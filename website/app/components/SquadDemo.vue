@@ -67,7 +67,7 @@ function answer(option: number) {
   <figure ref="root" class="squad" :class="{ still: !playing }">
     <div class="win">
       <div class="titlebar">
-        <LogoMark :size="18" fill="#1d1a17" />
+        <LogoMark :size="18" />
         <span class="tab">
           <i class="swatch" />
           <b>{{ squad.project.name }}</b>

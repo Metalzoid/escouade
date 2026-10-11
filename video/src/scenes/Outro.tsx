@@ -32,7 +32,7 @@ export const Outro: FC = () => {
             paddingBottom: 190,
           }}
         >
-          <Logo size={210} stack={[e, e, e]} spark={e} spin={frame * 0.5} />
+          <Logo size={210} tile={e} chevron={e} spark={e} spin={frame * 0.5} />
           <div style={{ fontSize: 130, fontWeight: 800, letterSpacing: -5, lineHeight: 1, opacity: Math.min(1, name) }}>Escouade</div>
           <div style={{ fontSize: 42, fontWeight: 500, color: C.muted, opacity: Math.min(1, name) }}>
             {tr('Le poste de pilotage de tes agents Claude Code', 'The cockpit for your Claude Code agents')}

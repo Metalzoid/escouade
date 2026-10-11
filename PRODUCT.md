@@ -54,7 +54,7 @@ Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet
 ## Brand Commitments
 
 - Nom : Escouade (anciennement « Claude Code Manager » ; l'ancien nom et « CCM » n'apparaissent plus).
-- Logo : trois fenêtres arrondies empilées, celle de devant portant une étincelle à huit rayons, en #35C1BD (`public/logo.svg`, `website/public/logo.svg`).
+- Logo (depuis le 2026-10-11) : « l'invite », une tuile arrondie pleine en #35C1BD portant, en encre presque noire (#08090A), le chevron `>` de Claude Code et une étincelle à huit rayons à la place du curseur (`public/logo.svg`, `website/public/logo.svg`, icônes de l'app tirées de `src-tauri/icons/app-icon.svg` par `npx tauri icon`). Il remplace les trois fenêtres empilées ; les pistes écartées sont dans `design/logo-explorations/`.
 - Voix : en français, au tutoiement, simple et concrète, sans emphase publicitaire ; depuis la 1.7 l'app et le site existent aussi en anglais (la vidéo garde sa voix française, avec des sous-titres anglais), dans le même ton.
 - Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic, et le site le dit.
 - Le site suit le standard des sites d'outils de dev, au niveau de finition de Linear et de Raycast, sans thème ni gadget : choix de l'utilisateur du 2026-10-11, après avoir vu sur aperçu des directions plus marquées (tableau des départs, cuisine, cracktro) et les avoir écartées.

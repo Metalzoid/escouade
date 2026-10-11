@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Escouade</title>
+  <!-- The source of the app's icons (npx tauri icon src-tauri/icons/app-icon.svg): public/logo.svg, its tile brought
+       to 824 px of 1024, the margin of macOS's icon grid. -->
+  <g transform="translate(21.524 21.524) scale(9.8095)">
+    <rect x="8" y="8" width="84" height="84" rx="24" fill="#35C1BD" />
+    <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
+    <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round">
+      <path d="M0 -12V12M-12 0H12" stroke-width="5.4" />
+      <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" />
+    </g>
+  </g>
+</svg>

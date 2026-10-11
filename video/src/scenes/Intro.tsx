@@ -7,7 +7,7 @@ import { useFmt } from '../lang';
 import { Logo } from '../ui/Logo';
 import { Caption, Stage } from '../ui/Stage';
 
-/** The logo builds up window by window, then the name, while the voice says it. */
+/** The logo builds up, its tile, its chevron, its spark, then the name, while the voice says it. */
 export const Intro: FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -30,12 +30,7 @@ export const Intro: FC = () => {
           paddingBottom: 150,
         }}
       >
-        <Logo
-          size={250}
-          stack={[pop(frame, fps, 24), pop(frame, fps, 12), pop(frame, fps, 0)]}
-          spark={pop(frame, fps, 36, 10)}
-          spin={frame * 0.4}
-        />
+        <Logo size={250} tile={pop(frame, fps, 0)} chevron={pop(frame, fps, 14)} spark={pop(frame, fps, 30, 10)} spin={frame * 0.4} />
         <div
           style={{
             fontSize: 150,

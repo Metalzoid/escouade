@@ -1,60 +1,44 @@
 import type { FC } from 'react';
 import { C } from '../theme';
 
-/** The app logo. `stack` reveals the back, middle and front windows, `spark` the spark (0 to 1). */
-export const Logo: FC<{ size: number; stack?: [number, number, number]; spark?: number; spin?: number }> = ({
+/** Ink on the teal: the chevron and the spark. */
+const INK = '#08090A';
+
+/**
+ * The app logo (public/logo.svg): a teal tile, Claude Code's chevron, and the spark where the cursor waits.
+ * `tile`, `chevron` and `spark` reveal each part (0 to 1, overshoot allowed); `spin` turns the spark, in degrees.
+ */
+export const Logo: FC<{ size: number; tile?: number; chevron?: number; spark?: number; spin?: number }> = ({
   size,
-  stack = [1, 1, 1],
+  tile = 1,
+  chevron = 1,
   spark = 1,
   spin = 0,
-}) => {
-  const [back, mid, front] = stack;
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: 'visible' }}>
-      <rect
-        x="26"
-        y="8"
-        width="66"
-        height="66"
-        rx="14"
-        fill="none"
-        stroke={C.brand}
-        strokeOpacity={0.35 * Math.min(1, back)}
-        strokeWidth="5"
-        transform={`translate(${(1 - back) * -18} ${(1 - back) * 18})`}
-      />
-      <rect
-        x="17"
-        y="17"
-        width="66"
-        height="66"
-        rx="14"
-        fill="none"
-        stroke={C.brand}
-        strokeOpacity={0.6 * Math.min(1, mid)}
-        strokeWidth="5"
-        transform={`translate(${(1 - mid) * -9} ${(1 - mid) * 9})`}
-      />
-      <rect
-        x="8"
-        y="26"
-        width="66"
-        height="66"
-        rx="14"
-        fill="#1b1512"
-        stroke={C.brand}
-        strokeWidth="5"
-        opacity={Math.min(1, front)}
-        transform={`translate(41 59) scale(${0.6 + 0.4 * front}) translate(-41 -59)`}
-      />
-      <g
-        transform={`translate(41 59) rotate(${(1 - spark) * -120 + spin}) scale(${Math.max(0, spark)})`}
-        stroke={C.brand}
-        strokeLinecap="round"
-      >
-        <path d="M0 -20V20M-20 0H20" strokeWidth="6.2" />
-        <path d="M-11.8 -11.8L11.8 11.8M-11.8 11.8L11.8 -11.8" strokeWidth="5" />
-      </g>
-    </svg>
-  );
-};
+}) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: 'visible' }}>
+    <rect
+      x="8"
+      y="8"
+      width="84"
+      height="84"
+      rx="24"
+      fill={C.brand}
+      opacity={Math.min(1, tile)}
+      transform={`translate(50 50) scale(${0.6 + 0.4 * tile}) translate(-50 -50)`}
+    />
+    <path
+      d="M25 33L42 50L25 67"
+      fill="none"
+      stroke={INK}
+      strokeWidth="8.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      opacity={Math.min(1, Math.max(0, chevron))}
+      transform={`translate(${(1 - chevron) * -10} 0)`}
+    />
+    <g transform={`translate(65 50) rotate(${(1 - spark) * -120 + spin}) scale(${Math.max(0, spark)})`} stroke={INK} strokeLinecap="round">
+      <path d="M0 -12V12M-12 0H12" strokeWidth="5.4" />
+      <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" strokeWidth="4.4" />
+    </g>
+  </svg>
+);

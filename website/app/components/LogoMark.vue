@@ -1,17 +1,15 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ size: number; /** What it sits on: its front window hides the ones behind it. */ fill?: string }>(), {
-  fill: '#08090a',
-});
+defineProps<{ size: number }>();
 </script>
 
 <template>
+  <!-- public/logo.svg: a teal tile, Claude Code's chevron, and the spark where the cursor waits. -->
   <svg :width="size" :height="size" viewBox="0 0 100 100" aria-hidden="true">
-    <rect x="26" y="8" width="66" height="66" rx="14" fill="none" stroke="#35C1BD" stroke-opacity="0.35" stroke-width="5" />
-    <rect x="17" y="17" width="66" height="66" rx="14" fill="none" stroke="#35C1BD" stroke-opacity="0.6" stroke-width="5" />
-    <rect x="8" y="26" width="66" height="66" rx="14" :fill="fill" stroke="#35C1BD" stroke-width="5" />
-    <g transform="translate(41 59)" stroke="#35C1BD" stroke-linecap="round">
-      <path d="M0 -20V20M-20 0H20" stroke-width="6.2" />
-      <path d="M-11.8 -11.8L11.8 11.8M-11.8 11.8L11.8 -11.8" stroke-width="5" />
+    <rect x="8" y="8" width="84" height="84" rx="24" fill="#35C1BD" />
+    <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
+    <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round">
+      <path d="M0 -12V12M-12 0H12" stroke-width="5.4" />
+      <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" />
     </g>
   </svg>
 </template>

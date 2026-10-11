@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8" />
+<title>Escouade — dix pistes de logo</title>
+<style>
+  @font-face { font-family: Inter; src: url(../../website/node_modules/@fontsource-variable/inter/files/inter-latin-opsz-normal.woff2); font-weight: 100 900; }
+  :root { --teal: #35c1bd; --night: #08090a; --amber: #f5b83d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px; width: 1880px; background: #121316; color: #f7f8f8; font-family: Inter, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { display: flex; align-items: baseline; gap: 24px; margin-bottom: 32px; }
+  h1 { margin: 0; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; }
+  header p { margin: 0; color: #8a8f98; font-size: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+  .card { border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: #0d0e10; overflow: hidden; }
+  .hero { height: 210px; display: grid; place-items: center; background: var(--night); color: var(--teal); --ko: var(--night); }
+  .hero svg { width: 128px; height: 128px; }
+  .row { display: flex; align-items: center; gap: 0; border-top: 1px solid rgba(255,255,255,.06); }
+  .sizes { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; height: 78px; background: var(--night); color: var(--teal); --ko: var(--night); }
+  .light { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; height: 78px; background: #f3f2ee; color: #0e6b68; --ko: #f3f2ee; }
+  .lockup { display: flex; align-items: center; justify-content: center; gap: 12px; height: 74px; background: var(--night); color: var(--teal); --ko: var(--night); border-top: 1px solid rgba(255,255,255,.06); }
+  .lockup span { color: #f7f8f8; font-size: 24px; font-weight: 650; letter-spacing: -0.025em; }
+  .words { padding: 16px 18px 18px; border-top: 1px solid rgba(255,255,255,.06); }
+  .words b { display: block; font-size: 16px; font-weight: 620; letter-spacing: -0.015em; }
+  .words b i { font-style: normal; color: #8a8f98; font-weight: 500; margin-right: 6px; }
+  .words p { margin: 6px 0 0; color: #8a8f98; font-size: 13.5px; line-height: 1.45; }
+  .current { outline: 1px dashed rgba(255,255,255,.25); outline-offset: -1px; }
+</style>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <!-- The spark of the current logo: eight rays, the straight ones thicker. -->
+      <symbol id="spark" viewBox="-24 -24 48 48">
+        <g stroke="currentColor" stroke-linecap="round" fill="none">
+          <path d="M0 -20V20M-20 0H20" stroke-width="6.2" />
+          <path d="M-11.8 -11.8L11.8 11.8M-11.8 11.8L11.8 -11.8" stroke-width="5" />
+        </g>
+      </symbol>
+
+      <!-- 0. Today's logo, for comparison. -->
+      <symbol id="l0" viewBox="0 0 100 100">
+        <rect x="26" y="8" width="66" height="66" rx="14" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="5" />
+        <rect x="17" y="17" width="66" height="66" rx="14" fill="none" stroke="currentColor" stroke-opacity=".6" stroke-width="5" />
+        <rect x="8" y="26" width="66" height="66" rx="14" fill="var(--ko)" stroke="currentColor" stroke-width="5" />
+        <use href="#spark" x="20" y="38" width="42" height="42" />
+      </symbol>
+
+      <!-- 1. The same pile, filled: it holds at 16 px where thin strokes melt. -->
+      <symbol id="l1" viewBox="0 0 100 100">
+        <rect x="30" y="8" width="62" height="62" rx="17" style="fill: color-mix(in srgb, currentColor 30%, var(--ko))" />
+        <rect x="19" y="19" width="62" height="62" rx="17" style="fill: color-mix(in srgb, currentColor 58%, var(--ko))" stroke="var(--ko)" stroke-width="5" />
+        <rect x="8" y="30" width="62" height="62" rx="17" fill="currentColor" stroke="var(--ko)" stroke-width="5" />
+        <use href="#spark" x="18" y="40" width="42" height="42" style="color: var(--ko)" />
+      </symbol>
+
+      <!-- 2. Tabs: one window, projects in tabs, the active one lit. -->
+      <symbol id="l2" viewBox="0 0 100 100">
+        <rect x="9" y="12" width="30" height="22" rx="7" fill="currentColor" />
+        <rect x="43" y="16" width="22" height="18" rx="6" fill="currentColor" opacity=".5" />
+        <rect x="69" y="16" width="22" height="18" rx="6" fill="currentColor" opacity=".28" />
+        <rect x="9" y="28" width="82" height="62" rx="14" fill="none" stroke="currentColor" stroke-width="6.5" />
+        <use href="#spark" x="33" y="42" width="34" height="34" />
+      </symbol>
+
+      <!-- 3. The badge: the window, and the dot of the agent waiting for you. -->
+      <symbol id="l3" viewBox="0 0 100 100">
+        <rect x="10" y="20" width="70" height="70" rx="21" fill="none" stroke="currentColor" stroke-width="7.5" />
+        <use href="#spark" x="25" y="35" width="40" height="40" />
+        <circle cx="79" cy="21" r="17" fill="var(--ko)" />
+        <circle cx="79" cy="21" r="11.5" fill="var(--amber)" />
+      </symbol>
+
+      <!-- 4. Formation: a squad of sparks flying in a V, the lead ahead. -->
+      <symbol id="l4" viewBox="0 0 100 100">
+        <use href="#spark" x="29" y="10" width="42" height="42" />
+        <use href="#spark" x="6" y="52" width="32" height="32" opacity=".6" />
+        <use href="#spark" x="62" y="52" width="32" height="32" opacity=".6" />
+      </symbol>
+
+      <!-- 5. Monogram: an E of three windows, the middle one shorter, a spark where it stops. -->
+      <symbol id="l5" viewBox="0 0 100 100">
+        <path d="M24 14h56a9 9 0 0 1 0 18H32v10h22a9 9 0 0 1 0 18H32v8h48a9 9 0 0 1 0 18H24a9 9 0 0 1-9-9V23a9 9 0 0 1 9-9z" fill="currentColor" />
+        <use href="#spark" x="66" y="39" width="22" height="22" />
+      </symbol>
+
+      <!-- 6. Grid: four agents, three at work, one lit because it needs you. -->
+      <symbol id="l6" viewBox="0 0 100 100">
+        <rect x="9" y="9" width="38" height="38" rx="11" style="fill: color-mix(in srgb, currentColor 34%, var(--ko))" />
+        <rect x="9" y="53" width="38" height="38" rx="11" style="fill: color-mix(in srgb, currentColor 52%, var(--ko))" />
+        <rect x="53" y="53" width="38" height="38" rx="11" style="fill: color-mix(in srgb, currentColor 34%, var(--ko))" />
+        <rect x="53" y="9" width="38" height="38" rx="11" fill="currentColor" />
+        <use href="#spark" x="58" y="14" width="28" height="28" style="color: var(--ko)" />
+      </symbol>
+
+      <!-- 7. The app's window: the list of agents on the left, the active one lit, the spark in the pane. -->
+      <symbol id="l7" viewBox="0 0 100 100">
+        <rect x="8" y="14" width="84" height="72" rx="15" fill="none" stroke="currentColor" stroke-width="6" />
+        <path d="M39 17V83" stroke="currentColor" stroke-width="5" />
+        <rect x="16" y="29" width="15" height="8" rx="4" fill="currentColor" />
+        <rect x="16" y="45" width="15" height="8" rx="4" fill="currentColor" opacity=".45" />
+        <rect x="16" y="61" width="15" height="8" rx="4" fill="currentColor" opacity=".45" />
+        <use href="#spark" x="50" y="35" width="30" height="30" />
+      </symbol>
+
+      <!-- 8. Prompt: an app icon, Claude Code's chevron and the spark as the cursor. -->
+      <symbol id="l8" viewBox="0 0 100 100">
+        <rect x="8" y="8" width="84" height="84" rx="24" fill="currentColor" />
+        <path d="M27 33l17 17-17 17" fill="none" stroke="var(--ko)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
+        <use href="#spark" x="51" y="36" width="28" height="28" style="color: var(--ko)" />
+      </symbol>
+
+      <!-- 9. Patch: the squad's badge, three chevrons of rank under the spark. -->
+      <symbol id="l9" viewBox="0 0 100 100">
+        <path d="M50 7l36 12v29c0 22-15 36-36 45C29 84 14 70 14 48V19z" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round" />
+        <use href="#spark" x="38" y="18" width="24" height="24" />
+        <path d="M32 56l18-11 18 11M32 71l18-11 18 11" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+
+      <!-- 10. Loop: the ticket's loop around the spark, until every criterion is met. -->
+      <symbol id="l10" viewBox="0 0 100 100">
+        <path d="M83.8 37.7A36 36 0 1 1 62.3 16.2" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" />
+        <path d="M54 7.5l10.5 9-12.5 4" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+        <use href="#spark" x="31" y="31" width="38" height="38" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <header>
+    <h1>Escouade — dix pistes de logo</h1>
+    <p>Chaque carte : la marque en grand, à 48, 32 et 16 px, sur fond clair, et avec le nom. En pointillés, le logo d’aujourd’hui.</p>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const LOGOS = [
+      ['l0', 'Aujourd’hui', 'Trois fenêtres empilées au trait, l’étincelle dans celle de devant. Le trait fin fond à 16 px.'],
+      ['l1', 'La pile, pleine', 'Le même logo, en aplats dégradés : la pile se lit encore en favicon, l’étincelle découpée dans la fenêtre de devant.'],
+      ['l2', 'Les onglets', 'Une fenêtre, des projets en onglets, l’actif allumé. Dit « un onglet par projet, tout dans une fenêtre ».'],
+      ['l3', 'La pastille', 'La fenêtre et la pastille de l’agent qui t’attend, dans l’ambre de l’app. La promesse du produit en un point.'],
+      ['l4', 'La formation', 'Trois étincelles en V, comme une escouade en vol : la tête devant, les ailiers derrière. Sans fenêtre.'],
+      ['l5', 'Le monogramme', 'Un E fait de trois fenêtres, celle du milieu plus courte, une étincelle où elle s’arrête.'],
+      ['l6', 'Le damier', 'Quatre agents : trois au travail, un allumé parce qu’il a besoin de toi. Lisible à toutes les tailles.'],
+      ['l7', 'La fenêtre de l’app', 'La liste des agents à gauche, l’actif allumé, l’étincelle dans la conversation. L’app elle-même, en icône.'],
+      ['l8', 'L’invite', 'Une icône d’app : le chevron de Claude Code et l’étincelle comme curseur. Très « outil de dev ».'],
+      ['l9', 'L’écusson', 'L’escouade au pied de la lettre : un écusson, trois chevrons de grade, l’étincelle en tête.'],
+      ['l10', 'La boucle', 'La boucle d’un ticket autour de l’étincelle, jusqu’à ce que chaque critère soit atteint.'],
+    ];
+    const use = (id, size) => `<svg viewBox="0 0 100 100" width="${size}" height="${size}"><use href="#${id}"/></svg>`;
+    document.getElementById('grid').innerHTML = LOGOS.slice(1).concat([LOGOS[0]]).map(([id, name, text], i) => `
+      <article class="card ${id === 'l0' ? 'current' : ''}">
+        <div class="hero">${use(id, 128)}</div>
+        <div class="row">
+          <div class="sizes">${use(id, 48)}${use(id, 32)}${use(id, 16)}</div>
+          <div class="light">${use(id, 48)}${use(id, 32)}${use(id, 16)}</div>
+        </div>
+        <div class="lockup">${use(id, 34)}<span>Escouade</span></div>
+        <div class="words"><b><i>${id === 'l0' ? '·' : i + 1}</i>${name}</b><p>${text}</p></div>
+      </article>`).join('');
+  </script>
+</body>
+</html>
