@@ -33,7 +33,9 @@ test('the interface in English, then in French without a restart', async ({ app 
   const quota = page.getByRole('meter', { name: '5-hour quota' });
   await expect(quota).toHaveAttribute('aria-valuenow', '12');
   await expect(page.getByRole('meter', { name: '7-day quota' })).toBeVisible();
-  // The percentage is in a tooltip over the bar.
+  // The percentage is in a tooltip over the bar. The processes' item comes with the first sample of the resources (every
+  // 2 s) and pushes the quota 190 px to the right: hovered before it, the pointer would rest on it, and show its tooltip.
+  await expect(footer).toContainText('1 Claude ·');
   await quota.hover();
   await expect(page.getByRole('tooltip')).toContainText(/^12%/);
 
