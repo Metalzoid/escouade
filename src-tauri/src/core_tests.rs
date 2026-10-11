@@ -305,7 +305,9 @@ async fn a_message_runs_a_turn_and_records_the_cost() {
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     h.turn(&a.meta.id, "Bonjour").await;
     assert_eq!(h.agent(&a.meta.id).status, AgentStatus::Done);
-    assert!(h.core.stats.today_cost() > 0.0);
+    // The turn's cost is counted just after its end reaches the window.
+    h.wait("the turn counted", |h| h.core.stats.today_cost() > 0.0)
+        .await;
     assert!(h
         .items(&a.meta.id)
         .iter()
@@ -5352,13 +5354,17 @@ async fn the_cost_of_the_day_is_told_for_each_account_and_in_total_and_kept_acro
     let pro = agent_on(&h, &p, "pro").await.id;
     // Nothing spent yet: nothing told.
     assert_eq!(h.core.usage.lock().today_cost, 0.0);
+    // A turn's cost is counted just after its end reaches the window: wait for it.
+    let spent = |h: &Harness, id: &str| h.core.usage.lock().account(id).unwrap().today_cost > 0.0;
     h.turn(&pro, "Bonjour").await;
-    {
-        let u = h.core.usage.lock();
-        assert!(u.account("pro").unwrap().today_cost > 0.0);
-        assert_eq!(u.account("principal").unwrap().today_cost, 0.0);
-    }
+    h.wait("the turn on pro counted", |h| spent(h, "pro")).await;
+    assert_eq!(
+        h.core.usage.lock().account("principal").unwrap().today_cost,
+        0.0
+    );
     h.turn(&main, "Bonjour").await;
+    h.wait("the turn on principal counted", |h| spent(h, "principal"))
+        .await;
     let u = h.core.usage.lock().clone();
     let of = |id: &str| u.account(id).unwrap().today_cost;
     assert!(of("principal") > 0.0 && of("pro") > 0.0);
