@@ -1217,8 +1217,8 @@ async fn deleting_the_agent_of_an_existing_branch_removes_its_worktree_and_keeps
     let own = h.core.create_agent(&p.id, None).await.unwrap();
     let own_wt = own.meta.worktree.clone().unwrap();
     assert!(!own_wt.existing);
-    h.core.delete_agent(&own.meta.id, true).await.unwrap();
-    assert!(!exists(&r, &own_wt.branch));
+    let warning = h.core.delete_agent(&own.meta.id, true).await.unwrap();
+    assert!(!exists(&r, &own_wt.branch), "{warning:?}");
     // The existing branch stays, with its commit, and the folder goes.
     h.core.delete_agent(&a.meta.id, true).await.unwrap();
     assert!(!Path::new(&wt.path).exists());
