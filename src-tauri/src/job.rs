@@ -330,7 +330,8 @@ mod tests {
         let job = Job::new().unwrap();
         assert!(job.assign_handle(std::os::windows::io::AsRawHandle::as_raw_handle(&child)));
         let mut usage = job.usage().unwrap();
-        for _ in 0..300 {
+        // Two minutes: a loaded CI runner gave it 0.4 s of CPU in 30 s.
+        for _ in 0..1200 {
             if usage.cpu > std::time::Duration::from_secs(1) {
                 break;
             }

@@ -982,11 +982,29 @@ pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
         .is_err()
         && Path::new(path).exists()
     {
-        std::fs::remove_dir_all(path)
+        remove_dir_retrying(Path::new(path))
+            .await
             .map_err(|e| anyhow::anyhow!(tr!("{path} : {e}", "{path}: {e}")))?;
     }
     let _ = run(repo, &["worktree", "prune"]).await;
     Ok(())
+}
+
+/// How long the removal of a worktree's folder is tried again.
+const REMOVE_RETRY: Duration = Duration::from_secs(5);
+
+/// `remove_dir_all`, tried again for `REMOVE_RETRY` while it fails: under Windows, a process just
+/// killed (an agent's, its tests') lets go of its files a moment later.
+async fn remove_dir_retrying(path: &Path) -> std::io::Result<()> {
+    let until = Instant::now() + REMOVE_RETRY;
+    loop {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(_) if !path.exists() => return Ok(()),
+            Err(e) if Instant::now() >= until => return Err(e),
+            Err(_) => tokio::time::sleep(Duration::from_millis(200)).await,
+        }
+    }
 }
 
 /// Checks `branch` out again at `path`, a worktree folder that went (after `worktree_remove_dir`).
@@ -2955,6 +2973,30 @@ mod repo_tests {
         g(&["add", "-A"]);
         g(&["commit", "-qm", "init"]);
         dir.to_string_lossy().to_string()
+    }
+
+    /// A process just killed lets go of its files a moment later under Windows (a loaded machine:
+    /// more than the 300 ms an agent's deletion gives it): its worktree goes all the same, and its
+    /// branch with it.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_worktree_whose_file_is_let_go_of_a_moment_later_is_removed_with_its_branch() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let repo = repo("git-wt-remove-held");
+        let (path, branch, _) = worktree_add(&repo, "held").await.unwrap();
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(Path::new(&path).join("résumé.md"))
+            .unwrap();
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(1));
+            drop(held);
+        });
+        worktree_remove(&repo, &path, &branch).await.unwrap();
+        letting_go.join().unwrap();
+        assert!(!Path::new(&path).exists());
+        assert!(!branch_exists(&repo, &branch).await);
     }
 
     #[tokio::test]
