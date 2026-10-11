@@ -9,76 +9,93 @@ const { text } = useLang();
 <template>
   <section :id="text.anchors.roadmap" class="section">
     <div class="wrap">
-      <p class="eyebrow">{{ text.roadmap.eyebrow }}</p>
-      <h2>{{ text.roadmap.title }}</h2>
-      <p class="lead">{{ text.roadmap.lead }}</p>
-      <p class="next">{{ fmt(text.roadmap.next, { version: NEXT }) }}</p>
-      <ul class="items">
-        <li v-for="i in text.roadmap.items" :key="i.title" class="item">
-          <h3>{{ i.title }}</h3>
-          <p>{{ i.text }}</p>
-        </li>
-      </ul>
-      <p class="links">
-        <a :href="PLAN">{{ text.roadmap.plan }} →</a>
-        <a :href="CHANGELOG">{{ text.roadmap.changelog }} →</a>
-      </p>
+      <div class="panel">
+        <p class="next"><i aria-hidden="true" />{{ fmt(text.roadmap.next, { version: NEXT }) }}</p>
+        <h2 class="title">{{ text.roadmap.title }}</h2>
+        <p class="lead">{{ text.roadmap.lead }}</p>
+        <ul class="items">
+          <li v-for="i in text.roadmap.items" :key="i.title">
+            <h3>{{ i.title }}</h3>
+            <p>{{ i.text }}</p>
+          </li>
+        </ul>
+        <p class="links">
+          <a class="arrow" :href="PLAN">{{ text.roadmap.plan }}</a>
+          <a class="arrow" :href="CHANGELOG">{{ text.roadmap.changelog }}</a>
+        </p>
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
+.panel {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(32px, 5vw, 56px);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: radial-gradient(70% 90% at 100% 0%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 70%), var(--surface);
+}
 .next {
-  display: inline-block;
-  margin: 0;
-  padding: 5px 12px;
-  border: 1px solid var(--line2);
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
   color: var(--muted);
-  font-family: var(--mono);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.next i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--brand);
+}
+.lead {
+  max-width: 620px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 17.5px;
 }
 .items {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin: 20px 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin: 44px 0 0;
   padding: 0;
   list-style: none;
 }
-.item {
-  padding: 24px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
+.items li {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 h3 {
-  margin: 0 0 8px;
-  font-size: 19px;
-}
-.item p {
-  margin: 0;
-  color: var(--muted);
   font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.items p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
 }
 .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 28px;
-  margin: 28px 0 0;
-}
-.links a {
-  color: var(--brand);
-  font-weight: 600;
+  gap: 12px 32px;
+  margin-top: 40px;
   font-size: 15px;
-  text-decoration: none;
 }
-.links a:hover {
-  text-decoration: underline;
-}
+
 @media (max-width: 900px) {
   .items {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .items li {
+    padding: 20px 0;
   }
 }
 </style>

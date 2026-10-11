@@ -272,13 +272,14 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).toContain(`Version ${VERSION}`);
   });
 
-  it('opens on a full-screen hero that says what Escouade is', () => {
+  it('opens on a hero that says what Escouade is, over the app’s own window', () => {
     const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? '';
     expect(h1).toContain(text.hero.line1);
     expect(h1).toContain(text.hero.line2);
     expect(html).toContain(escapeText(text.hero.lede));
-    expect(text.hero.lede.startsWith('Escouade, ')).toBe(true);
-    expect(css).toMatch(/\.hero[^{]*\{[^}]*min-height:[^;}]*100svh/);
+    const start = html.indexOf('id="top"');
+    const hero = html.slice(start, html.indexOf('</section>', start));
+    expect(hero).toContain(`src="${BASE}${imageOf(lang, 'agents.jpg')}"`);
   });
 
   it('shows the squad at work before any script runs, and says its data is made up', () => {
@@ -297,11 +298,12 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
   });
 
   it('keeps still for visitors who ask for less motion, and until its script runs', () => {
-    // Every animation of the hero lives in a block for visitors who accept motion.
+    // Every animation of the page lives in a block for visitors who accept motion.
     const outside = withoutBlocks(css, /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{/g);
-    for (const name of ['unfold', 'logo', 'square', 'spark', 'appear', 'rise', 'blink', 'pulse']) {
-      // Minified: `animation:1.3s … unfold-<scope>`.
-      const uses = new RegExp(`animation:[^;}]*\\b${name}(-[0-9a-f]{8})?[;}]`);
+    for (const name of ['rise', 'lift', 'blink', 'pulse']) {
+      // Minified: `animation:1.2s … blink-<scope>`.
+      // The name comes last, or first when the timing holds a var() the minifier cannot reorder.
+      const uses = new RegExp(`animation:[^;}]*\\b${name}(-[0-9a-f]{8})?(?=[\\s;}])`);
       expect(css, name).toMatch(uses);
       expect(outside, name).not.toMatch(uses);
     }
@@ -342,7 +344,8 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(meta('og:image')).toBe(`${SITE}${dir}poster.jpg`);
     expect(meta('twitter:image')).toBe(`${SITE}${dir}poster.jpg`);
     const images = [...html.matchAll(/(?:src|poster)="(\/escouade\/images\/[^"]+\.jpg)"/g)].map((m) => m[1]);
-    expect(images.length).toBe(FEATURE_SHOTS.length + 1);
+    // The hero shows the agents' screenshot too: each picture counts once.
+    expect(new Set(images).size).toBe(FEATURE_SHOTS.length + 1);
     for (const image of images) expect(image.startsWith(`${BASE}${dir}`), image).toBe(true);
     // The app’s window in the pictures says what the page does: no French on the English page.
     if (lang === 'en') expect(html).not.toMatch(/images\/(?!en\/)[a-z]+\.jpg/);
@@ -391,7 +394,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
   it('presents the imports from Jira, Trello and GitHub, kept in sync, among the features', () => {
     const f = features.find((x) => x.id === 'integrations');
     expect(f, 'integrations').toBeDefined();
-    const said = [f!.title, f!.text, ...f!.points].join(' ');
+    const said = [f!.title, f!.text].join(' ');
     for (const service of ['Jira', 'Trello', 'GitHub']) expect(said).toContain(service);
     expect(said).toMatch(says.criteria);
     expect(said).toMatch(says.status);

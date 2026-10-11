@@ -17,7 +17,7 @@ const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1
 describe('catalogs', () => {
   it('have the same keys and the same lists, in French and in English', () => {
     expect([...enLeaves.keys()].sort()).toEqual([...frLeaves.keys()].sort());
-    expect(frLeaves.size).toBeGreaterThan(150);
+    expect(frLeaves.size).toBeGreaterThan(140);
   });
 
   it('say something in every place', () => {
@@ -44,7 +44,6 @@ describe('catalogs', () => {
         'header.faq',
         'install.steps[1].link.href',
         'header.github',
-        'faq.eyebrow',
         'footer.github',
         'demo.status.question',
         'demo.agents',
@@ -154,7 +153,7 @@ describe('what the two pages share', () => {
         expect(f.image, `${name} ${f.id}`).toBe(imageOf(name, FEATURE_SHOTS.find((s) => s.id === f.id)!.file));
         expect(existsSync(new URL(f.image, PUBLIC)), `${name} ${f.id}: ${f.image}`).toBe(true);
         expect(f.title, f.id).not.toBe('');
-        expect(f.points.length, f.id).toBe(3);
+        expect(f.text, f.id).not.toBe('');
       }
     }
   });

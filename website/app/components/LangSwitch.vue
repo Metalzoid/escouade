@@ -32,33 +32,29 @@ function choose(l: LangInfo, e: MouseEvent) {
 </template>
 
 <style scoped>
+/* Two languages, side by side; the one shown is lit. */
 .lang {
   display: flex;
-  border: 1px solid var(--line2);
+  padding: 2px;
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 .lang a {
-  padding: 7px 11px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-decoration: none;
-}
-.lang a:first-child {
-  border-radius: 7px 0 0 7px;
-}
-.lang a:last-child {
-  border-radius: 0 7px 7px 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--dim);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: color 0.2s var(--ease);
 }
 .lang a:hover {
   color: var(--text);
 }
 .lang a[aria-current='page'] {
-  background: var(--elev);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
 }
-/* Inside the frame, which would clip an outline drawn outside. */
 .lang a:focus-visible {
   outline-offset: -2px;
 }

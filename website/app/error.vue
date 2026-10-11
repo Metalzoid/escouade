@@ -20,38 +20,43 @@ useHead({
 </script>
 
 <template>
-  <main v-if="gone" class="gone">
-    <LogoMark :size="56" />
-    <h1>{{ text.notFound.title }}</h1>
-    <p>{{ text.notFound.text }}</p>
-    <a class="btn primary" :href="home">{{ text.notFound.home }}</a>
-  </main>
-  <main v-else class="gone">
-    <LogoMark :size="56" />
-    <h1>{{ text.failure.title }}</h1>
-    <p v-if="message">{{ message }}</p>
-    <a class="btn primary" :href="home">{{ text.failure.home }}</a>
+  <main class="gone">
+    <LogoMark :size="48" />
+    <p class="code">{{ error.statusCode || 500 }}</p>
+    <h1>{{ gone ? text.notFound.title : text.failure.title }}</h1>
+    <p v-if="gone" class="text">{{ text.notFound.text }}</p>
+    <p v-else-if="message" class="text">{{ message }}</p>
+    <a class="btn primary" :href="home">{{ gone ? text.notFound.home : text.failure.home }}</a>
   </main>
 </template>
 
 <style scoped>
 .gone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   min-height: 100svh;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 14px;
-  padding: 32px 16px;
+  padding: 48px var(--gutter);
   text-align: center;
 }
-h1 {
-  margin: 8px 0 0;
-  font-size: clamp(30px, 4vw, 44px);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+.code {
+  margin-top: 12px;
+  color: var(--dim);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
 }
-p {
-  margin: 0 0 12px;
+h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+.text {
+  margin-bottom: 12px;
   color: var(--muted);
 }
 </style>

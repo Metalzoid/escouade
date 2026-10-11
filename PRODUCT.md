@@ -57,6 +57,7 @@ Une fenêtre qui pilote une escouade d'agents Claude Code : un onglet par projet
 - Logo : trois fenêtres arrondies empilées, celle de devant portant une étincelle à huit rayons, en #35C1BD (`public/logo.svg`, `website/public/logo.svg`).
 - Voix : en français, au tutoiement, simple et concrète, sans emphase publicitaire ; depuis la 1.7 l'app et le site existent aussi en anglais (la vidéo garde sa voix française, avec des sous-titres anglais), dans le même ton.
 - Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic, et le site le dit.
+- Le site suit le standard des sites d'outils de dev, au niveau de finition de Linear et de Raycast, sans thème ni gadget : choix de l'utilisateur du 2026-10-11, après avoir vu sur aperçu des directions plus marquées (tableau des départs, cuisine, cracktro) et les avoir écartées.
 
 ## Evidence on Hand
 

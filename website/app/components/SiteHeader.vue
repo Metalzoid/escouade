@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { REPO } from '~/data/site';
+import { DOWNLOAD, REPO } from '~/data/site';
 
 const { text } = useLang();
 </script>
 
 <template>
   <header class="top">
-    <div class="wrap bar">
-      <a class="brand" href="#top"><LogoMark :size="28" /><span>Escouade</span></a>
+    <div class="bar">
+      <a class="brand" href="#top"><LogoMark :size="26" /><span>Escouade</span></a>
       <nav class="nav" :aria-label="text.header.sections">
         <a href="#video">{{ text.header.video }}</a>
         <a :href="`#${text.anchors.features}`">{{ text.header.features }}</a>
@@ -17,7 +17,8 @@ const { text } = useLang();
       </nav>
       <div class="tools">
         <LangSwitch />
-        <a class="gh" :href="REPO">{{ text.header.github }}</a>
+        <a class="link" :href="REPO">{{ text.header.github }}</a>
+        <a class="get" :href="DOWNLOAD">{{ text.header.download }}</a>
       </div>
     </div>
   </header>
@@ -28,58 +29,75 @@ const { text } = useLang();
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(27, 25, 23, 0.82);
-  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
 }
 .bar {
-  height: 64px;
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 40px;
+  height: 64px;
+  padding: 0 var(--gutter);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 20px;
-  font-weight: 800;
-  text-decoration: none;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 .nav {
   display: flex;
-  gap: 24px;
-  margin-left: auto;
+  gap: 28px;
 }
 .tools {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
+  margin-left: auto;
 }
 .nav a,
-.gh {
+.link {
   color: var(--muted);
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
+  font-size: 14.5px;
+  font-weight: 500;
   white-space: nowrap;
+  transition: color 0.2s var(--ease);
 }
 .nav a:hover,
-.gh:hover {
+.link:hover {
   color: var(--text);
 }
-.gh {
-  padding: 7px 14px;
-  border: 1px solid var(--line2);
+.get {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
   border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: background-color 0.2s var(--ease);
 }
-/* Five links on one line need the room: below it, only the brand, the language and GitHub stay. */
-@media (max-width: 960px) {
+.get:hover {
+  background: #fff;
+}
+
+/* Five links on one line need the room: below it, only the brand, the language, GitHub and the download stay. */
+@media (max-width: 1080px) {
   .nav {
     display: none;
   }
-  .tools {
-    margin-left: auto;
+}
+@media (max-width: 560px) {
+  .link {
+    display: none;
   }
 }
 </style>

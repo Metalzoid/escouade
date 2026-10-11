@@ -1,151 +1,157 @@
 <script setup lang="ts">
 import { fmt } from '~/data/catalog';
-import { DOWNLOAD, REPO } from '~/data/site';
+import { CHANGELOG, DOWNLOAD, REPO, imageOf } from '~/data/site';
 
-const { text } = useLang();
+const { lang, text } = useLang();
+const asset = useAsset();
 const { version } = useRuntimeConfig().public;
+const shot = computed(() => text.value.features.items.agents);
 </script>
 
 <template>
   <section id="top" class="hero">
-    <div class="stage">
-      <div class="copy">
-        <h1>
-          <span class="line">{{ text.hero.line1 }}</span>
-          <span class="line accent">{{ text.hero.line2 }}</span>
-        </h1>
-        <p class="lede">{{ text.hero.lede }}</p>
-        <div class="cta">
-          <a class="btn primary" :href="DOWNLOAD">{{ text.hero.download }}</a>
-          <a class="btn" :href="REPO">{{ text.hero.github }}</a>
-        </div>
-        <p class="meta">{{ fmt(text.hero.meta, { version }) }}</p>
+    <div class="copy">
+      <a class="pill" :href="CHANGELOG"><i aria-hidden="true" />{{ fmt(text.hero.meta, { version }) }}</a>
+      <h1>
+        <span class="line">{{ text.hero.line1 }}</span>
+        <span class="line second">{{ text.hero.line2 }}</span>
+      </h1>
+      <p class="lede">{{ text.hero.lede }}</p>
+      <div class="cta">
+        <a class="btn primary" :href="DOWNLOAD">{{ text.hero.download }}</a>
+        <a class="btn" :href="REPO">{{ text.hero.github }}</a>
       </div>
-      <SquadWindows class="squad" />
     </div>
-    <a class="next" href="#video">
-      {{ text.hero.video }}
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <path
-          d="M3.5 6l4.5 4.5L12.5 6"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-    </a>
+    <div class="product">
+      <div class="glow" aria-hidden="true" />
+      <AppWindow class="frame" :src="asset(imageOf(lang, 'agents.jpg'))" :alt="shot.alt" />
+    </div>
   </section>
 </template>
 
 <style scoped>
 .hero {
-  --pad: clamp(28px, 5svh, 64px);
   position: relative;
-  display: grid;
-  align-items: center;
-  min-height: calc(100vh - 64px);
-  min-height: calc(100svh - 64px);
-  padding: var(--pad) 0 calc(var(--pad) + 28px);
-  background:
-    radial-gradient(60% 70% at 78% 45%, color-mix(in oklch, var(--brand) 11%, transparent), transparent 70%),
-    radial-gradient(900px 480px at 30% 0%, color-mix(in oklch, var(--brand) 7%, transparent), transparent 70%);
-  overflow: hidden;
-}
-.stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(32px, 5vw, 80px);
-  width: min(1400px, 100% - clamp(32px, 6vw, 96px));
-  margin-inline: auto;
+  /* The light behind the app spreads wider than the page: it stops at its edges. */
+  overflow-x: clip;
+  padding: clamp(56px, 8vh, 88px) var(--gutter) 0;
+  text-align: center;
 }
 .copy {
-  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  transition:
+    border-color 0.2s var(--ease),
+    color 0.2s var(--ease);
+}
+.pill:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.pill i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
 }
 h1 {
-  margin: 0;
-  font-size: clamp(44px, 5.1vw, 84px);
-  font-weight: 800;
-  line-height: 0.98;
-  letter-spacing: -0.035em;
+  margin-top: 24px;
+  font-size: clamp(42px, 5.4vw, 78px);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
   text-wrap: balance;
 }
 .line {
   display: block;
 }
-.accent {
-  color: var(--brand);
+.second {
+  color: var(--muted);
 }
 .lede {
-  max-width: 34em;
-  margin: clamp(22px, 3.4svh, 34px) 0 0;
+  max-width: 640px;
+  margin-top: 24px;
   color: var(--muted);
-  font-size: clamp(17px, 1.35vw, 19px);
+  font-size: clamp(17px, 1.4vw, 19.5px);
+  line-height: 1.55;
   text-wrap: pretty;
 }
 .cta {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
-  margin-top: clamp(24px, 4svh, 36px);
-}
-.meta {
-  margin: 18px 0 0;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--dim);
-}
-.squad {
-  justify-self: end;
-  /* The first viewport holds the window and its caption: the header, both paddings and the caption come off. */
-  width: min(100%, 760px, calc(100svh - 64px - 2 * var(--pad) - 68px));
-  min-width: min(100%, 440px);
-}
-.next {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  translate: -50% 0;
-  padding: 6px 10px;
-  border-radius: 8px;
-  color: var(--dim);
-  font-size: 14px;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-.next:hover {
-  color: var(--text);
+  margin-top: 34px;
 }
 
-/* The payoff holds on one line wherever the column can carry it. */
-@media (min-width: 961px) {
-  .accent {
-    white-space: nowrap;
+/* The app itself, large, with Escouade's light behind it. */
+.product {
+  position: relative;
+  width: min(1180px, 100%);
+  margin: clamp(48px, 7vh, 64px) auto 0;
+}
+.frame {
+  position: relative;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 40px 120px -20px color-mix(in srgb, var(--brand) 24%, transparent),
+    0 30px 60px -30px rgba(0, 0, 0, 0.9);
+}
+.glow {
+  position: absolute;
+  inset: 30% -6% -10%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 20%, transparent), transparent);
+  filter: blur(24px);
+}
+
+/* One entrance, when the page opens: the words, then the app rising into place. */
+@media (prefers-reduced-motion: no-preference) {
+  .copy > * {
+    animation: rise 0.9s var(--ease) both;
+  }
+  .copy > :nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .copy > :nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .copy > :nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .product {
+    animation: lift 1.4s var(--ease) 0.28s both;
   }
 }
-@media (max-width: 960px) {
-  .hero {
-    min-height: auto;
-    padding-bottom: var(--pad);
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
   }
-  .stage {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .copy {
-    max-width: 640px;
-  }
-  .squad {
-    justify-self: center;
-    width: min(100%, 600px);
-    min-width: 0;
-  }
-  .next {
-    display: none;
+}
+@keyframes lift {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.98);
   }
 }
 </style>

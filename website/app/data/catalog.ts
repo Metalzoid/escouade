@@ -13,7 +13,6 @@ export interface Plural {
 export interface FeatureText {
   title: string;
   text: string;
-  points: string[];
   /** What the screenshot shows. */
   alt: string;
 }
@@ -59,6 +58,8 @@ export interface Catalog {
     roadmap: string;
     faq: string;
     github: string;
+    /** The header's short download button. */
+    download: string;
     /** The language switch's name, for screen readers. */
     language: string;
   };
@@ -74,12 +75,15 @@ export interface Catalog {
     meta: string;
     video: string;
   };
-  features: { eyebrow: string; title: string; lead: string; items: Record<FeatureId, FeatureText> };
+  /** The demonstration of the queue, staged as a product screen: what it proves, in a title, a sentence and three facts. */
+  spotlight: { title: string; text: string; points: string[] };
+  video: { title: string };
+  features: { title: string; lead: string; items: Record<FeatureId, FeatureText> };
+  /** What else the app does, one line each. */
   cards: Card[];
-  install: { eyebrow: string; title: string; steps: Step[] };
+  install: { title: string; steps: Step[] };
   /** What comes next: the next version and what it brings, with links to its detailed plan and to what is out. */
   roadmap: {
-    eyebrow: string;
     title: string;
     lead: string;
     /** Takes `{version}`. */
@@ -88,13 +92,15 @@ export interface Catalog {
     plan: string;
     changelog: string;
   };
-  faq: { eyebrow: string; title: string; items: Question[] };
+  faq: { title: string; items: Question[] };
+  /** The page's last word: one more chance to download. */
+  close: { title: string };
   footer: { github: string; license: string; note: string };
   /** For an address that leads nowhere. */
   notFound: { title: string; text: string; home: string };
   /** For any other error the page itself runs into. */
   failure: { title: string; home: string };
-  /** The windows of the hero. */
+  /** The demonstration: an Escouade window and its agents. */
   demo: {
     status: Record<Status, string>;
     agents: string;

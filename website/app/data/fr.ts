@@ -1,4 +1,5 @@
 // Everything the French page says. en.ts says the same, key for key.
+// The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
 import { DOWNLOAD } from './site';
 
@@ -18,6 +19,7 @@ export const fr: Catalog = {
     roadmap: 'Feuille de route',
     faq: 'FAQ',
     github: 'GitHub',
+    download: 'Télécharger',
     language: 'Langue',
   },
 
@@ -26,167 +28,113 @@ export const fr: Catalog = {
   hero: {
     line1: 'Une escouade de Claude.',
     line2: 'Une seule fenêtre.',
-    lede: 'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS pour piloter plusieurs agents en parallèle, avec projets en onglets, chat natif, git, éditeur, terminaux, statistiques, et un Kanban de tickets, écrits par toi ou importés de Jira, Trello ou GitHub, que des agents prennent seuls jusqu’au but.',
+    lede: 'Toutes tes sessions Claude Code dans une seule fenêtre : autant d’agents que tu veux, en parallèle, et un signal dès que l’un d’eux a besoin de toi.',
     download: 'Télécharger pour Windows et macOS',
     github: 'Voir sur GitHub',
     meta: 'Version {version} · Windows 10 et 11, macOS 11 et plus · Gratuit et open source (MIT)',
     video: 'Voir la vidéo',
   },
 
+  spotlight: {
+    title: 'Celui qui a besoin de toi passe devant.',
+    text: 'Une question, une autorisation, une tâche finie : l’agent le signale, et tu réponds sans chercher dans quel terminal il attend. Essaie : réponds à tests-e2e.',
+    points: [
+      'Ctrl+J saute au prochain agent qui attend',
+      'La vue d’ensemble montre tous les agents, ceux qui attendent en tête',
+      'Carillon, notification système, onglet qui clignote : tu choisis ce qui te prévient',
+    ],
+  },
+
+  video: { title: 'Escouade à l’œuvre.' },
+
   features: {
-    eyebrow: 'Fonctionnalités',
-    title: 'Tout pour travailler avec plusieurs Claude',
-    lead: 'Chaque agent avance de son côté ; toi, tu gardes la vue d’ensemble et tu interviens quand il le faut.',
+    title: 'Dans la fenêtre.',
+    lead: 'Chaque agent avance de son côté. Toi, tu gardes la vue d’ensemble et tu n’interviens que quand il le faut.',
     items: {
       agents: {
         title: 'Projets en onglets, agents en parallèle',
-        text: 'Chaque projet a son onglet et sa couleur, qui teinte toute l’interface. Dans chacun, autant d’agents Claude Code que tu veux, chacun avec sa conversation, son modèle et son effort ; Haiku leur trouve un nom dès ta première demande.',
-        points: [
-          'Statut en direct : en cours, question, terminé',
-          'Tokens, coût et fichiers touchés par agent',
-          'Un worktree git par agent, si tu veux',
-        ],
+        text: 'Un onglet par projet, et dans chacun autant d’agents Claude Code que tu veux : chacun sa conversation, son modèle, son effort et, si tu veux, son worktree git. Statut, tokens, coût et fichiers touchés, en direct.',
         alt: 'La fenêtre d’Escouade : les projets en onglets, la liste des agents et la conversation de l’un d’eux',
       },
       chat: {
         title: 'Un vrai chat, pas un terminal',
-        text: 'Markdown, code coloré, appels d’outils compacts que tu déplies pour voir un diff ou la sortie d’une commande. Joins une image, un PDF ou un fichier, cite un @fichier, lance une /commande, et écris pendant que Claude travaille : il en tient compte à l’étape suivante. Ctrl+K retrouve un message dans les conversations de tous tes agents.',
-        points: [
-          'Les questions et autorisations de Claude en cartes, auxquelles tu réponds aussi au clavier',
-          'Modèle (avec sa version), effort et mode modifiables à tout moment',
-          'Une carte résume chaque tâche : durée, coût, fichiers modifiés',
-        ],
+        text: 'Markdown, code coloré, appels d’outils compacts qui se déplient sur un diff. Les questions et autorisations de Claude arrivent en cartes, auxquelles tu réponds d’un clic ou au clavier. Ctrl+K retrouve un message dans les conversations de tous tes agents.',
         alt: 'Une conversation : réponse de Claude en markdown, appel d’outil déplié sur son diff',
       },
       notifications: {
         title: 'Tu sais quand on t’attend',
-        text: 'Quand un agent pose une question ou termine, Escouade le signale : onglet et carte qui clignotent, carillon, notification système qui dit ce qui est demandé, barre des tâches qui clignote (ou icône du Dock qui rebondit). Fermer la fenêtre ne coupe rien : chaque agent reprend sa session au redémarrage.',
-        points: [
-          'Ctrl+J saute au prochain agent qui attend',
-          'La vue d’ensemble montre tous les agents, ceux qui attendent en tête',
-          'Tu choisis ce qui te prévient : questions, fins, erreurs, tickets',
-        ],
+        text: 'Une question, une tâche finie : l’onglet et la carte clignotent, un carillon sonne, une notification système dit ce qui est demandé. Ctrl+J saute au prochain agent qui attend, et fermer la fenêtre ne coupe rien.',
         alt: 'Un agent en attente de réponse, sa question et sa carte dans la barre latérale',
       },
       git: {
         title: 'Git sous les yeux',
-        text: 'Fichiers non commités par agent ou pour tout le projet, diff unifié ou côte à côte, git graph du dépôt avec la branche de l’agent en avant. La disposition moitié / moitié montre la conversation et les fichiers ensemble, mis à jour pendant que l’agent écrit.',
-        points: [
-          'Commit rédigé par l’agent, ou direct avec un message proposé que tu relis',
-          'Merge ou squash d’un worktree dans sa branche de base, puis nettoyage',
-          'Pull, push et fetch depuis la barre de statut',
-        ],
+        text: 'Fichiers non commités par agent, diffs côte à côte, git graph du dépôt. Un commit rédigé par l’agent ou un message proposé que tu relis, puis le merge ou le squash d’un worktree dans sa branche.',
         alt: 'La disposition moitié / moitié : la conversation, les fichiers non commités et leur diff côte à côte',
       },
       editeur: {
         title: 'Un éditeur, sans quitter l’app',
-        text: 'Retouche un fichier du projet ou du worktree d’un agent sans changer de fenêtre : arborescence, onglets, coloration, recherche, et les lignes modifiées depuis le dernier commit marquées dans la marge. Ctrl+clic va à une définition sans serveur de langage, Ctrl+P ouvre un fichier par son nom, Ctrl+Maj+F cherche dans tous les fichiers.',
-        points: [
-          'Voir les changements dans le texte, et annuler un bloc',
-          'Compare avec ce que l’agent vient d’écrire avant de choisir',
-          'Renommer, supprimer vers la corbeille, ouvrir un terminal ici',
-        ],
+        text: 'Arborescence, onglets, coloration et lignes modifiées dans la marge. Ctrl+clic va à une définition sans serveur de langage, Ctrl+P ouvre un fichier par son nom, Ctrl+Maj+F cherche dans tous les fichiers.',
         alt: 'L’éditeur intégré : l’arborescence du worktree, des onglets et le code avec ses lignes modifiées',
       },
       tableau: {
         title: 'Des tickets, que des agents prennent seuls',
-        text: 'Le Kanban de chaque projet : à faire, en cours, à tester, terminé. Écris un ticket avec ses critères d’acceptation ; en pilote auto, des agents le prennent, chacun dans son worktree avec ses propres ports, et bouclent jusqu’à ce que chaque critère soit atteint.',
-        points: [
-          'Pilote auto, de 1 à 6 agents en parallèle, en pause près de la limite de tes quotas',
-          'Boucle, critères, avancement et coût en direct sur chaque carte',
-          'Valider : tests, commit généré, merge, pull request ou push ; ou renvoyer à l’agent',
-        ],
+        text: 'Le Kanban de chaque projet : écris un ticket et ses critères d’acceptation. Pilote auto activé, des agents les prennent, chacun dans son worktree, et bouclent jusqu’à ce que chaque critère soit atteint.',
         alt: 'Le Kanban d’un projet : deux tickets en cours avec leur boucle et leurs critères, et les tickets terminés',
       },
       test: {
         title: 'Teste chaque ticket en un clic',
-        text: 'Quand un ticket passe « À tester », « ▶ Tester » te montre la recette de l’agent, puis prépare son worktree, lance ses serveurs sur ses ports réservés, attend qu’ils répondent et ouvre ton navigateur directement sur la fonctionnalité développée.',
-        points: [
-          'La recette vient de l’agent : tu la lis avant qu’elle tourne',
-          'Les logs restent dans la section Lancement, sous son nom',
-          '« Préparer le lancement » pour tout agent à worktree',
-        ],
+        text: 'Un ticket passe « À tester » : « Tester » te montre la recette écrite par l’agent, lance ses serveurs sur leurs ports réservés et ouvre ton navigateur sur la fonctionnalité.',
         alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
       },
       integrations: {
         title: 'Tes tickets Jira, Trello et GitHub, dans le Kanban',
-        text: 'Connecte Jira, Trello ou GitHub Issues et lie une source à ton projet. « Importer » cherche et filtre ses tickets : coche-les, ils arrivent dans le Kanban avec leurs critères d’acceptation. Escouade tient ensuite leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
-        points: [
-          'Critères d’acceptation repris de la description ou de la checklist',
-          'Statut et commentaires synchronisés, colonne par colonne, et retentés en cas d’échec',
-          'Import automatique, si tu l’actives, des tickets étiquetés claude-ready',
-        ],
+        text: 'Lie une source à ton projet, « Importer », coche : les tickets arrivent avec leurs critères d’acceptation. Escouade tient leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
         alt: 'La fenêtre « Importer des tickets » : trois tickets Jira cochés, avec leurs critères d’acceptation détectés',
       },
       lancement: {
         title: 'Lance ton projet d’un clic',
-        text: 'Configure les commandes qui lancent ton projet (front, API, worker…), chacune avec son shell et son dossier, ou laisse Claude lire le projet et te les proposer. Chaque commande tourne dans son terminal, avec son statut en direct.',
-        points: [
-          'Tout lancer, tout arrêter, relancer',
-          'Un plantage se voit tout de suite, avec son code',
-          'Arrêter coupe aussi ce que la commande a lancé',
-        ],
+        text: 'Les commandes qui lancent ton projet (front, API, worker…), écrites par toi ou proposées par Claude, chacune dans son terminal avec son statut en direct. Un plantage se voit tout de suite, avec son code.',
         alt: 'Trois commandes de lancement, dont une plantée, et le journal du serveur de développement',
       },
       stats: {
         title: 'Tokens, coût, quotas : en direct',
-        text: 'La barre de statut suit ton quota de session de 5 h, ton quota hebdomadaire, leur réinitialisation et le coût du jour, qui monte pendant que Claude travaille. Un agent arrêté par sa limite d’usage reprend tout seul quand le quota revient.',
-        points: [
-          'Tokens d’entrée, de cache et de sortie, par jour, semaine ou mois',
-          'Coût par projet, par modèle, par agent et par ticket',
-          'Mémoire et processeur pris par Claude',
-        ],
+        text: 'La barre de statut suit ton quota de 5 h, ton quota de la semaine et le coût du jour, qui monte pendant que Claude travaille. Le détail par projet, par modèle, par agent et par ticket est dans les statistiques.',
         alt: 'La page des statistiques : tokens par jour, coût par projet et par modèle',
       },
       remote: {
         title: 'Et depuis ton téléphone',
-        text: 'Active le remote control sur un agent : sa session s’ouvre sur claude.ai et dans l’app Claude sur mobile. Ce que tu y envoies s’affiche aussi dans Escouade.',
-        points: [
-          'Au cas par cas, d’un clic droit sur l’agent',
-          'Même session après un redémarrage',
-          'L’agent reste joignable tant que Escouade tourne',
-        ],
+        text: 'Active le remote control sur un agent : sa session s’ouvre sur claude.ai et dans l’app Claude sur mobile, et ce que tu y envoies s’affiche aussi dans Escouade.',
         alt: 'Un téléphone sur claude.ai et Escouade qui affichent la même conversation',
       },
     },
   },
 
   cards: [
-    { title: 'De vrais terminaux', text: 'PowerShell, Git Bash et WSL intégrés, avec l’autocomplétion de ton shell.' },
-    {
-      title: 'Limite d’usage ? Il reprend',
-      text: 'Un agent arrêté par sa limite d’usage reprend tout seul dès que ton quota revient, et le Kanban attend avant de lancer un nouveau ticket.',
-    },
-    {
-      title: 'Toujours là',
-      text: 'Fermer la fenêtre ne coupe pas les agents : Escouade reste dans la zone de notification et reprend chaque session au redémarrage.',
-    },
+    { title: 'De vrais terminaux', text: 'PowerShell, Git Bash et WSL, avec l’autocomplétion de ton shell.' },
+    { title: 'Limite d’usage ? Il reprend', text: 'Un agent arrêté par sa limite d’usage reprend seul dès que ton quota revient.' },
+    { title: 'Toujours là', text: 'Fenêtre fermée, Escouade reste dans la zone de notification et reprend chaque session au redémarrage.' },
     {
       title: 'Derrière un proxy',
       text: 'Proxy HTTP(S) pour Claude, les quotas, les mises à jour, les intégrations et, si tu veux, les terminaux.',
     },
     {
       title: 'Mises à jour automatiques',
-      text: 'Les nouvelles versions, signées, se téléchargent en arrière-plan et s’installent sans fenêtre, quand aucun agent ne travaille.',
+      text: 'Signées, téléchargées en arrière-plan, installées sans fenêtre quand aucun agent ne travaille.',
     },
-    {
-      title: 'Au clavier',
-      text: 'Ctrl+1…9 pour les projets, Ctrl+N pour un agent, Ctrl+J pour celui qui attend, Ctrl+Entrée pour autoriser, Ctrl+K pour chercher, Échap pour interrompre.',
-    },
+    { title: 'Au clavier', text: 'Ctrl+1…9 les projets, Ctrl+N un agent, Ctrl+J celui qui attend, Ctrl+K chercher, Échap interrompre.' },
   ],
 
   install: {
-    eyebrow: 'Installer',
-    title: 'Prêt en trois étapes',
+    title: 'Prêt en trois étapes.',
     steps: [
       {
         title: 'Installe Claude Code',
-        text: 'Escouade pilote le Claude Code installé sur ta machine : installe-le et connecte-toi une fois, avec ton abonnement Claude ou une clé API.',
+        text: 'Escouade pilote le Claude Code de ta machine : installe-le et connecte-toi une fois, avec ton abonnement Claude ou une clé API.',
         link: { label: 'Documentation de Claude Code', href: 'https://code.claude.com/docs/fr/overview' },
       },
       {
         title: 'Installe Escouade',
-        text: 'Télécharge l’installeur de la dernière version : le .exe pour Windows 10 ou 11 (avec Git for Windows), le .dmg pour macOS 11 ou plus récent (Mac Apple Silicon ou Intel).',
+        text: 'Le .exe pour Windows 10 ou 11 (avec Git for Windows), le .dmg pour macOS 11 ou plus récent, sur Mac Apple Silicon ou Intel.',
         link: { label: 'Dernière version', href: DOWNLOAD },
       },
       {
@@ -197,22 +145,21 @@ export const fr: Catalog = {
   },
 
   roadmap: {
-    eyebrow: 'Feuille de route',
-    title: 'Ce qui arrive ensuite',
-    lead: 'Escouade ne pilotera bientôt plus seulement Claude Code. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    title: 'Ce qui arrive ensuite.',
+    lead: 'Escouade ne pilotera bientôt plus seulement Claude Code. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
         title: 'Codex, Copilot CLI et OpenCode',
-        text: 'Chaque agent tourne sur le moteur de ton choix : Claude Code, Codex d’OpenAI, GitHub Copilot CLI ou OpenCode. Même conversation, mêmes cartes de questions et d’autorisations, même Kanban, mêmes worktrees.',
+        text: 'Chaque agent tourne sur le moteur de ton choix : Claude Code, Codex d’OpenAI, GitHub Copilot CLI ou OpenCode. Même conversation, mêmes cartes, même Kanban, mêmes worktrees.',
       },
       {
         title: 'Un moteur par projet, agent ou ticket',
-        text: 'Un moteur par défaut pour chaque projet, un autre pour un agent ou un ticket, et le pilote auto qui suit. Les modèles, l’effort et les modes de chaque moteur se choisissent comme aujourd’hui.',
+        text: 'Un moteur par défaut pour chaque projet, un autre pour un agent ou un ticket, et le pilote auto qui suit.',
       },
       {
         title: 'Les quotas de chacun',
-        text: 'Les fenêtres de quota de Codex et les crédits du mois de Copilot dans la barre d’état, plusieurs comptes Codex ou Copilot avec bascule automatique, et des statistiques par moteur.',
+        text: 'Les fenêtres de quota de Codex et les crédits du mois de Copilot dans la barre d’état, et des statistiques par moteur.',
       },
     ],
     plan: 'Le plan détaillé',
@@ -220,8 +167,7 @@ export const fr: Catalog = {
   },
 
   faq: {
-    eyebrow: 'FAQ',
-    title: 'Questions fréquentes',
+    title: 'Questions fréquentes.',
     items: [
       {
         q: 'C’est gratuit ?',
@@ -229,7 +175,7 @@ export const fr: Catalog = {
       },
       {
         q: 'Où vont mes données ?',
-        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour de l’app et, si tu les connectes, à Jira, Trello ou GitHub : un ticket importé y reçoit son statut et des commentaires (ses critères, ce qui a été fait).',
+        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello ou GitHub, où un ticket importé reçoit son statut et des commentaires.',
       },
       {
         q: 'Et mes jetons Jira, Trello ou GitHub ?',
@@ -258,6 +204,8 @@ export const fr: Catalog = {
     ],
   },
 
+  close: { title: 'Lance ton escouade.' },
+
   footer: {
     github: 'GitHub',
     license: 'Licence MIT',
@@ -280,7 +228,7 @@ export const fr: Catalog = {
     pause: 'Mettre la démonstration en pause',
     caption: 'Démonstration animée · données fictives',
     description:
-      ': cinq agents Claude Code du projet demo-api travaillent en parallèle ; l’un pose une question à laquelle tu peux répondre, un agent de ticket boucle sur ses critères jusqu’à « À tester ».',
+      ' : cinq agents Claude Code du projet demo-api travaillent en parallèle ; l’un pose une question à laquelle tu peux répondre, un agent de ticket boucle sur ses critères jusqu’à « À tester ».',
   },
 
   squad: {

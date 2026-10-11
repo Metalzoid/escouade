@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { CATALOGS, featuresFor } from '~/data/catalogs';
+import { CATALOGS } from '~/data/catalogs';
 import { LANGS } from '~/data/language';
 import { SITE, imageOf, pageUrl } from '~/data/site';
 
 // The whole page, in the language of its address. A page never changes language (the other one is another
 // address), so these are read once.
 const { lang, text } = useLang();
-const features = featuresFor(lang.value);
 const { meta } = text.value;
 const other = LANGS.find((l) => l.code !== lang.value)!.code;
 const image = `${SITE}${imageOf(lang.value, 'poster.jpg')}`;
@@ -44,19 +43,13 @@ useHead({
   <SiteHeader />
   <main>
     <HeroSection />
+    <SignalSection />
     <VideoSection />
-    <section :id="text.anchors.features" class="section">
-      <div class="wrap">
-        <p class="eyebrow">{{ text.features.eyebrow }}</p>
-        <h2>{{ text.features.title }}</h2>
-        <p class="lead">{{ text.features.lead }}</p>
-        <FeatureRow v-for="(f, i) in features" :key="f.id" :feature="f" :reverse="i % 2 === 1" />
-        <FeatureCards />
-      </div>
-    </section>
+    <FeatureGrid />
     <InstallSteps />
     <RoadmapSection />
     <FaqSection />
+    <CloseSection />
   </main>
   <SiteFooter />
 </template>

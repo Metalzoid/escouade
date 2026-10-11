@@ -6,24 +6,26 @@ const { text } = useLang();
 
 <template>
   <footer class="foot">
-    <div class="wrap bar">
-      <div class="brand"><LogoMark :size="22" /> Escouade</div>
-      <div class="links">
-        <a :href="REPO">{{ text.footer.github }}</a>
-        <a :href="`${REPO}/blob/main/LICENSE`">{{ text.footer.license }}</a>
+    <div class="wrap">
+      <div class="line">
+        <span class="brand"><LogoMark :size="22" /> Escouade</span>
+        <nav class="links">
+          <a :href="REPO">{{ text.footer.github }}</a>
+          <a :href="`${REPO}/blob/main/LICENSE`">{{ text.footer.license }}</a>
+        </nav>
       </div>
+      <p class="note">{{ text.footer.note }}</p>
     </div>
-    <p class="wrap note">{{ text.footer.note }}</p>
   </footer>
 </template>
 
 <style scoped>
 .foot {
-  padding: 40px 0 48px;
+  padding: 40px 0 56px;
   border-top: 1px solid var(--line);
-  font-size: 15px;
+  font-size: 14.5px;
 }
-.bar {
+.line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -31,25 +33,26 @@ const { text } = useLang();
   gap: 16px;
 }
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .links {
   display: flex;
-  gap: 20px;
+  gap: 24px;
 }
 .links a {
   color: var(--muted);
-  text-decoration: none;
+  transition: color 0.2s var(--ease);
 }
 .links a:hover {
   color: var(--text);
 }
 .note {
-  margin-top: 18px;
+  margin-top: 16px;
   color: var(--dim);
-  font-size: 14px;
+  font-size: 13.5px;
 }
 </style>

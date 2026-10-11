@@ -17,6 +17,12 @@ const contrast = (a: string, b: string) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-it('keeps every text colour readable on the background (WCAG AA, 4.5:1)', () => {
-  for (const t of ['text', 'muted', 'dim']) expect(contrast(token(t), token('bg')), t).toBeGreaterThanOrEqual(4.5);
+it('keeps every text colour readable on the page and on its surfaces (WCAG AA, 4.5:1)', () => {
+  for (const ground of ['bg', 'surface', 'surface-2']) {
+    for (const t of ['text', 'muted', 'dim']) expect(contrast(token(t), token(ground)), `${t} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+it('keeps the main action’s words readable on its teal, at rest and under the pointer', () => {
+  for (const teal of ['brand', 'brand-hi']) expect(contrast(token('ink'), token(teal)), teal).toBeGreaterThanOrEqual(4.5);
 });
