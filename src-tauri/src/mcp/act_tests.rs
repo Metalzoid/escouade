@@ -890,6 +890,8 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
         (Some(a.id.as_str()), Some("agent-1"))
     );
     turn_over(&h, &a.id).await;
+    // Its first message has it named (by the fake claude, in the background): the name it keeps, before it is listed.
+    h.wait("its name", |h| h.agent(&a.id).named).await;
     // The agent is told who writes, and the conversation shows it.
     assert!(h
         .items(&a.id)
@@ -974,7 +976,7 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
     assert!(blank.contains("message"), "{blank}");
     let unknown = refused(&c, "send_message", json!({ "agent": "zzz", "text": "x" })).await;
     assert!(
-        unknown.contains("Aucun agent « zzz »") && unknown.contains("agent-1"),
+        unknown.contains("Aucun agent « zzz »") && unknown.contains(&h.agent(&a.id).name),
         "{unknown}"
     );
     assert_eq!(h.agent(&a.id).prompts, prompts);
