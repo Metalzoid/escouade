@@ -2248,11 +2248,13 @@ async fn a_board_with_nothing_left_to_start_still_drops_its_issue_once_its_targe
     h.wait_board_idle().await;
     git(&r, &["branch", "disparue"]);
     h.core.compute_git(&p.id).await;
-    h.wait("the issue gone", |h| {
+    // The issue leaves the map before the window is told (the event goes out once the lock is
+    // released): wait for both, or a loaded machine reads the events in between.
+    h.wait("the issue gone, and the window told", |h| {
         !h.core.board_issues.lock().contains_key(&p.id)
+            && board_issues(h, &p.id).last() == Some(&None)
     })
     .await;
-    assert_eq!(board_issues(&h, &p.id).last(), Some(&None));
 }
 
 #[tokio::test]
