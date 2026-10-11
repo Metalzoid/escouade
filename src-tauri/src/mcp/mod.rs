@@ -52,8 +52,11 @@ pub const PORTS: RangeInclusive<u16> = 47000..=47999;
 /// The path of the MCP endpoint: `http://127.0.0.1:<port>/mcp`.
 pub const PATH: &str = "/mcp";
 
-/// How long a stop waits for the port to close: a start right after binds it again.
-const STOP_WAIT: Duration = Duration::from_secs(2);
+/// How long a stop waits for the port to close: a start right after binds it again. Longer in
+/// the tests: the accept loop runs on the app's runtime, which every test of the binary shares,
+/// and on a 3-core CI runner it went unscheduled for over 2 s (the port, still open, was not
+/// taken again).
+const STOP_WAIT: Duration = Duration::from_secs(if cfg!(test) { 30 } else { 2 });
 
 /// Who a request comes from, as its token says.
 #[derive(Debug, Clone, PartialEq, Eq)]
