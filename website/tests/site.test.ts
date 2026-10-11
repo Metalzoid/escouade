@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { fmt } from '../app/data/catalog';
 import { LANG_KEY, type Lang } from '../app/data/language';
-import { FEATURE_SHOTS, SITE, VIDEO, imageOf } from '../app/data/site';
+import { FEATURE_SHOTS, NEXT, REPO, SITE, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
 
@@ -55,6 +55,16 @@ function withoutBlocks(css: string, open: RegExp): string {
   }
   return out + css.slice(from);
 }
+
+describe('the roadmap', () => {
+  it('announces a version that is not out yet: once it is, the roadmap says what comes after it', () => {
+    const parts = (v: string) => v.split('.').map(Number);
+    const [nextMajor, nextMinor] = parts(NEXT);
+    const [major, minor] = parts(VERSION);
+    expect(nextMajor > major || (nextMajor === major && nextMinor > minor), `${NEXT} after ${VERSION}`).toBe(true);
+    expect(existsSync(new URL(`../../docs/TODO-${NEXT}.md`, import.meta.url)), `docs/TODO-${NEXT}.md`).toBe(true);
+  });
+});
 
 describe('generated site', () => {
   it('generates one page per language, and keeps Jekyll away from them', () => {
@@ -223,6 +233,19 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(texts.length).toBe(11 + 6 + 3 + 8);
     for (const t of texts) expect(html, t).toContain(escapeText(t));
     expect(html).toContain(says.affiliation);
+  });
+
+  it('says what comes next: the next version, what it brings, its detailed plan and what is already out', () => {
+    const r = text.roadmap;
+    expect(html).toContain(`id="${text.anchors.roadmap}"`);
+    expect(tags(html, 'a').some((a) => a.href === `#${text.anchors.roadmap}`)).toBe(true);
+    expect(r.items).toHaveLength(3);
+    for (const s of [r.title, fmt(r.next, { version: NEXT }), ...r.items.flatMap((i) => [i.title, i.text])]) {
+      expect(html, s).toContain(escapeText(s));
+    }
+    const hrefs = tags(html, 'a').map((a) => a.href);
+    expect(hrefs).toContain(`${REPO}/blob/main/docs/TODO-${NEXT}.md`);
+    expect(hrefs).toContain(`${REPO}/blob/main/CHANGELOG.md`);
   });
 
   it('says nothing in the other language', () => {
@@ -402,7 +425,14 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     const targets = tags(header, 'a')
       .map((a) => a.href)
       .filter((h) => h?.startsWith('#'));
-    expect(targets).toEqual(['#top', '#video', `#${text.anchors.features}`, `#${text.anchors.install}`, '#faq']);
+    expect(targets).toEqual([
+      '#top',
+      '#video',
+      `#${text.anchors.features}`,
+      `#${text.anchors.install}`,
+      `#${text.anchors.roadmap}`,
+      '#faq',
+    ]);
     for (const target of targets) expect(html, target).toContain(`id="${target.slice(1)}"`);
   });
 });

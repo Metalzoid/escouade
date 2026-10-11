@@ -56,13 +56,14 @@ export interface Catalog {
     video: string;
     features: string;
     install: string;
+    roadmap: string;
     faq: string;
     github: string;
     /** The language switch's name, for screen readers. */
     language: string;
   };
   /** The ids of the sections the header’s links point to (the other sections keep the same id everywhere). */
-  anchors: { features: string; install: string };
+  anchors: { features: string; install: string; roadmap: string };
   hero: {
     line1: string;
     line2: string;
@@ -76,6 +77,17 @@ export interface Catalog {
   features: { eyebrow: string; title: string; lead: string; items: Record<FeatureId, FeatureText> };
   cards: Card[];
   install: { eyebrow: string; title: string; steps: Step[] };
+  /** What comes next: the next version and what it brings, with links to its detailed plan and to what is out. */
+  roadmap: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    /** Takes `{version}`. */
+    next: string;
+    items: Card[];
+    plan: string;
+    changelog: string;
+  };
   faq: { eyebrow: string; title: string; items: Question[] };
   footer: { github: string; license: string; note: string };
   /** For an address that leads nowhere. */

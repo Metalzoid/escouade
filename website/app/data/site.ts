@@ -4,6 +4,10 @@ import { LANGS, type Lang } from './language';
 
 export const REPO = 'https://github.com/guillaume-gagnaire/escouade';
 export const DOWNLOAD = `${REPO}/releases/latest`;
+/** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
+export const NEXT = '1.8';
+export const PLAN = `${REPO}/blob/main/docs/TODO-${NEXT}.md`;
+export const CHANGELOG = `${REPO}/blob/main/CHANGELOG.md`;
 /** Public address of the site, for links shared on social networks. */
 export const SITE = 'https://guillaume-gagnaire.github.io/escouade/';
 

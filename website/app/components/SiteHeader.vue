@@ -12,6 +12,7 @@ const { text } = useLang();
         <a href="#video">{{ text.header.video }}</a>
         <a :href="`#${text.anchors.features}`">{{ text.header.features }}</a>
         <a :href="`#${text.anchors.install}`">{{ text.header.install }}</a>
+        <a :href="`#${text.anchors.roadmap}`">{{ text.header.roadmap }}</a>
         <a href="#faq">{{ text.header.faq }}</a>
       </nav>
       <div class="tools">
@@ -61,6 +62,7 @@ const { text } = useLang();
   font-size: 15px;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
 }
 .nav a:hover,
 .gh:hover {
@@ -71,7 +73,8 @@ const { text } = useLang();
   border: 1px solid var(--line2);
   border-radius: 8px;
 }
-@media (max-width: 720px) {
+/* Five links on one line need the room: below it, only the brand, the language and GitHub stay. */
+@media (max-width: 960px) {
   .nav {
     display: none;
   }

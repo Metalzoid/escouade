@@ -55,6 +55,7 @@ useHead({
       </div>
     </section>
     <InstallSteps />
+    <RoadmapSection />
     <FaqSection />
   </main>
   <SiteFooter />

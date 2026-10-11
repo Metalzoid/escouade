@@ -15,12 +15,13 @@ export const en: Catalog = {
     video: 'Video',
     features: 'Features',
     install: 'Install',
+    roadmap: 'Roadmap',
     faq: 'FAQ',
     github: 'GitHub',
     language: 'Language',
   },
 
-  anchors: { features: 'features', install: 'install' },
+  anchors: { features: 'features', install: 'install', roadmap: 'roadmap' },
 
   hero: {
     line1: 'A squad of Claudes.',
@@ -193,6 +194,29 @@ export const en: Catalog = {
         text: 'Pick a folder, create an agent and write your first request. The next ones come with Ctrl+N (⌘N on Mac).',
       },
     ],
+  },
+
+  roadmap: {
+    eyebrow: 'Roadmap',
+    title: 'What comes next',
+    lead: 'Escouade will soon drive more than Claude Code. No date promised: the work is planned in detail on GitHub.',
+    next: 'Version {version} · in the works',
+    items: [
+      {
+        title: 'Codex, Copilot CLI and OpenCode',
+        text: 'Each agent runs on the engine you choose: Claude Code, OpenAI’s Codex, GitHub Copilot CLI or OpenCode. Same conversation, same question and permission cards, same Kanban, same worktrees.',
+      },
+      {
+        title: 'One engine per project, agent or ticket',
+        text: 'A default engine for each project, another one for an agent or a ticket, and the autopilot follows. Each engine’s models, effort and modes are picked just like today.',
+      },
+      {
+        title: 'Each engine’s quotas',
+        text: 'Codex’s quota windows and Copilot’s monthly credits in the status bar, several Codex or Copilot accounts with automatic switching, and stats per engine.',
+      },
+    ],
+    plan: 'The detailed plan (in French)',
+    changelog: 'What is already out',
   },
 
   faq: {

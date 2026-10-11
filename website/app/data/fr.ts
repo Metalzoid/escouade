@@ -15,12 +15,13 @@ export const fr: Catalog = {
     video: 'Vidéo',
     features: 'Fonctionnalités',
     install: 'Installer',
+    roadmap: 'Feuille de route',
     faq: 'FAQ',
     github: 'GitHub',
     language: 'Langue',
   },
 
-  anchors: { features: 'fonctionnalites', install: 'installer' },
+  anchors: { features: 'fonctionnalites', install: 'installer', roadmap: 'feuille-de-route' },
 
   hero: {
     line1: 'Une escouade de Claude.',
@@ -193,6 +194,29 @@ export const fr: Catalog = {
         text: 'Choisis un dossier, crée un agent et écris ta première demande. Les suivants arrivent avec Ctrl+N (⌘N sur Mac).',
       },
     ],
+  },
+
+  roadmap: {
+    eyebrow: 'Feuille de route',
+    title: 'Ce qui arrive ensuite',
+    lead: 'Escouade ne pilotera bientôt plus seulement Claude Code. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    next: 'Version {version} · en préparation',
+    items: [
+      {
+        title: 'Codex, Copilot CLI et OpenCode',
+        text: 'Chaque agent tourne sur le moteur de ton choix : Claude Code, Codex d’OpenAI, GitHub Copilot CLI ou OpenCode. Même conversation, mêmes cartes de questions et d’autorisations, même Kanban, mêmes worktrees.',
+      },
+      {
+        title: 'Un moteur par projet, agent ou ticket',
+        text: 'Un moteur par défaut pour chaque projet, un autre pour un agent ou un ticket, et le pilote auto qui suit. Les modèles, l’effort et les modes de chaque moteur se choisissent comme aujourd’hui.',
+      },
+      {
+        title: 'Les quotas de chacun',
+        text: 'Les fenêtres de quota de Codex et les crédits du mois de Copilot dans la barre d’état, plusieurs comptes Codex ou Copilot avec bascule automatique, et des statistiques par moteur.',
+      },
+    ],
+    plan: 'Le plan détaillé',
+    changelog: 'Ce qui est déjà sorti',
   },
 
   faq: {

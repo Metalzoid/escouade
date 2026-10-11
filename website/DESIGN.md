@@ -238,7 +238,7 @@ La page est une colonne centrée de min(1160px, 100% − 32px), soit 16px de mar
 
 Le hero prend la hauteur du viewport moins l'en-tête (100svh − 64px). Sa scène est plus large que la colonne (1400px au plus, marges de clamp(32px, 6vw, 96px)) : deux colonnes égales, le texte à gauche sur 680px au plus, l'objet-logo carré à droite, aussi grand que la hauteur le permet et 760px au plus. Ses espacements verticaux suivent la hauteur (clamp en svh). Sous 960px, il passe en une colonne : le texte et les boutons d'abord, l'objet dessous (600px au plus), sans le lien « Voir la vidéo ».
 
-Les fonctionnalités alternent texte et capture en 5fr / 7fr (gouttière 52px), puis trois cartes (gouttière 16px) ; les étapes d'installation tiennent sur trois colonnes (gouttière 20px). Sous 900px, tout passe en une colonne. Sous 720px, la navigation disparaît et le lien GitHub reste.
+Les fonctionnalités alternent texte et capture en 5fr / 7fr (gouttière 52px), puis trois cartes (gouttière 16px) ; les étapes d'installation tiennent sur trois colonnes (gouttière 20px). Sous 900px, tout passe en une colonne. Sous 960px, la navigation disparaît et le lien GitHub reste.
 
 L'objet-logo s'adapte à son conteneur. Sous 570px de large, là où son texte cesse de rétrécir, la fenêtre de devant garde trois agents (celui qui travaille, celui qui demande, le ticket) et prend leur hauteur au lieu du carré du logo (elle part quand même de ce carré au déploiement) ; le nombre d'agents de l'en-tête, ses compteurs, la branche et les coûts par carte s'effacent, la pastille de l'onglet et les cartes disant déjà qui travaille et qui attend.
 
@@ -280,7 +280,7 @@ Compacts, francs, en gras.
 - **Bande :** la section « Installer » passe sur fond panneau, entre deux filets.
 
 ### Navigation
-- **En-tête :** collant, 64px, brun nuit à 82 % et flou de 10px, filet en bas. La marque à gauche (logo 28px et « Escouade » 20px / 800), les liens à droite en sable 15px / 600 espacés de 24px, crème au survol. Sous 720px, seuls la marque et GitHub restent.
+- **En-tête :** collant, 64px, brun nuit à 82 % et flou de 10px, filet en bas. La marque à gauche (logo 28px et « Escouade » 20px / 800), les liens à droite en sable 15px / 600 espacés de 24px, crème au survol, chacun sur une ligne. Sous 960px (cinq liens, dont « Feuille de route »), seuls la marque, la langue et GitHub restent.
 - **Pied :** filet en haut, logo 22px et nom en 700, liens sable crème au survol, mention d'indépendance en taupe 14px.
 
 ### FAQ
