@@ -2,6 +2,17 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.7.1] — 2026-10-11
+
+### Modifications
+
+- Toutes les infobulles de l'app ont désormais l'allure de celle du quota (fond sombre de l'app, bordure, ombre) au lieu de celle du système, blanche sous Windows. C'est le cas des ressources (mémoire et CPU, une ligne par agent), du coût estimé, de la branche, et des boutons de la barre de titre, de la barre latérale, du Kanban, de l'éditeur et des réglages.
+- Elles s'affichent plus vite : après 400 ms de survol, puis tout de suite quand le pointeur passe d'un élément à son voisin. Elles se placent au-dessus de l'élément sans jamais sortir de la fenêtre.
+- Elles s'affichent aussi au clavier : un bouton qui reçoit le focus par Tab ou une flèche montre la sienne.
+- Échap, un clic ou un défilement les retirent. Avec le focus sur l'élément, Échap ne ferme rien d'autre : ni une fenêtre, ni le tour de l'agent.
+- Un texte coupé par des points de suspension ne montre son texte entier en infobulle que s'il est vraiment coupé.
+- Lecteurs d'écran : un bouton qui n'affiche qu'un symbole (⚙, ×, ⌕, +…) est désormais nommé par son infobulle (« Réglages (Ctrl+,) » plutôt que « ⚙ »).
+
 ## [1.7.0] — 2026-10-11
 
 ### Ajouts
