@@ -2,7 +2,7 @@
 
 Le poste de pilotage de tes agents [Claude Code](https://claude.com/claude-code) : une application Windows et macOS pour piloter plusieurs instances de Claude Code en local, avec un onglet par projet, autant d'agents que nécessaire, des terminaux intégrés, des notifications quand Claude attend une réponse, les quotas de ton abonnement et des statistiques de consommation. Elle parle français et anglais.
 
-Site : [guillaume-gagnaire.github.io/escouade](https://guillaume-gagnaire.github.io/escouade/)
+Site : [escouade.gagnaire.dev](https://escouade.gagnaire.dev/)
 
 Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour remplace l'ancienne installation et garde tes réglages et tes conversations. Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic.
 

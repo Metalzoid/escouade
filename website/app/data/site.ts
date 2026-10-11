@@ -9,7 +9,7 @@ export const NEXT = '1.8';
 export const PLAN = `${REPO}/blob/main/docs/TODO-${NEXT}.md`;
 export const CHANGELOG = `${REPO}/blob/main/CHANGELOG.md`;
 /** Public address of the site, for links shared on social networks. */
-export const SITE = 'https://guillaume-gagnaire.github.io/escouade/';
+export const SITE = 'https://escouade.gagnaire.dev/';
 
 /** Public address of the page of `lang`. */
 export const pageUrl = (lang: Lang) => `${SITE}${LANGS.find((l) => l.code === lang)!.path}`;

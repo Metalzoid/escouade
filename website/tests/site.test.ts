@@ -9,7 +9,7 @@ import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
 
 const OUT = new URL('../.output/public/', import.meta.url);
-const BASE = '/escouade/';
+const BASE = '/';
 const VERSION = (JSON.parse(readFileSync(new URL('../../src-tauri/tauri.conf.json', import.meta.url), 'utf8')) as { version: string })
   .version;
 
@@ -320,7 +320,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).toContain(escapeText(link.label));
   });
 
-  it('serves every local file under the GitHub Pages path', () => {
+  it('serves every local file from the site’s root', () => {
     const local = [...html.matchAll(/(?:src|href|poster)="(\/[^"]*)"/g)].map((m) => m[1]);
     expect(local.length).toBeGreaterThan(10);
     for (const ref of local) {
@@ -343,7 +343,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(html).toContain(`poster="${BASE}${dir}poster.jpg"`);
     expect(meta('og:image')).toBe(`${SITE}${dir}poster.jpg`);
     expect(meta('twitter:image')).toBe(`${SITE}${dir}poster.jpg`);
-    const images = [...html.matchAll(/(?:src|poster)="(\/escouade\/images\/[^"]+\.jpg)"/g)].map((m) => m[1]);
+    const images = [...html.matchAll(new RegExp(`(?:src|poster)="(${BASE}images/[^"]+\\.jpg)"`, 'g'))].map((m) => m[1]);
     // The hero shows the agents' screenshot too: each picture counts once.
     expect(new Set(images).size).toBe(FEATURE_SHOTS.length + 1);
     for (const image of images) expect(image.startsWith(`${BASE}${dir}`), image).toBe(true);
