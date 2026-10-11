@@ -2,6 +2,13 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.7.2] — 2026-10-11
+
+### Modifications
+
+- Nouveau logo : une tuile teal, le chevron `>` de Claude Code et l'étincelle à la place du curseur. Il remplace les trois fenêtres empilées dans l'icône de l'app (barre des tâches, menu Démarrer, raccourcis, Dock, Finder, installeur), dans la barre de titre et dans la zone de notification, où la pastille ambre d'un agent qui attend se pose toujours dans son coin.
+- Le site de présentation change d'allure : la vraie fenêtre de l'app en grand dès le premier écran, une démonstration où tu réponds toi-même à la question d'un agent, les fonctionnalités en grille de captures, et une section « Feuille de route » qui annonce la 1.8 (Codex, Copilot CLI et OpenCode à côté de Claude Code). La vidéo et ses images montrent le nouveau logo.
+
 ## [1.7.1] — 2026-10-11
 
 ### Modifications
