@@ -1196,7 +1196,7 @@ describe('Conversation header test launch', () => {
   it('tests a worktree whose services isola runs without a recipe, and asks for none', () => {
     setup({ worktree: WT, isola: true });
     expect(screen.getByRole('button', { name: '▶ Tester' })).toHaveAttribute(
-      'title',
+      'data-tip',
       'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur',
     );
     expect(screen.queryByRole('button', { name: 'Préparer le lancement' })).not.toBeInTheDocument();
@@ -1217,7 +1217,7 @@ describe('Conversation header usage', () => {
     setup({ contextTokens: 45_200, contextWindow: 200_000 });
     const ctx = screen.getByText('Contexte').closest('.m')!;
     expect(ctx).toHaveTextContent('45,2 k / 200 k');
-    expect(ctx).toHaveAttribute('title', expect.stringContaining('23 %'));
+    expect(ctx).toHaveAttribute('data-tip', expect.stringContaining('23 %'));
     expect(ctx.querySelector('.v')).not.toHaveClass('full');
   });
 
@@ -1577,7 +1577,7 @@ describe('Conversation in English', () => {
     setLang('en');
     setup({ status: 'running', contextTokens: 120_000, contextWindow: 200_000, activeMs: 151_000 });
     expect(screen.getByText('Running')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Editor' })).toHaveAttribute('title', 'Browse and edit the files of this agent');
+    expect(screen.getByRole('button', { name: 'Editor' })).toHaveAttribute('data-tip', 'Browse and edit the files of this agent');
     expect(screen.getByText('Context').nextElementSibling).toHaveTextContent('120.0k / 200k');
     expect(screen.getByText('Cost')).toBeInTheDocument();
     expect(screen.getByText('Duration').nextElementSibling).toHaveTextContent('2m 31s');

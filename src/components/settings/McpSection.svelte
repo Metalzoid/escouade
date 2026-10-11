@@ -9,6 +9,7 @@
   import { app } from '../../lib/state.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import { tip } from '../../lib/tip';
 
   // « Escouade dans Claude »: Claude Code drives Escouade through its MCP server, declared in the Claude Code of each
   // active account; and « Activité MCP »: what the server was asked. The switch is saved at once, not through the
@@ -95,7 +96,7 @@
     <ul class="log" tabindex="0" aria-label={t('mcp.activity.list')}>
       {#each calls as e}
         <li class:bad={e.outcome !== 'ok'}>
-          <span class="at mono" title={fDateTime(e.at)}>{fTime(e.at)}</span>
+          <span class="at mono" use:tip={fDateTime(e.at)}>{fTime(e.at)}</span>
           <span class="who">{e.caller}</span>
           <span class="tool mono">{e.tool || '—'}</span>
           <span class="res">{t(`mcp.activity.outcome.${e.outcome}`)}</span>

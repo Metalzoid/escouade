@@ -9,6 +9,7 @@ import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, gitInfo, project, resetApp } from '../test/ipc';
 import ConfirmModal from './modals/ConfirmModal.svelte';
 import TitleBar from './TitleBar.svelte';
+import { getByTip } from '../test/tip';
 
 async function closeProjectFromMenu(name: string) {
   await fireEvent.contextMenu(screen.getByRole('button', { name: new RegExp(name) }));
@@ -42,7 +43,7 @@ describe('TitleBar', () => {
     await Promise.resolve();
     expect(other).toHaveClass('alert');
     expect(other.style.getPropertyValue('--alert')).toBe('var(--del)');
-    expect(other).toHaveAttribute('title', expect.stringContaining('À voir'));
+    expect(other).toHaveAttribute('data-tip', expect.stringContaining('À voir'));
     // The active project's own tab does not blink: its agent's card does.
     app.attention = { a1: true };
     await Promise.resolve();
@@ -67,7 +68,7 @@ describe('TitleBar', () => {
     expect(
       button.compareDocumentPosition(screen.getByRole('button', { name: /demo-api/ })) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(button).toHaveAttribute('title', expect.stringContaining('Ctrl+Maj+A'));
+    expect(button).toHaveAttribute('data-tip', expect.stringContaining('Ctrl+Maj+A'));
     expect(button).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(button);
     expect(app.ui.view).toBe('overview');
@@ -234,21 +235,21 @@ describe('TitleBar in English', () => {
     app.git = { p1: gitInfo({ total: 3 }) };
     app.attention = { b1: true };
     render(TitleBar);
-    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('title', 'All agents of all projects (Ctrl+Shift+A)');
+    expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute('data-tip', 'All agents of all projects (Ctrl+Shift+A)');
     expect(screen.getByRole('button', { name: 'Stats' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add a project' })).toHaveAttribute('title', 'Add a project');
+    expect(screen.getByRole('button', { name: 'Add a project' })).toHaveAttribute('data-tip', 'Add a project');
     expect(screen.getByRole('button', { name: 'Open the project’s editor' })).toHaveAttribute(
-      'title',
+      'data-tip',
       'Browse and edit the project’s files',
     );
-    expect(screen.getByTitle('Uncommitted git changes')).toHaveTextContent('Δ 3');
-    expect(screen.getByTitle('Agents waiting for an answer')).toHaveTextContent('1');
+    expect(getByTip(document.body, 'Uncommitted git changes')).toHaveTextContent('Δ 3');
+    expect(getByTip(document.body, 'Agents waiting for an answer')).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /studio-web/ })).toHaveAttribute(
-      'title',
+      'data-tip',
       expect.stringContaining('Needs a look: refacto-auth'),
     );
-    expect(screen.getByRole('button', { name: 'Minimize' })).toHaveAttribute('title', 'Minimize');
-    expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('title', 'Close (the app stays in the notification area)');
+    expect(screen.getByRole('button', { name: 'Minimize' })).toHaveAttribute('data-tip', 'Minimize');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveAttribute('data-tip', 'Close (the app stays in the notification area)');
   });
 
   it('writes the menu of a project’s tab in English', async () => {

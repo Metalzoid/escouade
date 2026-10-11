@@ -9,6 +9,7 @@
   import { IS_MAC, keyLabel } from '../lib/platform';
   import { PROJECT_COLORS } from '../lib/theme';
   import type { Project } from '../lib/types';
+  import { tip } from '../lib/tip';
 
   const win = getCurrentWindow();
   let maximized = $state(false);
@@ -106,7 +107,7 @@
       class="tab stats"
       class:active={app.ui.view === 'overview'}
       aria-pressed={app.ui.view === 'overview'}
-      title={t('nav.titleBar.overviewTitle', { shortcut: keyLabel('Ctrl+Shift+A') })}
+      use:tip={t('nav.titleBar.overviewTitle', { shortcut: keyLabel('Ctrl+Shift+A') })}
       onclick={() => app.toggleOverview()}
     >
       <svg
@@ -141,7 +142,7 @@
         style:--tab-color={p.color}
         style:--alert={s.alert}
         draggable="true"
-        title={s.alertTitle && !active ? `${s.alertTitle}\n${p.path}` : p.path}
+        use:tip={s.alertTitle && !active ? `${s.alertTitle}\n${p.path}` : p.path}
         onclick={() => app.selectProject(p.id)}
         oncontextmenu={(e) => tabMenu(e, p)}
         onauxclick={(e) => e.button === 1 && tabMenu(e, p)}
@@ -164,14 +165,14 @@
         <span class="name">{p.name}</span>
         {#if s.running && !s.waiting}<span class="dot" style="width:6px;height:6px;background:var(--ok)"></span>{/if}
         {#if s.changes > 0}
-          <span class="delta" title={t('nav.titleBar.delta')}>Δ {s.changes}</span>
+          <span class="delta" use:tip={t('nav.titleBar.delta')}>Δ {s.changes}</span>
         {/if}
-        {#if s.waiting > 0}<span class="pill" title={t('nav.titleBar.waiting')}>{s.waiting}</span>{/if}
+        {#if s.waiting > 0}<span class="pill" use:tip={t('nav.titleBar.waiting')}>{s.waiting}</span>{/if}
       </button>
     {/each}
     <button
       class="add"
-      title={t('nav.titleBar.addProject')}
+      use:tip={t('nav.titleBar.addProject')}
       aria-label={t('nav.titleBar.addProject')}
       onclick={() => {
         app.modal = { kind: 'newProject' };
@@ -184,7 +185,7 @@
       <button
         class="tab stats"
         aria-label={t('nav.titleBar.openEditor')}
-        title={t('nav.titleBar.openEditorTitle')}
+        use:tip={t('nav.titleBar.openEditorTitle')}
         onclick={() => app.openEditor({ projectId: activeProject.id, source: 'project' })}
       >
         <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"
@@ -201,12 +202,12 @@
   <!-- macOS draws its own buttons (traffic lights) at the left of the bar. -->
   {#if !IS_MAC}
     <div class="controls">
-      <button class="ctl" title={t('nav.titleBar.minimize')} aria-label={t('nav.titleBar.minimize')} onclick={() => win.minimize()}>
+      <button class="ctl" use:tip={t('nav.titleBar.minimize')} aria-label={t('nav.titleBar.minimize')} onclick={() => win.minimize()}>
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1" /></svg>
       </button>
       <button
         class="ctl"
-        title={maximized ? t('nav.titleBar.restore') : t('nav.titleBar.maximize')}
+        use:tip={maximized ? t('nav.titleBar.restore') : t('nav.titleBar.maximize')}
         aria-label={t('nav.titleBar.maximize')}
         onclick={() => win.toggleMaximize()}
       >
@@ -220,7 +221,7 @@
           >
         {/if}
       </button>
-      <button class="ctl close" title={t('nav.titleBar.closeWindow')} aria-label={t('common.close')} onclick={() => win.hide()}>
+      <button class="ctl close" use:tip={t('nav.titleBar.closeWindow')} aria-label={t('common.close')} onclick={() => win.hide()}>
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1" /></svg>
       </button>
     </div>

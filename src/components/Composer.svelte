@@ -19,6 +19,7 @@
   import { app } from '../lib/state.svelte';
   import type { Agent, QuestionItem } from '../lib/types';
   import Dropdown from './Dropdown.svelte';
+  import { tip } from '../lib/tip';
 
   let { agent }: { agent: Agent } = $props();
 
@@ -429,7 +430,7 @@
               >
             </div>
           {:else}
-            <div class="file" title={f.name}>
+            <div class="file" use:tip={{ text: f.name, cut: true }}>
               <span aria-hidden="true">📄</span>
               <span class="fname">{f.name}</span>
               <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => files.splice(i, 1)}
@@ -505,7 +506,7 @@
           class="btn ghost stop"
           class:icon={tight}
           onclick={stop}
-          title={t('composer.bar.interrupt', { key: keyLabel('Esc') })}
+          use:tip={t('composer.bar.interrupt', { key: keyLabel('Esc') })}
           aria-label={t('composer.bar.stop')}>{tight ? '■' : `■ ${t('composer.bar.stop')}`}</button
         >
       {/if}
@@ -523,7 +524,7 @@
       />
       <button
         class="icon-btn attach"
-        title={t('composer.attach.title')}
+        use:tip={t('composer.attach.title')}
         aria-label={t('composer.attach.label')}
         onclick={() => fileInput?.click()}
       >
@@ -541,7 +542,7 @@
       </button>
       <button
         class="btn primary"
-        title={busy && !pendingItem
+        use:tip={busy && !pendingItem
           ? t('composer.send.titleQueued', { enter: keyLabel('Enter') })
           : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
         disabled={sending || reading > 0 || (!text.trim() && !files.length)}

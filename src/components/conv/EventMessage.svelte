@@ -2,6 +2,7 @@
   import { t } from '../../lib/i18n';
   import { parseAgentMessage, parseTaskNotification, plainText } from '../../lib/events';
   import Markdown from './Markdown.svelte';
+  import { tip } from '../../lib/tip';
 
   // What Claude Code passed on to Claude by itself: `source` "task" (a background task), "agent"
   // (a subagent or another session), or another origin. `label`: the task a subagent was given.
@@ -46,7 +47,7 @@
   <div class="event line" class:failed={task?.status === 'failed'}>
     <span class="ico" aria-hidden="true">◷</span>
     <span class="what">{line.what}</span>
-    {#if line.detail}<span class="detail" title={line.detail}>{line.detail}</span>{/if}
+    {#if line.detail}<span class="detail" use:tip={{ text: line.detail, cut: true }}>{line.detail}</span>{/if}
   </div>
 {/if}
 

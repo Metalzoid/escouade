@@ -126,7 +126,7 @@ describe('TurnCard in English', () => {
     expect(screen.getByText('$2.84')).toBeInTheDocument();
     expect(screen.getByText('2 files edited')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Edited files' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'src/auth.ts' })).toHaveAttribute('title', 'Open in editor');
+    expect(screen.getByRole('button', { name: 'src/auth.ts' })).toHaveAttribute('data-tip', 'Open in editor');
     unmount();
     render(TurnCard, { item: turn(), agent: agent({ status: 'done' }), last: true, edits: edits.slice(0, 1) });
     expect(screen.getByText('1 file edited')).toBeInTheDocument();

@@ -6,6 +6,7 @@
   import { t, type Key } from '../../lib/i18n';
   import type { SearchMatch } from '../../lib/types';
   import FileIcon from './FileIcon.svelte';
+  import { tip } from '../../lib/tip';
 
   // « Rechercher dans les fichiers »: the field and its options, then what the search of the source shown found, file by
   // file, in a tree the keys walk as the files' one; a line found opens its file there.
@@ -155,7 +156,7 @@
         class:on={search[o.key]}
         aria-pressed={search[o.key]}
         aria-label={t(o.label)}
-        title={t(o.label)}
+        use:tip={t(o.label)}
         onmousedown={(e) => e.preventDefault()}
         onclick={() => search.toggle(o.key)}>{o.glyph}</button
       >
@@ -191,7 +192,7 @@
               : t('editor.search.fileRow', { name: basename(r.path), results: results(r.count) })}
             aria-selected={r.key === stop}
             tabindex={r.key === stop ? 0 : -1}
-            title={r.path}
+            use:tip={r.path}
             data-index={i}
             onfocus={() => (focused = r.key)}
             onclick={() => fold(r.path)}

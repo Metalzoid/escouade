@@ -248,7 +248,7 @@ describe('BranchPicker', () => {
       const reason = 'La branche « escouade/refacto-auth » est utilisée par l’agent refacto-auth, dans son worktree.';
       expect(held).toHaveTextContent('utilisée par l’agent refacto-auth');
       expect(held).toHaveAttribute('aria-disabled', 'true');
-      expect(held).toHaveAttribute('title', reason);
+      expect(held).toHaveAttribute('data-tip', reason);
       // On the keyboard: the cursor reaches it, says why, and Enter does nothing.
       await userEvent.keyboard('{ArrowDown}{ArrowDown}');
       expect(cursor()).toBe(2);
@@ -281,7 +281,7 @@ describe('BranchPicker', () => {
       const spike = option('spike');
       expect(spike).toHaveAttribute('aria-disabled', 'true');
       expect(spike).toHaveTextContent('dans un autre worktree');
-      expect(spike).toHaveAttribute('title', 'La branche « spike » est prise par le worktree D:\\other\\spike.');
+      expect(spike).toHaveAttribute('data-tip', 'La branche « spike » est prise par le worktree D:\\other\\spike.');
       await userEvent.click(spike);
       expect(backend.called('branch_switch')).toHaveLength(0);
     });
@@ -537,7 +537,7 @@ describe('BranchPicker to pick a branch', () => {
     const why = 'C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.';
     for (const name of ['main', 'origin/main']) {
       expect(option(name)).toHaveAttribute('aria-disabled', 'true');
-      expect(option(name)).toHaveAttribute('title', why);
+      expect(option(name)).toHaveAttribute('data-tip', why);
       await userEvent.click(option(name));
     }
     expect(onpick).not.toHaveBeenCalled();
@@ -556,7 +556,7 @@ describe('BranchPicker to pick a branch', () => {
     const why = 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.';
     for (const name of ['feat/login', 'origin/feat/login']) {
       expect(option(name)).toHaveAttribute('aria-disabled', 'true');
-      expect(option(name)).toHaveAttribute('title', why);
+      expect(option(name)).toHaveAttribute('data-tip', why);
       await userEvent.click(option(name));
     }
     expect(onpick).not.toHaveBeenCalled();
@@ -571,7 +571,7 @@ describe('BranchPicker to pick a branch', () => {
     const { onpick } = pick();
     await loaded();
     expect(option('main')).toHaveAttribute('aria-disabled', 'true');
-    expect(option('main')).toHaveAttribute('title', 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.');
+    expect(option('main')).toHaveAttribute('data-tip', 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.');
     await userEvent.click(option('main'));
     expect(onpick).not.toHaveBeenCalled();
   });
@@ -581,7 +581,7 @@ describe('BranchPicker to pick a branch', () => {
     setup();
     await loaded();
     expect(option('feat/login')).not.toHaveAttribute('aria-disabled', 'true');
-    expect(option('feat/login')).not.toHaveAttribute('title');
+    expect(option('feat/login')).not.toHaveAttribute('data-tip');
   });
 
   it('cannot pick a branch a worktree holds either', async () => {
@@ -605,7 +605,7 @@ describe('BranchPicker to pick a branch', () => {
     await loaded();
     expect(screen.getByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
     expect(option('main')).toHaveAttribute(
-      'title',
+      'data-tip',
       'This is the branch of the project’s folder: an agent without a worktree already works on it, or switch branches first.',
     );
   });
@@ -615,7 +615,7 @@ describe('BranchPicker to pick a branch', () => {
     app.projects = [project({ board: board({ target: 'feat/login' }) })];
     pick();
     await loaded();
-    expect(option('feat/login')).toHaveAttribute('title', 'It’s the board’s target branch: an agent doesn’t work on it directly.');
+    expect(option('feat/login')).toHaveAttribute('data-tip', 'It’s the board’s target branch: an agent doesn’t work on it directly.');
   });
 });
 
@@ -635,7 +635,7 @@ describe('BranchPicker in English', () => {
     expect(screen.getByRole('group', { name: 'Remote' })).toBeInTheDocument();
     expect(option('escouade/refacto-auth')).toHaveTextContent('used by agent refacto-auth');
     expect(option('escouade/refacto-auth')).toHaveAttribute(
-      'title',
+      'data-tip',
       'The branch “escouade/refacto-auth” is used by agent refacto-auth, in its worktree.',
     );
     expect(option('main')).toHaveTextContent('2 commits to push');

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import type { UserItem } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   let { item, waiting = false }: { item: UserItem; waiting?: boolean } = $props();
 </script>
@@ -17,8 +18,8 @@
     <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
     {#if waiting}<span class="note">{t('conv.user.waiting')}</span>{/if}
     <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
-    {#if item.queued}<span class="note" title={t('conv.user.queuedHint')}>{t('conv.user.queued')}</span>{/if}
-    {#if item.origin === 'remote'}<span class="note" title={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
+    {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint')}>{t('conv.user.queued')}</span>{/if}
+    {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
   </div>
 </div>
 

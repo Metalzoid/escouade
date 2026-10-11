@@ -7,6 +7,7 @@
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { ExternalIssue, IssuePage, Service } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   // « Importer des tickets »: the tickets of the project's linked sources, searched and filtered by
   // their service, chosen across sources, then put at the end of « À faire ».
@@ -289,7 +290,7 @@
                 <span class="kind" style:color={kindColor(i.kindCode)}>{i.kind}</span>
                 {#if i.meta.length}<span>{i.meta.join('  ·  ')}</span>{/if}
                 {#if extract && i.criteria.length}
-                  <span class="crit" title={i.criteria.join(' · ')}
+                  <span class="crit" use:tip={i.criteria.join(' · ')}
                     >{t('integrations.modal.criteriaFound', { count: i.criteria.length })}</span
                   >
                 {/if}

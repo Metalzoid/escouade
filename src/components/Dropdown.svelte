@@ -10,6 +10,7 @@
 
 <script lang="ts">
   import { t } from '../lib/i18n';
+  import { tip } from '../lib/tip';
 
   // A compact picker whose menu opens upwards (the composer sits at the bottom of the window).
   let {
@@ -62,7 +63,7 @@
     aria-expanded={readonly ? undefined : open}
     aria-disabled={readonly ? 'true' : undefined}
     aria-label={label}
-    title={title ?? label}
+    use:tip={title ?? label}
     {disabled}
     onclick={readonly ? undefined : onToggle}
   >
@@ -73,7 +74,13 @@
     <div class="backdrop" onclick={onToggle}></div>
     <div class="menu" role="menu" aria-label={caption}>
       {#each options as o (o.value)}
-        <button role="menuitemradio" aria-checked={o.value === value} disabled={o.disabled} title={o.title} onclick={() => onPick(o.value)}>
+        <button
+          role="menuitemradio"
+          aria-checked={o.value === value}
+          disabled={o.disabled}
+          use:tip={o.title}
+          onclick={() => onPick(o.value)}
+        >
           <span class="check" aria-hidden="true">{o.value === value ? '✓' : ''}</span>
           <span class="ml">{o.label}</span>
           {#if o.detail}<span class="md">{o.detail}</span>{/if}

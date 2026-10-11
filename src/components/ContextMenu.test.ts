@@ -43,8 +43,8 @@ describe('ContextMenu', () => {
     };
     const entry = await screen.findByRole('menuitem', { name: 'Dupliquer la conversation' });
     expect(entry).toBeDisabled();
-    expect(entry).toHaveAttribute('title', 'Attends la fin de son tour.');
-    expect(screen.getByRole('menuitem', { name: 'Renommer' })).not.toHaveAttribute('title');
+    expect(entry).toHaveAttribute('data-tip', 'Attends la fin de son tour.');
+    expect(screen.getByRole('menuitem', { name: 'Renommer' })).not.toHaveAttribute('data-tip');
   });
 });
 

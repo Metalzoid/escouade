@@ -14,6 +14,7 @@
   import { SUMMED_UP, toolLabel } from '../lib/tools';
   import type { Agent, PendingRequest, Project } from '../lib/types';
   import StatusDot from './StatusDot.svelte';
+  import { tip } from '../lib/tip';
 
   // « Vue d’ensemble » (Ctrl+Shift+A): every agent of every project in one list, the ones waiting for an answer first,
   // whose permissions are answered on the spot; a line opens its agent.
@@ -278,7 +279,7 @@
     <div class="line" role="button" tabindex={a.id === current ? 0 : -1} onkeydown={(e) => lineKey(e, a)}>
       <span class="agent">
         <StatusDot status={a.status} size={8} />
-        <span class="name" id={`ov-a-${a.id}`} title={a.name}>{a.name}</span>
+        <span class="name" id={`ov-a-${a.id}`} use:tip={{ text: a.name, cut: true }}>{a.name}</span>
         {#if p}<span class="proj"><span class="swatch" style:background={p.color}></span>{p.name}</span>{/if}
         {#if tag}<span class="tag mono">▸ {tag}</span>{/if}
       </span>
@@ -288,7 +289,7 @@
         {:else if a.resumeAt}
           <span class="txt" style:color="var(--wait)">{t('stats.overview.resumes', { when: fWhen(a.resumeAt, app.now) })}</span>
         {:else if a.setup}
-          <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="txt" title={a.setup}
+          <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="txt" use:tip={a.setup}
             >{t('stats.overview.settingUp', { step: a.setup })}</span
           >
         {:else if a.status === 'running'}
@@ -300,19 +301,21 @@
         {/if}
       </span>
       <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
-      <span class="num" title={used.estimated ? estimateHint() : undefined}
+      <span class="num" use:tip={used.estimated ? estimateHint() : undefined}
         ><span class="sr">{t('common.cost')}{' '}</span>{fSpentUsd(used)}</span
       >
-      <span class="num ctx" class:full={ctx?.full} title={ctx?.title ?? t('stats.overview.contextUnknown')}
+      <span class="num ctx" class:full={ctx?.full} use:tip={ctx?.title ?? t('stats.overview.contextUnknown')}
         ><span class="sr">{t('stats.overview.context')}{' '}</span>{ctx ? fPct(ctx.pct) : '—'}</span
       >
-      <span class="num" title={t('stats.overview.lastChange', { when: fWhen(a.lastActivity, app.now) })}
+      <span class="num" use:tip={t('stats.overview.lastChange', { when: fWhen(a.lastActivity, app.now) })}
         ><span class="sr">{t('stats.overview.since')}{' '}</span>{fSince(a.lastActivity, app.now)}</span
       >
     </div>
     {#if a.progressLine}
       <!-- What the agent reported through Escouade's MCP server, until its next report. -->
-      <div class="said" title={a.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}</div>
+      <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
+        <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
+      </div>
     {/if}
     {#if asks}
       <!-- Drawn anew for each request: its argument is measured for itself. -->
@@ -352,7 +355,7 @@
                 : req
                   ? t('stats.overview.proposesPlan')
                   : t('stats.overview.waitsForAnswer')}
-            <span class="ask" title={text}>{text}</span>
+            <span class="ask" use:tip={{ text: text, cut: true }}>{text}</span>
             <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
           {/if}
         </div>
@@ -365,7 +368,7 @@
   <header class="head">
     <div class="who">
       <h1 class="t" id="ov-title">{t('common.overview')}</h1>
-      <span class="sub mono" title={sub}>{sub}</span>
+      <span class="sub mono" use:tip={{ text: sub, cut: true }}>{sub}</span>
     </div>
     <div style="flex:1"></div>
     <span class="keys" aria-hidden="true">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
   import { menu } from '../lib/menu.svelte';
+  import { tip } from '../lib/tip';
 
   let el = $state<HTMLDivElement>();
   let pos = $state({ x: 0, y: 0 });
@@ -112,7 +113,7 @@
           role="menuitem"
           class:danger={item.danger}
           disabled={item.disabled}
-          title={item.title}
+          use:tip={item.title}
           onclick={() => {
             menu.close();
             item.onClick?.();

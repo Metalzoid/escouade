@@ -40,7 +40,7 @@ describe('QuotaMeter in the status bar', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     const meter = screen.getByRole('meter');
     await userEvent.hover(meter);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
     await userEvent.unhover(meter);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
@@ -48,21 +48,21 @@ describe('QuotaMeter in the status bar', () => {
   it('shows the tooltip as well over the label and the reset, a bigger target than the bar', async () => {
     render(QuotaMeter, { kind: 'fiveHour', usage: { pct: 42, resetsAt: SOON }, now: NOW });
     await userEvent.hover(screen.getByText('reset 3h01'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('42 %');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('42 %');
   });
 
   it('puts the meter in the tab order, shows the tooltip when it has the focus, and Escape takes it back', async () => {
     render(QuotaMeter, { kind: 'fiveHour', usage: { pct: 42, resetsAt: SOON }, now: NOW });
     await userEvent.tab();
     expect(screen.getByRole('meter')).toHaveFocus();
-    expect(screen.getByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     // Still on the bar: the focus stays, and the tooltip comes back with the next focus.
     expect(screen.getByRole('meter')).toHaveFocus();
     await userEvent.tab();
     await userEvent.tab({ shift: true });
-    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
     await userEvent.tab();
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
@@ -73,7 +73,7 @@ describe('QuotaMeter in the status bar', () => {
     await userEvent.tab();
     await userEvent.hover(meter);
     await userEvent.unhover(meter);
-    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
   });
 
   it('turns to the warning color past 80 %, not at 80 %', async () => {
@@ -98,7 +98,7 @@ describe('QuotaMeter in the status bar', () => {
     expect(meter).toHaveAttribute('aria-valuenow', '0');
     expect(meter).toHaveAttribute('aria-valuetext', 'Quota indisponible');
     await userEvent.hover(meter);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Quota indisponible');
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Quota indisponible');
   });
 
   it('gives only the percentage when the reset is unknown', async () => {
@@ -106,7 +106,7 @@ describe('QuotaMeter in the status bar', () => {
     expect(container).not.toHaveTextContent('reset');
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', '10 %');
     await userEvent.hover(screen.getByRole('meter'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent(/^10 %$/);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/^10 %$/);
   });
 
   it('is not in the tab order when the button around it takes the focus', async () => {
@@ -116,7 +116,7 @@ describe('QuotaMeter in the status bar', () => {
     expect(screen.getByRole('meter')).not.toHaveFocus();
     // The pointer still gets its tooltip.
     await userEvent.hover(screen.getByRole('meter'));
-    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
   });
 
   it('follows the clock', async () => {

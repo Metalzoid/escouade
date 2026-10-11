@@ -20,6 +20,7 @@
   import RunsSection from './RunsSection.svelte';
   import StatusDot from './StatusDot.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
+  import { tip } from '../lib/tip';
 
   let { project }: { project: Project } = $props();
 
@@ -215,7 +216,7 @@
     <div class="switcher" role="group" aria-label={t('nav.sidebar.viewLabel')}>
       <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>{t('common.agents')}</button>
       <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-        >Kanban{#if review}<span class="badge" title={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
+        >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
       >
     </div>
   </div>
@@ -225,7 +226,11 @@
     <span class="count">{app.projectAgents.length}</span>
     <div style="flex:1"></div>
     <div class="newgrp">
-      <button class="new" onclick={() => app.newAgent(project.id)} title={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}>
+      <button
+        class="new"
+        onclick={() => app.newAgent(project.id)}
+        use:tip={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}
+      >
         <span class="plus">+</span>
         {t('nav.sidebar.newAgent')}
       </button>
@@ -234,7 +239,7 @@
         bind:this={moreBtn}
         aria-haspopup="menu"
         aria-label={t('branches.agent.moreWays')}
-        title={t('branches.agent.moreWays')}
+        use:tip={t('branches.agent.moreWays')}
         onclick={newAgentMenu}>▾</button
       >
     </div>
@@ -277,7 +282,7 @@
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
           {/if}
           {#if a.remoteControl}
-            <span class="rc" class:on={a.remoteState === 'connected'} title={remoteTitle(a)}>
+            <span class="rc" class:on={a.remoteState === 'connected'} use:tip={remoteTitle(a)}>
               <svg
                 width="12"
                 height="12"
@@ -294,11 +299,11 @@
           {#if a.status === 'waiting'}
             <span class="pill">{statusLabel('waiting')}</span>
           {:else if a.resumeAt}
-            <span class="status" style:color="var(--wait)" title={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
+            <span class="status" style:color="var(--wait)" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
               >{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
             >
           {:else if a.setup}
-            <span class="status" style:color="var(--wait)" title={t('nav.sidebar.settingUpTitle', { step: a.setup })}
+            <span class="status" style:color="var(--wait)" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}
               >{t('nav.sidebar.settingUp')}</span
             >
           {:else}
@@ -307,14 +312,16 @@
         </div>
         {#if a.progressLine}
           <!-- What the agent reported through Escouade's MCP server, until its next report. -->
-          <div class="said" title={a.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}</div>
+          <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
+            <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
+          </div>
         {/if}
         <div class="meta">
           <span>{modelLabel(a.model, app.models)}</span><span class="sep">·</span><span>{duration(a)}</span>
-          {#if a.worktree}<span class="sep">·</span><span class="wt" title={a.worktree.branch}>⎇ {shortBranch(a.worktree.branch)}</span
+          {#if a.worktree}<span class="sep">·</span><span class="wt" use:tip={a.worktree.branch}>⎇ {shortBranch(a.worktree.branch)}</span
             >{/if}
         </div>
-        <div class="meta dim" title={s.estimated ? estimateHint() : undefined}>
+        <div class="meta dim" use:tip={s.estimated ? estimateHint() : undefined}>
           <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span><span>{fSpentUsd(s)}</span><span
             >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
           >
@@ -374,7 +381,7 @@
       <span class="section-label">{t('nav.sidebar.terminals')}</span>
       <span class="count">{terms.length}</span>
       <div style="flex:1"></div>
-      <button class="plus-btn" bind:this={termMenuBtn} title={t('nav.sidebar.newTerminal')} onclick={shellMenu}>+</button>
+      <button class="plus-btn" bind:this={termMenuBtn} use:tip={t('nav.sidebar.newTerminal')} onclick={shellMenu}>+</button>
     </div>
     <div class="term-list">
       {#each terms as term (term.id)}
@@ -392,7 +399,7 @@
           {#if app.exitedTerms[term.id] !== undefined}<span class="shell">{t('nav.sidebar.exited')}</span>{/if}
           <button
             class="x"
-            title={t('common.close')}
+            use:tip={t('common.close')}
             onclick={(e) => {
               e.stopPropagation();
               closeTerminal(term.id);
@@ -406,7 +413,7 @@
   </div>
 
   <div class="foot">
-    <div class="path mono" title={project.path}>{tildify(project.path)}</div>
+    <div class="path mono" use:tip={project.path}>{tildify(project.path)}</div>
     {#if git?.isRepo}
       <div class="branch mono">
         <span class="ring"></span>{git.branch || '—'}

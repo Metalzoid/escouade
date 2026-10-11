@@ -44,7 +44,7 @@ describe('EditorTabs', () => {
   it('shows no folder next to names that are alone', () => {
     const { container } = render(EditorTabs, { tabs, onselect: () => {}, onclose: () => {} });
     expect(container.querySelector('.hint')).toBeNull();
-    expect(screen.getByRole('tab', { name: /a\.ts/ })).toHaveAttribute('title', 'src/a.ts');
+    expect(screen.getByRole('tab', { name: /a\.ts/ })).toHaveAttribute('data-tip', 'src/a.ts');
   });
 
   describe('with two files of the same name', () => {
@@ -58,8 +58,8 @@ describe('EditorTabs', () => {
       render(EditorTabs, { tabs: twins, onselect: () => {}, onclose: () => {} });
       const editor = screen.getByRole('tab', { name: /index\.ts · editor/ });
       const board = screen.getByRole('tab', { name: /index\.ts · board/ });
-      expect(editor).toHaveAttribute('title', 'src/components/editor/index.ts');
-      expect(board).toHaveAttribute('title', 'src/components/board/index.ts');
+      expect(editor).toHaveAttribute('data-tip', 'src/components/editor/index.ts');
+      expect(board).toHaveAttribute('data-tip', 'src/components/board/index.ts');
       expect(within(editor).getByText('editor', { exact: false })).toHaveClass('hint');
       expect(screen.getByRole('tab', { name: /main\.ts/ })).not.toHaveTextContent('·');
     });
@@ -90,8 +90,8 @@ describe('EditorTabs in English', () => {
     ];
     render(EditorTabs, { tabs: twins, onselect: () => {}, onclose: () => {} });
     expect(screen.getByRole('tablist', { name: 'Open files' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Close index.ts · a' })).toHaveAttribute('title', 'Close (unsaved)');
-    expect(screen.getByRole('button', { name: 'Close index.ts · b' })).toHaveAttribute('title', 'Close');
+    expect(screen.getByRole('button', { name: 'Close index.ts · a' })).toHaveAttribute('data-tip', 'Close (unsaved)');
+    expect(screen.getByRole('button', { name: 'Close index.ts · b' })).toHaveAttribute('data-tip', 'Close');
     expect(screen.getByRole('button', { name: 'Close main.ts' })).toBeInTheDocument();
   });
 });

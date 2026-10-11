@@ -77,7 +77,8 @@ describe('TerminalView in English', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close terminal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '⌕' })).toHaveAttribute('title', 'Search (Ctrl+Shift+F)');
+    // The symbol says nothing: the button is named by its tooltip.
+    expect(screen.getByRole('button', { name: 'Search (Ctrl+Shift+F)' })).toHaveAttribute('data-tip', 'Search (Ctrl+Shift+F)');
   });
 
   it('says it without a code when the shell gave none', () => {

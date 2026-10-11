@@ -99,7 +99,7 @@ describe('ImportModal', () => {
     expect(backend.called('integration_issues')[0].args).toEqual({ projectId: 'p1', service: 'jira', text: '', filters: [] });
     const first = row(/ATL-1287/);
     expect(first).toHaveTextContent('Story Haute · Ada L. · To Do');
-    expect(within(first).getByText('✓ 2 critères détectés')).toHaveAttribute('title', 'Refresh avant expiration · Tests unitaires');
+    expect(within(first).getByText('✓ 2 critères détectés')).toHaveAttribute('data-tip', 'Refresh avant expiration · Tests unitaires');
     expect(within(row(/ATL-1290/)).queryByText(/critère/)).not.toBeInTheDocument();
     expect(d.getByText('ada@atlas.dev · ATL — Atlas')).toBeInTheDocument();
     const already = row(/ATL-1301/);

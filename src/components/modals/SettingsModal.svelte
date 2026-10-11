@@ -10,6 +10,7 @@
   import BoardTab from '../settings/BoardTab.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
+  import { tip } from '../../lib/tip';
 
   // All the settings, the app's and each project's, in one place: a tab at a time, saved together.
   let {
@@ -98,7 +99,7 @@
             onkeydown={(e) => onTabKey(e, i)}
           >
             <span class="ic" aria-hidden="true">{entry.icon}</span>{entry.label}
-            <span class="mark" title={t('settings.modal.changed')} aria-hidden="true"></span>
+            <span class="mark" use:tip={t('settings.modal.changed')} aria-hidden="true"></span>
           </button>
         {/each}
       </div>

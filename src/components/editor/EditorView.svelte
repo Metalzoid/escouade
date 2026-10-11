@@ -33,6 +33,7 @@
   import SearchPanel from './SearchPanel.svelte';
   import SourcePicker from './SourcePicker.svelte';
   import TargetPicker from './TargetPicker.svelte';
+  import { tip } from '../../lib/tip';
 
   let { project }: { project: Project } = $props();
 
@@ -736,7 +737,7 @@
             class:on={!search.shown}
             aria-pressed={!search.shown}
             aria-label={t('common.files')}
-            title={t('common.files')}
+            use:tip={t('common.files')}
             onclick={() => (search.shown = false)}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
@@ -747,7 +748,7 @@
             class:on={search.shown}
             aria-pressed={search.shown}
             aria-label={t('editor.side.searchFiles')}
-            title={t('editor.side.searchFilesKey', { key: keyLabel('Ctrl+Shift+F') })}
+            use:tip={t('editor.side.searchFilesKey', { key: keyLabel('Ctrl+Shift+F') })}
             onclick={showSearch}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
@@ -764,7 +765,7 @@
               <button
                 class="act"
                 aria-label={t('editor.side.newFile')}
-                title={t('editor.side.newFile')}
+                use:tip={t('editor.side.newFile')}
                 disabled={!tree}
                 onclick={() => newHere('file')}
               >
@@ -777,7 +778,7 @@
               <button
                 class="act"
                 aria-label={t('editor.side.newFolder')}
-                title={t('editor.side.newFolder')}
+                use:tip={t('editor.side.newFolder')}
                 disabled={!tree}
                 onclick={() => newHere('dir')}
               >
@@ -790,7 +791,7 @@
               <button
                 class="act"
                 aria-label={t('common.refresh')}
-                title={t('common.refresh')}
+                use:tip={t('common.refresh')}
                 onclick={() => refresh(project.id, source, false)}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5" /></svg>
@@ -798,7 +799,7 @@
               <button
                 class="act"
                 aria-label={t('common.collapseAll')}
-                title={t('common.collapseAll')}
+                use:tip={t('common.collapseAll')}
                 onclick={() => app.collapseEditorDirs(project.id, source)}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"
@@ -807,7 +808,7 @@
               </button>
             </div>
           </div>
-          <span class="mono dim root" title={tree?.root}
+          <span class="mono dim root" use:tip={tree?.root}
             >{srcAgent
               ? `.claude/worktrees/${srcAgent.worktree ? basename(srcAgent.worktree.path) : srcAgent.name}`
               : tildify(project.path)}</span

@@ -56,7 +56,7 @@ describe('TicketCard', () => {
     fakeBackend();
     const { unmount } = show(doing());
     const line = screen.getByText('Écrit les tests du parseur');
-    expect(line).toHaveAttribute('title', 'Écrit les tests du parseur');
+    expect(line).toHaveAttribute('data-tip', 'Écrit les tests du parseur');
     expect(line).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
     expect(screen.getByText('Lit src/db.ts')).toBeInTheDocument();
     unmount();
@@ -617,7 +617,7 @@ describe('TicketCard cost of a ticket under way', () => {
     fakeBackend();
     show(doing());
     const cost = screen.getByText('≈ 1,63 $');
-    expect(cost).toHaveAttribute('title', estimateHint());
+    expect(cost).toHaveAttribute('data-tip', estimateHint());
   });
 
   it('shows the exact cost of a ticket to test, next to its criteria', () => {
@@ -625,7 +625,7 @@ describe('TicketCard cost of a ticket under way', () => {
     fakeBackend();
     show(doing({ column: 'review' }));
     const cost = screen.getByText('1,50 $');
-    expect(cost).not.toHaveAttribute('title');
+    expect(cost).not.toHaveAttribute('data-tip');
     expect(screen.getByText('1/2 critères')).toBeInTheDocument();
   });
 
@@ -805,6 +805,6 @@ describe('TicketCard in English', () => {
 
   it('says how many items of the progress are hidden, with the plural of English', () => {
     show(doing({ progress: ['One', 'Two', 'Three', 'Four'] }));
-    expect(screen.getByText('+1')).toHaveAttribute('title', '1 more item');
+    expect(screen.getByText('+1')).toHaveAttribute('data-tip', '1 more item');
   });
 });

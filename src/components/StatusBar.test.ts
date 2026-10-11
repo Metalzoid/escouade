@@ -8,6 +8,7 @@ import { app } from '../lib/state.svelte';
 import type { Account, AccountUsage, RateWindow, Settings } from '../lib/types';
 import { agent, branchInfo, fakeBackend, gitInfo, resetApp } from '../test/ipc';
 import StatusBar from './StatusBar.svelte';
+import { getByTip, tabTo } from '../test/tip';
 
 describe('StatusBar', () => {
   beforeEach(() => {
@@ -38,7 +39,7 @@ describe('StatusBar', () => {
     render(StatusBar);
     const item = screen.getByText(/2 Claude/).closest('.it')!;
     expect(item).toHaveTextContent('2 Claude · 1,5 Go · 12 % CPU');
-    const title = item.getAttribute('title')!;
+    const title = item.getAttribute('data-tip')!;
     // The biggest first.
     expect(title.split('\n').slice(1)).toEqual(['tests-e2e : 1 Go · 10 %', 'refacto-auth : 512 Mo · 2 %']);
   });
@@ -139,8 +140,8 @@ describe('StatusBar branch and sync with the remote', () => {
     expect(syncButton()).toHaveTextContent('↓3');
     // The way they are in the picker: ahead first.
     expect(syncButton().textContent!.replace(/\s+/g, ' ')).toContain('⎇ main ↑1 ↓3');
-    expect(syncButton().title).toContain('origin/main');
-    expect(syncButton().title).toContain('Dernier fetch : il y a 3 min');
+    expect(syncButton().dataset.tip).toContain('origin/main');
+    expect(syncButton().dataset.tip).toContain('Dernier fetch : il y a 3 min');
   });
 
   it('shows the branch of any repository, with no sync to say when it has no remote, and a detached HEAD', async () => {
@@ -148,7 +149,7 @@ describe('StatusBar branch and sync with the remote', () => {
     app.git = { p1: gitInfo({ hasRemote: false }) };
     render(StatusBar);
     expect(syncButton()).toHaveTextContent(/^⎇ main$/);
-    expect(syncButton().title).toBe('Changer de branche');
+    expect(syncButton().dataset.tip).toBe('Changer de branche');
     app.git = { p1: gitInfo({ ...tracked, branch: '(detached)', upstream: null }) };
     await tick();
     expect(screen.getByRole('button', { name: /⎇ HEAD détachée/ })).toHaveTextContent(/^⎇ HEAD détachée$/);
@@ -198,7 +199,7 @@ describe('StatusBar branch and sync with the remote', () => {
     await tick();
     const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
     expect(button).toHaveTextContent('distante supprimée');
-    expect(button.title).toContain("origin/feat/x n'existe plus");
+    expect(button.dataset.tip).toContain("origin/feat/x n'existe plus");
   });
 
   it('pulls from the picker, then says what came in', async () => {
@@ -255,7 +256,7 @@ describe('StatusBar branch and sync with the remote', () => {
     await picker();
     await userEvent.click(screen.getByRole('button', { name: /Pousser/ }));
     await waitFor(() => expect(syncButton()).toBeDisabled());
-    const sound = screen.getByTitle('Son des notifications');
+    const sound = getByTip(document.body, 'Son des notifications');
     sound.focus();
     finish('1 commit poussé');
     await waitFor(() => expect(syncButton()).toBeEnabled());
@@ -365,7 +366,7 @@ describe('StatusBar in English', () => {
     render(StatusBar);
     expect(screen.getByText('1 active')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /1 waiting/ })).toHaveAttribute(
-      'title',
+      'data-tip',
       'Go to the next agent that is waiting or needs a look (Ctrl+J)',
     );
     expect(screen.getByText('1 done')).toBeInTheDocument();
@@ -400,8 +401,8 @@ describe('StatusBar in English', () => {
     render(StatusBar);
     const item = screen.getByText(/2 Claude/).closest('.it')!;
     expect(item).toHaveTextContent('2 Claude · 1.5 GB · 12% CPU');
-    expect(item.getAttribute('title')!.split('\n')[0]).toBe('Running Claude processes (with the tools and MCP servers they start)');
-    expect(item.getAttribute('title')!.split('\n')[1]).toBe('refacto-auth: 512 MB · 2%');
+    expect(item.getAttribute('data-tip')!.split('\n')[0]).toBe('Running Claude processes (with the tools and MCP servers they start)');
+    expect(item.getAttribute('data-tip')!.split('\n')[1]).toBe('refacto-auth: 512 MB · 2%');
   });
 
   it('marks the day cost as an estimate while a turn runs, and says why', () => {
@@ -409,7 +410,7 @@ describe('StatusBar in English', () => {
     fakeBackend();
     render(StatusBar);
     expect(screen.getByText(/Today/)).toHaveAttribute(
-      'title',
+      'data-tip',
       'Estimate (public prices) while Claude works; exact cost at the end of the turn',
     );
     expect(screen.getByText('≈ $0.50')).toBeInTheDocument();
@@ -420,7 +421,7 @@ describe('StatusBar in English', () => {
     app.git = { p1: gitInfo({ upstream: 'origin/main', hasRemote: true, behind: 3, ahead: 1, lastFetch: app.now - 3 * 60_000 }) };
     render(StatusBar);
     const button = screen.getByRole('button', { name: /⎇ main/ });
-    expect(button.title).toBe('Tracking origin/main: 3 to pull, 1 to push\nLast fetch: 3 min ago');
+    expect(button.dataset.tip).toBe('Tracking origin/main: 3 to pull, 1 to push\nLast fetch: 3 min ago');
     await userEvent.click(button);
     await screen.findByRole('dialog', { name: 'Branches' });
     expect(screen.getByRole('button', { name: /Push/ })).toBeInTheDocument();
@@ -436,7 +437,7 @@ describe('StatusBar in English', () => {
     render(StatusBar);
     const button = screen.getByRole('button', { name: /⎇ feat\/x/ });
     expect(button).toHaveTextContent('not published');
-    expect(button.title).toBe('Branch not published to the remote repository yet\nLast fetch: never');
+    expect(button.dataset.tip).toBe('Branch not published to the remote repository yet\nLast fetch: never');
     await userEvent.click(button);
     await screen.findByRole('dialog', { name: 'Branches' });
     expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument();
@@ -444,12 +445,12 @@ describe('StatusBar in English', () => {
     app.git = { p1: gitInfo({ hasRemote: true, branch: 'feat/x', upstream: 'origin/feat/x', upstreamGone: true }) };
     await tick();
     expect(screen.getByRole('button', { name: /⎇ feat\/x/ })).toHaveTextContent('remote deleted');
-    expect(screen.getByRole('button', { name: /⎇ feat\/x/ }).title).toContain(
+    expect(screen.getByRole('button', { name: /⎇ feat\/x/ }).dataset.tip).toContain(
       'The tracked branch origin/feat/x no longer exists on the remote repository',
     );
     app.git = { p1: gitInfo({ hasRemote: false, branch: '(detached)' }) };
     await tick();
-    expect(screen.getByRole('button', { name: /⎇ Detached HEAD/ }).title).toBe('Switch branch');
+    expect(screen.getByRole('button', { name: /⎇ Detached HEAD/ }).dataset.tip).toBe('Switch branch');
   });
 
   it('writes the update, its countdown and the sound in English', async () => {
@@ -459,8 +460,9 @@ describe('StatusBar in English', () => {
     render(StatusBar);
     expect(screen.getByText('Restarting in 25 s')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Later' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '♪ On' })).toHaveAttribute('title', 'Notification sound');
-    expect(screen.getByRole('button', { name: '⚙' })).toHaveAttribute('title', 'Settings (Ctrl+,)');
+    expect(screen.getByRole('button', { name: '♪ On' })).toHaveAttribute('data-tip', 'Notification sound');
+    // The symbol says nothing: the button is named by its tooltip.
+    expect(screen.getByRole('button', { name: 'Settings (Ctrl+,)' })).toHaveAttribute('data-tip', 'Settings (Ctrl+,)');
     app.restartAt = null;
     await tick();
     expect(screen.getByRole('button', { name: 'Update 1.6.0 ready · Restart' })).toBeInTheDocument();
@@ -534,7 +536,7 @@ describe('StatusBar quotas of the accounts', () => {
 
   it('shows the tooltip of a bar when it has the focus, with a single account', async () => {
     render(StatusBar);
-    screen.getByRole('meter', { name: 'Quota sur 5 heures' }).focus();
+    tabTo(screen.getByRole('meter', { name: 'Quota sur 5 heures' }));
     expect(await screen.findByRole('tooltip')).toHaveTextContent('42 % · remise à zéro le 10/10 à 18:00');
   });
 
@@ -558,7 +560,7 @@ describe('StatusBar quotas of the accounts', () => {
     two();
     render(StatusBar);
     await userEvent.hover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
-    expect(screen.getByRole('tooltip')).toHaveTextContent(/^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/^12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
     await userEvent.unhover(within(group()).getByRole('meter', { name: 'Quota sur 7 jours' }));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
@@ -579,7 +581,7 @@ describe('StatusBar quotas of the accounts', () => {
     two();
     render(StatusBar);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
-    group().focus();
+    tabTo(group());
     const tip = await screen.findByRole('tooltip');
     expect(tip).toHaveTextContent(/Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}/);
     expect(tip).toHaveTextContent(/Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}/);
@@ -590,10 +592,19 @@ describe('StatusBar quotas of the accounts', () => {
     expect(panel()).not.toBeInTheDocument();
     // It comes back with the next focus.
     group().blur();
-    group().focus();
+    tabTo(group());
     expect(await screen.findByRole('tooltip')).toBeInTheDocument();
     group().blur();
     await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+  });
+
+  it('shows both values in a tooltip when the pointer stays on the group button away from its bars', async () => {
+    two();
+    render(StatusBar);
+    await userEvent.hover(within(group()).getByText('Pro'));
+    const tip = await screen.findByRole('tooltip');
+    expect(tip).toHaveTextContent(/Quota sur 5 heures : 42 %/);
+    expect(tip).toHaveTextContent(/Quota sur 7 jours : 12 %/);
   });
 
   it('shows no tooltip on a click, which opens the panel instead', async () => {
@@ -606,7 +617,7 @@ describe('StatusBar quotas of the accounts', () => {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(panel()).not.toBeInTheDocument());
     group().blur();
-    group().focus();
+    tabTo(group());
     expect(await screen.findByRole('tooltip')).toBeInTheDocument();
     await userEvent.keyboard('{Enter}');
     expect(panel()).toBeInTheDocument();
@@ -619,7 +630,7 @@ describe('StatusBar quotas of the accounts', () => {
     app.settings.accounts = [PRINCIPAL, { ...PRO, name }];
     render(StatusBar);
     const label = within(screen.getByRole('button', { name: `Quotas par compte (compte en cours : ${name})` })).getByText(name);
-    expect(label).toHaveAttribute('title', name);
+    expect(label).toHaveAttribute('data-tip', name);
     // Cut short by the style of that class (the layout is the browser's: the e2e of the two accounts reads it).
     expect(label).toHaveClass('acct');
   });

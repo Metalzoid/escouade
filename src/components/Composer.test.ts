@@ -523,9 +523,9 @@ describe('Composer in English', () => {
     setLang('en');
     const { textarea } = setup({ model: 'opus', effort: 'high', mode: 'plan' });
     expect(textarea).toHaveAttribute('placeholder', 'Describe the task to give to Claude…');
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('title', 'Enter to send · Shift+Enter for a new line');
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-tip', 'Enter to send · Shift+Enter for a new line');
     expect(screen.getByRole('button', { name: 'Attach a file' })).toHaveAttribute(
-      'title',
+      'data-tip',
       'Attach an image, a PDF or a text file (or paste / drop it)',
     );
     // “Mode” alone: “Model” begins the same.
@@ -537,10 +537,10 @@ describe('Composer in English', () => {
   it('says in English that Haiku has no effort or Auto mode, and what to do while Claude works', async () => {
     setLang('en');
     setup({ model: 'haiku', status: 'running' });
-    expect(screen.getByRole('button', { name: /^Effort/ })).toHaveAttribute('title', 'Haiku doesn’t support effort');
-    expect(screen.getByRole('button', { name: 'Stop' })).toHaveAttribute('title', 'Interrupt (Esc)');
+    expect(screen.getByRole('button', { name: /^Effort/ })).toHaveAttribute('data-tip', 'Haiku doesn’t support effort');
+    expect(screen.getByRole('button', { name: 'Stop' })).toHaveAttribute('data-tip', 'Interrupt (Esc)');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
-      'title',
+      'data-tip',
       'Claude takes it into account at its next step · Enter to send',
     );
     await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));

@@ -47,10 +47,10 @@ describe('FileTree ignored files', () => {
   it('greys out a file git ignores and says so in its title, the others keeping their path', () => {
     render(FileTree, { ...base, rows });
     const env = screen.getByRole('treeitem', { name: /\.env/ });
-    expect(env).toHaveAttribute('title', 'Ignoré par git');
+    expect(env).toHaveAttribute('data-tip', 'Ignoré par git');
     expect(env).toHaveClass('ignored');
     const readme = screen.getByRole('treeitem', { name: /README\.md/ });
-    expect(readme).toHaveAttribute('title', 'README.md');
+    expect(readme).toHaveAttribute('data-tip', 'README.md');
     expect(readme).not.toHaveClass('ignored');
   });
 
@@ -370,7 +370,7 @@ describe('FileTree in English', () => {
     const rows = treeRows(['src/app.ts', '.env'], { src: true }, {}, 'src', ['.env']);
     const { unmount } = render(FileTree, { ...base, rows, adding: 'dir' });
     expect(screen.getByRole('tree', { name: 'Files' })).toBeInTheDocument();
-    expect(screen.getByRole('treeitem', { name: /\.env/ })).toHaveAttribute('title', 'Ignored by git');
+    expect(screen.getByRole('treeitem', { name: /\.env/ })).toHaveAttribute('data-tip', 'Ignored by git');
     expect(screen.getByRole('textbox', { name: 'Name of the new folder' })).toBeInTheDocument();
     unmount();
     render(FileTree, { ...base, rows: treeRows(['src/app.ts'], { src: true }, {}), renaming: { kind: 'file', path: 'src/app.ts' } });

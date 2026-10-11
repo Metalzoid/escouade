@@ -44,7 +44,7 @@ test('a superpowers plan run shows the “Plan” banner between the header and 
   await expect(plan.head).toHaveAccessibleName('Plan : Démo');
   await expect(plan.root.locator('.title')).toHaveText('Démo');
   // The agent’s own list is the list: the file is named in the tooltip when the file is the list (below).
-  await expect(plan.root.locator('.title')).toHaveAttribute('title', 'Démo');
+  await expect(plan.root.locator('.title')).toHaveAttribute('data-tip', 'Démo');
 
   // Between the agent's header and the messages.
   const header = (await page.locator('main.conv header.head').boundingBox())!;
@@ -131,7 +131,7 @@ test('a superpowers plan run without a task list takes its tasks from the plan f
   await expect(page.getByTestId('question-pending')).toContainText('Quelle base de données ?');
   const plan = banner(page);
   await expect(plan.head).toHaveAccessibleName('Plan : Démo');
-  await expect(plan.root.locator('.title')).toHaveAttribute('title', `Démo\nPlan : ${PLAN}`);
+  await expect(plan.root.locator('.title')).toHaveAttribute('data-tip', `Démo\nPlan : ${PLAN}`);
   await expect(plan.root).toContainText('2/3 tâches');
   await expect(plan.root).toContainText('1 sous-agent actif');
   // A window under 800 px (a CI runner's screen) shows the list folded.
@@ -141,7 +141,7 @@ test('a superpowers plan run without a task list takes its tasks from the plan f
   await expect(plan.row(2)).toContainText('Terminé');
   await expect(plan.row(3)).toContainText('Brancher dans l’interface');
   // The steps the plan counts: none of the third task's is checked.
-  await expect(plan.row(3).locator('.rpct')).toHaveAttribute('title', '0/2 étapes');
+  await expect(plan.row(3).locator('.rpct')).toHaveAttribute('data-tip', '0/2 étapes');
   await expect(plan.row(3)).toContainText('En attente de ta réponse');
   await expect(page.locator('.card .plan-mini .plan-text').first()).toHaveText('Plan 2/3 · 1 sous-agent');
   await expect(page.locator('main.conv')).not.toContainText('Tâche : Écrire la fonction');

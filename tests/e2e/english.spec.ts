@@ -38,7 +38,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByRole('tooltip')).toContainText(/^12%/);
 
   // The settings, in English, on the tab of the languages.
-  await page.getByTitle('Settings (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await dialog.getByRole('tab', { name: 'Application' }).click();
   await expect(dialog.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
@@ -63,7 +63,7 @@ test('the interface in English, then in French without a restart', async ({ app 
 
   // What Claude said stays what it was; the settings are French too.
   await expect(page.getByText('Bonjour, tu as dit : Hello')).toBeVisible();
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const reglages = page.getByRole('dialog', { name: 'Réglages' });
   await reglages.getByRole('tab', { name: 'Application' }).click();
   await expect(
@@ -108,7 +108,7 @@ test('a superpowers plan run reads in English, and in French as soon as the lang
   await expect(page.locator('.card .plan-mini .plan-text').first()).toHaveText('Plan 2/3 · 1 subagent');
 
   // Switched to French while the banner is open: its words change at once, nothing is read again.
-  await page.getByTitle('Settings (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await dialog.getByRole('tab', { name: 'Application' }).click();
   await dialog.getByRole('group', { name: 'Interface language' }).getByRole('button', { name: 'Français', exact: true }).click();

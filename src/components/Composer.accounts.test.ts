@@ -119,7 +119,7 @@ describe('the account chip of the Composer', () => {
     const c = chip('Compte : Pro');
     expect(c).toHaveAttribute('aria-disabled', 'true');
     expect(c).toHaveAttribute(
-      'title',
+      'data-tip',
       'Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte).',
     );
     await userEvent.click(c);
@@ -143,7 +143,7 @@ describe('the account chip of the Composer', () => {
     setLang('en');
     setup({ account: 'pro', sessionId: 's1' });
     expect(chip('Account: Pro')).toHaveAttribute(
-      'title',
+      'data-tip',
       'An agent’s account can’t change after its first message (its conversation is filed in that account).',
     );
   });

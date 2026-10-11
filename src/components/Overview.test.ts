@@ -144,7 +144,7 @@ describe('Overview', () => {
     render(Overview);
     const busy = screen.getByRole('listitem', { name: /refacto-auth/ });
     const said = within(busy).getByText('Écrit les tests du parseur');
-    expect(said).toHaveAttribute('title', 'Écrit les tests du parseur');
+    expect(said).toHaveAttribute('data-tip', 'Écrit les tests du parseur');
     expect(busy).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
     // What it does right now stays on its line.
     expect(busy).toHaveTextContent('Lit src/db.ts');
@@ -569,7 +569,7 @@ describe('Overview in English', () => {
     // Said to a screen reader, apart from the value.
     expect(row(/refacto-auth/).querySelector('.model')).toHaveTextContent('Model Opus');
     expect(row(/refacto-auth/).querySelector('.ctx')?.textContent).toBe('Context 34%');
-    expect(row(/refacto-auth/).querySelector('.num[title^="Last change"]')).toBeInTheDocument();
+    expect(row(/refacto-auth/).querySelector('.num[data-tip^="Last change"]')).toBeInTheDocument();
   });
 
   it('writes the time a limited agent resumes at the way English does', () => {

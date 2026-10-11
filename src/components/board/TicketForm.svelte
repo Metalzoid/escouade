@@ -9,6 +9,7 @@
   import type { Ticket, TicketDraft } from '../../lib/types';
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Modal from '../modals/Modal.svelte';
+  import { tip } from '../../lib/tip';
 
   // The form of a ticket, new or edited, in a large window to write long texts in. `onsubmit` saves the ticket and tells
   // whether it did: the window closes then, else it stays with what was typed. `resume`: what had been typed, back from a
@@ -233,7 +234,7 @@
             bind:this={branchButton}
             aria-haspopup="menu"
             aria-labelledby="{uid}-branch {uid}-branch-value"
-            title={branch || own}
+            use:tip={branch || own}
             onclick={branchMenu}
           >
             <span id="{uid}-branch-value">{branch || own}</span>
@@ -262,7 +263,7 @@
                   <label
                     ><input type="checkbox" checked={after.includes(x.id)} onchange={(e) => toggle(x, e.currentTarget)} /><span
                       class="key mono">{x.key}</span
-                    > <span class="name" title={x.title}>{x.title}</span></label
+                    > <span class="name" use:tip={{ text: x.title, cut: true }}>{x.title}</span></label
                   >
                 </li>
               {/each}

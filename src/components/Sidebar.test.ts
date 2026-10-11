@@ -9,6 +9,7 @@ import { openTerminal } from '../lib/terminals';
 import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
+import { getByTip } from '../test/tip';
 
 // The xterm.js instance a terminal draws on is not one of jsdom's: only what is asked of the backend is looked at.
 vi.mock('../lib/terminals', async (original) => ({
@@ -44,7 +45,7 @@ describe('Sidebar', () => {
     render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
     const line = within(card).getByText('Écrit les tests du parseur');
-    expect(line).toHaveAttribute('title', 'Écrit les tests du parseur');
+    expect(line).toHaveAttribute('data-tip', 'Écrit les tests du parseur');
     // Assistive technologies are told what the line is.
     expect(card).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
     // The other agent said nothing: no line, no label.
@@ -65,7 +66,7 @@ describe('Sidebar', () => {
     app.agents.a1 = { ...app.agents.a1, status: 'idle', setup: '2/3 · npm run gen (web)' };
     render(Sidebar, { project: project() });
     const status = within(screen.getByRole('button', { name: /refacto-auth/ })).getByText('Préparation…');
-    expect(status).toHaveAttribute('title', 'Préparation du worktree : 2/3 · npm run gen (web)');
+    expect(status).toHaveAttribute('data-tip', 'Préparation du worktree : 2/3 · npm run gen (web)');
   });
 
   it('names an agent’s model with the version Claude Code runs for it', () => {
@@ -243,7 +244,7 @@ describe('Sidebar', () => {
     app.agents.a1 = { ...app.agents.a1, status: 'error', resumeAt: new Date(2026, 8, 30, 15, 0).getTime() };
     render(Sidebar, { project: project() });
     const status = screen.getByText('Reprise à 15:00');
-    expect(status).toHaveAttribute('title', 'Arrêté par la limite d’usage : reprise automatique à 15:00');
+    expect(status).toHaveAttribute('data-tip', 'Arrêté par la limite d’usage : reprise automatique à 15:00');
   });
 
   it('leaves the project’s color to its tab menu', () => {
@@ -389,7 +390,7 @@ describe('Sidebar remote control', () => {
     const backend = fakeBackend();
     render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
-    expect(within(card).getByTitle(/Remote control : connecté/)).toBeInTheDocument();
+    expect(getByTip(card, /Remote control : connecté/)).toBeInTheDocument();
     await fireEvent.contextMenu(card);
     expect(items()).toEqual(expect.arrayContaining(['Désactiver le remote control', 'Ouvrir sur claude.ai', 'Copier le lien claude.ai']));
     click('Désactiver le remote control');
@@ -492,7 +493,7 @@ describe('Sidebar remote control', () => {
     resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteState: null })] });
     fakeBackend();
     render(Sidebar, { project: project() });
-    expect(screen.getByTitle(/Remote control : en attente de connexion/)).toBeInTheDocument();
+    expect(getByTip(document.body, /Remote control : en attente de connexion/)).toBeInTheDocument();
   });
 });
 
@@ -560,7 +561,7 @@ describe('Sidebar editor entries', () => {
     fakeBackend();
     const { unmount } = render(Sidebar, { project: project() });
     expect(screen.getByRole('button', { name: 'Parcourir' }).closest('.branch')).toHaveTextContent('feat/x');
-    expect(screen.getByTitle(project().path).parentElement).toHaveClass('foot');
+    expect(getByTip(document.body, project().path).parentElement).toHaveClass('foot');
     unmount();
     app.git.p1 = gitInfo({ isRepo: false });
     render(Sidebar, { project: project() });
@@ -797,8 +798,8 @@ describe('Sidebar in English', () => {
     expect(screen.getByText('−3 deleted')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Browse' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Project view' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /New agent/ })).toHaveAttribute('title', 'New agent (Ctrl+N)');
-    expect(screen.getByTitle('1 to review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New agent/ })).toHaveAttribute('data-tip', 'New agent (Ctrl+N)');
+    expect(getByTip(document.body, '1 to review')).toBeInTheDocument();
   });
 
   it('says when an agent stopped by the usage limit resumes, and when its worktree is set up', () => {
@@ -807,8 +808,11 @@ describe('Sidebar in English', () => {
     app.agents.a1 = { ...app.agents.a1, status: 'error', resumeAt: new Date(2026, 8, 30, 15, 0).getTime() };
     app.agents.a2 = { ...app.agents.a2, status: 'idle', setup: '2/3 · npm run gen (web)' };
     render(Sidebar, { project: project() });
-    expect(screen.getByText('Resumes at 3:00 PM')).toHaveAttribute('title', 'Stopped by the usage limit: resumes automatically at 3:00 PM');
-    expect(screen.getByText('Setting up…')).toHaveAttribute('title', 'Setting up the worktree: 2/3 · npm run gen (web)');
+    expect(screen.getByText('Resumes at 3:00 PM')).toHaveAttribute(
+      'data-tip',
+      'Stopped by the usage limit: resumes automatically at 3:00 PM',
+    );
+    expect(screen.getByText('Setting up…')).toHaveAttribute('data-tip', 'Setting up the worktree: 2/3 · npm run gen (web)');
   });
 
   it('writes the remote control states and the menu of an agent in English', async () => {
@@ -823,7 +827,7 @@ describe('Sidebar in English', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
-    expect(within(card).getByTitle('Remote control: connecting… (reachable from claude.ai and the Claude app)')).toBeInTheDocument();
+    expect(getByTip(card, 'Remote control: connecting… (reachable from claude.ai and the Claude app)')).toBeInTheDocument();
     await fireEvent.contextMenu(card);
     expect(items()).toEqual([
       'Rename',
@@ -876,7 +880,7 @@ describe('Sidebar in English', () => {
       disabled: true,
       title: 'Wait for its turn to end.',
     });
-    await userEvent.click(screen.getByTitle('New terminal'));
+    await userEvent.click(getByTip(document.body, 'New terminal'));
     expect(app.toasts.at(-1)).toMatchObject({ text: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.', kind: 'error' });
   });
 });

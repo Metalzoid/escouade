@@ -4,6 +4,7 @@
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import type { WorktreeStep } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   // The commands a project runs in its worktrees (their setup, or their teardown, `kind`), in order: shell, command
   // line, folder of the worktree.
@@ -61,14 +62,14 @@
       <input
         class="field mono dir"
         aria-label={t('settings.fields.subfolder')}
-        title={t('settings.steps.subfolderTitle')}
+        use:tip={t('settings.steps.subfolderTitle')}
         placeholder={t('settings.steps.subfolderPlaceholder')}
         spellcheck="false"
         bind:value={s.cwd}
       />
       <button
         class="icon up"
-        title={t('settings.steps.up', { keys: `${ALT}↑` })}
+        use:tip={t('settings.steps.up', { keys: `${ALT}↑` })}
         aria-label={t('settings.steps.upN', { n: i + 1 })}
         aria-keyshortcuts="Alt+ArrowUp"
         disabled={i === 0}
@@ -76,7 +77,7 @@
       >
       <button
         class="icon down"
-        title={t('settings.steps.down', { keys: `${ALT}↓` })}
+        use:tip={t('settings.steps.down', { keys: `${ALT}↓` })}
         aria-label={t('settings.steps.downN', { n: i + 1 })}
         aria-keyshortcuts="Alt+ArrowDown"
         disabled={i === steps.length - 1}
@@ -84,7 +85,7 @@
       >
       <button
         class="icon del"
-        title={t('common.delete')}
+        use:tip={t('common.delete')}
         aria-label={t('settings.steps.deleteN', { n: i + 1 })}
         onclick={() => steps.splice(i, 1)}>×</button
       >

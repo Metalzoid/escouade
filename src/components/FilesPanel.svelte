@@ -7,6 +7,7 @@
   import { app } from '../lib/state.svelte';
   import type { Agent, FileChange, Project } from '../lib/types';
   import FileDiff from './FileDiff.svelte';
+  import { tip } from '../lib/tip';
 
   // The side panel's uncommitted files. `docked`: right half of the split layout, showing the
   // picked file's diff under the list. `count`: number of files listed, for the panel's tab.
@@ -217,7 +218,7 @@
           <button
             class="edit"
             aria-label={t('git.files.openNamed', { name: basename(f.path) })}
-            title={t('common.openInEditor')}
+            use:tip={t('common.openInEditor')}
             onclick={() => openInEditor(f)}
             oncontextmenu={(e) => fileMenu(e, f)}>&lt;/&gt;</button
           >

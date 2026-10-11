@@ -5,6 +5,7 @@
   import { app } from '../../lib/state.svelte';
   import type { Column, Project, Ticket, TicketDraft } from '../../lib/types';
   import TicketCard from './TicketCard.svelte';
+  import { tip } from '../../lib/tip';
 
   let {
     column,
@@ -63,7 +64,8 @@
     <span class="count mono">{tickets.length}</span>
     <div style="flex:1"></div>
     {#if column.id === 'todo'}
-      <button class="plus" title={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}>+</button
+      <button class="plus" use:tip={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}
+        >+</button
       >
     {/if}
   </div>

@@ -309,14 +309,14 @@ describe('Splitter on the vertical axis', () => {
     expect(handle).toHaveAttribute('aria-valuemin', '60');
     expect(handle).toHaveAttribute('aria-valuemax', '400');
     expect(handle).toHaveAttribute('tabindex', '0');
-    expect(handle).toHaveAttribute('title', 'Glisser pour redimensionner');
+    expect(handle).toHaveAttribute('data-tip', 'Glisser pour redimensionner');
     expect(handle).toHaveClass('row');
   });
 
   it('stays a vertical separator on the horizontal axis, with no tooltip unless it is given one', () => {
     const { handle } = setup();
     expect(handle).toHaveAttribute('aria-orientation', 'vertical');
-    expect(handle).not.toHaveAttribute('title');
+    expect(handle).not.toHaveAttribute('data-tip');
     expect(handle).not.toHaveClass('row');
   });
 

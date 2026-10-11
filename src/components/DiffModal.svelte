@@ -6,6 +6,7 @@
   import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
+  import { tip } from '../lib/tip';
 
   // Uncommitted changes (`paths` of the agent's checkout), what `commit` changed, what changes from one ref to
   // another (`refs`: branches or commits, the git graph's comparison) or, with `wholeProject`, every file the
@@ -76,7 +77,7 @@
         <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
         <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
       </div>
-      <button class="icon-btn" title={t('git.diff.closeTitle', { key: keyLabel('Esc') })} onclick={() => (app.modal = null)}>×</button>
+      <button class="icon-btn" use:tip={t('git.diff.closeTitle', { key: keyLabel('Esc') })} onclick={() => (app.modal = null)}>×</button>
     </div>
     <div class="body">
       {#if files.length > 1}

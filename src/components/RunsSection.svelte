@@ -4,6 +4,7 @@
   import { isolaCommand, recipeCommands } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
   import type { Project, RunCommand } from '../lib/types';
+  import { tip } from '../lib/tip';
 
   let { project }: { project: Project } = $props();
 
@@ -46,7 +47,7 @@
     class:sel={selected === c.id}
     role="button"
     tabindex="0"
-    title={c.command}
+    use:tip={c.command}
     onclick={() => app.selectLaunch(c.id)}
     onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
   >
@@ -56,15 +57,16 @@
     {#if isRunning(c)}
       <button
         class="ctl"
-        title={t('runs.action.restart')}
+        use:tip={t('runs.action.restart')}
         aria-label={t('runs.action.restart')}
         onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button
       >
-      <button class="ctl" title={t('common.stop')} aria-label={t('common.stop')} onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button>
+      <button class="ctl" use:tip={t('common.stop')} aria-label={t('common.stop')} onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button
+      >
     {:else}
       <button
         class="ctl go"
-        title={t('runs.action.run')}
+        use:tip={t('runs.action.run')}
         aria-label={t('runs.action.run')}
         onclick={(e) => act(e, () => startLaunch(project, c))}>▶</button
       >
@@ -84,7 +86,7 @@
         <button class="all" onclick={() => startAll(project)}>{t('runs.action.runAll')}</button>
       {/if}
     {/if}
-    <button class="gear" title={t('runs.section.configure')} aria-label={t('runs.section.configure')} onclick={configure}>
+    <button class="gear" use:tip={t('runs.section.configure')} aria-label={t('runs.section.configure')} onclick={configure}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
         ><circle cx="12" cy="12" r="3" /><path
           d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"

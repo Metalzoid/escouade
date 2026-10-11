@@ -128,8 +128,8 @@ describe('EditorView', () => {
     await app.openEditor({ source: 'project', path: 'src/board/index.ts' });
     await app.openEditor({ source: 'project', path: 'README.md' });
     render(EditorView, { project: project() });
-    expect(await screen.findByRole('tab', { name: /index\.ts · editor/ })).toHaveAttribute('title', 'src/editor/index.ts');
-    expect(screen.getByRole('tab', { name: /index\.ts · board/ })).toHaveAttribute('title', 'src/board/index.ts');
+    expect(await screen.findByRole('tab', { name: /index\.ts · editor/ })).toHaveAttribute('data-tip', 'src/editor/index.ts');
+    expect(screen.getByRole('tab', { name: /index\.ts · board/ })).toHaveAttribute('data-tip', 'src/board/index.ts');
     expect(screen.getByRole('tab', { name: /README\.md/ })).not.toHaveTextContent('·');
   });
 
@@ -847,8 +847,8 @@ describe('EditorView tree, as VS Code’s explorer', () => {
     await app.openEditor({ source: 'project', path: 'README.md' });
     render(EditorView, { project: project() });
     const env = await screen.findByRole('treeitem', { name: /\.env/ });
-    expect(env).toHaveAttribute('title', 'Ignoré par git');
-    expect(item(/README/)).toHaveAttribute('title', 'README.md');
+    expect(env).toHaveAttribute('data-tip', 'Ignoré par git');
+    expect(item(/README/)).toHaveAttribute('data-tip', 'README.md');
     await userEvent.click(env);
     expect(await screen.findByRole('tab', { name: /\.env/ })).toHaveAttribute('aria-selected', 'true');
     expect(be.called('fs_read').map((c) => c.args.path)).toContain('.env');
@@ -1905,7 +1905,7 @@ describe('EditorView in English', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This file changed on disk.');
     for (const name of ['Reload', 'Compare', 'Keep my version']) expect(screen.getByRole('button', { name })).toBeInTheDocument();
     const close = screen.getByRole('button', { name: 'Close app.ts' });
-    expect(close).toHaveAttribute('title', 'Close (unsaved)');
+    expect(close).toHaveAttribute('data-tip', 'Close (unsaved)');
     await userEvent.click(close);
     expect(app.modal).toMatchObject({
       kind: 'confirm',

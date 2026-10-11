@@ -9,6 +9,7 @@
   import { menu, type MenuItem } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
   import type { BranchInfo } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   // The picker the status bar's branch button opens, above it: the branches of the project's repository, searched, and
   // under them what is done to branches (create one, clean up, sync). `anchor`: the button, to open over it (under it
@@ -346,7 +347,7 @@
               aria-current={b.current ? 'true' : undefined}
               aria-disabled={r.why ? 'true' : undefined}
               aria-describedby={r.index === cursor ? 'branch-description' : undefined}
-              title={r.why ?? undefined}
+              use:tip={r.why ?? undefined}
               onclick={() => pick(r)}
               onmousemove={() => (active = b.name)}
               oncontextmenu={(e) => onContextMenu(e, b)}

@@ -267,7 +267,7 @@ describe('ToolRow in English', () => {
     setLang('en');
     const edit = tool({ name: 'Edit', input: { file_path: 'C:\\code\\app\\src\\auth.ts' }, result: { isError: false, add: 2, del: 1 } });
     const { unmount } = render(ToolRow, { item: edit, cwd: CWD, onOpenFile: () => {} });
-    expect(screen.getByRole('button', { name: 'Open src/auth.ts in the editor' })).toHaveAttribute('title', 'Open in editor');
+    expect(screen.getByRole('button', { name: 'Open src/auth.ts in the editor' })).toHaveAttribute('data-tip', 'Open in editor');
     unmount();
     const task = tool({ id: 'task', name: 'Task', input: { description: 'Explore the code' }, status: 'ok' });
     const sub = (id: string) => tool({ id, name: 'Read', input: { file_path: 'C:\\code\\app\\a.ts' }, parent: 'task' });

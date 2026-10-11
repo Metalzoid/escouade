@@ -8,6 +8,7 @@
   import { app } from '../lib/state.svelte';
   import { kpis, niceMax, ROWS, shown, type Range } from '../lib/stats';
   import type { Bucket, StatsView } from '../lib/types';
+  import { tip } from '../lib/tip';
 
   // Categorical palette validated for the dark surface (dataviz validator: all checks pass).
   const SERIES = [
@@ -284,7 +285,7 @@
                 {#each view.byAccount as a (a.account)}
                   {@const name = accountLabel(a.account)}
                   <tr class:on={a.account === filter} aria-current={a.account === filter ? 'true' : undefined}>
-                    <td class="cut strong" title={name}>{name}</td>
+                    <td class="cut strong" use:tip={{ text: name, cut: true }}>{name}</td>
                     <td class="num mono">{fTok(a.tokens)}</td>
                     <td class="num mono">{fUsd(a.cost)}</td>
                     <td class="num mono">{fInt(a.turns)}</td>
@@ -314,7 +315,7 @@
               {#each shown(view.byAgent, allAgents) as a (a.agentId)}
                 {@const p = projectOf(a.projectId)}
                 <tr>
-                  <td class="cut strong" title={a.name ?? undefined}>{a.name ?? t('stats.byAgent.deleted')}</td>
+                  <td class="cut strong" use:tip={{ text: a.name, cut: true }}>{a.name ?? t('stats.byAgent.deleted')}</td>
                   <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
                   <td class="num mono">{fTok(a.tokens)}</td>
                   <td class="num mono">{fUsd(a.cost)}</td>
@@ -350,7 +351,7 @@
               {#each shown(view.byTicket, allTickets) as x (x.id)}
                 <tr>
                   <td class="mono">{x.key}</td>
-                  <td class="cut strong" title={x.title}>{x.title}</td>
+                  <td class="cut strong" use:tip={{ text: x.title, cut: true }}>{x.title}</td>
                   <td class="num">{t('common.count.loops', { count: x.loops })}</td>
                   <td class="num mono">{fUsd(x.cost)}</td>
                 </tr>
@@ -574,8 +575,9 @@
     border-radius: var(--r-sm);
     border: 1px solid var(--line2);
     background: var(--elev);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
-    font-size: 12px;
+    /* The look of the other tooltips (.tip-box of app.css), on a card that follows the bars. */
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    font-size: 11.5px;
     pointer-events: none;
   }
   .tip.left {

@@ -4,6 +4,7 @@
   import { api } from '../lib/ipc';
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
+  import { tip } from '../lib/tip';
 
   // The diff of one uncommitted file, kept up to date while the agent edits it.
   let { projectId, agentId, path }: { projectId: string; agentId: string | null; path: string } = $props();
@@ -42,7 +43,7 @@
 
 <section class="fdiff" aria-label={t('git.diff.ofFile', { path })}>
   <div class="bar">
-    <span class="p mono" title={path}>{path}</span>
+    <span class="p mono" use:tip={{ text: path, cut: true }}>{path}</span>
     {#if file && !file.tooLarge}<span class="add mono">+{file.add}</span><span class="del mono">−{file.del}</span>{/if}
     <div style="flex:1"></div>
     <div class="segmented">

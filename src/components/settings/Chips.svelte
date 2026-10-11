@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string | number">
+  import { tip } from '../../lib/tip';
   // One choice among a few, each a chip; `lang`: the language a choice is written in, when not the interface's (a
   // language named in itself), for screen readers.
   let {
@@ -17,7 +18,7 @@
       class:on={value === o.value}
       aria-pressed={value === o.value}
       lang={o.lang}
-      title={o.title}
+      use:tip={o.title}
       onclick={() => (value = o.value)}>{o.label}</button
     >
   {/each}

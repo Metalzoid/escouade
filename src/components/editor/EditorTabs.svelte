@@ -2,6 +2,7 @@
   import { tabHints } from '../../lib/editor/tabs';
   import type { FileStatus } from '../../lib/editor/tree';
   import { t } from '../../lib/i18n';
+  import { tip } from '../../lib/tip';
 
   let {
     tabs,
@@ -27,7 +28,7 @@
       role="tab"
       tabindex="0"
       aria-selected={tab.active}
-      title={tab.path}
+      use:tip={tab.path}
       onclick={() => onselect(tab.path)}
       onkeydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && onselect(tab.path)}
       onauxclick={(e) => e.button === 1 && onclose(tab.path)}
@@ -41,7 +42,7 @@
         class="close"
         class:dirty={tab.dirty}
         aria-label={hint ? t('editor.tabs.closeIn', { name: tab.name, folder: hint }) : t('editor.tabs.close', { name: tab.name })}
-        title={tab.dirty ? t('editor.tabs.closeUnsaved') : t('common.close')}
+        use:tip={tab.dirty ? t('editor.tabs.closeUnsaved') : t('common.close')}
         onclick={(e) => {
           e.stopPropagation();
           onclose(tab.path);

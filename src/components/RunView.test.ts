@@ -139,7 +139,8 @@ describe('RunView in English', () => {
     expect(screen.getByText('Not run yet.')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '▶ Run' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^⌕$/ })).toHaveAttribute('title', 'Search (Ctrl+Shift+F)');
+    // The symbol says nothing: the button is named by its tooltip.
+    expect(screen.getByRole('button', { name: 'Search (Ctrl+Shift+F)' })).toHaveAttribute('data-tip', 'Search (Ctrl+Shift+F)');
   });
 
   it('says since when it runs, in the time of the language, and offers to restart or stop it', () => {

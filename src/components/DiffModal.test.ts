@@ -5,6 +5,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import DiffModal from './DiffModal.svelte';
+import { getByTip } from '../test/tip';
 
 export const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 --- a/src/auth.ts
@@ -235,7 +236,7 @@ describe('DiffModal in English', () => {
     expect(screen.getByText('2 files')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unified' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Side by side' })).toBeInTheDocument();
-    expect(screen.getByTitle('Close (Esc)')).toBeInTheDocument();
+    expect(getByTip(document.body, 'Close (Esc)')).toBeInTheDocument();
   });
 
   it('says a diff is empty or binary, in English', async () => {

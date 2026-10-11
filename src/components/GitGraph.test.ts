@@ -515,8 +515,8 @@ describe('GitGraph in English', () => {
     fakeBackend({ git_log: () => LOG });
     render(GitGraph, { project: project(), agent: app.agents.a2 });
     expect(await screen.findByText('Merge landing')).toBeInTheDocument();
-    expect(screen.getByText('v0.1.0')).toHaveAttribute('title', 'tag v0.1.0');
-    expect(screen.getByText('landing')).toHaveAttribute('title', 'branch ccm/landing of agent landing');
+    expect(screen.getByText('v0.1.0')).toHaveAttribute('data-tip', 'tag v0.1.0');
+    expect(screen.getByText('landing')).toHaveAttribute('data-tip', 'branch ccm/landing of agent landing');
     expect(within(row('Merge landing')).getByText('5 min ago')).toBeInTheDocument();
   });
 

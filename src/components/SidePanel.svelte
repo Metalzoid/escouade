@@ -4,6 +4,7 @@
   import type { Agent, Project } from '../lib/types';
   import FilesPanel from './FilesPanel.svelte';
   import GitGraph from './GitGraph.svelte';
+  import { tip } from '../lib/tip';
 
   // The agent's side panel: its uncommitted files, or the repository history.
   // `docked`: right half of the split layout (always shown), else an optional 330 px panel.
@@ -24,7 +25,7 @@
       </button>
     </div>
     <div style="flex:1"></div>
-    {#if !docked}<button class="icon-btn" title={t('common.close')} onclick={() => (app.filesOpen = false)}>×</button>{/if}
+    {#if !docked}<button class="icon-btn" use:tip={t('common.close')} onclick={() => (app.filesOpen = false)}>×</button>{/if}
   </div>
   {#if tab === 'files'}
     <FilesPanel {project} {agent} {docked} bind:count />

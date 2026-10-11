@@ -6,6 +6,7 @@
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import BoardColumn from './BoardColumn.svelte';
+  import { tip } from '../../lib/tip';
 
   let { project: given }: { project: Project } = $props();
 
@@ -39,37 +40,37 @@
   <header class="head">
     <div class="who">
       <span class="t">Kanban</span>
-      <span class="sub mono" title={sub}>{sub}</span>
+      <span class="sub mono" use:tip={{ text: sub, cut: true }}>{sub}</span>
     </div>
     <div style="flex:1"></div>
     {#if !app.claudeFound}
       <!-- No place is worth showing: nothing starts without Claude Code. -->
-      <span class="places missing" title={t('board.header.claudeMissing')}>{t('board.header.claudeMissing')}</span>
+      <span class="places missing" use:tip={{ text: t('board.header.claudeMissing'), cut: true }}>{t('board.header.claudeMissing')}</span>
     {:else if issue}
       <!-- Nor while the target branch cannot start a ticket. -->
-      <span class="places missing" title={issue}>{issue}</span>
+      <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
     {:else if pause}
       <!-- Nor while the autopilot is paused: the line under the header says why. -->
     {:else}
-      <span class="places" title={places}>{places}</span>
+      <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
     {/if}
     <!-- Its label goes in a narrow window, its icon and its name stay. -->
     <button
       class="imp"
       aria-label={t('common.import')}
-      title={t('board.header.importTitle')}
+      use:tip={t('board.header.importTitle')}
       onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
       ><span class="ic" aria-hidden="true">⤓</span><span class="l">{t('common.import')}</span></button
     >
     <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
     <button
       class="cfg"
-      title={t('board.header.settingsTitle', { summary })}
+      use:tip={t('board.header.settingsTitle', { summary })}
       onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
     >
       <span class="gear">⚙</span><span class="k">{t('board.header.afterApproval')}</span><span class="v mono">{summary}</span>
     </button>
-    <div class="auto" title={t('board.header.autopilotTitle')}>
+    <div class="auto" use:tip={t('board.header.autopilotTitle')}>
       <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span>
       <button
         class="switch"
@@ -85,8 +86,8 @@
     <!-- A line of its own under the header: its text and its button would not fit in a narrow one. -->
     <div class="pause" role="status">
       <span class="dot" aria-hidden="true"></span>
-      <span class="why" title={paused}>{paused}</span>
-      {#if over}<span class="over" title={over}>{over}</span>{/if}
+      <span class="why" use:tip={{ text: paused, cut: true }}>{paused}</span>
+      {#if over}<span class="over" use:tip={{ text: over, cut: true }}>{over}</span>{/if}
       <button class="resume" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
     </div>
   {/if}

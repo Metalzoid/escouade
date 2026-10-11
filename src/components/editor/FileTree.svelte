@@ -5,6 +5,7 @@
   import { t } from '../../lib/i18n';
   import FileIcon from './FileIcon.svelte';
   import NewFileField from './NewFileField.svelte';
+  import { tip } from '../../lib/tip';
 
   let {
     rows,
@@ -186,7 +187,7 @@
         aria-expanded={r.kind === 'dir' ? r.open : undefined}
         aria-selected={r.kind === 'file' && r.path === active}
         tabindex={keyOf(r) === stop ? 0 : -1}
-        title={r.ignored ? t('editor.tree.ignoredByGit') : r.path}
+        use:tip={r.ignored ? t('editor.tree.ignoredByGit') : r.path}
         data-index={i}
         style:padding-left="{pad(r.depth)}px"
         onfocus={() => (focused = keyOf(r))}

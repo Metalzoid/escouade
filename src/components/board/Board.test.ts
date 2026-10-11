@@ -58,7 +58,7 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     const said = screen.getByText(issue);
     expect(said).toHaveClass('places', 'missing');
-    expect(said).toHaveAttribute('title', issue);
+    expect(said).toHaveAttribute('data-tip', issue);
     expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
     const todo = col('À faire');
     expect(within(todo).queryByText("Pris dès qu'une place se libère")).not.toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     const said = 'Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)';
     expect(screen.getByRole('status')).toHaveTextContent(said);
-    expect(screen.getByText(said)).toHaveAttribute('title', said);
+    expect(screen.getByText(said)).toHaveAttribute('data-tip', said);
     // No place is worth showing meanwhile: none is taken, and no card is promised one.
     expect(screen.queryByText('1 place libre')).not.toBeInTheDocument();
     expect(within(col('À faire')).getAllByText('En attente : pilote auto en pause')).toHaveLength(2);
@@ -195,9 +195,9 @@ describe('Board', () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     const button = screen.getByRole('button', { name: /Après validation/ });
-    expect(button).toHaveAttribute('title', 'Réglages du Kanban — merge squash → main');
+    expect(button).toHaveAttribute('data-tip', 'Réglages du Kanban — merge squash → main');
     // The summary has no tooltip of its own, which would hide the button's.
-    expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('title');
+    expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('data-tip');
   });
 
   it('is the Kanban, whose settings button opens the settings on its tab and project', async () => {
@@ -336,11 +336,14 @@ describe('Board in English', () => {
     app.claudeFound = false;
     render(Board, { project: app.projects[0] });
     expect(screen.getByText('Claude Code not found — no tickets will start')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute('title', 'Import tickets from Jira, Trello, or GitHub Issues');
+    expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute(
+      'data-tip',
+      'Import tickets from Jira, Trello, or GitHub Issues',
+    );
     expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     expect(screen.getByText('After approval:')).toBeInTheDocument();
     expect(screen.getByText('Autopilot').closest('.auto')).toHaveAttribute(
-      'title',
+      'data-tip',
       'Tickets in “To do” start on their own as soon as a slot is free',
     );
   });

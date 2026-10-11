@@ -161,7 +161,36 @@ test('the status bar counts the running Claude processes, with their memory and 
   // Measured: the fake CLI is cmd.exe running node.
   const memory = Number((await procs.textContent())!.match(/(\d+) Mo/)![1]);
   expect(memory).toBeGreaterThan(10);
-  await expect(procs).toHaveAttribute('title', /: \d+ Mo · \d+ %/);
+  await expect(procs).toHaveAttribute('data-tip', /: \d+ Mo · \d+ %/);
+});
+
+test('the tooltip of the resources is the app’s: its look, one agent a line, above the status bar, gone when the pointer leaves', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  const procs = page.locator('footer .it', { hasText: 'Claude ·' });
+  await expect(procs).toHaveText(/^1 Claude/);
+  // No `title` left for the system to show its own.
+  await expect(procs).not.toHaveAttribute('title');
+  await procs.hover();
+  const tip = page.getByRole('tooltip');
+  await expect(tip).toHaveText(/^Processus Claude en cours[^\n]*\n[^\n]+ : \d+ Mo · \d+ %$/);
+  const look = await tip.evaluate((el) => {
+    const probe = document.createElement('div');
+    probe.style.background = 'var(--elev)';
+    document.body.append(probe);
+    const elev = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const s = getComputedStyle(el);
+    return { background: s.backgroundColor, elev, whiteSpace: s.whiteSpace, position: s.position };
+  });
+  expect(look).toEqual({ background: look.elev, elev: look.elev, whiteSpace: 'pre-line', position: 'fixed' });
+  const [box, item] = [(await tip.boundingBox())!, (await procs.boundingBox())!];
+  expect(box.y + box.height).toBeLessThanOrEqual(item.y);
+  expect(box.x).toBeGreaterThanOrEqual(8);
+  await page.mouse.move(400, 300);
+  await expect(tip).toBeHidden();
 });
 
 test('a subagent’s report and a background task are shown as such, not as the user’s messages', async ({ app }) => {
@@ -253,14 +282,14 @@ test('an agent in remote control shows what is sent to it from claude.ai', async
   const card = page.locator('.card').first();
   await card.click({ button: 'right' });
   await page.getByRole('menuitem', { name: /Activer le remote control/ }).click();
-  await expect(card.getByTitle(/Remote control : connecté/)).toBeVisible();
+  await expect(card.locator('[data-tip*="Remote control : connecté"]')).toBeVisible();
   // The fake CLI then plays a message sent from the phone, and Claude answers it.
   await expect(page.locator('.bubble', { hasText: 'Message depuis le téléphone' })).toContainText('depuis claude.ai');
   await expect(page.getByText('Bonjour, tu as dit : Message depuis le téléphone')).toBeVisible();
   await card.click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Ouvrir sur claude.ai' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Désactiver le remote control' }).click();
-  await expect(card.getByTitle(/Remote control/)).toBeHidden();
+  await expect(card.locator('[data-tip*="Remote control"]')).toBeHidden();
 });
 
 test('scrolling up slowly from the bottom of a conversation is never pulled back down', async ({ app }) => {
@@ -361,7 +390,7 @@ test('a new worktree is set up before its agent takes a message, and torn down b
 test('a terminal runs commands in the project folder', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
-  await page.getByTitle('Nouveau terminal').click();
+  await page.getByRole('button', { name: 'Nouveau terminal' }).click();
   await page.getByRole('menuitem', { name: /PowerShell/ }).click();
   await expect(page.locator('.xterm')).toBeVisible();
   await page.waitForTimeout(2500); // PowerShell start-up
@@ -437,7 +466,7 @@ test('stats record the turns of the app’s agents', async ({ app }) => {
 
 test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   const { page } = app;
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Réseau' }).click();
   await dialog.getByPlaceholder('aucun').fill('http://proxy.local:3128');

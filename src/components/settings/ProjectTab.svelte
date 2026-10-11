@@ -14,6 +14,7 @@
   import Row from './Row.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
+  import { tip } from '../../lib/tip';
 
   // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
   // modal's project).
@@ -130,7 +131,7 @@
     <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
   </Row>
   <Row label={t('common.folder')}>
-    <span class="path mono" title={project.path}>{project.path}</span>
+    <span class="path mono" use:tip={{ text: project.path, cut: true }}>{project.path}</span>
     <button class="btn" onclick={() => openPath(project.path).catch((err) => app.toast(String(err), 'error'))}>{t('common.open')}</button>
   </Row>
   <Row label={t('common.color')}>
@@ -254,7 +255,7 @@
               >{/if}
           </select>
         </label>
-        <button class="del" title={t('common.delete')} aria-label={t('common.delete')} onclick={() => draft.runCommands.splice(i, 1)}
+        <button class="del" use:tip={t('common.delete')} aria-label={t('common.delete')} onclick={() => draft.runCommands.splice(i, 1)}
           >×</button
         >
       </div>

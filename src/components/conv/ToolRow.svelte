@@ -6,6 +6,7 @@
   import Markdown from './Markdown.svelte';
   import PatchView from './PatchView.svelte';
   import Self from './ToolRow.svelte';
+  import { tip } from '../../lib/tip';
 
   // `onOpenFile`: opens a file the tool edited (its path) in the editor, at a line.
   let {
@@ -47,7 +48,7 @@
     role="button"
     tabindex="0"
     aria-expanded={open}
-    title={arg}
+    use:tip={{ text: arg, cut: true }}
     onclick={toggle}
     onkeydown={(e) => {
       // The keys of the path's button are its own.
@@ -63,7 +64,7 @@
       <button
         class="arg link"
         aria-label={t('conv.tool.openFile', { path: arg })}
-        title={t('common.openInEditor')}
+        use:tip={t('common.openInEditor')}
         onclick={(e) => {
           e.stopPropagation();
           onOpenFile?.(file, firstLine);

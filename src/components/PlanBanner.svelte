@@ -8,6 +8,7 @@
   import { app } from '../lib/state.svelte';
   import type { Agent } from '../lib/types';
   import Splitter from './Splitter.svelte';
+  import { tip } from '../lib/tip';
 
   // The plan an agent follows, between its header and its messages: a line (the plan, how far it is), a bar with a
   // segment for each task, and the list of the tasks. What the stream says is worked out in `lib/plan.ts`.
@@ -152,7 +153,7 @@
   {#if view && view.subsRunning > 0}
     <span class="subs">
       <span class="dots" aria-hidden="true"
-        >{#each view.subDots.slice(0, DOTS) as dot, i (i)}<span class="dot" title={dot.name}></span>{/each}</span
+        >{#each view.subDots.slice(0, DOTS) as dot, i (i)}<span class="dot" use:tip={dot.name}></span>{/each}</span
       >{t('plan.subsRunning', { count: view.subsRunning })}
     </span>
   {/if}
@@ -171,7 +172,7 @@
           onclick={toggle}
         >
           <span class="badge">{t('plan.badge')}</span>
-          <span class="title" title={titleTip}>{view.title}</span>
+          <span class="title" use:tip={titleTip}>{view.title}</span>
           {@render subs()}
           <span class="count mono">{t('plan.tasks', { done: view.done, count: view.total })}</span>
           <span class="pct mono">{t('plan.percent', { percent: view.percent })}</span>
@@ -213,7 +214,7 @@
             {#each view.rows as row (row.n)}
               <li class="row {row.state}" class:focus={row.focus} data-plan-task={row.n}>
                 <span class="n mono">{row.n}</span>
-                <span class="ico" title={stateWord(row.state)}>
+                <span class="ico" use:tip={stateWord(row.state)}>
                   <span class="sr">{stateWord(row.state)}</span>
                   {#if row.state === 'done'}
                     <span class="check" aria-hidden="true">✓</span>
@@ -226,7 +227,7 @@
                   {/if}
                 </span>
                 <span class="what">
-                  <span class="rt" title={row.title}>{row.title}</span>
+                  <span class="rt" use:tip={{ text: row.title, cut: true }}>{row.title}</span>
                   <span class="meta">
                     {#if row.sub}
                       <span class="subtag mono"
@@ -235,7 +236,7 @@
                           >{/if}</span
                       >
                     {/if}
-                    {#if row.step}<span class="step" title={row.step}>{row.step}</span>{/if}
+                    {#if row.step}<span class="step" use:tip={{ text: row.step, cut: true }}>{row.step}</span>{/if}
                     {#if row.state === 'block'}<span class="wait">{t('plan.waiting')}</span>{/if}
                     {#if row.after}<span class="after mono">{t('plan.after', { list: row.after })}</span>{/if}
                   </span>
@@ -243,7 +244,7 @@
                 <span class="rbar" aria-hidden="true"
                   ><span class="rfill" class:unmeasured={row.percent === null} style:width="{row.percent ?? 100}%"></span></span
                 >
-                <span class="rpct mono" title={row.steps ? t('plan.stepsOf', { done: row.steps[0], count: row.steps[1] }) : undefined}
+                <span class="rpct mono" use:tip={row.steps ? t('plan.stepsOf', { done: row.steps[0], count: row.steps[1] }) : undefined}
                   >{progress(row)}</span
                 >
               </li>
@@ -254,7 +255,7 @@
         <!-- Subagents work, but no task list: who works is all there is to tell. -->
         <div class="head static">
           <span class="badge">{t('plan.badgeSubs')}</span>
-          <span class="title" title={view.title}>{view.title}</span>
+          <span class="title" use:tip={{ text: view.title, cut: true }}>{view.title}</span>
           {@render subs()}
         </div>
       {/if}

@@ -6,6 +6,7 @@
   import { estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
+  import { tip } from '../lib/tip';
 
   // The panel the quota group of the status bar opens, above it, when there are several accounts: each one's two windows
   // with the percentage written, the current account first. `anchor`: that button, to open over it and to give the focus
@@ -68,7 +69,7 @@
         <span class="name">{accountName(r.account)}</span>
         {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
         {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
-        <span class="today" title={r.today.estimated ? estimateHint() : undefined}
+        <span class="today" use:tip={r.today.estimated ? estimateHint() : undefined}
           >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
         >
       </div>

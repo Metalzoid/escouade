@@ -44,7 +44,7 @@ describe('UserMessage in English', () => {
     setLang('en');
     const { unmount } = render(UserMessage, { item: { ...item(true), images: 1, origin: 'remote' as const } });
     expect(screen.getByText('🖼 1 image')).toBeInTheDocument();
-    expect(screen.getByText('sent during the turn')).toHaveAttribute('title', 'Claude takes it into account at its next step');
+    expect(screen.getByText('sent during the turn')).toHaveAttribute('data-tip', 'Claude takes it into account at its next step');
     expect(screen.getByText('from claude.ai')).toBeInTheDocument();
     unmount();
     render(UserMessage, { item: { ...item(false), images: 2 }, waiting: true });

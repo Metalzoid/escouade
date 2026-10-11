@@ -8,6 +8,7 @@
   import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import FileIcon from './editor/FileIcon.svelte';
+  import { tip } from '../lib/tip';
 
   // « Ouvrir un fichier » (Ctrl+P): the files of a source of a project, ranked for what is typed. `nom:42` opens the
   // file at its line 42.
@@ -139,7 +140,7 @@
         oninput={() => (active = 0)}
         onkeydown={onKeydown}
       />
-      <span class="where" title={place}>{place}</span>
+      <span class="where" use:tip={{ text: place, cut: true }}>{place}</span>
       <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
     </div>
     <div class="list" id="quick-open-files" role="listbox" aria-label={t('common.files')} bind:this={list}>

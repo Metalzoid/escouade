@@ -12,6 +12,7 @@
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
+  import { tip } from '../../lib/tip';
 
   // The external ticket systems: the accounts (connected at once, apart from the draft), the
   // project's sources and what moving its tickets does there (its draft: the modal's project), and
@@ -310,7 +311,7 @@
               <select
                 class="field select"
                 aria-label={t('integrations.mapping.cell', { service: SERVICES[id].name, column })}
-                title={why}
+                use:tip={why}
                 value={link?.states[c.id]?.id ?? ''}
                 onchange={(e) => setState(id, c.id, e.currentTarget.value)}
               >

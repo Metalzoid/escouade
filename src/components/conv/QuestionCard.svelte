@@ -6,6 +6,7 @@
   import { answersHere, ariaEnter, enterAnswer, optionAnswer } from '../../lib/shortcuts';
   import { app } from '../../lib/state.svelte';
   import type { Question, QuestionItem } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   // `current`: several requests can wait at once, and the keyboard answers the first (as the message field does).
   let { item, agentId, pending, current = true }: { item: QuestionItem; agentId: string; pending: boolean; current?: boolean } = $props();
@@ -95,7 +96,7 @@
               class="opt"
               class:primary={j === 0 && !needsConfirm}
               class:on
-              title={o.description}
+              use:tip={o.description}
               disabled={busy}
               aria-keyshortcuts={hint ? `Alt+${j + 1}` : undefined}
               onclick={() => choose(qi, o.label)}

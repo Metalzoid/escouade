@@ -61,7 +61,7 @@ test.describe('two accounts, the first out of quota', () => {
     const group = page.getByRole('button', { name: `Quotas par compte (compte en cours : ${NAME})` });
     await expect(group).toBeVisible();
     const label = group.locator('.acct');
-    await expect(label).toHaveAttribute('title', NAME);
+    await expect(label).toHaveAttribute('data-tip', NAME);
     expect(await label.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
     // The bars are the button's to describe: both windows, said to a screen reader.
     await expect(group).toHaveAccessibleDescription(/^Quota sur 5 heures : .*\. Quota sur 7 jours : /);

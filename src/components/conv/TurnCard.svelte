@@ -7,6 +7,7 @@
   import { app } from '../../lib/state.svelte';
   import type { FileEdit } from '../../lib/tools';
   import type { Agent, TurnItem } from '../../lib/types';
+  import { tip } from '../../lib/tip';
 
   // `edits`: the files this turn edited, recapped once the agent is done. `latest`: the conversation's
   // latest turn (notices may follow it).
@@ -92,7 +93,7 @@
           <li>
             <button
               class="path link"
-              title={t('common.openInEditor')}
+              use:tip={t('common.openInEditor')}
               onclick={() =>
                 app.openEditor({
                   projectId: agent.projectId,

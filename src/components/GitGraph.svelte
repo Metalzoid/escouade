@@ -9,6 +9,7 @@
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
   import type { Agent, BranchInfo, Commit, GitLog, Project } from '../lib/types';
+  import { tip } from '../lib/tip';
 
   // The repository's history, every branch included, with the agent's branch highlighted. A commit's menu (right
   // click, menu key, Shift+F10) starts a branch there, switches to its branches, compares it, deletes its branches.
@@ -226,7 +227,7 @@
       class="row"
       class:own
       data-mine={own}
-      title="{c.hash.slice(0, 7)} · {c.author}"
+      use:tip={`${c.hash.slice(0, 7)} · ${c.author}`}
       onclick={() => open(c)}
       oncontextmenu={(e) => onContextMenu(e, c)}
       onkeydown={(e) => onKeydown(e, c)}
@@ -241,7 +242,7 @@
         <circle cx={x(r.col)} cy={H / 2} r={own ? 4.5 : 3.5} fill={COLORS[r.lane % COLORS.length]} class:dim={!own} />
       </svg>
       {#each labels(c) as l (l.text + l.kind)}
-        <span class="ref {l.kind}" title={l.title}>{l.text}</span>
+        <span class="ref {l.kind}" use:tip={l.title}>{l.text}</span>
       {/each}
       <span class="subject">{c.subject}</span>
       <span class="when">{fAgo(c.time, app.now)}</span>

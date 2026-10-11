@@ -154,11 +154,11 @@ describe('PlanBanner', () => {
         agentOf([task('1', 'pending')], {}, { title: 'Le plan', source: 'plan', planFile: 'docs/superpowers/plans/x.md' }),
       );
       const title = within(toggle()).getByText('Le plan');
-      expect(title.getAttribute('title')).toContain('Plan : docs/superpowers/plans/x.md');
-      expect(title.getAttribute('title')).toContain('Le plan');
+      expect(title.getAttribute('data-tip')).toContain('Plan : docs/superpowers/plans/x.md');
+      expect(title.getAttribute('data-tip')).toContain('Le plan');
       unmount();
       show(agentOf([task('1', 'pending')], {}, { title: 'Le plan', source: 'tools', planFile: 'docs/superpowers/plans/x.md' }));
-      expect(within(toggle()).getByText('Le plan')).toHaveAttribute('title', 'Le plan');
+      expect(within(toggle()).getByText('Le plan')).toHaveAttribute('data-tip', 'Le plan');
     });
 
     it('shows the subagents running as a stack of dots, six at most, and counts them', () => {
@@ -167,7 +167,7 @@ describe('PlanBanner', () => {
       show(agentOf(FIVE(), {}, { agents }));
       const dots = [...document.querySelectorAll('.dots .dot')];
       expect(dots).toHaveLength(6);
-      expect(dots.map((d) => d.getAttribute('title'))).toEqual(['agent-0', 'agent-1', 'agent-2', 'agent-3', 'agent-4', 'agent-5']);
+      expect(dots.map((d) => d.getAttribute('data-tip'))).toEqual(['agent-0', 'agent-1', 'agent-2', 'agent-3', 'agent-4', 'agent-5']);
       expect(within(toggle()).getByText('8 sous-agents actifs')).toBeInTheDocument();
       expect(document.querySelector('.dots')).toHaveAttribute('aria-hidden', 'true');
     });
@@ -340,7 +340,7 @@ describe('PlanBanner', () => {
       const pct = rows().map((r) => r.querySelector('.rpct')?.textContent);
       expect(pct).toEqual(['100 %', '67 %', 'En cours', '0 %']);
       expect(rows()[2]).not.toHaveTextContent('%');
-      expect(rows()[1].querySelector('.rpct')).toHaveAttribute('title', '2/3 étapes');
+      expect(rows()[1].querySelector('.rpct')).toHaveAttribute('data-tip', '2/3 étapes');
       // The bar of the row: as far as it is, or faint and whole.
       const bars = rows().map((r) => r.querySelector<HTMLElement>('.rfill')!);
       expect(bars.map((b) => b.style.width)).toEqual(['100%', '67%', '100%', '0%']);
@@ -353,7 +353,7 @@ describe('PlanBanner', () => {
       expect(row.querySelector('.rpct')).toHaveTextContent('En cours');
       expect(row).not.toHaveTextContent('%');
       // The steps are still there for whoever points at it.
-      expect(row.querySelector('.rpct')).toHaveAttribute('title', '0/2 étapes');
+      expect(row.querySelector('.rpct')).toHaveAttribute('data-tip', '0/2 étapes');
       expect(row.querySelector('.rfill')).toHaveClass('unmeasured');
     });
 
@@ -440,13 +440,13 @@ describe('PlanBanner', () => {
       expect(rows()[0].querySelector('.rt')).toHaveTextContent(bad);
       expect(rows()[0].querySelector('.step')).toHaveTextContent(bad);
       expect(rows()[0].querySelector('.subtag')).toHaveTextContent(`↳ ${bad}`);
-      expect(document.querySelector('.dots .dot')).toHaveAttribute('title', bad);
+      expect(document.querySelector('.dots .dot')).toHaveAttribute('data-tip', bad);
     });
 
     it('cuts a long title and keeps all of it for the tooltip', () => {
       const long = 'Un titre de tâche beaucoup trop long pour tenir sur une seule ligne de la liste du plan';
       show(agentOf([task('1', 'pending', { title: long })]));
-      expect(rows()[0].querySelector('.rt')).toHaveAttribute('title', long);
+      expect(rows()[0].querySelector('.rt')).toHaveAttribute('data-tip', long);
     });
 
     it('is as tall as it needs, at most its share of the window, unless the reader chose a height', () => {
@@ -588,7 +588,7 @@ describe('PlanBanner', () => {
       show(agentOf(FIVE()));
       const handle = grip();
       expect(handle).toHaveAccessibleName('Hauteur de la liste des tâches');
-      expect(handle).toHaveAttribute('title', 'Glisser pour redimensionner · double-clic pour réinitialiser');
+      expect(handle).toHaveAttribute('data-tip', 'Glisser pour redimensionner · double-clic pour réinitialiser');
       expect(handle).toHaveAttribute('aria-orientation', 'horizontal');
       expect(handle).toHaveAttribute('tabindex', '0');
       expect(handle).toHaveAttribute('aria-valuemin', '60');
@@ -683,7 +683,7 @@ describe('PlanBanner', () => {
       show(agentOf([], {}, { agents: [sub('s1', { title: 'Explore' }), sub('s2', { title: 'Revue' })], launched: 3 }));
       const head = screen.getByText('Sous-agents').closest('.head')!;
       expect(head).toHaveTextContent('2 sous-agents actifs');
-      expect([...head.querySelectorAll('.dot')].map((d) => d.getAttribute('title'))).toEqual(['Explore', 'Revue']);
+      expect([...head.querySelectorAll('.dot')].map((d) => d.getAttribute('data-tip'))).toEqual(['Explore', 'Revue']);
       expect(head).not.toHaveTextContent('tâche');
       expect(head).not.toHaveTextContent('%');
       expect(screen.queryByRole('button')).toBeNull();
@@ -768,21 +768,21 @@ describe('PlanBanner', () => {
       expect(todo.querySelector('.after')).toHaveTextContent('after 04');
       expect(rows()[0].querySelector('.ico .sr')).toHaveTextContent('Done');
       expect(grip()).toHaveAccessibleName('Height of the task list');
-      expect(grip()).toHaveAttribute('title', 'Drag to resize · double-click to reset');
+      expect(grip()).toHaveAttribute('data-tip', 'Drag to resize · double-click to reset');
     });
 
     it('says “In progress” where a task under way has no number', () => {
       setLang('en');
       show(agentOf([task('1', 'inProgress', { steps: [1, 2] }), task('2', 'inProgress')]));
       expect(rows().map((r) => r.querySelector('.rpct')?.textContent)).toEqual(['50%', 'In progress']);
-      expect(rows()[0].querySelector('.rpct')).toHaveAttribute('title', '1/2 steps');
+      expect(rows()[0].querySelector('.rpct')).toHaveAttribute('data-tip', '1/2 steps');
     });
 
     it('says one task and the plan file in English', () => {
       setLang('en');
       show(agentOf([task('1', 'pending')], {}, { title: 'Plan title', source: 'plan', planFile: 'docs/p.md' }));
       expect(within(toggle()).getByText('0/1 task')).toBeInTheDocument();
-      expect(within(toggle()).getByText('Plan title').getAttribute('title')).toContain('Plan: docs/p.md');
+      expect(within(toggle()).getByText('Plan title').getAttribute('data-tip')).toContain('Plan: docs/p.md');
     });
 
     it('names the subagents when there is no task list', () => {

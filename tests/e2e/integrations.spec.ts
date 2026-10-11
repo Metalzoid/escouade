@@ -36,7 +36,7 @@ test('a Jira issue and a Trello card are imported, and their states follow their
   await addProject(page, app.repo, { firstAgent: false });
 
   // Accounts: refused, then accepted.
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await settings.getByRole('tab', { name: 'Intégrations' }).click();
   await settings.getByRole('button', { name: 'Connecter…' }).first().click();
@@ -104,7 +104,7 @@ test('a Jira issue and a Trello card are imported, and their states follow their
 test('the automatic import brings the GitHub issues that carry its label', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await settings.getByRole('tab', { name: 'Intégrations' }).click();
   await settings.getByRole('button', { name: 'Connecter…' }).nth(2).click();

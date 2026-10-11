@@ -32,7 +32,7 @@ async function rpc(server: { url: string; token: string }, id: number | null, me
 test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Claude Code' }).click();
   await expect(dialog.getByRole('heading', { name: 'Escouade dans Claude' })).toBeVisible();
@@ -104,7 +104,7 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
 test('turning Claude’s control of Escouade off takes it out of Claude Code and changes the token', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });
-  await page.getByTitle('Réglages (Ctrl+,)').click();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Claude Code' }).click();
   await dialog.getByRole('switch', { name: SWITCH }).click();

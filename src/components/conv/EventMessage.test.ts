@@ -54,7 +54,7 @@ describe('EventMessage', () => {
     expect(screen.getByText('Nouveau ticket #42')).toBeInTheDocument();
     render(EventMessage, { source: 'task', text: NOTIFICATION });
     const sum = screen.getByText('Background command "npm test" completed (exit code 0)');
-    expect(sum).toHaveAttribute('title', 'Background command "npm test" completed (exit code 0)');
+    expect(sum).toHaveAttribute('data-tip', 'Background command "npm test" completed (exit code 0)');
   });
 });
 

@@ -5,6 +5,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import SidePanel from './SidePanel.svelte';
+import { getByTip, queryByTip } from '../test/tip';
 
 const change = (path: string) => ({ path, status: 'M', add: 1, del: 0, agentId: 'a1' });
 const LOG = {
@@ -36,14 +37,14 @@ describe('SidePanel', () => {
     fakeBackend({ git_files: () => [] });
     app.filesOpen = true;
     render(SidePanel, { project: project(), agent: app.agents.a1 });
-    await userEvent.click(screen.getByTitle('Fermer'));
+    await userEvent.click(getByTip(document.body, 'Fermer'));
     expect(app.filesOpen).toBe(false);
   });
 
   it('cannot be closed in the split layout', () => {
     fakeBackend({ git_files: () => [] });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
-    expect(screen.queryByTitle('Fermer')).not.toBeInTheDocument();
+    expect(queryByTip(document.body, 'Fermer')).not.toBeInTheDocument();
   });
 });
 
@@ -58,6 +59,6 @@ describe('SidePanel in English', () => {
     render(SidePanel, { project: project(), agent: app.agents.a1 });
     expect(await screen.findByRole('tab', { name: /Uncommitted\s*2/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'History' })).toBeInTheDocument();
-    expect(screen.getByTitle('Close')).toBeInTheDocument();
+    expect(getByTip(document.body, 'Close')).toBeInTheDocument();
   });
 });

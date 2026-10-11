@@ -28,6 +28,7 @@
   import TurnCard from './conv/TurnCard.svelte';
   import UserMessage from './conv/UserMessage.svelte';
   import StatusDot from './StatusDot.svelte';
+  import { tip } from '../lib/tip';
 
   let { agent, project }: { agent: Agent; project: Project } = $props();
 
@@ -429,7 +430,7 @@
   <header class="head">
     <div class="who">
       <div class="line1">
-        <span class="name" ondblclick={rename} role="presentation" title={t('conv.header.renameHint')}>{agent.name}</span>
+        <span class="name" ondblclick={rename} role="presentation" use:tip={t('conv.header.renameHint')}>{agent.name}</span>
         <span class="st" style:color={SC[agent.status]}><StatusDot status={agent.status} size={7} />{statusLabel(agent.status)}</span>
       </div>
       <span class="sub mono">{project.name} / {branch || '—'}</span>
@@ -438,7 +439,7 @@
     <button
       class="btn edit"
       aria-label={t('common.editor')}
-      title={t('conv.header.editorHint')}
+      use:tip={t('conv.header.editorHint')}
       onclick={() => app.openEditor({ projectId: project.id, source: editorSource })}
     >
       <span class="mono glyph">&lt;/&gt;</span><span class="lbl">{t('common.editor')}</span>
@@ -448,7 +449,7 @@
         <button
           class="btn test"
           aria-label={`▶ ${t('conv.header.test')}`}
-          title={agent.isola ? t('conv.header.testIsolaHint') : t('conv.header.testHint')}
+          use:tip={agent.isola ? t('conv.header.testIsolaHint') : t('conv.header.testHint')}
           onclick={() => testAgent(agent, project)}
         >
           <span class="glyph">▶</span><span class="lbl">{t('conv.header.test')}</span>
@@ -458,7 +459,7 @@
       <button
         class="btn test"
         aria-label={t('conv.header.prepare')}
-        title={t('conv.header.prepareHint')}
+        use:tip={t('conv.header.prepareHint')}
         onclick={() => prepareLaunch(agent)}
       >
         <span class="glyph">▷</span><span class="lbl">{t('conv.header.prepare')}</span>
@@ -466,11 +467,11 @@
     {/if}
     <div class="metrics">
       <span class="model mono">{modelLabel(agent.model, app.models)}</span>
-      <div class="m" title={context.title}>
+      <div class="m" use:tip={context.title}>
         <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
       </div>
       <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
-      <div class="m opt2" title={used.estimated ? estimateHint() : undefined}>
+      <div class="m opt2" use:tip={used.estimated ? estimateHint() : undefined}>
         <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
       </div>
       {#if app.split}
@@ -479,7 +480,7 @@
         <button
           class="m files opt2"
           class:open={app.filesOpen}
-          title={t('conv.header.filesHint')}
+          use:tip={t('conv.header.filesHint')}
           onclick={() => (app.filesOpen = !app.filesOpen)}
         >
           <span class="k">{t('common.files')} ▸</span><span class="v mono">{files}</span>
@@ -492,7 +493,7 @@
         class:on={!app.split}
         aria-pressed={!app.split}
         aria-label={t('conv.header.layoutClassic')}
-        title={t('conv.header.layoutClassic')}
+        use:tip={t('conv.header.layoutClassic')}
         onclick={() => app.split && app.toggleLayout()}
       >
         <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"
@@ -510,7 +511,7 @@
         class:on={app.split}
         aria-pressed={app.split}
         aria-label={t('conv.header.layoutSplit')}
-        title={t('conv.header.layoutSplit')}
+        use:tip={t('conv.header.layoutSplit')}
         onclick={() => !app.split && app.toggleLayout()}
       >
         <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"

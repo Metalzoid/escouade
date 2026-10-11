@@ -1,5 +1,6 @@
 <script lang="ts">
   import { clamp } from '../lib/resize';
+  import { tip } from '../lib/tip';
 
   // The handle between a column and what follows it, on the column's right: dragged right, the column grows. It
   // only reports widths, the column's owner sets them and keeps the one chosen. `value` is the width shown, held
@@ -130,7 +131,7 @@
   role="separator"
   aria-orientation={vertical ? 'horizontal' : 'vertical'}
   aria-label={label}
-  {title}
+  use:tip={title}
   aria-valuenow={value}
   aria-valuemin={min}
   aria-valuemax={max}

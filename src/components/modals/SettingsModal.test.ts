@@ -950,7 +950,7 @@ describe('SettingsModal in English', () => {
     // The choices of a setting are read at each render: their words follow too.
     const effort = within(screen.getByRole('group', { name: 'Default effort' }));
     expect(effort.getAllByRole('button').map((b) => b.textContent)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
-    expect(effort.getByRole('button', { name: 'Low' })).toHaveAttribute('title', 'Quick answers, little thinking');
+    expect(effort.getByRole('button', { name: 'Low' })).toHaveAttribute('data-tip', 'Quick answers, little thinking');
     expect(
       within(screen.getByRole('group', { name: 'Default permission mode' }))
         .getAllByRole('button')

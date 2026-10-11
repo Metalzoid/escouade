@@ -6,6 +6,7 @@
   import { getXTerm, mountTerminal } from '../lib/terminals';
   import type { Project, TermInfo } from '../lib/types';
   import { tildify } from '../lib/format';
+  import { tip } from '../lib/tip';
 
   let { term, project }: { term: TermInfo; project: Project } = $props();
   let box = $state<HTMLDivElement>();
@@ -74,8 +75,10 @@
         }}
       />
     {/if}
-    <button class="btn ghost" title={t('runs.log.searchKey', { key: keyLabel('Ctrl+Shift+F') })} onclick={() => (searchOpen = !searchOpen)}
-      >⌕</button
+    <button
+      class="btn ghost"
+      use:tip={t('runs.log.searchKey', { key: keyLabel('Ctrl+Shift+F') })}
+      onclick={() => (searchOpen = !searchOpen)}>⌕</button
     >
     <button class="btn ghost" onclick={() => getXTerm(term.id)?.term.clear()}>{t('common.clear')}</button>
     <button class="btn danger" onclick={() => closeTerminal(term.id)}>{t('runs.terminal.close')}</button>

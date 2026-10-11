@@ -15,6 +15,7 @@
   import type { Project, Ticket } from '../../lib/types';
   import StatusDot from '../StatusDot.svelte';
   import RejectForm from './RejectForm.svelte';
+  import { tip } from '../../lib/tip';
 
   /** Items of the agent's progress a ticket under way shows: the last ones. */
   const SHOWN = 3;
@@ -207,7 +208,7 @@
       {@const svc = SERVICES[ticket.external.service]}
       <button
         class="ext"
-        title={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
+        use:tip={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
         aria-label={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
         onclick={(e) => act(e, () => app.run(openUrl(ticket.external!.url)))}
         ><span class="svc" style:background={svc.color} style:color={svc.ink} aria-hidden="true">{svc.letter}</span><span class="mono"
@@ -219,7 +220,7 @@
           class="sync-err"
           aria-label={t('board.card.syncError', { service: svc.name, error: ticket.external.error })}
           aria-expanded={syncOpen}
-          title={ticket.external.error}
+          use:tip={ticket.external.error}
           onclick={(e) => act(e, () => (syncOpen = !syncOpen))}>⚠</button
         >{/if}
     {/if}
@@ -266,7 +267,7 @@
   {#if ticket.column === 'doing' || ticket.column === 'review'}
     <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
       {#each ticket.criteria as c, i (i)}
-        <li class:ok={c.ok} title={c.note || undefined}><span class="mark">{c.ok ? '✓' : '○'}</span><span>{c.text}</span></li>
+        <li class:ok={c.ok} use:tip={c.note || undefined}><span class="mark">{c.ok ? '✓' : '○'}</span><span>{c.text}</span></li>
       {/each}
     </ul>
   {/if}
@@ -285,12 +286,14 @@
     {#if steps.length}
       <div class="prog">
         {@render stepList()}
-        {#if hidden > 0}<span class="more mono" title={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
+        {#if hidden > 0}<span class="more mono" use:tip={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
       </div>
     {/if}
     {#if agent?.progressLine}
       <!-- What the agent reported through Escouade's MCP server, until its next report. -->
-      <div class="said" title={agent.progressLine}><span class="sr">{t('mcp.progress.label')}{' '}</span>{agent.progressLine}</div>
+      <div class="said" use:tip={{ text: agent.progressLine, cut: true }}>
+        <span class="sr">{t('mcp.progress.label')}{' '}</span>{agent.progressLine}
+      </div>
     {/if}
     {#if !ticket.blocked}
       {#if waiting}
@@ -298,7 +301,7 @@
       {:else if agent?.resumeAt}
         <div class="act">{t('board.card.resumes', { when: fWhen(agent.resumeAt, app.now) })}</div>
       {:else if agent?.setup}
-        <div class="act" title={agent.setup}>
+        <div class="act" use:tip={agent.setup}>
           <span class="dots"><span></span><span></span><span></span></span>{t('board.card.settingUp', { step: agent.setup })}
         </div>
       {:else if agent?.status === 'running'}
@@ -356,12 +359,13 @@
   {#if ticket.column !== 'todo' && (agent || ticket.column === 'done')}
     <div class="row foot">
       {#if agent}<span class="who mono"
-          ><StatusDot status={agent.status} size={7} /><span class="name" title={agent.name}>{agent.name}</span></span
+          ><StatusDot status={agent.status} size={7} /><span class="name" use:tip={{ text: agent.name, cut: true }}>{agent.name}</span
+          ></span
         >{/if}
       {#if figures}
         <div class="figures">
           {#if used}
-            <span class="k mono" title={used.estimated ? estimateHint() : undefined}
+            <span class="k mono" use:tip={used.estimated ? estimateHint() : undefined}
               ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
             >
           {/if}

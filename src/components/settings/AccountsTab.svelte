@@ -6,6 +6,7 @@
   import { app } from '../../lib/state.svelte';
   import type { Account, AccountStatus } from '../../lib/types';
   import Group from './Group.svelte';
+  import { tip } from '../../lib/tip';
 
   // The Claude accounts. Each change goes to the backend at once (`account_*`), not through the modal's draft: an
   // account is made, signed in and removed on the disk, which « Annuler » could not take back.
@@ -131,7 +132,7 @@
             aria-checked={a.active}
             aria-label={t('accounts.tab.active')}
             aria-describedby={last ? 'accounts-last-active' : undefined}
-            title={last ? t('accounts.tab.lastActive') : undefined}
+            use:tip={last ? t('accounts.tab.lastActive') : undefined}
             disabled={last}
             onclick={() => save({ ...plain(a), active: !a.active })}
           ></button>

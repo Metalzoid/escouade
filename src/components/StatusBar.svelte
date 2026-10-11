@@ -11,6 +11,7 @@
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
+  import { tip } from '../lib/tip';
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
   const running = $derived(agents.filter((a) => a.status === 'running').length);
@@ -38,29 +39,11 @@
   });
   // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
   // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
-  // to the keyboard as a tooltip when it gets the focus).
+  // in its tooltip, one line each, but while the panel that writes them is open).
   const quotaLines = $derived([
     t('accounts.quota.line', { name: quotaName('fiveHour'), tip: quotaTip(app.usage.fiveHour) }),
     t('accounts.quota.line', { name: quotaName('sevenDay'), tip: quotaTip(app.usage.sevenDay) }),
   ]);
-  let quotaTipShown = $state(false);
-  let quotaTipSpot = $state({ left: 8, bottom: 38 });
-  /** A pointer pressed the button: its focus is no keyboard's, and the click opens the panel, not a tooltip. */
-  let pointerOnGroup = false;
-
-  function showQuotaTip(button: HTMLElement) {
-    if (pointerOnGroup || panelOpen) return;
-    const r = button.getBoundingClientRect();
-    quotaTipSpot = { left: Math.max(8, r.left), bottom: Math.max(8, window.innerHeight - r.top + 8) };
-    quotaTipShown = true;
-  }
-
-  function onGroupKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || !quotaTipShown) return;
-    // Away without the focus moving (the panel is not what Escape closes here, nor the composer's turn).
-    e.stopPropagation();
-    quotaTipShown = false;
-  }
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -123,7 +106,7 @@
 </script>
 
 {#snippet quotas(focusable: boolean)}
-  {#if several}<span class="v acct" title={currentName}>{currentName}</span><span class="d">·</span>{/if}
+  {#if several}<span class="v acct" use:tip={{ text: currentName, cut: true }}>{currentName}</span><span class="d">·</span>{/if}
   <QuotaMeter kind="fiveHour" usage={app.usage.fiveHour} now={app.now} {focusable} />
   <span class="vsep"></span>
   <QuotaMeter kind="sevenDay" usage={app.usage.sevenDay} now={app.now} {focusable} />
@@ -137,7 +120,7 @@
     class="it link"
     style:color={waiting ? 'var(--wait)' : 'var(--muted)'}
     onclick={() => app.nextWaiting()}
-    title={t('shell.status.nextWaiting', { key: keyLabel('Ctrl+J') })}
+    use:tip={t('shell.status.nextWaiting', { key: keyLabel('Ctrl+J') })}
   >
     {#if waiting}<span class="pulse" style="width:7px;height:7px"></span>{:else}<span
         class="dot"
@@ -148,7 +131,7 @@
   <span class="it"><span style="color:var(--ok)">✓</span>{t('shell.status.done', { count: done })}</span>
   {#if procs.instances}
     <span class="vsep"></span>
-    <span class="it" title={procsTitle}
+    <span class="it" use:tip={procsTitle}
       ><Rich k="shell.status.procs" instances={procs.instances}
         >{#snippet memory()}<span class="v">{fBytes(procs.memory)}</span>{/snippet}{#snippet cpu()}<span class="v">{fPct(procs.cpu)}</span
           >{/snippet}</Rich
@@ -166,17 +149,8 @@
       aria-controls="accounts-panel"
       aria-label={t('accounts.panel.open', { name: currentName })}
       aria-describedby="quota-description"
-      onpointerdown={() => (pointerOnGroup = true)}
-      onfocus={(e) => showQuotaTip(e.currentTarget)}
-      onblur={() => {
-        quotaTipShown = false;
-        pointerOnGroup = false;
-      }}
-      onkeydown={onGroupKeydown}
-      onclick={() => {
-        quotaTipShown = false;
-        panelOpen = !panelOpen;
-      }}
+      use:tip={panelOpen ? null : { text: quotaLines.join('\n'), aria: false }}
+      onclick={() => (panelOpen = !panelOpen)}
     >
       {@render quotas(false)}
     </button>
@@ -185,7 +159,7 @@
     <span class="it group">{@render quotas(true)}</span>
   {/if}
   <span class="vsep"></span>
-  <span class="it" title={app.liveCost > 0 ? estimateHint() : undefined}
+  <span class="it" use:tip={app.liveCost > 0 ? estimateHint() : undefined}
     >{t('shell.status.today')}
     <span class="v strong">{fSpentUsd({ cost: app.usage.todayCost + app.liveCost, estimated: app.liveCost > 0 })}</span></span
   >
@@ -198,7 +172,7 @@
       aria-haspopup="dialog"
       aria-expanded={pickerOpen}
       onclick={() => (pickerOpen = !pickerOpen)}
-      title={branchTitle}
+      use:tip={branchTitle}
     >
       <span class="v">⎇ {repo.detached ? t('branches.picker.detached') : repo.git.branch}</span>
       {#if busy}
@@ -222,7 +196,7 @@
   {:else if app.update}
     <span class="it">{t('shell.status.updating', { version: app.update.version })}</span>
   {/if}
-  <button class="small" onclick={toggleSound} title={t('shell.status.sound')}
+  <button class="small" onclick={toggleSound} use:tip={t('shell.status.sound')}
     >♪ {app.settings.sound ? t('shell.status.soundOn') : t('shell.status.soundOff')}</button
   >
   <button
@@ -230,15 +204,9 @@
     onclick={() => {
       app.modal = { kind: 'settings' };
     }}
-    title={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
+    use:tip={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
   >
 </footer>
-
-{#if quotaTipShown && !panelOpen}
-  <div class="tip" role="tooltip" style:left="{quotaTipSpot.left}px" style:bottom="{quotaTipSpot.bottom}px">
-    {#each quotaLines as line (line)}<div>{line}</div>{/each}
-  </div>
-{/if}
 
 {#if panelOpen}
   <AccountsPanel id="accounts-panel" anchor={quotaButton} onclose={() => (panelOpen = false)} />
@@ -311,20 +279,6 @@
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .tip {
-    position: fixed;
-    z-index: 60;
-    padding: 4px 8px;
-    background: var(--elev);
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-    color: var(--text);
-    font-size: 11.5px;
-    line-height: 1.4;
-    white-space: nowrap;
-    pointer-events: none;
   }
   .strong {
     font-weight: 600;

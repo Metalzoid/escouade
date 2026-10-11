@@ -8,6 +8,7 @@ import { app } from '../lib/state.svelte';
 import type { FileChange } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import FilesPanel from './FilesPanel.svelte';
+import { queryByTip } from '../test/tip';
 
 const change = (path: string, agentId: string | null = null, inWorktree = false): FileChange => ({
   path,
@@ -166,7 +167,7 @@ describe('FilesPanel docked in the split layout', () => {
     expect(await screen.findByText('contenu de new.txt')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: row(/new\.txt/) })).toHaveAttribute('aria-current', 'true');
     expect(app.modal).toBeNull();
-    expect(screen.queryByTitle('Fermer')).not.toBeInTheDocument();
+    expect(queryByTip(document.body, 'Fermer')).not.toBeInTheDocument();
   });
 
   it('keeps the picked file across refreshes and falls back to the first one when it is gone', async () => {
@@ -474,7 +475,7 @@ describe('FilesPanel in English', () => {
     expect(screen.getByText('Files changed by this agent (from its edits)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show diff' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commit…' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open auth.ts in editor' })).toHaveAttribute('title', 'Open in editor');
+    expect(screen.getByRole('button', { name: 'Open auth.ts in editor' })).toHaveAttribute('data-tip', 'Open in editor');
     await userEvent.click(screen.getByRole('button', { name: 'Whole project' }));
     expect(screen.getByText('All the project’s agents · attributed by worktree')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Commit all…' })).toBeInTheDocument();

@@ -145,9 +145,9 @@ describe('AccountsPanel', () => {
     render(AccountsPanel, { onclose: () => {} });
     // Pro has no reading yet, but its agent is running.
     expect(group('Pro')).toHaveTextContent("Aujourd'hui : ≈ 0,30 $");
-    expect(within(group('Pro')).getByText(/Aujourd'hui/)).toHaveAttribute('title', expect.stringContaining('Estimation'));
+    expect(within(group('Pro')).getByText(/Aujourd'hui/)).toHaveAttribute('data-tip', expect.stringContaining('Estimation'));
     expect(group('Principal')).toHaveTextContent("Aujourd'hui : 1,20 $");
-    expect(within(group('Principal')).getByText(/Aujourd'hui/)).not.toHaveAttribute('title');
+    expect(within(group('Principal')).getByText(/Aujourd'hui/)).not.toHaveAttribute('data-tip');
   });
 
   it('takes the focus when it opens', () => {
