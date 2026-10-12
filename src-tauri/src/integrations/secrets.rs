@@ -497,7 +497,10 @@ mod tests {
     fn the_apps_entries_are_under_its_identifier_and_a_sandboxs_apart() {
         assert_eq!(keychain_service(false), "dev.gagnaire.escouade");
         assert_eq!(keychain_service(true), "dev.gagnaire.escouade.sandbox");
-        assert_eq!(Service::ALL.map(entry), ["jira", "trello", "github"]);
+        assert_eq!(
+            Service::ALL.map(entry),
+            ["jira", "trello", "github", "linear"]
+        );
     }
 
     /// `integrations.json` as a version before 1.6 wrote it: the secrets with the rest.
@@ -583,7 +586,7 @@ mod tests {
         );
         assert_eq!(saved.trello.as_ref().unwrap().user, "m1");
         assert_eq!(saved.github.as_ref().unwrap().label, "@ada · via gh");
-        assert_eq!(in_file(&a), [false, false, false]);
+        assert_eq!(in_file(&a), [false, false, false, false]);
         // No entry to delete in a file of before.
         assert!(a.to_forget.is_empty() && saved.to_forget.is_empty());
         // The next start finds them in the keychain, and leaves the file as it is.
@@ -622,11 +625,11 @@ mod tests {
             assert!(text.contains(s), "{text}");
         }
         // The window is told, for the accounts that have one.
-        assert_eq!(in_file(&a), [true, true, false]);
+        assert_eq!(in_file(&a), [true, true, false, false]);
         // Back: the next start moves them.
         store.refuse.store(false, Ordering::SeqCst);
         let a = load_accounts(&d, &store, false);
-        assert_eq!(in_file(&a), [false, false, false]);
+        assert_eq!(in_file(&a), [false, false, false, false]);
         assert_eq!(a.jira.as_ref().unwrap().token, "jira-secret");
         let text = file(&d);
         for s in SECRETS {
@@ -644,7 +647,7 @@ mod tests {
         for s in SECRETS {
             assert!(text.contains(s), "{text}");
         }
-        assert_eq!(in_file(&a), [true, true, false]);
+        assert_eq!(in_file(&a), [true, true, false, false]);
         assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
     }
 
@@ -663,9 +666,9 @@ mod tests {
         // Out of reach at the next start: GitHub through gh has none to read.
         store.refuse.store(true, Ordering::SeqCst);
         let a = load_accounts(&d, &store, false);
-        assert_eq!(unread(&a), [true, true, false]);
+        assert_eq!(unread(&a), [true, true, false, false]);
         assert_eq!(a.jira.as_ref().unwrap().token, "");
-        assert_eq!(in_file(&a), [false, false, false]);
+        assert_eq!(in_file(&a), [false, false, false, false]);
         // Nothing lost: the file and the entries as they were.
         assert_eq!(file(&d), text);
         assert_eq!(entries(), kept);
@@ -673,19 +676,19 @@ mod tests {
         store.refuse.store(false, Ordering::SeqCst);
         store.delete("jira").unwrap();
         let a = load_accounts(&d, &store, false);
-        assert_eq!(unread(&a), [true, false, false]);
+        assert_eq!(unread(&a), [true, false, false, false]);
         assert_eq!(a.trello.as_ref().unwrap().token, "trello-secret");
         // A GitHub token of its own that is missing is never the CLI's.
         let mine = r#"{ "github": { "label": "@work", "user": "work" } }"#;
         std::fs::write(d.integrations_file(), mine).unwrap();
         assert_eq!(
             unread(&load_accounts(&d, &store, false)),
-            [false, false, true]
+            [false, false, true, false]
         );
         store.set("github", "not json").unwrap();
         assert_eq!(
             unread(&load_accounts(&d, &store, false)),
-            [false, false, true]
+            [false, false, true, false]
         );
         assert_eq!(file(&d), mine);
     }
@@ -774,7 +777,7 @@ mod tests {
         );
         assert!(store.entry("jira").is_some());
         assert_eq!(file(&d), OLD_FILE);
-        assert_eq!(in_file(&a), [false, false, false]);
+        assert_eq!(in_file(&a), [false, false, false, false]);
         // Saved again (an account connected): they stay.
         a.set(Service::Github, None);
         save_accounts(&d, &a).unwrap();

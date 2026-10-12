@@ -2,11 +2,12 @@ import { defineZone } from '../types';
 
 // Jira, Trello and GitHub: the integrations tab and the import of tickets.
 export default defineZone('integrations', {
-  container: { jira: 'Project', trello: 'Board', github: 'Repository' },
+  container: { jira: 'Project', trello: 'Board', github: 'Repository', linear: 'Team' },
   searchHint: {
     jira: 'Search by key or text…',
     trello: 'Search for a card…',
     github: 'Search for an issue…',
+    linear: 'Search by identifier (ENG-42) or title…',
   },
   imported: { one: '{count} ticket imported from {from}', other: '{count} tickets imported from {from}' },
 
@@ -33,13 +34,14 @@ export default defineZone('integrations', {
     githubToken: 'Token {hint}',
     githubTokenHint: '(empty: the one from gh)',
     createGithubToken: 'Create a GitHub token',
+    createLinearKey: 'Create a Linear API key',
   },
 
   sources: {
     title: 'Sources linked to {project}',
     connectFirst: 'Connect an account above to link a source to this project.',
     none: 'None',
-    pick: { jira: 'Jira project', trello: 'Trello board', github: 'GitHub Issues repository' },
+    pick: { jira: 'Jira project', trello: 'Trello board', github: 'GitHub Issues repository', linear: 'Linear team' },
   },
 
   mapping: {
@@ -66,7 +68,7 @@ export default defineZone('integrations', {
     enable: 'Import labeled tickets',
     enableDesc: 'Open tickets from linked sources that carry the label arrive in “To do”',
     label: 'Label',
-    labelHint: 'Jira label, Trello or GitHub label',
+    labelHint: 'Jira, Trello, GitHub or Linear label',
     every: 'Check every',
     minutes: '{n} min',
   },
@@ -75,7 +77,8 @@ export default defineZone('integrations', {
     title: 'Import tickets',
     sub: 'Into “To do” on the Kanban of {project}',
     noSource: 'No source linked to this project',
-    noSourceBody: 'Connect Jira, Trello, or GitHub Issues, then choose the project, board, or repository to link to {project}.',
+    noSourceBody:
+      'Connect Jira, Trello, GitHub Issues, or Linear, then choose the project, board, repository, or team to link to {project}.',
     thisProject: 'this project',
     linkSource: 'Link a source',
     sources: 'Sources',

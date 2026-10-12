@@ -338,7 +338,7 @@ describe('Board in English', () => {
     expect(screen.getByText('Claude Code not found — no tickets will start')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import' })).toHaveAttribute(
       'data-tip',
-      'Import tickets from Jira, Trello, or GitHub Issues',
+      'Import tickets from Jira, Trello, GitHub Issues, or Linear',
     );
     expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     expect(screen.getByText('After approval:')).toBeInTheDocument();

@@ -25,7 +25,7 @@ function issue(over: Partial<ExternalIssue> = {}): ExternalIssue {
 
 describe('integrations', () => {
   it('knows each service by its letter, color and container', () => {
-    expect(SERVICE_IDS).toEqual(['jira', 'trello', 'github']);
+    expect(SERVICE_IDS).toEqual(['jira', 'trello', 'github', 'linear']);
     expect(SERVICES.jira).toMatchObject({ name: 'Jira', letter: 'J', container: 'Projet' });
     expect(SERVICES.trello).toMatchObject({ name: 'Trello', letter: 'T', container: 'Tableau' });
     expect(SERVICES.github).toMatchObject({ name: 'GitHub Issues', letter: 'GH', container: 'Dépôt' });

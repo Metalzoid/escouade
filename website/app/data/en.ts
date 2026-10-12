@@ -6,7 +6,7 @@ export const en: Catalog = {
   meta: {
     title: 'Escouade — the cockpit for your Claude Code agents',
     description:
-      'Escouade, the cockpit for your Claude Code agents: a free, open source Windows, macOS and Linux app to run several agents in parallel, in a single window, and hand them tickets, even from Jira, Trello or GitHub, that they carry through to the end.',
+      'Escouade, the cockpit for your Claude Code agents: a free, open source Windows, macOS and Linux app to run several agents in parallel, in a single window, and hand them tickets, even from Jira, Trello, GitHub or Linear, that they carry through to the end.',
     locale: 'en_US',
   },
 
@@ -86,7 +86,7 @@ export const en: Catalog = {
         alt: 'The “Test DEM-6” window: preparation, servers ready and address opened in the browser',
       },
       integrations: {
-        title: 'Your Jira, Trello and GitHub tickets, in the Kanban',
+        title: 'Your Jira, Trello, GitHub and Linear tickets, in the Kanban',
         text: 'Link a source to your project, “Import”, tick: the tickets arrive with their acceptance criteria. Escouade keeps their status up to date and comments on the original ticket when it is ready for review, then done.',
         alt: 'The “Import tickets” window: three Jira tickets ticked, with their acceptance criteria detected',
       },
@@ -171,10 +171,10 @@ export const en: Catalog = {
       },
       {
         q: 'Where does my data go?',
-        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by Claude Code itself, to read your quotas, for updates and, if you connect them, for Jira, Trello or GitHub, where an imported ticket gets its status and comments.',
+        a: 'Nowhere: projects, conversations and statistics stay on your machine, in ~/.escouade/. The network is only used by Claude Code itself, to read your quotas, for updates and, if you connect them, for Jira, Trello, GitHub or Linear, where an imported ticket gets its status and comments.',
       },
       {
-        q: 'What about my Jira, Trello or GitHub tokens?',
+        q: 'What about my Jira, Trello, GitHub or Linear tokens?',
         a: 'They stay on your machine: in the system keychain (Windows Credential Manager, macOS Keychain), or on Linux in the integrations file of ~/.escouade/, and are only used for calls to those services. For GitHub, Escouade can also reuse the token from gh.',
       },
       {

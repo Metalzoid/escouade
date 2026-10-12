@@ -11,7 +11,7 @@ Fait pour la 1.8 :
   - [ ] Le jour où Codex ou Copilot arrivent : leur propre interface en vue terminal, sur le même modèle (hooks ou journal de session).
 
 Aussi pour la 1.8 :
-- [ ] **Intégration Linear**, à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
+- [x] **Intégration Linear** (2026-10-12), à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
   - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;
   - lien d'un projet vers une équipe Linear, et éventuellement un projet ou un cycle ;
   - import des issues dans le Kanban, avec leurs critères d'acceptation extraits de la description (`text.rs`), import par étiquette compris (« claude-ready ») ;

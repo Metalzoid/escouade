@@ -7,7 +7,7 @@ export const fr: Catalog = {
   meta: {
     title: 'Escouade — le poste de pilotage de tes agents Claude Code',
     description:
-      'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows, macOS et Linux gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre, et leur confier des tickets, même ceux de Jira, Trello ou GitHub, qu’ils mènent jusqu’au but.',
+      'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows, macOS et Linux gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre, et leur confier des tickets, même ceux de Jira, Trello, GitHub ou Linear, qu’ils mènent jusqu’au but.',
     locale: 'fr_FR',
   },
 
@@ -87,7 +87,7 @@ export const fr: Catalog = {
         alt: 'La fenêtre « Tester DEM-6 » : préparation, serveurs prêts et adresse ouverte dans le navigateur',
       },
       integrations: {
-        title: 'Tes tickets Jira, Trello et GitHub, dans le Kanban',
+        title: 'Tes tickets Jira, Trello, GitHub et Linear, dans le Kanban',
         text: 'Lie une source à ton projet, « Importer », coche : les tickets arrivent avec leurs critères d’acceptation. Escouade tient leur statut à jour et commente le ticket d’origine quand il est prêt à tester, puis terminé.',
         alt: 'La fenêtre « Importer des tickets » : trois tickets Jira cochés, avec leurs critères d’acceptation détectés',
       },
@@ -175,10 +175,10 @@ export const fr: Catalog = {
       },
       {
         q: 'Où vont mes données ?',
-        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello ou GitHub, où un ticket importé reçoit son statut et des commentaires.',
+        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub ou Linear, où un ticket importé reçoit son statut et des commentaires.',
       },
       {
-        q: 'Et mes jetons Jira, Trello ou GitHub ?',
+        q: 'Et mes jetons Jira, Trello, GitHub ou Linear ?',
         a: 'Ils restent sur ta machine : dans le trousseau du système (Gestionnaire d’identification Windows, Trousseau macOS), ou sous Linux dans le fichier des intégrations de ~/.escouade/, et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
       },
       {

@@ -59,7 +59,7 @@ describe('IntegrationsTab', () => {
     app.accounts = [off('jira'), off('trello'), off('github')];
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     expect(screen.getByRole('tab', { name: 'Intégrations' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(3);
+    expect(within(panel()).getAllByText('Non connecté')).toHaveLength(4);
     expect(within(panel()).getByText('Connecte un compte ci-dessus pour lier une source à ce projet.')).toBeInTheDocument();
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe('IntegrationsTab', () => {
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
     await userEvent.click(within(panel()).getByRole('button', { name: 'Déconnecter' }));
     expect(b.called('integration_disconnect')[0].args).toEqual({ service: 'jira' });
-    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(3));
+    await waitFor(() => expect(within(panel()).getAllByText('Non connecté')).toHaveLength(4));
   });
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {
@@ -236,16 +236,24 @@ describe('IntegrationsTab in English', () => {
     const p = within(document.body);
     expect(p.getByRole('heading', { name: 'Connected accounts' })).toBeInTheDocument();
     expect(p.getByText('Connected · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
-    expect(p.getByText('Not connected')).toBeInTheDocument();
+    expect(p.getAllByText('Not connected')).toHaveLength(2);
     expect(p.getByText('System keychain unavailable: the token stays in ~/.escouade/integrations.json.')).toBeInTheDocument();
     expect(p.getByText('System keychain unreadable: restart Escouade or reconnect the account.')).toBeInTheDocument();
     expect(p.getAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);
-    await userEvent.click(p.getByRole('button', { name: 'Connect…' }));
+    // Trello's first, then Linear's.
+    const [trello, linear] = p.getAllByRole('button', { name: 'Connect…' });
+    await userEvent.click(trello);
     const form = p.getByRole('form', { name: 'Connect to Trello' });
     expect(within(form).getByLabelText('API key')).toBeInTheDocument();
     expect(within(form).getByLabelText('Token')).toBeInTheDocument();
     expect(within(form).getByRole('button', { name: 'Get a token for this key' })).toBeDisabled();
     expect(within(form).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    // Linear: a personal API key alone.
+    await userEvent.click(linear);
+    const lin = p.getByRole('form', { name: 'Connect to Linear' });
+    expect(within(lin).getByLabelText('API key')).toHaveAttribute('type', 'password');
+    expect(within(lin).queryByLabelText('Token')).toBeNull();
+    expect(within(lin).getByRole('button', { name: 'Create a Linear API key' })).toBeInTheDocument();
   });
 
   it('writes the token of GitHub with its hint inside the sentence', async () => {

@@ -32,6 +32,7 @@ impl Harness {
         *self.core.bases.write() = Bases {
             trello: server.url.clone(),
             github: server.url.clone(),
+            linear: server.url.clone(),
         };
     }
 
@@ -1715,5 +1716,140 @@ async fn a_warning_left_without_its_operation_is_resynced_from_the_tickets_colum
     warn(&h);
     h.core.integration_resync(&t.id).await.unwrap();
     assert_eq!(trace(&server).len(), 2);
+    assert_eq!(h.sync_error(&t.id), None);
+}
+
+#[tokio::test]
+async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() {
+    let h = harness("ig-linear");
+    let server = FakeServer::start().await;
+    h.serve(&server);
+    server.on(
+        "POST",
+        "/graphql#Me",
+        200,
+        json!({ "data": { "viewer": { "id": "u1", "name": "Ada", "email": "ada@atlas.dev" } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#States",
+        200,
+        json!({ "data": { "team": { "states": { "nodes": [
+            { "id": "s-todo", "name": "Todo", "type": "unstarted", "position": 0 },
+            { "id": "s-doing", "name": "In Progress", "type": "started", "position": 0 },
+            { "id": "s-review", "name": "In Review", "type": "started", "position": 1 },
+            { "id": "s-done", "name": "Done", "type": "completed", "position": 0 }
+        ] } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#Issues",
+        200,
+        json!({ "data": { "issues": {
+            "nodes": [{
+                "id": "i1", "identifier": "ENG-42", "title": "Exporter le journal",
+                "description": "## Critères d'acceptation\n- Un bouton Exporter\n- Un fichier CSV",
+                "url": "https://linear.app/atlas/issue/ENG-42", "state": { "id": "s-todo", "name": "Todo" },
+                "labels": { "nodes": [] }
+            }],
+            "pageInfo": { "hasNextPage": false, "endCursor": null }
+        } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#SetState",
+        200,
+        json!({ "data": { "issueUpdate": { "success": true } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#Comment",
+        200,
+        json!({ "data": { "commentCreate": { "success": true } } }),
+    );
+    // A key is needed: Linear has no CLI to take one from.
+    let refused = h
+        .core
+        .integration_connect(Service::Linear, Account::default())
+        .await
+        .unwrap_err();
+    assert!(refused.to_string().contains("jeton"), "{refused}");
+    let view = h
+        .core
+        .integration_connect(
+            Service::Linear,
+            Account {
+                token: "lin_api_k".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (view.connected, view.label.as_str()),
+        (true, "ada@atlas.dev")
+    );
+    let (p, _) = h.project(false).await;
+    h.set_autopilot(&p.id, false);
+    // The defaults of the columns, as the window offers them.
+    let states = h
+        .core
+        .integration_states(Service::Linear, "t1")
+        .await
+        .unwrap();
+    assert_eq!(states.defaults[&Column::Doing].id, "s-doing");
+    assert_eq!(states.defaults[&Column::Done].id, "s-review");
+    h.link(
+        &p.id,
+        SourceLink {
+            service: Service::Linear,
+            container: "t1".into(),
+            name: "Engineering (ENG)".into(),
+            states: states.defaults.clone(),
+        },
+        &[Column::Review],
+    );
+    let page = h
+        .core
+        .integration_issues(&p.id, Service::Linear, Query::default())
+        .await
+        .unwrap();
+    let t = h
+        .core
+        .integration_import(&p.id, page.issues, 5)
+        .await
+        .unwrap()
+        .remove(0);
+    let criteria: Vec<&str> = t.criteria.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(criteria, ["Un bouton Exporter", "Un fichier CSV"]);
+    let ext = t.external.clone().unwrap();
+    assert_eq!(
+        (ext.service, ext.id.as_str(), ext.key.as_str()),
+        (Service::Linear, "i1", "ENG-42")
+    );
+    h.move_to(&t.id, Column::Doing);
+    h.move_to(&t.id, Column::Review);
+    h.wait_synced().await;
+    let writes: Vec<Value> = server.writes().iter().map(|w| w.json()).collect();
+    let ops: Vec<(&str, &Value)> = writes
+        .iter()
+        .filter(|w| w["operationName"] != "Me")
+        .map(|w| (w["operationName"].as_str().unwrap(), &w["variables"]))
+        .filter(|(op, _)| matches!(*op, "SetState" | "Comment"))
+        .collect();
+    assert_eq!(ops.len(), 3, "{ops:?}");
+    assert_eq!(
+        ops[0],
+        ("SetState", &json!({ "id": "i1", "state": "s-doing" }))
+    );
+    assert_eq!(
+        ops[1],
+        ("SetState", &json!({ "id": "i1", "state": "s-doing" }))
+    );
+    assert_eq!(ops[2].0, "Comment");
+    assert!(ops[2].1["body"]
+        .as_str()
+        .unwrap()
+        .contains("est prêt à tester"));
     assert_eq!(h.sync_error(&t.id), None);
 }

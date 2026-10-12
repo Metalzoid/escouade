@@ -4,7 +4,7 @@ import { fList } from './format';
 import { t } from './i18n';
 import type { Column, Container, ExternalIssue, ExternalState, ProjectIntegrations, Service } from './types';
 
-export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github'];
+export const SERVICE_IDS: Service[] = ['jira', 'trello', 'github', 'linear'];
 
 /**
  * How the window shows each service. `container` (what the service calls the place its tickets are in) and
@@ -50,10 +50,22 @@ export const SERVICES: Record<
       return t('integrations.searchHint.github');
     },
   },
+  linear: {
+    name: 'Linear',
+    letter: 'L',
+    color: 'oklch(0.58 0.16 280)',
+    ink: '#fff',
+    get container() {
+      return t('integrations.container.linear');
+    },
+    get placeholder() {
+      return t('integrations.searchHint.linear');
+    },
+  },
 };
 
 /** How a service names itself in a sentence (« depuis GitHub »). */
-const SHORT: Record<Service, string> = { jira: 'Jira', trello: 'Trello', github: 'GitHub' };
+const SHORT: Record<Service, string> = { jira: 'Jira', trello: 'Trello', github: 'GitHub', linear: 'Linear' };
 
 export const shortName = (service: Service) => SHORT[service];
 

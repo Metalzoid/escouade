@@ -471,7 +471,7 @@ describe('settingsForm', () => {
       'Notifications / Visual and sound alerts',
       'Projects / Settings specific to each project',
       'Kanban / Autopilot and approved tickets',
-      'Integrations / Jira, Trello, and GitHub Issues',
+      'Integrations / Jira, Trello, GitHub Issues, and Linear',
       'Terminals / Shells available in the built-in terminals',
       'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
       'About / Version and local data',

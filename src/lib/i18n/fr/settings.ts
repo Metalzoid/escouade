@@ -10,7 +10,7 @@ export default {
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: { label: 'Intégrations', desc: 'Jira, Trello et GitHub Issues' },
+    integrations: { label: 'Intégrations', desc: 'Jira, Trello, GitHub Issues et Linear' },
     terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
     network: {
       label: 'Réseau',
@@ -69,7 +69,7 @@ export default {
     claudeLanguage: 'Langue des textes rédigés par Claude',
     sameAsUi: 'Comme l’interface (par défaut)',
     claudeLanguageHelp:
-      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello et GitHub, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
+      'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub et Linear, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     /** A language named in the interface's (the choices name each in itself: `LANG_NAMES`). */
     langName: { fr: 'Français', en: 'Anglais' },
   },

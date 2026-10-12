@@ -20,7 +20,7 @@ export default {
       other: '{name} · {count} tickets · {looping} en boucle',
     },
     claudeMissing: 'Claude Code introuvable — aucun ticket ne démarre',
-    importTitle: 'Importer des tickets de Jira, Trello ou GitHub Issues',
+    importTitle: 'Importer des tickets de Jira, Trello, GitHub Issues ou Linear',
     settingsTitle: 'Réglages du Kanban — {summary}',
     afterApproval: 'Après validation :',
     autopilotTitle: "Les tickets « À faire » partent seuls dès qu'une place se libère",

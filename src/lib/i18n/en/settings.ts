@@ -9,7 +9,7 @@ export default defineZone('settings', {
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: { label: 'Integrations', desc: 'Jira, Trello, and GitHub Issues' },
+    integrations: { label: 'Integrations', desc: 'Jira, Trello, GitHub Issues, and Linear' },
     terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
     network: {
       label: 'Network',
@@ -59,7 +59,7 @@ export default defineZone('settings', {
     claudeLanguage: 'Language of texts written by Claude',
     sameAsUi: 'Same as the interface (default)',
     claudeLanguageHelp:
-      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, and GitHub, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
+      'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, and Linear, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     langName: { fr: 'French', en: 'English' },
   },
 

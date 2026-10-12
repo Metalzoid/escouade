@@ -187,6 +187,12 @@ impl FakeServer {
             .iter()
             .rev()
             .find(|r| {
+                // `/graphql#<operation>`: a GraphQL operation, by the `operationName` of its body.
+                if let Some((path, op)) = r.target.split_once('#') {
+                    return r.method == req.method
+                        && path == req.path()
+                        && req.json()["operationName"].as_str() == Some(op);
+                }
                 r.method == req.method
                     && if r.target.contains('?') {
                         r.target == req.target

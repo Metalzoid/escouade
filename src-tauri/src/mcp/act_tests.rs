@@ -988,7 +988,19 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
 async fn a_running_turn_is_interrupted_by_another_and_never_by_the_agent_itself() {
     let h = harness("mcp-act-stop-agent");
     let (p, _) = h.project(false).await;
-    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            crate::core::AgentOptions {
+                // Named: never renamed after its first message, as the test names it.
+                name: Some("agent-1".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
     let c = external(&h).await;
     // Not at work: nothing to stop, and it says so.

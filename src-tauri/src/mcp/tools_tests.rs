@@ -732,7 +732,19 @@ async fn an_ambiguous_or_unknown_name_is_an_error_that_lists_the_choices() {
 async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_edited() {
     let h = harness("mcp-agent-summary");
     let p = project(&h).await;
-    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            crate::core::AgentOptions {
+                // Named: never renamed after its first message, as the test names it.
+                name: Some("agent-1".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
     h.turn(&a.id, "edit").await;
     let c = external(&h).await;
     let summary = read(&c, "get_agent_summary", json!({ "agent": a.name })).await;

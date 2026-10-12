@@ -18,7 +18,7 @@ export default defineZone('board', {
       other: '{name} · {count} tickets · {looping} looping',
     },
     claudeMissing: 'Claude Code not found — no tickets will start',
-    importTitle: 'Import tickets from Jira, Trello, or GitHub Issues',
+    importTitle: 'Import tickets from Jira, Trello, GitHub Issues, or Linear',
     settingsTitle: 'Kanban settings — {summary}',
     afterApproval: 'After approval:',
     autopilotTitle: 'Tickets in “To do” start on their own as soon as a slot is free',

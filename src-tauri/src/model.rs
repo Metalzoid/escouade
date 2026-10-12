@@ -337,10 +337,16 @@ pub enum Service {
     Jira,
     Trello,
     Github,
+    Linear,
 }
 
 impl Service {
-    pub const ALL: [Service; 3] = [Service::Jira, Service::Trello, Service::Github];
+    pub const ALL: [Service; 4] = [
+        Service::Jira,
+        Service::Trello,
+        Service::Github,
+        Service::Linear,
+    ];
 
     /// Its name, as the window and the comments say it.
     pub fn label(self) -> &'static str {
@@ -348,6 +354,7 @@ impl Service {
             Service::Jira => "Jira",
             Service::Trello => "Trello",
             Service::Github => "GitHub",
+            Service::Linear => "Linear",
         }
     }
 }

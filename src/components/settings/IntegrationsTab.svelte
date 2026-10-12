@@ -239,6 +239,18 @@
               >{t('integrations.accounts.getTokenForKey')}</button
             >
           </div>
+        {:else if id === 'linear'}
+          <label
+            ><span>{t('integrations.accounts.apiKey')}</span><input
+              class="field mono"
+              type="password"
+              bind:value={form.token}
+              autocomplete="off"
+            /></label
+          >
+          <button type="button" class="link" onclick={() => open('https://linear.app/settings/account/security')}
+            >{t('integrations.accounts.createLinearKey')}</button
+          >
         {:else}
           <label
             ><span

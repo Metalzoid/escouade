@@ -6,6 +6,8 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ### Ajouts
 
+- Intégration Linear, à côté de Jira, Trello et GitHub Issues : Réglages › Intégrations › Linear › « Connecter… » avec une clé d'API personnelle, puis une équipe liée à chaque projet. « Importer des tickets » liste ses issues ouvertes (filtres « Mes issues » et par état, recherche par identifiant comme `ENG-42` ou par titre, page suivante), avec leurs critères d'acceptation tirés de la description ; l'import automatique par étiquette marche aussi. Quand le ticket avance, l'issue change d'état (« In Progress », puis « In Review » par défaut) et reçoit les commentaires choisis.
+
 - Escouade existe pour Linux (x86-64) : une `AppImage`, que la mise à jour intégrée remplace comme sous Windows et macOS, et un `.deb` pour Debian et Ubuntu, sur toute distribution d'une glibc 2.35 ou plus récente (Ubuntu 22.04, Debian 12, Fedora 36…). Les jetons des intégrations (Jira, Trello, GitHub) y restent dans le fichier des intégrations, faute de trousseau pris en charge.
 
 - « Vue Claude Code » : un bouton dans l'en-tête d'un agent le fait tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade, et « Vue Escouade » l'y ramène. La session continue d'une vue à l'autre. Tout ce que propose l'interface de Claude Code y est : commandes `/`, raccourcis, dialogues, `/model`, Maj+Tab.

@@ -290,7 +290,9 @@ describe('ImportModal in English', () => {
     const d = within(dialogEn());
     expect(d.getByText('No source linked to this project')).toBeInTheDocument();
     expect(
-      d.getByText('Connect Jira, Trello, or GitHub Issues, then choose the project, board, or repository to link to demo-api.'),
+      d.getByText(
+        'Connect Jira, Trello, GitHub Issues, or Linear, then choose the project, board, repository, or team to link to demo-api.',
+      ),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1' });

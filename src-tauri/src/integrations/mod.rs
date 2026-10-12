@@ -1,10 +1,11 @@
-//! External ticket systems (Jira, Trello, GitHub Issues): their accounts, the tickets a project
+//! External ticket systems (Jira, Trello, GitHub Issues, Linear): their accounts, the tickets a project
 //! imports from them, and the sync of their states with the Kanban's columns.
 
 #[cfg(test)]
 pub(crate) mod fake;
 pub mod github;
 pub mod jira;
+pub mod linear;
 pub mod secrets;
 pub mod sync;
 pub mod text;
@@ -25,6 +26,7 @@ pub struct Accounts {
     pub jira: Option<Account>,
     pub trello: Option<Account>,
     pub github: Option<Account>,
+    pub linear: Option<Account>,
     /// The services whose entry in the system's keychain a « Déconnecter » (or a switch to the
     /// GitHub CLI's token) could not delete: deleted at the next start, unless the service has a
     /// token of its own again. Their names only, never a secret.
@@ -42,6 +44,7 @@ impl Accounts {
             Service::Jira => self.jira.as_ref(),
             Service::Trello => self.trello.as_ref(),
             Service::Github => self.github.as_ref(),
+            Service::Linear => self.linear.as_ref(),
         }
     }
 
@@ -50,6 +53,7 @@ impl Accounts {
             Service::Jira => self.jira.as_mut(),
             Service::Trello => self.trello.as_mut(),
             Service::Github => self.github.as_mut(),
+            Service::Linear => self.linear.as_mut(),
         }
     }
 
@@ -58,6 +62,7 @@ impl Accounts {
             Service::Jira => self.jira = a,
             Service::Trello => self.trello = a,
             Service::Github => self.github = a,
+            Service::Linear => self.linear = a,
         }
     }
 
@@ -99,7 +104,8 @@ pub struct Account {
     pub email: String,
     /// Trello: the API key. A secret, as the token is.
     pub key: String,
-    /// The API token; for GitHub, empty: the GitHub CLI's (`gh auth token`).
+    /// The API token (Linear's personal API key); for GitHub, empty: the GitHub CLI's
+    /// (`gh auth token`).
     pub token: String,
     /// As the window shows it: "ada@atlas.dev · atlas.atlassian.net", "@ada".
     pub label: String,
@@ -134,7 +140,8 @@ pub struct AccountView {
     pub unread: bool,
 }
 
-/// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository.
+/// Where an account's tickets live: a Jira project, a Trello board, a GitHub repository, a Linear
+/// team.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Container {
@@ -212,12 +219,14 @@ pub struct IssuePage {
     pub total: Option<u64>,
 }
 
-/// Where the Trello and GitHub APIs are (Jira's is the account's site); `ESCOUADE_TRELLO_API`
-/// and `ESCOUADE_GITHUB_API` put a fake one in their place (tests, demos).
+/// Where the Trello, GitHub and Linear APIs are (Jira's is the account's site);
+/// `ESCOUADE_TRELLO_API`, `ESCOUADE_GITHUB_API` and `ESCOUADE_LINEAR_API` put a fake one in their
+/// place (tests, demos).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bases {
     pub trello: String,
     pub github: String,
+    pub linear: String,
 }
 
 impl Bases {
@@ -233,6 +242,7 @@ impl Bases {
         Self {
             trello: var("ESCOUADE_TRELLO_API", "https://api.trello.com/1"),
             github: var("ESCOUADE_GITHUB_API", "https://api.github.com"),
+            linear: var("ESCOUADE_LINEAR_API", "https://api.linear.app"),
         }
     }
 }
@@ -242,6 +252,7 @@ pub enum Client {
     Jira(jira::Jira),
     Trello(trello::Trello),
     Github(github::Github),
+    Linear(linear::Linear),
 }
 
 impl Client {
@@ -251,6 +262,7 @@ impl Client {
             Service::Jira => Client::Jira(jira::Jira::new(http, account)),
             Service::Trello => Client::Trello(trello::Trello::new(http, account, &bases.trello)),
             Service::Github => Client::Github(github::Github::new(http, account, &bases.github)),
+            Service::Linear => Client::Linear(linear::Linear::new(http, account, &bases.linear)),
         }
     }
 
@@ -260,6 +272,7 @@ impl Client {
             Client::Jira(c) => c.me().await,
             Client::Trello(c) => c.me().await,
             Client::Github(c) => c.me().await,
+            Client::Linear(c) => c.me().await,
         }
     }
 
@@ -268,6 +281,7 @@ impl Client {
             Client::Jira(c) => c.containers().await,
             Client::Trello(c) => c.containers().await,
             Client::Github(c) => c.containers().await,
+            Client::Linear(c) => c.containers().await,
         }
     }
 
@@ -276,6 +290,7 @@ impl Client {
             Client::Jira(c) => c.states(container).await,
             Client::Trello(c) => c.states(container).await,
             Client::Github(c) => c.states(container).await,
+            Client::Linear(c) => c.states(container).await,
         }
     }
 
@@ -284,6 +299,7 @@ impl Client {
             Client::Jira(c) => c.issues(container, q).await,
             Client::Trello(c) => c.issues(container, q).await,
             Client::Github(c) => c.issues(container, q).await,
+            Client::Linear(c) => c.issues(container, q).await,
         }
     }
 
@@ -299,6 +315,7 @@ impl Client {
             Client::Jira(c) => c.set_state(r, state).await,
             Client::Trello(c) => c.set_state(r, state).await,
             Client::Github(c) => c.set_state(r, state, mapped).await,
+            Client::Linear(c) => c.set_state(r, state).await,
         }
     }
 
@@ -307,6 +324,7 @@ impl Client {
             Client::Jira(c) => c.comment(r, text).await,
             Client::Trello(c) => c.comment(r, text).await,
             Client::Github(c) => c.comment(r, text).await,
+            Client::Linear(c) => c.comment(r, text).await,
         }
     }
 }
@@ -439,8 +457,8 @@ fn http_error_in(lang: crate::i18n::Lang, service: Service, status: u16, body: &
     }
 }
 
-/// The message of an error's body: Jira's `errorMessages` or `errors`, GitHub's `message`, or
-/// Trello's text.
+/// The message of an error's body: Jira's `errorMessages` or `errors`, the first of GraphQL's
+/// `errors` (Linear), GitHub's `message`, or Trello's text.
 fn said(body: &str) -> Option<String> {
     let body = body.trim();
     let msg = match serde_json::from_str::<Value>(body) {
@@ -453,6 +471,7 @@ fn said(body: &str) -> Option<String> {
                     .as_object()
                     .and_then(|o| o.values().find_map(|e| e.as_str().map(str::to_string)))
             })
+            .or_else(|| v["errors"][0]["message"].as_str().map(str::to_string))
             .or_else(|| v["message"].as_str().map(str::to_string))
             .or_else(|| v["error"].as_str().map(str::to_string))?,
         Err(_) if body.starts_with('<') => return None,
@@ -631,7 +650,7 @@ mod tests {
         let v = serde_json::to_string(&a.views()).unwrap();
         assert!(!v.contains("secret"));
         let views = a.views();
-        assert_eq!(views.len(), 3);
+        assert_eq!(views.len(), 4);
         assert!(!views[0].connected);
         assert_eq!(
             (views[1].connected, views[1].label.as_str()),

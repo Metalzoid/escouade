@@ -1,14 +1,15 @@
 import type { Tree } from '../types';
 
-// Jira, Trello and GitHub: the integrations tab and the import of tickets.
+// Jira, Trello, GitHub and Linear: the integrations tab and the import of tickets.
 export default {
   // What each service calls the place its tickets are in (the project, the board, the repository).
-  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt' },
+  container: { jira: 'Projet', trello: 'Tableau', github: 'Dépôt', linear: 'Équipe' },
   // The search field of the import, by service.
   searchHint: {
     jira: 'Rechercher par clé ou par texte…',
     trello: 'Rechercher une carte…',
     github: 'Rechercher une issue…',
+    linear: 'Rechercher par identifiant (ENG-42) ou par titre…',
   },
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
@@ -37,6 +38,7 @@ export default {
     githubToken: 'Jeton {hint}',
     githubTokenHint: '(vide : celui de gh)',
     createGithubToken: 'Créer un jeton GitHub',
+    createLinearKey: "Créer une clé d'API Linear",
   },
 
   // The project's sources.
@@ -45,7 +47,7 @@ export default {
     connectFirst: 'Connecte un compte ci-dessus pour lier une source à ce projet.',
     none: 'Aucun',
     // The choice of the source, by service: its container, then the service.
-    pick: { jira: 'Projet Jira', trello: 'Tableau Trello', github: 'Dépôt GitHub Issues' },
+    pick: { jira: 'Projet Jira', trello: 'Tableau Trello', github: 'Dépôt GitHub Issues', linear: 'Équipe Linear' },
   },
 
   // What a column gives the external tickets, and the comments written there.
@@ -73,7 +75,7 @@ export default {
     enable: 'Importer les tickets étiquetés',
     enableDesc: "Les tickets ouverts des sources liées qui portent l'étiquette arrivent dans « À faire »",
     label: 'Étiquette',
-    labelHint: 'label Jira, étiquette Trello ou GitHub',
+    labelHint: 'label Jira, étiquette Trello, GitHub ou Linear',
     every: 'Vérifier toutes les',
     minutes: '{n} min',
   },
@@ -83,7 +85,8 @@ export default {
     title: 'Importer des tickets',
     sub: 'Dans « À faire » du Kanban de {project}',
     noSource: 'Aucune source liée à ce projet',
-    noSourceBody: 'Connecte Jira, Trello ou GitHub Issues, puis choisis le projet, le tableau ou le dépôt à associer à {project}.',
+    noSourceBody:
+      'Connecte Jira, Trello, GitHub Issues ou Linear, puis choisis le projet, le tableau, le dépôt ou l’équipe à associer à {project}.',
     thisProject: 'ce projet',
     linkSource: 'Lier une source',
     sources: 'Sources',

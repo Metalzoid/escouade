@@ -397,7 +397,7 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
         Service::Jira if account.email.is_empty() => {
             tr_in!(lang, "Indique l'e-mail.", "Give the email.")
         }
-        Service::Jira | Service::Trello if account.token.is_empty() => {
+        Service::Jira | Service::Trello | Service::Linear if account.token.is_empty() => {
             tr_in!(lang, "Indique le jeton.", "Give the token.")
         }
         Service::Trello if account.key.is_empty() => {
