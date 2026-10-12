@@ -2,6 +2,14 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.7.4] — 2026-10-12
+
+### Modifications
+
+- Réglages › Comptes Claude : Principal peut lui aussi être « Réservé aux projets » que tu coches, comme les autres comptes. Un projet que plus aucun compte actif ne sert (tous réservés à d'autres projets, ou désactivés) ne démarre plus rien : un nouvel agent y est refusé avec la marche à suivre, son Kanban affiche « Aucun compte Claude pour ce projet — aucun ticket ne démarre », le choix du compte dans le compositeur dit « Automatique (aucun compte) », et l'onglet Comptes Claude nomme ces projets sous la liste. Avant, un tel projet partait en silence sur Principal, même désactivé.
+- Un projet ajouté avec « Créer un premier agent » alors qu'aucun compte ne le sert est ajouté quand même, sans cet agent, et une notification dit pourquoi (avant, l'ajout semblait échouer et un nouvel essai ajoutait le projet une seconde fois). Un projet fermé sort des « Réservé aux projets » de chaque compte.
+- Le message de commit proposé pour un commit direct sur le dossier du projet est demandé à un compte de ce projet.
+
 ## [1.7.3] — 2026-10-12
 
 ### Ajouts
