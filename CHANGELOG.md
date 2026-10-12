@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [1.7.3] — 2026-10-12
+
+### Ajouts
+
+- Réglages › Comptes Claude : un compte autre que Principal peut être « Réservé aux projets » que tu coches (ceux d'un client, par exemple). Les autres projets n'y partent plus jamais : ni en « Automatique », ni comme « Compte préféré », ni au choix du compte dans le compositeur, ni par « Reprendre sur… » ou la reprise automatique d'un agent de ticket. Le pilote auto d'un projet attend ses propres comptes quand ils sont tous au seuil. Sans projet coché, un compte sert à tous, comme avant ; Principal reste toujours celui de tous les projets.
+
 ## [1.7.2] — 2026-10-11
 
 ### Modifications
