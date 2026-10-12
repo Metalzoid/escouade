@@ -270,8 +270,95 @@ if (argv[0] === 'mcp') {
     const named = `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
     process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
   });
+} else if (argv.includes('--settings')) {
+  tuiSession();
 } else {
   startSession();
+}
+
+// Claude Code's own interface (« Vue Claude Code »: no -p, its hooks in --settings). It needs
+// CLAUDE_CONFIG_DIR. Each line it reads (pasted text, then Enter) is a prompt: it calls the hooks
+// of the settings (HTTP, with the token of ESCOUADE_HOOK_TOKEN) and writes its transcript as
+// Claude Code does (see tests/fixtures/tui-transcript.jsonl). "permission" in the prompt asks for
+// Bash first and goes on once the next Enter comes; "lent" makes the turn wait for Escape, which
+// interrupts it; "/exit" ends the process.
+function tuiSession() {
+  const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
+  const flag = (name) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
+  const sessionId = flag('--session-id') ?? flag('--resume') ?? `sess-${process.pid}`;
+  const file = sessionFile(sessionId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
+  const ts = () => new Date().toISOString();
+  const write = (entry) => fs.appendFileSync(file, JSON.stringify({ ...entry, sessionId, timestamp: ts() }) + '\n');
+  const hook = async (name, extra = {}) => {
+    const h = settings.hooks[name]?.[0]?.hooks?.[0];
+    if (!h) return;
+    const headers = { 'content-type': 'application/json' };
+    for (const [k, v] of Object.entries(h.headers ?? {})) headers[k] = v.replace('$ESCOUADE_HOOK_TOKEN', process.env.ESCOUADE_HOOK_TOKEN ?? '');
+    const body = { session_id: sessionId, transcript_path: file, cwd: process.cwd(), hook_event_name: name, ...extra };
+    try {
+      await fetch(h.url, { method: 'POST', headers, body: JSON.stringify(body) });
+    } catch {}
+  };
+  let n = 0;
+  const assistant = (content) => {
+    n += 1;
+    write({
+      type: 'assistant',
+      uuid: `tui-${process.pid}-${n}`,
+      isSidechain: false,
+      message: { id: `msg-${process.pid}-${n}`, model, role: 'assistant', content, usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 1000 } },
+    });
+  };
+  let waiting = null;
+  let line = '';
+  process.stdout.write('fake claude tui\r\n');
+  write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
+  const turn = async (prompt) => {
+    if (prompt === '/exit') process.exit(0);
+    await hook('UserPromptSubmit', { prompt });
+    write({ type: 'user', uuid: `u-${process.pid}-${n++}`, origin: { kind: 'human' }, message: { role: 'user', content: prompt } });
+    if (prompt.includes('permission')) {
+      const input = { command: 'echo tui' };
+      const id = `tool-${process.pid}-${n}`;
+      assistant([{ type: 'tool_use', id, name: 'Bash', input }]);
+      await hook('PreToolUse', { tool_name: 'Bash', tool_input: input });
+      await hook('PermissionRequest', { tool_name: 'Bash', tool_input: input });
+      await new Promise((resolve) => (waiting = resolve));
+      write({ type: 'user', uuid: `r-${id}`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'tui' }] }, toolUseResult: { stdout: 'tui', stderr: '' } });
+      await hook('PostToolUse', { tool_name: 'Bash', tool_input: input });
+    }
+    if (prompt.includes('lent')) {
+      const stopped = await new Promise((resolve) => (waiting = resolve));
+      if (stopped === 'escape') {
+        write({ type: 'user', uuid: `i-${process.pid}-${n++}`, message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] } });
+        return;
+      }
+    }
+    assistant([{ type: 'text', text: `Fini : ${prompt}` }]);
+    await hook('Stop', { stop_hook_active: false });
+    write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
+  };
+  // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r).
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
+      if (part === '\x1b[200~' || part === '\x1b[201~' || part === '') continue;
+      if (part === '\x1b') {
+        if (waiting) [waiting, waiting = null][0]('escape');
+      } else if (part === '\r') {
+        if (waiting) {
+          [waiting, waiting = null][0]('enter');
+        } else if (line.trim()) {
+          const prompt = line.trim();
+          line = '';
+          turn(prompt);
+        }
+      } else line += part;
+    }
+  });
 }
 
 function startSession() {

@@ -21,6 +21,9 @@ pub struct Settings {
     pub notify_for: NotifyFor,
     /// Stop idle Claude processes after N minutes (0 = never). Sessions stay resumable.
     pub idle_stop_minutes: u32,
+    /// « Ouvrir les nouveaux agents dans l'interface de Claude Code »: a new agent (not a
+    /// ticket's) starts in the Claude Code view (`AgentMeta::terminal`).
+    pub terminal_view: bool,
     pub pwsh_path: String,
     pub bash_path: String,
     pub wsl_distro: String,
@@ -237,6 +240,7 @@ impl Default for Settings {
             os_notifications: true,
             notify_for: NotifyFor::default(),
             idle_stop_minutes: 30,
+            terminal_view: false,
             pwsh_path: String::new(),
             bash_path: String::new(),
             wsl_distro: String::new(),
@@ -765,6 +769,12 @@ pub struct AgentMeta {
     /// The resume it waited for on that account (`resume_at`), which the move dropped: where it waits
     /// again when it goes back, if the account's windows no longer say when it resets.
     pub moved_resume_at: Option<i64>,
+    /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
+    /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
+    pub terminal: bool,
+    /// How far the transcript its interface writes was read: the file and the offset (bytes),
+    /// so that what was written while the app was not reading it is read when it starts again.
+    pub transcript_read: Option<(String, u64)>,
 }
 
 fn principal_id() -> String {
@@ -842,6 +852,8 @@ pub struct AgentView {
     pub remote_state: Option<String>,
     /// What it does right now ("Lit src/db.ts", "Lance npm test"…), during a turn.
     pub activity: Option<String>,
+    /// The terminal of Claude Code's interface running for it (« Vue Claude Code »).
+    pub terminal_id: Option<String>,
     /// The setup of its new worktree under way: the command running ("npm ci (1/2)").
     pub setup: Option<String>,
     /// isola runs its worktree's services (installed, and an `.isola.toml` in the worktree): its

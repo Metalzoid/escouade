@@ -1228,6 +1228,7 @@ impl<R: Runtime> Core<R> {
         self.pty.spawn_program(
             info.clone(),
             &program,
+            &[],
             &home.to_string_lossy(),
             size,
             env,

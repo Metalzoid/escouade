@@ -45,6 +45,9 @@ mod testlaunch;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
+mod tui;
+#[cfg(test)]
+mod tui_tests;
 mod updates;
 mod usage;
 mod which;
@@ -244,6 +247,8 @@ pub fn run() {
             commands::account_remove,
             commands::account_status,
             commands::account_login,
+            commands::set_agent_view,
+            commands::agent_terminal,
             commands::inspect_folder,
             commands::create_project,
             commands::update_project,

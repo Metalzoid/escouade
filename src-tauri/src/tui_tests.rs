@@ -1,0 +1,226 @@
+//! Integration tests of « Vue Claude Code » (`tui`): the fake `claude` plays Claude Code's
+//! interface in a real terminal, calls the hooks of its settings over HTTP and writes its
+//! transcript, which the core reads as it comes.
+
+use crate::core::AgentOptions;
+use crate::core_tests::{agent_on, harness, second_account, Harness};
+use crate::model::*;
+use std::sync::Arc;
+
+/// An agent on a Claude account of its own (the fake keeps its transcripts in its folder), in the
+/// Claude Code view, its interface started.
+async fn agent_in_tui(h: &Harness) -> String {
+    let (p, _) = h.project(false).await;
+    second_account(h);
+    let id = agent_on(h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let screen = Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let sink = screen.clone();
+    h.core
+        .open_agent_terminal(&id, (100, 30), move |b| sink.lock().extend(b))
+        .await
+        .unwrap();
+    h.wait("the interface's first screen", |_| {
+        String::from_utf8_lossy(&screen.lock()).contains("fake claude tui")
+    })
+    .await;
+    id
+}
+
+fn texts(h: &Harness, id: &str, kind: &str) -> Vec<String> {
+    h.items(id)
+        .iter()
+        .filter(|i| i["kind"] == kind)
+        .map(|i| i["text"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_goes_through_the_interface_and_its_turn_comes_back_from_the_transcript() {
+    let h = harness("tui-turn");
+    let id = agent_in_tui(&h).await;
+    let a = h.agent(&id);
+    assert!(a.terminal);
+    let session = a
+        .session_id
+        .clone()
+        .expect("a session of its own from the start");
+    // No stream's process: the interface has the session.
+    assert!(!h.alive(&id));
+    assert!(h.core.agent(&id).unwrap().lock().tui.is_some());
+
+    h.core
+        .send_message(&id, "bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn's end", |h| {
+        h.items(&id).iter().any(|i| i["kind"] == "turn")
+    })
+    .await;
+    let user = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["kind"] == "user")
+        .unwrap();
+    assert_eq!(user["text"], "bonjour");
+    assert_eq!(user["origin"], "terminal");
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+    let a = h.agent(&id);
+    assert_eq!(a.status, AgentStatus::Done);
+    assert_eq!(a.prompts, 1);
+    assert!(a.cost > 0.0, "counted at list prices");
+    assert_eq!(a.session_id.as_deref(), Some(session.as_str()));
+    // Where the read stopped is kept, for the next start.
+    let (file, offset) = a.transcript_read.clone().unwrap();
+    assert!(file.ends_with(&format!("{session}.jsonl")));
+    assert_eq!(offset, std::fs::metadata(&file).unwrap().len());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_permission_asked_in_the_interface_is_told_and_answered_there() {
+    let h = harness("tui-permission");
+    let id = agent_in_tui(&h).await;
+    h.core
+        .send_message(&id, "permission".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the agent waiting", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    assert!(
+        h.core.alerts.lock().iter().any(|a| a.contains("echo tui")),
+        "{:?}",
+        h.core.alerts.lock()
+    );
+    // A message would go to its dialog: refused.
+    let refused = h.core.send_message(&id, "et ça ?".into(), Vec::new()).await;
+    assert!(refused.is_err());
+    // Answered in its terminal (Enter: « Yes »).
+    let term = h
+        .core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .view()
+        .terminal_id
+        .unwrap();
+    h.core.pty.write(&term, b"\r").unwrap();
+    h.wait("the turn's end", |h| {
+        h.agent(&id).status == AgentStatus::Done
+    })
+    .await;
+    let tool = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["kind"] == "tool")
+        .unwrap();
+    assert_eq!(
+        (tool["name"].as_str(), tool["status"].as_str()),
+        (Some("Bash"), Some("ok"))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interrupt_from_the_window_is_escape_in_the_interface() {
+    let h = harness("tui-interrupt");
+    let id = agent_in_tui(&h).await;
+    h.core
+        .send_message(&id, "lent".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn running", |h| {
+        h.agent(&id).status == AgentStatus::Running
+    })
+    .await;
+    h.core.interrupt(&id).await.unwrap();
+    h.wait("the turn interrupted", |h| {
+        h.items(&id)
+            .iter()
+            .any(|i| i["kind"] == "turn" && i["interrupted"] == true)
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn back_in_escouades_view_the_stream_resumes_the_same_session() {
+    let h = harness("tui-back");
+    let id = agent_in_tui(&h).await;
+    h.core
+        .send_message(&id, "bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn's end", |h| {
+        h.agent(&id).status == AgentStatus::Done
+    })
+    .await;
+    let session = h.agent(&id).session_id.unwrap();
+    h.core.set_agent_view(&id, false).await.unwrap();
+    assert!(!h.agent(&id).terminal);
+    assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let stream = |h: &Harness| {
+        h.launch_log(&cwd)
+            .into_iter()
+            .rev()
+            .find(|l| l["argv"].to_string().contains("stream-json"))
+    };
+    h.wait("the stream's process", |h| stream(h).is_some())
+        .await;
+    let last = stream(&h).unwrap();
+    let args: Vec<&str> = last["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a.as_str())
+        .collect();
+    assert!(
+        args.contains(&format!("--resume={session}").as_str()),
+        "{args:?}"
+    );
+    assert!(args.contains(&"stream-json"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tickets_agent_never_goes_to_the_claude_code_view() {
+    let h = harness("tui-ticket");
+    let (p, _) = h.project(false).await;
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some("t1".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    assert!(h.core.set_agent_view(&a.id, true).await.is_err());
+    assert!(!h.agent(&a.id).terminal);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_hook_without_the_token_of_an_interface_is_refused() {
+    let h = harness("tui-token");
+    let _id = agent_in_tui(&h).await;
+    let port = h.core.hooks_port().unwrap();
+    let call = |auth: Option<&str>| {
+        let mut req = format!(
+            "POST /hook HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n"
+        );
+        if let Some(a) = auth {
+            req.push_str(&format!("Authorization: Bearer {a}\r\n"));
+        }
+        req.push_str("\r\n{}");
+        use std::io::{Read, Write};
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        s.write_all(req.as_bytes()).unwrap();
+        let mut out = String::new();
+        let _ = s.read_to_string(&mut out);
+        out.lines().next().unwrap_or_default().to_string()
+    };
+    assert!(call(None).contains("401"));
+    assert!(call(Some("not-a-token")).contains("401"));
+}

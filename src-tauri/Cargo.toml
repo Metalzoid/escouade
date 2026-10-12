@@ -47,6 +47,7 @@ unicode-normalization = "0.1"
 rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
+http-body-util = "0.1"
 subtle = "2.6"
 # Its tokens: 32 bytes from the system's random generator.
 getrandom = "0.4"

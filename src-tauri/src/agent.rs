@@ -16,6 +16,8 @@ use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+mod transcript;
+
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
 
 /// What a notification is about: each kind has its own choice in the settings ("Me prévenir pour").
@@ -162,6 +164,31 @@ pub struct AgentRt {
     /// turn's result brings the exact figures.
     live: HashMap<String, (String, Usage)>,
     queued: u32,
+    /// Claude Code's own interface running for it, in a terminal (« Vue Claude Code », `tui`).
+    pub tui: Option<TuiRun>,
+    /// The usage of each API message its interface ran, by message id with its model: what its
+    /// turns are counted from, at list prices (the interface tells no cost per turn).
+    tui_usage: HashMap<String, (String, Usage)>,
+    /// The running turn of its interface met an API error: what it said.
+    tui_error: Option<String>,
+    /// The running turn of its interface, from its prompt (what it was) to its end.
+    pub(crate) tui_prompt: Option<String>,
+    /// The entries of its transcript written before then (ms) are not read: the history of a
+    /// session its interface resumed or forked with no read kept, which its view already has.
+    pub(crate) tui_since: Option<i64>,
+}
+
+/// Claude Code's interface running for an agent (`tui`).
+#[derive(Debug, Clone)]
+pub struct TuiRun {
+    /// Its terminal.
+    pub term_id: String,
+    /// Which of the agent's interfaces it is: what the terminal's exit and the reads of the
+    /// transcript check, so that an older one's are ignored.
+    pub gen: u64,
+    /// The transcript it writes, once known, and how far it was read (bytes).
+    pub transcript: Option<std::path::PathBuf>,
+    pub offset: u64,
 }
 
 const MAX_TEXT: usize = 8000;
@@ -282,6 +309,11 @@ impl AgentRt {
             last_usage: HashMap::new(),
             live: HashMap::new(),
             queued: 0,
+            tui: None,
+            tui_usage: HashMap::new(),
+            tui_error: None,
+            tui_prompt: None,
+            tui_since: None,
         }
     }
 
@@ -300,7 +332,8 @@ impl AgentRt {
         AgentView {
             meta: self.meta.clone(),
             active_since: self.active_since,
-            alive: self.proc.is_some(),
+            alive: self.proc.is_some() || self.tui.is_some(),
+            terminal_id: self.tui.as_ref().map(|t| t.term_id.clone()),
             pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),
             requests: self.pending.iter().map(|p| p.view.clone()).collect(),
             context_tokens: self.context_tokens,

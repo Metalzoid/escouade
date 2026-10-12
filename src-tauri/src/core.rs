@@ -69,7 +69,7 @@ pub(crate) fn not_a_repo() -> anyhow::Error {
 }
 
 /// Refused: the app is quitting, no agent process starts any more.
-fn quitting_refusal() -> anyhow::Error {
+pub(crate) fn quitting_refusal() -> anyhow::Error {
     anyhow!(tr!(
         "Escouade se ferme : aucun agent ne démarre.",
         "Escouade is quitting: no agent starts."
@@ -683,6 +683,8 @@ pub struct Core<R: Runtime = Wry> {
     searches: convsearch::Searches,
     /// The MCP server (« Claude peut piloter Escouade »), running while `sync_mcp` wants it.
     pub(crate) mcp: crate::mcp::McpServer<R>,
+    /// The server the hooks of the agents' Claude Code interfaces call (`tui`).
+    pub(crate) hooks: crate::tui::Hooks,
     /// Times the files of an agent's plan were read, not counting the looks that found them as
     /// before (tests only).
     #[cfg(test)]
@@ -1353,6 +1355,7 @@ impl<R: Runtime> Core<R> {
             import_lock: tokio::sync::Mutex::new(()),
             searches: convsearch::Searches::default(),
             mcp: crate::mcp::McpServer::new(me.clone()),
+            hooks: Default::default(),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
@@ -1763,7 +1766,7 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    fn apply(
+    pub(crate) fn apply(
         self: &Arc<Self>,
         id: &str,
         project_id: &str,
@@ -2092,6 +2095,13 @@ impl<R: Runtime> Core<R> {
         if self.quitting.load(Ordering::Acquire) {
             bail!(quitting_refusal());
         }
+        // In the Claude Code view, its interface has the session (`tui`).
+        if h.lock().meta.terminal {
+            bail!(tr!(
+                "L’agent est en vue Claude Code : c’est son terminal qui le fait tourner.",
+                "The agent is in the Claude Code view: its terminal runs it."
+            ));
+        }
         let settings = self.settings.read().clone();
         // Its account's Claude Code, where its session is kept.
         let account = accounts::get(&settings, &h.lock().meta.account);
@@ -2226,7 +2236,11 @@ impl<R: Runtime> Core<R> {
         let Ok(h) = self.agent(id) else { return };
         {
             let rt = h.lock();
-            if rt.proc.is_some() || rt.meta.archived || rt.meta.status == AgentStatus::Error {
+            if rt.proc.is_some()
+                || rt.meta.archived
+                || rt.meta.terminal
+                || rt.meta.status == AgentStatus::Error
+            {
                 return;
             }
         }
@@ -2583,6 +2597,16 @@ impl<R: Runtime> Core<R> {
             Some(origin) => from_origin(i18n::ui(), origin, &text),
             None => text.clone(),
         };
+        // In the Claude Code view: typed in its interface.
+        if self.agent(id)?.lock().meta.terminal {
+            if !attachments.is_empty() {
+                bail!(tr!(
+                    "Pas de pièce jointe en vue Claude Code : colle-la dans son terminal.",
+                    "No attachments in the Claude Code view: paste them in its terminal."
+                ));
+            }
+            return self.send_to_tui(id, &delivered);
+        }
         // Refused before starting Claude: the composer keeps the message.
         let content = user_content(&delivered, &attachments)?;
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
@@ -2647,6 +2671,9 @@ impl<R: Runtime> Core<R> {
     }
 
     pub async fn interrupt(self: &Arc<Self>, id: &str) -> Result<()> {
+        if self.interrupt_tui(id)? {
+            return Ok(());
+        }
         let h = self.agent(id)?;
         let proc = {
             let mut rt = h.lock();
@@ -2871,6 +2898,7 @@ impl<R: Runtime> Core<R> {
             cwd: project.path.clone(),
             created_at: now_ms(),
             last_activity: now_ms(),
+            terminal: settings.terminal_view && o.ticket_id.is_none(),
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
             port_base: o.port_base,
@@ -3451,7 +3479,7 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
-    async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
+    pub(crate) async fn auto_name(self: &Arc<Self>, id: &str, prompt: &str) {
         match self.generate_name(id, prompt).await {
             Ok(Some(slug)) => {
                 if let Err(e) = self.apply_generated_name(id, &slug).await {
@@ -3726,6 +3754,12 @@ impl<R: Runtime> Core<R> {
                 if let Some(p) = rt.detach() {
                     p.close_input();
                 }
+                if let Some(t) = rt.tui.as_ref().map(|t| t.term_id.clone()) {
+                    rt.gen += 1;
+                    rt.stop_tui(fx);
+                    self.hooks.revoke(&rt.meta.id);
+                    self.pty.kill(&t);
+                }
                 rt.clear_pending(fx);
                 if rt.meta.status.is_active() {
                     rt.set_status(AgentStatus::Done, fx);
@@ -3771,6 +3805,9 @@ impl<R: Runtime> Core<R> {
             if let Some(p) = rt.proc.take() {
                 p.kill();
             }
+            if let Some(t) = rt.tui.take() {
+                self.pty.kill(&t.term_id);
+            }
             rt.conv.delete_file();
             (
                 rt.meta.project_id.clone(),
@@ -3780,6 +3817,7 @@ impl<R: Runtime> Core<R> {
         };
         // Refused at once, without waiting for its process to end.
         self.mcp.forget_agent(id);
+        self.hooks.revoke(id);
         self.spawn_locks.lock().remove(id);
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.

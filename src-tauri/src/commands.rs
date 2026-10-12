@@ -203,6 +203,29 @@ pub fn account_login(
     .map_err(err)
 }
 
+/// « Vue Claude Code »: the agent runs in Claude Code's own interface, or in Escouade's view.
+#[tauri::command]
+pub async fn set_agent_view(core: CoreState<'_>, id: String, terminal: bool) -> Res<()> {
+    core.set_agent_view(&id, terminal).await.map_err(err)
+}
+
+/// The agent's Claude Code interface, in an interactive terminal (written to, resized and killed
+/// as the others: `term_write`, `term_resize`, `term_kill`).
+#[tauri::command]
+pub async fn agent_terminal(
+    core: CoreState<'_>,
+    id: String,
+    cols: u16,
+    rows: u16,
+    output: Channel<InvokeResponseBody>,
+) -> Res<TermInfo> {
+    core.open_agent_terminal(&id, (cols, rows), move |bytes| {
+        let _ = output.send(InvokeResponseBody::Raw(bytes));
+    })
+    .await
+    .map_err(err)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderInfo {

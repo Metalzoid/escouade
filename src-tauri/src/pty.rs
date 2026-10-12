@@ -345,6 +345,7 @@ impl PtyManager {
         &self,
         info: TermInfo,
         program: &Path,
+        args: &[String],
         cwd: &str,
         size: (u16, u16),
         env: Vec<(String, String)>,
@@ -353,6 +354,7 @@ impl PtyManager {
     ) -> Result<()> {
         // A `.cmd` launcher (npm's claude.cmd) included: Windows runs it through cmd.exe.
         let mut cmd = CommandBuilder::new(program);
+        cmd.args(args);
         if Path::new(cwd).is_dir() {
             cmd.cwd(cwd);
         }
