@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, project, resetApp } from '../test/ipc';
-import { newAgentAccount, overThreshold, pausedAccounts, pauseOf, quotaOf, quotaRows } from './accounts';
+import { newAgentAccount, overThreshold, pausedAccounts, pauseOf, projectsWithoutAccount, quotaOf, quotaRows } from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 import type { Account, AccountUsage, AutopilotPause, RateWindow } from './types';
@@ -39,6 +39,15 @@ describe('the accounts of a project', () => {
     app.projectPauses = { client: pause({ until: 2 }) };
     expect(pauseOf(project({ id: 'client' }))?.until).toBe(2);
     expect(pauseOf(project({ id: 'other' }))?.until).toBe(1);
+  });
+
+  it('names the projects no active account serves: Principal may be reserved like any account', () => {
+    app.projects = [project({ id: 'client', name: 'client' }), project({ id: 'other', name: 'autre' })];
+    expect(projectsWithoutAccount()).toEqual([]);
+    app.settings.accounts = [{ ...PRINCIPAL, projects: ['client'] }, { ...PRO, projects: ['client'] }, TEAM];
+    expect(projectsWithoutAccount().map((p) => p.name)).toEqual(['autre']);
+    expect(newAgentAccount(project({ id: 'other' }))).toBeUndefined();
+    expect(newAgentAccount(project({ id: 'client' }))?.id).toBe('principal');
   });
 
   it('is paused by the pause of any account, or by the one of the project that prefers an account', () => {

@@ -534,6 +534,12 @@ impl<R: Runtime> Core<R> {
 
     /// "Lancer": a ticket that starts even with the autopilot off.
     pub fn ticket_start(self: &Arc<Self>, id: &str) -> Result<()> {
+        // A project no account serves starts nothing, nor later on its own once one does.
+        let project = self.ticket(id)?.project_id;
+        if !accounts::serves_any(&self.settings.read(), Some(&project)) {
+            let name = self.project(&project).map_or(project, |p| p.name);
+            return Err(accounts::no_account(&name));
+        }
         self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
                 bail!(tr!(
@@ -745,13 +751,18 @@ impl<R: Runtime> Core<R> {
 
     /// The account a new agent of the project goes to (a ticket's or not): the one the project
     /// prefers when it is active, else the first usable one, in the order of the accounts.
-    pub(crate) fn account_for_new(&self, project_id: &str) -> String {
-        let settings = accounts::for_project(&self.settings.read(), Some(project_id));
-        let preferred = self
-            .project(project_id)
-            .ok()
-            .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        self.pick_account(&settings, preferred.as_deref())
+    /// Refused when no active account serves the project (all reserved to others, Principal too).
+    pub(crate) fn account_for_new(&self, project_id: &str) -> Result<String> {
+        let all = self.settings.read().clone();
+        let project = self.project(project_id).ok();
+        if !accounts::serves_any(&all, Some(project_id)) {
+            let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
+            return Err(accounts::no_account(&name));
+        }
+        let settings = accounts::for_project(&all, Some(project_id));
+        let preferred =
+            project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
+        Ok(self.pick_account(&settings, preferred.as_deref()))
     }
 
     /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
@@ -885,13 +896,18 @@ impl<R: Runtime> Core<R> {
             // rather than make every ticket's worktree and agent only to block it, none starts
             // until it is found (saving the settings looks again).
             let settings = self.settings.read().clone();
-            let account = accounts::get(&settings, &self.account_for_new(&p.id));
-            if accounts::program(&account, &settings).is_none() {
-                missing = true;
-                if !self.claude_missing.swap(true, Ordering::AcqRel) {
-                    log::info!("board: Claude Code not found, no ticket starts until it is");
+            // No account serves the project (all reserved to others): none starts, as the window
+            // is told below; saving the accounts looks again.
+            let account = self.account_for_new(&p.id).ok();
+            if let Some(id) = &account {
+                let account = accounts::get(&settings, id);
+                if accounts::program(&account, &settings).is_none() {
+                    missing = true;
+                    if !self.claude_missing.swap(true, Ordering::AcqRel) {
+                        log::info!("board: Claude Code not found, no ticket starts until it is");
+                    }
+                    continue;
                 }
-                continue;
             }
             // Held (`held`), none starts, even launched by hand. Looked at again for each project
             // and each start: one started in this pass, or already at work, may meet the usage
@@ -901,6 +917,13 @@ impl<R: Runtime> Core<R> {
             // A board that told why nothing starts is looked at again even with nothing to start:
             // its issue goes once its target is there.
             if ids.is_empty() && !self.board_issues.lock().contains_key(&p.id) {
+                continue;
+            }
+            if account.is_none() {
+                let issue = accounts::no_account_issue();
+                if self.set_board_issue(&p.id, Some(issue.clone())) {
+                    log::info!("board of {}: {issue}", p.name);
+                }
                 continue;
             }
             // Every ticket's branch starts from the target: while it has no commit yet (a new
@@ -1291,6 +1314,10 @@ impl<R: Runtime> Core<R> {
                 accounts::get(&settings, &rt.meta.account).id,
             )
         };
+        // No account serves the project any more: none to go on on.
+        if !accounts::serves_any(&settings, Some(&project)) {
+            return None;
+        }
         let settings = accounts::for_project(&settings, Some(&project));
         let preferred = self
             .project(&project)
@@ -1861,6 +1888,7 @@ impl<R: Runtime> Core<R> {
                 &board::commit_system(lang),
                 &board::commit_prompt(lang, t, &stat),
                 agent,
+                Some(&t.project_id),
             )
             .await
         {

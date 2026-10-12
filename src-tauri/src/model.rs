@@ -87,8 +87,8 @@ pub struct Account {
     /// New agents may go to it.
     pub active: bool,
     /// « Réservé aux projets »: the ids of the only projects whose new agents and tickets may go
-    /// to it (a client's account kept to that client's projects); empty: every project. Never
-    /// Principal's, which every project may always fall back on (`accounts::normalize`).
+    /// to it (a client's account kept to that client's projects); empty: every project. Principal's
+    /// too: a project no active account serves then starts nothing (`accounts::serves_any`).
     pub projects: Vec<String>,
 }
 

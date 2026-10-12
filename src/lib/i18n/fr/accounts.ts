@@ -23,6 +23,12 @@ export default {
     add: 'Ajouter un compte…',
     reserved: 'Réservé aux projets',
     reservedAll: 'Tous les projets',
+    /** `{names}` : les projets, chacun entre guillemets (`quoted`) et énumérés comme dans une phrase. */
+    noAccount: {
+      one: 'Aucun compte actif ne sert {names} : ses agents et ses tickets ne démarrent pas.',
+      other: 'Aucun compte actif ne sert {names} : leurs agents et leurs tickets ne démarrent pas.',
+    },
+    quoted: '« {name} »',
     reservedHint:
       'Coche des projets pour garder ce compte à eux seuls (les projets d’un client, par exemple) : les autres n’y partent jamais.',
     stillUsed: { one: 'Le compte sert encore à {count} agent.', other: 'Le compte sert encore à {count} agents.' },
@@ -70,6 +76,7 @@ export default {
   composer: {
     caption: 'Compte',
     auto: 'Automatique ({name})',
+    autoNone: 'Automatique (aucun compte)',
     autoDetail: 'Celui du projet, sinon le premier compte sous le seuil de pause.',
     inactive: '{name} (inactif)',
     locked: 'Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte).',

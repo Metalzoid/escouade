@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { accountName, agentsOn, backToAccounts, PRINCIPAL } from '../../lib/accounts';
-  import { tildify } from '../../lib/format';
+  import { accountName, agentsOn, backToAccounts, PRINCIPAL, projectsWithoutAccount } from '../../lib/accounts';
+  import { fList, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -13,6 +13,16 @@
 
   const accounts = $derived(app.settings.accounts ?? []);
   const activeCount = $derived(accounts.filter((a) => a.active).length);
+  /** Principal may be reserved like any account: the projects none serves then, told under the list. */
+  const orphans = $derived(projectsWithoutAccount());
+  const orphansText = $derived(
+    orphans.length
+      ? t('accounts.tab.noAccount', {
+          count: orphans.length,
+          names: fList(orphans.map((p) => t('accounts.tab.quoted', { name: p.name }))),
+        })
+      : '',
+  );
   /** Each account's sign-in, as last read. */
   let statuses = $state<Record<string, AccountStatus>>({});
   /** Why an account was not removed, by account. */
@@ -177,7 +187,7 @@
             <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
           {/if}
         </div>
-        {#if a.id !== PRINCIPAL && app.projects.length}
+        {#if app.projects.length}
           {@const reserved = a.projects ?? []}
           <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
             <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
@@ -195,6 +205,8 @@
       </li>
     {/each}
   </ul>
+  <!-- Always there, empty while every project has an account: a screen reader hears it fill. -->
+  <p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
   <span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
 </Group>
 <div>
@@ -309,8 +321,17 @@
     font-size: 11.5px;
     line-height: 1.45;
   }
-  .late {
+  .late,
+  .orphans {
     color: var(--wait);
+  }
+  .orphans {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .orphans.on {
+    margin-top: 8px;
   }
   .refused {
     color: var(--del);

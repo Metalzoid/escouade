@@ -108,8 +108,6 @@ pub fn normalize(settings: &mut Settings) {
     let main = &mut accounts[at];
     // Whatever a hand-edited file says: a folder would sign the user out of it.
     main.config_dir.clear();
-    // Every project may fall back on it: none is ever left with no account.
-    main.projects.clear();
     if main.name.trim().is_empty() {
         main.name = principal().name;
     }
@@ -204,6 +202,15 @@ pub fn for_project(settings: &Settings, project: Option<&str>) -> Settings {
         a.active = false;
     }
     s
+}
+
+/// Whether an active account serves new agents of `project` (none: of no project). Principal may be
+/// reserved like any account: a project then may have none, and nothing starts for it.
+pub fn serves_any(settings: &Settings, project: Option<&str>) -> bool {
+    settings
+        .accounts
+        .iter()
+        .any(|a| a.active && a.serves(project))
 }
 
 /// The account a project prefers (`Project::account`), if it is one the settings have and it is
@@ -750,6 +757,30 @@ fn reserved(account: &Account) -> anyhow::Error {
     ))
 }
 
+/// Refused: no active account serves the project `name` (all are reserved to others, or off).
+pub(crate) fn no_account(name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "Aucun compte Claude actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude.",
+        "No active Claude account serves the project “{name}”: tick it under “Reserved to projects” on an active account, in Settings › Claude accounts."
+    ))
+}
+
+/// Refused: no active account serves agents of no project (every one is reserved).
+pub(crate) fn no_account_outside_projects() -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "Aucun compte Claude actif ne sert les agents hors projet : chacun est réservé à des projets.",
+        "No active Claude account serves agents outside a project: each is reserved to projects."
+    ))
+}
+
+/// Why a project's board starts nothing while no account serves it (`no_account`).
+pub(crate) fn no_account_issue() -> String {
+    tr!(
+        "Aucun compte Claude pour ce projet — aucun ticket ne démarre",
+        "No Claude account for this project — no tickets will start"
+    )
+}
+
 /// Refused: the account is switched off, nothing goes to it.
 fn switched_off(account: &Account) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -815,6 +846,28 @@ impl<R: Runtime> Core<R> {
         Ok((out, accounts))
     }
 
+    /// The project `id` taken out of every account's « Réservé aux projets » (it is gone). An
+    /// account kept to it alone then serves every project, as one kept to none does.
+    pub(crate) fn forget_project_in_accounts(self: &Arc<Self>, id: &str) {
+        let kept = |s: &Settings| {
+            s.accounts
+                .iter()
+                .any(|a| a.projects.iter().any(|p| p == id))
+        };
+        if !kept(&self.settings.read()) {
+            return;
+        }
+        let forgotten = self.change_claude_accounts(|s| {
+            for a in &mut s.accounts {
+                a.projects.retain(|p| p != id);
+            }
+            Ok(())
+        });
+        if let Err(e) = forgotten {
+            log::warn!("accounts: project {id} not forgotten: {e:#}");
+        }
+    }
+
     /// The account `id` names, as the settings now have it.
     fn claude_account(&self, id: &str) -> Result<Account> {
         let settings = self.settings.read();
@@ -874,18 +927,16 @@ impl<R: Runtime> Core<R> {
             a.name = name.to_string();
             a.claude_path = account.claude_path.trim().to_string();
             a.active = account.active;
-            // Principal stays every project's (`normalize`).
+            // Principal too: a project none serves then starts nothing (`serves_any`).
             a.projects.clear();
-            if a.id != PRINCIPAL {
-                for p in account
-                    .projects
-                    .iter()
-                    .map(|p| p.trim())
-                    .filter(|p| !p.is_empty())
-                {
-                    if !a.projects.iter().any(|x| x == p) {
-                        a.projects.push(p.to_string());
-                    }
+            for p in account
+                .projects
+                .iter()
+                .map(|p| p.trim())
+                .filter(|p| !p.is_empty())
+            {
+                if !a.projects.iter().any(|x| x == p) {
+                    a.projects.push(p.to_string());
                 }
             }
             Ok(())
@@ -988,7 +1039,7 @@ impl<R: Runtime> Core<R> {
         let target = match account.trim() {
             "" => {
                 let project = h.lock().meta.project_id.clone();
-                self.account_for_new(&project)
+                self.account_for_new(&project)?
             }
             wanted => {
                 let found = settings.accounts.iter().find(|a| a.id == wanted);
@@ -1972,10 +2023,6 @@ mod tests {
     fn an_account_reserved_to_projects_goes_to_those_alone() {
         let mut s = three();
         s.accounts[1].projects = vec!["client".into()];
-        // Principal is every project's, whatever a file says.
-        s.accounts[0].projects = vec!["client".into()];
-        normalize(&mut s);
-        assert!(s.accounts[0].projects.is_empty());
         let client = for_project(&s, Some("client"));
         assert_eq!(candidates(&client, None), ["principal", "pro", "team"]);
         assert_eq!(preferred(&client, "pro"), Some("pro"));
@@ -1991,6 +2038,30 @@ mod tests {
         let over = [used("principal", 100.0, end)];
         assert_eq!(pick(&other, &over, 95, None, NOW), "team");
         assert_eq!(pick(&client, &over, 95, None, NOW), "pro");
+    }
+
+    #[test]
+    fn principal_may_be_reserved_too_and_a_project_may_be_left_without_an_account() {
+        let mut s = three();
+        s.accounts[0].projects = vec!["client".into()];
+        s.accounts[1].projects = vec!["client".into()];
+        normalize(&mut s);
+        // Principal keeps the projects it is reserved to, as any account does.
+        assert_eq!(s.accounts[0].projects, ["client"]);
+        let client = for_project(&s, Some("client"));
+        assert_eq!(candidates(&client, None), ["principal", "pro", "team"]);
+        assert_eq!(candidates(&for_project(&s, Some("other")), None), ["team"]);
+        // Team kept to the client as well: no account is left to the other project, nor to none.
+        s.accounts[2].projects = vec!["client".into()];
+        assert!(candidates(&for_project(&s, Some("other")), None).is_empty());
+        assert!(candidates(&for_project(&s, None), None).is_empty());
+        assert!(serves_any(&s, Some("client")));
+        assert!(!serves_any(&s, Some("other")));
+        assert!(!serves_any(&s, None));
+        // A switched off account serves none either.
+        s.accounts[2].projects.clear();
+        deactivate(&mut s, "team");
+        assert!(!serves_any(&s, Some("other")));
     }
 
     #[test]

@@ -2906,7 +2906,7 @@ impl<R: Runtime> Core<R> {
             // else the first usable one.
             account: match &o.account {
                 Some(id) => accounts::get(&settings, id).id,
-                None => self.account_for_new(project_id),
+                None => self.account_for_new(project_id)?,
             },
             ..Default::default()
         };
@@ -3494,14 +3494,16 @@ impl<R: Runtime> Core<R> {
     }
 
     /// One question to Haiku (`claude -p`, no tools, no session, no MCP) about `agent`, asked of
-    /// its account: its answer, within 90 s.
+    /// its account (with none, of the account a new agent of `project` would go to): its answer,
+    /// within 90 s.
     pub(crate) async fn one_shot(
         &self,
         system: &str,
         prompt: &str,
         agent: Option<&str>,
+        project: Option<&str>,
     ) -> Result<String> {
-        self.one_shot_within(system, prompt, Duration::from_secs(90), agent)
+        self.one_shot_within(system, prompt, Duration::from_secs(90), agent, project)
             .await
     }
 
@@ -3513,6 +3515,7 @@ impl<R: Runtime> Core<R> {
         prompt: &str,
         limit: Duration,
         agent: Option<&str>,
+        project: Option<&str>,
     ) -> Result<String> {
         self.ask_claude(Ask {
             who: "Haiku",
@@ -3523,7 +3526,7 @@ impl<R: Runtime> Core<R> {
             prompt,
             limit,
             agent,
-            project: None,
+            project,
         })
         .await
     }
@@ -3539,22 +3542,25 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The account a question is asked of: its `agent`'s; else, as a new agent of its `project`
-    /// (when it is about one) would go.
+    /// (when it is about one) would go. Refused when no account serves that project.
     fn account_for(
         &self,
         settings: &Settings,
         agent: Option<&str>,
         project: Option<&str>,
-    ) -> Account {
+    ) -> Result<Account> {
         let of_agent = agent
             .and_then(|id| self.agent(id).ok())
             .map(|h| h.lock().meta.account.clone());
         let id = match (of_agent, project) {
             (Some(id), _) => id,
-            (None, Some(project)) => self.account_for_new(project),
+            (None, Some(project)) => self.account_for_new(project)?,
+            (None, None) if !accounts::serves_any(settings, None) => {
+                return Err(accounts::no_account_outside_projects())
+            }
             (None, None) => self.pick_account(&accounts::for_project(settings, None), None),
         };
-        accounts::get(settings, &id)
+        Ok(accounts::get(settings, &id))
     }
 
     /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
@@ -3573,7 +3579,7 @@ impl<R: Runtime> Core<R> {
             project,
         } = ask;
         let settings = self.settings.read().clone();
-        let account = self.account_for(&settings, agent, project);
+        let account = self.account_for(&settings, agent, project)?;
         let program = accounts::program(&account, &settings)
             .with_context(|| tr!("claude introuvable", "claude not found"))?;
         let mut cmd = tokio::process::Command::new(program);
@@ -3634,6 +3640,7 @@ impl<R: Runtime> Core<R> {
                 &naming_system(lang),
                 &naming_prompt(lang, prompt),
                 Some(agent),
+                None,
             )
             .await?;
         Ok(name_from_answer(&answer))
@@ -4122,8 +4129,15 @@ impl<R: Runtime> Core<R> {
         }
         self.request_save();
         self.git.watch(&project.id, &project.path);
+        // The project is made whatever becomes of its first agent: told (no account serves a new
+        // project, say), never an error that would have the window ask, and make it, again.
         if let Some(model) = first_agent {
-            self.create_agent(&project.id, Some(model)).await?;
+            if let Err(e) = self.create_agent(&project.id, Some(model)).await {
+                log::warn!("first agent of {}: {e:#}", project.name);
+                self.hub.emit(UiEvent::Toast {
+                    text: e.to_string(),
+                });
+            }
         }
         Ok(project)
     }
@@ -4179,6 +4193,8 @@ impl<R: Runtime> Core<R> {
     }
 
     pub async fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
+        // No account stays kept to a project that is gone (the window could not untick it).
+        self.forget_project_in_accounts(id);
         let agents: Vec<String> = self
             .project_agents(id)
             .iter()
@@ -4780,7 +4796,12 @@ impl<R: Runtime> Core<R> {
         let named = i18n::names_a_language(&self.settings.read().claude_language);
         let prompt = commit_proposal_prompt(lang, named, &subjects, &files, &diff);
         let answer = self
-            .one_shot(&commit_proposal_system(lang), &prompt, asker.as_deref())
+            .one_shot(
+                &commit_proposal_system(lang),
+                &prompt,
+                asker.as_deref(),
+                Some(project_id),
+            )
             .await?;
         proposal_from_answer(&answer)
             .ok_or_else(|| anyhow!(tr!("Haiku n'a rien proposé", "Haiku proposed nothing")))

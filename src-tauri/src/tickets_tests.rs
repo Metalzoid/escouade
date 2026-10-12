@@ -2204,6 +2204,67 @@ async fn no_ticket_starts_while_the_target_branch_is_missing() {
     assert_eq!(board_issues(&h, &p.id), [Some(missing.to_string()), None]);
 }
 
+/// Principal, the only account, kept to `projects` (« Réservé aux projets »).
+fn principal_reserved_to(h: &Harness, projects: &[&str]) {
+    let principal = h.core.settings.read().accounts[0].clone();
+    h.core
+        .update_claude_account(Account {
+            projects: projects.iter().map(|p| p.to_string()).collect(),
+            ..principal
+        })
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_project_no_account_serves_makes_no_agent_and_its_board_says_why() {
+    let h = harness("tk-no-account");
+    let (p, _r) = h.project(false).await;
+    principal_reserved_to(&h, &["ailleurs"]);
+    assert_eq!(h.core.settings.read().accounts[0].projects, ["ailleurs"]);
+    // A new agent is refused, with the way out, and nothing is made for it.
+    let e = h.core.create_agent(&p.id, None).await.unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        format!(
+            "Aucun compte Claude actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude.",
+            p.name
+        )
+    );
+    assert!(h.core.project_agents(&p.id).is_empty());
+    // Its tickets wait, and the window is told why, once.
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.schedule_now().await;
+    h.wait_board_idle().await;
+    let waiting = h.ticket(&t.id);
+    assert_eq!(
+        (waiting.column, waiting.agent_id, waiting.blocked),
+        (Column::Todo, None, None)
+    );
+    assert!(h.alerts().is_empty(), "{:?}", h.alerts());
+    let none = "Aucun compte Claude pour ce projet — aucun ticket ne démarre";
+    assert_eq!(board_issues(&h, &p.id), [Some(none.to_string())]);
+    // Nor is it launched by hand: it would start later on its own, autopilot or not.
+    let e = h.core.ticket_start(&t.id).unwrap_err();
+    assert!(
+        e.to_string()
+            .starts_with("Aucun compte Claude actif ne sert le projet"),
+        "{e}"
+    );
+    assert!(!h.ticket(&t.id).forced);
+    // The project ticked as well: the ticket starts on Principal.
+    principal_reserved_to(&h, &["ailleurs", &p.id]);
+    h.wait_ticket(&t.id, "started once an account serves its project", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert_eq!(h.agent_of(&t.id).account, "principal");
+    assert_eq!(board_issues(&h, &p.id), [Some(none.to_string()), None]);
+}
+
 #[tokio::test]
 async fn a_target_branch_made_again_starts_the_queue_at_the_next_git_refresh() {
     let h = harness("tk-target-back");
@@ -3283,7 +3344,7 @@ async fn a_haiku_that_never_reads_its_question_does_not_hold_up_the_validation()
     let answer = tokio::time::timeout(
         Duration::from_secs(20),
         h.core
-            .one_shot_within("[sourd]", &prompt, Duration::from_secs(2), None),
+            .one_shot_within("[sourd]", &prompt, Duration::from_secs(2), None, None),
     )
     .await
     .expect("the question to Haiku was never given up");

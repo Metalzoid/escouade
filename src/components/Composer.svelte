@@ -65,13 +65,15 @@
   const project = $derived(app.projects.find((p) => p.id === agent.projectId));
   const accounts = $derived(app.settings.accounts);
   const accountLocked = $derived(!!agent.sessionId || !!agent.forkOf || agent.prompts > 0 || busy);
+  // « Automatique » names the account a new agent of the project would go to: none when every one is reserved to others.
+  const autoAccount = $derived(newAgentAccount(project));
   const accountOptions = $derived(
     accounts.length < 2
       ? []
       : [
           {
             value: '',
-            label: t('accounts.composer.auto', { name: accountName(newAgentAccount(project) ?? accounts[0]) }),
+            label: autoAccount ? t('accounts.composer.auto', { name: accountName(autoAccount) }) : t('accounts.composer.autoNone'),
             detail: t('accounts.composer.autoDetail'),
           },
           // The agent's own, even switched off since: it is where it is.

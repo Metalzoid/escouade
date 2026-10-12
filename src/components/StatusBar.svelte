@@ -30,7 +30,10 @@
   // The quota of the current account: with several, the name in front, and the whole group opens the panel of every account's.
   // (The bar is there before the settings are: no accounts yet.)
   const several = $derived((app.settings.accounts?.length ?? 0) > 1);
-  const current = $derived(several ? newAgentAccount(undefined) : undefined);
+  // Every account reserved to projects (Principal too): the one whose windows the bars show (`usage.current`).
+  const current = $derived(
+    several ? (newAgentAccount(undefined) ?? app.settings.accounts.find((a) => a.id === app.usage.current)) : undefined,
+  );
   const currentName = $derived(current ? accountName(current) : '');
   let panelOpen = $state(false);
   // Down to one account: nothing left to compare.

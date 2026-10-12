@@ -102,6 +102,22 @@ describe('the account chip of the Composer', () => {
     expect(screen.getByRole('menuitemradio', { name: /^Automatique \(Principal\)/ })).toBeInTheDocument();
   });
 
+  it('says « Automatique » goes to no account when none serves the project', async () => {
+    const a = agent({ id: 'c-none', account: 'principal', status: 'idle' });
+    resetApp({ agents: [a], projects: [project()] });
+    // Principal and Pro both kept to another project.
+    app.settings.accounts = [
+      { ...PRINCIPAL, projects: ['ailleurs'] },
+      { ...PRO, projects: ['ailleurs'] },
+    ];
+    fakeBackend({ get_conversation: () => [] });
+    render(Composer, { agent: app.agents[a.id] });
+    await userEvent.click(chip('Compte : Principal'));
+    expect(screen.getByRole('menuitemradio', { name: /^Automatique \(aucun compte\)/ })).toBeInTheDocument();
+    // Nor is Pro offered: it is not this project's.
+    expect(screen.queryByRole('menuitemradio', { name: /^Pro/ })).not.toBeInTheDocument();
+  });
+
   it('keeps an agent’s own account in the menu even when it was switched off since', async () => {
     setup({ account: 'team' }, [PRINCIPAL, PRO, TEAM]);
     await userEvent.click(chip('Compte : Équipe (inactif)'));

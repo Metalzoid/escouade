@@ -436,8 +436,14 @@ impl UsageSnapshot {
             a.reason = a.problem.map(|p| reason(p, lang));
         }
         let threshold = board::quota_threshold(settings.quota_pause);
-        // The accounts reserved to some projects are not where any new agent goes.
-        let settings = &accounts::for_project(settings, None);
+        // The accounts reserved to some projects are not where any new agent goes; when each one
+        // is (Principal too), the first usable active one all the same.
+        let open = accounts::for_project(settings, None);
+        let settings = if accounts::serves_any(settings, None) {
+            &open
+        } else {
+            settings
+        };
         self.current = accounts::pick(settings, &self.accounts, threshold, None, now);
         if let Some(current) = self.account(&self.current).cloned() {
             self.five_hour = current.five_hour;
@@ -912,6 +918,18 @@ mod tests {
             pct,
             resets_at: Some(resets_at),
         })
+    }
+
+    #[test]
+    fn with_every_account_kept_to_projects_the_current_one_is_still_an_active_one() {
+        let mut s = two_accounts();
+        for a in &mut s.accounts {
+            a.projects = vec!["client".into()];
+        }
+        s.accounts[0].active = false;
+        let mut u = UsageSnapshot::default();
+        u.settle(&s, now_ms());
+        assert_eq!(u.current, "pro");
     }
 
     #[test]

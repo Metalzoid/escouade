@@ -38,6 +38,11 @@ export function usableFor(project: string | undefined): Account[] {
   return app.settings.accounts.filter((a) => a.active && serves(a, project));
 }
 
+/** The projects no active account serves (each reserved to others, Principal too, or switched off): nothing starts for them. */
+export function projectsWithoutAccount(): Project[] {
+  return app.projects.filter((p) => !usableFor(p.id).length);
+}
+
 /** The active account the project prefers (« Compte préféré »), if it names one: a switched off, reserved or unknown one is none. */
 function preferred(project: (Pick<Project, 'account'> & { id?: string }) | undefined): Account | undefined {
   const id = project?.account;

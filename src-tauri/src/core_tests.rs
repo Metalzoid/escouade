@@ -2684,6 +2684,99 @@ async fn a_commit_proposal_follows_the_latest_subjects_of_the_repository() {
 }
 
 #[tokio::test]
+async fn a_commit_proposal_on_the_checkout_goes_to_an_account_of_the_project() {
+    let h = harness("commit-propose-reserved");
+    let (p, r) = h.project(false).await;
+    // Principal, the only account, kept to this project: no account serves agents of none.
+    let principal = h.core.settings.read().accounts[0].clone();
+    h.core
+        .update_claude_account(Account {
+            projects: vec![p.id.clone()],
+            ..principal
+        })
+        .unwrap();
+    std::fs::write(r.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let proposal = h
+        .core
+        .commit_propose(&p.id, None, strings(&["src/app.ts"]))
+        .await
+        .unwrap();
+    assert!(proposal.contains("Diff de : src/app.ts."), "{proposal}");
+}
+
+/// Principal, the only account, kept to `projects` (« Réservé aux projets »).
+fn keep_principal_to(h: &Harness, projects: &[&str]) {
+    let principal = h.core.settings.read().accounts[0].clone();
+    h.core
+        .update_claude_account(Account {
+            projects: projects.iter().map(|p| p.to_string()).collect(),
+            ..principal
+        })
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_and_says_why() {
+    let h = harness("new-project-no-account");
+    let (p, _) = h.project(false).await;
+    keep_principal_to(&h, &[&p.id]);
+    let r = repo(&h.dir.join("b"));
+    let q = h
+        .core
+        .create_project(
+            &r.to_string_lossy(),
+            "client",
+            "oklch(0.72 0.12 300)",
+            false,
+            Some("sonnet".into()),
+        )
+        .await
+        .unwrap();
+    // The project is there, once: it is not made again when the window asks again.
+    let same_path = h
+        .core
+        .projects
+        .read()
+        .iter()
+        .filter(|x| x.path == q.path)
+        .count();
+    assert_eq!(same_path, 1);
+    assert!(h.core.project_agents(&q.id).is_empty());
+    let toasts: Vec<String> = h
+        .events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "toast")
+        .map(|e| e["text"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        toasts,
+        ["Aucun compte Claude actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude."]
+    );
+}
+
+#[tokio::test]
+async fn a_project_removed_leaves_the_reservations() {
+    let h = harness("reserved-removed");
+    let (p, _) = h.project(false).await;
+    let r = repo(&h.dir.join("b"));
+    let q = h
+        .core
+        .create_project(
+            &r.to_string_lossy(),
+            "client",
+            "oklch(0.72 0.12 300)",
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+    keep_principal_to(&h, &[&p.id, &q.id]);
+    h.core.remove_project(&q.id).await.unwrap();
+    assert_eq!(h.core.settings.read().accounts[0].projects, [p.id.as_str()]);
+}
+
+#[tokio::test]
 async fn a_commit_proposal_is_asked_for_in_the_language_of_the_texts_for_claude() {
     let h = harness("commit-propose-en");
     let (p, r) = h.project(false).await;

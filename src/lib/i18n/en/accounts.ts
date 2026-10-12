@@ -21,6 +21,12 @@ export default defineZone('accounts', {
     add: 'Add an account…',
     reserved: 'Reserved to projects',
     reservedAll: 'Every project',
+    /** `{names}`: the projects, each quoted (`quoted`) and listed as a sentence does. */
+    noAccount: {
+      one: 'No active account serves {names}: its agents and tickets won’t start.',
+      other: 'No active account serves {names}: their agents and tickets won’t start.',
+    },
+    quoted: '“{name}”',
     reservedHint: 'Tick projects to keep this account to them alone (a client’s projects, say): the others never start on it.',
     stillUsed: { one: 'The account is still used by {count} agent.', other: 'The account is still used by {count} agents.' },
     state: {
@@ -64,6 +70,7 @@ export default defineZone('accounts', {
   composer: {
     caption: 'Account',
     auto: 'Automatic ({name})',
+    autoNone: 'Automatic (no account)',
     autoDetail: 'The project’s, else the first account under the pause threshold.',
     inactive: '{name} (inactive)',
     locked: 'An agent’s account can’t change after its first message (its conversation is filed in that account).',

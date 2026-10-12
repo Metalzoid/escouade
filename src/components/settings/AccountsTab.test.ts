@@ -8,7 +8,7 @@ vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus } from '../../lib/types';
-import { agent, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { agent, fakeBackend, project, resetApp, SETTINGS } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -149,6 +149,26 @@ describe('AccountsTab', () => {
     // Principal is then the only one active.
     expect(principal).toBeDisabled();
     expect(principal).toHaveAccessibleDescription('Il faut au moins un compte actif.');
+  });
+
+  it('keeps Principal to projects too, and says which projects no active account serves then', async () => {
+    app.projects = [project({ id: 'p1', name: 'demo' }), project({ id: 'p2', name: 'infra' }), project({ id: 'p3', name: 'web' })];
+    const pro = { ...PRO, active: false };
+    app.settings.accounts = [PRINCIPAL, pro];
+    const b = backend({ account_update: (a: { account: Account }) => [a.account, pro] });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(screen.getByRole('status').textContent).toBe('');
+    await userEvent.click(within(row('Principal')).getByRole('checkbox', { name: 'demo' }));
+    expect(b.called('account_update')[0].args.account).toEqual({ ...PRINCIPAL, projects: ['p1'] });
+    // Pro switched off: no account serves the others any more, and the tab says so.
+    const status = screen.getByRole('status');
+    await waitFor(() =>
+      expect(status).toHaveTextContent('Aucun compte actif ne sert « infra » et « web » : leurs agents et leurs tickets ne démarrent pas.'),
+    );
+    await userEvent.click(within(row('Principal')).getByRole('checkbox', { name: 'web' }));
+    await waitFor(() =>
+      expect(status).toHaveTextContent('Aucun compte actif ne sert « infra » : ses agents et ses tickets ne démarrent pas.'),
+    );
   });
 
   it('does not remove an account agents still run on', async () => {
