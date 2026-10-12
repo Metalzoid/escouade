@@ -90,6 +90,11 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
   - Lire `account.getQuota` (expérimental) et les `quotaSnapshots` d'`assistant.usage` sur un vrai compte : unités, `remainingPercentage`, `resetDate`, drapeau `token_based_billing`.
   - Les limites par session et par semaine (Pro et Pro+, depuis le 2026-04-20) ont-elles une API, ou seulement `/usage` ?
 - [ ] **Coût d'un tour** : la conversion des nano-AIU (`copilotUsage.totalNanoAiu`) en dollars, que la doc dit de vérifier avant de l'afficher.
+- [ ] **GitHub Enterprise (GHE)** : bien gérer le routage de Copilot CLI vers l'instance de l'entreprise, et pas seulement github.com.
+  - Les deux cas : GHE.com (données hébergées dans une région, hôte `<entreprise>.ghe.com`) et GitHub Enterprise Server (hôte de l'entreprise).
+  - Par compte Copilot d'Escouade : l'hôte à donner au CLI (variable d'environnement ou option, à relever dans le CLI et le SDK), la connexion sur cet hôte (`copilot` / `gh auth login --hostname`), et un `COPILOT_HOME` à part si un même poste a un compte github.com et un compte GHE.
+  - Ce qui doit suivre l'hôte : les appels du quota et des crédits, la liste des modèles (une entreprise en restreint souvent), les liens affichés, et le proxy d'entreprise (déjà dans les réglages d'Escouade).
+  - Essai réel avec un compte GHE (à fournir).
 - [ ] **Second compte** : un `COPILOT_HOME` à part et `copilot login`. La connexion va dans le trousseau du système : chaque dossier y a-t-il son entrée ? Autre piste : un jeton par session (`github_token` du SDK, `COPILOT_GITHUB_TOKEN`).
 - [ ] **MCP par process** : `--additional-mcp-config @<fichier privé>` (vaut pour la session, remplace une entrée du même nom) et `--disable-mcp-server escouade` ; ou `mcpServers` à la création de session.
 - [ ] **Reprise et copie** : `resume_session` ; la copie à un événement donné (`sessions().fork(id, to_event_id)`, expérimental) ; `history.truncate`.
