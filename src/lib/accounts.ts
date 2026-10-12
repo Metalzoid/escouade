@@ -27,24 +27,44 @@ export function agentsOn(id: string): number {
   return Object.values(app.agents).filter((a) => a.account === id && !a.archived).length;
 }
 
-/** The active account the project prefers (« Compte préféré »), if it names one: a switched off or unknown one is none. */
-function preferred(project: Pick<Project, 'account'> | undefined): Account | undefined {
+/** Whether a new agent of the project (none: of no project) may go to the account: it is not reserved to other projects. */
+export function serves(a: Pick<Account, 'projects'>, project: string | undefined): boolean {
+  const reserved = a.projects ?? [];
+  return !reserved.length || (!!project && reserved.includes(project));
+}
+
+/** The active accounts a new agent of the project may go to, in order (`accounts::for_project`). */
+export function usableFor(project: string | undefined): Account[] {
+  return app.settings.accounts.filter((a) => a.active && serves(a, project));
+}
+
+/** The active account the project prefers (« Compte préféré »), if it names one: a switched off, reserved or unknown one is none. */
+function preferred(project: (Pick<Project, 'account'> & { id?: string }) | undefined): Account | undefined {
   const id = project?.account;
-  return id ? app.settings.accounts.find((a) => a.id === id && a.active) : undefined;
+  return id ? usableFor(project?.id).find((a) => a.id === id) : undefined;
+}
+
+/** The project's tickets wait for accounts of their own: the one it prefers, or the set that reserved accounts make its own. */
+function ownAccounts(project: Pick<Project, 'id' | 'account'>): boolean {
+  const ids = (p: string | undefined) =>
+    usableFor(p)
+      .map((a) => a.id)
+      .join(' ');
+  return !!preferred(project) || ids(project.id) !== ids(undefined);
 }
 
 /**
  * The account a new agent of the project would go to now (« Automatique »): the one it prefers, else the current account
  * (the first active one under the pause threshold, as the backend says), else the first active one.
  */
-export function newAgentAccount(project: Pick<Project, 'account'> | undefined): Account | undefined {
-  const { accounts } = app.settings;
-  return preferred(project) ?? accounts.find((a) => a.id === app.usage.current) ?? accounts.find((a) => a.active);
+export function newAgentAccount(project: (Pick<Project, 'account'> & { id?: string }) | undefined): Account | undefined {
+  const usable = usableFor(project?.id);
+  return preferred(project) ?? usable.find((a) => a.id === app.usage.current) ?? usable[0];
 }
 
 /** Why no ticket of the project starts: the pause of its preferred account alone, else of the accounts new agents may go to. */
 export function pauseOf(project: Pick<Project, 'id' | 'account'>): AutopilotPause | null {
-  return preferred(project) ? (app.projectPauses[project.id] ?? null) : app.autopilotPause;
+  return ownAccounts(project) ? (app.projectPauses[project.id] ?? null) : app.autopilotPause;
 }
 
 /** The agent's account as the backend takes it: one the window does not know is Principal's. */
@@ -56,9 +76,9 @@ function accountOf(a: Pick<Agent, 'account'>): string {
  * When the first agent waiting for its quota resumes, if every account a ticket of the project could start on has one:
  * nothing starts before. While one has none, a ticket starts on it.
  */
-export function quotaOf(project: Pick<Project, 'account'>): number | null {
+export function quotaOf(project: Pick<Project, 'account'> & { id?: string }): number | null {
   const pick = preferred(project);
-  const ids = pick ? [pick.id] : app.settings.accounts.filter((a) => a.active).map((a) => a.id);
+  const ids = pick ? [pick.id] : usableFor(project?.id).map((a) => a.id);
   const agents = Object.values(app.agents);
   const times = ids.map((id) => quotaUntil(agents.filter((a) => accountOf(a) === id)));
   return ids.length && times.every((x) => x !== null) ? Math.min(...(times as number[])) : null;
@@ -69,11 +89,11 @@ export function quotaOf(project: Pick<Project, 'account'>): number | null {
  * the active ones other than its own that are signed in and under « Pause au-delà du quota ». One past the threshold is left
  * out: the agent would meet the limit again there.
  */
-export function resumeTargets(agent: Pick<Agent, 'account'>): Account[] {
+export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string }): Account[] {
   const own = accountOf(agent);
   const threshold = app.settings.quotaPause;
   return app.settings.accounts.filter((a) => {
-    if (!a.active || a.id === own) return false;
+    if (!a.active || a.id === own || !serves(a, agent.projectId)) return false;
     const read = app.usage.accounts.find((u) => u.id === a.id);
     // An account not read yet counts as signed in, as the backend has it.
     if (read && !read.connected) return false;

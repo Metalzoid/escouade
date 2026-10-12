@@ -3524,7 +3524,7 @@ impl<R: Runtime> Core<R> {
         let id = match (of_agent, project) {
             (Some(id), _) => id,
             (None, Some(project)) => self.account_for_new(project),
-            (None, None) => self.pick_account(settings, None),
+            (None, None) => self.pick_account(&accounts::for_project(settings, None), None),
         };
         accounts::get(settings, &id)
     }

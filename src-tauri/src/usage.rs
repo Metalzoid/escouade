@@ -436,6 +436,8 @@ impl UsageSnapshot {
             a.reason = a.problem.map(|p| reason(p, lang));
         }
         let threshold = board::quota_threshold(settings.quota_pause);
+        // The accounts reserved to some projects are not where any new agent goes.
+        let settings = &accounts::for_project(settings, None);
         self.current = accounts::pick(settings, &self.accounts, threshold, None, now);
         if let Some(current) = self.account(&self.current).cloned() {
             self.five_hour = current.five_hour;

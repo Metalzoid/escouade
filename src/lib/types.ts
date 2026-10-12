@@ -56,6 +56,8 @@ export interface Account {
   claudePath: string;
   /** New agents may go to it. */
   active: boolean;
+  /** « Réservé aux projets »: the only projects whose new agents and tickets may go to it; empty: every project. Never Principal's. */
+  projects?: string[];
 }
 
 /** Whether a Claude account is signed in to claude.ai, as its tab shows it. */

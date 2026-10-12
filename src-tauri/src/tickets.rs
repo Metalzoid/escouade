@@ -702,15 +702,15 @@ impl<R: Runtime> Core<R> {
     /// (`board::autopilot_pause`): the quota windows last read, the pause after a usage limit,
     /// what "Reprendre maintenant" lifted, for every active account.
     pub(crate) fn autopilot_pause(&self) -> Option<AutopilotPause> {
-        self.pause_for(None)
+        let settings = accounts::for_project(&self.settings.read(), None);
+        self.pause_for(&settings, None)
     }
 
     /// `autopilot_pause` for the projects that go to the account `preferred` (any, when none or
-    /// not an active one).
-    fn pause_for(&self, preferred: Option<&str>) -> Option<AutopilotPause> {
-        let settings = self.settings.read().clone();
+    /// not an active one), with `settings` as a project sees them (`accounts::for_project`).
+    fn pause_for(&self, settings: &Settings, preferred: Option<&str>) -> Option<AutopilotPause> {
         let threshold = board::quota_threshold(settings.quota_pause);
-        let accounts = accounts::candidates(&settings, preferred);
+        let accounts = accounts::candidates(settings, preferred);
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
@@ -724,16 +724,21 @@ impl<R: Runtime> Core<R> {
         )
     }
 
-    /// Why the tickets of the projects that prefer an account do not start, by project: each
-    /// waits for its own account.
+    /// Why the tickets of the projects that prefer an account, or that have accounts reserved to
+    /// them, do not start, by project: each waits for its own accounts.
     pub(crate) fn project_pauses(&self) -> BTreeMap<String, AutopilotPause> {
-        let settings = self.settings.read().clone();
+        let all = self.settings.read().clone();
+        let any = accounts::candidates(&accounts::for_project(&all, None), None);
         let projects = self.projects.read().clone();
         projects
             .iter()
             .filter_map(|p| {
-                let preferred = accounts::preferred(&settings, &p.account)?;
-                Some((p.id.clone(), self.pause_for(Some(preferred))?))
+                let settings = accounts::for_project(&all, Some(&p.id));
+                let preferred = accounts::preferred(&settings, &p.account);
+                if preferred.is_none() && accounts::candidates(&settings, None) == any {
+                    return None;
+                }
+                Some((p.id.clone(), self.pause_for(&settings, preferred)?))
             })
             .collect()
     }
@@ -741,7 +746,7 @@ impl<R: Runtime> Core<R> {
     /// The account a new agent of the project goes to (a ticket's or not): the one the project
     /// prefers when it is active, else the first usable one, in the order of the accounts.
     pub(crate) fn account_for_new(&self, project_id: &str) -> String {
-        let settings = self.settings.read().clone();
+        let settings = accounts::for_project(&self.settings.read(), Some(project_id));
         let preferred = self
             .project(project_id)
             .ok()
@@ -784,7 +789,7 @@ impl<R: Runtime> Core<R> {
     /// (`board::project_hold`): every account it may go to is held, and then until the first of
     /// them is free again. The tools that act refuse by it.
     pub(crate) fn project_hold(&self, project_id: &str) -> Option<board::Held> {
-        let settings = self.settings.read().clone();
+        let settings = accounts::for_project(&self.settings.read(), Some(project_id));
         let preferred = self
             .project(project_id)
             .ok()
@@ -1286,6 +1291,7 @@ impl<R: Runtime> Core<R> {
                 accounts::get(&settings, &rt.meta.account).id,
             )
         };
+        let settings = accounts::for_project(&settings, Some(&project));
         let preferred = self
             .project(&project)
             .ok()

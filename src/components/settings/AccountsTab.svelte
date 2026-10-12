@@ -60,6 +60,13 @@
     return !!list;
   }
 
+  /** The project ticked or unticked in « Réservé aux projets ». */
+  function reserve(a: Account, project: string, on: boolean) {
+    const now = a.projects ?? [];
+    const projects = on ? [...now, project] : now.filter((p) => p !== project);
+    void save({ ...plain(a), projects });
+  }
+
   /** A field left: what it says saved when it changed, else (or refused) as it was. */
   async function commit(a: Account, input: HTMLInputElement, field: 'name' | 'claudePath') {
     const shown = field === 'name' ? accountName(a) : a.claudePath;
@@ -170,6 +177,19 @@
             <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
           {/if}
         </div>
+        {#if a.id !== PRINCIPAL && app.projects.length}
+          {@const reserved = a.projects ?? []}
+          <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
+            <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
+            {#each app.projects as p (p.id)}
+              <label class="chip">
+                <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
+                {p.name}
+              </label>
+            {/each}
+            {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+          </div>
+        {/if}
         {#if late}<p class="late">{late}</p>{/if}
         {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
       </li>
@@ -206,6 +226,18 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
+  }
+  .wrap {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
   }
   .name {
     width: 200px;

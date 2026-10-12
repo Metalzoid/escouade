@@ -5,7 +5,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { ACCEPT, MAX_TOTAL, readAttachment, sizeLabel, type DraftAttachment } from '../lib/attachments';
-  import { accountName, newAgentAccount } from '../lib/accounts';
+  import { accountName, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, setDraft } from '../lib/drafts';
@@ -76,7 +76,7 @@
           },
           // The agent's own, even switched off since: it is where it is.
           ...accounts
-            .filter((a) => a.active || a.id === agent.account)
+            .filter((a) => (a.active && serves(a, agent.projectId)) || a.id === agent.account)
             .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.composer.inactive', { name: accountName(a) }) })),
         ],
   );

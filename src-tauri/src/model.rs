@@ -83,6 +83,17 @@ pub struct Account {
     pub claude_path: String,
     /// New agents may go to it.
     pub active: bool,
+    /// « Réservé aux projets »: the ids of the only projects whose new agents and tickets may go
+    /// to it (a client's account kept to that client's projects); empty: every project. Never
+    /// Principal's, which every project may always fall back on (`accounts::normalize`).
+    pub projects: Vec<String>,
+}
+
+impl Account {
+    /// Whether a new agent of `project` (none: one of no project) may go to it.
+    pub fn serves(&self, project: Option<&str>) -> bool {
+        self.projects.is_empty() || project.is_some_and(|p| self.projects.iter().any(|x| x == p))
+    }
 }
 
 impl Default for Account {
@@ -93,6 +104,7 @@ impl Default for Account {
             config_dir: String::new(),
             claude_path: String::new(),
             active: true,
+            projects: Vec::new(),
         }
     }
 }

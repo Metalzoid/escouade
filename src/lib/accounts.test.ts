@@ -30,6 +30,17 @@ describe('the accounts of a project', () => {
     expect(newAgentAccount(project())?.id).toBe('principal');
   });
 
+  it('never goes to an account reserved to other projects, and a project with accounts of its own waits for them', () => {
+    app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['client'] }, TEAM];
+    app.usage.current = 'principal';
+    expect(newAgentAccount(project({ id: 'other', account: 'pro' }))?.id).toBe('principal');
+    expect(newAgentAccount(project({ id: 'client', account: 'pro' }))?.id).toBe('pro');
+    app.autopilotPause = pause({ until: 1 });
+    app.projectPauses = { client: pause({ until: 2 }) };
+    expect(pauseOf(project({ id: 'client' }))?.until).toBe(2);
+    expect(pauseOf(project({ id: 'other' }))?.until).toBe(1);
+  });
+
   it('is paused by the pause of any account, or by the one of the project that prefers an account', () => {
     app.autopilotPause = pause({ until: 1 });
     app.projectPauses = { p2: pause({ until: 2, accounts: ['pro'] }) };

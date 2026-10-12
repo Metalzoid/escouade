@@ -5220,6 +5220,7 @@ async fn settings_and_agents_saved_before_the_accounts_load_on_principal() {
             config_dir: String::new(),
             claude_path: String::new(),
             active: true,
+            projects: Vec::new(),
         }]
     );
     assert_eq!(core.agent("a1").unwrap().lock().meta.account, "principal");
@@ -5782,6 +5783,7 @@ async fn an_account_made_in_its_tab_gets_a_folder_of_its_own_and_comes_last() {
             config_dir: dir.to_string_lossy().into(),
             claude_path: String::new(),
             active: true,
+            projects: Vec::new(),
         }
     );
     assert!(dir.is_dir());

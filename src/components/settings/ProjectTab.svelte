@@ -2,7 +2,7 @@
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
-  import { accountName } from '../../lib/accounts';
+  import { accountName, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -25,7 +25,7 @@
   const ACCOUNTS = $derived([
     { value: '', label: t('accounts.project.auto'), title: t('accounts.project.autoTitle') },
     ...app.settings.accounts
-      .filter((a) => a.active || a.id === draft.account)
+      .filter((a) => (a.active && serves(a, project.id)) || a.id === draft.account)
       .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.project.inactive', { name: accountName(a) }) })),
   ]);
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */

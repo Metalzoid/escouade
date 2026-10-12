@@ -21,6 +21,10 @@ export default {
     signInAgain: 'Se reconnecter…',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
+    reserved: 'Réservé aux projets',
+    reservedAll: 'Tous les projets',
+    reservedHint:
+      'Coche des projets pour garder ce compte à eux seuls (les projets d’un client, par exemple) : les autres n’y partent jamais.',
     stillUsed: { one: 'Le compte sert encore à {count} agent.', other: 'Le compte sert encore à {count} agents.' },
     state: {
       checking: 'Vérification…',

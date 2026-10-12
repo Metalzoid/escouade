@@ -19,6 +19,9 @@ export default defineZone('accounts', {
     signInAgain: 'Sign in again…',
     remove: 'Remove',
     add: 'Add an account…',
+    reserved: 'Reserved to projects',
+    reservedAll: 'Every project',
+    reservedHint: 'Tick projects to keep this account to them alone (a client’s projects, say): the others never start on it.',
     stillUsed: { one: 'The account is still used by {count} agent.', other: 'The account is still used by {count} agents.' },
     state: {
       checking: 'Checking…',

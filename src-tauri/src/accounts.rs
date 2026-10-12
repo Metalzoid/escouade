@@ -59,6 +59,7 @@ pub fn principal() -> Account {
         config_dir: String::new(),
         claude_path: String::new(),
         active: true,
+        projects: Vec::new(),
     }
 }
 
@@ -107,6 +108,8 @@ pub fn normalize(settings: &mut Settings) {
     let main = &mut accounts[at];
     // Whatever a hand-edited file says: a folder would sign the user out of it.
     main.config_dir.clear();
+    // Every project may fall back on it: none is ever left with no account.
+    main.projects.clear();
     if main.name.trim().is_empty() {
         main.name = principal().name;
     }
@@ -190,6 +193,17 @@ pub fn pick_where(
         .find(|a| usable(&a.id))
         .or(first)
         .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
+}
+
+/// The settings as a new agent of `project` (none: one of no project) sees them: the accounts
+/// reserved to other projects (« Réservé aux projets ») taken as switched off. What `pick`,
+/// `preferred` and `candidates` are given for a project.
+pub fn for_project(settings: &Settings, project: Option<&str>) -> Settings {
+    let mut s = settings.clone();
+    for a in s.accounts.iter_mut().filter(|a| !a.serves(project)) {
+        a.active = false;
+    }
+    s
 }
 
 /// The account a project prefers (`Project::account`), if it is one the settings have and it is
@@ -460,6 +474,7 @@ pub fn create(
         config_dir: dir.to_string_lossy().into_owned(),
         claude_path: String::new(),
         active: true,
+        projects: Vec::new(),
     })
 }
 
@@ -726,6 +741,15 @@ struct Moved {
     resume_at: Option<i64>,
 }
 
+/// Refused: the account is reserved to other projects (« Réservé aux projets »).
+fn reserved(account: &Account) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "Le compte « {name} » est réservé à d’autres projets.",
+        "The account “{name}” is reserved to other projects.",
+        name = name_in(crate::i18n::ui(), account)
+    ))
+}
+
 /// Refused: the account is switched off, nothing goes to it.
 fn switched_off(account: &Account) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -850,6 +874,20 @@ impl<R: Runtime> Core<R> {
             a.name = name.to_string();
             a.claude_path = account.claude_path.trim().to_string();
             a.active = account.active;
+            // Principal stays every project's (`normalize`).
+            a.projects.clear();
+            if a.id != PRINCIPAL {
+                for p in account
+                    .projects
+                    .iter()
+                    .map(|p| p.trim())
+                    .filter(|p| !p.is_empty())
+                {
+                    if !a.projects.iter().any(|x| x == p) {
+                        a.projects.push(p.to_string());
+                    }
+                }
+            }
             Ok(())
         })?;
         Ok(accounts)
@@ -957,6 +995,10 @@ impl<R: Runtime> Core<R> {
                 let found = found.ok_or_else(|| unknown(wanted))?;
                 if !found.active {
                     return Err(switched_off(found));
+                }
+                let project = h.lock().meta.project_id.clone();
+                if !found.serves(Some(&project)) {
+                    return Err(reserved(found));
                 }
                 found.id.clone()
             }
@@ -1076,6 +1118,9 @@ impl<R: Runtime> Core<R> {
             .ok_or_else(|| unknown(target))?;
         if !to.active {
             return Err(switched_off(to));
+        }
+        if !to.serves(Some(&h.lock().meta.project_id)) {
+            return Err(reserved(to));
         }
         let (from, session, stopped) = {
             let mut rt = h.lock();
@@ -1210,6 +1255,7 @@ mod tests {
             config_dir: dir.into(),
             claude_path: String::new(),
             active: true,
+            projects: Vec::new(),
         }
     }
 
@@ -1229,6 +1275,7 @@ mod tests {
                 config_dir: String::new(),
                 claude_path: String::new(),
                 active: true,
+                projects: Vec::new(),
             }]
         );
         assert_eq!(principal(), s.accounts[0]);
@@ -1357,7 +1404,7 @@ mod tests {
         assert_eq!(
             v,
             serde_json::json!({ "id": "pro", "name": "PRO", "configDir": "/a",
-                                "claudePath": "", "active": true })
+                                "claudePath": "", "active": true, "projects": [] })
         );
     }
 
@@ -1519,6 +1566,7 @@ mod tests {
                 config_dir: root.join("equipe-pro").to_string_lossy().into(),
                 claude_path: String::new(),
                 active: true,
+                projects: Vec::new(),
             }
         );
         assert!(Path::new(&made.config_dir).is_absolute());
@@ -1917,6 +1965,31 @@ mod tests {
         // An account switched off cannot be asked for either.
         deactivate(&mut s, "pro");
         assert_eq!(pick(&s, &first_over, 95, Some("pro"), NOW), "team");
+    }
+
+    #[test]
+    fn an_account_reserved_to_projects_goes_to_those_alone() {
+        let mut s = three();
+        s.accounts[1].projects = vec!["client".into()];
+        // Principal is every project's, whatever a file says.
+        s.accounts[0].projects = vec!["client".into()];
+        normalize(&mut s);
+        assert!(s.accounts[0].projects.is_empty());
+        let client = for_project(&s, Some("client"));
+        assert_eq!(candidates(&client, None), ["principal", "pro", "team"]);
+        assert_eq!(preferred(&client, "pro"), Some("pro"));
+        let other = for_project(&s, Some("other"));
+        assert_eq!(candidates(&other, None), ["principal", "team"]);
+        assert_eq!(preferred(&other, "pro"), None);
+        assert_eq!(
+            candidates(&for_project(&s, None), None),
+            ["principal", "team"]
+        );
+        // Principal over the threshold: the other project goes to Team, never to Pro.
+        let end = NOW + 60_000;
+        let over = [used("principal", 100.0, end)];
+        assert_eq!(pick(&other, &over, 95, None, NOW), "team");
+        assert_eq!(pick(&client, &over, 95, None, NOW), "pro");
     }
 
     #[test]
