@@ -11,6 +11,7 @@ Fait pour la 1.8 :
   - [ ] Le jour où Codex ou Copilot arrivent : leur propre interface en vue terminal, sur le même modèle (hooks ou journal de session).
 
 Aussi pour la 1.8 :
+- [ ] **Blocage intermittent de la CI sous macOS** : un test qui crée un agent dans un worktree git ne finit parfois jamais, et le job est coupé au bout de 45 minutes. Ce n'est jamais le même test (`core_tests::the_project_diff_covers_the_checkout_and_each_agents_worktree`, `core_tests::an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_env_files`), seulement sous macOS, depuis le 10 octobre au moins (runs de 3ea4859, 24dfda6, 9d07e83, 170e1c3, 140db3e, ba58456). Piste : faire échouer ces tests au bout de 60 s en relevant la pile des threads et les process git en cours, pour voir où ça coince.
 - [x] **Intégration Linear** (2026-10-12), à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
   - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;
   - lien d'un projet vers une équipe Linear, et éventuellement un projet ou un cycle ;
