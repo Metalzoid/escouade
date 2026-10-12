@@ -239,7 +239,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     const r = text.roadmap;
     expect(html).toContain(`id="${text.anchors.roadmap}"`);
     expect(tags(html, 'a').some((a) => a.href === `#${text.anchors.roadmap}`)).toBe(true);
-    expect(r.items).toHaveLength(3);
+    expect(r.items).toHaveLength(4);
     for (const s of [r.title, fmt(r.next, { version: NEXT }), ...r.items.flatMap((i) => [i.title, i.text])]) {
       expect(html, s).toContain(escapeText(s));
     }

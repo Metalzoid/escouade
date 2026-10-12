@@ -7,7 +7,7 @@ export const fr: Catalog = {
   meta: {
     title: 'Escouade — le poste de pilotage de tes agents Claude Code',
     description:
-      'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows et macOS gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre, et leur confier des tickets, même ceux de Jira, Trello ou GitHub, qu’ils mènent jusqu’au but.',
+      'Escouade, le poste de pilotage de tes agents Claude Code : une app Windows, macOS et Linux gratuite et open source pour piloter plusieurs agents en parallèle, dans une seule fenêtre, et leur confier des tickets, même ceux de Jira, Trello ou GitHub, qu’ils mènent jusqu’au but.',
     locale: 'fr_FR',
   },
 
@@ -29,9 +29,9 @@ export const fr: Catalog = {
     line1: 'Une escouade de Claude.',
     line2: 'Une seule fenêtre.',
     lede: 'Toutes tes sessions Claude Code dans une seule fenêtre : autant d’agents que tu veux, en parallèle, et un signal dès que l’un d’eux a besoin de toi.',
-    download: 'Télécharger pour Windows et macOS',
+    download: 'Télécharger pour Windows, macOS et Linux',
     github: 'Voir sur GitHub',
-    meta: 'Version {version} · Windows 10 et 11, macOS 11 et plus · Gratuit et open source (MIT)',
+    meta: 'Version {version} · Windows 10 et 11, macOS 11 et plus, Linux · Gratuit et open source (MIT)',
     video: 'Voir la vidéo',
   },
 
@@ -134,7 +134,7 @@ export const fr: Catalog = {
       },
       {
         title: 'Installe Escouade',
-        text: 'Le .exe pour Windows 10 ou 11 (avec Git for Windows), le .dmg pour macOS 11 ou plus récent, sur Mac Apple Silicon ou Intel.',
+        text: 'Le .exe pour Windows 10 ou 11 (avec Git for Windows), le .dmg pour macOS 11 ou plus récent, sur Mac Apple Silicon ou Intel, l’AppImage ou le .deb pour Linux (x86-64).',
         link: { label: 'Dernière version', href: DOWNLOAD },
       },
       {
@@ -161,6 +161,10 @@ export const fr: Catalog = {
         title: 'Les quotas de chacun',
         text: 'Les fenêtres de quota de Codex et les crédits du mois de Copilot dans la barre d’état, et des statistiques par moteur.',
       },
+      {
+        title: 'La vue Claude Code',
+        text: 'Un bouton fait tourner un agent dans l’interface de Claude Code elle-même, dans un terminal, avec ses commandes et ses raccourcis. Escouade le suit toujours : notifications, coût, plan.',
+      },
     ],
     plan: 'Le plan détaillé',
     changelog: 'Ce qui est déjà sorti',
@@ -179,11 +183,11 @@ export const fr: Catalog = {
       },
       {
         q: 'Et mes jetons Jira, Trello ou GitHub ?',
-        a: 'Ils restent sur ta machine, dans le trousseau du système (Gestionnaire d’identification Windows, Trousseau macOS), et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
+        a: 'Ils restent sur ta machine : dans le trousseau du système (Gestionnaire d’identification Windows, Trousseau macOS), ou sous Linux dans le fichier des intégrations de ~/.escouade/, et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
       },
       {
         q: 'Ça marche sur Mac ou Linux ?',
-        a: 'Sur Mac, oui : macOS 11 ou plus récent, Apple Silicon comme Intel. Linux n’est pas encore pris en charge.',
+        a: 'Oui. Sur Mac : macOS 11 ou plus récent, Apple Silicon comme Intel. Sous Linux (x86-64) : l’AppImage, qui se met à jour toute seule, ou le .deb pour Debian et Ubuntu.',
       },
       {
         q: 'Le pilote auto peut-il épuiser mon quota ?',

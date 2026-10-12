@@ -1,6 +1,6 @@
 # Escouade
 
-Le poste de pilotage de tes agents [Claude Code](https://claude.com/claude-code) : une application Windows et macOS pour piloter plusieurs instances de Claude Code en local, avec un onglet par projet, autant d'agents que nécessaire, des terminaux intégrés, des notifications quand Claude attend une réponse, les quotas de ton abonnement et des statistiques de consommation. Elle parle français et anglais.
+Le poste de pilotage de tes agents [Claude Code](https://claude.com/claude-code) : une application Windows, macOS et Linux pour piloter plusieurs instances de Claude Code en local, avec un onglet par projet, autant d'agents que nécessaire, des terminaux intégrés, des notifications quand Claude attend une réponse, les quotas de ton abonnement et des statistiques de consommation. Elle parle français et anglais.
 
 Site : [escouade.gagnaire.dev](https://escouade.gagnaire.dev/)
 
@@ -41,9 +41,9 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 
 ## Prérequis
 
-- Windows 10 ou 11 (WebView2, présent par défaut sur Windows 11), ou macOS 11 (Big Sur) ou plus récent, sur Mac Apple Silicon ou Intel.
+- Windows 10 ou 11 (WebView2, présent par défaut sur Windows 11), macOS 11 (Big Sur) ou plus récent, sur Mac Apple Silicon ou Intel, ou Linux x86-64 avec une glibc 2.35 ou plus récente (Ubuntu 22.04, Debian 12, Fedora 36 et suivantes), WebKitGTK 4.1 compris.
 - [Claude Code](https://code.claude.com/docs/fr/overview) installé et connecté (`claude` dans le `PATH`, ou chemin indiqué dans les réglages).
-- Git : Git for Windows, ou sous macOS celui des outils en ligne de commande Xcode (`xcode-select --install`) ou de Homebrew.
+- Git : Git for Windows, sous macOS celui des outils en ligne de commande Xcode (`xcode-select --install`) ou de Homebrew, sous Linux celui de la distribution.
 - Optionnel sous Windows : PowerShell 7 (à défaut, les terminaux utilisent Windows PowerShell), WSL.
 
 Sous macOS, une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH` du terminal : Escouade reprend celui de ton shell de connexion (`$SHELL -ilc`) au démarrage, et cherche aussi `claude` dans `~/.local/bin`, `/opt/homebrew/bin` et `/usr/local/bin`.
@@ -53,6 +53,8 @@ Sous macOS, une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH`
 **Windows** : télécharge l'installeur `.exe` de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest).
 
 **macOS** : télécharge le `.dmg` (universel, Apple Silicon et Intel) de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), ouvre-le et glisse Escouade dans Applications. Depuis la 1.5.4, l'app est signée avec un certificat Apple Developer ID et notarisée par Apple : macOS l'ouvre sans demander d'autorisation.
+
+**Linux** : télécharge l'`AppImage` de la [dernière release](https://github.com/guillaume-gagnaire/escouade/releases/latest), rends-la exécutable (`chmod +x Escouade_*.AppImage`) et lance-la ; c'est elle que la mise à jour intégrée remplace. Le `.deb` (Debian, Ubuntu) s'installe avec `sudo apt install ./Escouade_*_amd64.deb`. Sous Linux, les jetons des intégrations restent dans `~/.escouade/integrations.json` plutôt que dans un trousseau.
 
 Les versions suivantes s'installent depuis l'application. Jusqu'à la 1.5.4, la barre de statut propose « Mise à jour disponible » ; à partir de la 1.6, la mise à jour se télécharge seule, la barre de statut affiche « Mise à jour X prête · Redémarrer », et l'app redémarre d'elle-même quand elle est au repos (réglage « Installer les mises à jour automatiquement », dans « À propos »).
 

@@ -6,7 +6,7 @@ export const en: Catalog = {
   meta: {
     title: 'Escouade — the cockpit for your Claude Code agents',
     description:
-      'Escouade, the cockpit for your Claude Code agents: a free, open source Windows and macOS app to run several agents in parallel, in a single window, and hand them tickets, even from Jira, Trello or GitHub, that they carry through to the end.',
+      'Escouade, the cockpit for your Claude Code agents: a free, open source Windows, macOS and Linux app to run several agents in parallel, in a single window, and hand them tickets, even from Jira, Trello or GitHub, that they carry through to the end.',
     locale: 'en_US',
   },
 
@@ -28,9 +28,9 @@ export const en: Catalog = {
     line1: 'A squad of Claudes.',
     line2: 'A single window.',
     lede: 'All your Claude Code sessions in a single window: as many agents as you want, in parallel, and a signal as soon as one of them needs you.',
-    download: 'Download for Windows and macOS',
+    download: 'Download for Windows, macOS and Linux',
     github: 'View on GitHub',
-    meta: 'Version {version} · Windows 10 and 11, macOS 11 or later · Free and open source (MIT)',
+    meta: 'Version {version} · Windows 10 and 11, macOS 11 or later, Linux · Free and open source (MIT)',
     video: 'Watch the video',
   },
 
@@ -130,7 +130,7 @@ export const en: Catalog = {
       },
       {
         title: 'Install Escouade',
-        text: 'The .exe for Windows 10 or 11 (with Git for Windows), the .dmg for macOS 11 or later, on an Apple Silicon or Intel Mac.',
+        text: 'The .exe for Windows 10 or 11 (with Git for Windows), the .dmg for macOS 11 or later, on an Apple Silicon or Intel Mac, the AppImage or the .deb for Linux (x86-64).',
         link: { label: 'Latest release', href: DOWNLOAD },
       },
       {
@@ -157,6 +157,10 @@ export const en: Catalog = {
         title: 'Each engine’s quotas',
         text: 'Codex’s quota windows and Copilot’s monthly credits in the status bar, and stats per engine.',
       },
+      {
+        title: 'The Claude Code view',
+        text: 'A button runs an agent in Claude Code’s own interface, in a terminal, with its commands and shortcuts. Escouade still follows it: notifications, cost, plan.',
+      },
     ],
     plan: 'The detailed plan (in French)',
     changelog: 'What is already out',
@@ -175,11 +179,11 @@ export const en: Catalog = {
       },
       {
         q: 'What about my Jira, Trello or GitHub tokens?',
-        a: 'They stay on your machine, in the system keychain (Windows Credential Manager, macOS Keychain), and are only used for calls to those services. For GitHub, Escouade can also reuse the token from gh.',
+        a: 'They stay on your machine: in the system keychain (Windows Credential Manager, macOS Keychain), or on Linux in the integrations file of ~/.escouade/, and are only used for calls to those services. For GitHub, Escouade can also reuse the token from gh.',
       },
       {
         q: 'Does it work on Mac or Linux?',
-        a: 'On Mac, yes: macOS 11 or later, Apple Silicon and Intel alike. Linux isn’t supported yet.',
+        a: 'Yes. On Mac: macOS 11 or later, Apple Silicon and Intel alike. On Linux (x86-64): the AppImage, which updates itself, or the .deb for Debian and Ubuntu.',
       },
       {
         q: 'Can autopilot use up my quota?',

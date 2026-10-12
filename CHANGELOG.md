@@ -6,6 +6,8 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ### Ajouts
 
+- Escouade existe pour Linux (x86-64) : une `AppImage`, que la mise à jour intégrée remplace comme sous Windows et macOS, et un `.deb` pour Debian et Ubuntu, sur toute distribution d'une glibc 2.35 ou plus récente (Ubuntu 22.04, Debian 12, Fedora 36…). Les jetons des intégrations (Jira, Trello, GitHub) y restent dans le fichier des intégrations, faute de trousseau pris en charge.
+
 - « Vue Claude Code » : un bouton dans l'en-tête d'un agent le fait tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade, et « Vue Escouade » l'y ramène. La session continue d'une vue à l'autre. Tout ce que propose l'interface de Claude Code y est : commandes `/`, raccourcis, dialogues, `/model`, Maj+Tab.
 - Escouade suit toujours un agent en vue Claude Code : la pastille et la notification quand il attend une autorisation ou une réponse, puis quand il termine ; sa conversation, sa recherche (`Ctrl+K`), son bandeau « Plan », ses statistiques et son coût, estimé aux tarifs publics (l'interface ne donne pas le coût de chaque tour).
 - Un message envoyé par le serveur MCP à un agent en vue Claude Code est tapé dans son interface ; une interruption depuis Escouade y devient Échap.

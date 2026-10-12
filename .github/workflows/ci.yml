@@ -97,6 +97,61 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  linux:
+    name: Linux (lint, tests and packages)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: System libraries (WebKitGTK, tray, AppImage)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (svelte-check)
+        run: npm run check
+
+      - name: Frontend tests (Vitest)
+        run: npm test
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests (unit + integration with the fake claude CLI)
+        working-directory: src-tauri
+        run: cargo test
+
+      # Without the updater key: only checks that the AppImage and the .deb build.
+      - name: Build the packages
+        run: npx tauri build --debug --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: escouade-linux-debug
+          path: |
+            src-tauri/target/debug/bundle/appimage/*.AppImage
+            src-tauri/target/debug/bundle/deb/*.deb
+          retention-days: 7
+
   macos:
     name: macOS (lint, tests and app bundle)
     runs-on: macos-latest
