@@ -10,6 +10,15 @@ Fait pour la 1.8 :
   - [ ] À essayer sous Windows (ConPTY, `claude.exe` natif) et macOS avec un vrai compte : collage d'un message, Échap, `/clear`, une compaction, un sous-agent.
   - [ ] Le jour où Codex ou Copilot arrivent : leur propre interface en vue terminal, sur le même modèle (hooks ou journal de session).
 
+Aussi pour la 1.8 :
+- [ ] **Intégration Linear**, à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
+  - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;
+  - lien d'un projet vers une équipe Linear, et éventuellement un projet ou un cycle ;
+  - import des issues dans le Kanban, avec leurs critères d'acceptation extraits de la description (`text.rs`), import par étiquette compris (« claude-ready ») ;
+  - suivi du statut (les états du workflow de l'équipe : « In Progress », « In Review », « Done ») et commentaires au passage « À tester » puis « Terminé » (`sync.rs`) ;
+  - API GraphQL (`https://api.linear.app/graphql`) : un faux serveur pour les tests, comme `fake.rs`, et le réglage de proxy appliqué ;
+  - interface : Linear dans Réglages › Intégrations et dans « Importer des tickets », textes fr et en ; site, README et journal.
+
 ## Ampleur (estimation du 2026-10-11)
 
 Repère : la 1.7 (cinq chantiers) a fait 266 commits et environ 78 000 lignes ajoutées, tests compris.
