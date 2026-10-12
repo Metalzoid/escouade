@@ -3,7 +3,7 @@
 //! transcript, which the core reads as it comes.
 
 use crate::core::AgentOptions;
-use crate::core_tests::{agent_on, harness, second_account, Harness};
+use crate::core_tests::{agent_on, harness, plain_text, second_account, Harness};
 use crate::model::*;
 use std::sync::Arc;
 
@@ -14,16 +14,31 @@ async fn agent_in_tui(h: &Harness) -> String {
     second_account(h);
     let id = agent_on(h, &p, "pro").await.id;
     h.core.set_agent_view(&id, true).await.unwrap();
-    let screen = Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let screen = Arc::new(parking_lot::Mutex::new(String::new()));
     let sink = screen.clone();
-    h.core
-        .open_agent_terminal(&id, (100, 30), move |b| sink.lock().extend(b))
+    let info = h
+        .core
+        .open_agent_terminal(&id, (100, 30), move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
         .await
         .unwrap();
-    h.wait("the interface's first screen", |_| {
-        String::from_utf8_lossy(&screen.lock()).contains("fake-claude-tui")
-    })
-    .await;
+    let start = std::time::Instant::now();
+    let mut answered = false;
+    while !plain_text(&screen.lock()).contains("fake-claude-tui") {
+        // As xterm.js does in the window: the pseudo-console (Windows) asks where the cursor is
+        // before it runs anything.
+        if !answered && screen.lock().contains("\x1b[6n") {
+            h.core.pty.write(&info.id, b"\x1b[1;1R").unwrap();
+            answered = true;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(60),
+            "the interface's first screen not in {:?}",
+            screen.lock()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
     id
 }
 
@@ -218,6 +233,8 @@ async fn a_hook_without_the_token_of_an_interface_is_refused() {
         req.push_str("\r\n{}");
         use std::io::{Read, Write};
         let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        s.set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
         s.write_all(req.as_bytes()).unwrap();
         let mut out = String::new();
         let _ = s.read_to_string(&mut out);

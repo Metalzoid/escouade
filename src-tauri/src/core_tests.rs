@@ -6059,7 +6059,7 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
 
 /// What a terminal printed, without its escape sequences nor its line ends (a pseudo-console
 /// paints its screen with them).
-fn plain_text(out: &str) -> String {
+pub(crate) fn plain_text(out: &str) -> String {
     let mut text = String::new();
     let mut chars = out.chars().peekable();
     while let Some(c) = chars.next() {
