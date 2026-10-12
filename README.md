@@ -39,33 +39,6 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 - **Proxy réseau** configurable (processus Claude, quotas, intégrations, mises à jour, et optionnellement terminaux).
 - **Mises à jour silencieuses** via les releases GitHub : téléchargées en arrière-plan, installées sans fenêtre d'installeur, au redémarrage que tu choisis, ou d'elles-mêmes quand aucun agent ne travaille et que tout est enregistré.
 
-## Téléchargements
-
-<!-- stats:start -->
-
-Relevé chaque jour par [une tâche planifiée](.github/workflows/stats.yml) d'après les compteurs de GitHub (dernier relevé : 2026-10-12 ; historique dans [stats/downloads.csv](stats/downloads.csv)).
-
-- **70** téléchargements d'installeurs : 28 pour macOS, 42 pour Windows (mises à jour comprises : l'app se met à jour avec l'installeur), 0 pour Linux.
-- **4** mises à jour de l'app macOS par la mise à jour intégrée.
-- **4 546** vérifications de mise à jour : chaque copie de l'app qui tourne lit `latest.json` à son démarrage puis régulièrement, ce qui donne une idée de l'usage (pas un nombre d'utilisateurs).
-
-| Version | Publiée le | macOS | Windows | Linux | Mises à jour macOS | Vérifications |
-|---|---|---:|---:|---:|---:|---:|
-| v1.7.2 | 2026-10-11 | 19 | 10 | 0 | 3 | 1 034 |
-| v1.7.1 | 2026-10-11 | 0 | 1 | 0 | 0 | 145 |
-| v1.7.0 | 2026-10-11 | 0 | 3 | 0 | 0 | 52 |
-| v1.6.0 | 2026-10-10 | 0 | 1 | 0 | 0 | 227 |
-| v1.5.4 | 2026-10-09 | 0 | 0 | 0 | 0 | 134 |
-| v1.5.3 | 2026-10-07 | 4 | 4 | 0 | 1 | 1 013 |
-| v1.5.2 | 2026-10-07 | 0 | 2 | 0 | 0 | 344 |
-| v1.5.1 | 2026-10-06 | 0 | 4 | 0 | 0 | 205 |
-| v1.5.0 | 2026-10-04 | 5 | 2 | 0 | 0 | 1 185 |
-| v1.4.0 | 2026-10-04 | 0 | 2 | 0 | 0 | 112 |
-
-Les 13 versions plus anciennes comptent dans les totaux.
-
-<!-- stats:end -->
-
 ## Prérequis
 
 - Windows 10 ou 11 (WebView2, présent par défaut sur Windows 11), macOS 11 (Big Sur) ou plus récent, sur Mac Apple Silicon ou Intel, ou Linux x86-64 avec une glibc 2.35 ou plus récente (Ubuntu 22.04, Debian 12, Fedora 36 et suivantes), WebKitGTK 4.1 compris.
