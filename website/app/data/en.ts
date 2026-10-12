@@ -56,8 +56,8 @@ export const en: Catalog = {
         alt: 'Escouade’s window: the projects in tabs, the list of agents and the conversation of one of them',
       },
       chat: {
-        title: 'A real chat, not a terminal',
-        text: 'Markdown, highlighted code, compact tool calls that unfold into a diff. Claude’s questions and permission requests come as cards you answer with a click or from the keyboard. Ctrl+K finds a message across all your agents’ conversations.',
+        title: 'A real chat, or Claude Code’s own interface: your choice',
+        text: 'Markdown, highlighted code, tool calls that unfold into a diff, questions and permission requests as cards you answer with a click. Prefer Claude Code’s interface? One button moves the agent there, in a terminal, without losing its session, and Escouade still follows it: notifications, cost, plan.',
         alt: 'A conversation: Claude’s reply in markdown, a tool call unfolded to its diff',
       },
       notifications: {
@@ -157,10 +157,6 @@ export const en: Catalog = {
         title: 'Each engine’s quotas',
         text: 'Codex’s quota windows and Copilot’s monthly credits in the status bar, and stats per engine.',
       },
-      {
-        title: 'The Claude Code view',
-        text: 'A button runs an agent in Claude Code’s own interface, in a terminal, with its commands and shortcuts. Escouade still follows it: notifications, cost, plan.',
-      },
     ],
     plan: 'The detailed plan (in French)',
     changelog: 'What is already out',
@@ -180,6 +176,10 @@ export const en: Catalog = {
       {
         q: 'What about my Jira, Trello or GitHub tokens?',
         a: 'They stay on your machine: in the system keychain (Windows Credential Manager, macOS Keychain), or on Linux in the integrations file of ~/.escouade/, and are only used for calls to those services. For GitHub, Escouade can also reuse the token from gh.',
+      },
+      {
+        q: 'I prefer Claude Code’s interface. Can I keep it?',
+        a: 'Yes. The “Claude Code view” button, in an agent’s header, runs it in Claude Code’s own interface, in a terminal: your / commands, your shortcuts, your dialogs. “Escouade view” brings it back to the chat without losing the session. A setting opens new agents in Claude Code’s interface straight away. Ticket agents, which the autopilot drives, stay in the chat.',
       },
       {
         q: 'Does it work on Mac or Linux?',

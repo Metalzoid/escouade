@@ -60,8 +60,8 @@ const { text } = useLang();
 }
 .items {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px 40px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
   margin: 44px 0 0;
   padding: 0;
   list-style: none;

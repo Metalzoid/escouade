@@ -57,8 +57,8 @@ export const fr: Catalog = {
         alt: 'La fenêtre d’Escouade : les projets en onglets, la liste des agents et la conversation de l’un d’eux',
       },
       chat: {
-        title: 'Un vrai chat, pas un terminal',
-        text: 'Markdown, code coloré, appels d’outils compacts qui se déplient sur un diff. Les questions et autorisations de Claude arrivent en cartes, auxquelles tu réponds d’un clic ou au clavier. Ctrl+K retrouve un message dans les conversations de tous tes agents.',
+        title: 'Un vrai chat, ou l’interface de Claude Code : à toi de choisir',
+        text: 'Markdown, code coloré, appels d’outils qui se déplient sur un diff, questions et autorisations en cartes auxquelles tu réponds d’un clic. Tu préfères l’interface de Claude Code ? Un bouton y fait passer l’agent, dans un terminal, sans perdre sa session, et Escouade le suit toujours : notifications, coût, plan.',
         alt: 'Une conversation : réponse de Claude en markdown, appel d’outil déplié sur son diff',
       },
       notifications: {
@@ -161,10 +161,6 @@ export const fr: Catalog = {
         title: 'Les quotas de chacun',
         text: 'Les fenêtres de quota de Codex et les crédits du mois de Copilot dans la barre d’état, et des statistiques par moteur.',
       },
-      {
-        title: 'La vue Claude Code',
-        text: 'Un bouton fait tourner un agent dans l’interface de Claude Code elle-même, dans un terminal, avec ses commandes et ses raccourcis. Escouade le suit toujours : notifications, coût, plan.',
-      },
     ],
     plan: 'Le plan détaillé',
     changelog: 'Ce qui est déjà sorti',
@@ -184,6 +180,10 @@ export const fr: Catalog = {
       {
         q: 'Et mes jetons Jira, Trello ou GitHub ?',
         a: 'Ils restent sur ta machine : dans le trousseau du système (Gestionnaire d’identification Windows, Trousseau macOS), ou sous Linux dans le fichier des intégrations de ~/.escouade/, et ne servent qu’aux appels de ces services. Pour GitHub, Escouade peut aussi reprendre celui de gh.',
+      },
+      {
+        q: 'Je préfère l’interface de Claude Code, je peux la garder ?',
+        a: 'Oui. Le bouton « Vue Claude Code », dans l’en-tête d’un agent, le fait tourner dans l’interface de Claude Code elle-même, dans un terminal : tes commandes /, tes raccourcis, tes dialogues. « Vue Escouade » le ramène dans le chat, sans perdre la session. Un réglage ouvre directement les nouveaux agents dans l’interface de Claude Code. Les agents des tickets, que le pilote auto mène, restent dans le chat.',
       },
       {
         q: 'Ça marche sur Mac ou Linux ?',

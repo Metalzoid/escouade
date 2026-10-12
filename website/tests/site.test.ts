@@ -230,7 +230,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
       ...text.install.steps.map((s) => s.title),
       ...text.faq.items.map((f) => f.q),
     ];
-    expect(texts.length).toBe(11 + 6 + 3 + 8);
+    expect(texts.length).toBe(11 + 6 + 3 + 9);
     for (const t of texts) expect(html, t).toContain(escapeText(t));
     expect(html).toContain(says.affiliation);
   });
@@ -239,7 +239,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     const r = text.roadmap;
     expect(html).toContain(`id="${text.anchors.roadmap}"`);
     expect(tags(html, 'a').some((a) => a.href === `#${text.anchors.roadmap}`)).toBe(true);
-    expect(r.items).toHaveLength(4);
+    expect(r.items).toHaveLength(3);
     for (const s of [r.title, fmt(r.next, { version: NEXT }), ...r.items.flatMap((i) => [i.title, i.text])]) {
       expect(html, s).toContain(escapeText(s));
     }
