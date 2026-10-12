@@ -684,9 +684,19 @@ fn the_server_starts_and_stops_from_a_thread_an_async_worker_or_a_single_threade
             let port = core.mcp.start(0).unwrap();
             core.mcp.stop();
             assert!(!core.mcp.status().running);
-            // Closed: a start right after takes the same port again.
-            assert_eq!(core.mcp.start(port).unwrap(), port);
-            core.mcp.stop();
+            // Closed: a start right after can take the same port again. Something else may hold it
+            // for a moment in between (another test's server shares the range, and an outgoing
+            // connection may be given it as its own port): then it is tried again a little later.
+            let mut again = 0;
+            for _ in 0..100 {
+                again = core.mcp.start(port).unwrap();
+                core.mcp.stop();
+                if again == port {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+            assert_eq!(again, port);
         })
         .await
         .unwrap();

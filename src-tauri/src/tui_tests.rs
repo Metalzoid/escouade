@@ -21,7 +21,7 @@ async fn agent_in_tui(h: &Harness) -> String {
         .await
         .unwrap();
     h.wait("the interface's first screen", |_| {
-        String::from_utf8_lossy(&screen.lock()).contains("fake claude tui")
+        String::from_utf8_lossy(&screen.lock()).contains("fake-claude-tui")
     })
     .await;
     id
@@ -155,19 +155,21 @@ async fn back_in_escouades_view_the_stream_resumes_the_same_session() {
     })
     .await;
     let session = h.agent(&id).session_id.unwrap();
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    // The warm-up when the agent was made started one already, with no session to resume.
+    let streams = |h: &Harness| {
+        h.launch_log(&cwd)
+            .into_iter()
+            .filter(|l| l["argv"].to_string().contains("stream-json"))
+            .collect::<Vec<_>>()
+    };
+    let before = streams(&h).len();
     h.core.set_agent_view(&id, false).await.unwrap();
     assert!(!h.agent(&id).terminal);
     assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
-    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
-    let stream = |h: &Harness| {
-        h.launch_log(&cwd)
-            .into_iter()
-            .rev()
-            .find(|l| l["argv"].to_string().contains("stream-json"))
-    };
-    h.wait("the stream's process", |h| stream(h).is_some())
+    h.wait("the stream's process", |h| streams(h).len() > before)
         .await;
-    let last = stream(&h).unwrap();
+    let last = streams(&h).pop().unwrap();
     let args: Vec<&str> = last["argv"]
         .as_array()
         .unwrap()

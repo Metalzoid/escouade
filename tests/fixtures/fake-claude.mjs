@@ -320,7 +320,8 @@ function tuiSession() {
   };
   let waiting = null;
   let line = '';
-  process.stdout.write('fake claude tui\r\n');
+  // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC).
+  process.stdout.write('fake-claude-tui\r\n');
   write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
   const turn = async (prompt) => {
     if (prompt === '/exit') process.exit(0);
