@@ -91,13 +91,17 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
   - Lire `account.getQuota` (expérimental) et les `quotaSnapshots` d'`assistant.usage` sur un vrai compte : unités, `remainingPercentage`, `resetDate`, drapeau `token_based_billing`.
   - Les limites par session et par semaine (Pro et Pro+, depuis le 2026-04-20) ont-elles une API, ou seulement `/usage` ?
 - [ ] **Coût d'un tour** : la conversion des nano-AIU (`copilotUsage.totalNanoAiu`) en dollars, que la doc dit de vérifier avant de l'afficher.
-- [ ] **GitHub Enterprise (GHE) et OpenRouter** : bien gérer Copilot CLI quand, chez une entreprise sur GHE, ses modèles passent par OpenRouter plutôt que par ceux de Copilot (fournisseur de modèles à soi, « bring your own key »).
-  - Relever dans le CLI et le SDK comment un fournisseur OpenRouter se déclare (clé, adresse de l'API, modèles) : réglage de l'entreprise, variable d'environnement ou config du compte (`COPILOT_HOME`).
-  - Modèles : la liste vient d'OpenRouter (ses identifiants `fournisseur/modèle`), pas de `models.list` de Copilot ; l'effort et les capacités suivent ce qu'OpenRouter en dit.
-  - Quota et coût : facturés par OpenRouter, pas en crédits d'IA de Copilot ; lire le solde et l'usage de la clé par l'API d'OpenRouter, et le coût d'un tour par ce qu'il renvoie, sinon l'afficher comme estimation.
-  - L'hôte GHE lui-même : GHE.com (`<entreprise>.ghe.com`) ou GitHub Enterprise Server, la connexion sur cet hôte, et un `COPILOT_HOME` à part si un poste a aussi un compte github.com.
-  - La clé OpenRouter, si Escouade doit la connaître, gardée dans le trousseau comme les jetons des intégrations ; le proxy d'entreprise des réglages appliqué.
-  - Essai réel avec un compte GHE et une clé OpenRouter (à fournir).
+- [ ] **GitHub Enterprise (GHE)**, à gérer : Copilot CLI sur l'instance de l'entreprise, pas seulement github.com.
+  - Les deux cas : GHE.com (`<entreprise>.ghe.com`, données hébergées dans une région) et GitHub Enterprise Server (hôte de l'entreprise).
+  - Par compte Copilot d'Escouade : l'hôte à donner au CLI (variable d'environnement ou option, à relever dans le CLI et le SDK), la connexion sur cet hôte, et un `COPILOT_HOME` à part si un poste a aussi un compte github.com.
+  - Ce qui doit suivre l'hôte : quota et crédits, liste des modèles (souvent restreinte par l'entreprise), liens affichés ; le proxy d'entreprise des réglages appliqué.
+  - Essai réel avec un compte GHE (à fournir).
+- [ ] **OpenRouter**, si possible : Copilot CLI avec des modèles qui passent par OpenRouter plutôt que par ceux de Copilot (fournisseur de modèles à soi, « bring your own key »).
+  - Relever dans le CLI et le SDK si et comment un tel fournisseur se déclare (clé, adresse de l'API, modèles). S'il ne se déclare pas, on s'arrête là.
+  - Modèles : la liste vient d'OpenRouter (identifiants `fournisseur/modèle`), pas de `models.list` de Copilot.
+  - Quota et coût : facturés par OpenRouter, pas en crédits de Copilot ; solde et usage de la clé par l'API d'OpenRouter, sinon coût affiché comme estimation.
+  - La clé, si Escouade doit la connaître, gardée dans le trousseau comme les jetons des intégrations.
+  - Essai réel avec une clé OpenRouter (à fournir).
 - [ ] **Second compte** : un `COPILOT_HOME` à part et `copilot login`. La connexion va dans le trousseau du système : chaque dossier y a-t-il son entrée ? Autre piste : un jeton par session (`github_token` du SDK, `COPILOT_GITHUB_TOKEN`).
 - [ ] **MCP par process** : `--additional-mcp-config @<fichier privé>` (vaut pour la session, remplace une entrée du même nom) et `--disable-mcp-server escouade` ; ou `mcpServers` à la création de session.
 - [ ] **Reprise et copie** : `resume_session` ; la copie à un événement donné (`sessions().fork(id, to_event_id)`, expérimental) ; `history.truncate`.
