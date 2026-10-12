@@ -106,7 +106,8 @@
   }
 
   function remoteItems(a: Agent): MenuItem[] {
-    if (a.archived) return [];
+    // In Claude Code's own interface, its /remote-control does it.
+    if (a.archived || (a.terminal && !a.remoteControl)) return [];
     const items: MenuItem[] = [
       { label: '', separator: true },
       a.remoteControl

@@ -21,6 +21,17 @@ export default defineZone('conv', {
     layout: 'Layout ({key})',
     layoutClassic: 'Classic layout',
     layoutSplit: 'Conversation and files side by side',
+    toTerminal: 'Claude Code view',
+    toTerminalHint: 'Run the agent in Claude Code’s own interface, in a terminal',
+    toRich: 'Escouade view',
+    toRichHint: 'Back to Escouade’s conversation (the session goes on)',
+  },
+
+  terminal: {
+    starting: 'Starting Claude Code…',
+    exited: 'Claude Code stopped.',
+    restart: 'Restart',
+    failed: 'Claude Code didn’t start: {error}',
   },
 
   loadError: 'Couldn’t load the conversation: {error}',

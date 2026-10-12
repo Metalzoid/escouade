@@ -70,6 +70,9 @@
         <Switch label={t('accounts.switchOnLimit.label')} bind:on={s.switchOnLimit} />
       </Row>
     {/if}
+    <Row label={t('settings.claude.terminalView')} desc={t('settings.claude.terminalViewDesc')}>
+      <Switch label={t('settings.claude.terminalView')} bind:on={s.terminalView} />
+    </Row>
     <Row label={t('settings.claude.todoTools')} desc={t('settings.claude.todoToolsDesc')}>
       <Switch label={t('settings.claude.todoTools')} bind:on={s.todoTools} />
     </Row>

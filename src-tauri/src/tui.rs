@@ -238,6 +238,12 @@ impl<R: Runtime> Core<R> {
             if terminal && rt.meta.ticket_id.is_some() {
                 return Err(ticket_refusal());
             }
+            if terminal && rt.meta.remote_control {
+                bail!(tr!(
+                    "Coupe d’abord le remote control : dans l’interface de Claude Code, c’est sa commande /remote-control qui le fait.",
+                    "Turn remote control off first: in Claude Code’s interface, its /remote-control command does it."
+                ));
+            }
             if rt.meta.status.is_active() && rt.tui.is_none() {
                 bail!(tr!(
                     "L’agent travaille encore : change de vue quand son tour est fini.",

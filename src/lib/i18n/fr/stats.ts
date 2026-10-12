@@ -81,5 +81,6 @@ export default {
     tooLong: 'Trop long pour être lu ici : lis-la et réponds dans la conversation.',
     proposesPlan: 'Claude propose un plan',
     waitsForAnswer: 'Claude attend ta réponse',
+    waitsInTerminal: 'Attend ta réponse dans l’interface de Claude Code',
   },
 } as const satisfies Tree;

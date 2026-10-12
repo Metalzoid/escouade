@@ -67,6 +67,7 @@ export const SETTINGS: Settings = {
   mcpEnabled: false,
   mcpPort: 0,
   todoTools: true,
+  terminalView: false,
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -138,6 +139,8 @@ export function agent(over: Partial<Agent> = {}): Agent {
     movedFrom: null,
     activity: null,
     setup: null,
+    terminal: false,
+    terminalId: null,
     isola: false,
     ...over,
   };

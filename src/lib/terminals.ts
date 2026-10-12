@@ -164,6 +164,11 @@ export function openAccountLogin(accountId: string): Promise<TermInfo> {
   return interactive((cols, rows, onData) => api.accountLogin(accountId, cols, rows, onData));
 }
 
+/** Claude Code's interface for the agent (« Vue Claude Code »): its session resumed in a terminal. */
+export function openAgentTerminal(agentId: string): Promise<TermInfo> {
+  return interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData));
+}
+
 /** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */
 async function interactive(spawn: (cols: number, rows: number, onData: (d: ArrayBuffer) => void) => Promise<TermInfo>): Promise<TermInfo> {
   const x = createXTerm(false);

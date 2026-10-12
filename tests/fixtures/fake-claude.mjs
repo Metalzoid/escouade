@@ -295,7 +295,8 @@ function tuiSession() {
     const h = settings.hooks[name]?.[0]?.hooks?.[0];
     if (!h) return;
     const headers = { 'content-type': 'application/json' };
-    for (const [k, v] of Object.entries(h.headers ?? {})) headers[k] = v.replace('$ESCOUADE_HOOK_TOKEN', process.env.ESCOUADE_HOOK_TOKEN ?? '');
+    for (const [k, v] of Object.entries(h.headers ?? {}))
+      headers[k] = v.replace('$ESCOUADE_HOOK_TOKEN', process.env.ESCOUADE_HOOK_TOKEN ?? '');
     const body = { session_id: sessionId, transcript_path: file, cwd: process.cwd(), hook_event_name: name, ...extra };
     try {
       await fetch(h.url, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -308,7 +309,13 @@ function tuiSession() {
       type: 'assistant',
       uuid: `tui-${process.pid}-${n}`,
       isSidechain: false,
-      message: { id: `msg-${process.pid}-${n}`, model, role: 'assistant', content, usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 1000 } },
+      message: {
+        id: `msg-${process.pid}-${n}`,
+        model,
+        role: 'assistant',
+        content,
+        usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 1000 },
+      },
     });
   };
   let waiting = null;
@@ -326,13 +333,22 @@ function tuiSession() {
       await hook('PreToolUse', { tool_name: 'Bash', tool_input: input });
       await hook('PermissionRequest', { tool_name: 'Bash', tool_input: input });
       await new Promise((resolve) => (waiting = resolve));
-      write({ type: 'user', uuid: `r-${id}`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'tui' }] }, toolUseResult: { stdout: 'tui', stderr: '' } });
+      write({
+        type: 'user',
+        uuid: `r-${id}`,
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'tui' }] },
+        toolUseResult: { stdout: 'tui', stderr: '' },
+      });
       await hook('PostToolUse', { tool_name: 'Bash', tool_input: input });
     }
     if (prompt.includes('lent')) {
       const stopped = await new Promise((resolve) => (waiting = resolve));
       if (stopped === 'escape') {
-        write({ type: 'user', uuid: `i-${process.pid}-${n++}`, message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] } });
+        write({
+          type: 'user',
+          uuid: `i-${process.pid}-${n++}`,
+          message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] },
+        });
         return;
       }
     }
@@ -347,10 +363,10 @@ function tuiSession() {
     for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
       if (part === '\x1b[200~' || part === '\x1b[201~' || part === '') continue;
       if (part === '\x1b') {
-        if (waiting) [waiting, waiting = null][0]('escape');
+        if (waiting) [waiting, (waiting = null)][0]('escape');
       } else if (part === '\r') {
         if (waiting) {
-          [waiting, waiting = null][0]('enter');
+          [waiting, (waiting = null)][0]('enter');
         } else if (line.trim()) {
           const prompt = line.trim();
           line = '';

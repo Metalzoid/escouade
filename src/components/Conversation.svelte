@@ -14,6 +14,7 @@
   import { app } from '../lib/state.svelte';
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
+  import AgentTerminal from './AgentTerminal.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -465,6 +466,21 @@
         <span class="glyph">▷</span><span class="lbl">{t('conv.header.prepare')}</span>
       </button>
     {/if}
+    <!-- « Vue Claude Code »: never for a ticket's agent, which its board drives over the stream. -->
+    {#if !agent.ticketId && !agent.archived}
+      <button
+        class="btn view"
+        class:on={agent.terminal}
+        aria-pressed={agent.terminal}
+        aria-label={agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal')}
+        use:tip={agent.terminal ? t('conv.header.toRichHint') : t('conv.header.toTerminalHint')}
+        onclick={() => app.run(api.setAgentView(agent.id, !agent.terminal))}
+      >
+        <span class="mono glyph">{agent.terminal ? '◧' : '>_'}</span><span class="lbl"
+          >{agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal')}</span
+        >
+      </button>
+    {/if}
     <div class="metrics">
       <span class="model mono">{modelLabel(agent.model, app.models)}</span>
       <div class="m" use:tip={context.title}>
@@ -531,129 +547,133 @@
   <!-- Where the agent is in its plan, when it follows one: it takes the room it needs, never the messages' last 160 px. -->
   <PlanBanner {agent} />
 
-  <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="scroll"
-    tabindex="-1"
-    bind:this={scroller}
-    onscroll={onScroll}
-    onwheel={byReader}
-    onkeydown={byReader}
-    onfocusin={onFocusIn}
-    onpointerdown={grab}
-  >
-    <div class="msgs" bind:this={content}>
-      {#if conv.error}
-        <div class="load-error">
-          {t('conv.loadError', { error: conv.error })}
-          <button class="btn" onclick={() => conv.load()}>{t('common.retry')}</button>
-        </div>
-      {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
-        <div class="empty">
-          <span class="t">{t('conv.empty.title')}</span>
-          <span class="s"><Rich k="conv.empty.hint">{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
-          {#if !app.claudeFound}
-            <span class="warn">{t('conv.empty.claudeMissing')}</span>
-          {/if}
-        </div>
-      {/if}
-      {#if older > 0}
-        <button class="btn older" bind:this={olderButton} onclick={showOlder}>
-          {t('conv.older.show', { count: older, n: fInt(older) })}
-        </button>
-      {/if}
-      {#each drawn as item, j (item.id)}
-        <!-- Its rank in the whole conversation. -->
-        {@const i = start + j}
-        {#if shows(item)}
-          <!-- The block of an item, found by it (reveal). -->
-          <div class="item" class:found={found === item.id} data-item={item.id}>
-            {#if item.kind === 'user'}
-              {@const injected = injectedSource(item)}
-              {#if injected}
-                <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
-              {:else}
-                <UserMessage {item} />
-              {/if}
-            {:else if item.kind === 'event'}
-              <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
-            {:else if item.kind === 'text'}
-              <div class="assistant">
-                {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
-                <div class="blocks">
-                  {#each splitEscouade(item.text) as seg, si (si)}
-                    {#if seg.kind === 'report'}
-                      <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
-                    {:else}
-                      <Markdown text={seg.text} streaming={item.streaming} />
-                    {/if}
-                  {/each}
-                </div>
-              </div>
-            {:else if item.kind === 'thinking'}
-              <Thinking {item} />
-            {:else if item.kind === 'tool'}
-              <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} />
-            {:else if item.kind === 'question'}
-              <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
-            {:else if item.kind === 'permission'}
-              <PermissionCard
-                {item}
-                agentId={agent.id}
-                cwd={agent.cwd}
-                pending={agent.pending.includes(item.id)}
-                current={agent.pending[0] === item.id}
-              />
-            {:else if item.kind === 'turn'}
-              <TurnCard
-                {item}
-                {agent}
-                last={i === top.length - 1}
-                latest={item.id === latestTurn}
-                edits={i === top.length - 1 ? lastEdits : []}
-              />
-            {:else if item.kind === 'notice'}
-              <Notice {item} />
+  {#if agent.terminal && !agent.archived}
+    <AgentTerminal {agent} />
+  {:else}
+    <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="scroll"
+      tabindex="-1"
+      bind:this={scroller}
+      onscroll={onScroll}
+      onwheel={byReader}
+      onkeydown={byReader}
+      onfocusin={onFocusIn}
+      onpointerdown={grab}
+    >
+      <div class="msgs" bind:this={content}>
+        {#if conv.error}
+          <div class="load-error">
+            {t('conv.loadError', { error: conv.error })}
+            <button class="btn" onclick={() => conv.load()}>{t('common.retry')}</button>
+          </div>
+        {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
+          <div class="empty">
+            <span class="t">{t('conv.empty.title')}</span>
+            <span class="s"><Rich k="conv.empty.hint">{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
+            {#if !app.claudeFound}
+              <span class="warn">{t('conv.empty.claudeMissing')}</span>
             {/if}
           </div>
         {/if}
-      {/each}
-      {#each conv.waiting as item (item.id)}
-        <UserMessage {item} waiting />
-      {/each}
-      {#if running}
-        <div class="working">
-          <span class="dots"><span></span><span></span><span></span></span>{t('conv.working')}
-        </div>
-      {/if}
-      {#if agent.setup}
-        <SetupProgress {agent} />
+        {#if older > 0}
+          <button class="btn older" bind:this={olderButton} onclick={showOlder}>
+            {t('conv.older.show', { count: older, n: fInt(older) })}
+          </button>
+        {/if}
+        {#each drawn as item, j (item.id)}
+          <!-- Its rank in the whole conversation. -->
+          {@const i = start + j}
+          {#if shows(item)}
+            <!-- The block of an item, found by it (reveal). -->
+            <div class="item" class:found={found === item.id} data-item={item.id}>
+              {#if item.kind === 'user'}
+                {@const injected = injectedSource(item)}
+                {#if injected}
+                  <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
+                {:else}
+                  <UserMessage {item} />
+                {/if}
+              {:else if item.kind === 'event'}
+                <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
+              {:else if item.kind === 'text'}
+                <div class="assistant">
+                  {#if !prevIsText(i)}<span class="avatar">C</span>{:else}<span class="avatar ghost"></span>{/if}
+                  <div class="blocks">
+                    {#each splitEscouade(item.text) as seg, si (si)}
+                      {#if seg.kind === 'report'}
+                        <CriteriaReport report={seg.report} criteria={ticket?.criteria ?? []} {agent} />
+                      {:else}
+                        <Markdown text={seg.text} streaming={item.streaming} />
+                      {/if}
+                    {/each}
+                  </div>
+                </div>
+              {:else if item.kind === 'thinking'}
+                <Thinking {item} />
+              {:else if item.kind === 'tool'}
+                <ToolRow {item} cwd={agent.cwd} childrenOf={(id) => children.get(id) ?? []} onOpenFile={openFile} />
+              {:else if item.kind === 'question'}
+                <QuestionCard {item} agentId={agent.id} pending={agent.pending.includes(item.id)} current={agent.pending[0] === item.id} />
+              {:else if item.kind === 'permission'}
+                <PermissionCard
+                  {item}
+                  agentId={agent.id}
+                  cwd={agent.cwd}
+                  pending={agent.pending.includes(item.id)}
+                  current={agent.pending[0] === item.id}
+                />
+              {:else if item.kind === 'turn'}
+                <TurnCard
+                  {item}
+                  {agent}
+                  last={i === top.length - 1}
+                  latest={item.id === latestTurn}
+                  edits={i === top.length - 1 ? lastEdits : []}
+                />
+              {:else if item.kind === 'notice'}
+                <Notice {item} />
+              {/if}
+            </div>
+          {/if}
+        {/each}
+        {#each conv.waiting as item (item.id)}
+          <UserMessage {item} waiting />
+        {/each}
+        {#if running}
+          <div class="working">
+            <span class="dots"><span></span><span></span><span></span></span>{t('conv.working')}
+          </div>
+        {/if}
+        {#if agent.setup}
+          <SetupProgress {agent} />
+        {/if}
+      </div>
+    </div>
+
+    <!-- Out of the list: its blocks are the conversation's. -->
+    <div class="sr" aria-live="polite" aria-atomic="true">
+      {#if drewOlder}
+        {#key drewOlder.seq}<span>{drewOlder.text}</span>{/key}
       {/if}
     </div>
-  </div>
 
-  <!-- Out of the list: its blocks are the conversation's. -->
-  <div class="sr" aria-live="polite" aria-atomic="true">
-    {#if drewOlder}
-      {#key drewOlder.seq}<span>{drewOlder.text}</span>{/key}
+    {#if showJump}
+      <button class="jump" onclick={toBottom}>↓ {t('conv.newMessages')}</button>
     {/if}
-  </div>
 
-  {#if showJump}
-    <button class="jump" onclick={toBottom}>↓ {t('conv.newMessages')}</button>
-  {/if}
-
-  {#if agent.archived}
-    <div class="banner">
-      {t('conv.archived.text')}
-      <button class="btn" onclick={() => app.run(api.archiveAgent(agent.id, false))}>{t('conv.archived.restore')}</button>
-    </div>
-  {:else}
-    {#if agent.status === 'error'}
-      <div class="banner err">{t('conv.stopped')}</div>
+    {#if agent.archived}
+      <div class="banner">
+        {t('conv.archived.text')}
+        <button class="btn" onclick={() => app.run(api.archiveAgent(agent.id, false))}>{t('conv.archived.restore')}</button>
+      </div>
+    {:else}
+      {#if agent.status === 'error'}
+        <div class="banner err">{t('conv.stopped')}</div>
+      {/if}
+      <Composer {agent} />
     {/if}
-    <Composer {agent} />
   {/if}
 </main>
 
@@ -706,7 +726,8 @@
     text-overflow: ellipsis;
   }
   .edit,
-  .test {
+  .test,
+  .view {
     height: 28px;
     display: flex;
     align-items: center;
@@ -717,7 +738,8 @@
     flex: none;
   }
   .edit .glyph,
-  .test .glyph {
+  .test .glyph,
+  .view .glyph {
     font-size: 11px;
     color: var(--accent);
   }
@@ -775,7 +797,8 @@
       display: none;
     }
     .edit .lbl,
-    .test .lbl {
+    .test .lbl,
+    .view .lbl {
       display: none;
     }
   }

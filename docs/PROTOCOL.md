@@ -157,6 +157,35 @@ Quatre lancements de l'application sur un dépôt jetable (un agent en worktree,
 
 `AgentMeta.plan` (`PlanState`, voir `src/lib/types.ts`) : `tasks` (100 au plus), `agents` (30 : toutes celles qui tournent, puis les dernières terminées), `launched` (tous les sous-agents lancés depuis la remise à zéro), `workflows` (10). Le sous-agent d'une tâche (`planTask`) est celle que son `prompt` ou sa `description` nomme (`task-<id>-brief.md` ou `task-<id>-report.md`, puis `Task <id>`) si la liste l'a, sinon la seule tâche en cours. Ce que fait un sous-agent (`doing`) vient de ses propres appels d'outils, dans les mêmes mots que `activity`. Remise à zéro : une nouvelle session Claude, ou le premier message d'un tour quand le plan est fini (toutes les tâches faites, ou aucune, et rien qui tourne) ; elle oublie aussi le titre et le plan des fichiers, et les fichiers du dossier ne sont relus que s'ils ont été touchés depuis. Quand le processus meurt, les rangées qui tournaient passent à `interrupted` ; une rangée au premier plan l'est aussi à la fin du tour.
 
+## Vue Claude Code (l'interface de Claude Code, dans un terminal)
+
+Un agent peut tourner dans l'interface de Claude Code elle-même (son TUI, `claude` sans `-p`) plutôt que sur le flux stream-json (`src-tauri/src/tui.rs`, `src-tauri/src/agent/transcript.rs`). Une session n'a qu'un process à la fois : changer de vue arrête l'un et reprend la session dans l'autre (`--resume`). Essais du 2026-10-12 sur Claude Code 2.1.296, avec un vrai TUI piloté dans un pseudo-terminal ; les flux enregistrés sont `tests/fixtures/tui-transcript.jsonl` et `tests/fixtures/tui-hooks.jsonl`.
+
+**Lancement.** Les mêmes arguments que le flux, sans ceux du flux : `--model`, `--effort`, `--permission-mode`, `--allow-dangerously-skip-permissions`, `--append-system-prompt`, `--mcp-config`. La session est toujours connue d'avance : `--resume=<id>`, sinon `--session-id=<nouvel uuid>` ; une copie fait `--resume=<original> --fork-session [--resume-session-at=<entrée>] --session-id=<nouvel uuid>` (vérifié : le transcript du fork porte bien l'id donné).
+
+**Hooks.** `--settings <fichier>` (dans `<données>/tui/<agent>.json`, sans secret) déclare des hooks `"type": "http"` vers `http://127.0.0.1:<port>/hook`, un petit serveur d'Escouade démarré avec la première interface. L'en-tête `Authorization: Bearer $ESCOUADE_HOOK_TOKEN` est lu dans l'environnement (`allowedEnvVars`) : un jeton par interface, jamais sur la ligne de commande. Vérifié :
+- les hooks inline s'ajoutent à ceux de l'utilisateur ;
+- `SessionStart` ne part pas en HTTP (commande seulement), d'où la session fixée d'avance ;
+- chaque appel porte `session_id`, `transcript_path`, `cwd`, `permission_mode` et `hook_event_name` ;
+- `PermissionRequest` arrive quand l'interface affiche une autorisation (avant la réponse), avec `tool_name`, `tool_input` et `permission_suggestions` ; une réponse `{}` ne décide rien et l'interface demande comme d'habitude ;
+- `Notification` (`notification_type: permission_prompt`) suit quelques secondes après, `idle_prompt` bien plus tard : Escouade s'en tient à `PermissionRequest`, et à `PreToolUse` d'`AskUserQuestion` pour une question ;
+- `Stop` termine un tour qui n'a pas été interrompu ; une interruption (Échap) n'en envoie pas.
+
+Les appels vers la boucle locale contournent le proxy (`NO_PROXY` complété).
+
+**Transcript.** `<dossier du compte>/projects/<cwd encodé>/<session>.jsonl`, une entrée par ligne :
+- `user` : un message tapé (`origin.kind: human`, `promptSource: typed`), un résultat d'outil (`toolUseResult`, comme `tool_use_result` du flux), une commande locale (`<command-name>/model</command-name>…`, sa sortie en `<local-command-stdout>`), `isMeta` pour ce que Claude Code ajoute lui-même, et `[Request interrupted by user]` à l'interruption ;
+- `assistant` : un bloc de contenu par entrée (même `message.id`, même `usage` répété), comme les frames `assistant` du flux ; `isApiErrorMessage` et `error` pour une erreur d'API ;
+- `system` : `stop_hook_summary` puis `turn_duration` (`durationMs`) à la fin de chaque tour, `compact_boundary` ;
+- `permission-mode` quand l'utilisateur change de mode (Maj+Tab), `ai-title`, `last-prompt`, `attachment`, `file-history-*` ;
+- `cost-state` (`modelUsage`, `totalCostUSD`, comme le `result` du flux) seulement à la sortie du process, pas à chaque tour.
+
+Escouade lit le transcript toutes les 400 ms (et juste avant chaque hook) par lignes complètes, et rejoue `user` et `assistant` dans le traducteur du flux. La fin d'un tour (`turn_duration`, l'interruption, ou `Stop` sans `turn_duration` 1,8 s après) devient un `result` fait maison, dont `modelUsage` cumule l'usage de chaque message aux tarifs publics (`pricing`) : le coût d'un tour en vue Claude Code est une estimation. L'offset lu est gardé (`transcriptRead`) : ce qui a été écrit pendant que l'app ne lisait pas l'est au lancement suivant ; sans offset gardé, les entrées d'avant le lancement (l'historique d'une session reprise ou copiée) sont ignorées.
+
+**Messages et interruption.** Un message de la fenêtre ou du serveur MCP est collé dans l'interface (collage entre crochets, `ESC[200~…ESC[201~`, puis Entrée), refusé pendant que l'interface attend une réponse ; une interruption y envoie Échap. Pas de pièce jointe. Un agent de ticket reste toujours sur le flux, et le remote control passe par la commande `/remote-control` de l'interface.
+
+**Confiance du dossier.** L'interface demande, au premier lancement dans un dossier, si on lui fait confiance ; un dossier parent accepté suffit (vérifié), donc les worktrees de `<projet>/.claude/worktrees/` héritent de la réponse donnée pour le projet.
+
 ## Serveur MCP d'Escouade
 
 Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude peut piloter Escouade » est activé ou qu'un projet laisse ses agents l'utiliser, et s'arrête avec l'app.

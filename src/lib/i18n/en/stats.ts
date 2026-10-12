@@ -76,5 +76,6 @@ export default defineZone('stats', {
     tooLong: 'Too long to read here: read it and answer in the conversation.',
     proposesPlan: 'Claude suggests a plan',
     waitsForAnswer: 'Claude is waiting for your answer',
+    waitsInTerminal: 'Waiting for your answer in Claude Code’s interface',
   },
 });

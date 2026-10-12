@@ -44,6 +44,8 @@ export interface Settings {
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
   todoTools: boolean;
+  /** « Ouvrir les nouveaux agents dans l'interface de Claude Code »: a new agent (not a ticket's) starts in the Claude Code view. */
+  terminalView: boolean;
 }
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
@@ -531,6 +533,10 @@ export interface Agent {
   isola: boolean;
   /** How far it is through a plan (its task list, its subagents, its workflows), worked out by the backend from its stream; absent until it has any. */
   plan?: PlanState;
+  /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
+  terminal: boolean;
+  /** The terminal of that interface while it runs. */
+  terminalId: string | null;
 }
 
 /** Where a plan's task list comes from: the agent's task tools (what the stream tells), or a plan file of its folder. */

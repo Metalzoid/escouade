@@ -354,7 +354,9 @@
                 ? req.questions.map((q) => q.question).join(' · ')
                 : req
                   ? t('stats.overview.proposesPlan')
-                  : t('stats.overview.waitsForAnswer')}
+                  : a.terminal
+                    ? t('stats.overview.waitsInTerminal')
+                    : t('stats.overview.waitsForAnswer')}
             <span class="ask" use:tip={{ text: text, cut: true }}>{text}</span>
             <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
           {/if}

@@ -116,6 +116,12 @@ export const api = {
   /** A copy of the agent, « <nom> (copie) », whose Claude Code session forks the original’s (refused during its turn). */
   duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),
   archiveAgent: (id: string, archived: boolean) => invoke<void>('archive_agent', { id, archived }),
+  setAgentView: (id: string, terminal: boolean) => invoke<void>('set_agent_view', { id, terminal }),
+  agentTerminal: (id: string, cols: number, rows: number, onData: (d: ArrayBuffer) => void) => {
+    const output = new Channel<ArrayBuffer>();
+    output.onmessage = onData;
+    return invoke<TermInfo>('agent_terminal', { id, cols, rows, output });
+  },
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
   mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),

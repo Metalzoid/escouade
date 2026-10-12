@@ -13,6 +13,11 @@ vi.mock('../lib/terminals', () => ({
     fit: { fit() {} },
   }),
   disposeLog() {},
+  // « Vue Claude Code »: its interface, not drawn in jsdom.
+  openAgentTerminal: async () => ({ id: 't1', projectId: '', name: 'x', shell: 'claude' }),
+  getXTerm: () => undefined,
+  mountTerminal() {},
+  disposeTerminal() {},
 }));
 
 import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
@@ -1627,5 +1632,39 @@ describe('Conversation in English', () => {
     await tick();
     expect(screen.getByText('Claude is working…')).toBeInTheDocument();
     expect(screen.queryByText('Claude travaille…')).not.toBeInTheDocument();
+  });
+});
+
+describe('« Vue Claude Code »', () => {
+  it('switches the agent to Claude Code’s interface from its header', async () => {
+    setLang('fr');
+    const a = agent({ id: 'vt1', status: 'done' });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.click(screen.getByRole('button', { name: 'Vue Claude Code' }));
+    expect(b.called('set_agent_view')[0].args).toEqual({ id: 'vt1', terminal: true });
+  });
+
+  it('shows the interface in place of the messages and the composer, and offers to go back', async () => {
+    setLang('fr');
+    const a = agent({ id: 'vt2', status: 'done', terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    const { container } = render(Conversation, { agent: a, project: project() });
+    expect(container.querySelector('.scroll')).toBeNull();
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('.tui')).not.toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Vue Escouade' }));
+    expect(b.called('set_agent_view')[0].args).toEqual({ id: 'vt2', terminal: false });
+  });
+
+  it('is never offered to a ticket’s agent', () => {
+    setLang('fr');
+    const a = agent({ id: 'vt3', status: 'done', ticketId: 'k1' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.queryByRole('button', { name: 'Vue Claude Code' })).toBeNull();
   });
 });

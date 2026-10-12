@@ -23,6 +23,18 @@ export default {
     layout: 'Disposition ({key})',
     layoutClassic: 'Disposition classique',
     layoutSplit: 'Conversation et fichiers côte à côte',
+    toTerminal: 'Vue Claude Code',
+    toTerminalHint: 'Faire tourner l’agent dans l’interface de Claude Code elle-même, dans un terminal',
+    toRich: 'Vue Escouade',
+    toRichHint: 'Revenir à la conversation d’Escouade (la session continue)',
+  },
+
+  /** « Vue Claude Code »: the agent in Claude Code's own interface. */
+  terminal: {
+    starting: 'Démarrage de Claude Code…',
+    exited: 'Claude Code s’est arrêté.',
+    restart: 'Relancer',
+    failed: 'Claude Code n’a pas démarré : {error}',
   },
 
   loadError: 'Impossible de charger la conversation : {error}',

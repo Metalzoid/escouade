@@ -5,6 +5,11 @@ Un chantier : Codex, OpenCode et GitHub Copilot CLI comme moteurs d'agents, à c
 - L'avancée d'un agent qui exécute un plan (tâches, sous-agents, ce qui est en cours, essai avec superpowers), d'abord notée ici, est passée dans la 1.7 : voir `docs/TODO-1.7.md`, chantier 5.
 - Une seule forme d'infobulle dans toute l'app, d'abord notée ici, est passée dans la 1.7.1 : voir `CHANGELOG.md`.
 
+Fait pour la 1.8 :
+- [x] **Vue Claude Code** (2026-10-12) : un agent peut tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade (bouton de l'en-tête, réglage pour les nouveaux agents). Escouade le suit par ses hooks HTTP et son transcript. Voir `docs/PROTOCOL.md`, « Vue Claude Code ».
+  - [ ] À essayer sous Windows (ConPTY, `claude.exe` natif) et macOS avec un vrai compte : collage d'un message, Échap, `/clear`, une compaction, un sous-agent.
+  - [ ] Le jour où Codex ou Copilot arrivent : leur propre interface en vue terminal, sur le même modèle (hooks ou journal de session).
+
 ## Ampleur (estimation du 2026-10-11)
 
 Repère : la 1.7 (cinq chantiers) a fait 266 commits et environ 78 000 lignes ajoutées, tests compris.

@@ -91,6 +91,9 @@ export default {
     idleStop: 'Arrêter les processus Claude inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
     idleStopLabel: 'Arrêter les processus Claude inactifs après (minutes)',
+    terminalView: 'Ouvrir les nouveaux agents dans l’interface de Claude Code',
+    terminalViewDesc:
+      'Un nouvel agent tourne dans un terminal avec l’interface de Claude Code elle-même plutôt que dans la conversation d’Escouade. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.',
     todoTools: 'Les agents tiennent une liste de tâches',
     todoToolsDesc:
       'Donne aux agents l’outil de liste de tâches de Claude Code : s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan » (le modèle n’est pas obligé de s’en servir). S’applique aux agents lancés ensuite.',
