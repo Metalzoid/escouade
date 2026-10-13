@@ -2,7 +2,7 @@
 
 Le poste de pilotage de tes agents [Claude Code](https://claude.com/claude-code) : une application Windows, macOS et Linux pour piloter plusieurs instances de Claude Code en local, avec un onglet par projet, autant d'agents que nécessaire, des terminaux intégrés, des notifications quand Claude attend une réponse, les quotas de ton abonnement et des statistiques de consommation. Elle parle français et anglais.
 
-Site : [escouade.gagnaire.dev](https://escouade.gagnaire.dev/)
+Site : [escouade.gagnaire.dev](https://escouade.gagnaire.dev/) · Documentation : [escouade.gagnaire.dev/docs](https://escouade.gagnaire.dev/docs/)
 
 Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour remplace l'ancienne installation et garde tes réglages et tes conversations. Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic.
 
@@ -195,7 +195,7 @@ npm run generate   # site statique dans .output/public
 npm test           # vérifie le site généré
 ```
 
-Il existe en français (à la racine) et en anglais (sous `/en/`) ; ses textes sont dans deux catalogues de mêmes clés. Ses images, sa vidéo et ses sous-titres viennent de `video/` : `npm run render`, `npm run web-video`, puis `npm run site-images` (captures, affiche et sous-titres dans les deux langues ; `-- --lang=en` pour une seule). La voix de la vidéo reste française, la page anglaise propose ses sous-titres anglais.
+Il existe en français (à la racine) et en anglais (sous `/en/`) ; ses textes sont dans deux catalogues de mêmes clés. Sa documentation (`/docs/`, `/en/docs/`) est faite de pages Markdown, une par langue, dans `website/content/docs/` : leur forme et leurs règles sont dans le `README.md` de ce dossier, leur ordre dans `website/app/data/docs.ts`. Ses images, sa vidéo et ses sous-titres viennent de `video/` : `npm run render`, `npm run web-video`, puis `npm run site-images` (captures, affiche et sous-titres dans les deux langues ; `-- --lang=en` pour une seule). La voix de la vidéo reste française, la page anglaise propose ses sous-titres anglais.
 
 ## Architecture
 

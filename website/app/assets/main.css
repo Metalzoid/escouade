@@ -40,6 +40,11 @@ html {
   scroll-padding-top: 88px;
   scrollbar-color: var(--line-strong) var(--bg);
 }
+/* The documentation's pages change under the router, which puts the new one at the top: from where the old one was
+   read, that would be a long glide. */
+html:has(.docs) {
+  scroll-behavior: auto;
+}
 
 body {
   margin: 0;

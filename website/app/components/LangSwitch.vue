@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { LANGS, rememberLanguage, type LangInfo } from '~/data/language';
+import { LANGS, pathIn, rememberLanguage, type LangInfo } from '~/data/language';
 
-// Two real links, one per page, so that the switch works without a script too; the click also keeps the choice.
+// Two real links to the same page in each language, so that the switch works without a script too; the click also
+// keeps the choice.
 const { lang, text } = useLang();
 const asset = useAsset();
+const route = useRoute();
 
 /** The French link asks for French explicitly: the first visit's redirection would send the visitor away again. */
-const href = (l: LangInfo) => `${asset(l.path)}${l.code === 'fr' ? '?lang=fr' : ''}`;
+const href = (l: LangInfo) => `${asset(pathIn(l.code, route.path))}${l.code === 'fr' ? '?lang=fr' : ''}`;
 
 function choose(l: LangInfo, e: MouseEvent) {
   rememberLanguage(l.code);

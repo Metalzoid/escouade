@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { docPath } from '~/data/docs';
 import { REPO } from '~/data/site';
 
-const { text } = useLang();
+const { lang, text } = useLang();
 </script>
 
 <template>
@@ -10,6 +11,7 @@ const { text } = useLang();
       <div class="line">
         <span class="brand"><LogoMark :size="22" /> Escouade</span>
         <nav class="links">
+          <NuxtLink :to="docPath(lang)">{{ text.header.docs }}</NuxtLink>
           <a :href="REPO">{{ text.footer.github }}</a>
           <a :href="`${REPO}/blob/main/LICENSE`">{{ text.footer.license }}</a>
         </nav>

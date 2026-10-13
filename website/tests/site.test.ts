@@ -3,7 +3,9 @@ import { runInNewContext } from 'node:vm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CATALOGS, featuresFor } from '../app/data/catalogs';
 import { fmt } from '../app/data/catalog';
+import { DOC_GROUPS, DOC_SLUGS, docPath, docSource, type DocSlug } from '../app/data/docs';
 import { LANG_KEY, type Lang } from '../app/data/language';
+import { renderDoc } from '../app/data/render';
 import { FEATURE_SHOTS, NEXT, REPO, SITE, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
@@ -423,6 +425,16 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect([...nav.matchAll(/<a[^>]*>([^<]*)<\/a>/g)].map((m) => m[1])).toEqual(['FR', 'EN']);
   });
 
+  it('leads to the documentation in its language, from the header and from the footer', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    const footer = html.match(/<footer class="foot[\s\S]*?<\/footer>/)?.[0] ?? '';
+    for (const part of [header, footer]) {
+      const link = tags(part, 'a').find((a) => a.href === `${BASE}${docPath(lang).slice(1)}`);
+      expect(link, part.slice(0, 80)).toBeDefined();
+    }
+    expect(header).toContain(`>${escapeText(text.header.docs)}</a>`);
+  });
+
   it('points the header’s links at sections that exist', () => {
     const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
     const targets = tags(header, 'a')
@@ -437,5 +449,102 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
       '#faq',
     ]);
     for (const target of targets) expect(html, target).toContain(`id="${target.slice(1)}"`);
+  });
+});
+
+/** The pages of the documentation the site generates, in both languages. */
+const DOC_PAGES = (['fr', 'en'] as const).flatMap((lang) => [
+  { lang, slug: undefined, other: lang === 'fr' ? 'en' : 'fr' },
+  ...DOC_SLUGS.map((slug) => ({ lang, slug, other: lang === 'fr' ? 'en' : 'fr' })),
+]) as { lang: Lang; slug?: DocSlug; other: Lang }[];
+
+describe.each(DOC_PAGES)('the documentation ($lang, $slug)', ({ lang, slug, other }) => {
+  const text = CATALOGS[lang];
+  const path = docPath(lang, slug).slice(1);
+  let html = '';
+  const meta = (key: string) => tags(headOf(html), 'meta').find((t) => t.name === key || t.property === key)?.content;
+  const links = (kind: string) => tags(headOf(html), 'link').filter((l) => l.rel === kind);
+  /** The page's own title and lede, from its Markdown; the home's come from the catalog. */
+  const page = () => {
+    if (!slug) return { title: text.docs.meta.title, description: text.docs.meta.description };
+    const source = readFileSync(new URL(`../${docSource(lang, slug)}`, import.meta.url), 'utf8');
+    const doc = renderDoc(source, { lang, link: (p) => p, callouts: text.docs.callouts });
+    return { title: fmt(text.docs.pageTitle, { title: doc.title }), description: doc.lede, h1: doc.title };
+  };
+
+  beforeAll(() => {
+    const file = new URL(`${path}index.html`, OUT);
+    if (!existsSync(file)) throw new Error(`${path}index.html : génère d’abord le site (npm run generate)`);
+    html = readFileSync(file, 'utf8');
+  });
+
+  it('is named and described for search engines, in its language', () => {
+    const p = page();
+    expect(html).toContain(`<title>${escapeText(p.title)}</title>`);
+    expect(html).toMatch(new RegExp(`<html[^>]*lang="${lang}"`));
+    expect(meta('description')).toBe(p.description);
+    expect(meta('og:title')).toBe(p.title);
+    expect(meta('og:url')).toBe(`${SITE}${path}`);
+    if (p.h1) expect(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1]).toBe(escapeText(p.h1));
+  });
+
+  it('points search engines to itself and to its version in the other language', () => {
+    expect(links('canonical').map((l) => l.href)).toEqual([`${SITE}${path}`]);
+    const alternates = Object.fromEntries(links('alternate').map((l) => [l.hreflang, l.href]));
+    expect(alternates).toEqual({
+      fr: `${SITE}${docPath('fr', slug).slice(1)}`,
+      en: `${SITE}${docPath('en', slug).slice(1)}`,
+      'x-default': `${SITE}${docPath('fr', slug).slice(1)}`,
+    });
+  });
+
+  it('lists every page in its sidebar, by group, and marks the one shown', () => {
+    const nav = html.match(/<nav id="docs-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(tags(nav, 'nav')[0]['aria-label']).toBe(text.docs.nav);
+    const a = tags(nav, 'a');
+    expect(a.map((l) => l.href)).toEqual(DOC_SLUGS.map((s) => `${BASE}${docPath(lang, s).slice(1)}`));
+    for (const g of DOC_GROUPS) expect(nav).toContain(escapeText(text.docs.groups[g.id].title));
+    expect(a.filter((l) => l['aria-current'] === 'page').map((l) => l.href)).toEqual(slug ? [`${BASE}${path}`] : []);
+  });
+
+  it('switches language to the same page', () => {
+    const nav = html.match(/<nav[^>]*class="lang"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';
+    expect(tags(nav, 'a').map((l) => l.href)).toEqual([`${BASE}${docPath('fr', slug).slice(1)}?lang=fr`, `${BASE}${docPath('en', slug).slice(1)}`]);
+  });
+
+  it('sends a first visit from a browser without French to the English page, from the French one only', () => {
+    const redirect = headOf(html).includes(LANG_KEY);
+    expect(redirect).toBe(lang === 'fr');
+    if (redirect) expect(headOf(html)).toContain(`location.replace(${JSON.stringify(`${BASE}${docPath('en', slug).slice(1)}`)})`);
+  });
+
+  it('serves every local file and links to pages that exist', () => {
+    const local = [...html.matchAll(/(?:src|href)="(\/[^"]*)"/g)].map((m) => m[1]);
+    expect(local.length).toBeGreaterThan(DOC_SLUGS.length);
+    for (const ref of local) {
+      const file = decodeURI(ref.slice(BASE.length).split(/[?#]/)[0]);
+      expect(existsSync(new URL(file.endsWith('/') || !file ? `${file}index.html` : file, OUT)), ref).toBe(true);
+    }
+  });
+
+  it('says where to edit it, and leads to the pages before and after it', () => {
+    if (!slug) {
+      for (const s of DOC_SLUGS) expect(html, s).toContain(`href="${BASE}${docPath(lang, s).slice(1)}"`);
+      return;
+    }
+    expect(html).toContain(`href="${REPO}/edit/main/website/${docSource(lang, slug)}"`);
+    const at = DOC_SLUGS.indexOf(slug);
+    const pager = html.slice(html.indexOf('class="pager"'));
+    for (const s of [DOC_SLUGS[at - 1], DOC_SLUGS[at + 1]].filter(Boolean)) {
+      expect(pager, s).toContain(`href="${BASE}${docPath(lang, s).slice(1)}"`);
+    }
+  });
+
+  it('calls the documentation by its name in the header, and links back to the site’s home', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    expect(header).toContain(`href="${BASE}${lang === 'en' ? 'en/' : ''}"`);
+    expect(header).toContain(escapeText(text.docs.title));
+    expect(header).toContain(escapeText(text.docs.search.button));
+    expect(html).not.toContain(escapeText(CATALOGS[other].docs.toc));
   });
 });

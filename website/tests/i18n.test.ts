@@ -5,7 +5,7 @@ import { fmt, plural } from '../app/data/catalog';
 import { en } from '../app/data/en';
 import { fr } from '../app/data/fr';
 import { FEATURE_SHOTS, IMAGE_DIR, VIDEO, imageOf } from '../app/data/site';
-import { LANGS, LANG_KEY, langOfPath, pickLanguage, rememberLanguage } from '../app/data/language';
+import { LANGS, LANG_KEY, langOfPath, pathIn, pickLanguage, rememberLanguage } from '../app/data/language';
 import { leaves } from './helpers';
 
 const PUBLIC = new URL('../public/', import.meta.url);
@@ -50,6 +50,18 @@ describe('catalogs', () => {
         'demo.tokens',
         'squad.names.docs',
         'squad.names.login',
+        'docs.title',
+        // The documentation's pages that bear the same name in both languages.
+        'docs.pages.installation',
+        'docs.pages.notifications',
+        'docs.pages.remote-control',
+        'docs.pages.worktrees',
+        'docs.pages.branches',
+        'docs.pages.integrations',
+        'docs.pages.settings-application',
+        'docs.pages.settings-claude-code',
+        'docs.pages.settings-notifications',
+        'docs.pages.settings-board',
       ].sort(),
     );
   });
@@ -137,6 +149,21 @@ describe('what the two pages share', () => {
     expect(langOfPath('/en/#faq')).toBe('en');
     expect(langOfPath('/english')).toBe('fr');
     expect(langOfPath('/fr/')).toBe('fr');
+    expect(langOfPath('/en/docs/agents/')).toBe('en');
+    expect(langOfPath('/docs/agents/')).toBe('fr');
+  });
+
+  it('finds the same page in the other language, its address ending with a slash', () => {
+    expect(pathIn('fr', '/')).toBe('/');
+    expect(pathIn('en', '/')).toBe('/en/');
+    expect(pathIn('fr', '/en')).toBe('/');
+    expect(pathIn('en', '/en')).toBe('/en/');
+    expect(pathIn('en', '/docs/agents')).toBe('/en/docs/agents/');
+    expect(pathIn('en', '/docs/agents/')).toBe('/en/docs/agents/');
+    expect(pathIn('fr', '/en/docs/agents/')).toBe('/docs/agents/');
+    expect(pathIn('fr', '/en/docs/')).toBe('/docs/');
+    expect(pathIn('en', '/docs/agents/?q=1#modes')).toBe('/en/docs/agents/');
+    expect(pathIn('fr', '/english/')).toBe('/english/');
   });
 
   it('shows the same features, in the same order, with the same screenshots', () => {

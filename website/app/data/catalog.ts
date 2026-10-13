@@ -1,5 +1,6 @@
 // The shape of the texts of a language. fr.ts and en.ts must both fit it, so that a page cannot lack a
 // sentence in one language; tests/i18n.test.ts also checks the lists' lengths and the {parameters}.
+import type { DocGroupId, DocSlug } from './docs';
 import type { Lang } from './language';
 import type { FeatureId } from './site';
 import type { Status } from './squad';
@@ -58,6 +59,8 @@ export interface Catalog {
     roadmap: string;
     faq: string;
     github: string;
+    /** The link to the documentation, in the header and the footer. */
+    docs: string;
     /** The header's short download button. */
     download: string;
     /** The language switch's name, for screen readers. */
@@ -121,6 +124,44 @@ export interface Catalog {
     description: string;
   };
   squad: SquadText;
+  /** The documentation's own words, around its pages (which are Markdown files, in content/docs/). */
+  docs: {
+    /** Its name, over its home. */
+    title: string;
+    /** Under the title of its home. */
+    lead: string;
+    /** The home's name and description for search engines and the browser's tab. */
+    meta: { title: string; description: string };
+    /** A page's name for search engines and the browser's tab. Takes `{title}`. */
+    pageTitle: string;
+    /** The groups of pages, in the sidebar and on the home: their name and what they cover. */
+    groups: Record<DocGroupId, Card>;
+    /** The pages' names in the sidebar, shorter than their titles. */
+    pages: Record<DocSlug, string>;
+    /** The sidebar's name, for screen readers. */
+    nav: string;
+    /** The button that opens the sidebar on a narrow screen. */
+    menu: string;
+    /** Over the page's summary. */
+    toc: string;
+    previous: string;
+    next: string;
+    edit: string;
+    /** The names of the callouts a page may hold. */
+    callouts: { note: string; tip: string; warning: string };
+    search: {
+      /** The header's button, and the window's name. */
+      button: string;
+      placeholder: string;
+      /** Takes `{query}`. */
+      empty: string;
+      /** How to move through the results, under them. */
+      keys: string;
+      /** When the pages could not be loaded to search them. */
+      failed: string;
+      close: string;
+    };
+  };
 }
 
 /** `template` with its `{parameters}` replaced. A parameter that is missing is a mistake, not a text to show. */

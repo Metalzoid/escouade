@@ -1,0 +1,178 @@
+/*
+ * The content of a page of the documentation: HTML rendered from its Markdown (data/render.ts), so styled from here
+ * rather than by its component. Long reading at a comfortable size, the site's hairlines and teal.
+ */
+.prose {
+  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: break-word;
+}
+.prose > :first-child {
+  margin-top: 40px;
+}
+
+.prose h2 {
+  margin: 64px 0 16px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.022em;
+}
+.prose h3 {
+  margin: 40px 0 12px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+}
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 16px;
+}
+.prose ul,
+.prose ol {
+  padding-left: 22px;
+}
+.prose li {
+  margin: 6px 0;
+  padding-left: 4px;
+}
+.prose li > ul,
+.prose li > ol {
+  margin: 6px 0 0;
+}
+.prose li::marker {
+  color: var(--dim);
+}
+.prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.prose a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s var(--ease);
+}
+.prose a:hover {
+  text-decoration-color: var(--brand);
+}
+
+.prose code {
+  padding: 1.5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.84em;
+  overflow-wrap: anywhere;
+}
+/* A key or a short value stays whole; a path or a command may break anywhere rather than widen the page. */
+.prose code.key {
+  white-space: nowrap;
+}
+.prose pre {
+  margin: 20px 0 24px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  line-height: 1.6;
+}
+.prose pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13.5px;
+  white-space: pre;
+}
+
+.prose .table {
+  margin: 20px 0 28px;
+  overflow-x: auto;
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.prose th {
+  padding: 0 16px 10px 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.prose td {
+  padding: 11px 16px 11px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.prose img {
+  width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.prose blockquote {
+  margin: 20px 0;
+  padding-left: 18px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--muted);
+}
+
+/* The callouts: a frame and a name, in the colour of what they say. */
+.prose .callout {
+  --tone: var(--muted);
+  margin: 24px 0;
+  padding: 14px 18px 2px;
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tone) 6%, transparent);
+}
+.prose .callout.tip {
+  --tone: var(--brand);
+}
+.prose .callout.warning {
+  --tone: oklch(0.82 0.13 80);
+}
+.prose .callout-title {
+  margin-bottom: 4px;
+  color: var(--tone);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.prose .callout p {
+  margin-bottom: 12px;
+}
+
+.prose hr {
+  margin: 48px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .prose {
+    font-size: 15.5px;
+  }
+  .prose h2 {
+    font-size: 21px;
+  }
+}

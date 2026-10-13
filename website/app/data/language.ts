@@ -17,9 +17,19 @@ export const LANGS: readonly LangInfo[] = [
   { code: 'en', label: 'EN', name: 'English', path: 'en/' },
 ];
 
-/** The language of a route of the site (`/` or `/en/`), as the router gives it: without the base URL. */
+/** The language of a route of the site (`/`, `/en/`, `/docs/…`, `/en/docs/…`), as the router gives it: without the base URL. */
 export function langOfPath(path: string): Lang {
   return /^\/en(?:[/?#]|$)/.test(path) ? 'en' : 'fr';
+}
+
+/**
+ * The same page as the route `path` (without the base URL), in `lang`: the English pages are the French ones under
+ * /en/. The address ends with a slash, as GitHub Pages serves a page’s folder; its query and its hash are dropped.
+ */
+export function pathIn(lang: Lang, path: string): string {
+  const page = path.replace(/[?#].*$/, '').replace(/^\/en(?=\/|$)/, '').replace(/\/*$/, '/');
+  const rooted = page.startsWith('/') ? page : `/${page}`;
+  return lang === 'en' ? `/en${rooted}` : rooted;
 }
 
 /** Where the visitor’s choice is kept in the browser; the redirection of the French root reads it. */
