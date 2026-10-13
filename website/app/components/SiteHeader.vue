@@ -4,8 +4,9 @@ import { pathIn } from '~/data/language';
 import { DOWNLOAD, REPO } from '~/data/site';
 
 // The home page's header leads to its sections; the documentation's (`docs`) leads back to the home page, and holds
-// the search and, on a narrow screen, the button that opens the sidebar.
-defineProps<{ docs?: boolean }>();
+// the search and, on a narrow screen, the button that opens the sidebar. A page of its own (`page`) leads back to the
+// home page too, and has no sections to lead to.
+defineProps<{ docs?: boolean; page?: boolean }>();
 
 const { lang, text } = useLang();
 const asset = useAsset();
@@ -29,14 +30,16 @@ const menu = useDocsMenu();
         </svg>
       </button>
       <div class="where">
-        <a class="brand" :href="docs ? asset(pathIn(lang, '/')) : '#top'"><LogoMark :size="26" /><span class="name">Escouade</span></a>
+        <a class="brand" :href="docs || page ? asset(pathIn(lang, '/')) : '#top'"
+          ><LogoMark :size="26" /><span class="name">Escouade</span></a
+        >
         <template v-if="docs">
           <span class="slash" aria-hidden="true">/</span>
           <NuxtLink class="crumb" :to="docPath(lang)">{{ text.docs.title }}</NuxtLink>
         </template>
       </div>
       <DocsSearch v-if="docs" />
-      <nav v-else class="nav" :aria-label="text.header.sections">
+      <nav v-else-if="!page" class="nav" :aria-label="text.header.sections">
         <a href="#video">{{ text.header.video }}</a>
         <a :href="`#${text.anchors.features}`">{{ text.header.features }}</a>
         <a :href="`#${text.anchors.install}`">{{ text.header.install }}</a>

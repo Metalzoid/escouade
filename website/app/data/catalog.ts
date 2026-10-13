@@ -98,7 +98,7 @@ export interface Catalog {
   faq: { title: string; items: Question[] };
   /** The page's last word: one more chance to download. */
   close: { title: string };
-  footer: { github: string; license: string; note: string };
+  footer: { github: string; license: string; privacy: string; legal: string; note: string };
   /** For an address that leads nowhere. */
   notFound: { title: string; text: string; home: string };
   /** For any other error the page itself runs into. */

@@ -522,7 +522,10 @@ describe.each(DOC_PAGES)('the documentation ($lang, $slug)', ({ lang, slug, othe
 
   it('switches language to the same page', () => {
     const nav = html.match(/<nav[^>]*class="lang"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? '';
-    expect(tags(nav, 'a').map((l) => l.href)).toEqual([`${BASE}${docPath('fr', slug).slice(1)}?lang=fr`, `${BASE}${docPath('en', slug).slice(1)}`]);
+    expect(tags(nav, 'a').map((l) => l.href)).toEqual([
+      `${BASE}${docPath('fr', slug).slice(1)}?lang=fr`,
+      `${BASE}${docPath('en', slug).slice(1)}`,
+    ]);
   });
 
   it('sends a first visit from a browser without French to the English page, from the French one only', () => {

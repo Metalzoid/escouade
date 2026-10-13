@@ -97,7 +97,10 @@ function blockText(t: Token): string {
       return [...table.header, ...table.rows.flat()].map((c) => plain(c.tokens)).join(' ');
     }
     case 'blockquote':
-      return t.tokens!.map(blockText).join(' ').replace(/^\[!\w+\]\s*/, '');
+      return t
+        .tokens!.map(blockText)
+        .join(' ')
+        .replace(/^\[!\w+\]\s*/, '');
     case 'code':
       return t.text;
     default:

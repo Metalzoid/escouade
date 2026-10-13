@@ -1,6 +1,6 @@
 # Réglages : À propos
 
-L’onglet « À propos » des réglages montre la version d’Escouade, cherche les mises à jour, dit si elles s’installent seules et indique où sont tes données locales.
+L’onglet « À propos » des réglages montre la version d’Escouade, cherche les mises à jour, dit si elles s’installent seules, règle les statistiques d’usage anonymes et indique où sont tes données locales.
 
 ## Ouvrir l’onglet
 
@@ -8,12 +8,13 @@ Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « À propo
 
 ## Escouade
 
-L’onglet n’a qu’un groupe, « Escouade », avec trois lignes.
+L’onglet n’a qu’un groupe, « Escouade », avec quatre lignes.
 
 | Ligne | Ce qu’elle montre ou fait | Par défaut |
 |---|---|---|
 | « Escouade » suivi de la version | La version installée. Dessous, « Claude Code détecté » ou « Claude Code introuvable », selon qu’Escouade trouve `claude`. À droite, le bouton « Rechercher une mise à jour ». | — |
 | « Installer les mises à jour automatiquement » | « Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. » | Activé |
+| « Statistiques d’usage anonymes » | « Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien de toi, de tes projets ni de ton code. » À droite, le bouton « En détail » (il ouvre la page [Confidentialité](/privacy/)) et un interrupteur. | Désactivé tant que tu n’as pas accepté la question du premier démarrage |
 | « Données locales » | Le dossier où Escouade garde ses données : `~/.escouade/`. | — |
 
 Si Claude Code est introuvable, indique son chemin dans l’onglet [« Claude Code »](settings-claude-code).
@@ -47,6 +48,16 @@ Si une version n’a pas pu s’installer, Escouade ne redémarre plus seule pou
 
 > [!NOTE]
 > Sous macOS, le redémarrage automatique n’a lieu que si Escouade peut remplacer son application sans mot de passe d’administrateur. Sinon, redémarre-la toi-même quand la mise à jour est prête.
+
+## Statistiques d’usage anonymes
+
+Escouade peut envoyer des statistiques d’usage anonymes : les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard. Elles vont à un serveur d’Escouade hébergé en France (Aptabase, open source), et à aucun tiers.
+
+Elles sont désactivées tant que tu n’as pas accepté. Au premier démarrage, y compris sur une installation qui existait déjà avant cette fonctionnalité, une fenêtre « Aider à améliorer Escouade ? » te le demande : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Si tu fermes la fenêtre sans répondre (avec `Échap`), elle revient au démarrage suivant.
+
+Le bouton « En détail » de la ligne, comme le lien « Ce qui est envoyé, en détail » de la fenêtre, ouvre la page [Confidentialité](/privacy/) : les événements envoyés et leurs informations, ce qui n’est jamais envoyé, la durée de conservation et la façon de demander une suppression.
+
+Quand tu désactives l’interrupteur, l’identifiant de l’installation est oublié, son fichier `telemetry-id` est supprimé et les événements qui attendaient encore sont abandonnés. Si tu le réactives, un nouvel identifiant est tiré : l’installation compte comme une nouvelle. Une instance lancée avec un dossier de données à part (voir [les données locales](data)) n’envoie jamais rien.
 
 ## Données locales
 

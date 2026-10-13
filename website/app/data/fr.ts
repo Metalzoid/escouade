@@ -214,6 +214,8 @@ export const fr: Catalog = {
   footer: {
     github: 'GitHub',
     license: 'Licence MIT',
+    privacy: 'Confidentialité',
+    legal: 'Mentions légales',
     note: 'Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',
   },
 

@@ -30,7 +30,8 @@ describe('the address of a page of the documentation', () => {
   });
 
   it('is where a link of a page leads the router, when it leads to another page of the documentation', () => {
-    const at = (href: string, base = '/', current = '/docs/chat/') => docRoute(new URL(href, 'https://site.dev/docs/chat/'), 'https://site.dev', base, current);
+    const at = (href: string, base = '/', current = '/docs/chat/') =>
+      docRoute(new URL(href, 'https://site.dev/docs/chat/'), 'https://site.dev', base, current);
     expect(at('/docs/editor/')).toBe('/docs/editor/');
     expect(at('/en/docs/editor/#search')).toBe('/en/docs/editor/#search');
     expect(at('/escouade/docs/editor/', '/escouade/', '/docs/chat/')).toBe('/docs/editor/');
@@ -128,7 +129,9 @@ describe('a page, rendered', () => {
 
   it('serves its images from the base URL, lazily, at their size', () => {
     const doc = render(page('![Le Kanban et ses colonnes](/images/board.jpg)'));
-    expect(doc.html).toContain('<img src="/base/images/board.jpg" alt="Le Kanban et ses colonnes" width="1920" height="960" loading="lazy" decoding="async">');
+    expect(doc.html).toContain(
+      '<img src="/base/images/board.jpg" alt="Le Kanban et ses colonnes" width="1920" height="960" loading="lazy" decoding="async">',
+    );
     expect(doc.images).toEqual(['/images/board.jpg']);
   });
 
@@ -189,7 +192,9 @@ describe('the search', () => {
   const docs = [
     {
       slug: 'managing-agents' as const,
-      doc: render('# Les agents\n\nUn agent est une session de Claude Code.\n\n## Modes de permission\n\nAuto, Plan, Bypass.\n\n## Créer un agent\n\n`Ctrl+N` crée un agent.'),
+      doc: render(
+        '# Les agents\n\nUn agent est une session de Claude Code.\n\n## Modes de permission\n\nAuto, Plan, Bypass.\n\n## Créer un agent\n\n`Ctrl+N` crée un agent.',
+      ),
     },
     {
       slug: 'autopilot' as const,
@@ -296,8 +301,14 @@ describe('the pages of the documentation', () => {
   it('have the same sections, links and images in both languages', () => {
     for (const slug of DOC_SLUGS) {
       const [fr, en] = LANGS.map((lang) => doc(lang, slug));
-      expect(en.headings.map((h) => h.depth), slug).toEqual(fr.headings.map((h) => h.depth));
-      expect(en.links.map((l) => l.slug), slug).toEqual(fr.links.map((l) => l.slug));
+      expect(
+        en.headings.map((h) => h.depth),
+        slug,
+      ).toEqual(fr.headings.map((h) => h.depth));
+      expect(
+        en.links.map((l) => l.slug),
+        slug,
+      ).toEqual(fr.links.map((l) => l.slug));
       expect(en.images, slug).toEqual(fr.images.map((i) => i.replace(/^\/images\//, '/images/en/')));
     }
   });
@@ -306,9 +317,16 @@ describe('the pages of the documentation', () => {
     for (const lang of LANGS) {
       for (const slug of DOC_SLUGS) {
         const d = doc(lang, slug);
-        for (const a of d.anchors) expect(d.headings.map((h) => h.id), `${lang}/${slug} → #${a}`).toContain(a);
+        for (const a of d.anchors)
+          expect(
+            d.headings.map((h) => h.id),
+            `${lang}/${slug} → #${a}`,
+          ).toContain(a);
         for (const l of d.links.filter((l) => l.anchor)) {
-          expect(doc(lang, l.slug).headings.map((h) => h.id), `${lang}/${slug} → ${l.slug}#${l.anchor}`).toContain(l.anchor);
+          expect(
+            doc(lang, l.slug).headings.map((h) => h.id),
+            `${lang}/${slug} → ${l.slug}#${l.anchor}`,
+          ).toContain(l.anchor);
         }
       }
     }
@@ -346,7 +364,9 @@ describe('the pages of the documentation', () => {
   it('write the keys as the app shows them in the page’s language', () => {
     /** The shortcuts a page writes in code: `Ctrl+Maj+F`, `Entrée`. */
     const keys = (s: string) =>
-      [...s.replace(/```[\s\S]*?```/g, '').matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).filter((k) => /^(?:[\p{L}\p{N}_⌘⌃⇧⌥←→↑↓…,.\-/]+\+)*[\p{L}\p{N}_⌘⌃⇧⌥←→↑↓…,.\-/]+$/u.test(k));
+      [...s.replace(/```[\s\S]*?```/g, '').matchAll(/`([^`\n]+)`/g)]
+        .map((m) => m[1])
+        .filter((k) => /^(?:[\p{L}\p{N}_⌘⌃⇧⌥←→↑↓…,.\-/]+\+)*[\p{L}\p{N}_⌘⌃⇧⌥←→↑↓…,.\-/]+$/u.test(k));
     for (const slug of DOC_SLUGS) {
       for (const k of keys(source('fr', slug))) expect(k, `fr/${slug}`).not.toMatch(/(?:^|\+)(?:Shift|Enter|Esc)(?:\+|$)/);
       for (const k of keys(source('en', slug))) expect(k, `en/${slug}`).not.toMatch(/(?:^|\+)(?:Maj|Entrée|Échap)(?:\+|$)/);

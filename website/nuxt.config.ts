@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { DOC_SLUGS, docPath } from './app/data/docs';
+import { legalPath, privacyPath } from './app/data/privacy';
 
 // The app's version, read from the repo: the one its next release carries.
 const tauri = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')) as { version: string };
@@ -23,7 +24,15 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'static',
     prerender: {
-      routes: ['/', '/en', ...(['fr', 'en'] as const).flatMap((lang) => [docPath(lang), ...DOC_SLUGS.map((slug) => docPath(lang, slug))])],
+      routes: [
+        '/',
+        '/en',
+        ...(['fr', 'en'] as const).flatMap((lang) => [docPath(lang), ...DOC_SLUGS.map((slug) => docPath(lang, slug))]),
+        privacyPath('fr'),
+        privacyPath('en'),
+        legalPath('fr'),
+        legalPath('en'),
+      ],
       // The language switch's French links (`?lang=fr`) are the French pages, already generated.
       ignore: [(route: string) => route.includes('?lang=')],
     },

@@ -27,7 +27,10 @@ export function langOfPath(path: string): Lang {
  * /en/. The address ends with a slash, as the server serves a page’s folder; its query and its hash are dropped.
  */
 export function pathIn(lang: Lang, path: string): string {
-  const page = path.replace(/[?#].*$/, '').replace(/^\/en(?=\/|$)/, '').replace(/\/*$/, '/');
+  const page = path
+    .replace(/[?#].*$/, '')
+    .replace(/^\/en(?=\/|$)/, '')
+    .replace(/\/*$/, '/');
   const rooted = page.startsWith('/') ? page : `/${page}`;
   return lang === 'en' ? `/en${rooted}` : rooted;
 }

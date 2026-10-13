@@ -139,7 +139,10 @@ onBeforeUnmount(() => removeEventListener('keydown', shortcut));
             <span class="where">
               {{ h.page }}<template v-if="h.heading"><span class="sep" aria-hidden="true"> › </span>{{ h.heading }}</template>
             </span>
-            <span class="snippet">{{ h.snippet.before }}<mark v-if="h.snippet.match">{{ h.snippet.match }}</mark>{{ h.snippet.after }}</span>
+            <span class="snippet"
+              >{{ h.snippet.before }}<mark v-if="h.snippet.match">{{ h.snippet.match }}</mark
+              >{{ h.snippet.after }}</span
+            >
           </a>
         </li>
       </ul>

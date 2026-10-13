@@ -1,0 +1,130 @@
+# Confidentialité
+
+Escouade travaille en local, sur ta machine. La seule chose qui part d’elle de son propre chef, et seulement si tu l’as acceptée, ce sont des statistiques d’usage anonymes. Cette page dit ce qui est envoyé, ce qui ne l’est jamais, où cela va et comment l’arrêter.
+
+## En bref
+
+- Les statistiques sont **facultatives**. Escouade te pose la question au premier démarrage (y compris après une mise à jour d’une version qui n’en avait pas) et n’envoie rien avant que tu aies répondu « Partager les statistiques ».
+- Elles sont **anonymes** : un identifiant tiré au hasard, jamais dérivé de ta machine ni de toi, et aucun nom, chemin, code, conversation ni donnée Git.
+- Elles vont à un serveur **à nous**, hébergé en France. Aucun tiers ne les reçoit.
+- Tu peux les arrêter à tout moment, et l’identifiant est alors effacé.
+
+## Ce qui est envoyé
+
+Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identifiant de session, l’identifiant de l’installation et les informations du système décrites plus bas.
+
+### Les événements
+
+| Événement | Quand | Informations ajoutées |
+|---|---|---|
+| `app_started` | À chaque démarrage | La langue de l’interface (`fr` ou `en`), le nombre de comptes Claude, le nombre de projets, si « Claude peut piloter Escouade » (le serveur MCP) est activé (oui ou non), si un projet est dans WSL (oui ou non) |
+| `app_active` | Une fois par jour, tant que l’app reste ouverte | — |
+| `project_created` | Un projet est créé | — |
+| `agent_created` | Un agent est créé | `worktree` : avec un worktree ou non (oui ou non) |
+| `message_sent` | Un message est envoyé à un agent | — |
+| `ticket_created` | Un ticket est créé | — |
+| `ticket_started` | Un ticket est démarré | `by` : `user` ou `autopilot` |
+| `ticket_approved` | Un ticket est validé | — |
+| `committed` | Un commit est fait | — |
+| `merged` | Une branche est mergée | — |
+| `git_sync` | Une synchronisation Git | `op` : `fetch`, `pull` ou `push` |
+| `branch_created` | Une branche est créée | — |
+| `terminal_opened` | Un terminal est ouvert | — |
+| `launch_started` | Une commande de lancement démarre | — |
+| `test_run_started` | Un test démarre | — |
+| `claude_code_view` | Un agent passe à la vue Claude Code | — |
+| `file_saved` | Un fichier est enregistré dans l’éditeur | — |
+| `code_searched` | Une recherche dans le code | — |
+| `mcp_enabled` | « Claude peut piloter Escouade » est activé | — |
+| `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github` ou `linear` |
+| `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github` ou `linear` |
+| `account_created` | Un compte Claude est ajouté | — |
+| `remote_control_enabled` | Le contrôle à distance est activé | — |
+
+Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent ou de la branche, ni ce qui a été écrit.
+
+### Le système et l’installation
+
+Tous les événements portent aussi :
+
+| Information | Exemple ou précision |
+|---|---|
+| Identifiant de l’installation | Un UUID v4 tiré au hasard quand tu acceptes, gardé dans `~/.escouade/telemetry-id`, effacé quand tu refuses |
+| Identifiant de session | Un nombre aléatoire, renouvelé après 4 heures sans aucun événement |
+| Version d’Escouade | Par exemple `1.8.0` |
+| Version de développement | Si l’app est une version de développement (oui ou non) |
+| Système et sa version | Par exemple Windows 10.0.26200, macOS 15.1 |
+| Langue du système | Par exemple `fr-FR` (10 caractères au plus) |
+| Moteur web et sa version | WebView2, WebKit ou WebKitGTK |
+
+## Ce qui n’est jamais envoyé
+
+- Les noms : le tien, ceux de tes projets, de tes agents, de tes branches, de tes comptes.
+- Les adresses e-mail.
+- Les chemins et les noms de fichiers.
+- Ton code.
+- Le contenu des conversations et des instructions données aux agents.
+- Les titres et les textes de tes tickets.
+- Les données Git : commits, remotes.
+- Les jetons et les secrets.
+- Tout ce que tu tapes.
+
+## L’outil et l’endroit où vivent les données
+
+Les statistiques sont reçues par [Aptabase](https://aptabase.com), un outil de mesure d’audience open source ([son code](https://github.com/aptabase/aptabase)). Il est **hébergé par l’auteur d’Escouade**, sur `aptabase.gagnaire.dev`, sur un serveur Scaleway dans un centre de données à Paris (France). Aucun tiers ne reçoit ces données, et rien ne passe par le cloud d’Aptabase.
+
+Côté serveur, Aptabase ne garde pas l’adresse IP. Il s’en sert à la réception pour déduire le pays et, quand il le peut, la région, et, combinée à un sel qui change chaque jour, pour calculer un identifiant de visiteur quotidien.
+
+## Comment les événements partent
+
+- Les événements attendent en mémoire, jamais sur le disque.
+- Ils sont envoyés toutes les minutes, par lots de 25, et quand tu quittes l’app (3 secondes au plus), en HTTPS vers `https://aptabase.gagnaire.dev/api/v0/events`.
+- Hors connexion, jusqu’à 1 000 événements attendent en mémoire, les plus anciens étant abandonnés en premier. Si tu quittes l’app sans connexion, ils sont perdus.
+
+## Combien de temps
+
+Le serveur supprime les événements automatiquement au bout de 5 ans (au bout de 182 jours pour ceux des versions de développement).
+
+## Dire oui, non, ou changer d’avis
+
+- **Au premier démarrage**, une fenêtre « Aider à améliorer Escouade ? » propose « Partager les statistiques » ou « Non merci », avec un lien « Ce qui est envoyé, en détail » vers cette page. Si tu la fermes sans répondre (avec `Échap`), elle revient au démarrage suivant.
+- **Dans les réglages**, onglet « À propos », la ligne « Statistiques d’usage anonymes » a un interrupteur et un bouton « En détail » qui ouvre cette page. Il est désactivé tant que tu n’as pas accepté dans la fenêtre du premier démarrage.
+- **Quand tu désactives**, l’identifiant de l’installation est oublié, son fichier `telemetry-id` est supprimé et les événements qui attendaient encore sont abandonnés. Si tu réactives, un nouvel identifiant est tiré : l’installation compte comme une nouvelle.
+
+Voir aussi [les réglages « À propos »](settings-about).
+
+## Les essais et les démonstrations
+
+Une instance lancée avec un dossier de données à part (la variable `ESCOUADE_DATA_DIR`, utilisée par les tests et les démonstrations) n’envoie jamais rien. Voir [les données locales](data).
+
+## Pourquoi
+
+Pour savoir combien de personnes utilisent Escouade (les utilisateurs actifs sur 30 jours, comptés par identifiant d’installation), quelles versions sont encore utilisées (pour savoir quand une ancienne version peut ne plus être prise en charge), sur quels systèmes, et quelles fonctionnalités servent, afin de décider quoi améliorer.
+
+## Anonymat
+
+L’identifiant est tiré au hasard. Il ne dérive de rien de ta machine ni de toi, et rien ne permet de relier les statistiques à une personne.
+
+## Faire supprimer des données
+
+Pour que les données d’une installation soient supprimées, ouvre une [demande sur GitHub](https://github.com/guillaume-gagnaire/escouade/issues) en indiquant l’identifiant qui est dans ton fichier `telemetry-id` (dans `~/.escouade/`). Tu peux aussi écrire à [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+
+## Qui est responsable
+
+Les statistiques sont gérées par GAGNAIRE DEVELOPPEMENT, éditeur d’Escouade (voir les [mentions légales](/legal/)). Contact : [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+
+## Le code
+
+Le code qui envoie les statistiques est ouvert : [`telemetry.rs`](https://github.com/guillaume-gagnaire/escouade/blob/main/src-tauri/src/telemetry.rs). Ce qui est écrit sur cette page doit y être vrai.
+
+## Ce qui sort d’Escouade en dehors des statistiques
+
+Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes conversations ou tes réglages : ils restent dans `~/.escouade/` ([les données locales](data)). Elle parle tout de même à quelques services, et seulement pour ce que tu lui demandes :
+
+- **Claude Code**, qu’elle lance sur ta machine, envoie ses requêtes à Anthropic comme il le ferait dans un terminal. Escouade interroge aussi le service d’usage d’Anthropic pour afficher tes quotas ([les quotas](usage)).
+- **Les mises à jour** : Escouade lit le fichier `latest.json` de la dernière release sur GitHub, puis télécharge la nouvelle version ([les mises à jour](updates)).
+- **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
+
+## Ce site
+
+Le code de ce site n’inclut ni cookie ni outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`), pour te laisser sur la bonne langue à ta prochaine visite. Cette valeur reste dans ton navigateur et n’est envoyée nulle part.

@@ -210,6 +210,8 @@ export const en: Catalog = {
   footer: {
     github: 'GitHub',
     license: 'MIT license',
+    privacy: 'Privacy',
+    legal: 'Legal notice',
     note: 'Independent project, not affiliated with Anthropic. Claude and Claude Code are trademarks of Anthropic.',
   },
 

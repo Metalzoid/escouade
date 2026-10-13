@@ -106,6 +106,7 @@ As long as no project exists, Escouade opens a welcome screen: its logo, the sen
 
 - If Claude Code is not found, a warning says so: “Claude Code couldn’t be found on this machine. Install it (`irm https://claude.ai/install.ps1 | iex`) or set its path in the settings.” Then open the settings with the ⚙ button of the status bar or `Ctrl+,`, Claude Code tab. On macOS, `Ctrl` becomes `⌘`.
 - Click “+ Add a project” to open the “New project” window. The [quick start](quick-start) describes it field by field and goes all the way to the first commit.
+- Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send anonymous usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › About (see the [“About” settings](settings-about)).
 
 The window opens at 1440 × 900 (1000 × 600 at the minimum); Escouade then remembers its size and position. Your projects, conversations and settings are written in `~/.escouade/`: see [local data](data).
 
