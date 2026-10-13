@@ -10,8 +10,8 @@
 use crate::board::{TurnEnd, LIMIT_PAUSE_MS};
 use crate::core::{AgentOptions, Core, RESUME_MARGIN_MS};
 use crate::core_tests::{
-    commit_change, config_dirs, extra_account, git, harness, ignore, second_account, wt_step,
-    Harness,
+    commit_change, config_dirs, extra_account, git, harness, ignore, naming_asked, second_account,
+    wt_step, Harness,
 };
 use crate::model::*;
 use crate::tickets::{error_reason, TicketDraft};
@@ -4432,6 +4432,30 @@ async fn an_agent_asked_in_english_to_prepare_its_launch_answers_with_its_recipe
         ),
         ("node serveur.js", format!("http://localhost:{}", base + 1))
     );
+}
+
+#[tokio::test]
+async fn preparing_a_launch_never_names_an_agent() {
+    let h = harness("tk-prepare-no-name");
+    let (p, _) = h.project(true).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // Opened by a skill with no arguments, so nothing to name it by yet.
+    h.turn(&a, "/impeccable").await;
+    // The app asks for the recipe by itself: that is no task of the user's.
+    h.core.agent_prepare_launch(&a).await.unwrap();
+    h.wait("recipe", |h| h.agent(&a).recipe.is_some()).await;
+    h.wait("turn over", |h| !h.agent(&a).status.is_active())
+        .await;
+    assert!(!naming_asked(&h, &a));
+    assert_eq!(
+        (h.agent(&a).name.as_str(), h.agent(&a).named),
+        ("agent-1", false)
+    );
+    // The user's next message does name it.
+    h.turn(&a, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
 }
 
 /// What the user approves in the test modal: the recipe the agent holds right now.

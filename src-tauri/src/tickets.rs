@@ -2323,7 +2323,8 @@ impl<R: Runtime> Core<R> {
         if h.lock().meta.archived {
             bail!(Refusal::Archived);
         }
-        self.send_message(id, board::prepare_message(self.lang().claude, base), vec![])
+        // The app's own text, not a task of the user's: it never names the agent.
+        self.send_by_app(id, board::prepare_message(self.lang().claude, base))
             .await
     }
 

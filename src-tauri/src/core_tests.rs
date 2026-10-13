@@ -324,7 +324,7 @@ async fn an_agent_is_named_from_a_question_in_the_language_of_the_texts_for_clau
 }
 
 /// Whether Haiku was asked to name the agent since the app started.
-fn naming_asked(h: &Harness, id: &str) -> bool {
+pub(crate) fn naming_asked(h: &Harness, id: &str) -> bool {
     h.core.agent(id).unwrap().lock().naming_asked
 }
 
