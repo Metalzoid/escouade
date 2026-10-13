@@ -353,6 +353,33 @@ async fn an_agent_whose_first_messages_are_commands_is_named_from_the_first_ordi
 }
 
 #[tokio::test]
+async fn the_automatic_resume_never_names_an_agent() {
+    let h = harness("name-not-by-continue");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // Opened by a skill with no arguments, so nothing to name it by yet.
+    h.turn(&a, "/impeccable").await;
+    // The usage limit ended a turn, and the app sends « continue » by itself: that is no task.
+    let turns = |h: &Harness| h.items(&a).iter().filter(|i| i["kind"] == "turn").count();
+    let before = turns(&h);
+    h.core.send_continue(&a).await.unwrap();
+    h.wait("the resumed turn's end", |h| {
+        turns(h) > before && !h.agent(&a).status.is_active()
+    })
+    .await;
+    assert!(!naming_asked(&h, &a));
+    assert_eq!(
+        (h.agent(&a).name.as_str(), h.agent(&a).named),
+        ("agent-1", false)
+    );
+    // The user's next message does name it.
+    h.turn(&a, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
+}
+
+#[tokio::test]
 async fn an_agent_started_by_a_skill_with_arguments_is_named_from_them() {
     let h = harness("name-from-skill");
     let (p, _) = h.project(false).await;

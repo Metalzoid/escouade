@@ -2481,7 +2481,7 @@ impl<R: Runtime> Core<R> {
         let text = auto_resume(self.lang().claude);
         match self.doing_ticket_of(id) {
             Some(ticket_id) => self.send_or_block(&ticket_id, id, text).await,
-            None => self.send_message(id, text, vec![]).await,
+            None => self.send_by_app(id, text).await,
         }
     }
 
@@ -2655,21 +2655,51 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
+        self.send(id, origin, text, attachments, true).await
+    }
+
+    /// `send_message` of a text the app writes by itself (« continue » after the usage limit, the
+    /// conflicts of the base to resolve): no task of the user's to name the agent after, so it
+    /// never does.
+    pub(crate) async fn send_by_app(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
+        self.send(id, None, text, Vec::new(), false).await
+    }
+
+    /// Sends the message to the agent; `names`: it may name the agent (`naming_text`).
+    async fn send(
+        self: &Arc<Self>,
+        id: &str,
+        origin: Option<&str>,
+        text: String,
+        attachments: Vec<Attachment>,
+        names: bool,
+    ) -> Result<()> {
         // Until its turn runs (its process started, the message delivered), it is under way.
         let _working = self.working();
         let delivered = match origin {
             Some(origin) => from_origin(i18n::ui(), origin, &text),
             None => text.clone(),
         };
+        // What the agent's name is made from: nothing, for a message of the app's.
+        let naming = if names { text.as_str() } else { "" };
         // In the Claude Code view: typed in its interface.
-        if self.agent(id)?.lock().meta.terminal {
+        let h = self.agent(id)?;
+        if h.lock().meta.terminal {
             if !attachments.is_empty() {
                 bail!(tr!(
                     "Pas de pièce jointe en vue Claude Code : colle-la dans son terminal.",
                     "No attachments in the Claude Code view: paste them in its terminal."
                 ));
             }
-            return self.send_to_tui(id, &delivered);
+            // Its entry in the transcript, read later, is told from the user's by its text.
+            if !names {
+                h.lock().unprompted = Some(delivered.clone());
+            }
+            let sent = self.send_to_tui(id, &delivered);
+            if sent.is_err() && !names {
+                h.lock().unprompted = None;
+            }
+            return sent;
         }
         // Refused before starting Claude: the composer keeps the message.
         let content = user_content(&delivered, &attachments)?;
@@ -2679,7 +2709,7 @@ impl<R: Runtime> Core<R> {
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
-            if self.deliver(id, &proc, &delivered, &text, &content, &attachments)? {
+            if self.deliver(id, &proc, &delivered, naming, &content, &attachments)? {
                 return Ok(());
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
@@ -4008,7 +4038,7 @@ impl<R: Runtime> Core<R> {
             (false, true) => integrate_rebase_message(claude, &base),
             (false, false) => integrate_conflict_message(claude, &base, &files),
         };
-        self.send_message(id, text, vec![]).await.map_err(|e| {
+        self.send_by_app(id, text).await.map_err(|e| {
             e.context(tr!(
                 "Les conflits de {base} sont dans le worktree, mais {name} n’a pas pu en être prévenu",
                 "The conflicts with {base} are in the worktree, but {name} could not be told",

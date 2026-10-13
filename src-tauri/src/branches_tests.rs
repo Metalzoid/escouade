@@ -1394,6 +1394,8 @@ async fn a_merge_that_conflicts_is_left_in_the_worktree_and_handed_to_the_agent(
         crate::git::operation_in_progress(&wt.to_string_lossy()).await,
         Some("merge")
     );
+    // That message is the app's, not a task of the user's: it never names the agent.
+    assert!(!h.core.agent(&id).unwrap().lock().naming_asked);
     // The agent is asked to resolve the files, in a message of its own (it has no ticket).
     assert_eq!(
         told(&h, &wt, 0).await,

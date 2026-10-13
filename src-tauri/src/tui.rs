@@ -518,10 +518,13 @@ impl<R: Runtime> Core<R> {
                 let prompts = rt.meta.prompts;
                 rt.on_transcript(e, &mut fx);
                 // A message of the user's names the agent, as one sent from the window does: the
-                // first that gives a text to name it from (not a command with nothing to say).
-                if naming.is_none() && rt.meta.prompts > prompts {
+                // first that gives a text to name it from (not a command with nothing to say, nor
+                // what the app typed by itself).
+                if rt.meta.prompts > prompts {
                     let prompt = rt.tui_prompt.clone().unwrap_or_default();
-                    naming = rt.name_from(&prompt);
+                    if !rt.took_unprompted(&prompt) && naming.is_none() {
+                        naming = rt.name_from(&prompt);
+                    }
                 }
             }
             if let Some(t) = rt.tui.as_mut() {

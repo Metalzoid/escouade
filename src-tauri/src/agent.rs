@@ -179,6 +179,10 @@ pub struct AgentRt {
     /// Haiku was asked to name it since the app started (not saved): asked once, at the first
     /// message that gives a text to name it from (`naming_text`).
     pub(crate) naming_asked: bool,
+    /// The text of a message the app typed into its interface by itself (the automatic resume:
+    /// « continue »), until its entry is read from the transcript: no task of the user's, it
+    /// never names the agent (not saved).
+    pub(crate) unprompted: Option<String>,
 }
 
 /// Claude Code's interface running for an agent (`tui`).
@@ -318,7 +322,16 @@ impl AgentRt {
             tui_prompt: None,
             tui_since: None,
             naming_asked: false,
+            unprompted: None,
         }
+    }
+
+    /// `prompt`, read from the transcript, is the message the app typed by itself (`unprompted`):
+    /// forgotten then, so that the user typing the same words later is not mistaken for it.
+    pub(crate) fn took_unprompted(&mut self, prompt: &str) -> bool {
+        self.unprompted
+            .take_if(|sent| sent.trim() == prompt.trim())
+            .is_some()
     }
 
     /// What Haiku is to name the agent from, given a message of its user's: set down as asked
@@ -2020,6 +2033,38 @@ mod tests {
             },
             &std::env::temp_dir().join(format!("ccm-agent-tests-{}", std::process::id())),
         )
+    }
+
+    #[test]
+    fn haiku_is_asked_to_name_an_agent_only_once_while_the_app_runs() {
+        let mut a = rt();
+        // A command with nothing to name it by does not use the one question.
+        assert_eq!(a.name_from("/clear"), None);
+        assert!(!a.naming_asked);
+        assert_eq!(
+            a.name_from("Create the hello file"),
+            Some("Create the hello file".into())
+        );
+        assert!(a.naming_asked);
+        // Not asked again, whatever the next message says (even a skill with arguments).
+        assert_eq!(a.name_from("Delete the other file"), None);
+        assert_eq!(a.name_from("/impeccable propose un design"), None);
+        // An agent that has a name is never asked for one.
+        let mut named = rt();
+        named.meta.named = true;
+        assert_eq!(named.name_from("Create the hello file"), None);
+        assert!(!named.naming_asked);
+    }
+
+    #[test]
+    fn a_message_the_app_typed_by_itself_is_recognized_once_in_the_transcript() {
+        let mut a = rt();
+        assert!(!a.took_unprompted("continue"));
+        a.unprompted = Some("continue".into());
+        // Another message first (the user typed meanwhile): the app's is still waited for.
+        assert!(!a.took_unprompted("Create the hello file"));
+        assert!(a.took_unprompted(" continue\n"));
+        assert!(!a.took_unprompted("continue"));
     }
 
     #[test]

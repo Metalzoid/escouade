@@ -189,6 +189,30 @@ async fn in_the_claude_code_view_commands_do_not_name_the_agent_but_the_next_ord
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn in_the_claude_code_view_the_automatic_resume_never_names_the_agent() {
+    let h = harness("tui-name-not-by-continue");
+    h.core.settings.write().claude_language = "en".into();
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "/impeccable").await;
+    // « continue », typed by the app itself after the usage limit: its entry in the transcript is
+    // read like any other, and is no task.
+    let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    let before = turns(&h);
+    h.core.send_continue(&id).await.unwrap();
+    h.wait("the resumed turn's end", |h| {
+        turns(h) > before && !h.agent(&id).status.is_active()
+    })
+    .await;
+    assert_eq!(texts(&h, &id, "user"), ["/impeccable", "continue"]);
+    let a = h.agent(&id);
+    assert_eq!((a.named, a.name.as_str()), (false, "agent-1"));
+    assert!(!h.core.agent(&id).unwrap().lock().naming_asked);
+    say_in_tui(&h, &id, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&id).named).await;
+    assert_eq!(h.agent(&id).name, "create-the-fake-en");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn in_the_claude_code_view_a_skill_with_arguments_names_the_agent_from_them() {
     let h = harness("tui-name-from-skill");
     h.core.settings.write().claude_language = "en".into();
