@@ -36,6 +36,40 @@ pub async fn output_within(mut cmd: Command, limit: Duration) -> io::Result<Outp
     }
 }
 
+/// How many descriptors `no_inherited_fds` goes through at most: the soft limit can be absurd (a
+/// container's is often a billion), and std's pipes are the lowest numbers free anyway.
+#[cfg(unix)]
+const MAX_FDS_MARKED: libc::c_int = 1 << 16;
+
+/// Makes the process `cmd` starts leave behind the descriptors the app has open (every one but its
+/// standard three): a long-lived child (`claude`, a test run) would otherwise hold on to the write
+/// end of the pipe of a `git` that another thread is running at that moment, and the end of that
+/// pipe would wait for it. Nothing to do outside Unix: a handle is not inherited there unless it was
+/// made to be. The descriptors are marked close-on-exec, not closed: std tells its parent that
+/// `exec` failed through a pipe of its own, which is only valid if it stays open until then.
+pub fn no_inherited_fds(cmd: &mut Command) {
+    #[cfg(unix)]
+    {
+        // Read here rather than in the closure, which runs between `fork` and `exec` and so may
+        // only call what is async-signal-safe.
+        let limit = unsafe { libc::getdtablesize() }.clamp(3, MAX_FDS_MARKED);
+        // SAFETY: the closure runs in the child between `fork` and `exec`, where nothing may
+        // allocate or take a lock. It only calls `fcntl` (a bare system call, async-signal-safe) on
+        // integers, on a range computed beforehand, and ignores its failure (`EBADF`: a number
+        // that is not open).
+        unsafe {
+            cmd.pre_exec(move || {
+                for fd in 3..limit {
+                    libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+                }
+                Ok(())
+            });
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = cmd;
+}
+
 /// What `child` (its outputs in pipes) prints until it ends, like tokio's `wait_with_output`, but
 /// without waiting for the end of the pipes once it has: they are then given `EOF_GRACE` to end,
 /// counted from the last data they delivered, so that all of a big output is read, and a pipe
@@ -261,6 +295,88 @@ mod tests {
         assert_eq!(out.status.code(), Some(3));
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "out");
         assert_eq!(String::from_utf8_lossy(&out.stderr).trim(), "err");
+    }
+
+    /// A pipe made the way std makes its own before it marks them close-on-exec: both ends are
+    /// inherited by whatever is started while they are open. Returns `(read, write)`.
+    #[cfg(unix)]
+    fn inheritable_pipe() -> (libc::c_int, libc::c_int) {
+        let mut fds = [0 as libc::c_int; 2];
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        (fds[0], fds[1])
+    }
+
+    /// Set in the copy of the test binary that runs the test below alone.
+    #[cfg(unix)]
+    const ALONE: &str = "CCM_PROC_TEST_ALONE";
+
+    /// A long-lived child must not keep what the app has open when it is started: with a pipe's
+    /// write end inherited, the app reading the pipe would not see its end until the child dies.
+    ///
+    /// The pipe is open (and inheritable) for the few milliseconds between its creation and the
+    /// close of our write end: any test of the process starting a long-lived program in that
+    /// window holds it too and the read waits for that one. So the test runs again alone, in a
+    /// copy of the test binary where nothing else is started (as nextest does for every test).
+    #[cfg(unix)]
+    #[test]
+    fn a_long_lived_child_does_not_inherit_the_open_descriptors() {
+        const NAME: &str = "a_long_lived_child_does_not_inherit_the_open_descriptors";
+        if std::env::var_os(ALONE).is_none() {
+            // The test's name from the root of the crate: `proc::tests::…`.
+            let path = module_path!().split_once("::").map_or("", |(_, rest)| rest);
+            let mut again = std::process::Command::new(std::env::current_exe().unwrap());
+            again
+                .args([&format!("{path}::{NAME}"), "--exact", "--test-threads=1"])
+                .env(ALONE, "1");
+            let out = output_in_files(&mut again).unwrap();
+            let said = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            // "1 passed": a name that matches nothing would also end well.
+            assert!(
+                out.status.success() && said.contains("1 passed"),
+                "run alone: {said}"
+            );
+            return;
+        }
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (n, waited) = rt.block_on(async {
+            let (read_end, write_end) = inheritable_pipe();
+            let mut cmd = command("sleep", &["5"]);
+            cmd.kill_on_drop(true);
+            no_inherited_fds(&mut cmd);
+            let spawned = cmd.spawn();
+            unsafe { libc::close(write_end) };
+            let mut child = spawned.unwrap();
+            let start = Instant::now();
+            let mut byte = 0u8;
+            let n = unsafe { libc::read(read_end, (&mut byte as *mut u8).cast(), 1) };
+            let waited = start.elapsed();
+            unsafe { libc::close(read_end) };
+            child.kill().await.unwrap();
+            (n, waited)
+        });
+        assert_eq!(n, 0, "the pipe has an end, nothing was written");
+        assert!(
+            waited < Duration::from_secs(1),
+            "the read waited {waited:?} for the child to let go of the pipe"
+        );
+    }
+
+    /// Descriptors are marked, not closed: std tells the parent that `exec` failed through a pipe
+    /// of its own, which the child still writes to after the closure has run.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_program_that_cannot_start_is_still_reported_by_spawn() {
+        let mut cmd = command("/nonexistent/ccm-no-such-program", &[]);
+        no_inherited_fds(&mut cmd);
+        let err = cmd.spawn().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound, "{err}");
     }
 
     /// The grace after the end of the process only cuts a pipe that stays silent: a program the

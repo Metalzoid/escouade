@@ -57,6 +57,7 @@ impl ClaudeProcess {
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
         crate::job::isolate(&mut cmd);
+        crate::proc::no_inherited_fds(&mut cmd);
 
         let mut child = cmd
             .spawn()

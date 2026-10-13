@@ -371,6 +371,7 @@ pub async fn run_streaming(
     #[cfg(windows)]
     cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
     crate::job::isolate(&mut cmd);
+    crate::proc::no_inherited_fds(&mut cmd);
     let mut child = cmd.spawn()?;
     let job = crate::job::Job::for_child(&child);
     let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
