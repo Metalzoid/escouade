@@ -1,0 +1,103 @@
+# Local data
+
+Everything Escouade keeps on your disk: the ~/.escouade/ folder and each of its files, where tokens live, what it reads of Claude Code’s data, and how to back up or reset.
+
+## The data folder
+
+Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows). Settings › About reminds you of it on the “Local data” line.
+
+| File or folder | Contents |
+|---|---|
+| `settings.json` | The settings. |
+| `state.json` | The projects, the agents (with the ID of their Claude Code session), the Kanban tickets, the autopilot’s pause, and the interface state. |
+| `integrations.json` | The Jira, Trello, GitHub, and Linear accounts, without their tokens (see [Tokens](#tokens)). |
+| `sync-queue.json` | The syncs with those services that are waiting to be retried. |
+| `conversations/<agent>.jsonl` | The log of each conversation, named after the agent’s ID, one operation (an item added or corrected) per line. Deleted with the agent. |
+| `claude/<account>/` | The Claude Code configuration folder of each account added in Settings › Claude accounts: its sign-in and its conversations. Main has none; it uses your own Claude Code’s folder. |
+| `mcp-token.json` | The MCP server’s token for Claude outside Escouade, only when the system keychain refuses it (always on Linux). |
+| `mcp/<agent>.json` | The MCP configuration of an Escouade agent, with its token. Deleted when its process stops, and each time the app starts and quits. |
+| `tui/<agent>.json` | The hook settings that an agent’s Claude Code view passes to Claude Code. The token isn’t in it: it goes through an environment variable. |
+| `logs/<agent>-setup.log` | The full output of the last setup of an agent’s worktree. Deleted with the agent. |
+| `update.json` | The update being installed, noted for the next start and then deleted. |
+| `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
+| `app.log` | The app’s log. At startup, if it is over about 5 MB, it becomes `app.old.log`. |
+| `settings.broken.json`, `state.broken.json`… | Copies of files the app couldn’t read (see [An unreadable file](#an-unreadable-file)). |
+
+## The old Claude Code Manager folder
+
+Escouade used to be called “Claude Code Manager” and kept its data in `~/.claude-code-manager/`. At the first launch that finds it, Escouade moves it to `~/.escouade/` and leaves a `.migrated-from-claude-code-manager` file in it. The web engine’s and window state’s folders, named after the app identifier, follow the same path. In practice, an update keeps your settings, projects, and conversations: see [updates](updates).
+
+The rare cases are handled without losing anything:
+
+- A `~/.escouade/` folder that is already there without that file (made by a launch that couldn’t move the old folder) is never deleted: it is set aside under the name `.escouade.before-migration-` followed by a number, and the old folder takes its place.
+- If the old folder can’t be moved because a file is still open, Escouade keeps using it and tries again at the next launch.
+
+## Choosing another folder
+
+The `ESCOUADE_DATA_DIR` environment variable, when it is set and not empty, replaces `~/.escouade/` with the folder it names. The old `CCM_DATA_DIR` variable still works, but `ESCOUADE_DATA_DIR` takes precedence. Set it in the terminal you launch Escouade from.
+
+It is meant for demos and trials. With a separate folder:
+
+- Escouade moves nothing from `~/.claude-code-manager/`.
+- Tokens go to a separate keychain entry (the `dev.gagnaire.escouade.sandbox` service): they never replace yours.
+- Another instance can run alongside the one that uses the usual folder.
+- The automatic restart for an update is turned off.
+
+## Tokens
+
+Tokens aren’t in the settings:
+
+- **Jira, Trello, GitHub, Linear.** Each service’s token is in the system keychain: Windows Credential Manager, macOS Keychain Access. There is one entry per service (`jira`, `trello`, `github`, `linear`) under the `dev.gagnaire.escouade` service. `integrations.json` keeps the rest of the account. When the keychain refuses the entry, Settings › Integrations says so (“System keychain unavailable: the token stays in ~/.escouade/integrations.json.”) and the token stays in that file, readable only by you on macOS and Linux.
+- **Linux.** There is no supported keychain: the integration tokens stay in `integrations.json`.
+- **MCP server.** The token for Claude outside Escouade is in the keychain (an `mcp` entry), otherwise in `mcp-token.json`. Each agent’s is in its `mcp/<agent>.json`, which goes away with its process.
+- **Claude Code’s sign-in.** It isn’t Escouade’s: Claude Code keeps it in each account’s folder (the `.credentials.json` file), and on macOS in the keychain. See [Claude accounts](accounts).
+
+To remove a token, disconnect the service in Settings › Integrations: its entry leaves the keychain. See [integrations](integrations).
+
+## What Escouade reads of Claude Code
+
+Escouade drives Claude Code and keeps its own conversations, but it also relies on Claude Code’s data:
+
+- **Sessions.** Each agent has a Claude Code session. Escouade notes its ID in `state.json` and runs `claude --resume` on that session when the app restarts or a stopped process picks up again: the agent gets its whole context back. The sessions themselves are in the Claude Code configuration folder of the agent’s account (`~/.claude` by default for Main, `~/.escouade/claude/<account>/` for the others), under `projects/`. Deleting an agent removes its conversation from Escouade; the Claude Code session stays on disk. If a session has disappeared, the agent says so (“Claude session not found: a new session will start with your next message.”).
+- **The sign-in, for quotas.** Escouade reads, without writing it, the sign-in that Claude Code keeps for each account, and uses it to ask Anthropic for the account’s quotas. See [quotas](usage).
+- **The transcript, in the Claude Code view.** To follow an agent that runs in Claude Code’s own interface, Escouade reads the session it writes (`projects/<folder>/<session>.jsonl`). See [the Claude Code view](claude-code-view).
+- **The MCP configuration.** When “Claude can drive Escouade” is on (Settings › Claude Code), Escouade declares its MCP server in the Claude Code configuration of each active account. See [the MCP server](mcp).
+- **A new account** takes from Main, by link or by copy, its settings, its `CLAUDE.md`, and its skills, agents, commands, plugins, hooks, and output styles. Never its sign-in or its `.claude.json`.
+
+## What isn’t in the folder
+
+- **Your projects and the agents’ worktrees.** They are yours, in each project: `.claude/worktrees` by default, or the “Worktrees folder” set for the project. Closing a project doesn’t touch them.
+- **Claude Code’s sessions**, seen above.
+- **The window’s size and position.** The `.window-state.json` file is in the system’s configuration folder, under `dev.gagnaire.escouade`: `%APPDATA%\dev.gagnaire.escouade` on Windows, `~/Library/Application Support/dev.gagnaire.escouade` on macOS, `~/.config/dev.gagnaire.escouade` on Linux.
+- **A few display preferences**, kept by the app’s web engine: the text you have started in a message field (it survives a restart), the width of the editor’s file tree, the height of the “Plan” banner, how diffs are shown, the statistics period.
+
+## Backing up
+
+1. Really quit Escouade: closing the window leaves it in the notification area. Use “Quit” in the menu of its icon.
+2. Copy the `~/.escouade/` folder.
+
+The copy holds your settings, projects, tickets, conversations, and statistics. It also holds, under `claude/`, the sign-in of the Claude accounts you added (on Windows and Linux): keep it private.
+
+To restore it on another machine, put the folder back in the same place, with your projects at the same paths (`state.json` remembers full paths). Three things don’t come along:
+
+- The integration tokens (except on Linux): reconnect each service.
+- Main’s sign-in: it is in your Claude Code.
+- The agents’ sessions, which are in Claude Code’s folder: without them, an agent starts over with a new session.
+
+## Resetting
+
+Quit Escouade first, then:
+
+| To… | Do… |
+|---|---|
+| Get the default settings back | Delete `settings.json`. |
+| Erase the statistics | Delete `stats.db`. |
+| Start over with no project, agent, or ticket | Delete `state.json`, and `conversations/` so the logs don’t stay behind. |
+| Erase everything | Delete the `~/.escouade/` folder. The sign-ins of the accounts added under `claude/` go with it. |
+| Remove the integration tokens | Disconnect each service in Settings › Integrations. |
+
+Your projects’ files, the agents’ worktrees, and Claude Code’s sessions are never touched by a reset: remove the worktrees you no longer want with git.
+
+## An unreadable file
+
+When `settings.json`, `state.json`, `integrations.json`, or `sync-queue.json` isn’t valid JSON, Escouade writes the error to `app.log`, keeps a copy of the file under a name like `state.broken.json`, and starts with the defaults for that file. The copy lets you recover by hand what was in it, such as the list of projects. See [troubleshooting](troubleshooting).

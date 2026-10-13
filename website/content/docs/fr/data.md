@@ -1,0 +1,103 @@
+# Données locales
+
+Tout ce qu’Escouade garde sur ton disque : le dossier ~/.escouade/ et chacun de ses fichiers, l’endroit où vivent les jetons, ce qu’elle lit des données de Claude Code, et comment sauvegarder ou remettre à zéro.
+
+## Le dossier de données
+
+Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous Windows). Réglages › À propos le rappelle sur la ligne « Données locales ».
+
+| Fichier ou dossier | Contenu |
+|---|---|
+| `settings.json` | Les réglages. |
+| `state.json` | Les projets, les agents (avec l’identifiant de leur session Claude Code), les tickets du Kanban, la pause du pilote auto et l’état de l’interface. |
+| `integrations.json` | Les comptes Jira, Trello, GitHub et Linear, sans leurs jetons (voir [Les jetons](#les-jetons)). |
+| `sync-queue.json` | Les synchronisations avec ces services qui attendent d’être retentées. |
+| `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent. |
+| `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes Claude : sa connexion et ses conversations. Principal n’en a pas, il utilise celui de ton propre Claude Code. |
+| `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (toujours sous Linux). |
+| `mcp/<agent>.json` | La configuration MCP d’un agent d’Escouade, avec son jeton. Effacée quand son processus s’arrête, et à chaque démarrage et arrêt de l’app. |
+| `tui/<agent>.json` | Les réglages de hooks que la vue Claude Code d’un agent passe à Claude Code. Le jeton n’y est pas : il passe par une variable d’environnement. |
+| `logs/<agent>-setup.log` | La sortie complète de la dernière préparation du worktree d’un agent. Effacé avec l’agent. |
+| `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
+| `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
+| `app.log` | Le journal de l’application. Au démarrage, s’il dépasse environ 5 Mo, il devient `app.old.log`. |
+| `settings.broken.json`, `state.broken.json`… | Les copies des fichiers que l’app n’a pas pu lire (voir [Un fichier illisible](#un-fichier-illisible)). |
+
+## L’ancien dossier de Claude Code Manager
+
+Escouade s’appelait « Claude Code Manager » et gardait ses données dans `~/.claude-code-manager/`. Au premier lancement qui le trouve, elle le déplace en `~/.escouade/` et y laisse un fichier `.migrated-from-claude-code-manager`. Les dossiers du moteur web et de l’état de la fenêtre, nommés d’après l’identifiant de l’app, suivent le même chemin. En pratique, la mise à jour garde tes réglages, tes projets et tes conversations : voir les [mises à jour](updates).
+
+Les cas rares sont traités sans rien perdre :
+
+- Un dossier `~/.escouade/` déjà là sans ce fichier (créé par un lancement qui n’avait pas pu déplacer l’ancien dossier) n’est jamais effacé : il est mis de côté sous le nom `.escouade.before-migration-` suivi d’un nombre, et l’ancien dossier prend sa place.
+- Si l’ancien dossier ne peut pas être déplacé parce qu’un fichier est encore ouvert, Escouade continue de l’utiliser et réessaie au lancement suivant.
+
+## Choisir un autre dossier
+
+La variable d’environnement `ESCOUADE_DATA_DIR`, quand elle est définie et non vide, remplace `~/.escouade/` par le dossier indiqué. L’ancienne variable `CCM_DATA_DIR` marche encore, mais `ESCOUADE_DATA_DIR` passe avant. Définis-la dans le terminal depuis lequel tu lances Escouade.
+
+C’est fait pour les démonstrations et les essais. Avec un dossier à part :
+
+- Escouade ne déplace rien de `~/.claude-code-manager/`.
+- Les jetons vont dans une entrée du trousseau à part (le service `dev.gagnaire.escouade.sandbox`) : ils ne remplacent jamais les tiens.
+- Une autre instance peut tourner à côté de celle qui utilise le dossier habituel.
+- Le redémarrage automatique pour une mise à jour est désactivé.
+
+## Les jetons
+
+Les jetons ne sont pas dans les réglages :
+
+- **Jira, Trello, GitHub, Linear.** Le jeton de chaque service est dans le trousseau du système : le Credential Manager de Windows, le Trousseau d’accès de macOS. Il y a une entrée par service (`jira`, `trello`, `github`, `linear`) sous le service `dev.gagnaire.escouade`. `integrations.json` garde le reste du compte. Quand le trousseau refuse l’entrée, Réglages › Intégrations le dit (« Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. ») et le jeton reste dans ce fichier, lisible par toi seul sous macOS et Linux.
+- **Linux.** Il n’y a pas de trousseau pris en charge : les jetons des intégrations restent dans `integrations.json`.
+- **Serveur MCP.** Le jeton de Claude hors Escouade est dans le trousseau (une entrée `mcp`), sinon dans `mcp-token.json`. Celui de chaque agent est dans son `mcp/<agent>.json`, qui disparaît avec son processus.
+- **Connexion de Claude Code.** Elle n’est pas à Escouade : Claude Code la garde dans le dossier de chaque compte (le fichier `.credentials.json`), et sous macOS dans le trousseau. Voir [les comptes Claude](accounts).
+
+Pour retirer un jeton, déconnecte le service dans Réglages › Intégrations : son entrée quitte le trousseau. Voir [les intégrations](integrations).
+
+## Ce que lit Escouade de Claude Code
+
+Escouade pilote Claude Code et garde ses propres conversations, mais elle s’appuie aussi sur ses données :
+
+- **Les sessions.** Chaque agent a une session Claude Code. Escouade en note l’identifiant dans `state.json` et relance `claude --resume` sur cette session quand l’app redémarre ou qu’un processus arrêté reprend : l’agent retrouve tout son contexte. Les sessions elles-mêmes sont dans le dossier de configuration de Claude Code du compte de l’agent (`~/.claude` par défaut pour Principal, `~/.escouade/claude/<compte>/` pour les autres), sous `projects/`. Supprimer un agent retire sa conversation d’Escouade ; la session Claude Code reste sur le disque. Si une session a disparu, l’agent le dit (« Session Claude introuvable : une nouvelle session sera démarrée au prochain message. »).
+- **La connexion, pour les quotas.** Escouade lit, sans l’écrire, la connexion que Claude Code garde pour chaque compte, et s’en sert pour demander ses quotas à Anthropic. Voir [les quotas](usage).
+- **Le transcript, dans la vue Claude Code.** Pour suivre un agent qui tourne dans l’interface de Claude Code, Escouade lit la session qu’il écrit (`projects/<dossier>/<session>.jsonl`). Voir [la vue Claude Code](claude-code-view).
+- **La configuration MCP.** Quand « Claude peut piloter Escouade » est activé (Réglages › Claude Code), Escouade déclare son serveur MCP dans la configuration de Claude Code de chaque compte actif. Voir [le serveur MCP](mcp).
+- **Un nouveau compte** reprend de Principal, par lien ou par copie, ses réglages, son `CLAUDE.md`, ses skills, agents, commandes, plugins, hooks et styles de sortie. Jamais sa connexion ni son `.claude.json`.
+
+## Ce qui n’est pas dans le dossier
+
+- **Tes projets et les worktrees des agents.** Ils sont chez toi, dans chaque projet : `.claude/worktrees` par défaut, ou le « Dossier des worktrees » réglé pour le projet. Fermer un projet ne les touche pas.
+- **Les sessions de Claude Code**, vues plus haut.
+- **La taille et la position de la fenêtre.** Le fichier `.window-state.json` est dans le dossier de configuration du système, sous `dev.gagnaire.escouade` : `%APPDATA%\dev.gagnaire.escouade` sous Windows, `~/Library/Application Support/dev.gagnaire.escouade` sous macOS, `~/.config/dev.gagnaire.escouade` sous Linux.
+- **Quelques préférences d’affichage**, gardées par le moteur web de l’app : le texte que tu as commencé dans un champ de message (il survit à un redémarrage), la largeur de l’arborescence de l’éditeur, la hauteur du bandeau « Plan », la présentation des diffs, la période des statistiques.
+
+## Sauvegarder
+
+1. Quitte vraiment Escouade : fermer la fenêtre la laisse dans la zone de notification. Utilise « Quitter » dans le menu de son icône.
+2. Copie le dossier `~/.escouade/`.
+
+La copie contient tes réglages, tes projets, tes tickets, tes conversations et tes statistiques. Elle contient aussi, sous `claude/`, la connexion des comptes Claude que tu as ajoutés (sous Windows et Linux) : garde-la privée.
+
+Pour la rétablir sur une autre machine, remets le dossier au même endroit, avec tes projets aux mêmes chemins (`state.json` retient des chemins complets). Trois choses ne suivent pas :
+
+- Les jetons des intégrations (sauf sous Linux) : reconnecte chaque service.
+- La connexion de Principal : elle est dans ton Claude Code.
+- Les sessions des agents, qui sont dans le dossier de Claude Code : sans elles, un agent repart d’une nouvelle session.
+
+## Remettre à zéro
+
+Quitte Escouade d’abord, puis :
+
+| Pour… | Fais… |
+|---|---|
+| Retrouver les réglages par défaut | Supprime `settings.json`. |
+| Effacer les statistiques | Supprime `stats.db`. |
+| Repartir sans projet, agent ni ticket | Supprime `state.json`, et `conversations/` pour ne pas garder les journaux. |
+| Tout effacer | Supprime le dossier `~/.escouade/`. Les connexions des comptes ajoutés dans `claude/` partent avec lui. |
+| Retirer les jetons des intégrations | Déconnecte chaque service dans Réglages › Intégrations. |
+
+Les fichiers de tes projets, les worktrees des agents et les sessions de Claude Code ne sont jamais touchés par une remise à zéro : supprime les worktrees dont tu ne veux plus avec git.
+
+## Un fichier illisible
+
+Quand `settings.json`, `state.json`, `integrations.json` ou `sync-queue.json` n’est pas du JSON valide, Escouade écrit l’erreur dans `app.log`, garde une copie du fichier sous un nom comme `state.broken.json`, et démarre avec les valeurs par défaut pour ce fichier. La copie permet de retrouver à la main ce qui y était, par exemple la liste des projets. Voir le [dépannage](troubleshooting).

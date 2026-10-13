@@ -1,0 +1,137 @@
+# Réglages : Intégrations
+
+L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues et Linear, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
+
+## Ouvrir l’onglet
+
+Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Intégrations ». Les tickets importés et leur synchronisation sont expliqués dans [les intégrations](integrations).
+
+L’onglet réunit trois sortes de réglages :
+
+- « Comptes connectés » est commun à toute l’app et s’enregistre tout de suite, sans « Enregistrer ».
+- « Sources liées à … » et « Correspondance des statuts » sont propres au projet sélectionné dans la barre « Projet » en haut de la fenêtre. Ils restent dans un brouillon jusqu’à « Enregistrer » ; « Annuler » les abandonne.
+- « Synchronisation » et « Import automatique » sont communs à tous les projets, et passent aussi par « Enregistrer ».
+
+Sans projet ouvert, l’onglet affiche « Aucun projet ouvert. ».
+
+## Comptes connectés
+
+Un compte par service : Jira, Trello, GitHub Issues et Linear. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
+
+« Connecter… » ouvre le formulaire du service, dont les champs sont décrits ci-dessous. Les jetons et la clé d’API de Linear sont masqués à la saisie ; la clé d’API de Trello ne l’est pas.
+
+### Jira
+
+| Champ | À renseigner |
+|---|---|
+| « Site » | L’adresse de ton site Atlassian, par exemple `atlas.atlassian.net`. Sans `https://`, Escouade l’ajoute. Seul https est accepté (http seulement vers cette machine). |
+| « E-mail » | L’e-mail du compte auquel appartient le jeton, par exemple `ada@atlas.dev`. |
+| « Jeton d’API » | Un jeton d’API Atlassian. |
+
+Le lien « Créer un jeton d’API Atlassian » ouvre `https://id.atlassian.com/manage-profile/security/api-tokens`. Une fois connecté, le compte s’affiche avec l’e-mail et le site, par exemple « ada@atlas.dev · atlas.atlassian.net ». Ce que Jira appelle l’endroit des tickets est un « Projet ».
+
+### Trello
+
+| Champ | À renseigner |
+|---|---|
+| « Clé d’API » | La clé d’API de Trello. |
+| « Jeton » | Un jeton pour cette clé. |
+
+Le lien « Obtenir une clé d’API » ouvre `https://trello.com/power-ups/admin`. Le lien « Obtenir un jeton pour cette clé », grisé tant que la clé est vide, ouvre la page d’autorisation de Trello pour la clé saisie : accès en lecture et en écriture, sans expiration, au nom d’« Escouade ». L’endroit des tickets est un « Tableau ».
+
+### GitHub Issues
+
+| Champ | À renseigner |
+|---|---|
+| « Jeton (vide : celui de gh) » | Un jeton GitHub. Laissé vide, Escouade demande son jeton à la CLI GitHub (`gh auth token`) : `gh` doit être installée et connectée (`gh auth login`). |
+
+Le lien « Créer un jeton GitHub » ouvre `https://github.com/settings/tokens`. Un compte qui passe par `gh` s’affiche avec « · via gh ». L’endroit des tickets est un « Dépôt ».
+
+### Linear
+
+| Champ | À renseigner |
+|---|---|
+| « Clé d’API » | Une clé d’API personnelle de Linear. |
+
+Le lien « Créer une clé d’API Linear » ouvre `https://linear.app/settings/account/security`. L’endroit des tickets est une « Équipe ».
+
+### Connecter et déconnecter
+
+Clique sur « Connecter » une fois les champs remplis ; le bouton dit « Vérification… » pendant l’appel, et « Annuler » ferme le formulaire. Escouade vérifie les identifiants auprès du service et ne les garde que s’il les accepte. S’il les refuse, ou s’il est injoignable, sa réponse s’affiche en rouge sous les champs, par exemple « Jira refuse ces identifiants (401) ». Un champ manquant est signalé avant tout appel, par exemple « Indique le jeton. ».
+
+« Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs sources liées : elles ne servent plus tant qu’un compte du service n’est pas reconnecté. Pour changer de compte, déconnecte l’ancien puis connecte l’autre.
+
+### Où sont gardés les jetons
+
+Les clés et les jetons vont dans le trousseau du système (Credential Manager sous Windows, Keychain sous macOS) ; le reste du compte est dans `~/.escouade/integrations.json`. Sous Linux, où Escouade ne connaît pas de trousseau, et quand le trousseau refuse une écriture, les secrets restent dans ce fichier, lisible par toi seul. Le compte le dit alors : « Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. »
+
+Si le trousseau ne rend pas un jeton au démarrage, le compte affiche « Trousseau du système illisible : relance Escouade ou reconnecte le compte. » et aucun appel ne part tant que c’est le cas. Voir [les données locales](data).
+
+## Sources liées à un projet
+
+Le groupe s’appelle « Sources liées à » suivi du nom du projet. Tant qu’aucun compte n’est connecté, il dit : « Connecte un compte ci-dessus pour lier une source à ce projet. »
+
+Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues » ou « Équipe Linear ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
+
+- **Jira** : les projets du site, présentés sous la forme « CLÉ — nom ».
+- **Trello** : tes tableaux ouverts.
+- **GitHub Issues** : les dépôts auxquels tu as accès (propriétaire, collaborateur ou membre d’une organisation), les derniers poussés d’abord. Le dépôt du projet, lu dans son remote git, est en tête avec « (dépôt du projet) ».
+- **Linear** : tes équipes, sous la forme « Nom (CLÉ) ».
+
+Choisir une source charge ses statuts et préremplit la correspondance ci-dessous. Si les statuts ne se chargent pas, la source est liée quand même, et l’infobulle des menus de la correspondance dit pourquoi.
+
+## Correspondance des statuts
+
+Ce groupe n’apparaît qu’une fois une source liée à un compte connecté. Il dit : « L’état que prend le ticket externe quand son ticket arrive dans la colonne ; « Commenter » y ajoute un commentaire (critères, issue de la validation…). »
+
+Une ligne par colonne du Kanban (« À faire », « En cours », « À tester », « Terminé »), un menu par service lié, et un interrupteur « Commenter » en bout de ligne.
+
+### Le statut de chaque colonne
+
+Chaque menu propose « — inchangé » (le ticket externe n’est pas touché) et les statuts de la source :
+
+| Service | Statuts proposés | Ce que fait le changement de statut |
+|---|---|---|
+| Jira | Les statuts des types de ticket du projet | Escouade applique la transition du workflow qui mène à ce statut. Si le workflow n’y mène pas depuis le statut actuel, c’est refusé. |
+| Trello | Les listes ouvertes du tableau | La carte passe dans la liste. |
+| GitHub Issues | « Ouverte », « Fermée », et les étiquettes du dépôt (précédées de ◆) | « Fermée » ferme l’issue comme terminée ; « Ouverte » la rouvre. Une étiquette est posée sur l’issue (rouverte si besoin), et les autres étiquettes de la correspondance sont retirées. |
+| Linear | Les états du workflow de l’équipe | Le ticket prend cet état. |
+
+Quand tu lies une source, Escouade préremplit les menus d’après le nom des statuts : celui qui ressemble à « en cours » (« In Progress », « En cours », « Doing »…) pour « En cours » et « À tester », et celui qui ressemble à « à tester » (« To test », « QA », « In Review », « À tester »…) pour « Terminé ». « À faire » reste « — inchangé ». Corrige les menus si ton workflow est autre.
+
+### Commenter
+
+L’interrupteur « Commenter » d’une colonne ajoute un commentaire sur le ticket externe quand un ticket arrive dans la colonne. Il vaut pour toutes les sources du projet. Par défaut, il est activé pour « À tester » et « Terminé », désactivé pour « À faire » et « En cours ».
+
+Le commentaire est écrit dans la langue de « Langue des textes rédigés par Claude » (onglet [« Application »](settings-application)) :
+
+| Colonne | Commentaire |
+|---|---|
+| « À faire » | « Escouade : ATL-42 est revenu « À faire ». » |
+| « En cours » | « Escouade : ATL-42 est pris par un agent (branche ticket/ATL-42). » |
+| « À tester » | « Escouade : ATL-42 est prêt à tester. », ou « … (objectif partiel). » quand le ticket arrive sans tous ses critères faute de boucles. Suivent la liste des critères et « Ce qui a été fait » quand le ticket en a. |
+| « Terminé » | « Escouade : ATL-42 est terminé — » suivi de l’issue de la validation, puis le lien de la PR s’il y en a une. |
+
+## Synchronisation
+
+Ces trois réglages valent pour tous les projets.
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Mettre à jour le statut externe » | Quand un ticket importé change de colonne dans le Kanban, le ticket externe prend le statut que la correspondance donne à la colonne. Désactivé, les statuts ne sont plus touchés ; les commentaires de la correspondance restent publiés. | Activé |
+| « Publier un résumé à chaque boucle » | Quand un ticket entame une nouvelle boucle (à partir de la deuxième), un commentaire donne les critères atteints et les notes de l’agent sur le ticket externe. | Désactivé |
+| « Extraire les critères d’acceptation » | À l’import, lit les critères dans la description (Jira, GitHub) ou la checklist (Trello) du ticket importé. Désactivé, le ticket reçoit les critères par défaut. | Activé |
+
+Si un service refuse ou n’est pas joignable, l’opération n’est pas perdue : elle est retentée après 1, 5, 15 puis 60 minutes, pendant 24 h au plus. La carte du ticket affiche alors l’erreur et « Resynchroniser » pour réessayer tout de suite. Un refus que réessayer ne changerait pas (ticket supprimé, workflow qui ne mène pas au statut) est mis de côté sans attendre.
+
+## Import automatique
+
+Ces trois réglages valent aussi pour tous les projets. L’import à la main est le bouton « Importer » de l’en-tête du Kanban : voir [les intégrations](integrations).
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Importer les tickets étiquetés » | Les tickets ouverts des sources liées qui portent l’étiquette arrivent dans « À faire », avec 5 boucles maximum. | Désactivé |
+| « Étiquette » | Le nom de l’étiquette : un label Jira, une étiquette Trello, GitHub ou Linear. Vide, rien n’est importé. | `claude-ready` |
+| « Vérifier toutes les » | L’intervalle entre deux vérifications : 5 min, 15 min ou 60 min. | 15 min |
+
+L’import automatique n’importe un ticket qu’une fois par projet : un ticket déjà importé, même supprimé du Kanban depuis, n’est pas ramené tout seul (l’import à la main peut le reprendre, tant qu’il n’est plus dans le Kanban). Chaque import affiche un message du genre « 3 tickets importés depuis Jira dans demo ». La première vérification a lieu environ 30 secondes après le démarrage de l’app, ou au plus 30 secondes après l’enregistrement si tu actives l’import ensuite ; les suivantes, à l’intervalle choisi.
