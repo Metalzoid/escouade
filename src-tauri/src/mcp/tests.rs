@@ -879,7 +879,7 @@ fn a_saved_port_that_is_released_a_moment_later_is_taken_again_instead_of_anothe
         std::thread::sleep(Duration::from_millis(300));
         drop(holder);
     });
-    let (_listener, got) = bind_within(port, Duration::from_secs(3)).unwrap();
+    let (_listener, got) = bind_within(port, Duration::from_secs(3), &|| false).unwrap();
     releasing.join().unwrap();
     assert_eq!(got, port);
 }
@@ -889,12 +889,48 @@ fn a_saved_port_that_stays_taken_gives_another_one_of_the_range_after_the_wait_o
     let (_holder, port) = held_port();
     let wait = Duration::from_millis(200);
     let started = std::time::Instant::now();
-    let (_listener, got) = bind_within(port, wait).unwrap();
+    let (_listener, got) = bind_within(port, wait, &|| false).unwrap();
     let took = started.elapsed();
     assert_ne!(got, port);
     assert!(PORTS.contains(&got), "{got}");
     assert!(took >= wait, "another port drawn after {took:?}");
     assert!(took < Duration::from_secs(1), "waited {took:?}");
+}
+
+#[tokio::test]
+async fn the_status_is_told_at_once_while_the_server_waits_for_its_port() {
+    // The window asks for it (on a thread of its own) while a start waits for a port that is held:
+    // it must not wait with it.
+    let h = harness("mcp-status-while-binding");
+    let (holder, port) = held_port();
+    let core = h.core.clone();
+    let starting = std::thread::spawn(move || core.mcp.start(port));
+    std::thread::sleep(Duration::from_millis(300));
+    let asked = std::time::Instant::now();
+    let status = h.core.mcp.status();
+    let took = asked.elapsed();
+    assert!(took < Duration::from_millis(500), "waited {took:?}");
+    assert!(!status.running, "{status:?}");
+    // The port is free in the end: the start takes it.
+    drop(holder);
+    assert_eq!(starting.join().unwrap().unwrap(), port);
+    assert!(h.core.mcp.status().running);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn the_app_quitting_ends_the_wait_for_the_port() {
+    let h = harness("mcp-quit-while-binding");
+    let (_holder, port) = held_port();
+    let core = h.core.clone();
+    let started = std::time::Instant::now();
+    let starting = std::thread::spawn(move || core.mcp.start(port));
+    std::thread::sleep(Duration::from_millis(300));
+    h.core.quitting.store(true, Ordering::Release);
+    assert!(starting.join().unwrap().is_err());
+    let took = started.elapsed();
+    assert!(took < Duration::from_secs(2), "waited {took:?}");
+    assert!(!h.core.mcp.status().running);
 }
 
 #[test]
@@ -914,7 +950,7 @@ fn only_a_port_that_is_busy_for_now_is_waited_for() {
 #[test]
 fn no_saved_port_draws_one_of_the_range_without_waiting() {
     let started = std::time::Instant::now();
-    let (_listener, got) = bind_within(0, Duration::from_secs(3)).unwrap();
+    let (_listener, got) = bind_within(0, Duration::from_secs(3), &|| false).unwrap();
     assert!(PORTS.contains(&got), "{got}");
     assert!(started.elapsed() < Duration::from_secs(1));
 }

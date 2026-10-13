@@ -1388,7 +1388,8 @@ pub async fn integration_resync(core: CoreState<'_>, ticket_id: String) -> Res<(
 }
 
 /// The MCP server (« Claude peut piloter Escouade »): running or not, its port, why it failed.
-#[tauri::command]
+// Off the main thread: a start waiting for its port is no reason for the window to wait.
+#[tauri::command(async)]
 pub fn mcp_status(core: CoreState) -> crate::mcp::McpStatus {
     core.mcp.status()
 }

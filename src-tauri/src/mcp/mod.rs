@@ -234,8 +234,7 @@ impl<R: Runtime> McpServer<R> {
     }
 
     fn start_held(&self, _held: &SyncHeld<'_>, port: u16) -> Result<u16> {
-        let mut running = self.running.lock();
-        if let Some(r) = &*running {
+        if let Some(r) = &*self.running.lock() {
             return Ok(r.port);
         }
         // A sync that read the settings just before the app quit: `shutdown` has stopped it, or
@@ -243,14 +242,15 @@ impl<R: Runtime> McpServer<R> {
         if self.quitting() {
             return Err(anyhow!("the app is stopping"));
         }
+        // `running` is not held while the port is waited for (seconds, when it is held): the
+        // window reads it (`status`). Nothing else fills it, a start or a stop being under `sync`.
         let launched = self.launch(port);
         *self.error.lock() = launched.as_ref().err().map(|e| format!("{e:#}"));
         let port = launched.map(|r| {
             let port = r.port;
-            *running = Some(r);
+            *self.running.lock() = Some(r);
             port
         });
-        drop(running);
         self.tell();
         port
     }
@@ -268,7 +268,7 @@ impl<R: Runtime> McpServer<R> {
             .ok_or_else(|| anyhow!("the app is stopping"))?;
         // The token first: without it, every request would be refused.
         self.external_token()?;
-        let (listener, port) = bind(port)?;
+        let (listener, port) = bind(port, &|| self.quitting())?;
         let (stop, stopped) = watch::channel(false);
         let (closed_tx, closed) = mpsc::sync_channel(1);
         let gate = http::Gate::new(port, std::sync::Arc::downgrade(&core));
@@ -525,11 +525,12 @@ fn new_token() -> String {
 const BIND_RETRY: Duration = Duration::from_secs(3);
 const BIND_STEP: Duration = Duration::from_millis(25);
 
-/// A listener on 127.0.0.1:`port`, waited for up to `BIND_RETRY` when it is held; when that one
-/// stays taken (or is 0), on a free port of `PORTS` (tried from a random one, so that two
-/// instances, an end-to-end test's beside the user's, rarely try the same ones).
-fn bind(port: u16) -> Result<(TcpListener, u16)> {
-    bind_within(port, BIND_RETRY)
+/// A listener on 127.0.0.1:`port`, waited for up to `BIND_RETRY` when it is held (no longer once
+/// `quitting` says the app stops); when that one stays taken (or is 0), on a free port of `PORTS`
+/// (tried from a random one, so that two instances, an end-to-end test's beside the user's,
+/// rarely try the same ones).
+fn bind(port: u16, quitting: &dyn Fn() -> bool) -> Result<(TcpListener, u16)> {
+    bind_within(port, BIND_RETRY, quitting)
 }
 
 /// A port that is busy for now, which a moment makes free again: held by a listener on its way
@@ -540,8 +541,13 @@ fn worth_waiting_for(e: &std::io::Error) -> bool {
     e.kind() == ErrorKind::AddrInUse || (cfg!(windows) && e.kind() == ErrorKind::PermissionDenied)
 }
 
-/// `bind`, with at most `wait` for the port asked for (tried again every `BIND_STEP`).
-fn bind_within(port: u16, wait: Duration) -> Result<(TcpListener, u16)> {
+/// `bind`, with at most `wait` for the port asked for (tried again every `BIND_STEP`), and none
+/// once `quitting` is true: the app stops, there is no server to start.
+fn bind_within(
+    port: u16,
+    wait: Duration,
+    quitting: &dyn Fn() -> bool,
+) -> Result<(TcpListener, u16)> {
     let mut refused = None;
     if port != 0 {
         let until = Instant::now() + wait;
@@ -549,6 +555,9 @@ fn bind_within(port: u16, wait: Duration) -> Result<(TcpListener, u16)> {
             match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
                 Ok(l) => return Ok((l, port)),
                 Err(e) if worth_waiting_for(&e) && Instant::now() < until => {
+                    if quitting() {
+                        return Err(anyhow!("the app is stopping"));
+                    }
                     std::thread::sleep(BIND_STEP);
                 }
                 Err(e) => {
