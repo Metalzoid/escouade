@@ -2,7 +2,7 @@
 import type { NuxtError } from '#app';
 import { LANGS } from '~/data/language';
 
-// GitHub Pages answers an unknown address with 404.html, which shows this in the language of the address
+// The server (website/nginx.conf) answers an unknown address with 404.html, which shows this in the language of the address
 // asked for; Nuxt's own page for it is white, and in English. Any other error gets the same page with its message
 // (`NuxtError` is no registered component in Nuxt 4.5, only `NuxtErrorBoundary` is).
 const props = defineProps<{ error: NuxtError }>();

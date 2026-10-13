@@ -69,15 +69,28 @@ describe('the roadmap', () => {
 });
 
 describe('generated site', () => {
-  it('generates one page per language, and keeps Jekyll away from them', () => {
+  it('generates one page per language', () => {
     for (const p of PAGES) expect(existsSync(new URL(p.file, OUT)), p.file).toBe(true);
-    expect(existsSync(new URL('.nojekyll', OUT))).toBe(true);
   });
 
-  it('generates the page GitHub Pages shows for an unknown address', () => {
+  it('generates the page the server shows for an unknown address', () => {
     const page = new URL('404.html', OUT);
     expect(existsSync(page)).toBe(true);
     expect(readFileSync(page, 'utf8')).toContain('<div id="__nuxt">');
+  });
+});
+
+describe('the server', () => {
+  const conf = readFileSync(new URL('../nginx.conf', import.meta.url), 'utf8');
+
+  it('sends the former address and www to the same page of the site, for good', () => {
+    const host = new URL(SITE).host;
+    expect(conf).toContain(`server_name escouade.gagnaire.dev www.${host};`);
+    expect(conf).toContain(`return 301 https://${host}$request_uri;`);
+  });
+
+  it('answers an unknown address with the generated 404 page', () => {
+    expect(conf).toContain('error_page 404 /404.html;');
   });
 });
 

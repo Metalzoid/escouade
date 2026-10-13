@@ -24,7 +24,7 @@ export function langOfPath(path: string): Lang {
 
 /**
  * The same page as the route `path` (without the base URL), in `lang`: the English pages are the French ones under
- * /en/. The address ends with a slash, as GitHub Pages serves a page’s folder; its query and its hash are dropped.
+ * /en/. The address ends with a slash, as the server serves a page’s folder; its query and its hash are dropped.
  */
 export function pathIn(lang: Lang, path: string): string {
   const page = path.replace(/[?#].*$/, '').replace(/^\/en(?=\/|$)/, '').replace(/\/*$/, '/');
@@ -64,7 +64,7 @@ export function pickLanguage(browser: readonly string[], stored: string | null, 
 
 /**
  * The script the French root runs before anything is drawn, so that a visitor who has no French is sent to
- * `target` (the English page) without seeing the French one first. GitHub Pages cannot look at the browser’s
+ * `target` (the English page) without seeing the French one first. The static server cannot look at the browser’s
  * languages itself. Without JavaScript, nothing moves. A browser that cannot keep or give back the choice
  * just decides again each time.
  */

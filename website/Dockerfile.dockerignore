@@ -1,0 +1,11 @@
+# The build context is the whole repo: only what the site needs goes in.
+*
+!website
+!src-tauri/tauri.conf.json
+!docs/TODO-*.md
+website/node_modules
+website/.nuxt
+website/.output
+website/.data
+website/dist
+website/.impeccable

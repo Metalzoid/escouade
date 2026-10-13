@@ -2,7 +2,7 @@
 
 Le poste de pilotage de tes agents [Claude Code](https://claude.com/claude-code) : une application Windows, macOS et Linux pour piloter plusieurs instances de Claude Code en local, avec un onglet par projet, autant d'agents que nécessaire, des terminaux intégrés, des notifications quand Claude attend une réponse, les quotas de ton abonnement et des statistiques de consommation. Elle parle français et anglais.
 
-Site : [escouade.gagnaire.dev](https://escouade.gagnaire.dev/) · Documentation : [escouade.gagnaire.dev/docs](https://escouade.gagnaire.dev/docs/)
+Site : [escouade.dev](https://escouade.dev/) · Documentation : [escouade.dev/docs](https://escouade.dev/docs/)
 
 Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour remplace l'ancienne installation et garde tes réglages et tes conversations. Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic.
 
@@ -185,7 +185,7 @@ npm test                    # chaque fonctionnalité montrée, cues, mixage, sou
 
 ### Site
 
-Le dossier `website/` contient le site de présentation (Nuxt, généré en statique), publié sur GitHub Pages à chaque push qui le touche. Il demande Node 22.19 ou plus récent :
+Le dossier `website/` contient le site de présentation (Nuxt, généré en statique), publié sur [escouade.dev](https://escouade.dev/) par Coolify à chaque push sur main (`website/Dockerfile` : génération, tests, puis nginx, qui renvoie aussi l’ancienne adresse escouade.gagnaire.dev vers la nouvelle). Il demande Node 22.19 ou plus récent :
 
 ```powershell
 cd website

@@ -3,7 +3,7 @@ import { DOC_SLUGS, docPath } from './app/data/docs';
 
 // The app's version, read from the repo: the one its next release carries.
 const tauri = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')) as { version: string };
-// GitHub Pages serves the site at the root of its own domain, escouade.gagnaire.dev.
+// The site is served at the root of its own domain, escouade.dev (website/Dockerfile, on Coolify).
 const base = process.env.NUXT_APP_BASE_URL ?? '/';
 
 export default defineNuxtConfig({
@@ -21,7 +21,7 @@ export default defineNuxtConfig({
   // One page per language: the French one at the root, the English one under /en/; and so for each page of the
   // documentation, under /docs/ and /en/docs/.
   nitro: {
-    preset: 'github_pages',
+    preset: 'static',
     prerender: {
       routes: ['/', '/en', ...(['fr', 'en'] as const).flatMap((lang) => [docPath(lang), ...DOC_SLUGS.map((slug) => docPath(lang, slug))])],
       // The language switch's French links (`?lang=fr`) are the French pages, already generated.
