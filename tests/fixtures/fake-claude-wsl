@@ -1,0 +1,19 @@
+#!/bin/sh
+# Test double of a `claude` installed in WSL (src-tauri/src/process_tests.rs), in POSIX sh: a
+# distribution has no node. Its first frame says how it was started: its arguments, its folder,
+# CLAUDE_CONFIG_DIR and a variable of the app (FAKE_VAR). It then answers each control request
+# with success and echoes each other line it reads, until its input ends.
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+args=""
+for a in "$@"; do args="$args${args:+,}\"$(esc "$a")\""; done
+printf '{"type":"started","argv":[%s],"cwd":"%s","configDir":"%s","var":"%s"}\n' \
+  "$args" "$(esc "$(pwd)")" "$(esc "${CLAUDE_CONFIG_DIR-}")" "$(esc "${FAKE_VAR-}")"
+while IFS= read -r line; do
+  case "$line" in
+    *'"control_request"'*)
+      id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+      printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{"ok":true}}}\n' "$id"
+      ;;
+    *) printf '{"type":"echo","line":%s}\n' "$line" ;;
+  esac
+done

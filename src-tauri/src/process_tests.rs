@@ -82,7 +82,7 @@ fn spawn_with(
             ));
         }
         let opts = SpawnOpts {
-            program: PathBuf::from("node"),
+            program: crate::claude::Program::Native(PathBuf::from("node")),
             cwd: rt.meta.cwd.clone(),
             args,
             env,
@@ -659,4 +659,135 @@ async fn a_crash_during_a_turn_flags_the_agent_in_error() {
     assert!(items(&h).iter().any(|i| i["kind"] == "notice"
         && i["level"] == "error"
         && i["text"].as_str().unwrap().contains("code 3")));
+}
+
+/// A `claude` installed in WSL, driven through `wsl.exe` as an agent's: its arguments (an empty
+/// one, a file of the app's by its Linux path, text with quotes and `$`) and its variables reach
+/// it as they are, it runs in the agent's folder under `/mnt/…`, and the stream goes both ways.
+/// Only where WSL has a distribution (not on the CI's Windows runners).
+#[tokio::test]
+async fn a_claude_of_wsl_gets_its_arguments_folder_and_variables_in_linux() {
+    let machine = crate::wsl::Machine::this();
+    let (Some(exe), Some(distro)) = (machine.exe.clone(), machine.default.clone()) else {
+        eprintln!("no WSL distribution: skipped");
+        return;
+    };
+    let dir = temp_dir("wsl-claude");
+    let fake = fixture().with_file_name("fake-claude-wsl");
+    let to_linux =
+        |p: &std::path::Path| crate::wsl::to_linux(&p.to_string_lossy(), &distro, "/mnt/").unwrap();
+    let program = crate::wsl::Program {
+        exe,
+        distro: distro.clone(),
+        path: to_linux(&std::fs::canonicalize(&fake).unwrap()),
+        home: "/root".into(),
+        mount_root: "/mnt/".into(),
+    };
+    let config = dir.join("compte pro");
+    let (frames, exit) = (
+        Arc::new(parking_lot::Mutex::new(Vec::<Value>::new())),
+        Arc::new(parking_lot::Mutex::new(None)),
+    );
+    let (f, x) = (frames.clone(), exit.clone());
+    let proc = ClaudeProcess::spawn(
+        SpawnOpts {
+            program: crate::claude::Program::Wsl(program.clone()),
+            cwd: dir.to_string_lossy().into_owned(),
+            args: [
+                "--mcp-config",
+                &dir.join("mcp").join("a1.json").to_string_lossy(),
+                "--tools",
+                "",
+                "--system-prompt",
+                r#"l'été "cité" $HOME `ls`"#,
+            ]
+            .map(String::from)
+            .to_vec(),
+            env: vec![
+                (
+                    "CLAUDE_CONFIG_DIR".into(),
+                    config.to_string_lossy().into_owned(),
+                ),
+                ("FAKE_VAR".into(), "a b;c".into()),
+            ],
+        },
+        move |frame| f.lock().push(frame),
+        move |code, stderr| *x.lock() = Some((code, stderr)),
+    )
+    .unwrap();
+    let started = async {
+        loop {
+            if let Some(s) = frames.lock().iter().find(|f| f["type"] == "started") {
+                return s.clone();
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    };
+    let started = tokio::time::timeout(Duration::from_secs(60), started)
+        .await
+        .unwrap_or_else(|_| panic!("no first frame; exit: {:?}", exit.lock()));
+    assert_eq!(
+        started["argv"],
+        json!([
+            "--mcp-config",
+            format!("{}/mcp/a1.json", to_linux(&dir)),
+            "--tools",
+            "",
+            "--system-prompt",
+            r#"l'été "cité" $HOME `ls`"#,
+        ])
+    );
+    assert_eq!(started["cwd"], json!(to_linux(&dir)));
+    assert_eq!(started["configDir"], json!(to_linux(&config)));
+    assert_eq!(started["var"], json!("a b;c"));
+
+    let answer = proc
+        .control(json!({ "subtype": "initialize" }), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(answer, json!({ "ok": true }));
+    proc.send(&json!({ "type": "user", "message": { "role": "user", "content": "Bonjour" } }))
+        .unwrap();
+    proc.close_input();
+    assert!(
+        proc.wait_exit(Duration::from_secs(30)).await,
+        "still running"
+    );
+    assert_eq!(
+        exit.lock().as_ref().map(|e| e.0),
+        Some(Some(0)),
+        "{:?}",
+        exit.lock()
+    );
+    assert!(frames
+        .lock()
+        .iter()
+        .any(|f| f["type"] == "echo" && f["line"]["message"]["content"] == "Bonjour"));
+
+    // A folder Linux does not have (here, drives said to be mounted elsewhere): the program does
+    // not start in another one (wsl.exe would take the home folder), and the exit says why.
+    let lost = crate::wsl::Program {
+        mount_root: "/nowhere/".into(),
+        ..program
+    };
+    let gone = Arc::new(parking_lot::Mutex::new(None));
+    let g = gone.clone();
+    let proc = ClaudeProcess::spawn(
+        SpawnOpts {
+            program: crate::claude::Program::Wsl(lost),
+            cwd: dir.to_string_lossy().into_owned(),
+            args: vec![],
+            env: vec![],
+        },
+        |_| {},
+        move |code, said| *g.lock() = Some((code, said)),
+    )
+    .unwrap();
+    assert!(
+        proc.wait_exit(Duration::from_secs(60)).await,
+        "still running"
+    );
+    let (code, said) = gone.lock().clone().unwrap();
+    assert_eq!(code, Some(126), "{said}");
+    assert!(said.contains("/nowhere/c/"), "{said}");
 }

@@ -894,6 +894,24 @@ fn args_for_log(args: &[String]) -> String {
     shown.join(" ")
 }
 
+/// The JSON answer of `claude -p --output-format json`: the whole output, or its last line that
+/// is JSON when something came before (a warning of `wsl.exe` for a `claude` of WSL).
+fn json_answer(stdout: &[u8]) -> Result<Value> {
+    serde_json::from_slice(stdout).or_else(|e| {
+        String::from_utf8_lossy(stdout)
+            .lines()
+            .rev()
+            .find_map(|l| {
+                // Also without the NULs of a warning written in UTF-16.
+                let l = l.trim_matches(|c: char| c.is_whitespace() || c == '\0');
+                serde_json::from_str::<Value>(l)
+                    .ok()
+                    .filter(Value::is_object)
+            })
+            .ok_or_else(|| e.into())
+    })
+}
+
 /// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
 pub fn slugify(s: &str) -> String {
     slug_within(s, 40)
@@ -2238,6 +2256,20 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// Before a `claude` of WSL starts for the agent of `h`: its worktree leads to the repository
+    /// by a relative path, which git of Linux can follow (`git::relative_gitdir`).
+    pub(crate) fn ready_for_wsl(&self, program: &claude::Program, h: &AgentHandle) {
+        if program.wsl().is_none() {
+            return;
+        }
+        let Some(worktree) = h.lock().meta.worktree.as_ref().map(|w| w.path.clone()) else {
+            return;
+        };
+        if let Err(e) = git::relative_gitdir(Path::new(&worktree)) {
+            log::warn!("worktree {worktree}: its .git stays as it is for git of WSL: {e}");
+        }
+    }
+
     async fn start_process(self: &Arc<Self>, id: &str) -> Result<Arc<ClaudeProcess>> {
         let h = self.agent(id)?;
         self.start_process_of(&h, id).await
@@ -2306,6 +2338,7 @@ impl<R: Runtime> Core<R> {
                 dir = opts.cwd
             ));
         }
+        self.ready_for_wsl(&opts.program, h);
         // Escouade's MCP server, as this agent (a token of its own) or refused to it.
         let access = self.agent_access(id, &project_id);
         opts.args.extend(access.args());
@@ -2313,7 +2346,7 @@ impl<R: Runtime> Core<R> {
         let token = access.token().map(str::to_string);
         log::info!(
             "agent {id}: starting {} {} in {} (account {})",
-            opts.program.display(),
+            opts.program.describe(),
             args_for_log(&opts.args),
             opts.cwd,
             account.id
@@ -3176,9 +3209,19 @@ impl<R: Runtime> Core<R> {
                 }
                 if let Some(from) = copied_from {
                     // Its conversation names the original's folder everywhere (its files' absolute
-                    // paths): its Claude is told at every start where it works now.
-                    meta.append_prompt =
-                        Some(copied_conversation(self.lang().claude, &from.path, &path));
+                    // paths): its Claude is told at every start where it works now, as it names
+                    // folders (`/mnt/c/…` for a `claude` of WSL).
+                    let program =
+                        accounts::program(&accounts::get(&settings, &meta.account), &settings);
+                    let shown = |p: &str| match program.as_ref().and_then(claude::Program::wsl) {
+                        Some(wsl) => wsl.linux_path(p).unwrap_or_else(|| p.to_string()),
+                        None => p.to_string(),
+                    };
+                    meta.append_prompt = Some(copied_conversation(
+                        self.lang().claude,
+                        &shown(&from.path),
+                        &shown(&path),
+                    ));
                 }
                 meta.cwd = path.clone();
                 // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
@@ -3855,8 +3898,7 @@ impl<R: Runtime> Core<R> {
         let account = self.account_for(&settings, agent, project)?;
         let program = accounts::program(&account, &settings)
             .with_context(|| tr!("claude introuvable", "claude not found"))?;
-        let mut cmd = tokio::process::Command::new(program);
-        cmd.args([
+        let args = [
             "-p",
             "--model",
             model,
@@ -3871,12 +3913,16 @@ impl<R: Runtime> Core<R> {
             "--strict-mcp-config",
             "--system-prompt",
             system,
-        ]);
+        ]
+        .map(String::from);
+        let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
+        let launch = program.launch(&cwd.to_string_lossy(), &args, &env)?;
+        let mut cmd = tokio::process::Command::new(&launch.program);
         // Reading needs no permission in its folder, and is refused outside of it: nothing more is
         // allowed.
-        cmd.current_dir(cwd)
-            .envs(settings.claude_env())
-            .envs(accounts::launch_env(&account))
+        cmd.args(&launch.args)
+            .current_dir(cwd)
+            .envs(launch.env)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
@@ -3901,7 +3947,7 @@ impl<R: Runtime> Core<R> {
                 s = limit.as_secs()
             ))
         })??;
-        let v: Value = serde_json::from_slice(&out.stdout)?;
+        let v = json_answer(&out.stdout)?;
         Ok(v["result"].as_str().unwrap_or("").to_string())
     }
 
@@ -5896,7 +5942,7 @@ impl<R: Runtime> Core<R> {
             last.insert(account.id.clone(), now_ms())
         };
         let api = self.usage_api.read().clone();
-        match usage::read_oauth(settings, &api, &usage::sign_in(account)).await {
+        match usage::read_oauth(settings, &api, &usage::sign_in(account, settings)).await {
             Ok(usage::Reading::NotSignedIn) => {
                 // The endpoint was not asked: the next reading looks again, so that a sign-in
                 // shows within a minute rather than five.
@@ -5919,6 +5965,24 @@ impl<R: Runtime> Core<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_answer_of_claude_p_is_found_after_a_warning() {
+        let answer = br#"{"type":"result","result":"feat: x"}"#;
+        assert_eq!(json_answer(answer).unwrap()["result"], "feat: x");
+        let warned =
+            "wsl: Une configuration de proxy localhost a été détectée\r\n{\"result\":\"ok\"}\r\n";
+        assert_eq!(json_answer(warned.as_bytes()).unwrap()["result"], "ok");
+        // The warning in UTF-16, as wsl.exe writes it without WSL_UTF8.
+        let utf16: Vec<u8> = "wsl: x\n"
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .chain(*b"{\"result\":\"ok\"}")
+            .collect();
+        assert_eq!(json_answer(&utf16).unwrap()["result"], "ok");
+        assert!(json_answer(b"pas du JSON").is_err());
+        assert!(json_answer(b"").is_err());
+    }
 
     #[test]
     fn names_are_taken_only_from_slug_like_answers() {

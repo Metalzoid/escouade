@@ -460,12 +460,25 @@ pub fn relative_slash(base: &str, path: &str) -> String {
 }
 
 /// `path` relative to `base` (forward slashes, case ignored) when it is inside it, without reading the disk.
+/// Under Windows, `/mnt/<drive>/…` is read as `<drive>:/…`: a `claude` of WSL tells the files of
+/// the agent's folder there (WSL's usual mount point, `wsl::mount_root`).
 pub(crate) fn strip_base(base: &str, path: &str) -> Option<String> {
     let norm = |s: &str| {
-        s.trim_start_matches(r"\\?\")
+        let s = s
+            .trim_start_matches(r"\\?\")
             .replace('\\', "/")
             .trim_end_matches('/')
-            .to_string()
+            .to_string();
+        let drive = s
+            .strip_prefix("/mnt/")
+            .filter(|rest| {
+                let b = rest.as_bytes();
+                cfg!(windows)
+                    && b.first().is_some_and(u8::is_ascii_alphabetic)
+                    && (b.len() == 1 || b[1] == b'/')
+            })
+            .map(|rest| format!("{}:{}", &rest[..1], &rest[1..]));
+        drive.unwrap_or(s)
     };
     let (b, p) = (norm(base), norm(path));
     // Compared lowercase character by character, and cut where the path's own characters end:
@@ -748,6 +761,28 @@ mod tests {
         assert_eq!(rel("C:/\u{212A}", "C:/k/€€.ts").as_deref(), Some("€€.ts"));
         assert_eq!(rel("C:/code/kelvin", "C:/code/kelvinx/a.ts"), None);
         assert_eq!(rel("C:/code/kelvin", "C:/code/kelvin"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_paths_of_a_claude_of_wsl_are_read_under_their_drive() {
+        // A `claude` of WSL tells the files of the agent's folder under /mnt/<drive>/.
+        assert_eq!(
+            strip_base(r"C:\code\app", "/mnt/c/code/app/src/a.ts").as_deref(),
+            Some("src/a.ts")
+        );
+        assert_eq!(
+            relative_slash(r"C:\code\App", "/mnt/c/code/app/README.md"),
+            "README.md"
+        );
+        assert_eq!(strip_base(r"D:\work", "/mnt/d/work/x"), Some("x".into()));
+        assert_eq!(strip_base(r"C:\code\app", "/mnt/d/code/app/x"), None);
+        // Anything else of Linux stays as it is.
+        assert_eq!(
+            relative_slash(r"C:\code\app", "/home/me/.claude/plans/p.md"),
+            "/home/me/.claude/plans/p.md"
+        );
+        assert_eq!(strip_base(r"C:\mnt\wslg", "/mnt/wslg/x"), None);
     }
 
     #[cfg(unix)]

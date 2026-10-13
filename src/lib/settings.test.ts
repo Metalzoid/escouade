@@ -64,6 +64,28 @@ describe('settingsForm', () => {
     expect(backend.called('board_set')).toHaveLength(0);
   });
 
+  it('asks again whether Claude Code is found once its path or the distribution of WSL is saved', async () => {
+    app.claudeFound = false;
+    app.claudePathFound = false;
+    const backend = fakeBackend({
+      save_settings: () => [],
+      claude_found: () => ({ claudeFound: true, claudePathFound: true }),
+    });
+    settingsForm.open();
+    settingsForm.settings.sound = false;
+    await settingsForm.save();
+    // Nothing of Claude Code changed: not asked.
+    expect(backend.called('claude_found')).toHaveLength(0);
+    expect(app.claudeFound).toBe(false);
+    settingsForm.settings.claudePath = '~/.local/bin/claude';
+    await settingsForm.save();
+    expect(backend.called('claude_found')).toHaveLength(1);
+    expect([app.claudeFound, app.claudePathFound]).toEqual([true, true]);
+    settingsForm.settings.wslDistro = 'Ubuntu-24.04';
+    await settingsForm.save();
+    expect(backend.called('claude_found')).toHaveLength(2);
+  });
+
   it('turns an emptied number of minutes into 0 instead of sending null', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     settingsForm.open();

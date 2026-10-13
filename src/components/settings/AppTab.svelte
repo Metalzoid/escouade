@@ -5,6 +5,7 @@
   import { IS_MAC } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import type { ClaudeLocated } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -17,6 +18,30 @@
 
   const s = $derived(settingsForm.settings);
   let checking = $state(false);
+
+  // Where the `claude` of the path is, asked a moment after the path or the distribution changes (a look into WSL
+  // may take seconds): an answer to an earlier path is dropped.
+  let located = $state<ClaudeLocated | null>(null);
+  $effect(() => {
+    if (tab !== 'claude') return;
+    const [path, distro] = [s.claudePath, s.wslDistro];
+    let stale = false;
+    const timer = setTimeout(async () => {
+      const found = await api.locateClaude(path, distro).catch(() => null);
+      if (!stale) located = found ?? null;
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  });
+
+  /** The line under the path: where its `claude` was found, or how to name one. */
+  function locatedText(l: ClaudeLocated | null): string {
+    if (!l) return '';
+    if (l.path === null) return l.canWsl ? t('settings.claude.notLocated') : t('settings.claude.notLocatedHere');
+    return l.wsl ? t('settings.claude.locatedWsl', { distro: l.wsl, path: l.path }) : t('settings.claude.located', { path: l.path });
+  }
 
   async function check() {
     checking = true;
@@ -40,14 +65,18 @@
 {/snippet}
 
 {#if tab === 'claude'}
-  <Group title={t('settings.claude.executable')}>
-    {@render text(
-      t('settings.claude.path'),
-      t('settings.claude.pathHint'),
-      s.claudePath,
-      (v) => (s.claudePath = v),
-      app.claudePathFound ? t('settings.claude.pathFound') : t('settings.claude.pathMissing'),
-    )}
+  <Group title={t('settings.claude.executable')} note={located?.nat ? t('settings.claude.nat') : undefined}>
+    <Row label={t('settings.claude.path')} hint={t('settings.claude.pathHint')} desc={locatedText(located)} descId="claude-located">
+      <input
+        class="field mono input"
+        aria-label={t('settings.claude.path')}
+        aria-describedby={located ? 'claude-located' : undefined}
+        spellcheck="false"
+        placeholder={app.claudePathFound ? t('settings.claude.pathFound') : t('settings.claude.pathMissing')}
+        value={s.claudePath}
+        oninput={(e) => (s.claudePath = e.currentTarget.value)}
+      />
+    </Row>
   </Group>
   <Group title={t('settings.claude.newAgents')}>
     <Row label={t('settings.claude.defaultModel')}>

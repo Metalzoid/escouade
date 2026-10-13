@@ -74,6 +74,18 @@ export interface AccountStatus {
   stamp: string | null;
 }
 
+/** Where the `claude` of a path of the settings is, as the line under its field says it. */
+export interface ClaudeLocated {
+  /** Its path (its Linux path for one of WSL); null when it is not found. */
+  path: string | null;
+  /** Its distribution, for one of WSL. */
+  wsl: string | null;
+  /** For one of WSL: its network is NAT, out of reach of Escouade's MCP server and of the hooks of the Claude Code view. */
+  nat: boolean;
+  /** A `claude` of WSL may be named (under Windows). */
+  canWsl: boolean;
+}
+
 /** How a new account shares Principal's items: linked (one change for both accounts) or copied. */
 export type ShareMode = 'link' | 'copy';
 

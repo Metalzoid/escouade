@@ -340,7 +340,7 @@ impl<R: Runtime> Core<R> {
             &settings_file,
             serde_json::to_vec_pretty(&hook_settings(port))?,
         )?;
-        let config_dir = accounts::config_dir(&account);
+        let config_dir = accounts::config_dir(&account, &settings);
         let started = now_ms();
         let (args, cwd, project_id, name, gen, transcript, since) = {
             let mut rt = h.lock();
@@ -391,6 +391,7 @@ impl<R: Runtime> Core<R> {
                 dir = cwd
             ));
         }
+        self.ready_for_wsl(&program, &h);
         let mut args = args;
         let access = self.agent_access(id, &project_id);
         args.extend(access.args());
@@ -407,7 +408,7 @@ impl<R: Runtime> Core<R> {
         };
         log::info!(
             "agent {id}: starting Claude Code's interface {} {} in {cwd} (account {})",
-            program.display(),
+            program.describe(),
             args.join(" "),
             account.id
         );
@@ -490,9 +491,10 @@ impl<R: Runtime> Core<R> {
         let path = match path {
             Some(p) => p,
             None => {
-                let account = accounts::get(&self.settings.read(), &account);
-                let Some(found) =
-                    sid.and_then(|s| find_transcript(&accounts::config_dir(&account), &s))
+                let settings = self.settings.read().clone();
+                let account = accounts::get(&settings, &account);
+                let Some(found) = sid
+                    .and_then(|s| find_transcript(&accounts::config_dir(&account, &settings), &s))
                 else {
                     return;
                 };
@@ -559,6 +561,12 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn on_tui_hook(self: &Arc<Self>, id: &str, hook: Value) {
         self.read_transcript(id);
         let Ok(h) = self.agent(id) else { return };
+        // A `claude` of WSL tells its transcript by its Linux path.
+        let wsl = {
+            let settings = self.settings.read().clone();
+            let account = accounts::get(&settings, &h.lock().meta.account);
+            accounts::program(&account, &settings).and_then(|p| p.wsl().cloned())
+        };
         let mut fx = Effects::default();
         let (out, pid, name, view, gen) = {
             let mut rt = h.lock();
@@ -567,8 +575,12 @@ impl<R: Runtime> Core<R> {
             };
             let out = rt.on_hook(&hook, &mut fx);
             if let Some(path) = &out.transcript {
+                let path = match &wsl {
+                    Some(wsl) if path.starts_with('/') => wsl.windows_path(path),
+                    _ => PathBuf::from(path),
+                };
                 if let Some(t) = rt.tui.as_mut() {
-                    t.transcript = Some(PathBuf::from(path));
+                    t.transcript = Some(path);
                     t.offset = 0;
                 }
                 rt.tui_since = None;

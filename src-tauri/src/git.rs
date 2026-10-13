@@ -2525,6 +2525,69 @@ pub fn sync_remote<'a>(remotes: &'a [String], upstream: Option<&str>) -> Option<
         .map(String::as_str)
 }
 
+/// Writes the `.git` file of the worktree at `path` with the path of its repository relative to
+/// it, which git reads whatever the system: a `claude` of WSL runs git of Linux there, which
+/// cannot follow the `C:/…` git of Windows writes. Nothing for a folder whose `.git` is no such
+/// file, one already relative, or one on another drive.
+pub fn relative_gitdir(path: &Path) -> std::io::Result<()> {
+    let dot = path.join(".git");
+    if !dot.is_file() {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(&dot)?;
+    let Some(target) = text.trim().strip_prefix("gitdir:").map(str::trim) else {
+        return Ok(());
+    };
+    if !Path::new(target).is_absolute() {
+        return Ok(());
+    }
+    // Both as the disk names them (a short 8.3 name on one side and not on the other would part
+    // them early).
+    let (from, to) = (std::fs::canonicalize(path)?, std::fs::canonicalize(target)?);
+    match relative_path(&from, &to) {
+        // Written beside it, then put in its place: git of Windows, which reads it as it polls the
+        // agent's changes, never finds it half written.
+        Some(rel) => {
+            let part = path.join(".git.escouade-part");
+            std::fs::write(&part, format!("gitdir: {rel}\n"))?;
+            std::fs::rename(&part, &dot)
+        }
+        None => Ok(()),
+    }
+}
+
+/// The path of `to` from the folder `from`, both absolute: `..` and names joined by `/`; None
+/// when they share no root (two drives).
+fn relative_path(from: &Path, to: &Path) -> Option<String> {
+    use std::path::Component;
+    let parts = |p: &Path| -> Vec<String> {
+        p.components()
+            .filter(|c| !matches!(c, Component::CurDir))
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect()
+    };
+    let (a, b) = (parts(from), parts(to));
+    let same = |x: &String, y: &String| {
+        if cfg!(windows) {
+            x.eq_ignore_ascii_case(y)
+        } else {
+            x == y
+        }
+    };
+    let common = a.iter().zip(&b).take_while(|(x, y)| same(x, y)).count();
+    // The drive and its root (`/` alone elsewhere).
+    let root = if cfg!(windows) { 2 } else { 1 };
+    if common < root {
+        return None;
+    }
+    let up = std::iter::repeat_n("..".to_string(), a.len() - common);
+    Some(
+        up.chain(b[common..].iter().cloned())
+            .collect::<Vec<_>>()
+            .join("/"),
+    )
+}
+
 /// When the checkout at `root` was last fetched (the date of its FETCH_HEAD), ms since epoch.
 pub fn last_fetch(root: &str) -> Option<i64> {
     let dot = Path::new(root).join(".git");
@@ -3250,6 +3313,62 @@ mod repo_tests {
         g(&["add", "-A"]);
         g(&["commit", "-qm", "init"]);
         dir.to_string_lossy().to_string()
+    }
+
+    /// A worktree a `claude` of WSL works in: its `.git` leads to the repository by a relative
+    /// path, which git reads on both sides (git of Linux cannot follow `C:/…`).
+    #[tokio::test]
+    async fn a_worktree_leads_to_its_repository_by_a_relative_path_once_asked() {
+        let repo = repo("git-relative-gitdir");
+        let (path, _, _) = worktree_add(&repo, &wt_root(&repo), &[], "escouade/", "wsl")
+            .await
+            .unwrap();
+        let dot = Path::new(&path).join(".git");
+        let absolute = std::fs::read_to_string(&dot).unwrap();
+        relative_gitdir(Path::new(&path)).unwrap();
+        let text = std::fs::read_to_string(&dot).unwrap();
+        assert_eq!(
+            text, "gitdir: ../../../.git/worktrees/wsl\n",
+            "was {absolute}"
+        );
+        // Once more changes nothing; git of this system still reads it.
+        relative_gitdir(Path::new(&path)).unwrap();
+        assert_eq!(std::fs::read_to_string(&dot).unwrap(), text);
+        assert!(Command::new("git")
+            .args(["-C", &path, "status", "--porcelain"])
+            .status()
+            .unwrap()
+            .success());
+        // A folder whose `.git` is its own repository is left as it is.
+        relative_gitdir(Path::new(&repo)).unwrap();
+        assert!(Path::new(&repo).join(".git").is_dir());
+        // And git of Linux reads it too, where WSL has a distribution.
+        let machine = crate::wsl::Machine::this();
+        if let (Some(exe), Some(distro)) = (machine.exe, machine.default) {
+            let linux = crate::wsl::to_linux(&path, &distro, "/mnt/").unwrap();
+            let out = Command::new(exe)
+                .args([
+                    "-d",
+                    &distro,
+                    "--exec",
+                    "git",
+                    "-C",
+                    &linux,
+                    "rev-parse",
+                    "--abbrev-ref",
+                    "HEAD",
+                ])
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .starts_with("escouade/"));
+        }
     }
 
     /// A process just killed lets go of its files a moment later under Windows (a loaded machine:

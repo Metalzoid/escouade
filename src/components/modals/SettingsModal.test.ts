@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -39,6 +39,24 @@ describe('SettingsModal', () => {
     app.git.p1 = gitInfo();
     app.version = '1.3.1';
     app.modal = { kind: 'settings' };
+  });
+
+  it('dit sous le chemin de l’exécutable où est son claude, dans WSL aussi', async () => {
+    fakeBackend({
+      claude_locate: ({ path }: { path: string }) =>
+        path === ''
+          ? { path: null, wsl: null, nat: false, canWsl: true }
+          : { path: '/home/moi/.local/bin/claude', wsl: 'Ubuntu', nat: true, canWsl: true },
+    });
+    render(SettingsModal, { tab: 'claude' });
+    expect(
+      await screen.findByText(
+        'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: "Chemin de l'exécutable" }), '~/.local/bin/claude');
+    expect(await screen.findByText('Trouvé dans WSL (Ubuntu) : /home/moi/.local/bin/claude')).toBeInTheDocument();
+    expect(screen.getByText(/^Le réseau de WSL est en NAT : le serveur MCP d’Escouade/)).toBeInTheDocument();
   });
 
   it('shows one tab at a time, Application first, opens on Claude Code, with the app’s version under them', async () => {
@@ -992,6 +1010,51 @@ describe('SettingsModal in English', () => {
     app.claudeFound = false;
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
+  });
+
+  it('says under the executable path where its claude is: on Windows, in WSL and in which distribution, or how to name it', async () => {
+    const { called } = fakeBackend({
+      claude_locate: ({ path }: { path: string }) =>
+        path === '~/.local/bin/claude'
+          ? { path: '/home/me/.local/bin/claude', wsl: 'Ubuntu-24.04', nat: true, canWsl: true }
+          : path === ''
+            ? { path: 'C:\\Users\\me\\.local\\bin\\claude.exe', wsl: null, nat: false, canWsl: true }
+            : { path: null, wsl: null, nat: false, canWsl: true },
+    });
+    render(SettingsModal, { tab: 'claude' });
+    const field = screen.getByRole('textbox', { name: 'Executable path' });
+    // Blank: the one found by itself.
+    expect(await screen.findByText('Found: C:\\Users\\me\\.local\\bin\\claude.exe')).toBeInTheDocument();
+    expect(field).toHaveAccessibleDescription('Found: C:\\Users\\me\\.local\\bin\\claude.exe');
+    // The form of the issue: Claude Code installed in WSL, its network in NAT.
+    await userEvent.type(field, '~/.local/bin/claude');
+    expect(await screen.findByText('Found in WSL (Ubuntu-24.04): /home/me/.local/bin/claude')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'WSL’s network is NAT: Escouade’s MCP server and the tracking of the Claude Code view can’t reach the app. Switch it to mirrored (networkingMode=mirrored under [wsl2] in %UserProfile%\\.wslconfig), then run wsl --shutdown.',
+      ),
+    ).toBeInTheDocument();
+    // Asked with the distribution of the settings.
+    expect(called('claude_locate').at(-1)!.args).toEqual({ path: '~/.local/bin/claude', wslDistro: '' });
+    await userEvent.clear(field);
+    await userEvent.type(field, '/nowhere/claude');
+    expect(
+      await screen.findByText(
+        'Not found. Give the path to claude.exe, or to Claude Code installed in WSL: ~/.local/bin/claude, /home/<user>/…, or \\\\wsl.localhost\\<distribution>\\….',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/WSL’s network is NAT/)).toBeNull();
+  });
+
+  it('names no WSL where there is none, and says nothing without an answer', async () => {
+    fakeBackend({ claude_locate: () => ({ path: null, wsl: null, nat: false, canWsl: false }) });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('Not found. Give the path to claude.')).toBeInTheDocument();
+    cleanup();
+    fakeBackend();
+    render(SettingsModal, { tab: 'claude' });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(screen.queryByText(/^Found|^Not found/)).toBeNull();
   });
 
   it('says the switch to another account in English', () => {

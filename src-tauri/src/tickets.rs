@@ -1335,8 +1335,15 @@ impl<R: Runtime> Core<R> {
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
         let now = self.pause_now();
+        // A session does not go between Claude Code on Windows and in WSL (`move_session`).
+        let in_wsl = |id: &str| {
+            accounts::program(&accounts::get(&settings, id), &settings)
+                .is_some_and(|p| p.wsl().is_some())
+        };
+        let side = in_wsl(&current);
         let usable = |id: &str| {
             id != current
+                && in_wsl(id) == side
                 // Not signed in: its first turn would only fail (an account not read yet is).
                 && usage.iter().find(|u| u.id == id).is_none_or(|u| u.connected)
                 && !waiting.contains_key(id)

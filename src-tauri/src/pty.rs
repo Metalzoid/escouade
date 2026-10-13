@@ -376,14 +376,13 @@ impl PtyManager {
     }
 
     /// An interactive terminal running `program` itself, with no shell around it (the sign-in of
-    /// a Claude account, Claude Code's interface): it ends with the program, and what it starts
-    /// goes with it; except, with `spare_windows`, what shows a window (the browser of the
-    /// sign-in).
+    /// a Claude account, the Claude Code view): it ends with the program, and what it starts goes
+    /// with it; except, with `spare_windows`, what shows a window (the browser of the sign-in).
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_program(
         &self,
         info: TermInfo,
-        program: &Path,
+        program: &crate::claude::Program,
         args: &[String],
         cwd: &str,
         size: (u16, u16),
@@ -392,9 +391,14 @@ impl PtyManager {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
         on_exit: impl FnOnce(Option<u32>) + Send + 'static,
     ) -> Result<()> {
+        // The terminal's variables as well: a program of WSL gets none of those set on wsl.exe.
+        let terminal = [("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]
+            .map(|(k, v)| (k.to_string(), v.to_string()));
+        let launch = program.launch(cwd, args, &[terminal.to_vec(), env].concat())?;
         // A `.cmd` launcher (npm's claude.cmd) included: Windows runs it through cmd.exe.
-        let mut cmd = CommandBuilder::new(program);
-        cmd.args(args);
+        let mut cmd = CommandBuilder::new(&launch.program);
+        cmd.args(&launch.args);
+        let env = launch.env;
         if Path::new(cwd).is_dir() {
             cmd.cwd(cwd);
         }
@@ -1161,7 +1165,7 @@ mod tests {
         let (ended, done) = std::sync::mpsc::channel();
         pty.spawn_program(
             info,
-            Path::new(&shell.path),
+            &crate::claude::Program::Native(PathBuf::from(&shell.path)),
             &[
                 "-NoProfile".into(),
                 "-ExecutionPolicy".into(),

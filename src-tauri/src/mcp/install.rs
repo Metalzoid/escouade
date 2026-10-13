@@ -78,7 +78,7 @@ fn mask_secrets(text: &str, secrets: &[&str]) -> String {
 #[derive(Debug, Clone)]
 pub struct Target {
     /// Its `claude`.
-    pub program: PathBuf,
+    pub program: crate::claude::Program,
     /// What its processes get besides the environment of the app: the network settings, and the
     /// account's `CLAUDE_CONFIG_DIR` (never Principal's).
     pub env: Vec<(String, String)>,
@@ -184,10 +184,13 @@ fn remove_args() -> Vec<String> {
 /// said when it fails, any of `secrets` (the tokens in play) hidden: the error goes to the window
 /// and the logs.
 async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
-    let mut cmd = tokio::process::Command::new(&target.program);
-    cmd.args(args)
+    let launch = target
+        .program
+        .launch(&target.cwd.to_string_lossy(), args, &target.env)?;
+    let mut cmd = tokio::process::Command::new(&launch.program);
+    cmd.args(&launch.args)
         .current_dir(&target.cwd)
-        .envs(target.env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+        .envs(launch.env)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -357,10 +360,13 @@ pub struct Declaration {
 // The declaration in each account, kept in step with the settings: « Claude peut piloter Escouade »
 // turned on or off, an account added, switched on or off, the server on another port.
 impl<R: Runtime> Core<R> {
-    /// The app's `CLAUDE_CONFIG_DIR` and home folder, which Principal's `claude` goes by
-    /// (`accounts::app_env`). In unit tests every core has a home of its own: the fake `claude`
-    /// is told it and never goes by the real one.
-    fn claude_app_env(&self) -> (Option<String>, PathBuf) {
+    /// The app's `CLAUDE_CONFIG_DIR` and home folder as the account's `claude` goes by them
+    /// (`accounts::claude_home`: the Linux home folder for one of WSL). In unit tests every core
+    /// has a home of its own: the fake `claude` is told it and never goes by the real one.
+    fn claude_app_env(&self, account: &Account, settings: &Settings) -> (Option<String>, PathBuf) {
+        if accounts::program(account, settings).is_some_and(|p| p.wsl().is_some()) {
+            return accounts::claude_home(account, settings);
+        }
         if cfg!(test) {
             return (None, self.data.root().join("claude-home"));
         }
@@ -376,7 +382,7 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (env, home) = self.claude_app_env();
+        let (env, home) = self.claude_app_env(account, settings);
         let mut vars = [settings.claude_env(), accounts::launch_env(account)].concat();
         if cfg!(test) {
             // Tests may run inside a Claude Code session with a `CLAUDE_CONFIG_DIR` of its own, which
@@ -400,8 +406,14 @@ impl<R: Runtime> Core<R> {
 
     /// What the account would be told to run by hand to declare `entry`.
     fn manual_command(&self, settings: &Settings, account: &Account, entry: &Entry) -> String {
-        let (env, home) = self.claude_app_env();
+        let (env, home) = self.claude_app_env(account, settings);
         let claude_json = accounts::claude_json_with(account, env.as_deref(), &home);
+        let replace = current(&claude_json).is_some();
+        // A `claude` of WSL: the command for a terminal of its distribution, its folder there.
+        if let Some(wsl) = accounts::program(account, settings).and_then(|p| p.wsl().cloned()) {
+            let dir = accounts::own_dir(account).map(|d| wsl.linux_path(d).unwrap_or(d.into()));
+            return manual_command_in(false, &wsl.path, dir.as_deref(), entry, replace);
+        }
         let typed = [account.claude_path.trim(), settings.claude_path.trim()]
             .into_iter()
             .find(|p| !p.is_empty())
@@ -411,7 +423,7 @@ impl<R: Runtime> Core<R> {
             typed,
             accounts::own_dir(account),
             entry,
-            current(&claude_json).is_some(),
+            replace,
         )
     }
 

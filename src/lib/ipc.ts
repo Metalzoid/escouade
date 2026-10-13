@@ -8,6 +8,7 @@ import type {
   Attachment,
   BoardSettings,
   BranchInfo,
+  ClaudeLocated,
   CommitScope,
   Container,
   ConvItem,
@@ -67,6 +68,10 @@ export const api = {
   mcpManualCommand: (account: string) => invoke<string>('mcp_manual_command', { account }),
   /** The settings, but for the Claude accounts (their tab changes them with the `account*` calls below). */
   saveSettings: (settings: Settings) => invoke<ShellInfo[]>('save_settings', { settings }),
+  /** Where the `claude` of `path` is (blank: the one found by itself), `wslDistro` the distribution for one of WSL. */
+  locateClaude: (path: string, wslDistro: string) => invoke<ClaudeLocated>('claude_locate', { path, wslDistro }),
+  /** Whether Claude Code is found for the account new agents go to, and by the settings' own path (as at the start). */
+  claudeFound: () => invoke<{ claudeFound: boolean; claudePathFound: boolean }>('claude_found'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
   accountShareable: () => invoke<string[]>('account_shareable'),
   /** A new Claude account, its folder made with the items `share` of Principal's linked or copied, saved last. */

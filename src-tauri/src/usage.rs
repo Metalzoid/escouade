@@ -265,10 +265,15 @@ const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 /// The variable that, when set, takes the place of `CLAUDE_CONFIG_DIR` for the sign-in alone.
 const SECURE_STORAGE_VAR: &str = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
 
-/// `sign_in_with` in the app's environment. In unit tests, a home folder that does not exist and
-/// none of the variables: Principal's sign-in is never the machine user's own (tests run inside
-/// a Claude Code session may have its CLAUDE_CONFIG_DIR).
-pub fn sign_in(account: &Account) -> SignIn {
+/// `sign_in_with` in the app's environment, or in the Linux home folder for a `claude` of WSL.
+/// In unit tests, a home folder that does not exist and none of the variables: Principal's
+/// sign-in is never the machine user's own (tests run inside a Claude Code session may have its
+/// CLAUDE_CONFIG_DIR).
+pub fn sign_in(account: &Account, settings: &crate::model::Settings) -> SignIn {
+    // A `claude` of WSL keeps it in Linux, and gets none of the app's variables.
+    if let Some(wsl) = accounts::program(account, settings).and_then(|p| p.wsl().cloned()) {
+        return sign_in_with(account, None, None, &wsl.windows_path(&wsl.home));
+    }
     if cfg!(test) {
         let home = std::env::temp_dir().join("escouade-tests-no-home");
         return sign_in_with(account, None, None, &home);
@@ -574,7 +579,7 @@ mod tests {
         let api = api_from_env();
         assert!(api.starts_with("http://127.0.0.1:"), "{api}");
         assert_ne!(api, USAGE_API);
-        let principal = sign_in(&accounts::principal());
+        let principal = sign_in(&accounts::principal(), &Default::default());
         assert_eq!(
             principal.dir,
             std::env::temp_dir()

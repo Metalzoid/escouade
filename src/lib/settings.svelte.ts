@@ -407,6 +407,14 @@ class SettingsForm {
           app.settings = next;
           app.shells = shells;
           this.#base = { ...this.#base, settings: { ...this.#base.settings, ...diff } };
+          // Another `claude`: the board's banner and the hint of the path say whether it is found now.
+          if ('claudePath' in diff || 'wslDistro' in diff) {
+            const found = await api.claudeFound().catch(() => null);
+            if (found) {
+              app.claudeFound = found.claudeFound;
+              app.claudePathFound = found.claudePathFound;
+            }
+          }
         } else ok = false;
       }
       for (const id of Object.keys(this.projects)) {

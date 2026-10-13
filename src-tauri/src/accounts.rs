@@ -24,7 +24,7 @@ use tauri::Runtime;
 pub const PRINCIPAL: &str = "principal";
 
 /// The variable that gives Claude Code its configuration folder.
-const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
+pub(crate) const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
 
 /// What a new account may share of Principal's folder: its settings and instructions (files),
 /// then what extends Claude Code (folders). Never its sign-in (`.credentials.json`) nor its
@@ -301,10 +301,24 @@ pub(crate) fn app_env() -> (Option<String>, PathBuf) {
     )
 }
 
-/// The configuration folder the account's Claude Code reads: its own, or for Principal (no folder)
-/// the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes inherit, else `~/.claude`.
-pub fn config_dir(account: &Account) -> PathBuf {
-    let (env, home) = app_env();
+/// The app's `CLAUDE_CONFIG_DIR` and the home folder as the account's Claude Code goes by them
+/// (`app_env`); for a `claude` of WSL, no variable (none of the app's reach it) and its Linux home
+/// folder seen from Windows (`\\wsl.localhost\<distro>\home\…`), where Principal's folder is.
+pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<String>, PathBuf) {
+    match program(account, settings)
+        .as_ref()
+        .and_then(claude::Program::wsl)
+    {
+        Some(wsl) => (None, wsl.windows_path(&wsl.home)),
+        None => app_env(),
+    }
+}
+
+/// The configuration folder the account's Claude Code reads, seen from the app: its own, or for
+/// Principal (no folder) the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes
+/// inherit, else `~/.claude` (in Linux for a `claude` of WSL: `claude_home`).
+pub fn config_dir(account: &Account, settings: &Settings) -> PathBuf {
+    let (env, home) = claude_home(account, settings);
     config_dir_with(account, env.as_deref(), &home)
 }
 
@@ -338,13 +352,14 @@ pub fn launch_env(account: &Account) -> Vec<(String, String)> {
 
 /// The `claude` the account runs: its own when it names one, else the settings' (found as
 /// `claude::resolve_binary` finds it). None when it cannot be found.
-pub fn program(account: &Account, settings: &Settings) -> Option<PathBuf> {
+pub fn program(account: &Account, settings: &Settings) -> Option<claude::Program> {
     let own = account.claude_path.trim();
-    claude::resolve_binary(if own.is_empty() {
+    let path = if own.is_empty() {
         &settings.claude_path
     } else {
         own
-    })
+    };
+    claude::resolve_binary(path, &settings.wsl_distro)
 }
 
 /// The file Claude Code keeps the account's own state in (its email, its MCP servers): in its
@@ -357,9 +372,9 @@ pub fn claude_json_with(account: &Account, env: Option<&str>, home: &Path) -> Pa
     }
 }
 
-/// `claude_json_with` in the app's environment (`app_env`).
-pub fn claude_json(account: &Account) -> PathBuf {
-    let (env, home) = app_env();
+/// `claude_json_with` as the account's Claude Code goes (`claude_home`).
+pub fn claude_json(account: &Account, settings: &Settings) -> PathBuf {
+    let (env, home) = claude_home(account, settings);
     claude_json_with(account, env.as_deref(), &home)
 }
 
@@ -487,6 +502,12 @@ pub fn create(
 
 /// The items `names` of `from` (Principal's folder) linked or copied into `to`: those it has.
 fn share_items(from: &Path, to: &Path, names: &[String], mode: ShareMode) -> Result<()> {
+    // A junction cannot lead into a distribution of WSL (a `claude` of WSL's folder).
+    let mode = if crate::wsl::on_share(from) {
+        ShareMode::Copy
+    } else {
+        mode
+    };
     for name in names {
         let (src, dst) = (from.join(name), to.join(name));
         let done = if SHARED_DIRS.contains(&name.as_str()) {
@@ -607,6 +628,10 @@ fn copy_dir(src: &Path, dst: &Path, depth: u32) -> Result<()> {
                 std::fs::copy(&from, &to)?;
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            // A link Windows cannot follow (one of a WSL distribution's folder): left out.
+            Err(e) if std::fs::symlink_metadata(&from).is_ok_and(|m| m.is_symlink()) => {
+                log::warn!("{}: link left out of the copy: {e}", from.display());
+            }
             Err(e) => return Err(e.into()),
         }
     }
@@ -781,6 +806,25 @@ pub(crate) fn no_account_issue() -> String {
     )
 }
 
+/// Refused, in `lang`: `account` runs Claude Code on the other side of WSL than the agent's
+/// (`in_wsl`: it runs it in WSL, the agent's account on Windows).
+fn other_side(lang: Lang, account: &Account, in_wsl: bool) -> anyhow::Error {
+    let name = name_in(lang, account);
+    anyhow::anyhow!(if in_wsl {
+        tr_in!(
+            lang,
+            "Le compte « {name} » fait tourner Claude Code dans WSL, celui de l’agent sous Windows : sa session ne passe pas de l’un à l’autre.",
+            "The “{name}” account runs Claude Code in WSL, the agent’s on Windows: its session doesn’t go from one to the other."
+        )
+    } else {
+        tr_in!(
+            lang,
+            "Le compte « {name} » fait tourner Claude Code sous Windows, celui de l’agent dans WSL : sa session ne passe pas de l’un à l’autre.",
+            "The “{name}” account runs Claude Code on Windows, the agent’s in WSL: its session doesn’t go from one to the other."
+        )
+    })
+}
+
 /// Refused: the account is switched off, nothing goes to it.
 fn switched_off(account: &Account) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -877,8 +921,8 @@ impl<R: Runtime> Core<R> {
 
     /// The items of Principal's folder a new account may share.
     pub fn claude_shareable(&self) -> Vec<String> {
-        let principal = get(&self.settings.read(), PRINCIPAL);
-        shareable(&config_dir(&principal))
+        let settings = self.settings.read().clone();
+        shareable(&config_dir(&get(&settings, PRINCIPAL), &settings))
     }
 
     /// « Créer et se connecter »: a new account (`create`), its folder in the data folder, last in
@@ -891,7 +935,7 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Account> {
         let root = self.data.claude_accounts();
         let (made, _) = self.change_claude_accounts(|s| {
-            let from = config_dir(&get(s, PRINCIPAL));
+            let from = config_dir(&get(s, PRINCIPAL), s);
             let made = create(s, &root, &from, name, share, mode)?;
             s.accounts.push(made.clone());
             Ok(made)
@@ -1173,6 +1217,14 @@ impl<R: Runtime> Core<R> {
         if !to.serves(Some(&h.lock().meta.project_id)) {
             return Err(reserved(to));
         }
+        // Claude Code finds a session by the folder it runs in, which WSL names in its own way
+        // (`/mnt/c/…`): one does not go on from Windows to WSL, nor back.
+        let in_wsl = |a: &Account| program(a, &settings).is_some_and(|p| p.wsl().is_some());
+        // The agent's account read first: no lock held while a `claude` of WSL is looked for.
+        let current = get(&settings, &h.lock().meta.account);
+        if in_wsl(&current) != in_wsl(to) {
+            return Err(other_side(crate::i18n::ui(), to, in_wsl(to)));
+        }
         let (from, session, stopped) = {
             let mut rt = h.lock();
             let from = get(&settings, &rt.meta.account);
@@ -1200,7 +1252,7 @@ impl<R: Runtime> Core<R> {
         if let Some(p) = stopped {
             stop_and_wait(&p).await?;
         }
-        let (from_dir, to_dir) = (config_dir(&from), config_dir(to));
+        let (from_dir, to_dir) = (config_dir(&from, &settings), config_dir(to, &settings));
         tokio::task::spawn_blocking(move || copy_session(&from_dir, &to_dir, &session))
             .await
             .map_err(|e| anyhow::anyhow!(e))??;
@@ -1215,6 +1267,14 @@ impl<R: Runtime> Core<R> {
         Ok(Moved { from, resume_at })
     }
 
+    /// Each active account's `claude` looked for once, at the start (see `wsl::find`).
+    pub fn warm_claude(&self) {
+        let settings = self.settings.read().clone();
+        for account in settings.accounts.iter().filter(|a| a.active) {
+            let _ = program(account, &settings);
+        }
+    }
+
     /// Whether Claude Code is found for the account new agents would go to (the current one): its
     /// own `claude`, else the settings'.
     pub fn claude_found(&self) -> bool {
@@ -1226,7 +1286,8 @@ impl<R: Runtime> Core<R> {
     /// Whether the account is signed in, and with which email.
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;
-        let sign_in = crate::usage::sign_in(&account);
+        let settings = self.settings.read().clone();
+        let sign_in = crate::usage::sign_in(&account, &settings);
         let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
             Ok(stored) => Some(stored),
             // A file being written, the keychain refused: not signed in as far as can be told.
@@ -1242,9 +1303,11 @@ impl<R: Runtime> Core<R> {
             connected,
             stamp: stored.and_then(|s| s.stamp),
             email: connected
-                .then(|| email_in(&claude_json(&account)))
+                .then(|| email_in(&claude_json(&account, &settings)))
                 .flatten(),
-            dir: config_dir(&account).to_string_lossy().into_owned(),
+            dir: config_dir(&account, &settings)
+                .to_string_lossy()
+                .into_owned(),
         })
     }
 
@@ -1513,6 +1576,100 @@ mod tests {
     }
 
     #[test]
+    fn with_a_claude_of_wsl_principal_keeps_its_folder_in_linux() {
+        // Only where WSL has a distribution (not on the CI's Windows runners).
+        let machine = crate::wsl::Machine::this();
+        let (Some(_), Some(distro)) = (&machine.exe, machine.default.clone()) else {
+            eprintln!("no WSL distribution: skipped");
+            return;
+        };
+        // Any program of the distribution will do: `sh` is in all of them.
+        let settings = Settings {
+            claude_path: "/bin/sh".into(),
+            ..Default::default()
+        };
+        let principal = get(&settings, PRINCIPAL);
+        let wsl = program(&principal, &settings)
+            .and_then(|p| p.wsl().cloned())
+            .expect("a program of WSL");
+        let home = wsl.windows_path(&wsl.home);
+        assert!(
+            home.to_string_lossy()
+                .starts_with(&format!(r"\\wsl.localhost\{distro}\")),
+            "{home:?}"
+        );
+        assert_eq!(config_dir(&principal, &settings), home.join(".claude"));
+        assert_eq!(
+            claude_json(&principal, &settings),
+            home.join(".claude.json")
+        );
+        assert_eq!(
+            crate::usage::sign_in(&principal, &settings).dir,
+            home.join(".claude")
+        );
+        // An account of its own keeps its folder, on Windows (its Linux path at the launch).
+        let pro = account("pro", r"C:\Users\me\.escouade\claude\pro");
+        assert_eq!(
+            config_dir(&pro, &settings),
+            PathBuf::from(r"C:\Users\me\.escouade\claude\pro")
+        );
+    }
+
+    #[test]
+    fn a_folder_of_wsl_is_copied_without_the_links_windows_cannot_follow() {
+        // Only where WSL has a distribution (not on the CI's Windows runners).
+        let machine = crate::wsl::Machine::this();
+        let (Some(exe), Some(distro)) = (machine.exe.clone(), machine.default.clone()) else {
+            eprintln!("no WSL distribution: skipped");
+            return;
+        };
+        let linux = format!("/var/tmp/escouade-copy-{}", std::process::id());
+        let made = std::process::Command::new(&exe)
+            .args(["-d", &distro, "--exec", "/bin/sh", "-c"])
+            .arg(format!(
+                "rm -rf {linux} && mkdir -p {linux}/skills/a && echo x > {linux}/skills/a/SKILL.md && ln -s /etc/hostname {linux}/skills/linked && ln -s a/SKILL.md {linux}/skills/relative && ln -s a {linux}/skills/folder"
+            ))
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let to = test_dir("accounts-copy-wsl").join("skills");
+        let from = crate::wsl::Program {
+            exe: exe.clone(),
+            distro: distro.clone(),
+            path: String::new(),
+            home: String::new(),
+            mount_root: "/mnt/".into(),
+        }
+        .windows_path(&format!("{linux}/skills"));
+        copy_dir(&from, &to, 0).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(to.join("a").join("SKILL.md"))
+                .unwrap()
+                .trim(),
+            "x"
+        );
+        assert!(!to.join("linked").exists());
+        assert!(!to.join("relative").exists());
+        assert!(!to.join("folder").exists());
+        let _ = std::process::Command::new(&exe)
+            .args(["-d", &distro, "--exec", "rm", "-rf", &linux])
+            .status();
+    }
+
+    #[test]
+    fn a_session_does_not_cross_between_windows_and_wsl_in_english() {
+        let pro = account("pro", "/a");
+        assert_eq!(
+            other_side(Lang::En, &pro, true).to_string(),
+            "The “PRO” account runs Claude Code in WSL, the agent’s on Windows: its session doesn’t go from one to the other."
+        );
+        assert_eq!(
+            other_side(Lang::En, &pro, false).to_string(),
+            "The “PRO” account runs Claude Code on Windows, the agent’s in WSL: its session doesn’t go from one to the other."
+        );
+    }
+
+    #[test]
     fn an_account_runs_its_own_claude_else_the_settings_one() {
         let dir = test_dir("accounts-program");
         let (own, set) = (dir.join("claude-pro.cmd"), dir.join("claude.cmd"));
@@ -1527,9 +1684,10 @@ mod tests {
             claude_path,
             ..account("pro", "/a")
         };
-        assert_eq!(program(&with(path(&own)), &settings), Some(own.clone()));
-        assert_eq!(program(&with(String::new()), &settings), Some(set.clone()));
-        assert_eq!(program(&with("  ".into()), &settings), Some(set));
+        let native = |p: &PathBuf| Some(claude::Program::Native(p.clone()));
+        assert_eq!(program(&with(path(&own)), &settings), native(&own));
+        assert_eq!(program(&with(String::new()), &settings), native(&set));
+        assert_eq!(program(&with("  ".into()), &settings), native(&set));
         // Its own named and not there: not found, rather than another one.
         let gone = path(&dir.join("absent.cmd"));
         assert_eq!(program(&with(gone), &settings), None);

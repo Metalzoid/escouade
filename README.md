@@ -46,6 +46,8 @@ Ce qui change d'une version à l'autre est dans le [journal des versions](CHANGE
 - Git : Git for Windows, sous macOS celui des outils en ligne de commande Xcode (`xcode-select --install`) ou de Homebrew, sous Linux celui de la distribution.
 - Optionnel sous Windows : PowerShell 7 (à défaut, les terminaux utilisent Windows PowerShell), WSL.
 
+Sous Windows, Claude Code peut aussi être installé dans WSL. Donne son chemin dans Réglages › Claude Code, sous l'une de ces formes : `~/.local/bin/claude`, `/home/<utilisateur>/.local/bin/claude` ou `\\wsl.localhost\<distribution>\home\<utilisateur>\.local\bin\claude`. Champ vide, il est trouvé seul quand Windows n'a pas de `claude`. La ligne sous le champ dit où Escouade l'a trouvé. Escouade le lance par `wsl.exe` dans le dossier de l'agent (`/mnt/c/…`) et lit ses sessions et sa connexion dans le dossier personnel Linux. Les outils MCP d'Escouade et le suivi en direct de la vue Claude Code demandent le réseau miroir de WSL : `networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`, puis `wsl --shutdown`. Claude Code y est lancé sans le profil du shell : une variable posée dans `~/.profile` ou `~/.bashrc` ne lui parvient pas.
+
 Sous macOS, une app lancée depuis le Finder ou le Dock ne reçoit pas le `PATH` du terminal : Escouade reprend celui de ton shell de connexion (`$SHELL -ilc`) au démarrage, et cherche aussi `claude` dans `~/.local/bin`, `/opt/homebrew/bin` et `/usr/local/bin`.
 
 ## Installation

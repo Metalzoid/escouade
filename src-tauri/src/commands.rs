@@ -75,7 +75,8 @@ pub struct InitialState {
     lang: crate::i18n::LangInfo,
 }
 
-#[tauri::command]
+// Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
+#[tauri::command(async)]
 pub fn subscribe(
     core: CoreState,
     updates: State<crate::updates::Updates>,
@@ -102,7 +103,8 @@ pub fn subscribe(
     let accounts = core.integration_accounts();
     let version = core.app.package_info().version.to_string();
     let lang = core.lang();
-    let claude_path_found = crate::claude::resolve_binary(&settings.claude_path).is_some();
+    let claude_path_found =
+        crate::claude::resolve_binary(&settings.claude_path, &settings.wsl_distro).is_some();
     InitialState {
         lang,
         projects,
@@ -141,6 +143,39 @@ pub fn set_ui(core: CoreState, ui: UiState) {
 pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>> {
     core.save_window_settings(settings.clone()).map_err(err)?;
     Ok(pty::detect_shells(&settings))
+}
+
+/// Where the `claude` of a path of the settings is (empty: the one found by itself), the
+/// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
+#[tauri::command(async)]
+pub fn claude_locate(path: String, wsl_distro: String) -> crate::claude::Located {
+    // Asked by the user: what was not found is looked for again (maybe just installed).
+    crate::wsl::forget(false);
+    crate::claude::locate(&path, &wsl_distro)
+}
+
+/// Whether Claude Code is found, as the start tells it (`claude_found`, `claude_path_found` of
+/// `InitialState`): asked again once its path is saved.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeFound {
+    claude_found: bool,
+    claude_path_found: bool,
+}
+
+#[tauri::command(async)]
+pub fn claude_found(core: CoreState) -> ClaudeFound {
+    // Asked once a path is saved: every `claude` of WSL is looked for again (installed, removed).
+    crate::wsl::forget(true);
+    let settings = core.settings.read().clone();
+    ClaudeFound {
+        claude_found: core.claude_found(),
+        claude_path_found: crate::claude::resolve_binary(
+            &settings.claude_path,
+            &settings.wsl_distro,
+        )
+        .is_some(),
+    }
 }
 
 // ---------- Claude accounts ----------
@@ -1423,7 +1458,7 @@ pub fn mcp_declare_status(core: CoreState) -> Vec<crate::mcp::install::Declarati
 
 /// The command that declares the server by hand in the account, with the real token: asked for
 /// when the user copies it, never sent with the state.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mcp_manual_command(core: CoreState, account: String) -> Res<String> {
     core.mcp_manual_command(&account).map_err(err)
 }

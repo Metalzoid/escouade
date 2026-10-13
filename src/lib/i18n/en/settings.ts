@@ -70,6 +70,13 @@ export default defineZone('settings', {
     pathHint: 'blank = detect automatically',
     pathFound: 'claude (found in PATH)',
     pathMissing: 'not found — enter the path to claude.exe',
+    /** Under the path: where its `claude` is. */
+    located: 'Found: {path}',
+    locatedWsl: 'Found in WSL ({distro}): {path}',
+    nat: 'WSL’s network is NAT: Escouade’s MCP server and the tracking of the Claude Code view can’t reach the app. Switch it to mirrored (networkingMode=mirrored under [wsl2] in %UserProfile%\\.wslconfig), then run wsl --shutdown.',
+    notLocated:
+      'Not found. Give the path to claude.exe, or to Claude Code installed in WSL: ~/.local/bin/claude, /home/<user>/…, or \\\\wsl.localhost\\<distribution>\\….',
+    notLocatedHere: 'Not found. Give the path to claude.',
     newAgents: 'New agents',
     defaultModel: 'Default model',
     defaultEffort: 'Default effort',

@@ -54,6 +54,7 @@ mod updates;
 mod usage;
 mod which;
 mod worktrees;
+mod wsl;
 
 use crate::core::Core;
 use std::io::Write;
@@ -207,6 +208,10 @@ pub fn run() {
                 log::error!("app menu not set: {e}");
             }
             core.start(git_rx);
+            // Finding a `claude` of WSL may start its distribution: done now and off the main
+            // thread, which neither the window nor the board then waits for (`wsl::find` keeps it).
+            let warm = core.clone();
+            tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
             updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 match window {
@@ -242,6 +247,8 @@ pub fn run() {
             commands::subscribe,
             commands::set_ui,
             commands::save_settings,
+            commands::claude_locate,
+            commands::claude_found,
             commands::account_shareable,
             commands::account_create,
             commands::account_update,

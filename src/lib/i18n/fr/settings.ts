@@ -82,6 +82,13 @@ export default {
     pathHint: 'vide = détection automatique',
     pathFound: 'claude (trouvé dans le PATH)',
     pathMissing: 'introuvable — indique le chemin de claude.exe',
+    /** Under the path: where its `claude` is. */
+    located: 'Trouvé : {path}',
+    locatedWsl: 'Trouvé dans WSL ({distro}) : {path}',
+    nat: 'Le réseau de WSL est en NAT : le serveur MCP d’Escouade et le suivi de la vue Claude Code ne joignent pas l’app. Passe-le en mode miroir (networkingMode=mirrored sous [wsl2] dans %UserProfile%\\.wslconfig), puis lance wsl --shutdown.',
+    notLocated:
+      'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
+    notLocatedHere: 'Introuvable. Indique le chemin de claude.',
     newAgents: 'Nouveaux agents',
     defaultModel: 'Modèle par défaut',
     defaultEffort: 'Effort par défaut',
