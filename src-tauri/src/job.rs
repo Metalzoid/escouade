@@ -89,6 +89,22 @@ mod imp {
             }
         }
 
+        /// Lets the processes of the job live on when it is dropped (a shell that ended by itself
+        /// leaves what its user detached): the job keeps holding them, but no longer kills them
+        /// when its handle closes. `terminate` still does.
+        pub fn release(&self) {
+            // SAFETY: valid job handle owned by self, a buffer of the declared size.
+            unsafe {
+                let info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+                SetInformationJobObject(
+                    self.0,
+                    JobObjectExtendedLimitInformation,
+                    &info as *const _ as *const c_void,
+                    std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                );
+            }
+        }
+
         /// What the job's processes use: CPU time since they joined it (ended ones included),
         /// and the memory of those still running.
         pub fn usage(&self) -> Option<JobUsage> {
@@ -173,7 +189,8 @@ mod imp {
 
     impl Drop for Job {
         fn drop(&mut self) {
-            // SAFETY: closing our own handle; with KILL_ON_JOB_CLOSE this ends the tree.
+            // SAFETY: closing our own handle; with KILL_ON_JOB_CLOSE (unless released) this ends
+            // the tree.
             unsafe {
                 CloseHandle(self.0);
             }
@@ -208,6 +225,10 @@ mod imp {
                 libc::killpg(self.0, libc::SIGKILL);
             }
         }
+
+        /// Nothing to release: a group is killed when the job is dropped, so a terminal whose
+        /// shell may end leaving what its user detached has no job on Unix (see `pty`).
+        pub fn release(&self) {}
 
         /// What the group's running processes use (CPU time of those still running, resident
         /// memory), read from `ps`.
@@ -273,6 +294,7 @@ mod imp {
             None
         }
         pub fn terminate(&self) {}
+        pub fn release(&self) {}
         pub fn usage(&self) -> Option<super::JobUsage> {
             None
         }
@@ -314,6 +336,24 @@ mod tests {
         drop(job);
         child.wait().unwrap();
         assert!(!alive(child.id()));
+    }
+
+    #[test]
+    fn a_released_job_kills_nothing_when_it_is_dropped() {
+        let mut child = Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let job = Job::new().unwrap();
+        assert!(job.assign_handle(std::os::windows::io::AsRawHandle::as_raw_handle(&child)));
+        job.release();
+        drop(job);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let survived = child.try_wait().unwrap().is_none();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(survived, "the released job killed its process");
     }
 
     #[test]

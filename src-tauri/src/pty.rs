@@ -36,11 +36,13 @@ struct Term {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
-    /// A launch command's whole process tree, including what it starts outside its console:
-    /// killed when the terminal goes.
-    _job: Option<Job>,
+    /// The terminal's whole process tree, including what it starts outside its console: killed
+    /// when the terminal goes.
+    job: Option<Job>,
     /// A launch command (or a step of a test launch), not an interactive shell.
     launch: bool,
+    /// See `Started::detached_survive`.
+    detached_survive: bool,
     /// When it last had input or output (ms).
     io_at: Arc<AtomicI64>,
 }
@@ -66,6 +68,9 @@ struct Started {
     launch: bool,
     /// What it starts, outside its console too, is killed with it (a `Job`).
     job: bool,
+    /// When its program ends by itself (an `exit`), what the user detached keeps running: only
+    /// closing the terminal kills the tree. Otherwise the end of the program ends what it started.
+    detached_survive: bool,
 }
 
 /// Where shells are looked for; from the environment in the app, fake folders in tests.
@@ -280,6 +285,29 @@ pub fn run_cwd(project: &str, sub: &str) -> Result<String> {
     Ok(dir.to_string_lossy().into_owned())
 }
 
+/// Finds the cursor position query (`ESC [ 6 n`) in what a terminal prints, even when it is cut
+/// between two reads: the end of each read is kept to join it to the next.
+#[derive(Default)]
+struct CursorQuery {
+    tail: Vec<u8>,
+}
+
+impl CursorQuery {
+    const QUERY: &'static [u8] = b"\x1b[6n";
+
+    /// Whether the query ends in `read`, the next one of the terminal's output.
+    fn feed(&mut self, read: &[u8]) -> bool {
+        let mut seen = std::mem::take(&mut self.tail);
+        seen.extend_from_slice(read);
+        let found = seen.windows(Self::QUERY.len()).any(|w| w == Self::QUERY);
+        // One byte short of the query: a whole one never waits for the next read, so it is not
+        // found twice.
+        let keep = seen.len().min(Self::QUERY.len() - 1);
+        self.tail = seen.split_off(seen.len() - keep);
+        found
+    }
+}
+
 impl PtyManager {
     /// An interactive shell.
     #[allow(clippy::too_many_arguments)]
@@ -319,8 +347,9 @@ impl PtyManager {
     ) -> Result<()> {
         let (me, id) = (self.clone(), info.id.clone());
         let answer = format!("\x1b[{};1R", cursor_row.max(1));
+        let query = Mutex::new(CursorQuery::default());
         let on_data = move |b: Vec<u8>| {
-            if b.windows(4).any(|w| w == b"\x1b[6n") {
+            if query.lock().feed(&b) {
                 let _ = me.write(&id, answer.as_bytes());
             }
             on_data(b);
@@ -361,6 +390,7 @@ impl PtyManager {
         let started = Started {
             launch: false,
             job: true,
+            detached_survive: false,
         };
         self.start(info, cmd, size, env, started, on_data, on_exit)
     }
@@ -416,7 +446,10 @@ impl PtyManager {
         }
         let started = Started {
             launch: command.is_some(),
-            job: command.is_some(),
+            // Not on Unix, where the job is the shell's process group, killed when dropped: an
+            // `exit` would take what the user detached (nohup…) with it.
+            job: command.is_some() || cfg!(windows),
+            detached_survive: command.is_none(),
         };
         self.start(info, cmd, size, env, started, on_data, on_exit)
     }
@@ -468,8 +501,9 @@ impl PtyManager {
                 master: pair.master,
                 writer,
                 killer,
-                _job: job,
+                job,
                 launch: started.launch,
+                detached_survive: started.detached_survive,
                 io_at: io_at.clone(),
             },
         );
@@ -491,8 +525,17 @@ impl PtyManager {
         std::thread::spawn(move || {
             let code = child.wait().ok().map(|s| s.exit_code());
             // Dropping the master closes the pseudo-console, which ends the reader thread (and the
-            // job, what the command left running). Outside the lock: see kill.
+            // job, what the command left running). Outside the lock: see kill. A term that is not
+            // there was closed by `kill`, which ended the tree.
             let term = terms.lock().remove(&id);
+            if let Some(Term {
+                job: Some(job),
+                detached_survive: true,
+                ..
+            }) = &term
+            {
+                job.release();
+            }
             drop(term);
             on_exit(code);
         });
@@ -523,9 +566,14 @@ impl PtyManager {
 
     pub fn kill(&self, id: &str) {
         // Dropped outside the lock: closing the pseudo-console may wait for its reader, which
-        // takes the lock to answer a cursor position query. Dropping its job kills the rest.
+        // takes the lock to answer a cursor position query.
         let term = self.terms.lock().remove(id);
         if let Some(mut t) = term {
+            // The whole tree at once: the pseudo-console, closed when the term is dropped, would
+            // take its time to end what is attached to it, and not end the rest.
+            if let Some(job) = &t.job {
+                job.terminate();
+            }
             let _ = t.killer.kill();
         }
     }
@@ -668,42 +716,62 @@ mod tests {
             .collect()
     }
 
+    /// Whether the process `pid` is still running: a handle that can be waited on is signaled
+    /// once the process ended (a pid is not proof of life: `tasklist` lags and ids are reused).
     fn alive(pid: u32) -> bool {
-        let out = std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .output()
-            .unwrap();
-        String::from_utf8_lossy(&out.stdout).contains(&pid.to_string())
+        use windows_sys::Win32::Foundation::{
+            CloseHandle, GetLastError, ERROR_ACCESS_DENIED, WAIT_TIMEOUT,
+        };
+        use windows_sys::Win32::Storage::FileSystem::SYNCHRONIZE;
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        // SAFETY: the handle is checked, waited on without blocking and closed.
+        unsafe {
+            let h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                // Out of reach but there; any other failure: no such process.
+                return GetLastError() == ERROR_ACCESS_DENIED;
+            }
+            let running = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+            CloseHandle(h);
+            running
+        }
     }
 
-    #[test]
-    fn closing_a_terminal_kills_the_programs_it_started() {
-        let _one = one_shell_at_a_time();
-        let pty = PtyManager::default();
-        let out = Arc::new(Mutex::new(String::new()));
-        let sink = out.clone();
+    /// Kills the process `pid` if it is still there (a test that failed leaves its ping behind).
+    fn kill_process(pid: u32) {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
+    }
+
+    /// Opens a PowerShell 7 terminal `id` that answers the cursor position queries the way
+    /// xterm.js does in the app; returns it with what it printed, once its prompt is there.
+    fn open_pwsh(id: &'static str) -> Option<(PtyManager, Arc<Mutex<String>>)> {
         let Some(shell) = detect_shells(&Settings::default())
             .into_iter()
             .find(|s| s.id == "pwsh")
         else {
             eprintln!("PowerShell 7 not installed: skipped");
-            return;
+            return None;
         };
+        let pty = PtyManager::default();
+        let out = Arc::new(Mutex::new(String::new()));
+        let (sink, answer) = (out.clone(), pty.clone());
         let info = TermInfo {
-            id: "t1".into(),
+            id: id.into(),
             project_id: "p".into(),
             name: "pwsh-1".into(),
             shell: "pwsh".into(),
         };
         let cwd = std::env::temp_dir().to_string_lossy().to_string();
-        // Behave like a terminal: answer every cursor position query (xterm.js does it in the app).
-        let answer = pty.clone();
+        let query = Mutex::new(CursorQuery::default());
         let on_data = move |b: Vec<u8>| {
-            let chunk = String::from_utf8_lossy(&b).to_string();
-            if chunk.contains("\x1b[6n") {
-                let _ = answer.write("t1", b"\x1b[1;1R");
+            if query.lock().feed(&b) {
+                let _ = answer.write(id, b"\x1b[1;1R");
             }
-            sink.lock().push_str(&chunk);
+            sink.lock().push_str(&String::from_utf8_lossy(&b));
         };
         pty.spawn(info, &shell, "", &cwd, (120, 30), vec![], on_data, |_| {})
             .unwrap();
@@ -717,11 +785,17 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         std::thread::sleep(Duration::from_millis(1500));
+        Some((pty, out))
+    }
+
+    /// Types `command`, which starts a ping, in terminal `id`; returns the ping's pid.
+    fn start_ping(pty: &PtyManager, out: &Mutex<String>, id: &str, command: &str) -> u32 {
         let before = pings();
-        pty.write("t1", b"ping -n 60 127.0.0.1\r").unwrap();
-        let pid = loop {
+        pty.write(id, format!("{command}\r").as_bytes()).unwrap();
+        let start = Instant::now();
+        loop {
             if let Some(p) = pings().into_iter().find(|p| !before.contains(p)) {
-                break p;
+                return p;
             }
             assert!(
                 start.elapsed() < Duration::from_secs(90),
@@ -729,17 +803,78 @@ mod tests {
                 out.lock()
             );
             std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Types `command`, which starts a ping, then closes the terminal: the ping must die with it.
+    fn closing_kills_the_ping_of(id: &'static str, command: &str) {
+        let _one = one_shell_at_a_time();
+        let Some((pty, out)) = open_pwsh(id) else {
+            return;
         };
+        let pid = start_ping(&pty, &out, id, command);
         assert!(alive(pid));
-        pty.kill("t1");
+        pty.kill(id);
+        // The pseudo-console closes on its own time (seconds on a loaded runner): the job does not
+        // wait for it.
         let start = Instant::now();
         while alive(pid) {
-            assert!(
-                start.elapsed() < Duration::from_secs(5),
-                "node {pid} survived its terminal"
-            );
+            if start.elapsed() > Duration::from_secs(20) {
+                kill_process(pid);
+                panic!("ping {pid} survived its terminal");
+            }
             std::thread::sleep(Duration::from_millis(100));
         }
+    }
+
+    #[test]
+    fn closing_a_terminal_kills_the_programs_it_started() {
+        closing_kills_the_ping_of("t1", "ping -n 60 127.0.0.1");
+    }
+
+    #[test]
+    fn closing_a_terminal_also_kills_programs_started_outside_its_console() {
+        // Hidden, in a console of its own: closing the pseudo-console does not reach it.
+        closing_kills_the_ping_of(
+            "t4",
+            "Start-Process ping -ArgumentList '-n','60','127.0.0.1' -WindowStyle Hidden",
+        );
+    }
+
+    /// Types `command`, which detaches a ping, then `exit`: the ping must run on after the shell
+    /// and its terminal are gone.
+    fn exit_leaves_the_ping_of(id: &'static str, command: &str) {
+        let _one = one_shell_at_a_time();
+        let Some((pty, out)) = open_pwsh(id) else {
+            return;
+        };
+        let pid = start_ping(&pty, &out, id, command);
+        pty.write(id, b"exit\r").unwrap();
+        let start = Instant::now();
+        while pty.list().iter().any(|t| t.id == id) {
+            assert!(
+                start.elapsed() < Duration::from_secs(30),
+                "the shell did not end: {}",
+                out.lock()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        // The shell is gone and its terminal dropped: what it detached must still run.
+        std::thread::sleep(Duration::from_secs(2));
+        let survived = alive(pid);
+        kill_process(pid);
+        assert!(survived, "ping {pid} died with the shell that started it");
+    }
+
+    #[test]
+    fn a_shell_that_ends_by_itself_leaves_the_programs_its_user_detached() {
+        // A console of its own, hidden, as `Start-Process` gives a console program. (One sharing the
+        // terminal's console, `start /b`, goes with the pseudo-console when its shell ends: that
+        // is Windows closing it, no job involved.)
+        exit_leaves_the_ping_of(
+            "t2",
+            "Start-Process ping -ArgumentList '-n','30','127.0.0.1' -WindowStyle Hidden",
+        );
     }
 
     /// Stops the launch command `command`, which starts a ping: the ping must die with it.
@@ -789,9 +924,7 @@ mod tests {
         let start = Instant::now();
         while alive(pid) {
             if start.elapsed() > Duration::from_secs(5) {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/PID", &pid.to_string(), "/F"])
-                    .output();
+                kill_process(pid);
                 panic!("ping {pid} survived its launch command");
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -1212,6 +1345,7 @@ mod windows_powershell_tests {
             shell: shell.id.clone(),
         };
         let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        let query = Mutex::new(CursorQuery::default());
         pty.spawn(
             info,
             &shell,
@@ -1220,11 +1354,10 @@ mod windows_powershell_tests {
             (120, 30),
             vec![],
             move |b| {
-                let chunk = String::from_utf8_lossy(&b).to_string();
-                if chunk.contains("\x1b[6n") {
+                if query.lock().feed(&b) {
                     let _ = answer.write("wps", b"\x1b[1;1R");
                 }
-                sink.lock().push_str(&chunk);
+                sink.lock().push_str(&String::from_utf8_lossy(&b));
             },
             |_| {},
         )
@@ -1245,6 +1378,47 @@ mod windows_powershell_tests {
             std::thread::sleep(Duration::from_millis(50));
         }
         pty.kill("wps");
+    }
+}
+
+#[cfg(test)]
+mod cursor_query_tests {
+    use super::*;
+
+    /// Whether the query is found in the last of `reads`, which `CursorQuery` has seen in order.
+    fn answers(reads: &[&str]) -> Vec<bool> {
+        let mut query = CursorQuery::default();
+        reads.iter().map(|r| query.feed(r.as_bytes())).collect()
+    }
+
+    #[test]
+    fn a_query_inside_one_read_is_found() {
+        assert_eq!(answers(&["\x1b[6n"]), [true]);
+        assert_eq!(answers(&["PS C:\\> \x1b[6n\x1b[?25h"]), [true]);
+    }
+
+    #[test]
+    fn a_query_cut_between_two_reads_is_found_once_complete() {
+        assert_eq!(answers(&["\x1b[", "6n"]), [false, true]);
+        assert_eq!(answers(&["\x1b", "[6n"]), [false, true]);
+        assert_eq!(answers(&["\x1b[6", "n"]), [false, true]);
+        // Cut in three, the middle read holding a single byte.
+        assert_eq!(answers(&["ab\x1b", "[", "6n cd"]), [false, false, true]);
+    }
+
+    #[test]
+    fn a_query_is_found_once_not_again_in_the_reads_after_it() {
+        assert_eq!(answers(&["\x1b[6n", "x", "[6n"]), [true, false, false]);
+        assert_eq!(answers(&["\x1b[6n", "\x1b[6n"]), [true, true]);
+    }
+
+    #[test]
+    fn other_sequences_are_not_queries() {
+        assert_eq!(answers(&["\x1b[5n", "\x1b[6", "m", "[6n"]), [false; 4]);
+        assert_eq!(
+            answers(&["", "\x1b[", "", "6n"]),
+            [false, false, false, true]
+        );
     }
 }
 
