@@ -53,6 +53,7 @@ export const SETTINGS: Settings = {
   switchOnLimit: false,
   quotaPause: 100,
   autoUpdate: true,
+  telemetry: false,
   integrations: {
     syncStates: true,
     loopComments: false,

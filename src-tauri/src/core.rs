@@ -21,6 +21,7 @@ use crate::planfiles;
 use crate::pty::{PtyManager, ShellInfo};
 use crate::resources;
 use crate::stats::{AgentLabel, Labels, Stats, StatsView, TicketLabel};
+use crate::telemetry::{Event, Telemetry};
 use crate::testlaunch;
 use crate::usage;
 use crate::worktrees::{self, RunSuggestion, WorktreeSuggestion};
@@ -617,6 +618,8 @@ pub struct Core<R: Runtime = Wry> {
     pub data: DataDir,
     pub hub: Hub,
     pub settings: RwLock<Settings>,
+    /// The usage statistics, once the user agreed to them (`telemetry`).
+    pub telemetry: Arc<Telemetry>,
     pub projects: RwLock<Vec<Project>>,
     /// Every project's tickets. Lock order: projects before tickets; never hold tickets while
     /// taking projects. Guards that end with their statement do not nest; mind the temporaries of
@@ -1436,8 +1439,15 @@ impl<R: Runtime> Core<R> {
         };
         let usage = UsageSnapshot::restored(&saved, &settings, ongoing, now);
         let (git, rx) = GitService::new();
+        let telemetry = Arc::new(Telemetry::new(
+            data.telemetry_id_file(),
+            app.package_info().version.to_string(),
+            settings.telemetry,
+            paths::sandbox_dir().is_none(),
+        ));
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
+            telemetry,
             stats: Stats::open(&data.stats_db()),
             app,
             data,
@@ -1517,6 +1527,10 @@ impl<R: Runtime> Core<R> {
 
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
+        self.telemetry.track(self.started_event());
+        if !cfg!(test) {
+            self.telemetry.spawn();
+        }
         for p in &projects {
             self.watch_project(p);
         }
@@ -1654,6 +1668,41 @@ impl<R: Runtime> Core<R> {
         self.dirty.store(true, Ordering::Release);
     }
 
+    /// The app's setup, in broad strokes, for the usage statistics.
+    pub(crate) fn started_event(&self) -> Event {
+        // One lock at a time: a read taken twice waits behind a writer queued in between.
+        let language = serde_json::to_value(self.lang().ui)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        let (accounts, mcp) = {
+            let s = self.settings.read();
+            (s.accounts.len(), s.mcp_enabled)
+        };
+        let (projects, wsl) = {
+            let projects = self.projects.read();
+            let wsl = projects
+                .iter()
+                .any(|p| crate::wsl::on_share(Path::new(&p.path)));
+            (projects.len(), wsl)
+        };
+        Event::AppStarted {
+            language,
+            accounts,
+            projects,
+            mcp,
+            wsl,
+        }
+    }
+
+    /// The answer to « Statistiques d’usage anonymes », kept at once (the question of the first
+    /// start; the settings window saves it with the rest).
+    pub fn set_telemetry(self: &Arc<Self>, consent: bool) -> Result<()> {
+        let mut s = self.settings.read().clone();
+        s.telemetry = Some(consent);
+        self.save_settings(s)
+    }
+
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
@@ -1663,7 +1712,12 @@ impl<R: Runtime> Core<R> {
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
+        let telemetry = s.telemetry;
         let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
+        if self.telemetry.set_consent(telemetry) {
+            // Said yes during the session: it counts as started.
+            self.telemetry.track(self.started_event());
+        }
         if mcp_was_enabled && !mcp_enabled {
             // « Claude peut piloter Escouade » turned off: the token changes at once, and its entry
             // leaves every account (`declare_now`, on its own task).
@@ -2760,6 +2814,8 @@ impl<R: Runtime> Core<R> {
         self.mcp.clear_agent_configs();
         self.pty.kill_all();
         self.save_now();
+        // The usage statistics of the last minute, if they can leave in time.
+        self.telemetry.flush_at_exit();
     }
 
     /// Every agent's process stops, with what it started.

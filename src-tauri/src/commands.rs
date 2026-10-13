@@ -12,6 +12,7 @@ use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo};
 use crate::search;
 use crate::stats::StatsView;
+use crate::telemetry::{self, Event};
 use crate::tickets::TicketDraft;
 use serde::Serialize;
 use serde_json::Value;
@@ -21,6 +22,14 @@ use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 
 type Res<T> = Result<T, String>;
+
+/// A command's result, counted in the usage statistics when it went well (`telemetry`).
+fn counted<T>(core: &Core, event: Event, r: Res<T>) -> Res<T> {
+    if r.is_ok() {
+        core.telemetry.track(event);
+    }
+    r
+}
 type CoreState<'a> = State<'a, Arc<Core>>;
 
 fn err(e: anyhow::Error) -> String {
@@ -195,7 +204,8 @@ pub fn account_create(
     share: Vec<String>,
     mode: ShareMode,
 ) -> Res<ClaudeAccount> {
-    core.create_claude_account(&name, &share, mode).map_err(err)
+    let r = core.create_claude_account(&name, &share, mode).map_err(err);
+    counted(&core, Event::AccountCreated, r)
 }
 
 /// The account's name, `claude` and « Actif »; the accounts as they then are.
@@ -241,7 +251,11 @@ pub fn account_login(
 /// « Vue Claude Code »: the agent runs in Claude Code's own interface, or in Escouade's view.
 #[tauri::command]
 pub async fn set_agent_view(core: CoreState<'_>, id: String, terminal: bool) -> Res<()> {
-    core.set_agent_view(&id, terminal).await.map_err(err)
+    core.set_agent_view(&id, terminal).await.map_err(err)?;
+    if terminal {
+        core.telemetry.track(Event::ClaudeCodeView);
+    }
+    Ok(())
 }
 
 /// The agent's Claude Code interface, in an interactive terminal (written to, resized and killed
@@ -318,9 +332,11 @@ pub async fn create_project(
     worktree_per_agent: bool,
     first_agent: Option<String>,
 ) -> Res<Project> {
-    core.create_project(&path, &name, &color, worktree_per_agent, first_agent)
+    let r = core
+        .create_project(&path, &name, &color, worktree_per_agent, first_agent)
         .await
-        .map_err(err)
+        .map_err(err);
+    counted(&core, Event::ProjectCreated, r)
 }
 
 #[tauri::command(async)]
@@ -344,7 +360,11 @@ pub async fn create_agent(
     project_id: String,
     model: Option<String>,
 ) -> Res<AgentView> {
-    core.create_agent(&project_id, model).await.map_err(err)
+    let agent = core.create_agent(&project_id, model).await.map_err(err)?;
+    core.telemetry.track(Event::AgentCreated {
+        worktree: agent.meta.worktree.is_some(),
+    });
+    Ok(agent)
 }
 
 #[tauri::command]
@@ -384,7 +404,8 @@ pub async fn send_message(
     text: String,
     attachments: Vec<Attachment>,
 ) -> Res<()> {
-    core.send_message(&id, text, attachments).await.map_err(err)
+    let r = core.send_message(&id, text, attachments).await.map_err(err);
+    counted(&core, Event::MessageSent, r)
 }
 
 /// The image on the system's clipboard, as PNG (empty without one), for a paste WebKitGTK leaves
@@ -485,13 +506,15 @@ pub async fn merge_agent(
     squash: bool,
     switch_to_base: bool,
 ) -> Res<String> {
-    core.merge_agent(&id, squash, switch_to_base)
+    let r = core
+        .merge_agent(&id, squash, switch_to_base)
         .await
         .map_err(|e| match e.downcast_ref::<NotOnBase>() {
             // The one refusal the frontend turns into a question rather than an error.
             Some(refused) => refused.wire(),
             None => err(e),
-        })
+        });
+    counted(&core, Event::Merged, r)
 }
 
 #[tauri::command]
@@ -553,17 +576,20 @@ pub async fn git_show(core: CoreState<'_>, project_id: String, hash: String) -> 
 
 #[tauri::command]
 pub async fn git_fetch(core: CoreState<'_>, project_id: String) -> Res<String> {
-    core.git_sync(&project_id, SyncOp::Fetch).await.map_err(err)
+    let r = core.git_sync(&project_id, SyncOp::Fetch).await.map_err(err);
+    counted(&core, Event::GitSync { op: "fetch" }, r)
 }
 
 #[tauri::command]
 pub async fn git_pull(core: CoreState<'_>, project_id: String) -> Res<String> {
-    core.git_sync(&project_id, SyncOp::Pull).await.map_err(err)
+    let r = core.git_sync(&project_id, SyncOp::Pull).await.map_err(err);
+    counted(&core, Event::GitSync { op: "pull" }, r)
 }
 
 #[tauri::command]
 pub async fn git_push(core: CoreState<'_>, project_id: String) -> Res<String> {
-    core.git_sync(&project_id, SyncOp::Push).await.map_err(err)
+    let r = core.git_sync(&project_id, SyncOp::Push).await.map_err(err);
+    counted(&core, Event::GitSync { op: "push" }, r)
 }
 
 /// A branch operation's error: the refusals the window turns into a question or a message of its
@@ -614,9 +640,11 @@ pub async fn branch_create(
     switch: bool,
     stash: bool,
 ) -> Res<Option<String>> {
-    core.branch_create(&project_id, &name, &start, switch, stash)
+    let r = core
+        .branch_create(&project_id, &name, &start, switch, stash)
         .await
-        .map_err(branch_err)
+        .map_err(branch_err);
+    counted(&core, Event::BranchCreated, r)
 }
 
 /// Deletes a branch (its remote one too with `remote`); unmerged, only with `force`. Returns what
@@ -660,9 +688,14 @@ pub async fn create_agent_on_branch(
     branch: String,
     model: Option<String>,
 ) -> Res<AgentView> {
-    core.create_agent_on_branch(&project_id, &branch, model)
+    let agent = core
+        .create_agent_on_branch(&project_id, &branch, model)
         .await
-        .map_err(branch_err)
+        .map_err(branch_err)?;
+    core.telemetry.track(Event::AgentCreated {
+        worktree: agent.meta.worktree.is_some(),
+    });
+    Ok(agent)
 }
 
 /// « Intégrer <base> » on an agent with a worktree: its base branch goes into its branch.
@@ -729,9 +762,11 @@ pub async fn commit_direct(
     paths: Vec<String>,
     message: String,
 ) -> Res<String> {
-    core.commit_direct(&project_id, agent_id, paths, message)
+    let r = core
+        .commit_direct(&project_id, agent_id, paths, message)
         .await
-        .map_err(err)
+        .map_err(err);
+    counted(&core, Event::Committed, r)
 }
 
 // ---------- embedded editor ----------
@@ -789,6 +824,7 @@ pub async fn fs_write(
     )
     .map_err(err)?;
     core.git.refresh(&project_id);
+    core.telemetry.track(Event::FileSaved);
     Ok(hash)
 }
 
@@ -889,7 +925,8 @@ pub async fn code_search(
         .edit_worktrees(&project_id, agent_id)
         .await
         .map_err(err)?;
-    search::search(&root, &query, &worktrees).await.map_err(err)
+    let r = search::search(&root, &query, &worktrees).await.map_err(err);
+    counted(&core, Event::CodeSearched, r)
 }
 
 #[tauri::command(async)]
@@ -955,6 +992,7 @@ pub async fn term_spawn(
             },
         )
         .map_err(err)?;
+    core.telemetry.track(Event::TerminalOpened);
     Ok(info)
 }
 
@@ -1005,14 +1043,15 @@ pub fn run_start(
         env: Vec::new(),
         command: &run.command,
     };
-    spawn_launch(
+    let r = spawn_launch(
         core.inner(),
         &settings,
         launch,
         (cols, rows),
         cursor_row,
         output,
-    )
+    );
+    counted(&core, Event::LaunchStarted, r)
 }
 
 /// What a launch terminal runs: one of the project's launch commands, or a step of an agent's
@@ -1102,7 +1141,11 @@ pub fn set_unsaved(core: CoreState, count: usize) {
 
 #[tauri::command]
 pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) -> Res<()> {
-    core.set_remote_control(&id, enabled).await.map_err(err)
+    core.set_remote_control(&id, enabled).await.map_err(err)?;
+    if enabled {
+        core.telemetry.track(Event::RemoteControlEnabled);
+    }
+    Ok(())
 }
 
 // ---------- board ----------
@@ -1113,7 +1156,8 @@ pub async fn ticket_create(
     project_id: String,
     draft: TicketDraft,
 ) -> Res<Ticket> {
-    core.ticket_create(&project_id, draft).await.map_err(err)
+    let r = core.ticket_create(&project_id, draft).await.map_err(err);
+    counted(&core, Event::TicketCreated, r)
 }
 
 #[tauri::command(async)]
@@ -1143,7 +1187,8 @@ pub async fn ticket_resume(core: CoreState<'_>, id: String) -> Res<()> {
 
 #[tauri::command]
 pub async fn ticket_approve(core: CoreState<'_>, id: String) -> Res<()> {
-    core.ticket_approve(&id).await.map_err(err)
+    let r = core.ticket_approve(&id).await.map_err(err);
+    counted(&core, Event::TicketApproved, r)
 }
 
 #[tauri::command]
@@ -1238,6 +1283,7 @@ pub fn test_run_start(
         output,
     )?;
     core.track_test_run(&agent_id, &info.id).map_err(err)?;
+    core.telemetry.track(Event::TestRunStarted);
     Ok(info)
 }
 
@@ -1352,9 +1398,12 @@ pub async fn integration_connect(
     service: Service,
     account: Account,
 ) -> Res<AccountView> {
-    core.integration_connect(service, account)
+    let r = core
+        .integration_connect(service, account)
         .await
-        .map_err(err)
+        .map_err(err);
+    let service = telemetry::service(service);
+    counted(&core, Event::IntegrationConnected { service }, r)
 }
 
 #[tauri::command]
@@ -1411,9 +1460,15 @@ pub async fn integration_import(
     issues: Vec<ExternalIssue>,
     max_loops: u32,
 ) -> Res<Vec<Ticket>> {
-    core.integration_import(&project_id, issues, max_loops)
+    let service = issues.first().map(|i| telemetry::service(i.service));
+    let r = core
+        .integration_import(&project_id, issues, max_loops)
         .await
-        .map_err(err)
+        .map_err(err);
+    match service {
+        Some(service) => counted(&core, Event::TicketsImported { service }, r),
+        None => r,
+    }
 }
 
 /// « Resynchroniser » (the ⚠ of an imported ticket's card): its failed syncs go again at once.
@@ -1446,7 +1501,17 @@ pub fn mcp_clear_activity(core: CoreState) {
 /// not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
 #[tauri::command(async)]
 pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
-    core.set_mcp_enabled(enabled).map_err(err)
+    core.set_mcp_enabled(enabled).map_err(err)?;
+    if enabled {
+        core.telemetry.track(Event::McpEnabled);
+    }
+    Ok(())
+}
+
+/// The answer to « Statistiques d’usage anonymes », at the first start.
+#[tauri::command(async)]
+pub fn telemetry_set(core: CoreState, consent: bool) -> Res<()> {
+    core.set_telemetry(consent).map_err(err)
 }
 
 /// Where the server stands in each active account's Claude Code: declared, or why not and the

@@ -65,6 +65,16 @@ export default {
     downloadFailed: 'Téléchargement de la mise à jour impossible : {error}',
     checkFailed: 'Vérification des mises à jour impossible : {error}',
   },
+  /** The question of the first start: the usage statistics (`telemetry`). */
+  telemetry: {
+    title: 'Aider à améliorer Escouade ?',
+    body: 'Escouade peut envoyer des statistiques d’usage anonymes : quelles fonctionnalités servent, avec quelle version d’Escouade et quel système. Jamais tes projets, ton code, tes conversations ni ton nom.',
+    detail:
+      'Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard. Tu peux changer d’avis à tout moment dans Réglages › À propos.',
+    more: 'Ce qui est envoyé, en détail',
+    yes: 'Partager les statistiques',
+    no: 'Non merci',
+  },
   /** The question asked when the window is closed with files unsaved. */
   quit: {
     title: 'Quitter Escouade ?',

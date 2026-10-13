@@ -846,6 +846,30 @@ describe('SettingsModal', () => {
     expect(app.settings.autoUpdate).toBe(false);
   });
 
+  it('shares the usage statistics only once switched on', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    app.settings = { ...app.settings, telemetry: null };
+    render(SettingsModal, { tab: 'about' });
+    const share = screen.getByRole('switch', { name: 'Statistiques d’usage anonymes' });
+    expect(share).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(share);
+    expect(tab('À propos')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ telemetry: true });
+    expect(app.settings.telemetry).toBe(true);
+  });
+
+  it('stops the usage statistics when switched off', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    app.settings = { ...app.settings, telemetry: true };
+    render(SettingsModal, { tab: 'about' });
+    const share = screen.getByRole('switch', { name: 'Statistiques d’usage anonymes' });
+    expect(share).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(share);
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ telemetry: false });
+  });
+
   it('keeps the focus inside, from the tab it opens on', async () => {
     fakeBackend();
     const outside = document.createElement('button');

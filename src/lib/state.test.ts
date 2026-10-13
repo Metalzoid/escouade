@@ -467,6 +467,17 @@ describe('AppState start-up', () => {
     expect(app.modal).toEqual({ kind: 'notes', version: '1.6.0', notes: '- Mises à jour silencieuses' });
   });
 
+  it('asks about the usage statistics at the first start, and only until answered', async () => {
+    resetApp();
+    await start({ settings: { ...SETTINGS, telemetry: null } });
+    expect(app.modal).toEqual({ kind: 'telemetry' });
+    for (const telemetry of [true, false]) {
+      resetApp();
+      await start({ settings: { ...SETTINGS, telemetry } });
+      expect(app.modal).toBeNull();
+    }
+  });
+
   it('says nothing of an update when none was installed', async () => {
     resetApp();
     await start({ installed: null });

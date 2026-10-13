@@ -295,6 +295,64 @@ impl Harness {
 }
 
 #[tokio::test]
+async fn the_answer_about_usage_statistics_is_kept_and_followed_at_once() {
+    let h = harness("telemetry-answer");
+    let id_file = h.core.data.telemetry_id_file();
+    assert_eq!(h.core.settings.read().telemetry, None);
+    assert!(!h.core.telemetry.enabled());
+    h.core.set_telemetry(true).unwrap();
+    assert!(h.core.telemetry.enabled());
+    assert!(id_file.exists());
+    // Said yes during the session: it counts as started, without waiting for the next start.
+    let names = |h: &Harness| -> Vec<Value> {
+        let pending = h.core.telemetry.pending();
+        pending
+            .into_iter()
+            .map(|e| e["eventName"].clone())
+            .collect()
+    };
+    assert_eq!(names(&h), [json!("app_started")]);
+    h.core.set_telemetry(true).unwrap();
+    assert_eq!(names(&h), [json!("app_started")], "once");
+    let saved = || -> Value {
+        serde_json::from_str(&std::fs::read_to_string(h.core.data.settings_file()).unwrap())
+            .unwrap()
+    };
+    assert_eq!(saved()["telemetry"], json!(true));
+    // The settings window says no: the id goes with what waited.
+    h.core.telemetry.track(crate::telemetry::Event::MessageSent);
+    let mut s = h.core.settings.read().clone();
+    s.telemetry = Some(false);
+    h.core.save_settings(s).unwrap();
+    assert!(!h.core.telemetry.enabled());
+    assert!(!id_file.exists());
+    assert!(h.core.telemetry.pending().is_empty());
+    assert_eq!(saved()["telemetry"], json!(false));
+}
+
+#[tokio::test]
+async fn the_start_tells_the_setup_in_broad_strokes_and_nothing_of_the_projects() {
+    let h = harness("telemetry-start");
+    h.project(false).await;
+    match h.core.started_event() {
+        crate::telemetry::Event::AppStarted {
+            language,
+            accounts,
+            projects,
+            mcp,
+            wsl,
+        } => {
+            assert!(["fr", "en"].contains(&language.as_str()), "{language}");
+            assert_eq!(accounts, 1);
+            assert_eq!(projects, 1);
+            assert!(!mcp);
+            assert!(!wsl);
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn a_message_runs_a_turn_and_records_the_cost() {
     let h = harness("turn");
     let (p, _) = h.project(false).await;

@@ -71,6 +71,9 @@ pub struct Settings {
     /// wait for its own to reset. Off unless the user switches it on (not verified with a second
     /// real account): settings saved before it have it off too.
     pub switch_on_limit: bool,
+    /// « Statistiques d’usage anonymes » (`telemetry`): None until the user answered the question
+    /// of the first start (settings saved before it have none: they are asked too).
+    pub telemetry: Option<bool>,
 }
 
 /// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
@@ -259,6 +262,7 @@ impl Default for Settings {
             accounts: Vec::new(),
             todo_tools: true,
             switch_on_limit: false,
+            telemetry: None,
         }
     }
 }
@@ -1464,6 +1468,20 @@ mod tests {
         // Settings saved before them have none: the load puts Principal in (`accounts::normalize`).
         let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
         assert!(s.accounts.is_empty());
+    }
+
+    #[test]
+    fn usage_statistics_wait_for_the_users_answer() {
+        // A new install, and settings saved before the question existed: not asked yet.
+        assert_eq!(Settings::default().telemetry, None);
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert_eq!(s.telemetry, None);
+        for answer in [true, false] {
+            let s: Settings = serde_json::from_value(json!({ "telemetry": answer })).unwrap();
+            assert_eq!(s.telemetry, Some(answer));
+        }
+        let v = serde_json::to_value(Settings::default()).unwrap();
+        assert_eq!(v["telemetry"], Value::Null);
     }
 
     #[test]

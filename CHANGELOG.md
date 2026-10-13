@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Ajouts
+
+- Statistiques d'usage anonymes, seulement si tu les acceptes : au premier lancement (et au premier après cette mise à jour), Escouade demande « Aider à améliorer Escouade ? ». Avec ton accord, elle envoie quelles fonctionnalités servent (agents créés, messages, tickets, git, terminaux, éditeur, intégrations…), avec sa version et celle du système, sous un identifiant tiré au hasard ; jamais tes projets, ton code, tes conversations ni ton nom. Elles partent vers un serveur d'Escouade hébergé en France (Aptabase, open source). Réglages › À propos › « Statistiques d'usage anonymes » les arrête à tout moment : l'identifiant est alors effacé. Le détail est sur [escouade.dev/privacy](https://escouade.dev/privacy/).
+
 ## [1.7.5] — 2026-10-13
 
 ### Ajouts

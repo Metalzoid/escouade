@@ -175,6 +175,8 @@ export const test = base.extend<{
         osNotifications: false,
         idleStopMinutes: 0,
         language,
+        // The question of the first start answered (a sandbox never sends anything anyway).
+        telemetry: false,
         ...(preStart.run(root) ?? {}),
       }),
     );

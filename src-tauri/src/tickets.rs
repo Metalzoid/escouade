@@ -12,6 +12,7 @@ use crate::i18n::{self, Lang};
 use crate::integrations;
 use crate::isola;
 use crate::model::*;
+use crate::telemetry::Event;
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
@@ -550,6 +551,8 @@ impl<R: Runtime> Core<R> {
             t.forced = true;
             Ok(())
         })?;
+        self.telemetry
+            .track(Event::TicketStarted { autopilot: false });
         self.schedule();
         Ok(())
     }
@@ -1022,7 +1025,8 @@ impl<R: Runtime> Core<R> {
             t.agent_id = None;
             t.iteration = 1;
             t.loops += 1;
-            t.forced = false;
+            // Started out of turn: by « Lancer » (counted there), or again after a restart.
+            let forced = std::mem::take(&mut t.forced);
             t.partial = false;
             t.blocked = None;
             t.conflict = false;
@@ -1034,9 +1038,13 @@ impl<R: Runtime> Core<R> {
                 c.ok = false;
                 c.note.clear();
             }
-            Ok(t.clone())
+            Ok((t.clone(), forced))
         });
-        let Ok(t) = started else { return };
+        let Ok((t, forced)) = started else { return };
+        if !forced {
+            self.telemetry
+                .track(Event::TicketStarted { autopilot: true });
+        }
         if let Err(e) = self.launch_ticket_agent(project, &t).await {
             log::warn!("ticket {}: start failed: {e:#}", t.key);
             // Only while it is still this start's: one sent back to do meanwhile (its agent

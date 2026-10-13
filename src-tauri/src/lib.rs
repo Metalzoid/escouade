@@ -43,6 +43,7 @@ mod search;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
+mod telemetry;
 mod testlaunch;
 mod tickets;
 #[cfg(test)]
@@ -365,6 +366,7 @@ pub fn run() {
             commands::mcp_activity,
             commands::mcp_clear_activity,
             commands::mcp_set_enabled,
+            commands::telemetry_set,
             commands::mcp_declare_status,
             commands::mcp_manual_command,
         ])

@@ -346,6 +346,12 @@ impl DataDir {
         self.0.join("logs").join(format!("{agent_id}-setup.log"))
     }
 
+    /// The install's random id, for the usage statistics: there only while the user agrees to
+    /// them (`telemetry`).
+    pub fn telemetry_id_file(&self) -> PathBuf {
+        self.0.join("telemetry-id")
+    }
+
     /// The update the app stopped to install, for the window of its next start.
     pub fn update_note_file(&self) -> PathBuf {
         self.0.join("update.json")

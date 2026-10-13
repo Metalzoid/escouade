@@ -699,6 +699,39 @@ async fn a_deleted_ticket_is_waited_for_by_no_other() {
 }
 
 #[tokio::test]
+async fn the_usage_statistics_tell_a_ticket_launched_by_hand_from_one_the_autopilot_started() {
+    let h = harness("tk-telemetry");
+    h.core.set_telemetry(true).unwrap();
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let by_hand = h
+        .core
+        .ticket_create(&p.id, draft("À la main [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core.ticket_start(&by_hand.id).unwrap();
+    h.wait_ticket(&by_hand.id, "to test", |t| t.column == Column::Review)
+        .await;
+    h.set_board(&p.id, |s| s.autopilot = true);
+    let alone = h
+        .core
+        .ticket_create(&p.id, draft("Seul [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&alone.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let started: Vec<Value> = h
+        .core
+        .telemetry
+        .pending()
+        .into_iter()
+        .filter(|e| e["eventName"] == "ticket_started")
+        .map(|e| e["props"]["by"].clone())
+        .collect();
+    assert_eq!(started, [json!("user"), json!("autopilot")]);
+}
+
+#[tokio::test]
 async fn a_ticket_starts_once_those_it_comes_after_are_done_and_the_next_one_goes_meanwhile() {
     let h = harness("tk-after-start");
     let (p, _) = h.project(false).await;

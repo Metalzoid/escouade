@@ -30,6 +30,8 @@ export interface Settings {
   quotaPause: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
   autoUpdate: boolean;
+  /** « Statistiques d’usage anonymes »: null until the user answered the question of the first start. */
+  telemetry: boolean | null;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
   integrations: IntegrationSettings;
   /** « Langue de l’interface »: the system's (French when it is, English otherwise), or a language of its own. */

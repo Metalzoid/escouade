@@ -41,6 +41,8 @@ import type {
 
 export type Modal =
   | { kind: 'newProject' }
+  /** The question of the first start: the usage statistics. */
+  | { kind: 'telemetry' }
   /**
    * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
    * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
@@ -428,6 +430,8 @@ class AppState {
     this.models = s.models;
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
+    // Not answered yet (closed without a choice: asked again at the next start).
+    if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
     if (s.installed) {
       const { version, notes } = s.installed;
       const tell = () =>

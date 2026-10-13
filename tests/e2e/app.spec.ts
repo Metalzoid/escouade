@@ -872,3 +872,18 @@ test('a ticket is written in a large window, a long description included, and ad
   await expect(edit).toBeHidden();
   await expect(page.getByRole('button', { name: /DEM-2/ })).toBeFocused();
 });
+
+test.describe('the first start', () => {
+  test.use({ preStart: { run: () => ({ telemetry: null }) } });
+
+  test('asks about the usage statistics, and keeps the answer', async ({ app }) => {
+    const { page } = app;
+    const dialog = page.getByRole('dialog', { name: 'Aider à améliorer Escouade ?' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Non merci' }).click();
+    await expect(dialog).toBeHidden();
+    const settings = () => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
+    await expect.poll(() => settings().telemetry).toBe(false);
+    expect(fs.existsSync(path.join(app.data, 'telemetry-id'))).toBe(false);
+  });
+});

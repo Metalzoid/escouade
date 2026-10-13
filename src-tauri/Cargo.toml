@@ -39,6 +39,8 @@ log = "0.4"
 trash = "5"
 # The system's language, for the interface's default one.
 sys-locale = "0.3"
+# The system's name and version, in the usage statistics (`telemetry`).
+os_info = { version = "3", default-features = false }
 # The name of a Claude account's macOS keychain entry: Claude Code's own hash of its folder, in NFC.
 sha2 = "0.10"
 unicode-normalization = "0.1"

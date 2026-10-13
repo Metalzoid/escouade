@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelOptions } from '../../lib/models';
   import { IS_MAC } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import { privacyUrl } from '../../lib/telemetry';
   import type { ClaudeLocated } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
@@ -186,6 +188,12 @@
     </Row>
     <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
       <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
+    </Row>
+    <Row label={t('settings.about.telemetry')} desc={t('settings.about.telemetryDesc')}>
+      <button class="btn ghost" onclick={() => openUrl(privacyUrl()).catch((e) => app.toast(String(e), 'error'))}
+        >{t('settings.about.telemetryMore')}</button
+      >
+      <Switch label={t('settings.about.telemetry')} bind:on={() => s.telemetry === true, (on) => (s.telemetry = on)} />
     </Row>
     <Row label={t('settings.about.localData')} desc="~/.escouade/" />
   </Group>
