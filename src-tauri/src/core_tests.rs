@@ -445,6 +445,34 @@ async fn an_agent_is_named_only_once_its_branch_is_renamed() {
 }
 
 #[tokio::test]
+async fn two_agents_named_at_the_same_moment_with_the_same_name_get_distinct_names() {
+    let h = harness("name-concurrent");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // Haiku found the same name for both tasks, and both are applied at once (the branch renames
+    // are awaited between reading the names taken and setting the name).
+    let (named_a, named_b) = tokio::join!(
+        h.core.apply_generated_name(&a, "fix-login"),
+        h.core.apply_generated_name(&b, "fix-login"),
+    );
+    named_a.unwrap();
+    named_b.unwrap();
+    let (seen_a, seen_b) = (h.agent(&a), h.agent(&b));
+    assert!(seen_a.named && seen_b.named);
+    let mut names = [seen_a.name.clone(), seen_b.name.clone()];
+    names.sort();
+    assert_eq!(names, ["fix-login", "fix-login-2"]);
+    // Each one's branch follows its own name.
+    for seen in [seen_a, seen_b] {
+        assert_eq!(
+            seen.worktree.unwrap().branch,
+            format!("escouade/{}", seen.name)
+        );
+    }
+}
+
+#[tokio::test]
 async fn an_agent_whose_branch_cannot_be_renamed_is_named_all_the_same() {
     let h = harness("name-branch-taken");
     let (p, r) = h.project(true).await;

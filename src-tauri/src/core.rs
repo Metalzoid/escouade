@@ -3919,9 +3919,14 @@ impl<R: Runtime> Core<R> {
         Ok(name_from_answer(&answer))
     }
 
-    async fn apply_generated_name(self: &Arc<Self>, id: &str, slug: &str) -> Result<()> {
+    pub(crate) async fn apply_generated_name(self: &Arc<Self>, id: &str, slug: &str) -> Result<()> {
         let h = self.agent(id)?;
         let project_id = h.lock().meta.project_id.clone();
+        // One agent named at a time in a project, from the names taken to the name set: two named
+        // at once with the same name (the branch renames are awaited in between) would both find
+        // it free.
+        let naming = self.spawn_lock(&format!("naming-{project_id}"));
+        let _naming = naming.lock().await;
         let taken: Vec<String> = self
             .project_agents(&project_id)
             .iter()
