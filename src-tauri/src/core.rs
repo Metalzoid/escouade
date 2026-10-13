@@ -3926,7 +3926,7 @@ impl<R: Runtime> Core<R> {
         // at once with the same name (the branch renames are awaited in between) would both find
         // it free.
         let naming = self.spawn_lock(&format!("naming-{project_id}"));
-        let _naming = naming.lock().await;
+        let naming_guard = naming.lock().await;
         let taken: Vec<String> = self
             .project_agents(&project_id)
             .iter()
@@ -3974,6 +3974,8 @@ impl<R: Runtime> Core<R> {
             }
             (named_now, rt.proc.clone())
         };
+        // The name is set: the next one in the project need not wait for the session rename.
+        drop(naming_guard);
         self.emit_agent(&h);
         self.request_save();
         if !named_now {

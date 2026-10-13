@@ -1011,7 +1011,7 @@ mod tests {
     fn start_command(script: &Path, hidden: bool) -> String {
         let style = if hidden { " -WindowStyle Hidden" } else { "" };
         format!(
-            "Start-Process powershell{style} -ArgumentList '-NoProfile','-File','\"{}\"'",
+            "Start-Process powershell{style} -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"'",
             script.display()
         )
     }
@@ -1083,9 +1083,10 @@ mod tests {
             ends_within(console, 20),
             "the program without a window survived its terminal"
         );
-        // The terminal is closed and gone: the window still stands.
+        // The terminal is closed and gone: the window still stands (given the time a wrongly
+        // killed one would take to end).
         assert!(
-            alive(window),
+            !ends_within(window, 3),
             "the program showing a window died with its terminal"
         );
     }
@@ -1163,6 +1164,8 @@ mod tests {
             Path::new(&shell.path),
             &[
                 "-NoProfile".into(),
+                "-ExecutionPolicy".into(),
+                "Bypass".into(),
                 "-File".into(),
                 program.display().to_string(),
             ],
