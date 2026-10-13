@@ -9,8 +9,125 @@ const OLD_DATA_DIR_NAME: &str = ".claude-code-manager";
 /// entries in the system's keychain.
 pub(crate) const IDENTIFIER: &str = "dev.gagnaire.escouade";
 const OLD_IDENTIFIER: &str = "dev.gagnaire.claude-code-manager";
-/// Prefix of the agents' worktree branches (agents made before 0.1.4 keep `ccm/`).
-pub const BRANCH_PREFIX: &str = "escouade/";
+/// A project's « Préfixe des branches des agents » until it sets its own (agents made before 0.1.4
+/// keep `ccm/`).
+pub const AGENT_BRANCH_PREFIX: &str = "escouade/";
+/// A project's « Préfixe des branches des tickets » until it sets its own.
+pub const TICKET_BRANCH_PREFIX: &str = "ticket/";
+/// Where a project's agents' worktrees go, from its folder, until it sets its own « Dossier des
+/// worktrees »: Claude Code's own (`claude --worktree`).
+pub const DEFAULT_WORKTREES: &str = ".claude/worktrees";
+
+/// The folder of the agents' worktrees of the project at `project`: its « Dossier des worktrees »
+/// `setting` (quotes around it taken away, as « Copier en tant que chemin » gives it), from its
+/// folder when relative, from the user's home folder after `~`, `.` and `..` taken away as
+/// written (`../app-worktrees` is a sibling of the project's folder, whatever links are on the
+/// way); `.claude/worktrees` of it when empty.
+pub fn worktrees_root(project: &str, setting: &str) -> PathBuf {
+    use std::path::Component;
+    let setting = unquoted_setting(setting);
+    let setting = if setting.is_empty() {
+        DEFAULT_WORKTREES
+    } else {
+        setting
+    };
+    let full = match setting.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => dirs::home_dir()
+            .unwrap_or_default()
+            .join(rest.trim_start_matches(['/', '\\'])),
+        _ => Path::new(project).join(setting),
+    };
+    let mut out = PathBuf::new();
+    for c in full.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// A « Dossier des worktrees » as typed, trimmed, without the quotes around it.
+fn unquoted_setting(setting: &str) -> &str {
+    let s = setting.trim();
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
+        .trim()
+}
+
+/// Why `setting` cannot be the « Dossier des worktrees » of the project at `project`, if it cannot.
+pub fn worktrees_root_problem(project: &str, setting: &str) -> Option<String> {
+    worktrees_root_problem_in(crate::i18n::ui(), project, setting)
+}
+
+fn worktrees_root_problem_in(
+    lang: crate::i18n::Lang,
+    project: &str,
+    setting: &str,
+) -> Option<String> {
+    use std::path::Component;
+    // Under Windows, `D:wt` (from D:'s current folder) and `\wt` (from the current drive's root)
+    // depend on what the app's process happens to be in: neither relative to the project nor
+    // whole.
+    let mut parts = Path::new(unquoted_setting(setting)).components();
+    let partial = match (parts.next(), parts.next()) {
+        (Some(Component::Prefix(_)), Some(Component::RootDir)) => false,
+        (Some(Component::Prefix(_)), _) => true,
+        (Some(Component::RootDir), _) => cfg!(windows),
+        _ => false,
+    };
+    if partial {
+        return Some(tr_in!(
+            lang,
+            "Écris un chemin relatif au dossier du projet, ou un chemin complet (C:\\…).",
+            "Write a path relative to the project’s folder, or a full one (C:\\…)."
+        ));
+    }
+    // Compared as the disk names them: case ignored on Windows and macOS.
+    let names = |p: &Path| -> Vec<String> {
+        p.components()
+            .map(|c| c.as_os_str().to_string_lossy().replace('\\', "/"))
+            .map(|n| {
+                if cfg!(any(windows, target_os = "macos")) {
+                    n.to_lowercase()
+                } else {
+                    n
+                }
+            })
+            .collect()
+    };
+    let root = names(&worktrees_root(project, setting));
+    let own = names(&worktrees_root(project, "."));
+    if root == own {
+        return Some(tr_in!(
+            lang,
+            "Le dossier des worktrees ne peut pas être celui du projet.",
+            "The worktrees folder can’t be the project’s own folder."
+        ));
+    }
+    // Its parent (`..`) or higher: a worktree would sit beside the project's folder, in a
+    // repository's folder the project is part of, or would hide it from its status.
+    if own.starts_with(&root) {
+        return Some(tr_in!(
+            lang,
+            "Le dossier des worktrees ne peut pas contenir celui du projet.",
+            "The worktrees folder can’t hold the project’s folder."
+        ));
+    }
+    // Git takes `.GIT` for its own folder on any disk that ignores case: refused everywhere.
+    if root.iter().any(|n| n.eq_ignore_ascii_case(".git")) {
+        return Some(tr_in!(
+            lang,
+            "Le dossier des worktrees ne peut pas être dans un dossier .git.",
+            "The worktrees folder can’t be in a .git folder."
+        ));
+    }
+    None
+}
 
 /// Written into a folder moved to its new name: the migration is done.
 const MIGRATED: &str = ".migrated-from-claude-code-manager";
@@ -482,6 +599,108 @@ pub fn make_file_link(target: &Path, link: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_worktrees_go_to_claude_worktrees_unless_the_project_says_where() {
+        let (project, parent, abs) = if cfg!(windows) {
+            (r"C:\code\app", r"C:\code", r"D:\worktrees\app")
+        } else {
+            ("/code/app", "/code", "/worktrees/app")
+        };
+        let root = |s| worktrees_root(project, s);
+        let default = Path::new(project).join(".claude").join("worktrees");
+        assert_eq!(root(""), default);
+        assert_eq!(root("  "), default);
+        assert_eq!(root(".worktrees"), Path::new(project).join(".worktrees"));
+        // `..` taken away as written: a sibling of the project's folder.
+        assert_eq!(
+            root("../app-worktrees"),
+            Path::new(parent).join("app-worktrees")
+        );
+        assert_eq!(root(" ./wt/../wt2/ "), Path::new(project).join("wt2"));
+        assert_eq!(root(".."), PathBuf::from(parent));
+        assert_eq!(root(abs), PathBuf::from(abs));
+        // As « Copier en tant que chemin » gives it, and from the home folder after `~`.
+        assert_eq!(
+            worktrees_root(project, &format!("\"{abs}\"")),
+            PathBuf::from(abs)
+        );
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(root("~/worktrees/app"), home.join("worktrees").join("app"));
+        assert_eq!(root("~"), home);
+        // A name that starts with `~` is a name.
+        assert_eq!(root("~wt"), Path::new(project).join("~wt"));
+        if cfg!(windows) {
+            assert_eq!(
+                root(r"..\app-worktrees"),
+                Path::new(parent).join("app-worktrees")
+            );
+        }
+    }
+
+    #[test]
+    fn the_worktrees_folder_is_neither_the_projects_nor_in_git() {
+        use crate::i18n::Lang::{En, Fr};
+        let project = if cfg!(windows) {
+            r"C:\code\app"
+        } else {
+            "/code/app"
+        };
+        let problem = |s| worktrees_root_problem_in(En, project, s);
+        for fine in [
+            "",
+            ".worktrees",
+            "../app-worktrees",
+            ".claude/worktrees",
+            "~/worktrees/app",
+            "\"../app-worktrees\"",
+        ] {
+            assert_eq!(problem(fine), None, "{fine}");
+        }
+        for itself in [".", "./", "sub/..", "../app", project, "\"../app\""] {
+            assert_eq!(
+                problem(itself).as_deref(),
+                Some("The worktrees folder can’t be the project’s own folder."),
+                "{itself}"
+            );
+        }
+        // Its parent or higher: worktrees beside the project in its repository's folder, or the
+        // project hidden from its own status.
+        let root_of_disk = if cfg!(windows) { r"C:\" } else { "/" };
+        for holding in ["..", "../..", "../../..", root_of_disk] {
+            assert_eq!(
+                problem(holding).as_deref(),
+                Some("The worktrees folder can’t hold the project’s folder."),
+                "{holding}"
+            );
+        }
+        if cfg!(windows) {
+            // From D:'s current folder, from the current drive's root: neither the project's nor whole.
+            for partial in ["D:wt", r"\wt", "/wt"] {
+                assert_eq!(
+                    problem(partial).as_deref(),
+                    Some("Write a path relative to the project’s folder, or a full one (C:\\…)."),
+                    "{partial}"
+                );
+            }
+            assert_eq!(problem(r"\\server\share\wt"), None);
+        }
+        for in_git in [".git", ".git/worktrees", "../app/.git/wt", "sub/.GIT/x"] {
+            assert_eq!(
+                problem(in_git).as_deref(),
+                Some("The worktrees folder can’t be in a .git folder."),
+                "{in_git}"
+            );
+        }
+        assert_eq!(
+            worktrees_root_problem_in(Fr, project, ".").as_deref(),
+            Some("Le dossier des worktrees ne peut pas être celui du projet.")
+        );
+        assert_eq!(
+            worktrees_root_problem_in(Fr, project, ".git").as_deref(),
+            Some("Le dossier des worktrees ne peut pas être dans un dossier .git.")
+        );
+    }
 
     #[test]
     fn a_path_leaving_its_folder_is_refused_in_english() {

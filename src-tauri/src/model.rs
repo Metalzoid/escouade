@@ -304,6 +304,32 @@ pub struct Project {
     /// `Account`'s id); empty is « Automatique » (`accounts::pick`).
     #[serde(default)]
     pub account: String,
+    /// « Dossier des worktrees »: where its new worktrees go, from its folder when relative
+    /// (`../app-worktrees`, `.worktrees`) or absolute; empty is `.claude/worktrees`
+    /// (`paths::worktrees_root`). Those made already stay where they are.
+    #[serde(default)]
+    pub worktree_dir: String,
+    /// « Préfixe des branches des agents »: a new agent's branch is `<prefix><name>`.
+    #[serde(default = "default_agent_branch_prefix")]
+    pub agent_branch_prefix: String,
+    /// « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`.
+    #[serde(default = "default_ticket_branch_prefix")]
+    pub ticket_branch_prefix: String,
+}
+
+impl Project {
+    /// The folder its new worktrees go to.
+    pub fn worktrees_root(&self) -> std::path::PathBuf {
+        crate::paths::worktrees_root(&self.path, &self.worktree_dir)
+    }
+}
+
+pub fn default_agent_branch_prefix() -> String {
+    crate::paths::AGENT_BRANCH_PREFIX.into()
+}
+
+pub fn default_ticket_branch_prefix() -> String {
+    crate::paths::TICKET_BRANCH_PREFIX.into()
 }
 
 /// Who writes a project's commits asked from the files panel.
@@ -1846,6 +1872,50 @@ mod tests {
         assert_eq!(v["account"], json!("pro"));
         let back: Project = serde_json::from_value(v).unwrap();
         assert_eq!(back.account, "pro");
+    }
+
+    #[test]
+    fn a_project_saved_before_the_worktrees_settings_keeps_its_folder_and_its_prefixes() {
+        let p: Project = serde_json::from_value(
+            json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                p.worktree_dir.as_str(),
+                p.agent_branch_prefix.as_str(),
+                p.ticket_branch_prefix.as_str()
+            ),
+            ("", "escouade/", "ticket/")
+        );
+        assert_eq!(
+            p.worktrees_root(),
+            std::path::Path::new("C:/demo")
+                .join(".claude")
+                .join("worktrees")
+        );
+        let own = Project {
+            worktree_dir: "../demo-worktrees".into(),
+            agent_branch_prefix: String::new(),
+            ticket_branch_prefix: "gg/".into(),
+            ..p
+        };
+        let v = serde_json::to_value(&own).unwrap();
+        assert_eq!(
+            (
+                &v["worktreeDir"],
+                &v["agentBranchPrefix"],
+                &v["ticketBranchPrefix"]
+            ),
+            (&json!("../demo-worktrees"), &json!(""), &json!("gg/"))
+        );
+        // An emptied prefix stays empty: the name alone.
+        let back: Project = serde_json::from_value(v).unwrap();
+        assert_eq!(back.agent_branch_prefix, "");
+        assert_eq!(
+            back.worktrees_root(),
+            std::path::Path::new("C:/demo-worktrees")
+        );
     }
 
     #[test]

@@ -148,7 +148,7 @@ export default {
   ticket: {
     branch: 'Branche',
     /** The ticket’s own branch, made at its start: its key is not known yet. */
-    ownNew: 'Nouvelle branche ticket/<clé>',
+    ownNew: 'Nouvelle branche {prefix}<clé>',
     /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
     own: 'Nouvelle branche {branch}',
     existing: 'Reprendre une branche existante…',

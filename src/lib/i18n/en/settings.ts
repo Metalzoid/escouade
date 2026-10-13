@@ -27,6 +27,7 @@ export default defineZone('settings', {
   problem: {
     projectName: 'The project “{name}” needs a name.',
     command: 'Every launch command in “{name}” needs a name and a command line.',
+    worktrees: 'The worktrees folder or a branch prefix of “{name}” isn’t valid.',
   },
 
   suggest: {
@@ -149,6 +150,21 @@ export default defineZone('settings', {
     colorN: 'Color {n}',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
+    worktreeDir: 'Worktrees folder',
+    worktreeDirDesc:
+      'Relative to the project’s folder (../app-worktrees, .worktrees), to your home folder (~/worktrees/app), or full. Empty: .claude/worktrees, as claude --worktree does. Worktrees made already stay where they are; out of the project, the Claude Code view first asks you to trust each of them.',
+    worktreeDirAt: 'The next one: {path}',
+    worktreeDirItself: 'This is the project’s own folder.',
+    worktreeDirContains: 'This folder holds the project’s: pick one beside it (../app-worktrees) or in it (.worktrees).',
+    worktreeDirGit: 'This folder is in a .git folder.',
+    worktreeDirPartial: 'Write a path relative to the project’s folder, or a full one (C:\\…).',
+    agentPrefix: 'Agents’ branch prefix',
+    agentPrefixDesc: 'A new agent’s branch: {prefix}<name>. Empty: its name alone.',
+    ticketPrefix: 'Tickets’ branch prefix',
+    ticketPrefixDesc: 'A ticket’s branch, the one its PR comes from: {prefix}<key>. Empty: its key alone.',
+    prefixInvalid:
+      'No branch name starts like this: no spaces, “..”, “~”, “^”, “:”, “?”, “*”, “[”, “\\” or “{at}”, no “-” or “/” at the start, no “//”, no part starting with “.” or ending with “.lock”.',
+    nextName: '<name>',
     copy: 'Files copied into worktrees',
     copyDesc: 'Only files git ignores, never committed. One pattern per line: .env* at the root, **/.env* everywhere.',
     commit: 'Commit',

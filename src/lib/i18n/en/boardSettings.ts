@@ -17,7 +17,7 @@ export default defineZone('boardSettings', {
   summary: {
     merge: 'merge {strategy} → {target}',
     pr: 'PR → {target}',
-    push: 'push ticket/*',
+    push: 'push {prefix}*',
     keep: 'leave as is',
   },
 
@@ -66,11 +66,11 @@ export default defineZone('boardSettings', {
       },
       pr: {
         label: 'Open a pull request',
-        desc: 'Pushes ticket/<key> and opens a PR to the target branch for review.',
+        desc: 'Pushes {prefix}<key> and opens a PR to the target branch for review.',
       },
       push: {
         label: 'Push the ticket’s branch',
-        desc: 'Commits and pushes to ticket/<key>, with no merge or PR.',
+        desc: 'Commits and pushes to {prefix}<key>, with no merge or PR.',
       },
       keep: {
         label: 'Leave as is',

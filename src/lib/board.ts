@@ -13,8 +13,11 @@ export const COLUMNS: { id: Column; color: string }[] = [
   { id: 'done', color: 'var(--ok)' },
 ];
 
-/** The branch a ticket gets when it names none: `ticket/dem-3`, as the backend makes it at its start. */
-export const ticketBranch = (key: string) => `ticket/${key.toLowerCase()}`;
+/**
+ * The branch a ticket gets when it names none: `ticket/dem-3` with the project's « Préfixe des branches des tickets »
+ * `prefix` as it is by default, as the backend makes it at its start.
+ */
+export const ticketBranch = (key: string, prefix: string) => `${prefix}${key.toLowerCase()}`;
 
 /** A column's tickets in order: "À faire" by priority, "Terminé" newest first, the others by arrival. */
 export function columnTickets(tickets: Ticket[], column: Column): Ticket[] {
@@ -49,15 +52,15 @@ export function pauseLabel(p: AutopilotPause, now: number): string {
   return t(key, { pct: fPct(p.pct ?? 100), when: fWhen(p.until, now) });
 }
 
-/** What validating a ticket does, in the header's button. */
-export function settingsSummary(s: BoardSettings, target: string): string {
+/** What validating a ticket does, in the header's button: `prefix` is the project's « Préfixe des branches des tickets ». */
+export function settingsSummary(s: BoardSettings, target: string, prefix: string): string {
   switch (s.action) {
     case 'merge':
       return t('boardSettings.summary.merge', { strategy: s.strategy, target });
     case 'pr':
       return t('boardSettings.summary.pr', { target });
     case 'push':
-      return t('boardSettings.summary.push');
+      return t('boardSettings.summary.push', { prefix });
     default:
       return t('boardSettings.summary.keep');
   }

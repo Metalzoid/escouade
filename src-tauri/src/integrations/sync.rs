@@ -1049,7 +1049,13 @@ impl<R: Runtime> Core<R> {
         agent
             .and_then(|a| self.agent(&a).ok())
             .and_then(|h| h.lock().meta.worktree.as_ref().map(|w| w.branch.clone()))
-            .unwrap_or_else(|| board::branch_of(&t.key))
+            .unwrap_or_else(|| {
+                let prefix = self
+                    .project(&t.project_id)
+                    .map(|p| p.ticket_branch_prefix)
+                    .unwrap_or_else(|_| crate::model::default_ticket_branch_prefix());
+                board::branch_of(&prefix, &t.key)
+            })
     }
 }
 

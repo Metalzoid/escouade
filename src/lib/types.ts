@@ -242,6 +242,12 @@ export interface Project {
   account: string;
   /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
   agentsUseEscouade: boolean;
+  /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */
+  worktreeDir: string;
+  /** « Préfixe des branches des agents »: a new agent's branch is `<prefix><name>`. */
+  agentBranchPrefix: string;
+  /** « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`. */
+  ticketBranchPrefix: string;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

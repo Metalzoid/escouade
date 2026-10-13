@@ -469,6 +469,87 @@ async fn an_agent_whose_branch_cannot_be_renamed_is_named_all_the_same() {
 }
 
 #[tokio::test]
+async fn an_agent_of_a_project_that_sets_its_worktrees_folder_and_prefix_works_there() {
+    let h = harness("own-worktrees-folder");
+    let (p, r) = h.project(true).await;
+    h.core.settings.write().claude_language = "en".into();
+    // Beside the repository, as the repositories that want no worktree inside them have it.
+    h.core
+        .update_project(Project {
+            worktree_dir: " ../repo-worktrees ".into(),
+            agent_branch_prefix: "gg/".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    assert_eq!(
+        h.core.project(&p.id).unwrap().worktree_dir,
+        "../repo-worktrees"
+    );
+    let beside = r.parent().unwrap().join("repo-worktrees");
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let wt = a.worktree.clone().unwrap();
+    assert_eq!(wt.branch, "gg/agent-1");
+    assert_eq!(Path::new(&wt.path), beside.join("agent-1"));
+    assert_eq!(a.cwd, wt.path);
+    // Named after its first message: its branch keeps the project's prefix.
+    h.turn(&a.id, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a.id).named).await;
+    assert_eq!(
+        h.agent(&a.id).worktree.unwrap().branch,
+        "gg/create-the-fake-en"
+    );
+    // A copy goes beside it, on the same prefix.
+    let copy = h.core.duplicate_agent(&a.id).await.unwrap().meta;
+    let copied = copy.worktree.unwrap();
+    assert_eq!(copied.branch, "gg/create-the-fake-en-copie");
+    assert_eq!(Path::new(&copied.path).parent(), Some(beside.as_path()));
+    // Back to the default: the next one is in the repository again, the first stays where it is.
+    h.core
+        .update_project(Project {
+            worktree_dir: String::new(),
+            ..h.core.project(&p.id).unwrap()
+        })
+        .unwrap();
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    assert!(Path::new(&b.worktree.unwrap().path).starts_with(r.join(".claude").join("worktrees")));
+    assert_eq!(
+        Path::new(&h.agent(&a.id).worktree.unwrap().path),
+        beside.join("agent-1")
+    );
+}
+
+#[tokio::test]
+async fn a_worktrees_folder_or_a_branch_prefix_that_cannot_be_is_refused_and_nothing_changes() {
+    let h = harness("own-worktrees-refused");
+    let (p, _) = h.project(true).await;
+    for (dir, agents, tickets) in [
+        (".", "escouade/", "ticket/"),
+        ("../repo", "escouade/", "ticket/"),
+        (".git/wt", "escouade/", "ticket/"),
+        ("", "a b/", "ticket/"),
+        ("", "escouade/", "-t/"),
+    ] {
+        let e = h
+            .core
+            .update_project(Project {
+                name: "renamed".into(),
+                worktree_dir: dir.into(),
+                agent_branch_prefix: agents.into(),
+                ticket_branch_prefix: tickets.into(),
+                ..p.clone()
+            })
+            .expect_err(dir);
+        assert!(!e.to_string().is_empty());
+        let kept = h.core.project(&p.id).unwrap();
+        assert_eq!(
+            (kept.name.as_str(), kept.worktree_dir.as_str()),
+            ("demo", ""),
+            "{dir} {agents} {tickets}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
     let h = harness("network");
     let (p, r) = h.project(false).await;
@@ -4401,6 +4482,67 @@ async fn an_archived_agent_whose_worktree_went_gets_it_back_from_its_branch_when
     git(&r, &["branch", "-D", &wt.branch]);
     h.core.archive_agent(&id, false).await.unwrap();
     assert!(!dir.exists());
+}
+
+#[tokio::test]
+async fn a_restored_agent_whose_folder_another_worktree_took_gets_its_own_beside_it() {
+    let h = harness("wt-restore-taken");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = a.meta.id.clone();
+    let wt = a.meta.worktree.clone().unwrap();
+    h.wait("warm-up", |h| h.alive(&id)).await;
+    let held = h.core.agent(&id).unwrap().lock().proc.clone().unwrap();
+    h.core.archive_agent(&id, true).await.unwrap();
+    h.wait("its process over", |_| !held.is_alive()).await;
+    remove_worktree_eventually(&r, &wt.path).await;
+    // Its folder is another repository's worktree now (a folder of worktrees two projects share).
+    let other = PathBuf::from(&wt.path);
+    std::fs::create_dir_all(&other).unwrap();
+    git(&other, &["init", "-q", "-b", "autre"]);
+    h.core.archive_agent(&id, false).await.unwrap();
+    let back = h.agent(&id);
+    let own = back.worktree.clone().unwrap();
+    let beside = format!("{}-2", wt.path);
+    assert_eq!(own.path, beside);
+    assert_eq!(back.cwd, beside);
+    assert_eq!(
+        git(Path::new(&beside), &["rev-parse", "--abbrev-ref", "HEAD"]),
+        wt.branch
+    );
+    // The other one is as it was, and the agent says where it works now.
+    assert_eq!(git(&other, &["symbolic-ref", "--short", "HEAD"]), "autre");
+    assert_eq!(
+        h.notices(&id, "warn"),
+        [format!(
+            "Le dossier {} est pris par un autre worktree : celui de l'agent est recréé dans {beside}.",
+            wt.path
+        )]
+    );
+}
+
+#[tokio::test]
+async fn the_worktrees_out_of_the_projects_folder_are_watched_too() {
+    let h = harness("own-worktrees-watched");
+    let (p, r) = h.project(true).await;
+    // In the project's folder: its watch sees them.
+    h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!(h.core.watched_folders(&p), vec![p.path.clone()]);
+    h.core
+        .update_project(Project {
+            worktree_dir: "../repo-wt".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    let p = h.core.project(&p.id).unwrap();
+    // Not made yet: nothing more to watch.
+    assert_eq!(h.core.watched_folders(&p), vec![p.path.clone()]);
+    h.core.create_agent(&p.id, None).await.unwrap();
+    let beside = r.parent().unwrap().join("repo-wt");
+    assert_eq!(
+        h.core.watched_folders(&p),
+        [p.path.clone(), beside.to_string_lossy().into_owned()]
+    );
 }
 
 // ---------- isola ----------

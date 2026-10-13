@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { basename, fInt } from '../../lib/format';
+  import { fInt } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import type { Agent, GitInfo, Project } from '../../lib/types';
+  import { worktreeLabel } from '../../lib/worktrees';
   import StatusDot from '../StatusDot.svelte';
 
   let {
@@ -62,7 +63,7 @@
           <span class="ic"><StatusDot status={a.status} size={7} /></span>
           <span class="txt"
             ><span class="nm">{a.name}</span><span class="sub mono"
-              >.claude/worktrees/{a.worktree ? basename(a.worktree.path) : a.name} · {a.model}</span
+              >{a.worktree ? worktreeLabel(project.path, a.worktree.path) : a.name} · {a.model}</span
             ></span
           >
           <span class="count mono" class:some={n > 0}

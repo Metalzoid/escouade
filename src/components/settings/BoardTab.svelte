@@ -39,7 +39,10 @@
     ACTION_IDS.map((id) => ({
       id,
       label: t(`boardSettings.tab.actions.${id}.label`),
-      desc: t(`boardSettings.tab.actions.${id}.desc`),
+      desc:
+        id === 'pr' || id === 'push'
+          ? t(`boardSettings.tab.actions.${id}.desc`, { prefix: draft.ticketBranchPrefix.trim() })
+          : t(`boardSettings.tab.actions.${id}.desc`),
     })),
   );
   const STRATEGY_IDS: BoardSettings['strategy'][] = ['merge', 'squash', 'rebase'];

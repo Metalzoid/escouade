@@ -78,10 +78,11 @@ describe('board labels', () => {
   });
 
   it('sums up what validating does, and names the button', () => {
-    expect(settingsSummary(board(), 'main')).toBe('merge squash → main');
-    expect(settingsSummary(board({ action: 'pr' }), 'main')).toBe('PR → main');
-    expect(settingsSummary(board({ action: 'push' }), 'main')).toBe('push ticket/*');
-    expect(settingsSummary(board({ action: 'keep' }), 'main')).toBe("laisser en l'état");
+    expect(settingsSummary(board(), 'main', 'ticket/')).toBe('merge squash → main');
+    expect(settingsSummary(board({ action: 'pr' }), 'main', 'ticket/')).toBe('PR → main');
+    expect(settingsSummary(board({ action: 'push' }), 'main', 'ticket/')).toBe('push ticket/*');
+    expect(settingsSummary(board({ action: 'push' }), 'main', 'gg/')).toBe('push gg/*');
+    expect(settingsSummary(board({ action: 'keep' }), 'main', 'ticket/')).toBe("laisser en l'état");
     expect(APPROVE_LABEL).toEqual({ merge: 'Valider et merger', pr: 'Valider + PR', push: 'Valider et pousser', keep: 'Valider' });
   });
 
@@ -252,8 +253,8 @@ describe('board labels in English', () => {
   });
 
   it('sums up what validating does, and names the button, following the language', () => {
-    expect(settingsSummary(board(), 'main')).toBe('merge squash → main');
-    expect(settingsSummary(board({ action: 'keep' }), 'main')).toBe('leave as is');
+    expect(settingsSummary(board(), 'main', 'ticket/')).toBe('merge squash → main');
+    expect(settingsSummary(board({ action: 'keep' }), 'main', 'ticket/')).toBe('leave as is');
     expect(APPROVE_LABEL).toEqual({ merge: 'Approve and merge', pr: 'Approve + PR', push: 'Approve and push', keep: 'Approve' });
     setLang('fr');
     expect(APPROVE_LABEL.merge).toBe('Valider et merger');

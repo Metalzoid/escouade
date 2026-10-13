@@ -8,6 +8,7 @@
   import type { Agent, FileChange, Project } from '../lib/types';
   import FileDiff from './FileDiff.svelte';
   import { tip } from '../lib/tip';
+  import { worktreeLabel } from '../lib/worktrees';
 
   // The side panel's uncommitted files. `docked`: right half of the split layout, showing the
   // picked file's diff under the list. `count`: number of files listed, for the panel's tab.
@@ -80,16 +81,10 @@
     if (!list.some((f) => keyOf(f) === picked)) picked = list[0] ? keyOf(list[0]) : null;
   }
 
-  /** A worktree under the project's `.claude` folder by its path from there, else by its whole path. */
-  function worktreeName(path: string) {
-    const inside = path.replace(/\\/g, '/').split('/.claude/')[1];
-    return inside ? '.claude/' + inside : path;
-  }
-
   const hint = $derived(
     scope === 'agent'
       ? agent?.worktree
-        ? t('git.files.hintWorktree', { path: worktreeName(agent.worktree.path) })
+        ? t('git.files.hintWorktree', { path: worktreeLabel(project.path, agent.worktree.path) })
         : t('git.files.hintAgent')
       : t('git.files.hintProject'),
   );

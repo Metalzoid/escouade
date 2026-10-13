@@ -1104,7 +1104,7 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    /// The ticket's agent: its worktree on `ticket/<key>` from the target branch, its block of
+    /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
     async fn launch_ticket_agent(self: &Arc<Self>, project: &Project, t: &Ticket) -> Result<()> {
@@ -1120,7 +1120,14 @@ impl<R: Runtime> Core<R> {
         }
         // The ticket's own branch from the target, or one that exists, which the agent takes up.
         let (new_branch, taken_up, base) = match t.branch.as_str() {
-            "" => (Some((board::branch_of(&t.key), target.clone())), None, None),
+            "" => (
+                Some((
+                    board::branch_of(&project.ticket_branch_prefix, &t.key),
+                    target.clone(),
+                )),
+                None,
+                None,
+            ),
             branch => (None, Some(branch.to_string()), Some(target.clone())),
         };
         // As its worktree will be: the branch it is on has isola's configuration.
@@ -1923,17 +1930,17 @@ impl<R: Runtime> Core<R> {
         let merging = lock.lock().await;
         // Its agent may have been archived or set to work during Haiku's answer and that wait.
         self.still_validating(&t.id, t.agent_id.as_deref().unwrap_or_default())?;
-        let tmp = Path::new(&repo)
-            .join(".claude")
-            .join("worktrees")
-            .join(format!(".merge-{}", t.key.to_lowercase()));
+        let merges = merges_root(project, &repo);
+        // Named after the project too: a folder of worktrees may be shared with another
+        // repository, whose validations do not wait for this one's.
+        let tmp = merges.join(format!(".merge-{}-{}", project.id, t.key.to_lowercase()));
         let tmp_s = tmp.to_string_lossy().to_string();
         // One left by a validation the app's stop cut: registered, it would still hold the target
         // and every merge into it would be refused.
         drop_worktree(&repo, &tmp).await;
         let mut checkout = git::checkout_of(&repo, target).await?;
         // Another ticket's, left the same way (no other merge into this repository runs now).
-        if let Some(p) = checkout.clone().filter(|p| merge_leftover(&repo, p)) {
+        if let Some(p) = checkout.clone().filter(|p| merge_leftover(p)) {
             drop_worktree(&repo, Path::new(&p)).await;
             checkout = git::checkout_of(&repo, target).await?;
         }
@@ -1961,7 +1968,7 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             None => {
-                git::ensure_excluded(&repo, ".claude/worktrees/").await?;
+                git::exclude_worktrees(&repo, &merges).await?;
                 git::run_hooks(&repo, &["worktree", "add", &tmp_s, target]).await?;
                 (tmp_s.clone(), true)
             }
@@ -2598,14 +2605,24 @@ pub(crate) fn validating(t: &Ticket, agent_id: &str) -> bool {
     t.column == Column::Review && t.step.is_some() && t.agent_id.as_deref() == Some(agent_id)
 }
 
-/// `path` is a temporary worktree of a validation (`.claude/worktrees/.merge-<clé>`) of `repo`.
-fn merge_leftover(repo: &str, path: &str) -> bool {
-    let p = Path::new(path);
-    let worktrees = Path::new(repo).join(".claude").join("worktrees");
-    p.file_name()
+/// Where the validations of the tickets of `project` (in the repository whose root is `repo`) make
+/// their temporary worktree: `.claude/worktrees` at the repository's root, or the project's own
+/// « Dossier des worktrees » when it has one (a repository that wants no worktree in it).
+fn merges_root(project: &Project, repo: &str) -> PathBuf {
+    if project.worktree_dir.trim().is_empty() {
+        crate::paths::worktrees_root(repo, "")
+    } else {
+        project.worktrees_root()
+    }
+}
+
+/// `path`, a worktree of the repository, is the temporary one of a validation (`.merge-…`), wherever
+/// it was made: the « Dossier des worktrees » of the project then, or `.claude/worktrees` at the
+/// repository's root before it had one.
+fn merge_leftover(path: &str) -> bool {
+    Path::new(path)
+        .file_name()
         .is_some_and(|n| n.to_string_lossy().starts_with(".merge-"))
-        && p.parent()
-            .is_some_and(|d| same_dir(&d.to_string_lossy(), &worktrees.to_string_lossy()))
 }
 
 /// Removes the worktree at `path`, registered or not, its folder there or not.

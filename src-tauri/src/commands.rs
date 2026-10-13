@@ -739,7 +739,10 @@ pub async fn fs_write(
     bom: bool,
     expected_hash: Option<String>,
 ) -> Res<String> {
-    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    let (root, worktrees) = core
+        .edit_worktrees(&project_id, agent_id)
+        .await
+        .map_err(err)?;
     let hash = fsedit::write(
         std::path::Path::new(&root),
         &path,
@@ -747,6 +750,7 @@ pub async fn fs_write(
         &eol,
         bom,
         expected_hash.as_deref(),
+        &worktrees,
     )
     .map_err(err)?;
     core.git.refresh(&project_id);
@@ -760,8 +764,11 @@ pub async fn fs_create(
     agent_id: Option<String>,
     path: String,
 ) -> Res<()> {
-    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    fsedit::create(std::path::Path::new(&root), &path).map_err(err)?;
+    let (root, worktrees) = core
+        .edit_worktrees(&project_id, agent_id)
+        .await
+        .map_err(err)?;
+    fsedit::create(std::path::Path::new(&root), &path, &worktrees).map_err(err)?;
     core.git.refresh(&project_id);
     Ok(())
 }
@@ -815,8 +822,11 @@ pub async fn fs_mkdir(
     agent_id: Option<String>,
     path: String,
 ) -> Res<()> {
-    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    fsedit::mkdir(std::path::Path::new(&root), &path).map_err(err)
+    let (root, worktrees) = core
+        .edit_worktrees(&project_id, agent_id)
+        .await
+        .map_err(err)?;
+    fsedit::mkdir(std::path::Path::new(&root), &path, &worktrees).map_err(err)
 }
 
 #[tauri::command]
@@ -840,8 +850,11 @@ pub async fn code_search(
     agent_id: Option<String>,
     query: search::SearchQuery,
 ) -> Res<search::SearchResult> {
-    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
-    search::search(&root, &query).await.map_err(err)
+    let (root, worktrees) = core
+        .edit_worktrees(&project_id, agent_id)
+        .await
+        .map_err(err)?;
+    search::search(&root, &query, &worktrees).await.map_err(err)
 }
 
 #[tauri::command(async)]

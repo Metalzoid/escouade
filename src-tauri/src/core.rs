@@ -949,10 +949,10 @@ pub(crate) fn copy_name(lang: i18n::Lang, original: &str, taken: &[String]) -> S
 }
 
 /// The branch of `copy`, the copy of the agent `original` that `copy_name` named:
-/// `escouade/<original as a slug>-copie` (`-copie-2`…; `-copy`, `-copy-2` for a copy named in
+/// `<prefix><original as a slug>-copie` (`-copie-2`…; `-copy`, `-copy-2` for a copy named in
 /// English), the original's part shortened so that the marker always fits in a slug's 40
-/// characters.
-fn copy_branch(original: &str, copy: &str) -> String {
+/// characters; `prefix` is the project's « Préfixe des branches des agents ».
+fn copy_branch(prefix: &str, original: &str, copy: &str) -> String {
     let marker = slugify(copy.strip_prefix(original).unwrap_or(copy));
     let base = slug_within(original, 40usize.saturating_sub(marker.len() + 1));
     let slug = if base.is_empty() {
@@ -960,19 +960,28 @@ fn copy_branch(original: &str, copy: &str) -> String {
     } else {
         format!("{base}-{marker}")
     };
-    format!("{}{slug}", paths::BRANCH_PREFIX)
+    format!("{prefix}{slug}")
 }
 
-/// The worktree of a copy of the agent whose worktree is `wt`, in the repository `repo`: on the
-/// new branch `branch` (`copy_branch`) from the commit `wt` is on (its branch's, unless the agent
-/// switched it), toward the same base. Returns (path, branch, base branch).
+/// The worktree of a copy of the agent whose worktree is `wt`, in the project's repository, its
+/// folder of worktrees: on the new branch `branch` (`copy_branch`) from the commit `wt` is on (its
+/// branch's, unless the agent switched it), toward the same base. Returns (path, branch, base
+/// branch).
 async fn copy_worktree(
-    repo: &str,
+    project: &Project,
+    held: &[PathBuf],
     wt: &Worktree,
     branch: &str,
 ) -> Result<(String, String, String)> {
     let start = git::text(&wt.path, &["rev-parse", "HEAD"]).await?;
-    let (path, branch) = git::worktree_add_on(repo, branch, &start).await?;
+    let (path, branch) = git::worktree_add_on(
+        &project.path,
+        &project.worktrees_root(),
+        held,
+        branch,
+        &start,
+    )
+    .await?;
     Ok((path, branch, wt.base_branch.clone()))
 }
 
@@ -1235,6 +1244,16 @@ fn files_not_copied(e: &anyhow::Error) -> String {
     )
 }
 
+/// An agent restored: its worktree, gone, made again at `to`, as another worktree took its folder
+/// `from` meanwhile.
+fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
+    tr_in!(
+        lang,
+        "Le dossier {from} est pris par un autre worktree : celui de l'agent est recréé dans {to}.",
+        "The folder {from} is taken by another worktree: the agent’s is made again in {to}."
+    )
+}
+
 /// Claude's answer held no list of commands to read.
 fn no_readable_commands() -> anyhow::Error {
     anyhow!(tr!(
@@ -1302,17 +1321,24 @@ fn sub_prefix(root: &str, sub: &str) -> String {
 
 /// The folders of an editor source (`root`, an agent's `worktree` or else the checkout holding
 /// the folder `project`) that hold the agents' worktrees, relative to it: the editor neither
-/// renames nor deletes them, nor a folder holding one. The project's own are in its folder, below
-/// the root when it is a subfolder of its repository; a validation's are at the root.
-fn worktrees_kept(root: &str, project: &str, worktree: bool) -> Vec<String> {
-    let mut kept = vec![fsedit::WORKTREES.to_string()];
+/// renames nor deletes them, nor a folder holding one, makes nothing in them, and its search leaves
+/// them out. The project's own are in its folder, below the root when it is a subfolder of its
+/// repository; a validation's are at the root; and `own`, the project's « Dossier des worktrees »
+/// when it sets one, wherever it is in the source.
+fn worktrees_kept(root: &str, project: &str, worktree: bool, own: Option<&Path>) -> Vec<String> {
+    let mut kept = vec![paths::DEFAULT_WORKTREES.to_string()];
     let below = if worktree {
         String::new()
     } else {
         sub_prefix(root, project)
     };
     if !below.is_empty() {
-        kept.push(format!("{below}{}", fsedit::WORKTREES));
+        kept.push(format!("{below}{}", paths::DEFAULT_WORKTREES));
+    }
+    if let Some(rel) = own.and_then(|d| below_root(root, &d.to_string_lossy())) {
+        if !kept.contains(&rel) {
+            kept.push(rel);
+        }
     }
     kept
 }
@@ -1472,8 +1498,9 @@ impl<R: Runtime> Core<R> {
     }
 
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
-        for p in self.projects.read().iter() {
-            self.git.watch(&p.id, &p.path);
+        let projects = self.projects.read().clone();
+        for p in &projects {
+            self.watch_project(p);
         }
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
@@ -3099,28 +3126,43 @@ impl<R: Runtime> Core<R> {
         }
         // The original's worktree, for a copy of an agent that has one.
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
+        // The folders of the app's agents' worktrees: a new one never takes one of them.
+        let held = self.held_worktrees();
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
             // A branch that exists: the agent works on it, whatever else is asked.
             (Some(branch), _, _) => Some(
-                self.worktree_on_branch(&project, branch, o.base.as_deref())
+                self.worktree_on_branch(&project, &held, branch, o.base.as_deref())
                     .await,
             ),
             (None, Some((branch, base)), _) => Some(
-                git::worktree_add_on(&project.path, branch, base)
-                    .await
-                    .map(|(path, branch)| (path, branch, base.clone())),
+                git::worktree_add_on(
+                    &project.path,
+                    &project.worktrees_root(),
+                    &held,
+                    branch,
+                    base,
+                )
+                .await
+                .map(|(path, branch)| (path, branch, base.clone())),
             ),
             // A copy works on its original's code: in a worktree of its own, or in the same folder.
             (None, None, Some(c)) => match copied_from {
                 Some(wt) => {
-                    let branch = copy_branch(&c.name, &name);
-                    Some(copy_worktree(&project.path, wt, &branch).await)
+                    let branch = copy_branch(&project.agent_branch_prefix, &c.name, &name);
+                    Some(copy_worktree(&project, &held, wt, &branch).await)
                 }
                 None => None,
             },
-            (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => {
-                Some(git::worktree_add(&project.path, &name).await)
-            }
+            (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => Some(
+                git::worktree_add(
+                    &project.path,
+                    &project.worktrees_root(),
+                    &held,
+                    &project.agent_branch_prefix,
+                    &name,
+                )
+                .await,
+            ),
             (None, None, None) => None,
         };
         let mut warning = None;
@@ -3139,6 +3181,10 @@ impl<R: Runtime> Core<R> {
                         Some(copied_conversation(self.lang().claude, &from.path, &path));
                 }
                 meta.cwd = path.clone();
+                // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
+                if !self.git_watches(&project, &path) {
+                    self.watch_project(&project);
+                }
                 meta.worktree = Some(Worktree {
                     path,
                     branch,
@@ -3556,14 +3602,60 @@ impl<R: Runtime> Core<R> {
             let rt = h.lock();
             (rt.meta.project_id.clone(), rt.meta.worktree.clone())
         };
-        let (Some(wt), Ok(project)) = (wt, self.project(&pid)) else {
+        let (Some(mut wt), Ok(project)) = (wt, self.project(&pid)) else {
             return;
         };
-        if Path::new(&wt.path).exists() || !git::branch_exists(&project.path, &wt.branch).await {
+        if !git::branch_exists(&project.path, &wt.branch).await {
             return;
+        }
+        let mut moved = None;
+        if Path::new(&wt.path).exists() {
+            // Its own, still there: nothing to do.
+            let ours = git::checkout_of(&project.path, &wt.branch)
+                .await
+                .ok()
+                .flatten()
+                .is_some_and(|p| crate::tickets::same_dir(&p, &wt.path));
+            if ours {
+                return;
+            }
+            // Another worktree took its folder meanwhile (a folder of worktrees shared with
+            // another repository): its own is made beside it, never worked in another's.
+            let held = self.held_worktrees();
+            let from = PathBuf::from(&wt.path);
+            let name = from
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let parent = from.parent().unwrap_or(Path::new("")).to_path_buf();
+            let mut n = 2;
+            let mut dir = parent.join(format!("{name}-{n}"));
+            while !git::free_folder(&dir, &held) {
+                n += 1;
+                dir = parent.join(format!("{name}-{n}"));
+            }
+            moved = Some(wt.path.clone());
+            wt.path = dir.to_string_lossy().into_owned();
         }
         let problem = match git::worktree_restore(&project.path, &wt.path, &wt.branch).await {
             Ok(()) => {
+                if let Some(from) = &moved {
+                    let (path, lang) = (wt.path.clone(), self.lang().ui);
+                    let _ = self.with_agent(id, |rt, fx| {
+                        if rt.meta.cwd == *from {
+                            rt.meta.cwd = path.clone();
+                        }
+                        if let Some(w) = rt.meta.worktree.as_mut() {
+                            w.path = path.clone();
+                        }
+                        rt.notice("warn", worktree_moved(lang, from, &path), fx);
+                        Ok(())
+                    });
+                    self.request_save();
+                    if !self.git_watches(&project, &wt.path) {
+                        self.watch_project(&project);
+                    }
+                }
                 let copied = testlaunch::copy_worktree_files(
                     &project.path,
                     &wt.path,
@@ -3855,8 +3947,8 @@ impl<R: Runtime> Core<R> {
         // (A branch that was there before the agent is the user's: it keeps its name.)
         let mut renamed = None;
         if let Some(wt) = worktree.filter(|wt| !wt.existing) {
-            let branch = format!("{}{name}", paths::BRANCH_PREFIX);
             if let Ok(project) = self.project(&project_id) {
+                let branch = format!("{}{name}", project.agent_branch_prefix);
                 if !git::branch_exists(&project.path, &branch).await
                     && git::rename_current_branch(&wt.path, &branch).await.is_ok()
                 {
@@ -4198,6 +4290,7 @@ impl<R: Runtime> Core<R> {
     async fn worktree_on_branch(
         &self,
         project: &Project,
+        held: &[PathBuf],
         name: &str,
         base: Option<&str>,
     ) -> Result<(String, String, String)> {
@@ -4219,7 +4312,9 @@ impl<R: Runtime> Core<R> {
             Some(base) => base.to_string(),
             None => self.base_of(project, &root).await,
         };
-        let (path, branch) = git::worktree_add_existing(&project.path, name).await?;
+        let (path, branch) =
+            git::worktree_add_existing(&project.path, &project.worktrees_root(), held, name)
+                .await?;
         Ok((path, branch, base))
     }
 
@@ -4345,6 +4440,9 @@ impl<R: Runtime> Core<R> {
             commit_mode: CommitMode::default(),
             agents_use_escouade: false,
             account: String::new(),
+            worktree_dir: String::new(),
+            agent_branch_prefix: crate::model::default_agent_branch_prefix(),
+            ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
         };
         self.projects.write().push(project.clone());
         {
@@ -4353,7 +4451,7 @@ impl<R: Runtime> Core<R> {
             ui.view = "project".into();
         }
         self.request_save();
-        self.git.watch(&project.id, &project.path);
+        self.watch_project(&project);
         // The project is made whatever becomes of its first agent: told (no account serves a new
         // project, say), never an error that would have the window ask, and make it, again.
         if let Some(model) = first_agent {
@@ -4368,6 +4466,17 @@ impl<R: Runtime> Core<R> {
     }
 
     pub fn update_project(self: &Arc<Self>, p: Project) -> Result<()> {
+        // Where its worktrees go and how their branches are named: refused as the window does.
+        let worktree_dir = p.worktree_dir.trim().to_string();
+        let agent_prefix = p.agent_branch_prefix.trim().to_string();
+        let ticket_prefix = p.ticket_branch_prefix.trim().to_string();
+        let path = self.project(&p.id)?.path;
+        if let Some(why) = paths::worktrees_root_problem(&path, &worktree_dir)
+            .or_else(|| git::branch_prefix_problem(&agent_prefix))
+            .or_else(|| git::branch_prefix_problem(&ticket_prefix))
+        {
+            bail!(why);
+        }
         // Its preferred account is one there is (the window's copy may be older than the
         // accounts' tab); an account switched off is kept, and ignored while it is.
         let account = {
@@ -4395,12 +4504,21 @@ impl<R: Runtime> Core<R> {
         cur.commit_mode = p.commit_mode;
         cur.agents_use_escouade = p.agents_use_escouade;
         cur.account = account;
+        let dir_changed = cur.worktree_dir != worktree_dir;
+        cur.worktree_dir = worktree_dir;
+        cur.agent_branch_prefix = agent_prefix;
+        cur.ticket_branch_prefix = ticket_prefix;
         // What was imported is the backend's own: the window's copy may be older.
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
         cur.integrations.imported = imported;
+        let updated = cur.clone();
         drop(projects);
         self.request_save();
+        // Its next worktrees go elsewhere, maybe out of its folder: watched there too.
+        if dir_changed {
+            self.watch_project(&updated);
+        }
         // « Les agents peuvent utiliser Escouade » may have changed.
         self.sync_mcp();
         // The account its tickets go to may have changed, and so what holds them back.
@@ -4742,22 +4860,87 @@ impl<R: Runtime> Core<R> {
         Ok((root, None))
     }
 
+    /// `edit_root`, with the folders of it that hold the agents' worktrees (see `worktrees_kept`):
+    /// the editor makes nothing in them, and its search leaves them out.
+    pub async fn edit_worktrees(
+        &self,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<(String, Vec<String>)> {
+        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        let project = self.project(project_id)?;
+        let own = (!project.worktree_dir.trim().is_empty()).then(|| project.worktrees_root());
+        let kept = worktrees_kept(&root, &project.path, base.is_some(), own.as_deref());
+        Ok((root, kept))
+    }
+
+    /// The folders of the worktrees of every agent of the app, there or not: a new worktree never
+    /// takes one (`git::worktree_add`), the agent's own coming back there when it is restored.
+    fn held_worktrees(&self) -> Vec<PathBuf> {
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                h.lock()
+                    .meta
+                    .worktree
+                    .as_ref()
+                    .map(|w| PathBuf::from(&w.path))
+            })
+            .collect()
+    }
+
+    /// The folders whose changes refresh the git state of `project`: its own, and those holding
+    /// its agents' worktrees out of it (its « Dossier des worktrees » beside it), which a watch of
+    /// its folder does not see.
+    pub(crate) fn watched_folders(&self, project: &Project) -> Vec<String> {
+        let mut holders = vec![project.worktrees_root()];
+        holders.extend(self.project_agents(&project.id).iter().filter_map(|h| {
+            let rt = h.lock();
+            let wt = rt.meta.worktree.as_ref()?;
+            Path::new(&wt.path).parent().map(Path::to_path_buf)
+        }));
+        let mut dirs = vec![project.path.clone()];
+        for d in holders {
+            let d = d.to_string_lossy().into_owned();
+            if Path::new(&d).is_dir() && !dirs.iter().any(|w| self.git_watches_in(w, &d)) {
+                dirs.push(d);
+            }
+        }
+        dirs
+    }
+
+    /// `dir` is `watched`, or in it.
+    fn git_watches_in(&self, watched: &str, dir: &str) -> bool {
+        crate::tickets::same_dir(watched, dir) || paths::strip_base(watched, dir).is_some()
+    }
+
+    /// The watch of `project`'s folder sees the worktree at `path`.
+    fn git_watches(&self, project: &Project, path: &str) -> bool {
+        self.git_watches_in(&project.path, path)
+    }
+
+    /// Watches what refreshes the git state of `project` (`watched_folders`), in place of what
+    /// was watched for it.
+    pub(crate) fn watch_project(&self, project: &Project) {
+        self.git.watch(&project.id, &self.watched_folders(project));
+    }
+
     /// `edit_root`, with the folders of it that the editor's renames and deletions keep away from:
-    /// those holding the agents' worktrees (see `worktrees_kept`), every worktree of the
-    /// repository (the agents' of every project sharing it, a validation's), every agent's, and
-    /// every project's folder (renamed, its project would point at nothing).
+    /// those holding the agents' worktrees (`edit_worktrees`), every worktree of the repository
+    /// (the agents' of every project sharing it, a validation's), every agent's, and every
+    /// project's folder (renamed, its project would point at nothing).
     pub async fn edit_kept(
         &self,
         project_id: &str,
         agent_id: Option<String>,
     ) -> Result<(String, Vec<fsedit::Kept>)> {
-        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        let (root, worktrees) = self.edit_worktrees(project_id, agent_id).await?;
         let kept_as = |what| move |path| fsedit::Kept { path, what };
-        let mut kept: Vec<fsedit::Kept> =
-            worktrees_kept(&root, &self.project(project_id)?.path, base.is_some())
-                .into_iter()
-                .map(kept_as(fsedit::Holds::Worktrees))
-                .collect();
+        let mut kept: Vec<fsedit::Kept> = worktrees
+            .into_iter()
+            .map(kept_as(fsedit::Holds::Worktrees))
+            .collect();
         let mut worktrees = git::worktree_paths(&root).await.unwrap_or_default();
         worktrees.extend(self.agents.read().values().filter_map(|h| {
             let wt = h.lock().meta.worktree.clone();
@@ -6027,11 +6210,11 @@ mod tests {
     #[test]
     fn a_copys_branch_keeps_its_marker_within_a_slug() {
         assert_eq!(
-            copy_branch("refacto-auth", "refacto-auth (copie)"),
+            copy_branch("escouade/", "refacto-auth", "refacto-auth (copie)"),
             "escouade/refacto-auth-copie"
         );
         assert_eq!(
-            copy_branch("refacto-auth", "refacto-auth (copie 2)"),
+            copy_branch("escouade/", "refacto-auth", "refacto-auth (copie 2)"),
             "escouade/refacto-auth-copie-2"
         );
         // A ticket agent's name already takes the 40 characters of a slug: it gives way.
@@ -6041,7 +6224,7 @@ mod tests {
             (format!("{ticket} (copie)"), "-copie"),
             (format!("{ticket} (copie 12)"), "-copie-12"),
         ] {
-            let branch = slug(&copy_branch(ticket, &copy));
+            let branch = slug(&copy_branch("escouade/", ticket, &copy));
             assert!(branch.len() <= 40, "{branch}");
             assert!(branch.ends_with(marker), "{branch}");
             assert!(
@@ -6053,11 +6236,17 @@ mod tests {
         // A single word longer than a slug: cut inside it.
         let word = "a".repeat(45);
         assert_eq!(
-            copy_branch(&word, &format!("{word} (copie)")),
+            copy_branch("escouade/", &word, &format!("{word} (copie)")),
             format!("escouade/{}-copie", "a".repeat(34))
         );
         // Nothing to make a slug of: the marker alone.
-        assert_eq!(copy_branch("日本", "日本 (copie)"), "escouade/copie");
+        assert_eq!(
+            copy_branch("escouade/", "日本", "日本 (copie)"),
+            "escouade/copie"
+        );
+        // The project's own prefix, or none.
+        assert_eq!(copy_branch("gg/", "api", "api (copie)"), "gg/api-copie");
+        assert_eq!(copy_branch("", "api", "api (copie)"), "api-copie");
     }
 
     #[test]
@@ -6244,18 +6433,60 @@ mod tests {
     #[test]
     fn the_editor_keeps_the_worktrees_of_the_projects_folder_and_of_its_root() {
         assert_eq!(
-            worktrees_kept("C:/code/app", "C:\\code\\app", false),
+            worktrees_kept("C:/code/app", "C:\\code\\app", false, None),
             vec![".claude/worktrees"]
         );
         assert_eq!(
-            worktrees_kept("C:/code/mono", "C:/code/mono/packages/web", false),
+            worktrees_kept("C:/code/mono", "C:/code/mono/packages/web", false, None),
             vec![".claude/worktrees", "packages/web/.claude/worktrees"]
         );
         // An agent's worktree holds none of the project's.
         assert_eq!(
-            worktrees_kept("C:/code/mono/.claude/worktrees/dem-1", "C:/code/mono", true),
+            worktrees_kept(
+                "C:/code/mono/.claude/worktrees/dem-1",
+                "C:/code/mono",
+                true,
+                None
+            ),
             vec![".claude/worktrees"]
         );
+        // The project's own « Dossier des worktrees », when it is in the source.
+        let own = |p: &str| Some(PathBuf::from(p));
+        assert_eq!(
+            worktrees_kept(
+                "C:/code/app",
+                "C:/code/app",
+                false,
+                own("C:\\code\\app\\.worktrees").as_deref()
+            ),
+            vec![".claude/worktrees", ".worktrees"]
+        );
+        assert_eq!(
+            worktrees_kept(
+                "C:/code/mono",
+                "C:/code/mono/packages/web",
+                false,
+                own("C:/code/mono/packages/web/wt").as_deref()
+            ),
+            vec![
+                ".claude/worktrees",
+                "packages/web/.claude/worktrees",
+                "packages/web/wt"
+            ]
+        );
+        // Beside the repository, or set to the usual one: nothing more.
+        for elsewhere in ["C:/code/app-worktrees", "C:/code/app/.claude/worktrees"] {
+            assert_eq!(
+                worktrees_kept(
+                    "C:/code/app",
+                    "C:/code/app",
+                    false,
+                    own(elsewhere).as_deref()
+                ),
+                vec![".claude/worktrees"],
+                "{elsewhere}"
+            );
+        }
     }
 
     fn att(name: &str, media_type: &str, data: &str) -> Attachment {
@@ -6338,7 +6569,7 @@ mod tests {
         use crate::i18n::Lang::{En, Fr};
         // A copy named in English has its branch named so too.
         assert_eq!(
-            copy_branch("refacto-auth", "refacto-auth (copy 2)"),
+            copy_branch("escouade/", "refacto-auth", "refacto-auth (copy 2)"),
             "escouade/refacto-auth-copy-2"
         );
         // A validation the app's stop cut, told as the ticket's block when the app starts again.

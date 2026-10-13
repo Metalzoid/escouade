@@ -2712,6 +2712,51 @@ async fn validating_merges_into_a_branch_checked_out_nowhere_through_a_temporary
 }
 
 #[tokio::test]
+async fn a_ticket_of_a_project_with_its_own_worktrees_folder_works_and_merges_out_of_the_repository(
+) {
+    let h = harness("tk-own-folder");
+    let (p, r) = h.project(false).await;
+    h.core
+        .update_project(Project {
+            worktree_dir: "../repo-wt".into(),
+            ticket_branch_prefix: "gg/".into(),
+            ..p.clone()
+        })
+        .unwrap();
+    let beside = r.parent().unwrap().join("repo-wt");
+    git(&r, &["branch", "release"]);
+    h.set_board(&p.id, |s| {
+        s.target = "release".into();
+        s.strategy = "merge".into();
+        s.cleanup = false;
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    assert_eq!(wt.parent(), Some(beside.as_path()));
+    assert_eq!(h.agent_of(&t.id).worktree.unwrap().branch, "gg/dem-1");
+    // Left behind, registered, by a validation the app's stop cut, in the project's folder of
+    // worktrees: it holds the target.
+    let stale = beside.join(".merge-dem-1");
+    git(
+        &r,
+        &["worktree", "add", "-q", &stale.to_string_lossy(), "release"],
+    );
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        t.outcome.as_deref(),
+        Some("⤵ Mergé dans release · merge commit"),
+        "{:?}",
+        t.blocked
+    );
+    assert_eq!(git(&r, &["show", "release:dem-1.txt"]), "Boucle 1");
+    assert!(!stale.exists());
+    assert!(!git(&r, &["worktree", "list"]).contains(".merge-dem-1"));
+    // Its temporary worktree was not in the repository either.
+    assert!(!r.join(".claude").exists());
+    assert!(has_branch(&r, "gg/dem-1"));
+}
+
+#[tokio::test]
 async fn validating_by_rebase_keeps_the_history_straight() {
     let h = harness("tk-rebase");
     let (p, r) = h.project(false).await;
