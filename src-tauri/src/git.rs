@@ -107,12 +107,45 @@ async fn output_within(
 
 /// A command killed for not being done within `limit`.
 fn stopped(args: &[&str], limit: Duration) -> anyhow::Error {
-    anyhow::anyhow!(tr!(
-        "git {cmd} interrompu : toujours pas terminé après {s} s",
-        "git {cmd} stopped: still not done after {s} s",
-        cmd = args.first().unwrap_or(&""),
-        s = limit.as_secs()
-    ))
+    anyhow::anyhow!(stopped_in(crate::i18n::ui(), args, limit))
+}
+
+/// What `stopped` says: the git command (its subcommand) and the limit it ran into, in seconds up
+/// to two minutes and in minutes past that (a commit running hooks has half an hour).
+fn stopped_in(lang: crate::i18n::Lang, args: &[&str], limit: Duration) -> String {
+    let secs = limit.as_secs();
+    let after = if secs > 120 && secs % 60 == 0 {
+        format!("{} min", secs / 60)
+    } else {
+        format!("{secs} s")
+    };
+    let cmd = subcommand(args)
+        .map(|c| format!(" {c}"))
+        .unwrap_or_default();
+    tr_in!(
+        lang,
+        "git{cmd} interrompu : toujours pas terminé après {after}",
+        "git{cmd} stopped: still not done after {after}",
+        cmd = cmd,
+        after = after
+    )
+}
+
+/// The git command `args` run: the first word that is no option (`--literal-pathspecs`,
+/// `-c key=value`...).
+fn subcommand<'a>(args: &[&'a str]) -> Option<&'a str> {
+    let mut args = args.iter().copied();
+    while let Some(arg) = args.next() {
+        match arg {
+            // These two take a value.
+            "-c" | "-C" => {
+                args.next();
+            }
+            _ if arg.starts_with('-') => {}
+            _ => return Some(arg),
+        }
+    }
+    None
 }
 
 /// Time limits of the commands that reach a remote.
@@ -3781,6 +3814,40 @@ sleep {seconds}
         .unwrap();
         git(&r, &["add", "a.txt"]);
         r
+    }
+
+    #[test]
+    fn a_command_stopped_is_named_by_its_subcommand_and_its_limit_is_said_in_minutes_past_two() {
+        use crate::i18n::Lang::{En, Fr};
+        let say = |lang, args: &[&str], secs| stopped_in(lang, args, Duration::from_secs(secs));
+        // The options before the subcommand are not the command.
+        assert_eq!(
+            say(En, &["--literal-pathspecs", "commit", "-m", "x"], 120),
+            "git commit stopped: still not done after 120 s"
+        );
+        assert_eq!(
+            say(Fr, &["-c", "core.x=y", "--no-pager", "log"], 60),
+            "git log interrompu : toujours pas terminé après 60 s"
+        );
+        // Past two minutes: minutes.
+        assert_eq!(
+            say(En, &["merge"], 30 * 60),
+            "git merge stopped: still not done after 30 min"
+        );
+        assert_eq!(
+            say(Fr, &["push"], 180),
+            "git push interrompu : toujours pas terminé après 3 min"
+        );
+        // Not a whole number of minutes: the seconds.
+        assert_eq!(
+            say(En, &["fetch"], 150),
+            "git fetch stopped: still not done after 150 s"
+        );
+        // Nothing but options: no word to name.
+        assert_eq!(
+            say(En, &["--version"], 5),
+            "git stopped: still not done after 5 s"
+        );
     }
 
     #[tokio::test]
