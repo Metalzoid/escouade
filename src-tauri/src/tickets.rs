@@ -1962,7 +1962,7 @@ impl<R: Runtime> Core<R> {
             }
             None => {
                 git::ensure_excluded(&repo, ".claude/worktrees/").await?;
-                git::run(&repo, &["worktree", "add", &tmp_s, target]).await?;
+                git::run_hooks(&repo, &["worktree", "add", &tmp_s, target]).await?;
                 (tmp_s.clone(), true)
             }
         };
@@ -2165,7 +2165,7 @@ impl<R: Runtime> Core<R> {
         let text = if rebase {
             board::rebase_message(lang, &target)
         } else {
-            match git::run(&wt.path, &["merge", "--no-edit", &target]).await {
+            match git::run_hooks(&wt.path, &["merge", "--no-edit", &target]).await {
                 Ok(_) => board::conflict_message(lang, &target, &[]),
                 Err(e) => {
                     let files = git::unmerged(&wt.path).await;

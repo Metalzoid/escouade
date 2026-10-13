@@ -31,23 +31,76 @@ pub(crate) fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
     cmd
 }
 
+/// Runs a git command that reads (status, diff, log, rev-parse…) or moves little: killed past
+/// `GIT_TIMEOUT`. One that runs the user's hooks goes through `run_hooks`.
 pub async fn run(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let out = output(command(cwd, args), args).await?;
+    run_within(cwd, args, Limit::Reads).await
+}
+
+/// `run`, for the commands that run the user's hooks (commit, merge, rebase, worktree add,
+/// switch…): a pre-commit hook may run a whole test suite, a post-checkout one an install.
+pub async fn run_hooks(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
+    run_within(cwd, args, Limit::Hooks).await
+}
+
+async fn run_within(cwd: &str, args: &[&str], limit: Limit) -> Result<Vec<u8>> {
+    let out = output_within(command(cwd, args), args, limit).await?;
     checked(out, args)
 }
 
-/// Time limit of the commands that stay on the machine (a commit and its hooks, a big checkout…).
-pub(crate) const GIT_TIMEOUT: Duration = Duration::from_secs(120);
+/// Time limit of the git commands that read.
+const GIT_TIMEOUT: Duration = Duration::from_secs(120);
+/// Time limit of the git commands that run the user's hooks.
+const GIT_HOOKS_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
-/// What `cmd` (a git command) prints, within `GIT_TIMEOUT` and without waiting for the end of
-/// its pipes once it has ended (see `proc`).
+/// How long a git command may take.
+#[derive(Clone, Copy)]
+enum Limit {
+    Reads,
+    Hooks,
+}
+
+impl Limit {
+    fn duration(self) -> Duration {
+        #[cfg(test)]
+        if let Some((reads, hooks)) = SHORT_LIMITS.with(std::cell::Cell::get) {
+            return match self {
+                Limit::Reads => reads,
+                Limit::Hooks => hooks,
+            };
+        }
+        match self {
+            Limit::Reads => GIT_TIMEOUT,
+            Limit::Hooks => GIT_HOOKS_TIMEOUT,
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Shorter limits (reads, hooks) for the test running on this thread: nobody waits minutes.
+    static SHORT_LIMITS: std::cell::Cell<Option<(Duration, Duration)>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// What `cmd` (a git command that reads) prints, within `GIT_TIMEOUT` and without waiting for
+/// the end of its pipes once it has ended (see `proc`).
 pub(crate) async fn output(
     cmd: tokio::process::Command,
     args: &[&str],
 ) -> Result<std::process::Output> {
-    match crate::proc::output_within(cmd, GIT_TIMEOUT).await {
+    output_within(cmd, args, Limit::Reads).await
+}
+
+async fn output_within(
+    cmd: tokio::process::Command,
+    args: &[&str],
+    limit: Limit,
+) -> Result<std::process::Output> {
+    let limit = limit.duration();
+    match crate::proc::output_within(cmd, limit).await {
         Ok(out) => Ok(out),
-        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(stopped(args, GIT_TIMEOUT)),
+        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(stopped(args, limit)),
         Err(e) => Err(e.into()),
     }
 }
@@ -91,9 +144,9 @@ fn in_english(mut cmd: tokio::process::Command) -> tokio::process::Command {
     cmd
 }
 
-/// `run`, with git's messages in English (`in_english`).
-async fn run_english(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let out = output(in_english(command(cwd, args)), args).await?;
+/// `run_hooks`, with git's messages in English (`in_english`): switch and merge run hooks.
+async fn run_english_hooks(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
+    let out = output_within(in_english(command(cwd, args)), args, Limit::Hooks).await?;
     checked(out, args)
 }
 
@@ -860,7 +913,7 @@ pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, Str
         .join("worktrees")
         .join(&dir_name);
     let path_s = path.to_string_lossy().to_string();
-    run(repo, &["worktree", "add", "-b", &branch, &path_s, "HEAD"]).await?;
+    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, "HEAD"]).await?;
     Ok((path_s, branch, base))
 }
 
@@ -889,7 +942,7 @@ pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(St
     }
     let path = dir_of(&name).to_string_lossy().to_string();
     // `--`: whatever `base` is, git reads it as the commit-ish to start from.
-    run(repo, &["worktree", "add", "-b", &name, &path, "--", base]).await?;
+    run_hooks(repo, &["worktree", "add", "-b", &name, &path, "--", base]).await?;
     Ok((path, name))
 }
 
@@ -920,9 +973,9 @@ pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, St
     let path = dir.to_string_lossy().to_string();
     // `--`: whatever the name is, git reads it as the commit-ish.
     let made = match &local {
-        Some(local) => run(repo, &["worktree", "add", &path, "--", local]).await,
+        Some(local) => run_hooks(repo, &["worktree", "add", &path, "--", local]).await,
         None => {
-            run(
+            run_hooks(
                 repo,
                 &[
                     "worktree", "add", "--track", "-b", &branch, &path, "--", name,
@@ -972,7 +1025,7 @@ pub async fn update_branch(dir: &str, base: &str, rebase: bool) -> Result<Update
     }
     let (merge, rebasing) = (["merge", "--no-edit", base], ["rebase", base]);
     let args: &[&str] = if rebase { &rebasing } else { &merge };
-    let Err(e) = run(dir, args).await else {
+    let Err(e) = run_hooks(dir, args).await else {
         return Ok(Updated::Done);
     };
     let files = unmerged(dir).await;
@@ -1035,7 +1088,7 @@ pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()
     }
     ensure_excluded(repo, ".claude/worktrees/").await?;
     let _ = run(repo, &["worktree", "prune"]).await;
-    run(repo, &["worktree", "add", path, branch]).await?;
+    run_hooks(repo, &["worktree", "add", path, branch]).await?;
     Ok(())
 }
 
@@ -1091,7 +1144,7 @@ pub async fn switch(repo: &str, branch: &str) -> Result<()> {
         bail!(invalid_branch(branch));
     }
     // `--no-guess`: a branch only the remote has is not made, the base is a local one.
-    run_english(repo, &["switch", "--no-guess", branch])
+    run_english_hooks(repo, &["switch", "--no-guess", branch])
         .await
         .map(|_| ())
         .map_err(switch_failed)
@@ -1467,7 +1520,7 @@ pub async fn switch_to(repo: &str, name: &str) -> Result<String> {
             Ok(local)
         }
         None => {
-            run_english(repo, &["switch", "--track", name])
+            run_english_hooks(repo, &["switch", "--track", name])
                 .await
                 .map_err(switch_failed)?;
             Ok(head_branch(repo).await)
@@ -2004,15 +2057,23 @@ pub async fn stage_all(cwd: &str, keep_out: &[String]) -> Result<bool> {
 }
 
 pub async fn commit_staged(cwd: &str, message: &str) -> Result<()> {
-    run(cwd, &["commit", "-q", "-m", message]).await.map(|_| ())
+    run_hooks(cwd, &["commit", "-q", "-m", message])
+        .await
+        .map(|_| ())
 }
 
 /// A command given `input` on its standard input (`--stdin`, `--pathspec-from-file=-`): a list of
-/// paths of any length, where a command line has a limit (see `command_line_chunks`).
-async fn run_input(cwd: &str, args: &[&str], input: &[u8]) -> Result<std::process::Output> {
+/// paths of any length, where a command line has a limit (see `command_line_chunks`). Killed past
+/// `limit`, and not held back by a pipe someone else keeps open (see `proc`).
+async fn run_input(
+    cwd: &str,
+    args: &[&str],
+    input: &[u8],
+    limit: Limit,
+) -> Result<std::process::Output> {
     use tokio::io::AsyncWriteExt;
     let mut cmd = command(cwd, args);
-    cmd.stdin(Stdio::piped());
+    cmd.stdin(Stdio::piped()).kill_on_drop(true);
     let mut child = cmd.spawn()?;
     let mut stdin = child.stdin.take().ok_or_else(|| {
         anyhow::anyhow!(tr!(
@@ -2027,7 +2088,15 @@ async fn run_input(cwd: &str, args: &[&str], input: &[u8]) -> Result<std::proces
         drop(stdin);
         written
     };
-    let (written, out) = tokio::join!(write, child.wait_with_output());
+    let limit = limit.duration();
+    // The timeout drops the child, which `kill_on_drop` kills.
+    let joined = tokio::time::timeout(limit, async {
+        tokio::join!(write, crate::proc::wait_output(child))
+    })
+    .await;
+    let Ok((written, out)) = joined else {
+        return Err(stopped(args, limit));
+    };
     let out = out?;
     // A command that stopped reading (it failed) says why better than the broken pipe.
     if out.status.success() {
@@ -2055,7 +2124,7 @@ pub async fn ignored(cwd: &str, paths: &[String]) -> Result<Vec<String>> {
     // Each name is tested as it is against the rules (a `*` in it is no wildcard): git refuses
     // `--literal-pathspecs` here, and needs none.
     let args = ["check-ignore", "--no-index", "--stdin", "-z"];
-    let out = run_input(cwd, &args, &nul_separated(paths)).await?;
+    let out = run_input(cwd, &args, &nul_separated(paths), Limit::Reads).await?;
     // 1: none of them is ignored; anything else but 0 is git failing, which must not pass for
     // "none".
     if out.status.code() == Some(1) && out.stderr.is_empty() {
@@ -2097,14 +2166,16 @@ pub async fn commit_paths(cwd: &str, paths: &[String], message: &str) -> Result<
     // stays so until the commit is made).
     if !new.is_empty() {
         let args = [&[LITERAL, "add"][..], &FROM_STDIN].concat();
-        checked(run_input(cwd, &args, &nul_separated(&new)).await?, &args)?;
+        let out = run_input(cwd, &args, &nul_separated(&new), Limit::Reads).await?;
+        checked(out, &args)?;
     }
     let args = [
         &[LITERAL, "commit", "-q", "--only", "-m", message][..],
         &FROM_STDIN,
     ]
     .concat();
-    let committed = checked(run_input(cwd, &args, &nul_separated(&all)).await?, &args);
+    let out = run_input(cwd, &args, &nul_separated(&all), Limit::Hooks).await?;
+    let committed = checked(out, &args);
     if committed.is_err() && !new.is_empty() {
         // Refused: the new files go back to untracked, as they were (their content stays on disk).
         let args = [
@@ -2119,7 +2190,7 @@ pub async fn commit_paths(cwd: &str, paths: &[String], message: &str) -> Result<
             &FROM_STDIN,
         ]
         .concat();
-        let unstaged = run_input(cwd, &args, &nul_separated(&new)).await;
+        let unstaged = run_input(cwd, &args, &nul_separated(&new), Limit::Reads).await;
         if let Err(e) = unstaged.and_then(|out| checked(out, &args)) {
             log::warn!("{cwd}: the new files of a refused commit stay staged: {e:#}");
         }
@@ -2171,7 +2242,7 @@ pub async fn integrate(
 ) -> Result<Integrated> {
     match strategy {
         "merge" => {
-            if let Err(e) = run(dir, &["merge", "--no-ff", "--no-edit", branch]).await {
+            if let Err(e) = run_hooks(dir, &["merge", "--no-ff", "--no-edit", branch]).await {
                 let files = unmerged(dir).await;
                 let _ = run(dir, &["merge", "--abort"]).await;
                 return if files.is_empty() {
@@ -2182,7 +2253,7 @@ pub async fn integrate(
             }
         }
         "rebase" => {
-            if let Err(e) = run(branch_dir, &["rebase", target]).await {
+            if let Err(e) = run_hooks(branch_dir, &["rebase", target]).await {
                 let files = unmerged(branch_dir).await;
                 let _ = run(branch_dir, &["rebase", "--abort"]).await;
                 return if files.is_empty() {
@@ -2191,10 +2262,10 @@ pub async fn integrate(
                     Ok(Integrated::Conflict(files))
                 };
             }
-            run(dir, &["merge", "--ff-only", branch]).await?;
+            run_hooks(dir, &["merge", "--ff-only", branch]).await?;
         }
         _ => {
-            if let Err(e) = run(dir, &["merge", "--squash", branch]).await {
+            if let Err(e) = run_hooks(dir, &["merge", "--squash", branch]).await {
                 let files = unmerged(dir).await;
                 let _ = run(dir, &["reset", "--merge"]).await;
                 return if files.is_empty() {
@@ -2203,7 +2274,7 @@ pub async fn integrate(
                     Ok(Integrated::Conflict(files))
                 };
             }
-            if let Err(e) = run(dir, &["commit", "-q", "-m", message]).await {
+            if let Err(e) = run_hooks(dir, &["commit", "-q", "-m", message]).await {
                 let _ = run(dir, &["reset", "--merge"]).await;
                 return Err(e);
             }
@@ -2223,12 +2294,12 @@ pub async fn has_tracked_changes(repo: &str) -> Result<bool> {
 
 pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Result<String> {
     if squash {
-        if let Err(e) = run(repo, &["merge", "--squash", branch]).await {
+        if let Err(e) = run_hooks(repo, &["merge", "--squash", branch]).await {
             // A conflicting squash leaves markers and unmerged entries behind: undo them.
             let _ = run(repo, &["reset", "--merge"]).await;
             return Err(e);
         }
-        match run(repo, &["commit", "-m", message]).await {
+        match run_hooks(repo, &["commit", "-m", message]).await {
             Ok(o) => Ok(String::from_utf8_lossy(&o).trim().to_string()),
             Err(e) => {
                 let _ = run(repo, &["reset", "--merge"]).await;
@@ -2236,7 +2307,7 @@ pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Res
             }
         }
     } else {
-        match run(repo, &["merge", "--no-ff", "-m", message, branch]).await {
+        match run_hooks(repo, &["merge", "--no-ff", "-m", message, branch]).await {
             Ok(o) => Ok(String::from_utf8_lossy(&o).trim().to_string()),
             Err(e) => {
                 let _ = run(repo, &["merge", "--abort"]).await;
@@ -2413,7 +2484,8 @@ pub async fn pull(repo: &str) -> Result<String> {
         ));
     }
     // In English: the refusal is told apart by git's own words.
-    if let Err(e) = run_english(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await {
+    if let Err(e) = run_english_hooks(repo, &["merge", "--ff-only", "--quiet", "@{upstream}"]).await
+    {
         if e.to_string().contains("would be overwritten") {
             bail!(tr!(
                 "Des modifications non commitées seraient écrasées par le pull : commite-les ou mets-les de côté d'abord.",
@@ -3488,6 +3560,120 @@ mod repo_tests {
         assert_eq!(after, before);
         assert_eq!(text(&r, &["show", ":b.txt"]).await.unwrap(), "2");
         assert_eq!(text(&r, &["log", "-1", "--format=%s"]).await.unwrap(), "b");
+    }
+
+    /// A pre-commit hook in the repository at `r` that takes `seconds` seconds, then lets the commit be.
+    fn slow_hook(r: &str, seconds: u32) {
+        let hook = Path::new(r).join(".git").join("hooks").join("pre-commit");
+        std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
+        std::fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh
+sleep {seconds}
+"
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// Shorter limits for the test on this thread, until it ends: (reads, hooks).
+    struct ShortLimits;
+
+    impl ShortLimits {
+        fn new(reads: Duration, hooks: Duration) -> Self {
+            SHORT_LIMITS.with(|l| l.set(Some((reads, hooks))));
+            ShortLimits
+        }
+    }
+
+    impl Drop for ShortLimits {
+        fn drop(&mut self) {
+            SHORT_LIMITS.with(|l| l.set(None));
+        }
+    }
+
+    /// A repository with `a.txt` staged and a pre-commit hook that takes 3 s.
+    fn repo_with_a_slow_hook(name: &str) -> String {
+        let r = repo(name);
+        slow_hook(&r, 3);
+        std::fs::write(
+            Path::new(&r).join("a.txt"),
+            "a
+",
+        )
+        .unwrap();
+        git(&r, &["add", "a.txt"]);
+        r
+    }
+
+    #[tokio::test]
+    async fn a_command_that_reads_is_cut_at_its_limit_and_says_so() {
+        let r = repo_with_a_slow_hook("git-limit-reads");
+        let _short = ShortLimits::new(Duration::from_secs(1), Duration::from_secs(60));
+        let started = Instant::now();
+        let e = run(&r, &["commit", "-qm", "slow"]).await.unwrap_err();
+        // « interrompu : toujours pas terminé après 1 s » / « stopped: still not done after 1 s ».
+        assert!(
+            e.to_string().contains("après 1 s") || e.to_string().contains("after 1 s"),
+            "{e}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_command_that_runs_hooks_is_not_cut_at_the_limit_of_the_reads() {
+        let _short = ShortLimits::new(Duration::from_secs(1), Duration::from_secs(60));
+        // The hook outlasts the reads' limit: every path that runs hooks waits for it.
+        let r = repo_with_a_slow_hook("git-limit-hooks-run");
+        run_hooks(&r, &["commit", "-qm", "slow"]).await.unwrap();
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
+            "slow"
+        );
+
+        let r = repo_with_a_slow_hook("git-limit-hooks-commit");
+        commit_staged(&r, "slow").await.unwrap();
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
+            "slow"
+        );
+
+        // `commit_paths` gives the paths on the input of the command.
+        let r = repo_with_a_slow_hook("git-limit-hooks-paths");
+        commit_paths(&r, &["a.txt".to_string()], "slow")
+            .await
+            .unwrap();
+        assert_eq!(
+            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
+            "slow"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_command_that_runs_hooks_is_cut_at_its_own_limit() {
+        let r = repo_with_a_slow_hook("git-limit-hooks-cut");
+        let _short = ShortLimits::new(Duration::from_secs(60), Duration::from_secs(1));
+        let started = Instant::now();
+        let e = run_hooks(&r, &["commit", "-qm", "slow"]).await.unwrap_err();
+        assert!(
+            e.to_string().contains("après 1 s") || e.to_string().contains("after 1 s"),
+            "{e}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     /// `main` and a branch `feat` that changed the same file (`conflict`) or another one.
