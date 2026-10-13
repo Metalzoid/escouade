@@ -1042,7 +1042,17 @@ pub async fn update_branch(dir: &str, base: &str, rebase: bool) -> Result<Update
 
 /// Removes a worktree and its branch, tolerating a worktree folder that is already gone.
 pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()> {
-    worktree_remove_dir(repo, path).await?;
+    worktree_remove_within(repo, path, branch, REMOVE_RETRY).await
+}
+
+/// `worktree_remove`, its folder's removal tried again for `retry`.
+pub async fn worktree_remove_within(
+    repo: &str,
+    path: &str,
+    branch: &str,
+    retry: Duration,
+) -> Result<()> {
+    worktree_remove_dir_within(repo, path, retry).await?;
     if branch_exists(repo, branch).await {
         run(repo, &["branch", "-D", branch]).await?;
     }
@@ -1051,12 +1061,17 @@ pub async fn worktree_remove(repo: &str, path: &str, branch: &str) -> Result<()>
 
 /// Removes a worktree, its branch kept, tolerating a worktree folder that is already gone.
 pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
+    worktree_remove_dir_within(repo, path, REMOVE_RETRY).await
+}
+
+/// `worktree_remove_dir`, its folder's removal tried again for `retry`.
+pub async fn worktree_remove_dir_within(repo: &str, path: &str, retry: Duration) -> Result<()> {
     if run(repo, &["worktree", "remove", "--force", path])
         .await
         .is_err()
         && Path::new(path).exists()
     {
-        remove_dir_retrying(Path::new(path))
+        remove_dir_retrying(Path::new(path), retry)
             .await
             .map_err(|e| anyhow::anyhow!(tr!("{path} : {e}", "{path}: {e}")))?;
     }
@@ -1065,12 +1080,16 @@ pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
 }
 
 /// How long the removal of a worktree's folder is tried again.
-const REMOVE_RETRY: Duration = Duration::from_secs(15);
+pub const REMOVE_RETRY: Duration = Duration::from_secs(15);
 
-/// `remove_dir_all`, tried again for `REMOVE_RETRY` while it fails: under Windows, a process just
+/// How long the folder's removal is tried again once what holds it has been waited for in vain:
+/// that wait is spent already.
+pub const REMOVE_RETRY_HELD: Duration = Duration::from_secs(2);
+
+/// `remove_dir_all`, tried again for `retry` while it fails: under Windows, a process just
 /// killed (an agent's, its tests') lets go of its files a moment later.
-async fn remove_dir_retrying(path: &Path) -> std::io::Result<()> {
-    let until = Instant::now() + REMOVE_RETRY;
+async fn remove_dir_retrying(path: &Path, retry: Duration) -> std::io::Result<()> {
+    let until = Instant::now() + retry;
     loop {
         match std::fs::remove_dir_all(path) {
             Ok(()) => return Ok(()),

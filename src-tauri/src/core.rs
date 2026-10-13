@@ -58,6 +58,19 @@ pub(crate) fn agent_not_found() -> anyhow::Error {
     anyhow!(tr!("agent introuvable", "agent not found"))
 }
 
+/// What a deleted agent's warning says when `running` of its processes still ran `secs` seconds
+/// after it was killed: they may hold its worktree.
+pub(crate) fn agent_still_running(lang: i18n::Lang, running: u32, secs: u64) -> String {
+    tr_n_in!(
+        lang,
+        running,
+        "{running} processus de l'agent tournait encore après {secs} s et peut retenir son worktree",
+        "{running} processus de l'agent tournaient encore après {secs} s et peuvent retenir son worktree",
+        "{running} process of the agent was still running after {secs} s and may hold its worktree",
+        "{running} processes of the agent were still running after {secs} s and may hold its worktree"
+    )
+}
+
 /// Refused: the project asked for is gone (removed meanwhile).
 pub(crate) fn project_not_found() -> anyhow::Error {
     anyhow!(tr!("projet introuvable", "project not found"))
@@ -393,7 +406,11 @@ pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;
 
 /// How long a killed agent's process tree is waited for before its worktree is removed: under
 /// Windows, what still runs keeps the folder, and a tree can take long to go on a loaded machine.
-pub(crate) const AGENT_GONE: Duration = Duration::from_secs(15);
+const AGENT_GONE: Duration = Duration::from_secs(15);
+
+/// How long a deleted agent's worktree waits for the project's running git refresh, which has
+/// `git` commands in the folder.
+const GIT_IDLE: Duration = Duration::from_secs(10);
 
 /// How often every repository with a remote is fetched in the background.
 const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
@@ -624,7 +641,8 @@ pub struct Core<R: Runtime = Wry> {
     /// Where the usage endpoint is (`usage::api_from_env`; a fake one in tests).
     pub(crate) usage_api: RwLock<String>,
     resources: Mutex<resources::Sampler>,
-    git_inflight: Mutex<std::collections::HashSet<String>>,
+    /// The projects whose git state is being computed (`compute_git`).
+    pub(crate) git_inflight: Mutex<std::collections::HashSet<String>>,
     /// One fetch, pull or push at a time per repository.
     sync_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     toplevels: Mutex<HashMap<String, Option<String>>>,
@@ -700,6 +718,10 @@ pub struct Core<R: Runtime = Wry> {
     /// interval is `PLAN_SCAN_EVERY`).
     #[cfg(test)]
     pub(crate) plan_scan_ms: AtomicU64,
+    /// How long a deleted agent's processes are waited for, in milliseconds (tests only: the wait
+    /// is `AGENT_GONE`).
+    #[cfg(test)]
+    pub(crate) agent_gone_ms: AtomicU64,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1431,6 +1453,8 @@ impl<R: Runtime> Core<R> {
             #[cfg(test)]
             plan_scan_ms: AtomicU64::new(PLAN_SCAN_EVERY.as_millis() as u64),
             #[cfg(test)]
+            agent_gone_ms: AtomicU64::new(AGENT_GONE.as_millis() as u64),
+            #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
             relabels: Mutex::default(),
@@ -1908,6 +1932,45 @@ impl<R: Runtime> Core<R> {
         self.apply(&id, &pid, &name, fx, view);
     }
 
+    /// How long the processes of a deleted agent are waited for before its worktree goes.
+    pub(crate) fn agent_gone(&self) -> Duration {
+        #[cfg(test)]
+        return Duration::from_millis(self.agent_gone_ms.load(Ordering::Acquire));
+        #[cfg(not(test))]
+        AGENT_GONE
+    }
+
+    /// Waits (`agent_gone`) for the processes of the killed agent `id`, `p`, to be gone. None when
+    /// they are; else what the warning says: how many still run (the log, which ones).
+    pub(crate) async fn await_agent_gone(&self, id: &str, p: &ClaudeProcess) -> Option<String> {
+        let (within, waited) = (self.agent_gone(), Instant::now());
+        let gone = p.wait_gone(within).await;
+        log::info!(
+            "agent {id}: its processes {} after {} ms",
+            if gone { "are gone" } else { "still run" },
+            waited.elapsed().as_millis()
+        );
+        if gone {
+            return None;
+        }
+        let running = p.still_running();
+        log::warn!(
+            "agent {id}: {running} process(es) still run after {} s, pids {:?}",
+            within.as_secs(),
+            p.pids()
+        );
+        Some(agent_still_running(i18n::ui(), running, within.as_secs()))
+    }
+
+    /// Waits, at most `within`, until no refresh of the project's git state is running: its `git`
+    /// commands sit in the agents' worktrees, which cannot go while one does.
+    async fn wait_git_idle(&self, project_id: &str, within: Duration) {
+        let until = Instant::now() + within;
+        while self.git_inflight.lock().contains(project_id) && Instant::now() < until {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
+
     /// The least time between two looks at the files of an agent's plan.
     fn plan_scan_every(&self) -> Duration {
         #[cfg(test)]
@@ -2150,8 +2213,27 @@ impl<R: Runtime> Core<R> {
 
     async fn start_process(self: &Arc<Self>, id: &str) -> Result<Arc<ClaudeProcess>> {
         let h = self.agent(id)?;
+        self.start_process_of(&h, id).await
+    }
+
+    /// `start_process` of the agent `h` (`id`), as found at the call.
+    pub(crate) async fn start_process_of(
+        self: &Arc<Self>,
+        h: &AgentHandle,
+        id: &str,
+    ) -> Result<Arc<ClaudeProcess>> {
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
+        // Deleted while it waited for the lock (the deletion has its own, now gone): a process
+        // started now would run, unseen, in the folder that is being removed.
+        if !self
+            .agents
+            .read()
+            .get(id)
+            .is_some_and(|a| Arc::ptr_eq(a, h))
+        {
+            return Err(agent_not_found());
+        }
         if let Some(p) = h.lock().proc.clone() {
             if p.is_alive() {
                 return Ok(p);
@@ -2247,7 +2329,7 @@ impl<R: Runtime> Core<R> {
             }
             bail!(quitting_refusal());
         }
-        self.emit_agent(&h);
+        self.emit_agent(h);
         match proc
             .control(json!({ "subtype": "initialize" }), Duration::from_secs(90))
             .await
@@ -2257,7 +2339,7 @@ impl<R: Runtime> Core<R> {
                 h.lock().commands = resp["commands"].as_array().cloned().unwrap_or_default();
                 self.set_models(&resp["models"]);
                 if h.lock().meta.remote_control {
-                    if let Err(e) = self.link_remote(&h, &proc).await {
+                    if let Err(e) = self.link_remote(h, &proc).await {
                         log::warn!("agent {id}: remote control failed: {e:#}");
                         let _ = self.with_agent(id, |rt, fx| {
                             rt.notice(
@@ -3966,18 +4048,40 @@ impl<R: Runtime> Core<R> {
         match (remove_worktree, worktree, self.project(&pid)) {
             (true, Some(wt), Ok(project)) => {
                 // The killed process tree must be gone to release its handles on the worktree. One
-                // that is not by then is not waited for any longer: the cleanup below says if the
-                // folder stayed.
+                // that is not by then is not waited for any longer: the warning says how many
+                // still run, and the removal below is tried for a short while only.
+                let mut held = false;
                 if let Some(p) = killed {
-                    let _ = p.wait_gone(AGENT_GONE).await;
+                    if let Some(problem) = self.await_agent_gone(id, &p).await {
+                        held = true;
+                        problems.push(problem);
+                    }
                 }
+                // Its git commands in the folder (the refresh of the project's state) end first.
+                let waited = Instant::now();
+                self.wait_git_idle(&pid, GIT_IDLE).await;
+                log::info!(
+                    "agent {id}: the project's git was idle after {} ms",
+                    waited.elapsed().as_millis()
+                );
                 problems.extend(self.teardown_worktree(&project, &wt, ports).await);
                 // A branch that was there before the agent is the user's: only its folder goes.
-                let removed = if wt.existing {
-                    git::worktree_remove_dir(&project.path, &wt.path).await
+                let retry = if held {
+                    git::REMOVE_RETRY_HELD
                 } else {
-                    git::worktree_remove(&project.path, &wt.path, &wt.branch).await
+                    git::REMOVE_RETRY
                 };
+                let waited = Instant::now();
+                let removed = if wt.existing {
+                    git::worktree_remove_dir_within(&project.path, &wt.path, retry).await
+                } else {
+                    git::worktree_remove_within(&project.path, &wt.path, &wt.branch, retry).await
+                };
+                log::info!(
+                    "agent {id}: its worktree removal took {} ms ({})",
+                    waited.elapsed().as_millis(),
+                    if removed.is_ok() { "done" } else { "failed" }
+                );
                 if let Err(e) = removed {
                     problems.push(tr!(
                         "le worktree n'a pas pu être nettoyé : {e:#}",

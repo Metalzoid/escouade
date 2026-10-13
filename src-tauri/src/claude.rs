@@ -63,6 +63,13 @@ impl ClaudeProcess {
             .spawn()
             .with_context(|| cannot_start(i18n::ui(), &opts.program.display().to_string()))?;
         let job = Job::for_child(&child).map(Arc::new);
+        if job.is_none() {
+            // Killing it would then leave what it started running.
+            log::warn!(
+                "claude (pid {:?}) is not in a job: its tree is not killed as a whole",
+                child.id()
+            );
+        }
         let mut stdin = child.stdin.take().context("stdin")?;
         let stdout = child.stdout.take().context("stdout")?;
         let stderr = child.stderr.take().context("stderr")?;
@@ -164,6 +171,18 @@ impl ClaudeProcess {
     /// What the process and everything it started use.
     pub fn usage(&self) -> Option<JobUsage> {
         self.job.as_ref()?.usage()
+    }
+
+    /// How many processes of the tree run: those of its job, and at least one while the process
+    /// itself has not been reaped.
+    pub fn still_running(&self) -> u32 {
+        let in_job = self.usage().map_or(0, |u| u.processes);
+        in_job.max(u32::from(self.is_alive()))
+    }
+
+    /// The ids of the processes of its job (to say what keeps a folder).
+    pub fn pids(&self) -> Vec<u32> {
+        self.job.as_ref().map(|j| j.pids()).unwrap_or_default()
     }
 
     pub fn send(&self, frame: &Value) -> Result<()> {

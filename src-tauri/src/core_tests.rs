@@ -1791,6 +1791,20 @@ async fn killing_an_agent_kills_its_whole_process_tree() {
     panic!("grandchild {pid} survived the agent");
 }
 
+/// A start that took the agent before its deletion and the lock after it (the deletion drops its
+/// lock when it is over) would run claude, unseen, in the folder that goes.
+#[tokio::test]
+async fn a_start_that_waited_for_the_lock_of_a_deleted_agent_starts_nothing() {
+    let h = harness("start-deleted");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let handle = h.core.agent(&id).unwrap();
+    h.core.delete_agent(&id, false).await.unwrap();
+    let started = h.core.start_process_of(&handle, &id).await;
+    assert_eq!(started.err().unwrap().to_string(), "agent introuvable");
+    assert!(handle.lock().proc.is_none());
+}
+
 #[cfg(windows)]
 fn process_exists(pid: u32) -> bool {
     let out = Command::new("tasklist")

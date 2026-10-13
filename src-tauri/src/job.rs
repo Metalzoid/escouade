@@ -19,7 +19,13 @@ mod imp {
     use super::JobUsage;
     use std::ffi::c_void;
     use std::time::Duration;
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_MORE_DATA, HANDLE};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_MORE_DATA, HANDLE, INVALID_HANDLE_VALUE,
+    };
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob,
         JobObjectBasicAccountingInformation, JobObjectBasicProcessIdList,
@@ -31,7 +37,9 @@ mod imp {
     use windows_sys::Win32::System::ProcessStatus::{
         K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     };
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+    };
 
     pub struct Job(HANDLE);
 
@@ -64,9 +72,64 @@ mod imp {
         }
 
         /// A job holding `child` (started by tokio) and what it starts.
+        ///
+        /// What `child` started before it joined the job (a `.cmd` shim's `cmd` starts its program
+        /// at once) is put in the job too: such a process would escape `terminate` and `usage`.
         pub fn for_child(child: &tokio::process::Child) -> Option<Self> {
             let job = Self::new()?;
-            job.assign_handle(child.raw_handle()?).then_some(job)
+            if !job.assign_handle(child.raw_handle()?) {
+                return None;
+            }
+            if let Some(pid) = child.id() {
+                job.adopt_started_by(pid);
+            }
+            Some(job)
+        }
+
+        /// Puts in the job the processes `pid` started, and those they started, that are not in it
+        /// already. Gone ones, or ones that refuse (a job of their own that cannot nest), are left
+        /// out; returns how many joined.
+        fn adopt_started_by(&self, pid: u32) -> usize {
+            let mut family: Vec<(u32, u32)> = Vec::new();
+            // SAFETY: a snapshot of the machine's processes, read to its end and closed; the entry
+            // is a plain struct whose size is declared as the API asks.
+            unsafe {
+                let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                if snapshot == INVALID_HANDLE_VALUE {
+                    return 0;
+                }
+                let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+                entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+                let mut more = Process32FirstW(snapshot, &mut entry);
+                while more != 0 {
+                    family.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                    more = Process32NextW(snapshot, &mut entry);
+                }
+                CloseHandle(snapshot);
+            }
+            let mut found: Vec<u32> = Vec::new();
+            let mut parents = vec![pid];
+            while let Some(parent) = parents.pop() {
+                for &(id, of) in &family {
+                    if of == parent && id != pid && !found.contains(&id) {
+                        found.push(id);
+                        parents.push(id);
+                    }
+                }
+            }
+            found
+                .into_iter()
+                // SAFETY: the handle is checked, handed to the job and closed.
+                .filter(|&id| unsafe {
+                    let h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, id);
+                    if h.is_null() {
+                        return false;
+                    }
+                    let joined = AssignProcessToJobObject(self.0, h) != 0;
+                    CloseHandle(h);
+                    joined
+                })
+                .count()
         }
 
         /// A job holding `child` (started in a pseudo-console) and what it starts.
@@ -134,7 +197,8 @@ mod imp {
             }
         }
 
-        fn pids(&self) -> Vec<u32> {
+        /// The ids of the job's processes (the first thousand).
+        pub fn pids(&self) -> Vec<u32> {
             const MAX: usize = 1024;
             // u64 cells: the list's header and ids need 8-byte alignment.
             let mut buf = vec![0u64; 1 + MAX];
@@ -241,6 +305,18 @@ mod imp {
             out.status.success().then_some(())?;
             Some(parse_ps(&String::from_utf8_lossy(&out.stdout), self.0))
         }
+
+        /// The ids of the group's running processes, read from `ps`.
+        pub fn pids(&self) -> Vec<u32> {
+            let Ok(out) = std::process::Command::new("ps")
+                .args(["-A", "-o", "pgid=,pid="])
+                .stderr(std::process::Stdio::null())
+                .output()
+            else {
+                return Vec::new();
+            };
+            parse_pids(&String::from_utf8_lossy(&out.stdout), self.0)
+        }
     }
 
     impl Drop for Job {
@@ -268,7 +344,20 @@ mod imp {
         u
     }
 
-    /// `ps` CPU times: `[[dd-]hh:]mm:ss[.cc]` (Linux `00:01:02`, macOS `1:02.03`).
+    /// The ids of the `pgid pid` lines of `ps` for group `pgid`.
+    pub(super) fn parse_pids(out: &str, pgid: i32) -> Vec<u32> {
+        out.lines()
+            .filter_map(|line| {
+                let mut f = line.split_whitespace();
+                let (g, pid) = (f.next()?, f.next()?);
+                (g.parse::<i32>().ok()? == pgid)
+                    .then(|| pid.parse::<u32>().ok())
+                    .flatten()
+            })
+            .collect()
+    }
+
+    /// `ps` CPU times:`[[dd-]hh:]mm:ss[.cc]` (Linux `00:01:02`, macOS `1:02.03`).
     pub(super) fn parse_cpu_time(s: &str) -> Option<Duration> {
         let (days, rest) = match s.split_once('-') {
             Some((d, r)) => (d.parse::<u64>().ok()?, r),
@@ -297,6 +386,9 @@ mod imp {
         pub fn release(&self) {}
         pub fn usage(&self) -> Option<super::JobUsage> {
             None
+        }
+        pub fn pids(&self) -> Vec<u32> {
+            Vec::new()
         }
     }
 }
@@ -356,6 +448,37 @@ mod tests {
         assert!(survived, "the released job killed its process");
     }
 
+    #[tokio::test]
+    async fn a_program_the_process_started_before_it_joined_the_job_is_held_too() {
+        // What a `.cmd` shim does: `cmd` starts its program at once, maybe before the job exists.
+        // The program says it runs, by a file; `cmd` waits for it to end.
+        let up = std::env::temp_dir().join(format!("ccm-job-adopt-{}", std::process::id()));
+        let _ = std::fs::remove_file(&up);
+        let mut cmd = tokio::process::Command::new("cmd");
+        cmd.args([
+            "/c",
+            "node",
+            "-e",
+            "require('fs').writeFileSync(process.argv[1],'x');setTimeout(function(){},30000)",
+        ])
+        .arg(&up)
+        .kill_on_drop(true);
+        let mut child = cmd.spawn().unwrap();
+        for _ in 0..400 {
+            if up.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(up.exists(), "the program did not start");
+        let job = Job::for_child(&child).unwrap();
+        // `cmd` and its program (node may also have a helper): not just the process itself.
+        assert!(job.usage().unwrap().processes >= 2, "{:?}", job.pids());
+        job.terminate();
+        child.wait().await.unwrap();
+        let _ = std::fs::remove_file(&up);
+    }
+
     #[test]
     fn tells_the_cpu_time_and_memory_of_its_processes() {
         let mut child = Command::new("powershell")
@@ -388,7 +511,7 @@ mod tests {
 
 #[cfg(all(test, unix))]
 mod unix_tests {
-    use super::imp::{parse_cpu_time, parse_ps};
+    use super::imp::{parse_cpu_time, parse_pids, parse_ps};
     use super::*;
     use std::time::Duration;
 
@@ -413,6 +536,12 @@ mod unix_tests {
         assert_eq!(u.processes, 2);
         assert_eq!(u.memory, 1024 * 1024);
         assert_eq!(u.cpu, Duration::from_millis(1500));
+    }
+
+    #[test]
+    fn lists_the_pids_of_the_group() {
+        let out = " 42  100\n 42  101\n 7  102\n junk\n 42 x\n";
+        assert_eq!(parse_pids(out, 42), vec![100, 101]);
     }
 
     #[tokio::test]

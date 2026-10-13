@@ -1249,6 +1249,80 @@ async fn deleting_an_agent_that_started_a_program_removes_its_worktree_without_a
     assert!(!exists(&r, &wt.branch));
 }
 
+/// A deleted agent's processes that still run when the wait ends are said, with how many; those
+/// that are gone are not.
+#[tokio::test]
+async fn the_wait_for_a_deleted_agents_processes_says_how_many_still_run_or_nothing() {
+    let h = harness("g4-agent-gone-held");
+    let (p, _) = h.project(true).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&id, "grandchild").await;
+    let proc = h.core.ensure_process(&id).await.unwrap();
+    // Not killed, and no time to wait: it still runs (one or several processes with its tree).
+    h.core
+        .agent_gone_ms
+        .store(0, std::sync::atomic::Ordering::Release);
+    let said = h.core.await_agent_gone(&id, &proc).await.unwrap();
+    assert!(
+        said.contains(" processus de l'agent tourna")
+            && said.contains(" encore après 0 s et pe")
+            && said.ends_with(" retenir son worktree"),
+        "{said}"
+    );
+    // Killed, and given time: gone, nothing to say.
+    proc.kill();
+    h.core
+        .agent_gone_ms
+        .store(60_000, std::sync::atomic::Ordering::Release);
+    assert_eq!(h.core.await_agent_gone(&id, &proc).await, None);
+}
+
+#[test]
+fn what_a_deleted_agent_that_still_ran_is_told_reads_in_both_languages() {
+    use crate::core::agent_still_running;
+    use crate::i18n::Lang::{En, Fr};
+    assert_eq!(
+        agent_still_running(Fr, 1, 15),
+        "1 processus de l'agent tournait encore après 15 s et peut retenir son worktree"
+    );
+    assert_eq!(
+        agent_still_running(Fr, 3, 15),
+        "3 processus de l'agent tournaient encore après 15 s et peuvent retenir son worktree"
+    );
+    assert_eq!(
+        agent_still_running(En, 1, 15),
+        "1 process of the agent was still running after 15 s and may hold its worktree"
+    );
+    assert_eq!(
+        agent_still_running(En, 3, 15),
+        "3 processes of the agent were still running after 15 s and may hold its worktree"
+    );
+}
+
+/// The project's refresh of its git state has `git` commands in the agents' worktrees: while it
+/// runs, the folder of a deleted agent stays.
+#[tokio::test]
+async fn deleting_an_agent_waits_for_the_projects_running_git_before_removing_its_worktree() {
+    let h = harness("g4-agent-delete-git");
+    let (p, _) = h.project(true).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let wt = h.agent(&id).worktree.unwrap();
+    // Taken as the refresh takes it: the real ones, if any is running, end first and wait after.
+    while !h.core.git_inflight.lock().insert(p.id.clone()) {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    let (core, aid) = (h.core.clone(), id.clone());
+    let deletion = tokio::spawn(async move { core.delete_agent(&aid, true).await });
+    h.wait("the agent out of the list", |h| h.core.agent(&id).is_err())
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!deletion.is_finished());
+    assert!(Path::new(&wt.path).exists());
+    h.core.git_inflight.lock().remove(&p.id);
+    assert_eq!(deletion.await.unwrap().unwrap(), None);
+    assert!(!Path::new(&wt.path).exists());
+}
+
 #[tokio::test]
 async fn naming_the_agent_of_an_existing_branch_never_renames_the_branch() {
     let h = harness("g4-agent-branch-named");
