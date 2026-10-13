@@ -1065,7 +1065,7 @@ pub async fn worktree_remove_dir(repo: &str, path: &str) -> Result<()> {
 }
 
 /// How long the removal of a worktree's folder is tried again.
-const REMOVE_RETRY: Duration = Duration::from_secs(5);
+const REMOVE_RETRY: Duration = Duration::from_secs(15);
 
 /// `remove_dir_all`, tried again for `REMOVE_RETRY` while it fails: under Windows, a process just
 /// killed (an agent's, its tests') lets go of its files a moment later.

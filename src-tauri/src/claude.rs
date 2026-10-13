@@ -232,6 +232,28 @@ impl ClaudeProcess {
         true
     }
 
+    /// Waits until the process and everything it started are gone, at most `within`; false when
+    /// something still runs. Under Windows, a process that lives keeps its folder (and the files in
+    /// it) however the process that started it ended, and a killed tree takes a moment to go: the
+    /// job must be empty before the folder is removed. (Not elsewhere: a folder can be removed
+    /// while a program has it open, and `ps` is too heavy to ask every few milliseconds.)
+    pub async fn wait_gone(&self, within: Duration) -> bool {
+        let started = std::time::Instant::now();
+        if !self.wait_exit(within).await {
+            return false;
+        }
+        #[cfg(windows)]
+        while self.usage().is_some_and(|u| u.processes > 0) {
+            if started.elapsed() >= within {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        #[cfg(not(windows))]
+        let _ = started;
+        true
+    }
+
     /// Kills the process and its whole tree.
     pub fn kill(&self) {
         self.tx.lock().take();

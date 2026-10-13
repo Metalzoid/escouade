@@ -391,6 +391,10 @@ struct Setup {
 /// may differ a little.
 pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;
 
+/// How long a killed agent's process tree is waited for before its worktree is removed: under
+/// Windows, what still runs keeps the folder, and a tree can take long to go on a loaded machine.
+pub(crate) const AGENT_GONE: Duration = Duration::from_secs(15);
+
 /// How often every repository with a remote is fetched in the background.
 const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
 
@@ -3901,10 +3905,11 @@ impl<R: Runtime> Core<R> {
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
         let h = self.agents.write().remove(id).ok_or_else(agent_not_found)?;
-        let (pid, worktree, ports) = {
+        let (pid, worktree, ports, killed) = {
             let mut rt = h.lock();
             rt.gen += 1;
-            if let Some(p) = rt.proc.take() {
+            let killed = rt.proc.take();
+            if let Some(p) = &killed {
                 p.kill();
             }
             if let Some(t) = rt.tui.take() {
@@ -3915,6 +3920,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.project_id.clone(),
                 rt.meta.worktree.clone(),
                 rt.meta.port_base,
+                killed,
             )
         };
         // Refused at once, without waiting for its process to end.
@@ -3943,8 +3949,12 @@ impl<R: Runtime> Core<R> {
         let mut problems = Vec::new();
         match (remove_worktree, worktree, self.project(&pid)) {
             (true, Some(wt), Ok(project)) => {
-                // Give the killed process tree a moment to release its handles on the worktree.
-                tokio::time::sleep(Duration::from_millis(300)).await;
+                // The killed process tree must be gone to release its handles on the worktree. One
+                // that is not by then is not waited for any longer: the cleanup below says if the
+                // folder stayed.
+                if let Some(p) = killed {
+                    let _ = p.wait_gone(AGENT_GONE).await;
+                }
                 problems.extend(self.teardown_worktree(&project, &wt, ports).await);
                 // A branch that was there before the agent is the user's: only its folder goes.
                 let removed = if wt.existing {

@@ -1234,6 +1234,21 @@ async fn deleting_the_agent_of_an_existing_branch_removes_its_worktree_and_keeps
         .unwrap();
 }
 
+/// What the agent started (a dev server: the fake CLI's « grandchild ») runs in its folder, which
+/// Windows does not let go of while it lives: the deletion waits for it to be gone.
+#[tokio::test]
+async fn deleting_an_agent_that_started_a_program_removes_its_worktree_without_a_warning() {
+    let h = harness("g4-agent-delete-with-child");
+    let (p, r) = h.project(true).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let wt = h.agent(&id).worktree.unwrap();
+    h.turn(&id, "grandchild").await;
+    let warning = h.core.delete_agent(&id, true).await.unwrap();
+    assert_eq!(warning, None);
+    assert!(!Path::new(&wt.path).exists());
+    assert!(!exists(&r, &wt.branch));
+}
+
 #[tokio::test]
 async fn naming_the_agent_of_an_existing_branch_never_renames_the_branch() {
     let h = harness("g4-agent-branch-named");

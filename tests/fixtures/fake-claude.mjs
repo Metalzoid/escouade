@@ -2,8 +2,9 @@
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
 // scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
-// plain reply. A `--resume=missing…` session fails like an unknown session does, forked or not;
-// with `--fork-session`, the resumed conversation goes on under a new session id, and a
+// plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
+// [detached] too, that program outlives the process). A `--resume=missing…` session fails like an
+// unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
 // Every launch appends {argv, cwd, proxy, tls, configDir, todoTools} (its HTTPS_PROXY,
@@ -813,8 +814,13 @@ function startSession() {
     if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('crash')) process.exit(3);
     if (text.includes('grandchild')) {
-      // Like a dev server started by the Bash tool: must die with the agent's process tree.
-      const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+      // Like a dev server started by the Bash tool: must die with the agent's process tree. Node ends
+      // a child that is not detached with its parent (on Windows, through a job of its own); with
+      // [detached] it lives on after the process has ended, in the agent's job still.
+      const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+        stdio: 'ignore',
+        detached: text.includes('[detached]'),
+      });
       streamText(`pid:${child.pid}`);
       result();
       return;

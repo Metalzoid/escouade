@@ -6,7 +6,9 @@ use crate::accounts;
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
 use crate::claude::ClaudeProcess;
-use crate::core::{not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core};
+use crate::core::{
+    not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core, AGENT_GONE,
+};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
@@ -2002,12 +2004,8 @@ impl<R: Runtime> Core<R> {
     ) {
         if let Some(p) = proc {
             p.kill();
-            for _ in 0..30 {
-                if !p.is_alive() {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
+            // Gone with all it started (see `wait_gone`); the removal below says if the folder stayed.
+            let _ = p.wait_gone(AGENT_GONE).await;
         }
         if let Some(problem) = self.teardown_worktree(project, wt, ports).await {
             log::warn!("ticket {}: {problem}", t.key);

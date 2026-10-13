@@ -357,6 +357,29 @@ async fn interrupt_ends_the_turn_without_error() {
     assert_eq!(turn["isError"], false);
 }
 
+/// Under Windows, an agent is gone when its job holds no process any more: a program it started
+/// (a dev server, here the fake CLI's detached « grandchild ») lives on, and keeps its folder, after
+/// the process itself has ended.
+#[cfg(windows)]
+#[tokio::test]
+async fn an_agent_is_gone_only_once_what_it_started_is_gone_too() {
+    let dir = temp_dir("wait-gone");
+    let h = new_agent(&dir);
+    let proc = spawn(&h, &dir.join("log.jsonl"));
+    send(&h, &proc, "grandchild [detached]");
+    wait_for(&h, "turn end", |rt| rt.meta.status == AgentStatus::Done).await;
+
+    // The process ends with its input; its grandchild stays in the job.
+    proc.close_input();
+    assert!(proc.wait_exit(Duration::from_secs(10)).await);
+    assert!(proc.usage().unwrap().processes >= 1);
+    assert!(!proc.wait_gone(Duration::from_millis(300)).await);
+
+    proc.kill();
+    assert!(proc.wait_gone(Duration::from_secs(10)).await);
+    assert_eq!(proc.usage().unwrap().processes, 0);
+}
+
 #[tokio::test]
 async fn a_new_process_starts_without_the_activity_or_text_of_a_turn_that_never_ended() {
     let dir = temp_dir("fresh-turn");
