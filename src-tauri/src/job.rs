@@ -736,21 +736,48 @@ mod tests {
         let _ = std::fs::remove_file(&up);
     }
 
+    /// Kills its child when it is dropped, whatever way the test ends (a failed assertion, a job
+    /// that could not be made): a process that never stops is not left running.
+    struct KillOnDrop(std::process::Child);
+
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    #[test]
+    fn the_guard_kills_its_child_when_a_test_ends_without_reaching_its_cleanup() {
+        let pid = {
+            let child = KillOnDrop(
+                Command::new("powershell")
+                    .args(["-NoProfile", "-Command", "Start-Sleep 60"])
+                    .spawn()
+                    .unwrap(),
+            );
+            child.0.id()
+        };
+        assert!(!alive(pid));
+    }
+
     #[test]
     fn tells_the_cpu_time_and_memory_of_its_processes() {
-        let mut child = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                // Busy without end: the test waits for the Job's CPU time to pass a second, and a
-                // script that stops by the process's own may be over before the Job shows it. It
-                // dies with the Job, dropped at the end of the test.
-                "while ($true) {}",
-            ])
-            .spawn()
-            .unwrap();
+        let mut child = KillOnDrop(
+            Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-Command",
+                    // Busy without end: the test waits for the Job's CPU time to pass a second, and
+                    // a script that stops by the process's own may be over before the Job shows it.
+                    // It dies with the Job, dropped at the end of the test (or with the guard).
+                    "while ($true) {}",
+                ])
+                .spawn()
+                .unwrap(),
+        );
         let job = Job::new().unwrap();
-        assert!(job.assign_handle(std::os::windows::io::AsRawHandle::as_raw_handle(&child)));
+        assert!(job.assign_handle(std::os::windows::io::AsRawHandle::as_raw_handle(&child.0)));
         let mut usage = job.usage().unwrap();
         // Two minutes: a loaded CI runner gave it 0.4 s of CPU in 30 s.
         for _ in 0..1200 {
@@ -764,7 +791,7 @@ mod tests {
         assert_eq!(usage.processes, 1);
         assert!(usage.memory > 10 * 1024 * 1024, "{usage:?}");
         drop(job);
-        child.wait().unwrap();
+        child.0.wait().unwrap();
     }
 }
 
