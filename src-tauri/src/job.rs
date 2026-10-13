@@ -17,10 +17,11 @@ pub struct JobUsage {
 #[cfg(windows)]
 mod imp {
     use super::JobUsage;
+    use std::collections::HashMap;
     use std::ffi::c_void;
     use std::time::Duration;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, GetLastError, ERROR_MORE_DATA, HANDLE, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, ERROR_MORE_DATA, FILETIME, HANDLE, INVALID_HANDLE_VALUE,
     };
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -38,7 +39,8 @@ mod imp {
         K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     };
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
+        PROCESS_TERMINATE,
     };
 
     pub struct Job(HANDLE);
@@ -87,9 +89,13 @@ mod imp {
         }
 
         /// Puts in the job the processes `pid` started, and those they started, that are not in it
-        /// already. Gone ones, or ones that refuse (a job of their own that cannot nest), are left
-        /// out; returns how many joined.
+        /// already. Gone ones, ones that refuse (a job of their own that cannot nest) and ones that
+        /// are not really born of `pid` (see `descendants`) are left out; returns how many joined.
         fn adopt_started_by(&self, pid: u32) -> usize {
+            // Before the snapshot: a process born later joined the job as it was born, and is not
+            // looked for; one that the snapshot lists and that was born later is another, which got
+            // the id of one that ended.
+            let before = filetime_now();
             let mut family: Vec<(u32, u32)> = Vec::new();
             // SAFETY: a snapshot of the machine's processes, read to its end and closed; the entry
             // is a plain struct whose size is declared as the API asks.
@@ -107,29 +113,43 @@ mod imp {
                 }
                 CloseHandle(snapshot);
             }
-            let mut found: Vec<u32> = Vec::new();
-            let mut parents = vec![pid];
-            while let Some(parent) = parents.pop() {
-                for &(id, of) in &family {
-                    if of == parent && id != pid && !found.contains(&id) {
-                        found.push(id);
-                        parents.push(id);
+            // The handles stay open until the processes are assigned: a handle holds its process,
+            // so the one whose birth was read is the one that joins.
+            let mut opened: HashMap<u32, HANDLE> = HashMap::new();
+            let found = descendants(&family, pid, before, |id| {
+                // SAFETY: the handle is checked, and kept in `opened` or closed.
+                unsafe {
+                    let h = OpenProcess(
+                        PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_QUOTA | PROCESS_TERMINATE,
+                        0,
+                        id,
+                    );
+                    if h.is_null() {
+                        return None;
+                    }
+                    let born = creation_time(h);
+                    if born.is_some() {
+                        opened.insert(id, h);
+                    } else {
+                        CloseHandle(h);
+                    }
+                    born
+                }
+            });
+            let mut joined = 0;
+            for id in found {
+                if let Some(&h) = opened.get(&id) {
+                    // SAFETY: a live process handle, opened above.
+                    if unsafe { AssignProcessToJobObject(self.0, h) } != 0 {
+                        joined += 1;
                     }
                 }
             }
-            found
-                .into_iter()
-                // SAFETY: the handle is checked, handed to the job and closed.
-                .filter(|&id| unsafe {
-                    let h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, id);
-                    if h.is_null() {
-                        return false;
-                    }
-                    let joined = AssignProcessToJobObject(self.0, h) != 0;
-                    CloseHandle(h);
-                    joined
-                })
-                .count()
+            for (_, h) in opened {
+                // SAFETY: each handle was opened above and is closed once.
+                unsafe { CloseHandle(h) };
+            }
+            joined
         }
 
         /// A job holding `child` (started in a pseudo-console) and what it starts.
@@ -249,6 +269,64 @@ mod imp {
                 }
             }
         }
+    }
+
+    /// Now, as a FILETIME (100 ns since 1601), the unit of the birth of a process.
+    fn filetime_now() -> u64 {
+        const SINCE_1601: u64 = 116_444_736_000_000_000;
+        let since_1970 = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        SINCE_1601 + (since_1970.as_nanos() / 100) as u64
+    }
+
+    /// When the process `h` was born (a FILETIME), None when it cannot be read.
+    fn creation_time(h: HANDLE) -> Option<u64> {
+        // SAFETY: a live process handle and four plain structs to fill.
+        unsafe {
+            let (mut born, mut ended, mut kernel, mut user): (
+                FILETIME,
+                FILETIME,
+                FILETIME,
+                FILETIME,
+            ) = std::mem::zeroed();
+            (GetProcessTimes(h, &mut born, &mut ended, &mut kernel, &mut user) != 0)
+                .then(|| (u64::from(born.dwHighDateTime) << 32) | u64::from(born.dwLowDateTime))
+        }
+    }
+
+    /// The ids, among `family` (the `(id, parent id)` of a snapshot of the machine's processes
+    /// taken at `snapshot_at`), of the processes `root` started, and those they started. `born`
+    /// says when a process was born (None: gone, or out of reach). An id is reused once its process
+    /// ends, so a parent id in the snapshot proves nothing by itself: a process counts only if it
+    /// was born after its parent (else it is the old child of a process that had that id) and
+    /// before the snapshot (else it took the id of one that ended).
+    pub(super) fn descendants(
+        family: &[(u32, u32)],
+        root: u32,
+        snapshot_at: u64,
+        mut born: impl FnMut(u32) -> Option<u64>,
+    ) -> Vec<u32> {
+        let Some(root_born) = born(root) else {
+            return Vec::new();
+        };
+        let mut found: Vec<u32> = Vec::new();
+        let mut parents = vec![(root, root_born)];
+        while let Some((parent, parent_born)) = parents.pop() {
+            for &(id, of) in family {
+                if of != parent || id == root || found.contains(&id) {
+                    continue;
+                }
+                match born(id) {
+                    Some(b) if b >= parent_born && b <= snapshot_at => {
+                        found.push(id);
+                        parents.push((id, b));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        found
     }
 
     impl Drop for Job {
@@ -446,6 +524,54 @@ mod tests {
         child.kill().unwrap();
         child.wait().unwrap();
         assert!(survived, "the released job killed its process");
+    }
+
+    /// `descendants` over a snapshot of `(id, parent)` and the births of the processes in it.
+    fn adopted(family: &[(u32, u32)], root: u32, at: u64, births: &[(u32, u64)]) -> Vec<u32> {
+        let mut found = super::imp::descendants(family, root, at, |id| {
+            births.iter().find(|b| b.0 == id).map(|b| b.1)
+        });
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn the_processes_born_of_the_child_are_adopted_with_theirs() {
+        // 10 is the child, 20 its own, 30 theirs; 99 is another's.
+        let family = [(10, 1), (20, 10), (30, 20), (99, 5)];
+        let births = [(10, 100), (20, 150), (30, 160), (99, 40)];
+        assert_eq!(adopted(&family, 10, 200, &births), vec![20, 30]);
+    }
+
+    #[test]
+    fn a_process_born_before_the_child_is_not_its_own_whatever_its_parent_id_says() {
+        // 40 was the child of a process that had the id 10 before the child: it is a stranger (and
+        // so is 41, its own), though the snapshot names the child as its parent.
+        let family = [(10, 1), (20, 10), (40, 10), (41, 40)];
+        let births = [(10, 100), (20, 150), (40, 50), (41, 60)];
+        assert_eq!(adopted(&family, 10, 200, &births), vec![20]);
+        // One born before its parent, under a genuine descendant, is no more a descendant.
+        let family = [(10, 1), (20, 10), (31, 20)];
+        let births = [(10, 100), (20, 150), (31, 120)];
+        assert_eq!(adopted(&family, 10, 200, &births), vec![20]);
+    }
+
+    #[test]
+    fn a_process_born_after_the_snapshot_is_not_the_one_it_listed() {
+        // 50 took the id of a child of 10 that ended after the snapshot.
+        let family = [(10, 1), (20, 10), (50, 10)];
+        let births = [(10, 100), (20, 150), (50, 300)];
+        assert_eq!(adopted(&family, 10, 200, &births), vec![20]);
+    }
+
+    #[test]
+    fn a_process_gone_or_out_of_reach_is_left_out_with_its_own() {
+        let family = [(10, 1), (20, 10), (30, 20), (60, 10)];
+        // 20 cannot be read: neither it nor 30 (its child) is adopted; 60 is.
+        let births = [(10, 100), (30, 160), (60, 170)];
+        assert_eq!(adopted(&family, 10, 200, &births), vec![60]);
+        // The child itself unreadable: nothing is adopted.
+        assert_eq!(adopted(&family, 10, 200, &[(20, 150)]), Vec::<u32>::new());
     }
 
     #[tokio::test]
