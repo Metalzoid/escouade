@@ -37,10 +37,12 @@ struct Term {
     writer: Box<dyn Write + Send>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     /// The terminal's whole process tree, including what it starts outside its console: killed
-    /// when the terminal goes.
+    /// when the terminal goes (all of it, or what shows no window: see `Started::spare_windows`).
     job: Option<Job>,
     /// A launch command (or a step of a test launch), not an interactive shell.
     launch: bool,
+    /// See `Started::spare_windows`.
+    spare_windows: bool,
     /// See `Started::detached_survive`.
     detached_survive: bool,
     /// When it last had input or output (ms).
@@ -68,8 +70,14 @@ struct Started {
     launch: bool,
     /// What it starts, outside its console too, is killed with it (a `Job`).
     job: bool,
+    /// What shows a window (a browser, an editor), with what it started, is not killed with it:
+    /// closing the terminal (or, for `detached_survive` false, the end of its program) ends only
+    /// the programs that show none, and the Job kills nothing by itself when it is dropped (the
+    /// app's quit, crash or restart for an update). Otherwise it kills everything.
+    spare_windows: bool,
     /// When its program ends by itself (an `exit`), what the user detached keeps running: only
-    /// closing the terminal kills the tree. Otherwise the end of the program ends what it started.
+    /// closing the terminal ends the tree (but for the windows, see `spare_windows`). Otherwise
+    /// the end of the program ends what it started.
     detached_survive: bool,
 }
 
@@ -368,7 +376,9 @@ impl PtyManager {
     }
 
     /// An interactive terminal running `program` itself, with no shell around it (the sign-in of
-    /// a Claude account): it ends with the program, and what it starts goes with it.
+    /// a Claude account, Claude Code's interface): it ends with the program, and what it starts
+    /// goes with it; except, with `spare_windows`, what shows a window (the browser of the
+    /// sign-in).
     #[allow(clippy::too_many_arguments)]
     pub fn spawn_program(
         &self,
@@ -378,6 +388,7 @@ impl PtyManager {
         cwd: &str,
         size: (u16, u16),
         env: Vec<(String, String)>,
+        spare_windows: bool,
         on_data: impl Fn(Vec<u8>) + Send + 'static,
         on_exit: impl FnOnce(Option<u32>) + Send + 'static,
     ) -> Result<()> {
@@ -390,6 +401,7 @@ impl PtyManager {
         let started = Started {
             launch: false,
             job: true,
+            spare_windows,
             detached_survive: false,
         };
         self.start(info, cmd, size, env, started, on_data, on_exit)
@@ -449,6 +461,9 @@ impl PtyManager {
             // Not on Unix, where the job is the shell's process group, killed when dropped: an
             // `exit` would take what the user detached (nohup…) with it.
             job: command.is_some() || cfg!(windows),
+            // Closing an interactive terminal leaves a browser or an editor its user started
+            // open; a launch command stops with everything it started.
+            spare_windows: command.is_none(),
             detached_survive: command.is_none(),
         };
         self.start(info, cmd, size, env, started, on_data, on_exit)
@@ -490,6 +505,9 @@ impl PtyManager {
         drop(pair.slave);
         let killer = child.clone_killer();
         let job = started.job.then(|| Job::for_pty(child.as_ref())).flatten();
+        if let (Some(job), true) = (&job, started.spare_windows) {
+            job.release();
+        }
         let mut reader = pair.master.try_clone_reader().map_err(|e| anyhow!("{e}"))?;
         let writer = pair.master.take_writer().map_err(|e| anyhow!("{e}"))?;
         let id = info.id.clone();
@@ -503,6 +521,7 @@ impl PtyManager {
                 killer,
                 job,
                 launch: started.launch,
+                spare_windows: started.spare_windows,
                 detached_survive: started.detached_survive,
                 io_at: io_at.clone(),
             },
@@ -528,13 +547,16 @@ impl PtyManager {
             // job, what the command left running). Outside the lock: see kill. A term that is not
             // there was closed by `kill`, which ended the tree.
             let term = terms.lock().remove(&id);
+            // A shell that ends by itself leaves what its user detached; a program that ends
+            // takes what it started, but what shows a window (the Job, released, kills nothing).
             if let Some(Term {
                 job: Some(job),
-                detached_survive: true,
+                spare_windows: true,
+                detached_survive: false,
                 ..
             }) = &term
             {
-                job.release();
+                job.terminate_windowless();
             }
             drop(term);
             on_exit(code);
@@ -572,7 +594,11 @@ impl PtyManager {
             // The whole tree at once: the pseudo-console, closed when the term is dropped, would
             // take its time to end what is attached to it, and not end the rest.
             if let Some(job) = &t.job {
-                job.terminate();
+                if t.spare_windows {
+                    job.terminate_windowless();
+                } else {
+                    job.terminate();
+                }
             }
             let _ = t.killer.kill();
         }
@@ -942,6 +968,247 @@ mod tests {
             "run2",
             "Start-Process ping -ArgumentList '-n','60','127.0.0.1' -WindowStyle Hidden; Start-Sleep 60",
         );
+    }
+
+    /// Kills the processes it holds when it is dropped: a test that failed leaves them running.
+    #[derive(Default)]
+    struct Reaper(Vec<u32>);
+
+    impl Drop for Reaper {
+        fn drop(&mut self) {
+            for pid in &self.0 {
+                kill_process(*pid);
+            }
+        }
+    }
+
+    /// What a PowerShell script of the tests does before it waits: a console program only says it
+    /// runs (its process id in `pid_file`), a window program opens a form first (and says "none"
+    /// when Windows shows it no window: no desktop to show it on).
+    fn script_text(pid_file: &Path, window: bool) -> String {
+        let pid_file = pid_file.display();
+        if window {
+            format!(
+                "Add-Type -AssemblyName System.Windows.Forms\r\n$f = New-Object Windows.Forms.Form\r\n$f.Show()\r\nSet-Content -Path '{pid_file}' -Value $(if ($f.Visible) {{ $PID }} else {{ 'none' }})\r\nStart-Sleep 60\r\n"
+            )
+        } else {
+            format!("Set-Content -Path '{pid_file}' -Value $PID\r\nStart-Sleep 60\r\n")
+        }
+    }
+
+    /// Writes the script `name` in `dir`; returns it with the file its process id will be told in.
+    fn write_script(dir: &Path, name: &str, window: bool) -> (PathBuf, PathBuf) {
+        let (script, pid_file) = (
+            dir.join(format!("{name}.ps1")),
+            dir.join(format!("{name}.pid")),
+        );
+        std::fs::write(&script, script_text(&pid_file, window)).unwrap();
+        (script, pid_file)
+    }
+
+    /// The command that runs `script` in a PowerShell of its own, outside the console of the
+    /// terminal: hidden (a console program) or showing its window.
+    fn start_command(script: &Path, hidden: bool) -> String {
+        let style = if hidden { " -WindowStyle Hidden" } else { "" };
+        format!(
+            "Start-Process powershell{style} -ArgumentList '-NoProfile','-File','\"{}\"'",
+            script.display()
+        )
+    }
+
+    /// The process id a script told in `pid_file`; None when it could not show its window.
+    fn told_pid(pid_file: &Path) -> Option<u32> {
+        let start = Instant::now();
+        loop {
+            let text = std::fs::read_to_string(pid_file).unwrap_or_default();
+            if text.trim() == "none" {
+                return None;
+            }
+            if let Ok(pid) = text.trim().parse() {
+                return Some(pid);
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(90),
+                "the script told no process id"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Waits for the process `pid` to end; false if it is still there after `secs`.
+    fn ends_within(pid: u32, secs: u64) -> bool {
+        let start = Instant::now();
+        while alive(pid) {
+            if start.elapsed() > Duration::from_secs(secs) {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        true
+    }
+
+    #[test]
+    fn closing_a_terminal_ends_its_console_programs_but_spares_the_ones_with_a_window() {
+        let _one = one_shell_at_a_time();
+        let Some((pty, out)) = open_pwsh("t5") else {
+            return;
+        };
+        let dir = crate::paths::test_dir("pty-close-spares-windows");
+        let mut reaper = Reaper::default();
+        // A program with no window, in a console of its own; a program showing a window.
+        let (console_script, console_file) = write_script(&dir, "console", false);
+        let (window_script, window_file) = write_script(&dir, "window", true);
+        pty.write(
+            "t5",
+            format!("{}\r", start_command(&console_script, true)).as_bytes(),
+        )
+        .unwrap();
+        let console = told_pid(&console_file).unwrap();
+        reaper.0.push(console);
+        pty.write(
+            "t5",
+            format!("{}\r", start_command(&window_script, false)).as_bytes(),
+        )
+        .unwrap();
+        let Some(window) = told_pid(&window_file) else {
+            eprintln!("no window could be shown here: skipped");
+            return;
+        };
+        reaper.0.push(window);
+        assert!(alive(console) && alive(window), "{}", out.lock());
+
+        pty.kill("t5");
+
+        assert!(
+            ends_within(console, 20),
+            "the program without a window survived its terminal"
+        );
+        // The terminal is closed and gone: the window still stands.
+        assert!(
+            alive(window),
+            "the program showing a window died with its terminal"
+        );
+    }
+
+    #[test]
+    fn a_terminal_dropped_without_being_closed_kills_nothing() {
+        // What the app's crash, its quit or an update's restart does to a terminal: its handles
+        // close, nothing asks the processes to end.
+        let _one = one_shell_at_a_time();
+        let Some((pty, out)) = open_pwsh("t6") else {
+            return;
+        };
+        let dir = crate::paths::test_dir("pty-dropped-kills-nothing");
+        let mut reaper = Reaper::default();
+        let (script, pid_file) = write_script(&dir, "console", false);
+        pty.write(
+            "t6",
+            format!("{}\r", start_command(&script, true)).as_bytes(),
+        )
+        .unwrap();
+        let program = told_pid(&pid_file).unwrap();
+        reaper.0.push(program);
+        assert!(alive(program), "{}", out.lock());
+
+        let term = pty.terms.lock().remove("t6");
+        drop(term);
+
+        std::thread::sleep(Duration::from_secs(2));
+        assert!(alive(program), "the dropped terminal killed its program");
+    }
+
+    /// Runs a program (a PowerShell script) in a terminal of its own: it starts a console program
+    /// and a program showing a window, outside its console, and ends. Returns whether the console
+    /// program and the window one ended with it; None when no window could be shown here.
+    fn what_the_end_of_a_program_takes(
+        name: &'static str,
+        spare_windows: bool,
+    ) -> Option<(bool, bool)> {
+        let _one = one_shell_at_a_time();
+        let Some(shell) = detect_shells(&Settings::default())
+            .into_iter()
+            .find(|s| s.id == "pwsh" || s.id == "powershell")
+        else {
+            eprintln!("PowerShell not installed: skipped");
+            return None;
+        };
+        let dir = crate::paths::test_dir(name);
+        let mut reaper = Reaper::default();
+        let (console_script, console_file) = write_script(&dir, "console", false);
+        let (window_script, window_file) = write_script(&dir, "window", true);
+        // Both run before it ends: each says so by its file.
+        let program = dir.join("program.ps1");
+        std::fs::write(
+            &program,
+            format!(
+                "{}\r\n{}\r\nwhile (-not ((Test-Path '{}') -and (Test-Path '{}'))) {{ Start-Sleep -Milliseconds 100 }}\r\nStart-Sleep 1\r\n",
+                start_command(&console_script, true),
+                start_command(&window_script, false),
+                console_file.display(),
+                window_file.display(),
+            ),
+        )
+        .unwrap();
+        let pty = PtyManager::default();
+        let (answer, query) = (pty.clone(), Mutex::new(CursorQuery::default()));
+        let info = TermInfo {
+            id: name.into(),
+            project_id: String::new(),
+            name: "connexion".into(),
+            shell: "claude".into(),
+        };
+        let (ended, done) = std::sync::mpsc::channel();
+        pty.spawn_program(
+            info,
+            Path::new(&shell.path),
+            &[
+                "-NoProfile".into(),
+                "-File".into(),
+                program.display().to_string(),
+            ],
+            &dir.to_string_lossy(),
+            (120, 30),
+            vec![],
+            spare_windows,
+            move |b: Vec<u8>| {
+                if query.lock().feed(&b) {
+                    let _ = answer.write(name, b"\x1b[1;1R");
+                }
+            },
+            move |_| {
+                let _ = ended.send(());
+            },
+        )
+        .unwrap();
+        done.recv_timeout(Duration::from_secs(180))
+            .expect("the program did not end");
+        let console = told_pid(&console_file).unwrap();
+        reaper.0.push(console);
+        let window = told_pid(&window_file);
+        reaper.0.extend(window);
+        Some((ends_within(console, 20), ends_within(window?, 3)))
+    }
+
+    #[test]
+    fn the_end_of_the_sign_in_ends_what_it_started_but_the_programs_with_a_window() {
+        let Some((console_ended, window_ended)) =
+            what_the_end_of_a_program_takes("pty-sign-in-spares-windows", true)
+        else {
+            return;
+        };
+        assert!(console_ended, "the program without a window survived");
+        assert!(!window_ended, "the browser of the sign-in died with it");
+    }
+
+    #[test]
+    fn the_end_of_the_claude_code_view_ends_everything_it_started() {
+        let Some((console_ended, window_ended)) =
+            what_the_end_of_a_program_takes("pty-view-kills-all", false)
+        else {
+            return;
+        };
+        assert!(console_ended, "the program without a window survived");
+        assert!(window_ended, "the program with a window survived");
     }
 }
 

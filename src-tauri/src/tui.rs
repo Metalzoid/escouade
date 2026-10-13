@@ -424,6 +424,8 @@ impl<R: Runtime> Core<R> {
             &cwd,
             size,
             env,
+            // Everything it started goes with it.
+            false,
             on_data,
             move |code| {
                 if let Some(c) = me.upgrade() {

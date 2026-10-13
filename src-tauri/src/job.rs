@@ -2,8 +2,10 @@
 //! `cmd` → `node` chains…) live and die together.
 //!
 //! On Windows, a Job Object created with KILL_ON_JOB_CLOSE, so the whole tree also dies if the
-//! app crashes or is killed. On macOS (and other Unixes), the process group the child leads
-//! (see `isolate`): killed as a whole when the job is terminated or dropped.
+//! app crashes or is killed (unless it is `release`d: an interactive terminal's, which leaves
+//! the windows its user opened alone and ends only what shows none, see `terminate_windowless`).
+//! On macOS (and other Unixes), the process group the child leads (see `isolate`): killed as a
+//! whole when the job is terminated or dropped.
 
 /// What the processes of a job use.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -17,11 +19,13 @@ pub struct JobUsage {
 #[cfg(windows)]
 mod imp {
     use super::JobUsage;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::ffi::c_void;
     use std::time::Duration;
+    use windows_sys::core::BOOL;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, GetLastError, ERROR_MORE_DATA, FILETIME, HANDLE, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, ERROR_MORE_DATA, FILETIME, HANDLE, HWND, INVALID_HANDLE_VALUE,
+        LPARAM,
     };
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -39,8 +43,11 @@ mod imp {
         K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     };
     use windows_sys::Win32::System::Threading::{
-        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA,
-        PROCESS_TERMINATE,
+        GetProcessTimes, OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible,
     };
 
     pub struct Job(HANDLE);
@@ -96,23 +103,9 @@ mod imp {
             // looked for; one that the snapshot lists and that was born later is another, which got
             // the id of one that ended.
             let before = filetime_now();
-            let mut family: Vec<(u32, u32)> = Vec::new();
-            // SAFETY: a snapshot of the machine's processes, read to its end and closed; the entry
-            // is a plain struct whose size is declared as the API asks.
-            unsafe {
-                let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-                if snapshot == INVALID_HANDLE_VALUE {
-                    return 0;
-                }
-                let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-                entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-                let mut more = Process32FirstW(snapshot, &mut entry);
-                while more != 0 {
-                    family.push((entry.th32ProcessID, entry.th32ParentProcessID));
-                    more = Process32NextW(snapshot, &mut entry);
-                }
-                CloseHandle(snapshot);
-            }
+            let Some(family) = process_family() else {
+                return 0;
+            };
             // The handles stay open until the processes are assigned: a handle holds its process,
             // so the one whose birth was read is the one that joins.
             let mut opened: HashMap<u32, HANDLE> = HashMap::new();
@@ -172,19 +165,61 @@ mod imp {
             }
         }
 
-        /// Lets the processes of the job live on when it is dropped (a shell that ended by itself
-        /// leaves what its user detached): the job keeps holding them, but no longer kills them
-        /// when its handle closes. `terminate` still does.
+        /// Kills the processes of the job that show no window, and leaves the others: a process
+        /// with a visible top-level window (a browser, an editor) and those it started, whose own
+        /// windows may be none (a browser's renderers) but which it cannot do without.
+        pub fn terminate_windowless(&self) {
+            let pids = self.pids();
+            if pids.is_empty() {
+                return;
+            }
+            let family = process_family().unwrap_or_default();
+            let spared = spared(&pids, &visible_window_owners(), &family);
+            for pid in pids.into_iter().filter(|pid| !spared.contains(pid)) {
+                self.terminate_process(pid);
+            }
+        }
+
+        /// Ends one process of the job; nothing if it is gone, or if its id is another process's
+        /// by now (it is checked to be in the job).
+        fn terminate_process(&self, pid: u32) {
+            // SAFETY: the handle is checked, used for two calls and closed.
+            unsafe {
+                let h = OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+                    0,
+                    pid,
+                );
+                if h.is_null() {
+                    return;
+                }
+                let mut in_job = 0;
+                if IsProcessInJob(h, self.0, &mut in_job) != 0 && in_job != 0 {
+                    TerminateProcess(h, 1);
+                }
+                CloseHandle(h);
+            }
+        }
+
+        /// Lets the processes of the job live on when it is dropped (a terminal's shell: the app
+        /// closing, crashing or restarting for an update leaves a browser it started open): the
+        /// job keeps holding them, but no longer kills them when its handle closes. `terminate`
+        /// still does.
         pub fn release(&self) {
             // SAFETY: valid job handle owned by self, a buffer of the declared size.
-            unsafe {
+            let released = unsafe {
                 let info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
                 SetInformationJobObject(
                     self.0,
                     JobObjectExtendedLimitInformation,
                     &info as *const _ as *const c_void,
                     std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-                );
+                )
+            };
+            if released == 0 {
+                // SAFETY: plain call.
+                let code = unsafe { GetLastError() };
+                log::warn!("job: not released, it kills its processes when closed (error {code})");
             }
         }
 
@@ -267,6 +302,80 @@ mod imp {
                 } else {
                     0
                 }
+            }
+        }
+    }
+
+    /// The `(id, parent id)` of the machine's processes, None when they cannot be listed.
+    fn process_family() -> Option<Vec<(u32, u32)>> {
+        let mut family: Vec<(u32, u32)> = Vec::new();
+        // SAFETY: a snapshot of the machine's processes, read to its end and closed; the entry is
+        // a plain struct whose size is declared as the API asks.
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return None;
+            }
+            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+            entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+            let mut more = Process32FirstW(snapshot, &mut entry);
+            while more != 0 {
+                family.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                more = Process32NextW(snapshot, &mut entry);
+            }
+            CloseHandle(snapshot);
+        }
+        Some(family)
+    }
+
+    /// The ids of the processes that own a visible top-level window.
+    fn visible_window_owners() -> HashSet<u32> {
+        unsafe extern "system" fn note(window: HWND, owners: LPARAM) -> BOOL {
+            // SAFETY: `owners` is the set `visible_window_owners` lends for the enumeration.
+            let owners = unsafe { &mut *(owners as *mut HashSet<u32>) };
+            // SAFETY: plain queries on the window the enumeration gives.
+            unsafe {
+                if IsWindowVisible(window) != 0 {
+                    let mut pid = 0;
+                    GetWindowThreadProcessId(window, &mut pid);
+                    if pid != 0 {
+                        owners.insert(pid);
+                    }
+                }
+            }
+            // Go on.
+            1
+        }
+        let mut owners = HashSet::new();
+        // SAFETY: the callback only reads the windows and fills the set, alive for the call.
+        unsafe {
+            EnumWindows(Some(note), &mut owners as *mut HashSet<u32> as LPARAM);
+        }
+        owners
+    }
+
+    /// Among the job's processes `pids`, those to leave alive: the ones in `windowed` (owners of
+    /// a visible window) and every one started by them, at any depth (`family`: the `(id, parent
+    /// id)` of the machine's processes). A stale parent id only spares one more.
+    pub(super) fn spared(
+        pids: &[u32],
+        windowed: &HashSet<u32>,
+        family: &[(u32, u32)],
+    ) -> HashSet<u32> {
+        let mut spared: HashSet<u32> = pids
+            .iter()
+            .copied()
+            .filter(|pid| windowed.contains(pid))
+            .collect();
+        loop {
+            let before = spared.len();
+            for &(id, parent) in family {
+                if pids.contains(&id) && spared.contains(&parent) {
+                    spared.insert(id);
+                }
+            }
+            if spared.len() == before {
+                return spared;
             }
         }
     }
@@ -368,6 +477,11 @@ mod imp {
             }
         }
 
+        /// A group knows no windows: all of it.
+        pub fn terminate_windowless(&self) {
+            self.terminate();
+        }
+
         /// Nothing to release: a group is killed when the job is dropped, so a terminal whose
         /// shell may end leaving what its user detached has no job on Unix (see `pty`).
         pub fn release(&self) {}
@@ -461,6 +575,7 @@ mod imp {
             None
         }
         pub fn terminate(&self) {}
+        pub fn terminate_windowless(&self) {}
         pub fn release(&self) {}
         pub fn usage(&self) -> Option<super::JobUsage> {
             None
@@ -524,6 +639,22 @@ mod tests {
         child.kill().unwrap();
         child.wait().unwrap();
         assert!(survived, "the released job killed its process");
+    }
+
+    #[test]
+    fn the_processes_with_a_window_and_the_ones_they_started_are_spared() {
+        let windowed = std::collections::HashSet::from([20, 99]);
+        // 20 shows a window, 30 is its helper (no window) and 31 its helper's; 10 and 40 show
+        // none and are not its own; 50 shows none but is not in the job; 99 shows a window, not in
+        // the job.
+        let family = [(10, 1), (20, 10), (30, 20), (31, 30), (40, 10), (50, 20)];
+        let spared = super::imp::spared(&[10, 20, 30, 31, 40], &windowed, &family);
+        let mut spared: Vec<u32> = spared.into_iter().collect();
+        spared.sort();
+        assert_eq!(spared, vec![20, 30, 31]);
+        // No window at all: nothing is spared.
+        let none = std::collections::HashSet::new();
+        assert!(super::imp::spared(&[10, 20], &none, &family).is_empty());
     }
 
     /// `descendants` over a snapshot of `(id, parent)` and the births of the processes in it.

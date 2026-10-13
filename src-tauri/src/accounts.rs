@@ -1283,6 +1283,8 @@ impl<R: Runtime> Core<R> {
             &home.to_string_lossy(),
             size,
             env,
+            // The browser it opened for the sign-in stays open when the sign-in ends.
+            true,
             on_data,
             move |code| {
                 if let Some(core) = me.upgrade() {
