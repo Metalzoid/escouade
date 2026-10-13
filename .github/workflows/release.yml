@@ -3,6 +3,8 @@ name: Release
 # A tag `vX.Y.Z` (pushed, or created with a release on GitHub's page) publishes a release: NSIS
 # installer (Windows), universal app and disk image (macOS), AppImage and .deb (Linux), signed
 # updater artifacts and the latest.json of the in-app updater, which holds the three systems. The app gets the tag's version.
+# It only builds: the tests run on each push to main (ci.yml), and a tag is put on a commit whose
+# CI is green.
 on:
   push:
     tags: ['v*']
@@ -99,11 +101,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: node scripts/version.mjs "$TAG"
 
-      - name: Tests
-        run: |
-          npm test
-          cd src-tauri
-          cargo test
+      # No tests here: the tag's commit passed them on main (the CI workflow, on each push). Run
+      # again on each system, an intermittent test sent whole releases back to draft (1.7.0, 1.7.4).
 
       # Optional: with an Apple Developer ID certificate in the repository secrets, the app is
       # signed and notarized (no Gatekeeper warning). Without it, it is signed ad hoc. Only set
