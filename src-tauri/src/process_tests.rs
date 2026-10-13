@@ -472,6 +472,21 @@ async fn wait_ends(ends: &parking_lot::Mutex<Vec<TurnEnd>>, n: usize) {
     panic!("timed out waiting for {n} turn ends: {:?}", ends.lock());
 }
 
+/// Waits until `n` quota readings were told: the fake CLI sends one in a frame of its own, right
+/// after a turn's end, which a test that waited for the end may read before.
+async fn wait_rates(rates: &Rates, n: usize) {
+    for _ in 0..500 {
+        if rates.lock().len() >= n {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!(
+        "timed out waiting for {n} quota readings: {:?}",
+        rates.lock()
+    );
+}
+
 #[tokio::test]
 async fn an_account_keeps_its_sessions_in_its_folder_and_resumes_them_from_there() {
     let dir = temp_dir("account-sessions");
@@ -623,6 +638,7 @@ async fn an_accounts_fake_limit_stops_every_turn_at_the_limit_at_100_percent() {
     send(&h, &proc, "Encore");
     wait_ends(&ends, 2).await;
     assert!(matches!(ends.lock()[1], TurnEnd::Finished(_)));
+    wait_rates(&rates, 2).await;
     let pct = rates.lock()[1].0.map(|w| w.pct).unwrap();
     assert!((pct - 12.0).abs() < 1e-9, "{pct}");
     let usage = proc

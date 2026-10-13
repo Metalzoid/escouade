@@ -115,6 +115,59 @@ impl Harness {
         self.core.pause_tick();
     }
 
+    /// The autopilot's clock at `when` (ms since epoch), and its timer's look at its pause then.
+    /// A jump of a fixed length from now lands further each second the test takes under load; at
+    /// a moment of the pause ("a minute before its end"), it lands there whatever the machine did.
+    fn pause_tick_at(&self, when: i64) {
+        self.pause_tick_after(when - now_ms());
+    }
+
+    /// The quota of every account has been read since the last turn that ended on it. The fake
+    /// CLI reads its quotas out in a frame of their own, right after a turn's `result`: a turn
+    /// seen over may not have had it applied yet, and a quota the test sets then is read over by
+    /// it (12 % and 34 %). The turns that met the usage limit (their reading comes before their
+    /// end) or failed (an API error has none) are left out.
+    fn quotas_read_since_turns(&self) -> bool {
+        let handles: Vec<_> = self.core.agents.read().values().cloned().collect();
+        let turns: Vec<(String, i64)> = handles
+            .iter()
+            .filter_map(|h| {
+                let mut rt = h.lock();
+                let ended = rt
+                    .conv
+                    .items()
+                    .iter()
+                    .filter(|i| i["kind"] == "turn" && i["limited"] != true && i["isError"] != true)
+                    .filter_map(|i| i["ts"].as_i64())
+                    .max()?;
+                Some((rt.meta.id.clone(), ended))
+            })
+            .collect();
+        turns.iter().all(|(id, ended)| {
+            let account = self.core.account_of(id);
+            self.core
+                .usage
+                .lock()
+                .account(&account)
+                .is_some_and(|a| a.updated_at >= *ended)
+        })
+    }
+
+    /// Waits until the quotas were read after the turns that ended (`quotas_read_since_turns`).
+    async fn wait_quotas_read(&self) {
+        self.wait("the quota read after the turns", |h| {
+            h.quotas_read_since_turns()
+        })
+        .await
+    }
+
+    /// `reading` of the account's quota, set once the turns that ended have had theirs read: the
+    /// one the fake CLI sends right after a turn would otherwise come after it, and replace it.
+    async fn record_usage(&self, account: &str, reading: Reading) {
+        self.wait_quotas_read().await;
+        self.core.record_usage(account, reading);
+    }
+
     /// Claude Code can no longer be found: no agent process starts.
     fn lose_claude(&self) {
         self.core.settings.write().claude_path =
@@ -146,7 +199,7 @@ impl Harness {
     }
 
     /// A plain agent of the project (no worktree, no protocol: the fake CLI only echoes) that
-    /// already took a message.
+    /// already took a message, its turn over and the quota the fake CLI read out after it applied.
     async fn agent_that_worked(&self, project_id: &str) -> String {
         let a = self
             .core
@@ -164,6 +217,7 @@ impl Harness {
             m.prompts == 1 && m.status == AgentStatus::Done
         })
         .await;
+        self.wait_quotas_read().await;
         a
     }
 }
@@ -1321,13 +1375,19 @@ async fn a_usage_limit_with_no_resume_blocks_its_ticket_and_pauses_the_autopilot
         (&pause["reason"], &pause["pct"]),
         (&json!("limit"), &Value::Null)
     );
-    let left = pause["until"].as_i64().unwrap() - now_ms();
-    assert!((29 * 60_000..=30 * 60_000).contains(&left), "{left}");
-    // Not before its 30 minutes are over.
-    h.pause_tick_after(29 * 60_000);
+    // Set 30 minutes after the limit was met, less what the test took since: ten minutes at the
+    // most, however loaded the machine (it is no clock to measure the pause by).
+    let until = pause["until"].as_i64().unwrap();
+    let left = until - now_ms();
+    assert!(
+        (LIMIT_PAUSE_MS - 10 * 60_000..=LIMIT_PAUSE_MS).contains(&left),
+        "{left}"
+    );
+    // Not before its 30 minutes are over: a minute short of them, it still holds.
+    h.pause_tick_at(until - 60_000);
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&b.id).column, Column::Todo);
-    h.pause_tick_after(30 * 60_000 + 1_000);
+    h.pause_tick_at(until + 1_000);
     h.wait_ticket(&b.id, "started after the pause", |t| {
         t.column != Column::Todo
     })
@@ -1347,8 +1407,8 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
         pct: 96.0,
         resets_at: Some(end),
     });
-    h.core
-        .record_usage("principal", Reading::Windows((None, week)));
+    h.record_usage("principal", Reading::Windows((None, week)))
+        .await;
     let t = h
         .core
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
@@ -1383,8 +1443,8 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
         pct: 100.0,
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
-    h.core
-        .record_usage("principal", Reading::Windows((ended, None)));
+    h.record_usage("principal", Reading::Windows((ended, None)))
+        .await;
     let a = h
         .core
         .ticket_create(&p.id, draft("Tout de suite [ok]", &[], 5))
@@ -1395,10 +1455,10 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     // Under the threshold (the default 100 %): nothing holds either.
     let under = Some(RateWindow {
         pct: 96.0,
-        resets_at: Some(now_ms() + 60_000),
+        resets_at: Some(now_ms() + 3_600_000),
     });
-    h.core
-        .record_usage("principal", Reading::Windows((under, None)));
+    h.record_usage("principal", Reading::Windows((under, None)))
+        .await;
     let b = h
         .core
         .ticket_create(&p.id, draft("Aussi [ok]", &[], 5))
@@ -1407,14 +1467,15 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
         .await;
     assert!(h.pauses().is_empty(), "{:?}", h.pauses());
-    // Used up until a minute from now: the next one waits for its end (every place free), then
+    // Used up until an hour from now: the next one waits for its end (every place free), then
     // goes by itself.
+    let end = now_ms() + 3_600_000;
     let full = Some(RateWindow {
         pct: 100.0,
-        resets_at: Some(now_ms() + 60_000),
+        resets_at: Some(end),
     });
-    h.core
-        .record_usage("principal", Reading::Windows((full, None)));
+    h.record_usage("principal", Reading::Windows((full, None)))
+        .await;
     let c = h
         .core
         .ticket_create(&p.id, draft("Ensuite [ok]", &[], 5))
@@ -1425,10 +1486,10 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
     assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
     // Just past its end, a clock a little ahead of the server's would start it into the limit:
     // it waits the margin an agent's resume waits.
-    h.pause_tick_after(61_000);
+    h.pause_tick_at(end + 1_000);
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&c.id).column, Column::Todo);
-    h.pause_tick_after(60_000 + RESUME_MARGIN_MS + 1_000);
+    h.pause_tick_at(end + RESUME_MARGIN_MS + 1_000);
     h.wait_ticket(&c.id, "started once the window ended", |t| {
         t.column != Column::Todo
     })
@@ -1486,8 +1547,8 @@ async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until
         pct: 100.0,
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
-    h.core
-        .record_usage("principal", Reading::Windows((ended, week)));
+    h.record_usage("principal", Reading::Windows((ended, week)))
+        .await;
     let t = h
         .core
         .ticket_create(&p.id, draft("Patienter [ok]", &[], 5))
@@ -5208,8 +5269,8 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
             resets_at: Some(end),
         })
     };
-    h.core
-        .record_usage("pro", Reading::Windows((used(100.0, end), None)));
+    h.record_usage("pro", Reading::Windows((used(100.0, end), None)))
+        .await;
     // Principal is under: a ticket starts on it.
     let a = h
         .core
@@ -5222,10 +5283,11 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
     assert!(h.pauses().is_empty(), "{:?}", h.pauses());
     // Principal past the threshold too, sooner: the tickets wait for it, and the window is told
     // which accounts did.
-    h.core.record_usage(
+    h.record_usage(
         "principal",
         Reading::Windows((used(97.0, end - 600_000), None)),
-    );
+    )
+    .await;
     let b = h
         .core
         .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
@@ -5270,7 +5332,7 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
         pro.seven_day = None;
     });
     let end = now_ms() + 3_600_000;
-    h.core.record_usage(
+    h.record_usage(
         "principal",
         Reading::Windows((
             Some(RateWindow {
@@ -5279,7 +5341,8 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
             }),
             None,
         )),
-    );
+    )
+    .await;
     let b = h
         .core
         .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
@@ -5295,7 +5358,7 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
                      "accounts": ["pro", "principal"] }))
     );
     // Principal back under the threshold: a ticket goes there.
-    h.core.record_usage(
+    h.record_usage(
         "principal",
         Reading::Windows((
             Some(RateWindow {
@@ -5304,7 +5367,8 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
             }),
             None,
         )),
-    );
+    )
+    .await;
     h.core.pause_tick();
     h.wait_ticket(&b.id, "started on Principal", |t| t.column != Column::Todo)
         .await;
@@ -5318,7 +5382,7 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
     let (p, _) = h.project(false).await;
     let _pro = pro_first_and_out_of_quota(&h);
     let end = now_ms() + 3_600_000;
-    h.core.record_usage(
+    h.record_usage(
         "pro",
         Reading::Windows((
             Some(RateWindow {
@@ -5327,7 +5391,8 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
             }),
             None,
         )),
-    );
+    )
+    .await;
     let mut project = h.core.project(&p.id).unwrap();
     project.account = "pro".into();
     h.core.update_project(project).unwrap();
@@ -5392,13 +5457,13 @@ fn pro_then_team_then_principal(h: &Harness) -> (Account, Account) {
 }
 
 /// `account` read as used `pct` percent until in an hour.
-fn used_for_an_hour(h: &Harness, account: &str, pct: f64) {
+async fn used_for_an_hour(h: &Harness, account: &str, pct: f64) {
     let window = RateWindow {
         pct,
         resets_at: Some(now_ms() + 3_600_000),
     };
-    h.core
-        .record_usage(account, Reading::Windows((Some(window), None)));
+    h.record_usage(account, Reading::Windows((Some(window), None)))
+        .await;
 }
 
 #[tokio::test]
@@ -5445,7 +5510,7 @@ async fn an_agent_is_not_passed_back_and_forth_between_two_accounts_that_are_bot
     // Équipe is out of quota too, and Principal is past the threshold: no account is left.
     std::fs::create_dir_all(&team.config_dir).unwrap();
     std::fs::write(Path::new(&team.config_dir).join("fake-limit"), "").unwrap();
-    used_for_an_hour(&h, "principal", 100.0);
+    used_for_an_hour(&h, "principal", 100.0).await;
     let t = h
         .core
         .ticket_create(&p.id, draft("Un [ok]", &[], 5))
@@ -5548,8 +5613,8 @@ async fn a_tickets_agent_waits_when_no_other_account_is_usable() {
     let (p, _) = h.project(false).await;
     pro_then_team_then_principal(&h);
     // Équipe is not signed in, Principal is past the threshold.
-    h.core.record_usage("equipe", Reading::NotSignedIn);
-    used_for_an_hour(&h, "principal", 100.0);
+    h.record_usage("equipe", Reading::NotSignedIn).await;
+    used_for_an_hour(&h, "principal", 100.0).await;
     a_limited_ticket_stays_on_pro(&h, &p).await;
 }
 
@@ -5558,7 +5623,7 @@ async fn a_tickets_agent_waits_when_another_account_has_an_agent_waiting_for_its
     let h = harness("tk-limit-stay-held");
     let (p, _) = h.project(true).await;
     pro_then_team_then_principal(&h);
-    used_for_an_hour(&h, "principal", 100.0);
+    used_for_an_hour(&h, "principal", 100.0).await;
     // An agent of Équipe waits for its own reset: Équipe takes nothing more.
     let waiting = crate::core_tests::agent_on(&h, &p, "equipe").await.id;
     h.core.plan_resume(&waiting, Some(now_ms() + 3_600_000));

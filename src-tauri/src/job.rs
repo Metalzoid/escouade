@@ -611,8 +611,10 @@ mod tests {
             .args([
                 "-NoProfile",
                 "-Command",
-                // Busy until it used 1.5 s of CPU, however loaded the machine.
-                "while ((Get-Process -Id $PID).TotalProcessorTime.TotalSeconds -lt 1.5) {}; Start-Sleep 60",
+                // Busy without end: the test waits for the Job's CPU time to pass a second, and a
+                // script that stops by the process's own may be over before the Job shows it. It
+                // dies with the Job, dropped at the end of the test.
+                "while ($true) {}",
             ])
             .spawn()
             .unwrap();
