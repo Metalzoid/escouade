@@ -510,12 +510,19 @@ impl<R: Runtime> Core<R> {
             if rt.tui.as_ref().is_none_or(|t| t.gen != gen) {
                 return;
             }
-            let prompts = rt.meta.prompts;
+            let mut naming = None;
             for e in &lines {
                 if rt.tui_since.is_some_and(|since| before(e, since)) {
                     continue;
                 }
+                let prompts = rt.meta.prompts;
                 rt.on_transcript(e, &mut fx);
+                // A message of the user's names the agent, as one sent from the window does: the
+                // first that gives a text to name it from (not a command with nothing to say).
+                if naming.is_none() && rt.meta.prompts > prompts {
+                    let prompt = rt.tui_prompt.clone().unwrap_or_default();
+                    naming = rt.name_from(&prompt);
+                }
             }
             if let Some(t) = rt.tui.as_mut() {
                 t.transcript = Some(path.clone());
@@ -525,10 +532,6 @@ impl<R: Runtime> Core<R> {
             if rt.meta.transcript_read != read {
                 rt.meta.transcript_read = read;
             }
-            // Its first message names it, as one sent from the window does.
-            let naming = (prompts == 0 && rt.meta.prompts > 0 && !rt.meta.named)
-                .then(|| rt.tui_prompt.clone())
-                .flatten();
             let view = fx.agent_changed.then(|| rt.view());
             (
                 rt.meta.project_id.clone(),
@@ -541,9 +544,7 @@ impl<R: Runtime> Core<R> {
             return;
         }
         self.apply(id, &pid, &name, fx, view);
-        if let Some(text) =
-            naming.filter(|t| !t.trim().is_empty() && !t.trim_start().starts_with('/'))
-        {
+        if let Some(text) = naming {
             let (c, id) = (self.clone(), id.to_string());
             tauri::async_runtime::spawn(async move { c.auto_name(&id, &text).await });
         }

@@ -176,6 +176,9 @@ pub struct AgentRt {
     /// The entries of its transcript written before then (ms) are not read: the history of a
     /// session its interface resumed or forked with no read kept, which its view already has.
     pub(crate) tui_since: Option<i64>,
+    /// Haiku was asked to name it since the app started (not saved): asked once, at the first
+    /// message that gives a text to name it from (`naming_text`).
+    pub(crate) naming_asked: bool,
 }
 
 /// Claude Code's interface running for an agent (`tui`).
@@ -314,7 +317,20 @@ impl AgentRt {
             tui_error: None,
             tui_prompt: None,
             tui_since: None,
+            naming_asked: false,
         }
+    }
+
+    /// What Haiku is to name the agent from, given a message of its user's: set down as asked
+    /// (once per agent, while the app runs). None when the agent is named, was already asked, or
+    /// the message gives nothing to name it by (`naming_text`): a later message may.
+    pub(crate) fn name_from(&mut self, prompt: &str) -> Option<String> {
+        if self.meta.named || self.naming_asked {
+            return None;
+        }
+        let text = crate::core::naming_text(prompt)?;
+        self.naming_asked = true;
+        Some(text)
     }
 
     /// Tokens and estimated cost of the running turn so far.

@@ -327,6 +327,66 @@ async fn an_agent_is_named_from_a_question_in_the_language_of_the_texts_for_clau
     assert_eq!(h.agent(&a).name, "create-the-fake-en");
 }
 
+/// Whether Haiku was asked to name the agent since the app started.
+fn naming_asked(h: &Harness, id: &str) -> bool {
+    h.core.agent(id).unwrap().lock().naming_asked
+}
+
+#[tokio::test]
+async fn an_agent_whose_first_messages_are_commands_is_named_from_the_first_ordinary_message() {
+    let h = harness("name-after-commands");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A built-in command (with or without arguments) and a skill alone say nothing to name it by.
+    for command in ["/clear", "/model sonnet", "/impeccable"] {
+        h.turn(&a, command).await;
+        assert!(!naming_asked(&h, &a), "{command}");
+    }
+    assert_eq!(
+        (h.agent(&a).name.as_str(), h.agent(&a).named),
+        ("agent-1", false)
+    );
+    h.turn(&a, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
+}
+
+#[tokio::test]
+async fn an_agent_started_by_a_skill_with_arguments_is_named_from_them() {
+    let h = harness("name-from-skill");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "/impeccable propose un nouveau design").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    // The fake Haiku reads the first two words of the text it was given: the skill's name is one
+    // of them, so the slash is not.
+    assert_eq!(h.agent(&a).name, "impeccable-propose-fake-en");
+}
+
+#[tokio::test]
+async fn an_agent_already_named_is_never_named_again_by_a_later_message() {
+    let h = harness("name-once");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().claude_language = "en".into();
+    // Named by Haiku from its first message, then by none of the next ones.
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    h.turn(&a, "/impeccable propose un nouveau design").await;
+    h.turn(&a, "Delete the other file").await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(h.agent(&a).name, "create-the-fake-en");
+    // Named by the user before it wrote anything: Haiku is never asked.
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.rename_agent(&b, "mon-agent").await.unwrap();
+    h.turn(&b, "Create the hello file").await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(h.agent(&b).name, "mon-agent");
+    assert!(!naming_asked(&h, &b));
+}
+
 #[tokio::test]
 async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
     let h = harness("network");

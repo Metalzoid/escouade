@@ -157,6 +157,47 @@ async fn an_interrupt_from_the_window_is_escape_in_the_interface() {
     .await;
 }
 
+/// `text` typed in the interface, until its turn comes back from the transcript.
+async fn say_in_tui(h: &Harness, id: &str, text: &str) {
+    let turns = |h: &Harness| h.items(id).iter().filter(|i| i["kind"] == "turn").count();
+    let before = turns(h);
+    h.core
+        .send_message(id, text.into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn's end", |h| {
+        turns(h) > before && !h.agent(id).status.is_active()
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn in_the_claude_code_view_commands_do_not_name_the_agent_but_the_next_ordinary_message_does()
+{
+    let h = harness("tui-name-after-commands");
+    h.core.settings.write().claude_language = "en".into();
+    let id = agent_in_tui(&h).await;
+    for command in ["/clear", "/impeccable"] {
+        say_in_tui(&h, &id, command).await;
+        let a = h.agent(&id);
+        assert_eq!((a.named, a.name.as_str()), (false, "agent-1"), "{command}");
+        assert!(!h.core.agent(&id).unwrap().lock().naming_asked, "{command}");
+    }
+    say_in_tui(&h, &id, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&id).named).await;
+    assert_eq!(h.agent(&id).name, "create-the-fake-en");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn in_the_claude_code_view_a_skill_with_arguments_names_the_agent_from_them() {
+    let h = harness("tui-name-from-skill");
+    h.core.settings.write().claude_language = "en".into();
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "/impeccable propose un nouveau design").await;
+    h.wait("named", |h| h.agent(&id).named).await;
+    assert_eq!(h.agent(&id).name, "impeccable-propose-fake-en");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn back_in_escouades_view_the_stream_resumes_the_same_session() {
     let h = harness("tui-back");

@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Corrections
+
+- Un agent dont le premier message est une commande ou un skill (/impeccable…, /clear) est maintenant renommé : d'après les arguments du skill, sinon d'après le premier message ordinaire qui suit. Avant, il gardait son nom agent-N.
+
 ## [1.7.4] — 2026-10-12
 
 ### Modifications

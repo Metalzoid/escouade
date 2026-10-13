@@ -973,6 +973,70 @@ pub(crate) fn naming_prompt(lang: i18n::Lang, task: &str) -> String {
     )
 }
 
+/// The commands built into Claude Code: typed alone or with arguments, they say nothing about the
+/// task (`/model sonnet`, `/compact keep the plan`). Any other command is a skill or one of the
+/// user's own, and its arguments are the task.
+const BUILTIN_COMMANDS: &[&str] = &[
+    "add-dir",
+    "agents",
+    "bashes",
+    "bug",
+    "clear",
+    "compact",
+    "config",
+    "context",
+    "cost",
+    "doctor",
+    "effort",
+    "exit",
+    "export",
+    "fast",
+    "help",
+    "hooks",
+    "ide",
+    "init",
+    "install-github-app",
+    "login",
+    "logout",
+    "mcp",
+    "memory",
+    "model",
+    "output-style",
+    "permissions",
+    "plugin",
+    "pr-comments",
+    "privacy-settings",
+    "release-notes",
+    "resume",
+    "review",
+    "rewind",
+    "security-review",
+    "status",
+    "statusline",
+    "terminal-setup",
+    "todos",
+    "upgrade",
+    "usage",
+    "vim",
+];
+
+/// What an agent that is not named yet is named from, given a message of its user's: the message
+/// itself; for a command, the arguments of a skill or a custom command, without the leading slash
+/// (`/impeccable propose un design` is « impeccable propose un design »). None when the message
+/// says nothing to name it by: empty, a built-in command of Claude Code (`/clear`, `/model
+/// sonnet`), or a skill with no arguments (`/impeccable`): the next message is looked at then.
+pub(crate) fn naming_text(prompt: &str) -> Option<String> {
+    let text = prompt.trim();
+    let Some(command) = text.strip_prefix('/') else {
+        return (!text.is_empty()).then(|| text.to_string());
+    };
+    let (word, arguments) = command
+        .split_once(char::is_whitespace)
+        .unwrap_or((command, ""));
+    (!arguments.trim().is_empty() && !BUILTIN_COMMANDS.contains(&word))
+        .then(|| command.trim_start().to_string())
+}
+
 /// What an agent stopped by the usage limit is sent by itself once the quota resets: the same
 /// word in both languages.
 pub(crate) fn auto_resume(lang: i18n::Lang) -> String {
@@ -2627,8 +2691,9 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Sends the message to `proc` if it is still the agent's live process, then records it.
-    /// `text` is what the agent is sent, `naming` what its name is made from when this is its
-    /// first message (the same, unless the text is headed by its author's name).
+    /// `text` is what the agent is sent, `naming` what its name is made from when it is not named
+    /// yet (the same, unless the text is headed by its author's name): Haiku is asked once, at the
+    /// first message that gives it a text to name the agent from (`naming_text`).
     fn deliver(
         self: &Arc<Self>,
         id: &str,
@@ -2640,7 +2705,7 @@ impl<R: Runtime> Core<R> {
     ) -> Result<bool> {
         let h = self.agent(id)?;
         let mut fx = Effects::default();
-        let (pid, name, view, first) = {
+        let (pid, name, view, name_from) = {
             let mut rt = h.lock();
             if !rt.proc.as_ref().is_some_and(|p| Arc::ptr_eq(p, proc)) || !proc.is_alive() {
                 return Ok(false);
@@ -2653,18 +2718,18 @@ impl<R: Runtime> Core<R> {
             let (images, files): (Vec<_>, Vec<_>) = attachments.iter().partition(|a| a.is_image());
             let files: Vec<String> = files.into_iter().map(|a| a.name.clone()).collect();
             rt.push_user(&uid, text, images.len() as u32, &files, &mut fx);
-            let first = !rt.meta.named && rt.meta.prompts == 1;
+            let name_from = rt.name_from(naming);
             (
                 rt.meta.project_id.clone(),
                 rt.meta.name.clone(),
                 rt.view(),
-                first,
+                name_from,
             )
         };
         self.stats.record_prompt(&self.account_of(id), id, &pid);
         self.apply(id, &pid, &name, fx, Some(view));
-        if first && !naming.trim().is_empty() && !naming.trim_start().starts_with('/') {
-            let (c, id, naming) = (self.clone(), id.to_string(), naming.to_string());
+        if let Some(naming) = name_from {
+            let (c, id) = (self.clone(), id.to_string());
             tauri::async_runtime::spawn(async move { c.auto_name(&id, &naming).await });
         }
         Ok(true)
@@ -5499,6 +5564,55 @@ mod tests {
         );
         assert_eq!(name_from_answer("Voici le slug : creation-fichier"), None);
         assert_eq!(name_from_answer(""), None);
+    }
+
+    #[test]
+    fn an_agent_is_named_from_its_message_unless_that_is_a_command_without_words_of_its_own() {
+        let named = |prompt: &str| naming_text(prompt);
+        // Plain text names itself, trimmed.
+        assert_eq!(
+            named("Create the hello file"),
+            Some("Create the hello file".into())
+        );
+        assert_eq!(
+            named("  Crée le fichier \n"),
+            Some("Crée le fichier".into())
+        );
+        assert_eq!(named(""), None);
+        assert_eq!(named("  \n "), None);
+        // A built-in command of Claude Code has nothing to name a task from, arguments or not.
+        for builtin in ["/clear", "/model sonnet", "/compact keep the plan", "/init"] {
+            assert_eq!(named(builtin), None, "{builtin}");
+        }
+        assert_eq!(named("  /resume  "), None);
+        // Any other command is a skill or a command of the user's: without arguments, nothing to
+        // name from; with some, they are the task (without the leading slash).
+        for bare in [
+            "/impeccable",
+            "/gsd:quick",
+            "/superpowers:brainstorming",
+            "/",
+        ] {
+            assert_eq!(named(bare), None, "{bare}");
+        }
+        assert_eq!(
+            named("/impeccable propose un design"),
+            Some("impeccable propose un design".into())
+        );
+        assert_eq!(
+            named("  /gsd:quick fix the login"),
+            Some("gsd:quick fix the login".into())
+        );
+        assert_eq!(
+            named("/impeccable\nrefais l'écran d'accueil"),
+            Some("impeccable\nrefais l'écran d'accueil".into())
+        );
+        // A built-in's name is a whole word: a skill that starts with one is not that command.
+        assert_eq!(named("/clearly"), None);
+        assert_eq!(
+            named("/clearly say what you mean"),
+            Some("clearly say what you mean".into())
+        );
     }
 
     fn change(path: &str, status: &str) -> FileChange {
