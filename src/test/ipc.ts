@@ -87,6 +87,9 @@ export function project(over: Partial<Project> = {}): Project {
     commitMode: 'agent',
     account: '',
     agentsUseEscouade: false,
+    worktreeDir: '',
+    agentBranchPrefix: 'escouade/',
+    ticketBranchPrefix: 'ticket/',
     ...over,
   };
 }

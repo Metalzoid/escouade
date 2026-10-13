@@ -15,6 +15,7 @@ import type {
   WorktreeStep,
   WorktreeSuggestion,
 } from './types';
+import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
 
 export type SettingsTab =
   'app' | 'claude' | 'accounts' | 'notifications' | 'projects' | 'board' | 'integrations' | 'terminals' | 'network' | 'about';
@@ -82,6 +83,9 @@ type ProjectFields = Pick<
   | 'commitMode'
   | 'account'
   | 'agentsUseEscouade'
+  | 'worktreeDir'
+  | 'agentBranchPrefix'
+  | 'ticketBranchPrefix'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -102,6 +106,12 @@ export interface ProjectDraft {
   account: string;
   /** « Les agents peuvent utiliser Escouade ». */
   agentsUseEscouade: boolean;
+  /** « Dossier des worktrees », as typed: empty is `.claude/worktrees`. */
+  worktreeDir: string;
+  /** « Préfixe des branches des agents ». */
+  agentBranchPrefix: string;
+  /** « Préfixe des branches des tickets ». */
+  ticketBranchPrefix: string;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -119,6 +129,9 @@ function draftOf(p: Project): ProjectDraft {
     commitMode,
     account,
     agentsUseEscouade,
+    worktreeDir,
+    agentBranchPrefix,
+    ticketBranchPrefix,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -133,10 +146,27 @@ function draftOf(p: Project): ProjectDraft {
     commitMode,
     account,
     agentsUseEscouade,
+    worktreeDir,
+    agentBranchPrefix,
+    ticketBranchPrefix,
     board,
     integrations,
   };
 }
+
+/** What keeps a draft's « Dossier des worktrees » and branch prefixes from being saved, field by field. */
+export function worktreesProblems(path: string, d: Pick<ProjectDraft, 'worktreeDir' | 'agentBranchPrefix' | 'ticketBranchPrefix'>) {
+  return {
+    dir: worktreesRootProblem(path, d.worktreeDir),
+    agentPrefix: branchPrefixProblem(d.agentBranchPrefix.trim()),
+    ticketPrefix: branchPrefixProblem(d.ticketBranchPrefix.trim()),
+  };
+}
+
+const worktreesProblem = (path: string, d: ProjectDraft) => {
+  const p = worktreesProblems(path, d);
+  return !!p.dir || p.agentPrefix || p.ticketPrefix;
+};
 
 /** The steps as saved: trimmed, without those that run nothing. */
 const stepsOf = (steps: WorktreeStep[]) =>
@@ -163,6 +193,9 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     commitMode: d.commitMode,
     account: d.account,
     agentsUseEscouade: d.agentsUseEscouade,
+    worktreeDir: d.worktreeDir.trim(),
+    agentBranchPrefix: d.agentBranchPrefix.trim(),
+    ticketBranchPrefix: d.ticketBranchPrefix.trim(),
   };
 }
 
@@ -229,6 +262,7 @@ class SettingsForm {
       if (d.runCommands.some((c) => !c.name.trim() || !c.command.trim())) {
         return t('settings.problem.command', { name: d.name.trim() });
       }
+      if (worktreesProblem(p.path, d)) return t('settings.problem.worktrees', { name: d.name.trim() });
     }
     return null;
   });

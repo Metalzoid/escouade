@@ -18,8 +18,9 @@ const TIME_LIMIT: Duration = Duration::from_secs(10);
 const MAX_TEXT_CHARS: usize = 300;
 /// How much of a longer line is shown before its first match.
 const CONTEXT_CHARS: usize = 40;
-/// Where the agents' worktrees are, in the project's folder (or a folder of it).
-const WORKTREES: &str = ".claude/worktrees";
+// Where the agents' worktrees are, in the project's folder (or a folder of it), unless it sets its
+// own « Dossier des worktrees ».
+use crate::paths::DEFAULT_WORKTREES as WORKTREES;
 /// How git is told to mark each match of a line (`--color=always`, every other color off): an
 /// SGR sequence no file is likely to hold, then the reset.
 const MARK: &str = "reverse blink strike";
@@ -374,19 +375,25 @@ fn to_posix_set(c: &[char], at: usize) -> Result<(String, usize)> {
 }
 
 /// The lines of the files of `root` matching `query`: those git knows and those it does not, the
-/// ignored ones and the agents' worktrees left out.
-pub async fn search(root: &str, query: &SearchQuery) -> Result<SearchResult> {
-    search_within(root, query, TIME_LIMIT).await
+/// ignored ones and the agents' worktrees left out (`.claude/worktrees` at any depth, and the
+/// folders `out_of`, from the root with `/`: the project's own « Dossier des worktrees »).
+pub async fn search(root: &str, query: &SearchQuery, out_of: &[String]) -> Result<SearchResult> {
+    search_within(root, query, TIME_LIMIT, out_of).await
 }
 
 /// `search`, git stopped past `limit` (a shorter one lets the stop be tested).
-async fn search_within(root: &str, query: &SearchQuery, limit: Duration) -> Result<SearchResult> {
+async fn search_within(
+    root: &str,
+    query: &SearchQuery,
+    limit: Duration,
+    out_of: &[String],
+) -> Result<SearchResult> {
     let engine = if query.regex {
         engine().await
     } else {
         Engine::default()
     };
-    run(root, query, limit, engine).await
+    run(root, query, limit, engine, out_of).await
 }
 
 /// `search` with the expressions of `engine` (another one than this git's lets each be tested).
@@ -395,6 +402,7 @@ async fn run(
     query: &SearchQuery,
     limit: Duration,
     engine: Engine,
+    out_of: &[String],
 ) -> Result<SearchResult> {
     if query.pattern.is_empty() {
         bail!(empty_pattern(i18n::ui()));
@@ -413,7 +421,7 @@ async fn run(
     };
     let max = query.max_results.clamp(1, MAX_RESULTS);
     let repo = git::toplevel(root).await.is_some();
-    let args = grep_args(query, &pattern, engine.perl, repo);
+    let args = grep_args(query, &pattern, engine.perl, repo, out_of);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let mut cmd = git::command(root, &args);
     cmd.kill_on_drop(true);
@@ -481,7 +489,13 @@ async fn run(
 
 /// The arguments of `git grep` for `query`, its pattern being `pattern` (for `-P` when `perl`), in
 /// a repository (`repo`) or a plain folder.
-fn grep_args(query: &SearchQuery, pattern: &str, perl: bool, repo: bool) -> Vec<String> {
+fn grep_args(
+    query: &SearchQuery,
+    pattern: &str,
+    perl: bool,
+    repo: bool,
+    out_of: &[String],
+) -> Vec<String> {
     let mut a = Vec::new();
     // Each match marked and nothing else colored, whatever the user's settings say.
     for slot in [
@@ -534,8 +548,15 @@ fn grep_args(query: &SearchQuery, pattern: &str, perl: bool, repo: bool) -> Vec<
     }
     // After -e, a pattern is never taken for an option (`--help`).
     a.extend(["-e".into(), pattern.to_string(), "--".into()]);
+    let out_of_folders = out_of;
     let out_of = |dir: &str| format!(":(exclude,glob)**/{dir}/**");
     a.push(out_of(WORKTREES));
+    // Each a folder of the root, as it is spelled: none of its characters is a wildcard.
+    a.extend(
+        out_of_folders
+            .iter()
+            .map(|d| format!(":(exclude,literal){d}")),
+    );
     if !repo {
         // As the editor's tree walks such a folder.
         a.extend(git::WALK_SKIPPED.iter().map(|d| out_of(d)));
@@ -724,7 +745,7 @@ mod tests {
     }
 
     async fn found(root: &Path, q: &SearchQuery) -> Vec<(String, u32)> {
-        let r = search(&root.to_string_lossy(), q).await.unwrap();
+        let r = search(&root.to_string_lossy(), q, &[]).await.unwrap();
         let mut out: Vec<_> = r.matches.into_iter().map(|m| (m.path, m.line)).collect();
         out.sort();
         out
@@ -786,10 +807,10 @@ mod tests {
         write(&r, "many.txt", &"hit\n".repeat(5));
         let mut q = query("hit");
         q.max_results = 3;
-        let res = search(&r.to_string_lossy(), &q).await.unwrap();
+        let res = search(&r.to_string_lossy(), &q, &[]).await.unwrap();
         assert_eq!((res.matches.len(), res.truncated), (3, true));
         q.max_results = 5;
-        let res = search(&r.to_string_lossy(), &q).await.unwrap();
+        let res = search(&r.to_string_lossy(), &q, &[]).await.unwrap();
         assert_eq!((res.matches.len(), res.truncated), (5, false));
     }
 
@@ -799,19 +820,19 @@ mod tests {
         write(&r, "many.txt", &"hit\n".repeat(MAX_RESULTS + 1));
         let mut q = query("hit");
         q.max_results = usize::MAX;
-        let res = search(&r.to_string_lossy(), &q).await.unwrap();
+        let res = search(&r.to_string_lossy(), &q, &[]).await.unwrap();
         assert_eq!((res.matches.len(), res.truncated), (MAX_RESULTS, true));
     }
 
     #[tokio::test]
     async fn stops_git_at_the_time_limit_and_says_there_may_be_more() {
         let r = repo("search-time");
-        let res = search_within(&r.to_string_lossy(), &query("needle"), Duration::ZERO)
+        let res = search_within(&r.to_string_lossy(), &query("needle"), Duration::ZERO, &[])
             .await
             .unwrap();
         assert!(res.truncated && res.timed_out);
         // In time, the same search finds it all.
-        let res = search(&r.to_string_lossy(), &query("needle"))
+        let res = search(&r.to_string_lossy(), &query("needle"), &[])
             .await
             .unwrap();
         assert_eq!(
@@ -826,7 +847,7 @@ mod tests {
         write(&r, "many.txt", &"hit\n".repeat(5));
         let mut q = query("hit");
         q.max_results = 2;
-        let res = search(&r.to_string_lossy(), &q).await.unwrap();
+        let res = search(&r.to_string_lossy(), &q, &[]).await.unwrap();
         assert_eq!((res.truncated, res.timed_out), (true, false));
     }
 
@@ -843,7 +864,9 @@ mod tests {
         // git would take each line for a pattern, an empty one matching every line.
         let r = repo("search-lines");
         for p in ["needle\n", "x\ny", "needle\r"] {
-            let e = search(&r.to_string_lossy(), &query(p)).await.unwrap_err();
+            let e = search(&r.to_string_lossy(), &query(p), &[])
+                .await
+                .unwrap_err();
             assert!(e.to_string().contains("ligne"), "{p:?}: {e}");
         }
     }
@@ -852,7 +875,9 @@ mod tests {
     async fn gives_every_match_of_a_line() {
         let r = repo("search-ranges");
         write(&r, "a.txt", "foo bar foo\nnone\n");
-        let res = search(&r.to_string_lossy(), &query("foo")).await.unwrap();
+        let res = search(&r.to_string_lossy(), &query("foo"), &[])
+            .await
+            .unwrap();
         let m = &res.matches[0];
         assert_eq!(
             (m.col, m.offset, m.text.as_str(), m.ranges.clone()),
@@ -861,7 +886,7 @@ mod tests {
         // Each match of an expression, whole.
         let mut q = query("o+ |r");
         q.regex = true;
-        let res = search(&r.to_string_lossy(), &q).await.unwrap();
+        let res = search(&r.to_string_lossy(), &q, &[]).await.unwrap();
         assert_eq!(res.matches[0].ranges, vec![[1, 4], [6, 7]]);
     }
 
@@ -869,7 +894,9 @@ mod tests {
     async fn counts_matches_in_characters_after_accents_and_emoji() {
         let r = repo("search-emoji");
         write(&r, "a.txt", "é😀 foo foo\n");
-        let res = search(&r.to_string_lossy(), &query("foo")).await.unwrap();
+        let res = search(&r.to_string_lossy(), &query("foo"), &[])
+            .await
+            .unwrap();
         let m = &res.matches[0];
         assert_eq!(
             (m.col, m.offset, m.ranges.clone()),
@@ -884,7 +911,7 @@ mod tests {
         let near = format!("{}needle{}\n", "a".repeat(10), "b".repeat(500));
         let end = format!("{}needle\n", "y".repeat(1000));
         write(&r, "long.txt", &format!("{far}{near}{end}"));
-        let res = search(&r.to_string_lossy(), &query("needle"))
+        let res = search(&r.to_string_lossy(), &query("needle"), &[])
             .await
             .unwrap();
         // 40 characters before the first match; the second one, further, is not in the text.
@@ -921,7 +948,14 @@ mod tests {
         pattern: &str,
         engine: Engine,
     ) -> Result<Vec<(String, u32)>> {
-        let res = run(&r.to_string_lossy(), &regex(pattern), TIME_LIMIT, engine).await?;
+        let res = run(
+            &r.to_string_lossy(),
+            &regex(pattern),
+            TIME_LIMIT,
+            engine,
+            &[],
+        )
+        .await?;
         let mut out: Vec<_> = res.matches.into_iter().map(|m| (m.path, m.line)).collect();
         out.sort();
         Ok(out)
@@ -1035,7 +1069,7 @@ mod tests {
     #[tokio::test]
     async fn finding_nothing_is_an_empty_list_not_an_error() {
         let r = repo("search-none");
-        let res = search(&r.to_string_lossy(), &query("absent-everywhere"))
+        let res = search(&r.to_string_lossy(), &query("absent-everywhere"), &[])
             .await
             .unwrap();
         assert_eq!(res, SearchResult::default());
@@ -1044,10 +1078,10 @@ mod tests {
     #[tokio::test]
     async fn refuses_an_empty_pattern_and_tells_a_wrong_expression() {
         let r = repo("search-refused");
-        assert!(search(&r.to_string_lossy(), &query("")).await.is_err());
+        assert!(search(&r.to_string_lossy(), &query(""), &[]).await.is_err());
         let mut q = query("a(");
         q.regex = true;
-        assert!(search(&r.to_string_lossy(), &q).await.is_err());
+        assert!(search(&r.to_string_lossy(), &q, &[]).await.is_err());
     }
 
     #[tokio::test]
@@ -1088,7 +1122,7 @@ mod tests {
         let r = javascript_repo("search-bytes");
         write(&r, "d.txt", "function cafébar() {}\n");
         let q = regex("caf([^[:alnum:]_]|$)");
-        let args = grep_args(&q, &q.pattern, false, true);
+        let args = grep_args(&q, &q.pattern, false, true, &[]);
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let mut cmd = git::command(&r.to_string_lossy(), &args);
         cmd.env("LC_ALL", "C");
@@ -1204,6 +1238,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn leaves_the_projects_own_worktrees_folder_out_of_its_search() {
+        let r = repo("search-own-worktrees");
+        write(&r, ".worktrees/refacto/src/app.ts", "needle\n");
+        write(&r, "wt [1]/x/a.ts", "needle\n");
+        write(&r, "src/.worktrees/kept.ts", "needle\n");
+        write(&r, "src/app.ts", "needle\n");
+        let res = search(
+            &r.to_string_lossy(),
+            &query("needle"),
+            &[".worktrees".to_string(), "wt [1]".to_string()],
+        )
+        .await
+        .unwrap();
+        let mut paths: Vec<_> = res.matches.into_iter().map(|m| m.path).collect();
+        paths.sort();
+        // Only the folder named, from the root: one of the same name elsewhere is searched.
+        assert_eq!(paths, ["src/.worktrees/kept.ts", "src/app.ts"]);
+    }
+
+    #[tokio::test]
     async fn counts_the_column_in_characters_and_cuts_a_long_line() {
         let r = repo("search-column");
         write(
@@ -1211,7 +1265,7 @@ mod tests {
             "fr.md",
             &format!("é à needle\r\n{}needle\n", "ü".repeat(400)),
         );
-        let res = search(&r.to_string_lossy(), &query("needle"))
+        let res = search(&r.to_string_lossy(), &query("needle"), &[])
             .await
             .unwrap();
         let m = &res.matches[0];

@@ -30,6 +30,7 @@ export default {
   problem: {
     projectName: 'Le projet « {name} » doit garder un nom.',
     command: 'Chaque commande de lancement de « {name} » demande un nom et une ligne de commande.',
+    worktrees: 'Le dossier des worktrees ou un préfixe de branche de « {name} » n’est pas valide.',
   },
 
   // « Remplir automatiquement »: what is said when Claude has read the project.
@@ -169,6 +170,24 @@ export default {
     colorN: 'Couleur {n}',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
+    worktreeDir: 'Dossier des worktrees',
+    worktreeDirDesc:
+      'Relatif au dossier du projet (../app-worktrees, .worktrees), à ton dossier personnel (~/worktrees/app) ou complet. Vide : .claude/worktrees, comme claude --worktree. Les worktrees déjà créés restent où ils sont ; hors du projet, la vue Claude Code demande d’abord ta confiance pour chacun.',
+    /** `{path}`: where the next one goes, `<nom>` standing for its name. */
+    worktreeDirAt: 'Le prochain : {path}',
+    worktreeDirItself: 'C’est le dossier du projet lui-même.',
+    worktreeDirContains: 'Ce dossier contient celui du projet : choisis-en un à côté (../app-worktrees) ou dedans (.worktrees).',
+    worktreeDirGit: 'Ce dossier est dans un dossier .git.',
+    worktreeDirPartial: 'Écris un chemin relatif au dossier du projet, ou un chemin complet (C:\\…).',
+    agentPrefix: 'Préfixe des branches des agents',
+    agentPrefixDesc: 'Branche d’un nouvel agent : {prefix}<nom>. Vide : son nom seul.',
+    ticketPrefix: 'Préfixe des branches des tickets',
+    ticketPrefixDesc: 'Branche d’un ticket, celle de sa PR : {prefix}<clé>. Vide : sa clé seule.',
+    /** `{at}`: the characters `@{`, which a text of the catalog cannot hold. */
+    prefixInvalid:
+      'Aucun nom de branche ne commence ainsi : ni espace, ni « .. », « ~ », « ^ », « : », « ? », « * », « [ », « \\ » ou « {at} », ni « - » ou « / » au début, ni « // », ni une partie qui commence par « . » ou finit par « .lock ».',
+    /** Stands for the name of the next agent in `worktreeDirAt`. */
+    nextName: '<nom>',
     copy: 'Fichiers copiés dans les worktrees',
     copyDesc: 'Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout.',
     commit: 'Commit',

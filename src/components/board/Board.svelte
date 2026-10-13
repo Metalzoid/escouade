@@ -20,7 +20,7 @@
   const quota = $derived(quotaOf(project));
   const target = $derived(s.target || app.git[project.id]?.branch || 'main');
   const sub = $derived(t('board.header.sub', { name: project.name, count: tickets.length, looping }));
-  const summary = $derived(settingsSummary(s, target));
+  const summary = $derived(settingsSummary(s, target, project.ticketBranchPrefix));
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
   /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
   const issue = $derived(app.boardIssues[project.id] ?? null);

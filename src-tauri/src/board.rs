@@ -66,9 +66,10 @@ pub fn agent_name(key: &str, title: &str) -> String {
     slugify(&format!("{key} {title}"))
 }
 
-/// The branch of a ticket: `ticket/atl-42`.
-pub fn branch_of(key: &str) -> String {
-    format!("ticket/{}", key.to_lowercase())
+/// The branch of a ticket: `<prefix><key>`, `ticket/atl-42` with the project's « Préfixe des
+/// branches des tickets » as it is by default.
+pub fn branch_of(prefix: &str, key: &str) -> String {
+    format!("{prefix}{}", key.to_lowercase())
 }
 
 /// Whether the branch of a validated ticket stays when its worktree goes (« Supprimer le worktree »):
@@ -1504,7 +1505,8 @@ mod tests {
             agent_name("ATL-42", "Limiter les tentatives"),
             "atl-42-limiter-les-tentatives"
         );
-        assert_eq!(branch_of("ATL-42"), "ticket/atl-42");
+        assert_eq!(branch_of("ticket/", "ATL-42"), "ticket/atl-42");
+        assert_eq!(branch_of("gg/", "ATL-42"), "gg/atl-42");
         // (existing, nothing, action) → the branch stays. The ticket's own, merged, goes; pushed or
         // proposed it stays (the PR, a restored agent). One that was there before the ticket is the
         // user's: it stays whatever became of the ticket.

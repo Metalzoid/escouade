@@ -4,7 +4,15 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ## [Non publié]
 
+### Ajouts
+
+- Réglages › Projets › Git : « Dossier des worktrees », pour ranger les worktrees des agents ailleurs que dans `.claude/worktrees` du projet : un dossier voisin du dépôt (`../app-worktrees`), un `.worktrees` à l'intérieur, un dossier sous ton dossier personnel (`~/worktrees/app`) ou un chemin complet. Les worktrees des tickets et le worktree temporaire d'une validation y vont aussi ; ceux déjà créés restent où ils sont. Un dossier partagé par plusieurs dépôts marche : un nom déjà pris passe au suivant, et un dossier hors du projet est surveillé pour les compteurs git. Sont refusés le dossier du projet, un dossier qui le contient (`..`), un dossier dans `.git` et un dossier de fichiers suivis par git (`src`), dont les nouveaux fichiers sortiraient des commits. Un dossier dans le dépôt est tenu hors de `git status`, gardé par l'éditeur (ni création, ni renommage, ni suppression dedans) et laissé hors de « Rechercher dans les fichiers ». L'éditeur montre le chemin de chaque worktree depuis le projet (`../app-worktrees/login`). ([#4](https://github.com/guillaume-gagnaire/escouade/issues/4))
+- Réglages › Projets › Git : « Préfixe des branches des agents » (`escouade/` par défaut) et « Préfixe des branches des tickets » (`ticket/` par défaut), pour suivre la convention de nommage d'un dépôt : ce sont les noms qui partent sur le dépôt distant avec une PR. Vide, une branche prend le nom de l'agent ou la clé du ticket seuls. Un préfixe qui ne donnerait pas de nom de branche valide est refusé à la frappe. ([#4](https://github.com/guillaume-gagnaire/escouade/issues/4))
+
 ### Corrections
+
+- Un agent restauré dont le dossier du worktree a été repris entre-temps par un autre worktree n'y travaille plus : le sien est recréé à côté (`-2`), et sa conversation le dit. Un nouveau worktree ne prend plus jamais le dossier d'un agent archivé, même disparu pour l'instant.
+- Le worktree d'un agent d'un projet rangé dans un sous-dossier de son dépôt est désormais tenu hors de `git status` du dépôt (la ligne d'exclusion visait `.claude/worktrees` à la racine du dépôt, pas celui du projet).
 
 - Un agent dont le premier message est une commande ou un skill (/impeccable…, /clear) est maintenant renommé : d'après les arguments du skill, sinon d'après le premier message ordinaire qui suit. Avant, il gardait son nom agent-N.
 - Sous Linux, une image collée dans le champ du message (capture d'écran, « Copier l'image » d'un navigateur) y est jointe, comme sous Windows et macOS. Avant, le collage ne faisait rien : le moteur web de Linux (WebKitGTK) ne donne pas l'image à la page, Escouade la lit maintenant dans le presse-papiers du système.

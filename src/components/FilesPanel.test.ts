@@ -517,6 +517,14 @@ describe('FilesPanel in English', () => {
     expect(screen.getByRole('button', { name: 'Merge ccm/landing → main…' })).toBeInTheDocument();
   });
 
+  it('names a worktree beside the project from the project’s folder', async () => {
+    const wt = { path: 'C:\\code\\demo-api-worktrees\\landing', branch: 'gg/landing', baseBranch: 'main' };
+    resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
+    fakeBackend({ git_files: () => [change('src/auth.ts', 'a3', true)] });
+    render(FilesPanel, { project: project(), agent: app.agents.a3 });
+    expect(await screen.findByText('worktree ../demo-api-worktrees/landing · isolated from the other agents')).toBeInTheDocument();
+  });
+
   it('asks in English before discarding the changes of a file, deleting a new one', async () => {
     fakeBackend({
       git_files: () => [

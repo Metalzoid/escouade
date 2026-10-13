@@ -319,7 +319,8 @@
         {/if}
         <div class="meta">
           <span>{modelLabel(a.model, app.models)}</span><span class="sep">·</span><span>{duration(a)}</span>
-          {#if a.worktree}<span class="sep">·</span><span class="wt" use:tip={a.worktree.branch}>⎇ {shortBranch(a.worktree.branch)}</span
+          {#if a.worktree}<span class="sep">·</span><span class="wt" use:tip={a.worktree.branch}
+              >⎇ {shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
             >{/if}
         </div>
         <div class="meta dim" use:tip={s.estimated ? estimateHint() : undefined}>

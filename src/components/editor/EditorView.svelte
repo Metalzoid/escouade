@@ -34,6 +34,7 @@
   import SourcePicker from './SourcePicker.svelte';
   import TargetPicker from './TargetPicker.svelte';
   import { tip } from '../../lib/tip';
+  import { worktreeLabel } from '../../lib/worktrees';
 
   let { project }: { project: Project } = $props();
 
@@ -810,7 +811,9 @@
           </div>
           <span class="mono dim root" use:tip={tree?.root}
             >{srcAgent
-              ? `.claude/worktrees/${srcAgent.worktree ? basename(srcAgent.worktree.path) : srcAgent.name}`
+              ? srcAgent.worktree
+                ? worktreeLabel(project.path, srcAgent.worktree.path)
+                : tildify(project.path)
               : tildify(project.path)}</span
           >
           {#if tree}

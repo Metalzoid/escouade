@@ -306,6 +306,17 @@ describe('Composer', () => {
     expect(screen.queryByText('rapport.pdf')).not.toBeInTheDocument();
   });
 
+  it('attaches the files picked even though the input empties its list once read', async () => {
+    setup();
+    const input = screen.getByLabelText('Joindre un fichier', { selector: 'input' }) as HTMLInputElement;
+    // As a browser does: the list is the input's own, emptied when its value is cleared.
+    const picked = [new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' })];
+    Object.defineProperty(input, 'files', { configurable: true, get: () => picked });
+    Object.defineProperty(input, 'value', { configurable: true, get: () => '', set: () => picked.splice(0) });
+    await fireEvent.change(input);
+    expect(await screen.findByText('rapport.pdf')).toBeInTheDocument();
+  });
+
   it('attaches a text file Windows gives no type as text', async () => {
     const { backend } = setup();
     const md = new File(['# Notes\nà faire'], 'notes.md', { type: '' });

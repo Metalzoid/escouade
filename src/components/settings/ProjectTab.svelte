@@ -4,8 +4,9 @@
   import { t } from '../../lib/i18n';
   import { accountName, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
+  import { joinPath, tildify } from '../../lib/format';
   import { revealHidden } from '../../lib/recipe';
-  import { settingsForm } from '../../lib/settings.svelte';
+  import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
   import type { CommitMode, Project, WorktreeStep } from '../../lib/types';
@@ -15,6 +16,7 @@
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
   import { tip } from '../../lib/tip';
+  import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
 
   // A project's own settings: who it is, its worktrees and what runs in them, its launch commands (its draft: the
   // modal's project).
@@ -28,6 +30,18 @@
       .filter((a) => (a.active && serves(a, project.id)) || a.id === draft.account)
       .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.project.inactive', { name: accountName(a) }) })),
   ]);
+  /** What the field says of a « Dossier des worktrees » that cannot be. */
+  const DIR_PROBLEMS = {
+    itself: 'settings.project.worktreeDirItself',
+    contains: 'settings.project.worktreeDirContains',
+    git: 'settings.project.worktreeDirGit',
+    partial: 'settings.project.worktreeDirPartial',
+  } as const satisfies Record<WorktreesProblem, string>;
+  /** What is wrong with where its worktrees go and how their branches are named, as typed. */
+  const problems = $derived(worktreesProblems(project.path, draft));
+  /** Where its next worktree would go, as typed. */
+  const nextWorktree = $derived(tildify(joinPath(worktreesRoot(project.path, draft.worktreeDir), t('settings.project.nextName'))));
+
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
@@ -109,6 +123,22 @@
   </section>
 {/snippet}
 
+{#snippet prefixRow(kind: 'agent' | 'ticket', value: string, invalid: boolean, set: (v: string) => void)}
+  {@const label = t(`settings.project.${kind}Prefix`)}
+  <Row {label} desc={t(`settings.project.${kind}PrefixDesc`, { prefix: value.trim() })} descId="{kind}-prefix-desc" wide>
+    <input
+      class="field input mono setting"
+      spellcheck="false"
+      aria-label={label}
+      aria-describedby="{kind}-prefix-desc{invalid ? ` ${kind}-prefix-error` : ''}"
+      aria-invalid={invalid}
+      {value}
+      oninput={(e) => set(e.currentTarget.value)}
+    />
+    {#if invalid}<p class="error" id="{kind}-prefix-error">{t('settings.project.prefixInvalid', { at: '@{' })}</p>{/if}
+  </Row>
+{/snippet}
+
 {#snippet proposedSteps()}
   {@render stepsOf(t('settings.project.setupTitle'), proposal!.setup)}
   {@render stepsOf(t('settings.project.teardownTitle'), proposal!.teardown)}
@@ -159,6 +189,26 @@
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
+  <Row label={t('settings.project.worktreeDir')} desc={t('settings.project.worktreeDirDesc')} descId="worktree-dir-desc" wide>
+    <input
+      class="field input mono setting"
+      spellcheck="false"
+      placeholder={DEFAULT_WORKTREES}
+      aria-label={t('settings.project.worktreeDir')}
+      aria-describedby="worktree-dir-desc worktree-dir-at"
+      aria-invalid={!!problems.dir}
+      bind:value={draft.worktreeDir}
+    />
+    {#if problems.dir}
+      <p class="error" id="worktree-dir-at">
+        {t(DIR_PROBLEMS[problems.dir])}
+      </p>
+    {:else}
+      <p class="at mono" id="worktree-dir-at">{t('settings.project.worktreeDirAt', { path: nextWorktree })}</p>
+    {/if}
+  </Row>
+  {@render prefixRow('agent', draft.agentBranchPrefix, problems.agentPrefix, (v) => (draft.agentBranchPrefix = v))}
+  {@render prefixRow('ticket', draft.ticketBranchPrefix, problems.ticketPrefix, (v) => (draft.ticketBranchPrefix = v))}
   <Row label={t('settings.project.copy')} desc={t('settings.project.copyDesc')} descId="copy-desc" wide>
     <textarea
       class="field mono copy"
@@ -295,6 +345,26 @@
     padding: 0 10px;
     background: var(--panel);
     font-weight: 600;
+  }
+  .setting {
+    font-weight: 400;
+    font-size: 12.5px;
+  }
+  .setting[aria-invalid='true'] {
+    border-color: var(--del);
+  }
+  .at,
+  .error {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .at {
+    color: var(--dim);
+  }
+  .error {
+    color: var(--del);
   }
   .path {
     flex: 1;

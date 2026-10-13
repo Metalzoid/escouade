@@ -184,7 +184,7 @@ Escouade lit le transcript toutes les 400 ms (et juste avant chaque hook) par li
 
 **Messages et interruption.** Un message de la fenêtre ou du serveur MCP est collé dans l'interface (collage entre crochets, `ESC[200~…ESC[201~`, puis Entrée), refusé pendant que l'interface attend une réponse ; une interruption y envoie Échap. Pas de pièce jointe. Un agent de ticket reste toujours sur le flux, et le remote control passe par la commande `/remote-control` de l'interface.
 
-**Confiance du dossier.** L'interface demande, au premier lancement dans un dossier, si on lui fait confiance ; un dossier parent accepté suffit (vérifié), donc les worktrees de `<projet>/.claude/worktrees/` héritent de la réponse donnée pour le projet.
+**Confiance du dossier.** L'interface demande, au premier lancement dans un dossier, si on lui fait confiance ; un dossier parent accepté suffit (vérifié), donc les worktrees de `<projet>/.claude/worktrees/` héritent de la réponse donnée pour le projet. Un « Dossier des worktrees » hors du projet (`../app-worktrees`) n'en hérite pas : l'interface pose la question au premier lancement de chaque worktree, et Escouade ne répond jamais à la place de l'utilisateur (accepter une fois le dossier des worktrees lui-même, `claude` lancé dedans, la règle pour tous). Le flux (stream-json), sans interface, ne la pose pas.
 
 ## Serveur MCP d'Escouade
 

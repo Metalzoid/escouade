@@ -10,6 +10,7 @@
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Modal from '../modals/Modal.svelte';
   import { tip } from '../../lib/tip';
+  import { DEFAULT_TICKET_PREFIX } from '../../lib/worktrees';
 
   // The form of a ticket, new or edited, in a large window to write long texts in. `onsubmit` saves the ticket and tells
   // whether it did: the window closes then, else it stays with what was typed. `resume`: what had been typed, back from a
@@ -84,7 +85,10 @@
   });
 
   /** What the ticket does when there is no branch to take up: its own, named after its key once it has one. */
-  const own = $derived(ticket ? t('branches.ticket.own', { branch: ticketBranch(ticket.key) }) : t('branches.ticket.ownNew'));
+  const prefix = $derived(app.projects.find((p) => p.id === projectId)?.ticketBranchPrefix ?? DEFAULT_TICKET_PREFIX);
+  const own = $derived(
+    ticket ? t('branches.ticket.own', { branch: ticketBranch(ticket.key, prefix) }) : t('branches.ticket.ownNew', { prefix }),
+  );
 
   function branchMenu() {
     if (!branchButton) return;

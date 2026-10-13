@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -889,8 +889,115 @@ pub async fn branches(repo: &str) -> Result<Vec<String>> {
     Ok(list)
 }
 
-/// Creates `<repo>/.claude/worktrees/<name>` on a new branch. Returns (path, branch, base branch).
-pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, String)> {
+/// Why `prefix` cannot start the names of branches (a project's « Préfixe des branches des
+/// agents » or « des tickets »), if it cannot: what follows it is a slug (`login`, `dem-1`), so a
+/// prefix is good when git takes `<prefix>x` for a new branch (`check_ref_format`), read here
+/// without asking git.
+pub fn branch_prefix_problem(prefix: &str) -> Option<String> {
+    branch_prefix_problem_in(crate::i18n::ui(), prefix)
+}
+
+fn branch_prefix_problem_in(lang: crate::i18n::Lang, prefix: &str) -> Option<String> {
+    let name = format!("{prefix}x");
+    let bad_char = |c: char| c.is_ascii_control() || " ~^:?*[\\".contains(c);
+    let bad = name.starts_with(['-', '/'])
+        || name.contains(bad_char)
+        || name.contains("..")
+        || name.contains("@{")
+        || name.contains("//")
+        || name
+            .split('/')
+            .any(|part| part.starts_with('.') || part.ends_with(".lock"));
+    bad.then(|| {
+        tr_in!(
+            lang,
+            "« {prefix} » ne peut pas commencer un nom de branche : ni espace, ni « .. », « ~ », « ^ », « : », « ? », « * », « [ », « \\ » ou « @{{ », ni « - » ou « / » au début, ni « // », ni une partie qui commence par « . » ou finit par « .lock ».",
+            "“{prefix}” can’t start a branch name: no spaces, “..”, “~”, “^”, “:”, “?”, “*”, “[”, “\\” or “@{{”, no “-” or “/” at the start, no “//”, no part starting with “.” or ending with “.lock”."
+        )
+    })
+}
+
+/// The `info/exclude` line of the folder `rel` of a repository (from its root, with `/`): the
+/// characters a pattern reads escaped, and anchored at the root, which a `/` inside does already
+/// (`.claude/worktrees/`, the line of the apps that had no « Dossier des worktrees »).
+fn exclude_pattern(rel: &str) -> String {
+    let mut escaped = String::new();
+    for c in rel.chars() {
+        if "*?[\\".contains(c) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    if rel.contains('/') && !rel.starts_with(['#', '!']) {
+        format!("{escaped}/")
+    } else {
+        format!("/{escaped}/")
+    }
+}
+
+/// Keeps the folder `root` of the agents' worktrees of `repo` (made if need be) out of the
+/// repository's status, in its `info/exclude`, when it is in the repository: a folder elsewhere
+/// (beside it) is none of its business. Read through links and short names: git gives the
+/// repository's root in its long name. Refused for a folder of the repository's own files (`src`):
+/// excluded, the new files of the project there would never be committed.
+pub async fn exclude_worktrees(repo: &str, root: &Path) -> Result<()> {
+    std::fs::create_dir_all(root).map_err(|e| {
+        anyhow::anyhow!(tr!(
+            "Dossier des worktrees {p} : {e}",
+            "Worktrees folder {p}: {e}",
+            p = root.display()
+        ))
+    })?;
+    let Some(top) = toplevel(repo).await else {
+        return Ok(());
+    };
+    let (Ok(real_top), Ok(dir)) = (std::fs::canonicalize(&top), std::fs::canonicalize(root)) else {
+        return Ok(());
+    };
+    let Ok(rel) = dir.strip_prefix(&real_top) else {
+        return Ok(());
+    };
+    let rel: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    if rel.is_empty() {
+        return Ok(());
+    }
+    let rel = rel.join("/");
+    let tracked = text(&top, &["ls-files", "--", &format!(":(literal){rel}")]).await?;
+    if !tracked.is_empty() {
+        bail!(tr!(
+            "Le dossier des worktrees {rel} contient des fichiers suivis par git : choisis-en un autre dans les réglages du projet.",
+            "The worktrees folder {rel} holds files git tracks: pick another one in the project’s settings."
+        ));
+    }
+    ensure_excluded(repo, &exclude_pattern(&rel)).await
+}
+
+/// `dir` may take a new worktree: nothing is there, and no agent of the app holds it (`held`: the
+/// folders of their worktrees, there or not, as one gone comes back at its path when its agent is
+/// restored, `worktree_restore`). Compared as written, case ignored: a false match only moves the
+/// new worktree to the next name.
+pub(crate) fn free_folder(dir: &Path, held: &[PathBuf]) -> bool {
+    let norm = |p: &Path| {
+        p.to_string_lossy()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_lowercase()
+    };
+    !dir.exists() && !held.iter().any(|h| norm(h) == norm(dir))
+}
+
+/// Creates `<root>/<name>` (`-2`… when its branch or its folder is taken, `free_folder`) on a new
+/// branch `<prefix><name>` from HEAD. Returns (path, branch, base branch).
+pub async fn worktree_add(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    prefix: &str,
+    name: &str,
+) -> Result<(String, String, String)> {
     let base = current_branch(repo).await;
     if base.is_empty() || base == "HEAD" {
         bail!(tr!(
@@ -898,28 +1005,33 @@ pub async fn worktree_add(repo: &str, name: &str) -> Result<(String, String, Str
             "the repository has no commit yet: a worktree can’t be created"
         ));
     }
-    ensure_excluded(repo, ".claude/worktrees/").await?;
-    let mut branch = format!("{}{name}", crate::paths::BRANCH_PREFIX);
+    exclude_worktrees(repo, root).await?;
+    let mut dir_name = name.to_string();
     let mut n = 2;
-    while branch_exists(repo, &branch).await {
-        branch = format!("{}{name}-{n}", crate::paths::BRANCH_PREFIX);
+    // A folder shared by several repositories may hold another's worktree of that name.
+    while branch_exists(repo, &format!("{prefix}{dir_name}")).await
+        || !free_folder(&root.join(&dir_name), held)
+    {
+        dir_name = format!("{name}-{n}");
         n += 1;
     }
-    let dir_name = branch
-        .trim_start_matches(crate::paths::BRANCH_PREFIX)
-        .to_string();
-    let path = Path::new(repo)
-        .join(".claude")
-        .join("worktrees")
-        .join(&dir_name);
-    let path_s = path.to_string_lossy().to_string();
+    let branch = format!("{prefix}{dir_name}");
+    let path_s = root.join(&dir_name).to_string_lossy().to_string();
     run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, "HEAD"]).await?;
     Ok((path_s, branch, base))
 }
 
-/// Creates `<repo>/.claude/worktrees/<last part of branch>` on a new branch `branch` (`branch-2`…
-/// when it, or its folder, is taken) starting from `base`. Returns (path, branch).
-pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(String, String)> {
+/// Creates `<root>/<last part of branch>` (`-2`… when that folder is taken, `free_folder`) on a new
+/// branch `branch` (`branch-2`… when it is taken) starting from `base`: a ticket's branch keeps its
+/// name when only its folder is taken (by another repository's worktree in a shared folder), the
+/// name its pull request goes out with. Returns (path, branch).
+pub async fn worktree_add_on(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    branch: &str,
+    base: &str,
+) -> Result<(String, String)> {
     // A branch name never starts with `-`: this is an option (`--lock`…) that git would obey.
     if base.starts_with('-') {
         bail!(tr!(
@@ -927,31 +1039,37 @@ pub async fn worktree_add_on(repo: &str, branch: &str, base: &str) -> Result<(St
             "the starting branch “{base}” isn’t a valid branch name"
         ));
     }
-    ensure_excluded(repo, ".claude/worktrees/").await?;
-    let dir_of = |b: &str| {
-        Path::new(repo)
-            .join(".claude")
-            .join("worktrees")
-            .join(b.rsplit('/').next().unwrap_or(b))
-    };
+    exclude_worktrees(repo, root).await?;
     let mut name = branch.to_string();
     let mut n = 2;
-    while branch_exists(repo, &name).await || dir_of(&name).exists() {
+    while branch_exists(repo, &name).await {
         name = format!("{branch}-{n}");
         n += 1;
     }
-    let path = dir_of(&name).to_string_lossy().to_string();
+    let last = name.rsplit('/').next().unwrap_or(&name).to_string();
+    let mut dir = root.join(&last);
+    let mut n = 2;
+    while !free_folder(&dir, held) {
+        dir = root.join(format!("{last}-{n}"));
+        n += 1;
+    }
+    let path = dir.to_string_lossy().to_string();
     // `--`: whatever `base` is, git reads it as the commit-ish to start from.
     run_hooks(repo, &["worktree", "add", "-b", &name, &path, "--", base]).await?;
     Ok((path, name))
 }
 
-/// Creates `<repo>/.claude/worktrees/<last part of the branch>` (`-2`… when that folder is taken) on
+/// Creates `<root>/<last part of the branch>` (`-2`… when that folder is taken, `free_folder`) on
 /// a branch that exists already: a local one, or a remote one (`origin/feat`) through the local
 /// branch that tracks it, made, tracking it, when there is none (`local_of`). Nothing is made when
 /// the name is neither, or when git refuses (the branch is checked out elsewhere). Returns (path,
 /// local branch).
-pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, String)> {
+pub async fn worktree_add_existing(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    name: &str,
+) -> Result<(String, String)> {
     // Refuses an option, an unknown name, a local branch of the name that tracks something else.
     let local = local_of(repo, name).await?;
     let branch = match &local {
@@ -961,12 +1079,11 @@ pub async fn worktree_add_existing(repo: &str, name: &str) -> Result<(String, St
             .map(|(_, short)| short)
             .ok_or_else(|| no_branch(name))?,
     };
-    ensure_excluded(repo, ".claude/worktrees/").await?;
-    let root = Path::new(repo).join(".claude").join("worktrees");
+    exclude_worktrees(repo, root).await?;
     let last = branch.rsplit('/').next().unwrap_or(&branch);
     let mut dir = root.join(last);
     let mut n = 2;
-    while dir.exists() {
+    while !free_folder(&dir, held) {
         dir = root.join(format!("{last}-{n}"));
         n += 1;
     }
@@ -1100,12 +1217,15 @@ async fn remove_dir_retrying(path: &Path, retry: Duration) -> std::io::Result<()
     }
 }
 
-/// Checks `branch` out again at `path`, a worktree folder that went (after `worktree_remove_dir`).
+/// Checks `branch` out again at `path`, a worktree folder that went (after `worktree_remove_dir`),
+/// in the folder of worktrees it was made in.
 pub async fn worktree_restore(repo: &str, path: &str, branch: &str) -> Result<()> {
     if branch.starts_with('-') {
         bail!(invalid_branch(branch));
     }
-    ensure_excluded(repo, ".claude/worktrees/").await?;
+    if let Some(root) = Path::new(path).parent() {
+        exclude_worktrees(repo, root).await?;
+    }
     let _ = run(repo, &["worktree", "prune"]).await;
     run_hooks(repo, &["worktree", "add", path, branch]).await?;
     Ok(())
@@ -2611,7 +2731,9 @@ impl GitService {
         )
     }
 
-    pub fn watch(&self, project_id: &str, path: &str) {
+    /// Watches the folders `paths` of a project (its own first, then those of its worktrees out
+    /// of it), in place of what was watched for it.
+    pub fn watch(&self, project_id: &str, paths: &[String]) {
         let flag = Arc::new(AtomicBool::new(false));
         let (tx, pid, f) = (self.tx.clone(), project_id.to_string(), flag.clone());
         let handler = move |res: notify::Result<notify::Event>| {
@@ -2625,9 +2747,14 @@ impl GitService {
         };
         match notify::recommended_watcher(handler) {
             Ok(mut w) => {
-                if let Err(e) = w.watch(Path::new(path), RecursiveMode::Recursive) {
-                    log::warn!("cannot watch {path}: {e}");
-                    return;
+                for (i, path) in paths.iter().enumerate() {
+                    if let Err(e) = w.watch(Path::new(path), RecursiveMode::Recursive) {
+                        log::warn!("cannot watch {path}: {e}");
+                        // Without the project's own folder, there is nothing to refresh by.
+                        if i == 0 {
+                            return;
+                        }
+                    }
                 }
                 self.watchers
                     .lock()
@@ -3067,6 +3194,11 @@ mod repo_tests {
         );
     }
 
+    /// The folder of the agents' worktrees of the repository `r`, as a project there has it by default.
+    fn wt_root(r: &str) -> PathBuf {
+        crate::paths::worktrees_root(r, "")
+    }
+
     fn repo(name: &str) -> String {
         let dir = crate::paths::test_dir(name);
         let g = |args: &[&str]| {
@@ -3095,7 +3227,9 @@ mod repo_tests {
     async fn a_worktree_whose_file_is_let_go_of_a_moment_later_is_removed_with_its_branch() {
         use std::os::windows::fs::OpenOptionsExt;
         let repo = repo("git-wt-remove-held");
-        let (path, branch, _) = worktree_add(&repo, "held").await.unwrap();
+        let (path, branch, _) = worktree_add(&repo, &wt_root(&repo), &[], "escouade/", "held")
+            .await
+            .unwrap();
         let held = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(0)
@@ -3140,30 +3274,46 @@ mod repo_tests {
         git(&r, &["add", "-A"]);
         git(&r, &["commit", "-qm", "release"]);
         git(&r, &["checkout", "-q", "main"]);
-        let (path, branch) = worktree_add_on(&r, "ticket/dem-1", "release")
+        let (path, branch) = worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-1", "release")
             .await
             .unwrap();
         assert_eq!(branch, "ticket/dem-1");
         assert!(Path::new(&path).ends_with(".claude/worktrees/dem-1"));
         assert!(Path::new(&path).join("release.txt").exists());
-        // The branch taken, then the folder taken, then the same last part under another prefix.
-        let (second, branch) = worktree_add_on(&r, "ticket/dem-1", "main").await.unwrap();
+        // The branch taken: the next name, for its folder too.
+        let (second, branch) = worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-1", "main")
+            .await
+            .unwrap();
         assert_eq!(branch, "ticket/dem-1-2");
         assert!(Path::new(&second).ends_with("dem-1-2"));
         assert!(!Path::new(&second).join("release.txt").exists());
+        // Only the folder taken (another repository's worktree in a shared folder, an agent's
+        // gone for now): the branch keeps its name, the one its pull request would have.
         std::fs::create_dir_all(Path::new(&r).join(".claude/worktrees/dem-2")).unwrap();
-        let (third, branch) = worktree_add_on(&r, "ticket/dem-2", "main").await.unwrap();
-        assert_eq!(branch, "ticket/dem-2-2");
+        let (third, branch) = worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-2", "main")
+            .await
+            .unwrap();
+        assert_eq!(branch, "ticket/dem-2");
         assert!(Path::new(&third).ends_with("dem-2-2"));
-        let (fourth, branch) = worktree_add_on(&r, "autre/dem-1", "main").await.unwrap();
-        assert_eq!(branch, "autre/dem-1-3");
+        let (fourth, branch) = worktree_add_on(&r, &wt_root(&r), &[], "autre/dem-1", "main")
+            .await
+            .unwrap();
+        assert_eq!(branch, "autre/dem-1");
         assert!(Path::new(&fourth).ends_with("dem-1-3"));
+        let held = [wt_root(&r).join("DEM-3")];
+        let (fifth, branch) = worktree_add_on(&r, &wt_root(&r), &held, "ticket/dem-3", "main")
+            .await
+            .unwrap();
+        assert_eq!(branch, "ticket/dem-3");
+        assert!(Path::new(&fifth).ends_with("dem-3-2"));
         // The folder is kept out of the repository's own status.
         assert!(dirty(&r).await.is_empty());
         // A base that does not exist: an error, nothing left behind.
-        assert!(worktree_add_on(&r, "ticket/dem-9", "nowhere")
-            .await
-            .is_err());
+        assert!(
+            worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-9", "nowhere")
+                .await
+                .is_err()
+        );
         assert!(!branch_exists(&r, "ticket/dem-9").await);
     }
 
@@ -3171,7 +3321,7 @@ mod repo_tests {
     async fn a_base_that_looks_like_a_git_option_is_refused_and_nothing_is_created() {
         let r = repo("git-worktree-on-option");
         for base in ["-x", "--lock", "--detach", "-b"] {
-            let e = worktree_add_on(&r, "ticket/dem-5", base)
+            let e = worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-5", base)
                 .await
                 .expect_err(base);
             assert!(format!("{e:#}").contains(base), "{base}: {e:#}");
@@ -3192,7 +3342,9 @@ mod repo_tests {
             assert!(!listed.contains("locked"), "{base}: {listed}");
         }
         // A real base still works with the `--` before it.
-        let (path, _) = worktree_add_on(&r, "ticket/dem-5", "main").await.unwrap();
+        let (path, _) = worktree_add_on(&r, &wt_root(&r), &[], "ticket/dem-5", "main")
+            .await
+            .unwrap();
         assert!(Path::new(&path).join("résumé.md").exists());
     }
 
@@ -4474,6 +4626,172 @@ sleep {seconds}
     }
 
     #[tokio::test]
+    async fn a_branch_prefix_is_one_that_git_takes_before_a_name() {
+        use crate::i18n::Lang::{En, Fr};
+        for ok in [
+            "",
+            "escouade/",
+            "ticket/",
+            "feat/gg-",
+            "users/gg/",
+            "wip.",
+            "a.lock",
+            "résumé/",
+        ] {
+            assert_eq!(branch_prefix_problem_in(En, ok), None, "{ok}");
+            // Git agrees.
+            check_ref_format(&format!("{ok}x"))
+                .await
+                .unwrap_or_else(|e| panic!("{ok}: {e:#}"));
+        }
+        for bad in [
+            "-", "/", "a//", "a b", "a..", ".x/", "a/.b/", "x.lock/", "a~", "a^", "a:", "a?", "a*",
+            "a[", "a\\", "a@{", "a\t", "a\u{7f}",
+        ] {
+            assert!(branch_prefix_problem_in(En, bad).is_some(), "{bad:?}");
+            assert!(
+                check_ref_format(&format!("{bad}x")).await.is_err(),
+                "git takes {bad:?}"
+            );
+        }
+        assert_eq!(
+            branch_prefix_problem_in(En, "a b").as_deref(),
+            Some("“a b” can’t start a branch name: no spaces, “..”, “~”, “^”, “:”, “?”, “*”, “[”, “\\” or “@{”, no “-” or “/” at the start, no “//”, no part starting with “.” or ending with “.lock”.")
+        );
+        assert_eq!(
+            branch_prefix_problem_in(Fr, "a b").as_deref(),
+            Some("« a b » ne peut pas commencer un nom de branche : ni espace, ni « .. », « ~ », « ^ », « : », « ? », « * », « [ », « \\ » ou « @{ », ni « - » ou « / » au début, ni « // », ni une partie qui commence par « . » ou finit par « .lock ».")
+        );
+    }
+
+    #[test]
+    fn a_worktrees_folder_is_kept_out_from_the_root_of_its_repository() {
+        assert_eq!(exclude_pattern(".claude/worktrees"), ".claude/worktrees/");
+        assert_eq!(
+            exclude_pattern("packages/web/.claude/worktrees"),
+            "packages/web/.claude/worktrees/"
+        );
+        // Without a slash inside, a pattern would match a folder of that name anywhere.
+        assert_eq!(exclude_pattern(".worktrees"), "/.worktrees/");
+        // Nor a comment (`#`) or an exception (`!`).
+        assert_eq!(exclude_pattern("#wt"), "/#wt/");
+        assert_eq!(exclude_pattern("!a/wt"), "/!a/wt/");
+        assert_eq!(exclude_pattern("a [b]*?\\c"), "/a \\[b]\\*\\?\\\\c/");
+    }
+
+    #[tokio::test]
+    async fn a_new_agents_worktree_goes_to_the_folder_given_on_the_prefix_given() {
+        let r = repo("git-wt-root-prefix");
+        let exclude = Path::new(&r).join(".git").join("info").join("exclude");
+        // A folder out of the repository (beside it): none of its status's business.
+        let beside = crate::paths::test_dir("git-wt-root-prefix-beside");
+        let (path, branch, base) = worktree_add(&r, &beside, &[], "gg/", "login")
+            .await
+            .unwrap();
+        assert_eq!((branch.as_str(), base.as_str()), ("gg/login", "main"));
+        assert_eq!(Path::new(&path), beside.join("login"));
+        assert!(Path::new(&path).join("résumé.md").exists());
+        assert!(!std::fs::read_to_string(&exclude)
+            .unwrap_or_default()
+            .contains("beside"));
+        // Its folder taken (another repository's worktree in a shared folder): the next free
+        // name, for the branch too.
+        std::fs::create_dir_all(beside.join("api")).unwrap();
+        let (path, branch, _) = worktree_add(&r, &beside, &[], "gg/", "api").await.unwrap();
+        assert_eq!(branch, "gg/api-2");
+        assert_eq!(Path::new(&path), beside.join("api-2"));
+        // No prefix: the name alone.
+        let (path, branch, _) = worktree_add(&r, &beside, &[], "", "nu").await.unwrap();
+        assert_eq!(branch, "nu");
+        assert_eq!(Path::new(&path), beside.join("nu"));
+        // Held by an agent of the app whose worktree is gone for now: never given to another.
+        let held = [beside.join("Gone")];
+        let (path, branch, _) = worktree_add(&r, &beside, &held, "gg/", "gone")
+            .await
+            .unwrap();
+        assert_eq!(branch, "gg/gone-2");
+        assert_eq!(Path::new(&path), beside.join("gone-2"));
+        // A folder in the repository: kept out of its status, from its root.
+        let inside = Path::new(&r).join(".worktrees");
+        let (path, _, _) = worktree_add(&r, &inside, &[], "escouade/", "x")
+            .await
+            .unwrap();
+        assert_eq!(Path::new(&path), inside.join("x"));
+        // As git itself says it (the app's own status leaves out what it would show).
+        assert_eq!(text(&r, &["status", "--porcelain"]).await.unwrap(), "");
+        let lines = std::fs::read_to_string(&exclude).unwrap();
+        assert!(lines.lines().any(|l| l == "/.worktrees/"), "{lines}");
+    }
+
+    #[tokio::test]
+    async fn a_change_in_any_folder_watched_for_a_project_asks_for_its_refresh() {
+        let own = crate::paths::test_dir("git-watch-own");
+        let beside = crate::paths::test_dir("git-watch-beside");
+        let (service, mut rx) = GitService::new();
+        let folders = [own, beside.clone()].map(|d| d.to_string_lossy().into_owned());
+        service.watch("p1", &folders);
+        // Refreshed once watched.
+        assert_eq!(rx.recv().await.as_deref(), Some("p1"));
+        service.take_flag("p1");
+        std::fs::write(beside.join("x.ts"), "x\n").unwrap();
+        let next = tokio::time::timeout(Duration::from_secs(10), rx.recv()).await;
+        assert_eq!(next.expect("no refresh asked").as_deref(), Some("p1"));
+    }
+
+    #[tokio::test]
+    async fn a_worktrees_folder_holding_the_repositorys_own_files_is_refused_and_never_excluded() {
+        let r = repo("git-wt-tracked-root");
+        let src = Path::new(&r).join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.ts"), "a\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "src"]);
+        let e = worktree_add(&r, &src, &[], "escouade/", "x")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("src contient des fichiers suivis par git"),
+            "{e}"
+        );
+        assert!(!branch_exists(&r, "escouade/x").await);
+        assert!(!src.join("x").exists());
+        // The project's new files there are still seen by git, to be committed.
+        std::fs::write(src.join("new.ts"), "n\n").unwrap();
+        assert_eq!(
+            text(&r, &["status", "--porcelain"]).await.unwrap(),
+            "?? src/new.ts"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_worktrees_of_a_project_in_a_folder_of_its_repository_are_kept_out_of_its_status() {
+        let r = repo("git-wt-exclude-sub");
+        let web = Path::new(&r).join("packages").join("web");
+        std::fs::create_dir_all(&web).unwrap();
+        std::fs::write(web.join("index.ts"), "x\n").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "web"]);
+        let web = web.to_string_lossy().to_string();
+        let root = crate::paths::worktrees_root(&web, "");
+        let (path, _, _) = worktree_add(&web, &root, &[], "escouade/", "a")
+            .await
+            .unwrap();
+        assert!(Path::new(&path).join("packages/web/index.ts").exists());
+        // As git itself says it (the app's own status leaves out what it would show).
+        assert_eq!(text(&r, &["status", "--porcelain"]).await.unwrap(), "");
+        let lines =
+            std::fs::read_to_string(Path::new(&r).join(".git").join("info").join("exclude"))
+                .unwrap();
+        assert!(
+            lines
+                .lines()
+                .any(|l| l == "packages/web/.claude/worktrees/"),
+            "{lines}"
+        );
+    }
+
+    #[tokio::test]
     async fn a_branch_is_created_from_a_commit_or_from_another_branch() {
         let r = repo("git-g1-create");
         let first = text(&r, &["rev-parse", "HEAD"]).await.unwrap();
@@ -5179,7 +5497,9 @@ sleep {seconds}
         git_in(&local, &["checkout", "-qb", "feat/login"]);
         commit_file(&local, "login.txt", "login\n");
         git_in(&local, &["checkout", "-q", "main"]);
-        let (path, branch) = worktree_add_existing(&l, "feat/login").await.unwrap();
+        let (path, branch) = worktree_add_existing(&l, &wt_root(&l), &[], "feat/login")
+            .await
+            .unwrap();
         assert_eq!(branch, "feat/login");
         assert!(Path::new(&path).ends_with(".claude/worktrees/login"));
         assert_eq!(
@@ -5193,15 +5513,21 @@ sleep {seconds}
         // The folder is kept out of the repository's own status.
         assert!(dirty(&l).await.is_empty());
         // Held by that worktree now: git refuses a second one, and no folder is left behind.
-        assert!(worktree_add_existing(&l, "feat/login").await.is_err());
+        assert!(worktree_add_existing(&l, &wt_root(&l), &[], "feat/login")
+            .await
+            .is_err());
         assert_eq!(worktree_paths(&l).await.unwrap().len(), 2);
         // The folder's name is taken by that worktree: the next branch gets a free one.
         git_in(&local, &["branch", "other/login"]);
-        let (second, branch) = worktree_add_existing(&l, "other/login").await.unwrap();
+        let (second, branch) = worktree_add_existing(&l, &wt_root(&l), &[], "other/login")
+            .await
+            .unwrap();
         assert_eq!(branch, "other/login");
         assert!(Path::new(&second).ends_with(".claude/worktrees/login-2"));
         // The project's own branch is the folder's: git refuses it, nothing is left behind.
-        assert!(worktree_add_existing(&l, "main").await.is_err());
+        assert!(worktree_add_existing(&l, &wt_root(&l), &[], "main")
+            .await
+            .is_err());
         assert_eq!(worktree_paths(&l).await.unwrap().len(), 3);
     }
 
@@ -5217,7 +5543,9 @@ sleep {seconds}
         }
         git_in(&local, &["fetch", "-q"]);
         // None yet: one is made, which tracks it, with the remote branch's files.
-        let (path, branch) = worktree_add_existing(&l, "origin/feat/r").await.unwrap();
+        let (path, branch) = worktree_add_existing(&l, &wt_root(&l), &[], "origin/feat/r")
+            .await
+            .unwrap();
         assert_eq!(branch, "feat/r");
         assert!(Path::new(&path).ends_with(".claude/worktrees/r"));
         assert!(Path::new(&path).join("r.txt").exists());
@@ -5230,18 +5558,24 @@ sleep {seconds}
             &local,
             &["branch", "-q", "--track", "mine", "origin/theirs"],
         );
-        let (_, branch) = worktree_add_existing(&l, "origin/theirs").await.unwrap();
+        let (_, branch) = worktree_add_existing(&l, &wt_root(&l), &[], "origin/theirs")
+            .await
+            .unwrap();
         assert_eq!(branch, "mine");
         assert!(!branch_exists(&l, "theirs").await);
         // A local branch of its name that tracks something else: refused, nothing made.
         git_in(&local, &["branch", "-q", "clash", "main"]);
         let before = worktree_paths(&l).await.unwrap().len();
-        let e = worktree_add_existing(&l, "origin/clash").await.unwrap_err();
+        let e = worktree_add_existing(&l, &wt_root(&l), &[], "origin/clash")
+            .await
+            .unwrap_err();
         assert!(e.to_string().contains("« clash »"), "{e}");
         // Neither a branch nor an option: refused before git is asked.
         for bad in ["nowhere", "origin/nowhere", "--detach", "-b", "", "main~1"] {
             assert!(
-                worktree_add_existing(&l, bad).await.is_err(),
+                worktree_add_existing(&l, &wt_root(&l), &[], bad)
+                    .await
+                    .is_err(),
                 "{bad:?} was taken"
             );
         }
@@ -5271,7 +5605,7 @@ sleep {seconds}
         let hook = local.join(".git").join("hooks").join("post-checkout");
         fail_checkouts(&local);
         // A remote branch: git made the local branch, then failed. It did not exist before: it goes.
-        let e = worktree_add_existing(&l, "origin/feat/r")
+        let e = worktree_add_existing(&l, &wt_root(&l), &[], "origin/feat/r")
             .await
             .unwrap_err();
         assert!(format!("{e:#}").contains("refused"), "{e:#}");
@@ -5279,7 +5613,9 @@ sleep {seconds}
         assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
         assert!(!Path::new(&l).join(".claude/worktrees/r").exists());
         // A branch that was there: it stays, and nothing holds it any more.
-        assert!(worktree_add_existing(&l, "kept").await.is_err());
+        assert!(worktree_add_existing(&l, &wt_root(&l), &[], "kept")
+            .await
+            .is_err());
         assert!(branch_exists(&l, "kept").await);
         assert_eq!(worktree_paths(&l).await.unwrap().len(), before);
         assert!(!Path::new(&l).join(".claude/worktrees/kept").exists());
@@ -5287,17 +5623,28 @@ sleep {seconds}
         // Once git can do it again, both are taken up.
         std::fs::remove_file(&hook).unwrap();
         assert_eq!(
-            worktree_add_existing(&l, "origin/feat/r").await.unwrap().1,
+            worktree_add_existing(&l, &wt_root(&l), &[], "origin/feat/r")
+                .await
+                .unwrap()
+                .1,
             "feat/r"
         );
-        assert_eq!(worktree_add_existing(&l, "kept").await.unwrap().1, "kept");
+        assert_eq!(
+            worktree_add_existing(&l, &wt_root(&l), &[], "kept")
+                .await
+                .unwrap()
+                .1,
+            "kept"
+        );
     }
 
     /// `feat` (own commit, on `b.txt` or on the file `main` changes since: `conflict`) in a
     /// worktree of its own, `main` moved on.
     async fn feat_behind_main(name: &str, conflict: bool) -> (String, String) {
         let r = diverged(name, conflict);
-        let (path, _) = worktree_add_existing(&r, "feat").await.unwrap();
+        let (path, _) = worktree_add_existing(&r, &wt_root(&r), &[], "feat")
+            .await
+            .unwrap();
         (r, path)
     }
 

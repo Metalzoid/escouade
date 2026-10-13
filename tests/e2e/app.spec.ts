@@ -387,6 +387,39 @@ test('a new worktree is set up before its agent takes a message, and torn down b
   expect(fs.readFileSync(path.join(app.repo, 'teardown.txt'), 'utf8').trim()).toBe('True');
 });
 
+test('a project’s worktrees go to the folder and on the branch prefix its settings name', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo, { worktrees: true, firstAgent: false });
+  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // Beside the repository, as the repositories that want no worktree in them have it.
+  await dialog.getByRole('textbox', { name: 'Dossier des worktrees' }).fill('../demo-api-worktrees');
+  const beside = path.join(path.dirname(app.repo), 'demo-api-worktrees');
+  // (The home folder shortened to ~.)
+  await expect(dialog.getByText(/^Le prochain : .*[\\/]demo-api-worktrees[\\/]<nom>$/)).toBeVisible();
+  const prefix = dialog.getByRole('textbox', { name: 'Préfixe des branches des agents' });
+  await prefix.fill('gg /');
+  await expect(prefix).toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+  await prefix.fill('gg/');
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await expect.poll(() => (fs.existsSync(beside) ? fs.readdirSync(beside) : [])).toEqual(['agent-1']);
+  const wt = path.join(beside, 'agent-1');
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  expect(git(wt, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('gg/agent-1');
+  // Nothing in the repository: neither a folder nor a line of its status.
+  expect(fs.existsSync(path.join(app.repo, '.claude'))).toBe(false);
+  expect(git(app.repo, 'status', '--porcelain')).toBe('');
+  // The sidebar shows its branch without the project's prefix, the editor its folder from the project's.
+  await expect(page.locator('.card').first()).toContainText('⎇ agent-1');
+  await page.locator('.card').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Ouvrir dans l’éditeur' }).click();
+  await expect(page.getByText('../demo-api-worktrees/agent-1', { exact: true })).toBeVisible();
+});
+
 test('a terminal runs commands in the project folder', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);

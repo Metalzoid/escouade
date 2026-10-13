@@ -149,7 +149,7 @@ export default defineZone('branches', {
   ticket: {
     branch: 'Branch',
     /** The ticket’s own branch, made at its start: its key is not known yet. */
-    ownNew: 'New branch ticket/<key>',
+    ownNew: 'New branch {prefix}<key>',
     /** `{branch}`: the ticket’s own branch (`ticket/dem-3`). */
     own: 'New branch {branch}',
     existing: 'Take up an existing branch…',

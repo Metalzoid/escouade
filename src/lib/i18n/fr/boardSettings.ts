@@ -20,7 +20,8 @@ export default {
   summary: {
     merge: 'merge {strategy} → {target}',
     pr: 'PR → {target}',
-    push: 'push ticket/*',
+    /** `{prefix}`: the project's « Préfixe des branches des tickets » (`ticket/`). */
+    push: 'push {prefix}*',
     keep: "laisser en l'état",
   },
 
@@ -76,11 +77,11 @@ export default {
       },
       pr: {
         label: 'Ouvrir une pull request',
-        desc: 'Pousse ticket/<clé> et ouvre une PR vers la branche cible pour relecture.',
+        desc: 'Pousse {prefix}<clé> et ouvre une PR vers la branche cible pour relecture.',
       },
       push: {
         label: 'Pousser la branche du ticket',
-        desc: 'Commit et push sur ticket/<clé>, sans merge ni PR.',
+        desc: 'Commit et push sur {prefix}<clé>, sans merge ni PR.',
       },
       keep: {
         label: "Laisser en l'état",

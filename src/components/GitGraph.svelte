@@ -108,7 +108,14 @@
       .map((r) => {
         if (r.startsWith('tag: ')) return { text: r.slice(5), title: t('git.graph.tag', { name: r.slice(5) }), kind: 'tag' };
         const owner = Object.values(app.agents).find((a) => a.projectId === project.id && a.worktree?.branch === r);
-        const kind = r === log?.head ? 'head' : owner ? 'agent' : r.includes('/') && !isAgentBranch(r) ? 'remote' : 'branch';
+        const kind =
+          r === log?.head
+            ? 'head'
+            : owner
+              ? 'agent'
+              : r.includes('/') && !isAgentBranch(r, project.agentBranchPrefix)
+                ? 'remote'
+                : 'branch';
         return { text: owner ? owner.name : r, title: owner ? t('git.graph.agentBranch', { branch: r, agent: owner.name }) : r, kind };
       });
   }
