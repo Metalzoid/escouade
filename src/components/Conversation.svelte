@@ -28,6 +28,7 @@
   import ToolRow from './conv/ToolRow.svelte';
   import TurnCard from './conv/TurnCard.svelte';
   import UserMessage from './conv/UserMessage.svelte';
+  import PullRequests from './PullRequests.svelte';
   import StatusDot from './StatusDot.svelte';
   import { tip } from '../lib/tip';
 
@@ -434,7 +435,10 @@
         <span class="name" ondblclick={rename} role="presentation" use:tip={t('conv.header.renameHint')}>{agent.name}</span>
         <span class="st" style:color={SC[agent.status]}><StatusDot status={agent.status} size={7} />{statusLabel(agent.status)}</span>
       </div>
-      <span class="sub mono">{project.name} / {branch || '—'}</span>
+      <div class="under">
+        <span class="sub mono">{project.name} / {branch || '—'}</span>
+        <PullRequests pulls={agent.pullRequests} inline />
+      </div>
     </div>
     <div style="flex:1"></div>
     <button
@@ -718,6 +722,13 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
+  }
+  /* Where it works, then its pull requests. */
+  .under {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
   }
   .sub {
     font-size: 11px;

@@ -96,4 +96,19 @@ export default {
     remoteOn: '{name} est accessible depuis claude.ai et l’app Claude',
     linkCopied: 'Lien claude.ai copié',
   },
+
+  // The pull requests linked to an agent, on its card and in the header of its conversation.
+  pulls: {
+    /** The list, for a screen reader. */
+    label: 'Pull requests',
+    /** `{n}`: its number. What its number does when clicked. */
+    open: 'Ouvrir la pull request #{n} dans le navigateur',
+    state: { open: 'ouverte', draft: 'brouillon', merged: 'mergée', closed: 'fermée' },
+    /** GitHub told nothing of it yet: `gh` is missing, or not signed in. */
+    unknown: 'état inconnu : installe gh (GitHub CLI) et connecte-le (gh auth login) pour le suivre',
+    checks: { pending: 'CI en cours', passing: 'CI verte', failing: 'CI rouge' },
+    review: { approved: 'approuvée', changes: 'changements demandés', required: 'relecture attendue' },
+    /** On a card, past the ones shown. */
+    more: { one: '+ {count} autre', other: '+ {count} autres' },
+  },
 } as const satisfies Tree;

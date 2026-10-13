@@ -85,4 +85,14 @@ export default defineZone('git', {
     remoteOn: '{name} is reachable from claude.ai and the Claude app',
     linkCopied: 'claude.ai link copied',
   },
+
+  pulls: {
+    label: 'Pull requests',
+    open: 'Open pull request #{n} in the browser',
+    state: { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' },
+    unknown: 'state unknown: install gh (the GitHub CLI) and sign it in (gh auth login) to follow it',
+    checks: { pending: 'checks running', passing: 'checks passing', failing: 'checks failing' },
+    review: { approved: 'approved', changes: 'changes requested', required: 'review required' },
+    more: { one: '+ {count} more', other: '+ {count} more' },
+  },
 });
