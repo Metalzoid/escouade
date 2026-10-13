@@ -50,17 +50,21 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
-      # Reading the job's log takes admin rights: failed tests are also reported as an annotation.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
+      # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
+      # rights: the failures, and the tests that passed at a new try, are also annotations.
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
         shell: bash
         run: |
-          cargo test 2>&1 | tee cargo-test.log
+          set +e
+          cargo nextest run --profile ci 2>&1 | tee nextest.log
           status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then
-            grep -E -A12 '^---- .* stdout ----$|^failures:$' cargo-test.log | head -150 > failures.txt || true
-            node -e "const t=require('fs').readFileSync('failures.txt','utf8');console.log('::error title=cargo test::'+t.replace(/%/g,'%25').replace(/\r/g,'').replace(/\n/g,'%0A'))"
-          fi
+          node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
       - name: Build the app for end-to-end tests
@@ -135,9 +139,22 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
+      # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
+      # rights: the failures, and the tests that passed at a new try, are also annotations.
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
-        run: cargo test
+        shell: bash
+        run: |
+          set +e
+          cargo nextest run --profile ci 2>&1 | tee nextest.log
+          status=${PIPESTATUS[0]}
+          node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
+          exit $status
 
       # Without the updater key: only checks that the AppImage and the .deb build.
       - name: Build the packages
@@ -185,9 +202,23 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
+      # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
+      # rights: the failures, and the tests that passed at a new try, are also annotations.
+      # The runner has 3 vCPUs.
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
-        run: cargo test
+        shell: bash
+        run: |
+          set +e
+          cargo nextest run --profile ci --test-threads 3 2>&1 | tee nextest.log
+          status=${PIPESTATUS[0]}
+          node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
+          exit $status
 
       # Without the updater key: only checks that the app and its disk image build.
       - name: Build the app bundle

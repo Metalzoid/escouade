@@ -1,0 +1,29 @@
+# cargo-nextest: the tool the CI runs the Rust tests with (`cargo nextest run --profile ci`);
+# `cargo test` keeps working too. Nextest starts one process per test: a test that hangs is killed
+# and named, and the process-wide state the tests of one binary shared (isola's test CLI, the
+# caches) is no longer shared. The only lock that ever made tests wait for each other is the
+# shells' one, below.
+
+[test-groups]
+# Tests starting a real shell, one at a time (a lock inside `pty.rs`, `one_shell_at_a_time`, did it
+# between threads): several Windows PowerShells booting at once on a CI runner can outlast what the
+# tests wait for, and the ping tests count the machine's `ping` processes.
+shells = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "test(/^pty::/)"
+test-group = "shells"
+
+[profile.ci]
+# Every failure is reported, not only the first.
+fail-fast = false
+# A test that fails runs again, up to twice: one that passes then is reported as flaky (FLAKY).
+retries = { backoff = "fixed", count = 2, delay = "1s" }
+# After a minute a test is reported as slow; after three, it is killed and named.
+slow-timeout = { period = "60s", terminate-after = 3 }
+# The failures' output is also repeated at the end of the log, where the annotation reads it
+# (scripts/nextest-annotations.mjs).
+failure-output = "immediate-final"
+
+[profile.ci.junit]
+path = "junit.xml"
