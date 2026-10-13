@@ -340,9 +340,9 @@ mod tests {
 
     #[test]
     fn a_released_job_kills_nothing_when_it_is_dropped() {
-        let mut child = Command::new("ping")
-            .args(["-n", "30", "127.0.0.1"])
-            .stdout(std::process::Stdio::null())
+        // Not `ping`: the terminals' tests count the machine's `ping` processes.
+        let mut child = Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Start-Sleep 30"])
             .spawn()
             .unwrap();
         let job = Job::new().unwrap();
