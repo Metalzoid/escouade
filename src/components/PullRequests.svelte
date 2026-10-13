@@ -7,12 +7,13 @@
   import type { PullRequestLink } from '../lib/types';
 
   // The pull requests linked to an agent: the number of each, which opens its page, its state and, while it is to
-  // merge, its checks and its reviews. One under the other on an agent's card (`max` of them, the others counted), in a
-  // row in the header of its conversation (`inline`).
+  // merge, its checks and its reviews. One under the other on an agent's card, in a row in the header of its
+  // conversation (`inline`); `max` of them, the others counted, and named when the count is pointed at.
   let { pulls, max = Infinity, inline = false }: { pulls: PullRequestLink[]; max?: number; inline?: boolean } = $props();
 
   const all = $derived(shownPulls(pulls));
   const shown = $derived(all.slice(0, max));
+  const others = $derived(all.slice(max));
   /** What the checks say, at a glance; their words are in the tip, and read to a screen reader. */
   const CHECKS = { pending: '●', passing: '✓', failing: '✗' } as const;
 
@@ -20,6 +21,11 @@
     // On a card: the click is the link's, not the card's.
     e.stopPropagation();
     void app.run(openUrl(pr.url));
+  }
+
+  /** The keys that press the number are its own, not the card's (Enter selects its agent); every other one goes on, to the window's shortcuts. */
+  function ownKeys(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
   }
 </script>
 
@@ -33,7 +39,7 @@
           aria-label={t('git.pulls.open', { n: pr.number })}
           use:tip={pullTip(pr)}
           onclick={(e) => open(e, pr)}
-          onkeydown={(e) => e.stopPropagation()}>#{pr.number}</button
+          onkeydown={ownKeys}>#{pr.number}</button
         >
         {#if pr.state}<span class="state">{t(`git.pulls.state.${pr.state}`)}</span>{/if}
         {#if pr.checks}
@@ -44,8 +50,8 @@
         {#if pr.review}<span class="review" data-review={pr.review}>{t(`git.pulls.review.${pr.review}`)}</span>{/if}
       </li>
     {/each}
-    {#if all.length > shown.length}
-      <li class="more">{t('git.pulls.more', { count: all.length - shown.length })}</li>
+    {#if others.length}
+      <li class="more" use:tip={others.map(pullTip).join('\n')}>{t('git.pulls.more', { count: others.length })}</li>
     {/if}
   </ul>
 {/if}
@@ -62,10 +68,11 @@
     font-size: 11px;
     color: var(--muted);
   }
+  /* On one line, whatever their number: the header has one line for them. */
   .pulls.inline {
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0 12px;
+    gap: 12px;
+    overflow: hidden;
   }
   .pr,
   .more {

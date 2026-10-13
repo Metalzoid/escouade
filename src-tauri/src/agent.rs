@@ -1387,7 +1387,7 @@ impl AgentRt {
             // Whether it failed or not: `gh pr create` fails on a branch that has its pull request
             // already, and names it.
             if self.pr_calls.remove(id) {
-                if let Some((number, url)) = pulls::find(&text) {
+                if let Some((number, url)) = pulls::opened(tur["stdout"].as_str(), &text) {
                     if self.link_pull_request(number, url) {
                         fx.agent_changed = true;
                         fx.save = true;
@@ -4841,6 +4841,38 @@ git add docs/superpowers/plans/2026-10-11-slugify.md && git commit -qm plan";
                 (22, "https://github.com/acme/demo/pull/22")
             ]
         );
+    }
+
+    #[test]
+    fn the_pull_request_linked_is_the_one_the_command_opened_not_one_it_names_before() {
+        let mut a = rt();
+        // The comment's address is printed first, the new pull request's last.
+        call(
+            &mut a,
+            None,
+            "t1",
+            "Bash",
+            json!({ "command": "gh pr comment 9 --body superseded; gh pr create --fill" }),
+        );
+        let out = "https://github.com/acme/demo/pull/9#issuecomment-1\nhttps://github.com/acme/demo/pull/14\n";
+        returns(&mut a, "t1", "", json!({ "stdout": out, "stderr": "" }));
+        assert_eq!(linked(&a), [(14, "https://github.com/acme/demo/pull/14")]);
+        // Its address kept in a variable and printed by another command of the line.
+        call(
+            &mut a,
+            None,
+            "t2",
+            "Bash",
+            json!({ "command": "PR_URL=$(gh pr create --fill) && echo \"opened $PR_URL\"" }),
+        );
+        returns(
+            &mut a,
+            "t2",
+            "",
+            json!({ "stdout": "opened https://github.com/acme/demo/pull/15\n", "stderr": "" }),
+        );
+        assert_eq!(a.meta.pull_requests.len(), 2);
+        assert_eq!(a.meta.pull_requests[1].number, 15);
     }
 
     #[test]

@@ -8,6 +8,7 @@ use crate::git;
 use crate::model::{now_ms, PullRequestLink};
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -16,8 +17,11 @@ use tauri::Runtime;
 
 /// How long `gh` may take to tell of pull requests.
 const GH_LIMIT: Duration = Duration::from_secs(30);
-/// What `gh` is asked of a pull request.
-const FIELDS: &str = "number,url,title,state,isDraft,createdAt,reviewDecision,statusCheckRollup";
+/// What `gh` is asked of a pull request, but its checks.
+const FIELDS: &str = "number,url,title,state,isDraft,createdAt,reviewDecision,headRepositoryOwner";
+/// Its checks, asked with the rest: a token may not be allowed to read them (a fine-grained one
+/// without the checks), and the rest is then asked alone.
+const CHECKS: &str = "statusCheckRollup";
 /// At most this many pull requests of a branch are asked for: the latest ones.
 const BRANCH_LIMIT: &str = "20";
 /// The least time between two readings of an agent's pull requests that nothing new calls for
@@ -34,22 +38,63 @@ pub struct Reading {
     last: Option<Instant>,
 }
 
-/// A command line that opens a pull request: `gh pr create`, whatever comes before (`cd x &&`, a
-/// variable) or between `gh` and `pr` (`-R owner/repo`).
+/// A command line that opens a pull request: one of its commands (what `;`, `&&`, `|`, a line
+/// break, a substitution `$(…)` or backticks part) runs `gh pr create`, or `gh pr new`. A text
+/// that holds one of those signs can be taken for a command (`-m "wip; gh pr create later"`):
+/// only an address in the call's result links anything.
 pub fn opens_pull_request(command: &str) -> bool {
-    let words: Vec<&str> = command.split_whitespace().collect();
-    words.iter().enumerate().any(|(i, w)| {
-        let program = w.rsplit(['/', '\\']).next().unwrap_or(w);
-        if !matches!(program, "gh" | "gh.exe") {
+    command
+        .split(|c: char| {
+            matches!(
+                c,
+                ';' | '&' | '|' | '\n' | '\r' | '(' | ')' | '`' | '{' | '}'
+            )
+        })
+        .any(runs_pr_create)
+}
+
+/// `command` (one command, no operator) runs `gh pr create`: `gh`, by its name or its path (in
+/// quotes when it holds spaces, as `C:\Program Files\GitHub CLI\gh.exe` does), after the
+/// variables set for it and the words that run it (`GH_TOKEN=x`, `env`), then `pr create` past
+/// its own options (`-R owner/repo`).
+fn runs_pr_create(command: &str) -> bool {
+    let mut rest = command.trim_start();
+    loop {
+        let (word, after) = first_word(rest);
+        if word.is_empty() {
             return false;
         }
-        // Its options and their values, then the command.
-        words[i + 1..]
+        let sets_variable = word.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+        if sets_variable || matches!(word, "env" | "command" | "exec" | "time" | "nohup") {
+            rest = after.trim_start();
+            continue;
+        }
+        let program = word.rsplit(['/', '\\']).next().unwrap_or(word);
+        if !matches!(program.to_ascii_lowercase().as_str(), "gh" | "gh.exe") {
+            return false;
+        }
+        let words: Vec<&str> = after.split_whitespace().collect();
+        return words
             .iter()
             .take(5)
             .position(|w| *w == "pr")
-            .is_some_and(|at| words.get(i + at + 2) == Some(&"create"))
-    })
+            .is_some_and(|at| matches!(words.get(at + 1), Some(&"create") | Some(&"new")));
+    }
+}
+
+/// The first word of `command` and what follows it: up to a space, or between its quotes.
+fn first_word(command: &str) -> (&str, &str) {
+    match command.chars().next() {
+        Some(quote @ ('"' | '\'')) => match command[1..].split_once(quote) {
+            Some((word, after)) => (word, after),
+            None => (&command[1..], ""),
+        },
+        _ => command
+            .split_once(char::is_whitespace)
+            .unwrap_or((command, "")),
+    }
 }
 
 /// A tool that opens a pull request: the GitHub MCP server's, whatever the server is named
@@ -58,9 +103,23 @@ pub fn is_create_tool(name: &str) -> bool {
     name.starts_with("mcp__") && name.ends_with("create_pull_request")
 }
 
-/// The first pull request named in `text` (what `gh pr create` printed, a tool's JSON answer):
-/// its number and its address, `https://<host>/<owner>/<repo>/pull/<n>`, without what follows.
-pub fn find(text: &str) -> Option<(u32, String)> {
+/// The pull request a call that opens one gave. A tool's JSON answer: its own page (`html_url`),
+/// not one its description names. A command: the last address it printed (`gh pr create` prints
+/// its pull request last, after what the commands run before it said of others), else the last
+/// of all it wrote (`gh` names in its error the pull request a branch has already).
+pub fn opened(stdout: Option<&str>, text: &str) -> Option<(u32, String)> {
+    if let Ok(answer) = serde_json::from_str::<Value>(text.trim()) {
+        if let Some(own) = answer["html_url"].as_str().and_then(address) {
+            return Some(own);
+        }
+    }
+    stdout.and_then(last).or_else(|| last(text))
+}
+
+/// The last pull request named in `text`: its number and its address,
+/// `https://<host>/<owner>/<repo>/pull/<n>`, without what follows.
+pub fn last(text: &str) -> Option<(u32, String)> {
+    let mut found = None;
     let mut rest = text;
     while let Some(at) = rest.find("https://") {
         let from = &rest[at..];
@@ -70,12 +129,10 @@ pub fn find(text: &str) -> Option<(u32, String)> {
                     || matches!(c, '"' | '\'' | '<' | '>' | ')' | ']' | '}' | ',' | '\\')
             })
             .unwrap_or(from.len());
-        if let Some(found) = address(&from[..end]) {
-            return Some(found);
-        }
+        found = address(&from[..end]).or(found);
         rest = &from["https://".len()..];
     }
-    None
+    found
 }
 
 /// `url` as a pull request's: its number and its address up to it.
@@ -98,8 +155,8 @@ fn address(url: &str) -> Option<(u32, String)> {
     ))
 }
 
-/// A pull request as `gh … --json` tells it (`FIELDS`), read now; None when it has no address.
-/// The second value: when it was opened (ms since epoch), 0 when `gh` did not say.
+/// A pull request as `gh … --json` tells it (`FIELDS`, `CHECKS`), read now; None when it has no
+/// address. The second value: when it was opened (ms since epoch), 0 when `gh` did not say.
 pub fn parse(v: &Value, now: i64) -> Option<(PullRequestLink, i64)> {
     let (number, url) = address(v["url"].as_str()?)?;
     let state = match v["state"].as_str().unwrap_or("") {
@@ -141,12 +198,30 @@ pub fn parse(v: &Value, now: i64) -> Option<(PullRequestLink, i64)> {
 
 /// What a pull request's checks say as a whole (`statusCheckRollup`: check runs and commit
 /// statuses): "failing" as soon as one failed, else "pending" while one runs or waits, else
-/// "passing"; empty without any.
+/// "passing"; empty without any. A check run again is listed with its earlier runs: only the
+/// latest of each (by its name and its workflow's) counts, as `gh pr checks` does.
 fn checks(rollup: &Value) -> &'static str {
     let Some(all) = rollup.as_array().filter(|a| !a.is_empty()) else {
         return "";
     };
     let word = |c: &Value, key: &str| c[key].as_str().unwrap_or("").to_string();
+    let mut latest: HashMap<(String, String), &Value> = HashMap::new();
+    let mut counted: Vec<&Value> = Vec::new();
+    for c in all {
+        let name = c["name"].as_str().or(c["context"].as_str()).unwrap_or("");
+        if name.is_empty() {
+            counted.push(c);
+            continue;
+        }
+        let run = latest
+            .entry((word(c, "workflowName"), name.to_string()))
+            .or_insert(c);
+        // Dates written the same way: compared as written.
+        if word(c, "startedAt") >= word(run, "startedAt") {
+            *run = c;
+        }
+    }
+    counted.extend(latest.into_values());
     let failed = |c: &Value| {
         matches!(
             word(c, "conclusion").as_str(),
@@ -158,9 +233,9 @@ fn checks(rollup: &Value) -> &'static str {
         Some(status) => status != "COMPLETED",
         None => matches!(word(c, "state").as_str(), "PENDING" | "EXPECTED"),
     };
-    if all.iter().any(failed) {
+    if counted.iter().any(|c| failed(c)) {
         "failing"
-    } else if all.iter().any(running) {
+    } else if counted.iter().any(|c| running(c)) {
         "pending"
     } else {
         "passing"
@@ -197,13 +272,16 @@ pub fn may_change(link: &PullRequestLink) -> bool {
     link.state != "merged"
 }
 
-/// The pull requests of the branch `branch` in the repository of `cwd`, whoever opened them, as
-/// GitHub has them now: those still open, and those opened since `since` (ms since epoch; the
-/// agent's creation: a branch's name may have served before, or be a long-lived one).
+/// The pull requests of the branch `branch` in the repository of `cwd`, as GitHub has them now:
+/// those still open, and those opened since `since` (ms since epoch; the agent's creation: a
+/// branch's name may have served before, or be a long-lived one). `owners`: who has that branch
+/// among the repository's remotes (`pushed_to`); when known, a pull request from someone else's
+/// fork, whose branch only bears the same name, is not the agent's.
 pub async fn of_branch(
     gh: &Path,
     cwd: &str,
     branch: &str,
+    owners: &[String],
     since: i64,
     now: i64,
 ) -> Result<Vec<PullRequestLink>> {
@@ -220,15 +298,18 @@ pub async fn of_branch(
         "all",
         "--limit",
         BRANCH_LIMIT,
-        "--json",
-        FIELDS,
     ];
-    let out: Value = serde_json::from_str(&run(gh, cwd, &args).await?)?;
+    let out = ask(gh, cwd, &args).await?;
+    let ours = |v: &Value| match v["headRepositoryOwner"]["login"].as_str() {
+        Some(owner) if !owners.is_empty() => owners.contains(&owner.to_lowercase()),
+        _ => true,
+    };
     let mut found: Vec<PullRequestLink> = out
         .as_array()
         .map(Vec::as_slice)
         .unwrap_or_default()
         .iter()
+        .filter(|v| ours(v))
         .filter_map(|v| parse(v, now))
         .filter(|(link, opened)| {
             matches!(link.state.as_str(), "open" | "draft") || *opened >= since
@@ -239,22 +320,49 @@ pub async fn of_branch(
     Ok(found)
 }
 
-/// The pull request at `url`, as GitHub has it now. `cwd`: any folder that exists (the address
-/// names the repository).
+/// The pull request at `url`, as GitHub has it now, under the address it was asked at (the one
+/// it is linked by: GitHub answers with another once its repository was renamed). `cwd`: any
+/// folder that exists (the address names the repository).
 pub async fn at(gh: &Path, cwd: &str, url: &str, now: i64) -> Result<PullRequestLink> {
-    // Only what `find` or `gh` gave is ever asked for.
+    // Only what a call's result or `gh` gave is ever asked for.
     if address(url).is_none() {
         bail!("not a pull request: {url}");
     }
-    let out: Value =
-        serde_json::from_str(&run(gh, cwd, &["pr", "view", url, "--json", FIELDS]).await?)?;
-    parse(&out, now)
-        .map(|(link, _)| link)
-        .ok_or_else(|| anyhow!("gh pr view: no pull request in its answer"))
+    let out = ask(gh, cwd, &["pr", "view", url]).await?;
+    let (link, _) =
+        parse(&out, now).ok_or_else(|| anyhow!("gh pr view: no pull request in its answer"))?;
+    Ok(PullRequestLink {
+        url: url.to_string(),
+        ..link
+    })
+}
+
+/// What `gh <args> --json …` answers: the pull requests with their checks, or without them when
+/// `gh` cannot tell them with the rest.
+async fn ask(gh: &Path, cwd: &str, args: &[&str]) -> Result<Value> {
+    let with = |fields: &str| {
+        let mut all: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+        all.extend(["--json".to_string(), fields.to_string()]);
+        all
+    };
+    let out = match run(gh, cwd, &with(&format!("{FIELDS},{CHECKS}"))).await {
+        Ok(out) => out,
+        Err(e) if checks_refused(&e.to_string()) => run(gh, cwd, &with(FIELDS)).await?,
+        Err(e) => return Err(e),
+    };
+    Ok(serde_json::from_str(&out)?)
+}
+
+/// What `gh` answers when GitHub refuses the checks to its token (a fine-grained one without
+/// them, an app's): « GraphQL: Resource not accessible by … (repository.pullRequest.
+/// statusCheckRollup…) ». Any other failure (not signed in, no network, no such pull request)
+/// would fail the same without them.
+fn checks_refused(error: &str) -> bool {
+    error.contains(CHECKS) || error.contains("Resource not accessible")
 }
 
 /// `gh <args>` in `cwd`, never asking anything: what it printed.
-async fn run(gh: &Path, cwd: &str, args: &[&str]) -> Result<String> {
+async fn run(gh: &Path, cwd: &str, args: &[String]) -> Result<String> {
     let mut cmd = tokio::process::Command::new(gh);
     cmd.args(args)
         .current_dir(cwd)
@@ -270,7 +378,8 @@ async fn run(gh: &Path, cwd: &str, args: &[&str]) -> Result<String> {
     let child = cmd.spawn()?;
     // Dropped when this returns: whatever it left running (a `.cmd`'s node…) ends with it.
     let _job = crate::job::Job::for_child(&child);
-    let out = tokio::time::timeout(GH_LIMIT, child.wait_with_output())
+    // Not the end of its pipes: a process started at the same moment may hold them (`proc`).
+    let out = tokio::time::timeout(GH_LIMIT, crate::proc::wait_output(child))
         .await
         .map_err(|_| {
             anyhow!(
@@ -285,16 +394,48 @@ async fn run(gh: &Path, cwd: &str, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-/// Whether a remote has the branch `branch` of the repository of `cwd`, as of the last push or
-/// fetch here: until then it has no pull request, and GitHub is not asked.
-async fn pushed(cwd: &str, branch: &str) -> bool {
+/// Who has the branch `branch` of the repository of `cwd` among its remotes, as of the last push
+/// or fetch here: the owner of each one's repository (lowercase), when its address tells. None
+/// while no remote has it: it has no pull request then, and GitHub is not asked.
+async fn pushed_to(cwd: &str, branch: &str) -> Option<Vec<String>> {
+    let pattern = format!("refs/remotes/*/{branch}");
+    let refs = git::text(cwd, &["for-each-ref", "--format=%(refname)", &pattern])
+        .await
+        .ok()?;
     let tail = format!("/{branch}");
-    git::text(
-        cwd,
-        &["for-each-ref", "--format=%(refname)", "refs/remotes"],
-    )
-    .await
-    .is_ok_and(|refs| refs.lines().any(|r| r.ends_with(&tail)))
+    let remotes: Vec<&str> = refs
+        .lines()
+        .filter_map(|r| r.strip_prefix("refs/remotes/")?.strip_suffix(&tail))
+        .collect();
+    if remotes.is_empty() {
+        return None;
+    }
+    let mut owners = Vec::new();
+    for remote in remotes {
+        let url = git::remote_url(cwd, remote).await;
+        owners.extend(url.as_deref().and_then(owner_of));
+    }
+    Some(owners)
+}
+
+/// The owner of the repository at a remote's address, lowercase: `https://host/owner/repo`,
+/// `ssh://git@host/owner/repo`, `git@host:owner/repo`. None for a folder.
+fn owner_of(url: &str) -> Option<String> {
+    let url = url.trim();
+    let path = match url.split_once("://") {
+        Some(("http" | "https" | "ssh" | "git", rest)) => rest.split_once('/')?.1,
+        Some(_) => return None,
+        None => {
+            let (host, path) = url.split_once(':')?;
+            // A path with a drive, or a folder whose name holds a colon.
+            if host.len() < 2 || host.contains(['/', '\\']) {
+                return None;
+            }
+            path
+        }
+    };
+    let owner = path.trim_start_matches('/').split('/').next()?;
+    (!owner.is_empty()).then(|| owner.to_lowercase())
 }
 
 impl<R: Runtime> Core<R> {
@@ -309,6 +450,10 @@ impl<R: Runtime> Core<R> {
     /// reading at a time per agent. `now`: something new calls for it (it just opened one); else
     /// it is skipped when they were read less than `EVERY` ago.
     pub async fn refresh_pull_requests(self: &Arc<Self>, id: &str, now: bool) {
+        // Nothing is kept of an agent that is gone.
+        if self.agent(id).is_err() {
+            return;
+        }
         {
             let mut reads = self.pr_reads.lock();
             let r = reads.entry(id.to_string()).or_default();
@@ -323,7 +468,13 @@ impl<R: Runtime> Core<R> {
         }
         loop {
             self.read_pull_requests(id).await;
+            // Deleted meanwhile: what its deletion forgot before this ended goes now.
+            let gone = self.agent(id).is_err();
             let mut reads = self.pr_reads.lock();
+            if gone {
+                reads.remove(id);
+                return;
+            }
             let Some(r) = reads.get_mut(id) else {
                 return;
             };
@@ -358,17 +509,17 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Links to the agent the pull request the app just opened for its ticket: named in `text`
-    /// (what `gh pr create` printed), with the title it was given, open or a draft. GitHub is not
-    /// asked: it was told this very moment.
+    /// Links to the agent the pull request the app just opened for its ticket, as `gh pr create`
+    /// printed it (`last`), with the title it was given, open or a draft. GitHub is not asked: it
+    /// was told this very moment.
     pub(crate) fn link_opened(
         self: &Arc<Self>,
         agent_id: &str,
-        text: &str,
+        (number, url): (u32, String),
         title: &str,
         draft: bool,
     ) {
-        let (Some((number, url)), Ok(h)) = (find(text), self.agent(agent_id)) else {
+        let Ok(h) = self.agent(agent_id) else {
             return;
         };
         let opened = PullRequestLink {
@@ -386,9 +537,9 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Reads with `gh` the pull requests of the agent's own branch (an agent with a worktree,
-    /// once a remote has its branch), then those linked to it that are not among them and may
-    /// still change. Nothing without `gh`; what `gh` cannot tell (not signed in, no network)
-    /// stays as it was last told.
+    /// once a remote has its branch), then, all at once, those linked to it that are not among
+    /// them and may still change. Nothing without `gh`; what `gh` cannot tell (not signed in, no
+    /// network) stays as it was last told.
     async fn read_pull_requests(self: &Arc<Self>, id: &str) {
         let Some(gh) = self.gh_cli() else {
             return;
@@ -410,8 +561,8 @@ impl<R: Runtime> Core<R> {
         let now = now_ms();
         let mut read = Vec::new();
         if let Some(wt) = worktree.filter(|wt| Path::new(&wt.path).is_dir()) {
-            if pushed(&wt.path, &wt.branch).await {
-                match of_branch(&gh, &wt.path, &wt.branch, since, now).await {
+            if let Some(owners) = pushed_to(&wt.path, &wt.branch).await {
+                match of_branch(&gh, &wt.path, &wt.branch, &owners, since, now).await {
                     Ok(found) => read = found,
                     Err(e) => {
                         log::info!("agent {id}: pull requests of {} not read: {e:#}", wt.branch)
@@ -426,16 +577,20 @@ impl<R: Runtime> Core<R> {
             .flatten()
             .find(|dir| Path::new(dir).is_dir());
         if let Some(folder) = folder {
-            let others: Vec<&PullRequestLink> = known
+            let asked: Vec<_> = known
                 .iter()
                 .filter(|l| may_change(l) && !read.iter().any(|r| r.url == l.url))
+                .map(|link| {
+                    let (gh, folder, url) = (gh.clone(), folder.clone(), link.url.clone());
+                    let view = async move { at(&gh, &folder, &url, now).await };
+                    (link.number, tauri::async_runtime::spawn(view))
+                })
                 .collect();
-            for link in others {
-                match at(&gh, &folder, &link.url, now).await {
-                    Ok(pr) => read.push(pr),
-                    Err(e) => {
-                        log::info!("agent {id}: pull request #{} not read: {e:#}", link.number)
-                    }
+            for (number, view) in asked {
+                match view.await {
+                    Ok(Ok(pr)) => read.push(pr),
+                    Ok(Err(e)) => log::info!("agent {id}: pull request #{number} not read: {e:#}"),
+                    Err(e) => log::warn!("agent {id}: pull request #{number} not read: {e}"),
                 }
             }
         }
@@ -458,21 +613,38 @@ mod tests {
     fn a_command_that_runs_gh_pr_create_opens_a_pull_request_and_no_other_does() {
         for command in [
             "gh pr create --title \"Fix\" --body \"…\"",
+            "gh pr new --fill",
             "cd web && gh pr create --fill",
+            "git push&&gh pr create --fill",
             "git push -u origin HEAD\ngh  pr   create --draft",
             "GH_TOKEN=x gh -R acme/demo pr create --fill",
+            "env GH_TOKEN=x gh pr create --fill",
             "/opt/homebrew/bin/gh pr create",
             "C:\\Tools\\gh.exe pr create --fill",
+            // Its address kept by the shell, or printed by another command.
+            "PR_URL=$(gh pr create --fill) && echo $PR_URL",
+            "echo \"$(gh pr create --fill)\"",
+            "url=`gh pr create --fill`",
+            "(cd web; gh pr create --fill) | tee pr.txt",
+            // Where the installer puts it under Windows: a path with spaces, in quotes.
+            "& 'C:\\Program Files\\GitHub CLI\\gh.exe' pr create --fill",
+            "\"C:\\Program Files\\GitHub CLI\\gh.exe\" pr create --fill",
+            // A title that holds what parts commands comes after the command.
+            "gh pr create --title \"Fix (login) & co; part 2\"",
         ] {
             assert!(opens_pull_request(command), "{command}");
         }
         for command in [
             "gh pr list",
             "gh pr view 12",
+            "gh pr edit 9 --base main",
             "gh issue create --title pr",
             "echo gh pr created",
+            "echo gh pr create",
             "git commit -m 'gh pr create later'",
+            "git commit -m \"gh pr create later\"",
             "ghx pr create",
+            "'gh pr create'",
             "",
         ] {
             assert!(!opens_pull_request(command), "{command}");
@@ -486,32 +658,30 @@ mod tests {
     }
 
     #[test]
-    fn the_first_pull_request_of_a_text_is_found_whatever_surrounds_its_address() {
+    fn the_last_pull_request_of_a_text_is_found_whatever_surrounds_its_address() {
         let pr = |n: u32| Some((n, format!("https://github.com/acme/demo/pull/{n}")));
         // What `gh pr create` prints, its notes on stderr first.
         assert_eq!(
-            find("Creating pull request for feat into main in acme/demo\n\nhttps://github.com/acme/demo/pull/12\n"),
+            last("Creating pull request for feat into main in acme/demo\n\nhttps://github.com/acme/demo/pull/12\n"),
             pr(12)
-        );
-        // An MCP tool's JSON: the API's own address is not the page's.
-        assert_eq!(
-            find(
-                r#"{"url":"https://api.github.com/repos/acme/demo/pulls/7","html_url":"https://github.com/acme/demo/pull/7","number":7}"#
-            ),
-            pr(7)
         );
         // In a sentence, with what follows the number left out.
         assert_eq!(
-            find("a pull request for branch \"feat\" already exists:\nhttps://github.com/acme/demo/pull/3#issuecomment-1 (open)"),
+            last("a pull request for branch \"feat\" already exists:\nhttps://github.com/acme/demo/pull/3#issuecomment-1 (open)"),
             pr(3)
         );
         assert_eq!(
-            find("see <https://github.com/acme/demo/pull/8/files>."),
+            last("see <https://github.com/acme/demo/pull/8/files>."),
             pr(8)
+        );
+        // Several: the last one, past an address that is none.
+        assert_eq!(
+            last("https://github.com/acme/demo/pull/9 then https://github.com/acme/demo/pull/14 (see https://github.com/acme/demo/issues/2)"),
+            pr(14)
         );
         // Another host: GitHub Enterprise.
         assert_eq!(
-            find("https://git.corp.example/team/app/pull/41"),
+            last("https://git.corp.example/team/app/pull/41"),
             Some((41, "https://git.corp.example/team/app/pull/41".into()))
         );
         for none in [
@@ -525,7 +695,86 @@ mod tests {
             "https://github.com/acme/pull/12",
             "http://github.com/acme/demo/pull/12",
         ] {
-            assert_eq!(find(none), None, "{none}");
+            assert_eq!(last(none), None, "{none}");
+        }
+    }
+
+    #[test]
+    fn the_pull_request_a_call_opened_is_the_one_it_printed_last_or_its_tools_own() {
+        let pr = |n: u32| Some((n, format!("https://github.com/acme/demo/pull/{n}")));
+        // `gh pr comment 9 …; gh pr create`: the comment's address comes first, the new pull
+        // request's last.
+        let out = "https://github.com/acme/demo/pull/9#issuecomment-1\nhttps://github.com/acme/demo/pull/14\n";
+        let text = format!("{out}\nCreating pull request for feat into main in acme/demo");
+        assert_eq!(opened(Some(out), &text), pr(14));
+        // What it printed counts before what it wrote as notes or errors.
+        assert_eq!(
+            opened(
+                Some("https://github.com/acme/demo/pull/14\n"),
+                "https://github.com/acme/demo/pull/14\n\nwarning: see https://github.com/acme/demo/pull/2"
+            ),
+            pr(14)
+        );
+        // Nothing printed: the pull request its error names (the branch has one already).
+        assert_eq!(
+            opened(
+                Some(""),
+                "a pull request for branch \"feat\" already exists:\nhttps://github.com/acme/demo/pull/3"
+            ),
+            pr(3)
+        );
+        assert_eq!(opened(None, "https://github.com/acme/demo/pull/5"), pr(5));
+        // An MCP tool's JSON: its own page, not the API's address nor one its description names.
+        assert_eq!(
+            opened(
+                None,
+                r#"{"url":"https://api.github.com/repos/acme/demo/pulls/7","html_url":"https://github.com/acme/demo/pull/7","number":7,
+                    "body":"Supersedes https://github.com/acme/demo/pull/6","_links":{"issue":{"href":"https://api.github.com/repos/acme/demo/issues/7"}}}"#
+            ),
+            pr(7)
+        );
+        // A JSON answer without it: as a text.
+        assert_eq!(
+            opened(None, r#"{"created":"https://github.com/acme/demo/pull/8"}"#),
+            pr(8)
+        );
+        assert_eq!(opened(Some("done"), "done"), None);
+    }
+
+    #[test]
+    fn only_a_refusal_of_the_checks_has_the_rest_asked_without_them() {
+        assert!(checks_refused(
+            "GraphQL: Resource not accessible by personal access token (repository.pullRequest.statusCheckRollup)"
+        ));
+        assert!(checks_refused(
+            "GraphQL: Resource not accessible by integration (repository.pullRequests.nodes.0.statusCheckRollup.contexts)"
+        ));
+        for other in [
+            "no pull requests found for https://github.com/acme/demo/pull/7",
+            "To get started with GitHub CLI, please run:  gh auth login",
+            "error connecting to api.github.com",
+            "",
+        ] {
+            assert!(!checks_refused(other), "{other}");
+        }
+    }
+
+    #[test]
+    fn the_owner_of_a_remotes_repository_is_read_in_its_address() {
+        for (url, owner) in [
+            ("https://github.com/Acme/demo.git", Some("acme")),
+            ("https://token@github.com/acme/demo", Some("acme")),
+            ("git@github.com:acme/demo.git", Some("acme")),
+            ("ssh://git@git.corp.example:2222/team/app.git", Some("team")),
+            ("git://github.com/acme/demo", Some("acme")),
+            // A folder, here or as an address: no owner.
+            ("/srv/git/demo.git", None),
+            ("C:\\git\\demo.git", None),
+            ("file:///srv/git/demo.git", None),
+            ("../demo.git", None),
+            ("", None),
+        ] {
+            assert_eq!(owner_of(url).as_deref(), owner, "{url}");
         }
     }
 
@@ -618,6 +867,48 @@ mod tests {
         );
         assert_eq!(of(json!([run("COMPLETED", "TIMED_OUT")])), "failing");
         assert_eq!(of(json!([status("ERROR"), status("SUCCESS")])), "failing");
+    }
+
+    #[test]
+    fn a_check_run_again_counts_for_its_latest_run_only() {
+        let of = |rollup: Value| parse(&told("OPEN", false, "", rollup), 0).unwrap().0.checks;
+        let run = |name: &str, workflow: &str, at: &str, status: &str, conclusion: &str| {
+            json!({ "__typename": "CheckRun", "name": name, "workflowName": workflow,
+                "startedAt": at, "status": status, "conclusion": conclusion })
+        };
+        let status = |context: &str, at: &str, state: &str| json!({ "__typename": "StatusContext", "context": context, "startedAt": at, "state": state });
+        // Failed, run again, green: green, whatever the order they are listed in.
+        let failed = run("test", "CI", "2026-10-13T10:00:00Z", "COMPLETED", "FAILURE");
+        let passed = run("test", "CI", "2026-10-13T10:30:00Z", "COMPLETED", "SUCCESS");
+        assert_eq!(of(json!([failed.clone(), passed.clone()])), "passing");
+        assert_eq!(of(json!([passed.clone(), failed.clone()])), "passing");
+        // Run again and still running.
+        let again = run("test", "CI", "2026-10-13T11:00:00Z", "IN_PROGRESS", "");
+        assert_eq!(
+            of(json!([failed.clone(), passed.clone(), again])),
+            "pending"
+        );
+        // The same name in another workflow is another check: its failure stays.
+        let other = run(
+            "test",
+            "Nightly",
+            "2026-10-13T09:00:00Z",
+            "COMPLETED",
+            "FAILURE",
+        );
+        assert_eq!(
+            of(json!([failed.clone(), passed.clone(), other])),
+            "failing"
+        );
+        // A commit status set again.
+        assert_eq!(
+            of(json!([
+                status("deploy", "2026-10-13T10:00:00Z", "ERROR"),
+                status("deploy", "2026-10-13T10:05:00Z", "SUCCESS"),
+                passed
+            ])),
+            "passing"
+        );
     }
 
     #[test]

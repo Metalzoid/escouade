@@ -437,7 +437,7 @@
       </div>
       <div class="under">
         <span class="sub mono">{project.name} / {branch || '—'}</span>
-        <PullRequests pulls={agent.pullRequests} inline />
+        <PullRequests pulls={agent.pullRequests} max={4} inline />
       </div>
     </div>
     <div style="flex:1"></div>
@@ -731,6 +731,9 @@
     min-width: 0;
   }
   .sub {
+    /* Where it works gives way last: its pull requests are cut first. */
+    flex: 0 1 auto;
+    min-width: min(100%, 120px);
     font-size: 11px;
     color: var(--dim);
     overflow: hidden;

@@ -220,6 +220,111 @@ async fn the_pull_requests_of_an_agents_own_branch_are_found_once_it_is_pushed()
 }
 
 #[tokio::test]
+async fn a_pull_request_of_someone_elses_fork_whose_branch_bears_the_same_name_is_not_the_agents() {
+    let h = harness("pulls-owner");
+    let (p, r) = h.project(true).await;
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let wt = a.worktree.clone().expect("worktree created");
+    let dir = PathBuf::from(&wt.path);
+    push(&h, &r, &dir, &wt.branch);
+    // Pushed, its remote is now said to be Ada's repository on GitHub.
+    git(
+        &r,
+        &["remote", "set-url", "origin", "git@github.com:Ada/demo.git"],
+    );
+    let of = |number: u32, owner: Value| {
+        let mut pr = pull(number, &wt.branch, "OPEN");
+        pr["headRepositoryOwner"] = owner;
+        pr
+    };
+    github(
+        &dir,
+        json!([
+            of(20, json!({ "login": "ada" })),
+            of(21, json!({ "login": "mallory" })),
+            // Its fork deleted since: nobody to tell it from.
+            of(22, Value::Null),
+        ]),
+    );
+    h.core.refresh_pull_requests(&a.id, true).await;
+    assert_eq!(
+        pulls_of(&h, &a.id),
+        [told(20, "open", "", ""), told(22, "open", "", "")]
+    );
+}
+
+#[tokio::test]
+async fn a_pull_request_whose_repository_was_renamed_stays_one_link_under_its_address() {
+    let h = harness("pulls-renamed");
+    let (p, r) = h.project(false).await;
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let old = "https://github.com/acme/old/pull/12";
+    assert!(h
+        .core
+        .agent(&a)
+        .unwrap()
+        .lock()
+        .link_pull_request(12, old.into()));
+    // Asked at the address it was linked by, GitHub answers with the new one.
+    let mut pr = pull(12, "feat", "MERGED");
+    pr["was"] = json!(old);
+    pr["url"] = json!("https://github.com/acme/new/pull/12");
+    github(&r, json!([pr]));
+    h.core.refresh_pull_requests(&a, true).await;
+    let linked = h.agent(&a).pull_requests;
+    assert_eq!(linked.len(), 1, "{linked:?}");
+    assert_eq!(
+        (linked[0].url.as_str(), linked[0].state.as_str()),
+        (old, "merged")
+    );
+}
+
+#[tokio::test]
+async fn a_token_that_may_not_read_the_checks_still_tells_the_state_and_the_reviews() {
+    let h = harness("pulls-no-checks");
+    let (p, r) = h.project(false).await;
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let url = "https://github.com/acme/demo/pull/7";
+    assert!(h
+        .core
+        .agent(&a)
+        .unwrap()
+        .lock()
+        .link_pull_request(7, url.into()));
+    let mut pr = pull(7, "feat", "OPEN");
+    pr["reviewDecision"] = json!("APPROVED");
+    pr["statusCheckRollup"] = json!([{ "status": "COMPLETED", "conclusion": "FAILURE" }]);
+    github(&r, json!({ "forbidChecks": true, "pulls": [pr] }));
+    h.core.refresh_pull_requests(&a, true).await;
+    // Asked with its checks, refused, then without them.
+    assert_eq!(pulls_of(&h, &a), [told(7, "open", "", "approved")]);
+    assert_eq!(
+        asked(&r),
+        [format!("pr view {url}"), format!("pr view {url}")]
+    );
+}
+
+#[tokio::test]
+async fn nothing_is_kept_of_the_reading_of_an_agent_that_is_gone() {
+    let h = harness("pulls-gone");
+    let (p, _r) = h.project(false).await;
+    *h.core.gh_on_path.write() = Some(fake_gh());
+    h.core.refresh_pull_requests("gone", true).await;
+    assert!(h.core.pr_reads.lock().is_empty());
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.refresh_pull_requests(&a, true).await;
+    assert!(h.core.pr_reads.lock().contains_key(&a));
+    h.core.delete_agent(&a, false).await.unwrap();
+    assert!(h.core.pr_reads.lock().is_empty());
+    // Asked once more after it went (a reading asked just before): still nothing.
+    h.core.refresh_pull_requests(&a, true).await;
+    assert!(h.core.pr_reads.lock().is_empty());
+}
+
+#[tokio::test]
 async fn without_gh_a_pull_request_stays_linked_with_its_address_alone() {
     let h = harness("pulls-no-gh");
     let (p, _r) = h.project(false).await;

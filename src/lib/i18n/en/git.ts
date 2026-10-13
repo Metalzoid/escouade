@@ -90,7 +90,7 @@ export default defineZone('git', {
     label: 'Pull requests',
     open: 'Open pull request #{n} in the browser',
     state: { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' },
-    unknown: 'state unknown: install gh (the GitHub CLI) and sign it in (gh auth login) to follow it',
+    unknown: 'state not read on GitHub yet (it takes gh, the GitHub CLI, signed in: gh auth login)',
     checks: { pending: 'checks running', passing: 'checks passing', failing: 'checks failing' },
     review: { approved: 'approved', changes: 'changes requested', required: 'review required' },
     more: { one: '+ {count} more', other: '+ {count} more' },

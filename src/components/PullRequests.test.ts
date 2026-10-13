@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
 import type { PullRequestLink } from '../lib/types';
 import { fakeBackend, resetApp } from '../test/ipc';
+import { getByTip } from '../test/tip';
 import PullRequests from './PullRequests.svelte';
 
 const pr = (number: number, over: Partial<PullRequestLink> = {}): PullRequestLink => ({
@@ -61,6 +62,22 @@ describe('PullRequests', () => {
     expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/pull/128');
   });
 
+  it('leaves every key but the ones that press the number to the window’s shortcuts', async () => {
+    fakeBackend();
+    const keys: string[] = [];
+    const heard = (e: KeyboardEvent) => keys.push(e.key);
+    window.addEventListener('keydown', heard);
+    try {
+      render(PullRequests, { pulls: [pr(128)] });
+      screen.getByRole('button', { name: 'Ouvrir la pull request #128 dans le navigateur' }).focus();
+      await userEvent.keyboard('k{Escape}{Control>}j{/Control}{Enter} ');
+      // Enter and the space bar press it: whatever holds it (an agent's card) is not told.
+      expect(keys).toEqual(['k', 'Escape', 'Control', 'j']);
+    } finally {
+      window.removeEventListener('keydown', heard);
+    }
+  });
+
   it('keeps to the number of one GitHub told nothing of yet', () => {
     fakeBackend();
     render(PullRequests, { pulls: [pr(12, { state: '' })] });
@@ -75,6 +92,12 @@ describe('PullRequests', () => {
       max: 3,
     });
     expect(rows()).toEqual(['#4 ouverte', '#3 ouverte', '#5 fermée', '+ 2 autres']);
+  });
+
+  it('names the ones it only counts when the count is pointed at', async () => {
+    fakeBackend();
+    render(PullRequests, { pulls: [pr(1, { state: 'merged', title: 'Fix' }), pr(2, { state: 'closed' }), pr(3)], max: 1 });
+    expect(getByTip(document.body, '#2 — fermée #1 Fix — mergée')).toHaveTextContent('+ 2 autres');
   });
 
   it('is written in English', () => {

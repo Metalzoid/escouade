@@ -41,7 +41,7 @@ describe('pull requests of an agent', () => {
   it('names one with its title, and says why nothing is known of it', () => {
     expect(pullTip(pr(12, { title: 'Fix the login', checks: 'passing' }))).toBe('#12 Fix the login — ouverte · CI verte');
     expect(pullTip(pr(12, { state: '' }))).toBe(
-      '#12 — état inconnu : installe gh (GitHub CLI) et connecte-le (gh auth login) pour le suivre',
+      '#12 — état pas encore lu sur GitHub (il faut gh, la CLI de GitHub, connecté : gh auth login)',
     );
   });
 
@@ -56,7 +56,7 @@ describe('pull requests of an agent', () => {
     expect(pullFacts(pr(12, { state: 'merged' }))).toEqual(['merged']);
     expect(pullTip(pr(12, { state: 'closed', title: 'Fix' }))).toBe('#12 Fix — closed');
     expect(pullTip(pr(12, { state: '' }))).toBe(
-      '#12 — state unknown: install gh (the GitHub CLI) and sign it in (gh auth login) to follow it',
+      '#12 — state not read on GitHub yet (it takes gh, the GitHub CLI, signed in: gh auth login)',
     );
   });
 });
