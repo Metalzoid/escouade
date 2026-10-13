@@ -7,6 +7,7 @@ mod board;
 #[cfg(test)]
 mod branches_tests;
 mod claude;
+mod clipboard;
 mod commands;
 mod conv;
 mod convsearch;
@@ -260,6 +261,7 @@ pub fn run() {
             commands::get_conversation,
             commands::search_conversations,
             commands::send_message,
+            commands::clipboard_image,
             commands::interrupt,
             commands::answer_question,
             commands::answer_permission,

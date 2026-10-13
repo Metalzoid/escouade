@@ -352,6 +352,16 @@ pub async fn send_message(
     core.send_message(&id, text, attachments).await.map_err(err)
 }
 
+/// The image on the system's clipboard, as PNG (empty without one), for a paste WebKitGTK leaves
+/// without it.
+#[tauri::command]
+pub async fn clipboard_image(app: tauri::AppHandle) -> Res<tauri::ipc::Response> {
+    crate::clipboard::image_png(&app)
+        .await
+        .map(tauri::ipc::Response::new)
+        .map_err(err)
+}
+
 #[tauri::command]
 pub async fn interrupt(core: CoreState<'_>, id: String) -> Res<()> {
     core.interrupt(&id).await.map_err(err)

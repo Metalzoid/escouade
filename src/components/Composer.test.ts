@@ -420,6 +420,92 @@ describe('Composer', () => {
     await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/setup\.exe/));
   });
 
+  describe('pasting', () => {
+    const png = [137, 80, 78, 71];
+    const paste = (target: HTMLElement, clipboardData: { files: File[]; types: string[] }) => {
+      const e = createEvent.paste(target, { clipboardData });
+      fireEvent(target, e);
+      return e.defaultPrevented;
+    };
+
+    it('attaches a pasted file', async () => {
+      const { textarea } = setup();
+      const backend = fakeBackend({ get_conversation: () => [] });
+      const capture = new File([new Uint8Array(png)], 'capture.png', { type: 'image/png' });
+      expect(paste(textarea, { files: [capture], types: ['Files'] })).toBe(true);
+      expect(await screen.findByAltText('capture.png')).toBeInTheDocument();
+      expect(backend.called('clipboard_image')).toHaveLength(0);
+    });
+
+    it('takes the image WebKitGTK leaves out of a paste (Linux) from the system clipboard, and sends nothing without it', async () => {
+      const { a, textarea } = setup();
+      let give: (png: ArrayBuffer) => void = () => {};
+      const backend = fakeBackend({
+        get_conversation: () => [],
+        clipboard_image: () => new Promise((r) => (give = r)),
+      });
+      await userEvent.type(textarea, 'Que vois-tu ?');
+      // A browser's « Copier l'image »: the page only sees its HTML.
+      expect(paste(textarea, { files: [], types: ['text/html'] })).toBe(false);
+      await userEvent.type(textarea, '{Enter}');
+      expect(backend.called('clipboard_image')).toHaveLength(1);
+      expect(backend.called('send_message')).toHaveLength(0);
+      give(new Uint8Array(png).buffer);
+      expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+      await userEvent.type(textarea, '{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      expect(backend.called('send_message')[0].args).toEqual({
+        id: a.id,
+        text: 'Que vois-tu ?',
+        attachments: [{ name: 'image.png', mediaType: 'image/png', data: btoa(String.fromCharCode(...png)) }],
+      });
+    });
+
+    it('keeps the image read from the system clipboard for the agent it was pasted to', async () => {
+      resetApp({ agents: [agent({ id: 'v1' }), agent({ id: 'v2', name: 'autre' })] });
+      let give: (png: ArrayBuffer) => void = () => {};
+      fakeBackend({ get_conversation: () => [], clipboard_image: () => new Promise((r) => (give = r)) });
+      const { rerender } = render(Composer, { agent: app.agents.v1 });
+      paste(screen.getByRole('textbox'), { files: [], types: [] });
+      await rerender({ agent: app.agents.v2 });
+      give(new Uint8Array(png).buffer);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.queryByAltText('image.png')).not.toBeInTheDocument();
+      await rerender({ agent: app.agents.v1 });
+      expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+    });
+
+    it('attaches nothing when the system clipboard holds no image', async () => {
+      const { textarea } = setup();
+      const backend = fakeBackend({ get_conversation: () => [], clipboard_image: () => new ArrayBuffer(0) });
+      paste(textarea, { files: [], types: [] });
+      await waitFor(() => expect(backend.called('clipboard_image')).toHaveLength(1));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByAltText('image.png')).not.toBeInTheDocument();
+      expect(app.toasts).toHaveLength(0);
+    });
+
+    it('says why when the system clipboard cannot be read', async () => {
+      const { textarea } = setup();
+      fakeBackend({
+        get_conversation: () => [],
+        clipboard_image: () => {
+          throw 'le presse-papiers ne répond pas';
+        },
+      });
+      paste(textarea, { files: [], types: [] });
+      await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('le presse-papiers ne répond pas'));
+    });
+
+    it('leaves pasted text to the field without reading the system clipboard', async () => {
+      const { textarea } = setup();
+      const backend = fakeBackend({ get_conversation: () => [] });
+      expect(paste(textarea, { files: [], types: ['text/plain', 'text/html'] })).toBe(false);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(backend.called('clipboard_image')).toHaveLength(0);
+    });
+  });
+
   it('denies a pending permission with the typed explanation', async () => {
     const p = {
       kind: 'permission',

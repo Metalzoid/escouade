@@ -7,6 +7,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 ### Corrections
 
 - Un agent dont le premier message est une commande ou un skill (/impeccable…, /clear) est maintenant renommé : d'après les arguments du skill, sinon d'après le premier message ordinaire qui suit. Avant, il gardait son nom agent-N.
+- Sous Linux, une image collée dans le champ du message (capture d'écran, « Copier l'image » d'un navigateur) y est jointe, comme sous Windows et macOS. Avant, le collage ne faisait rien : le moteur web de Linux (WebKitGTK) ne donne pas l'image à la page, Escouade la lit maintenant dans le presse-papiers du système.
 
 ## [1.7.4] — 2026-10-12
 

@@ -237,11 +237,11 @@
 
   // A file that cannot be attached is named in a toast, never silently dropped. Sending waits for
   // the files being read, and one read while switching agents goes to the draft it was added to.
-  async function addFiles(list: Iterable<File>) {
+  async function addFiles(source: Iterable<File> | Promise<File[]>) {
     const owner = draftFor;
     reading++;
     try {
-      for (const f of list) {
+      for (const f of await source) {
         try {
           const a = await readAttachment(f);
           const target = owner === draftFor ? files : getDraft(owner).files;
@@ -251,12 +251,24 @@
           if (owner === draftFor) files.push(a);
           else setDraft(owner, { text: getDraft(owner).text, files: [...target, a] });
         } catch (e) {
-          app.toast(e instanceof Error ? e.message : String(e), 'error');
+          failed(e);
         }
       }
+    } catch (e) {
+      failed(e);
     } finally {
       reading--;
     }
+  }
+
+  function failed(e: unknown) {
+    app.toast(e instanceof Error ? e.message : String(e), 'error');
+  }
+
+  // WebKitGTK (Linux) gives a paste no image from the clipboard (WebKit bug 218519): the app reads it itself.
+  async function clipboardImage(): Promise<File[]> {
+    const png = await api.clipboardImage();
+    return png.byteLength ? [new File([png], 'image.png', { type: 'image/png' })] : [];
   }
 
   function onPaste(e: ClipboardEvent) {
@@ -264,6 +276,8 @@
     if (list.length) {
       e.preventDefault();
       addFiles(list);
+    } else if (!e.clipboardData?.types.includes('text/plain')) {
+      addFiles(clipboardImage());
     }
   }
 

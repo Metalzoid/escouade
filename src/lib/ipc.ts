@@ -99,6 +99,8 @@ export const api = {
   searchConversations: (query: string, projectId: string | null, archived: boolean) =>
     invoke<ConvSearchResult>('search_conversations', { query, projectId, archived }),
   sendMessage: (id: string, text: string, attachments: Attachment[] = []) => invoke<void>('send_message', { id, text, attachments }),
+  /** The image on the system's clipboard as PNG, empty without one: read for WebKitGTK (Linux), which leaves it out of a paste. */
+  clipboardImage: () => invoke<ArrayBuffer>('clipboard_image'),
   interrupt: (id: string) => invoke<void>('interrupt', { id }),
   answerQuestion: (id: string, requestId: string, answers: Record<string, string>) =>
     invoke<void>('answer_question', { id, requestId, answers }),
