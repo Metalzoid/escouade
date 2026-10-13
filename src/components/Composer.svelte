@@ -534,7 +534,8 @@
         hidden
         aria-label={t('composer.attach.label')}
         onchange={(e) => {
-          addFiles(e.currentTarget.files ?? []);
+          // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
+          addFiles([...(e.currentTarget.files ?? [])]);
           e.currentTarget.value = '';
         }}
       />
