@@ -114,7 +114,7 @@ fn stopped(args: &[&str], limit: Duration) -> anyhow::Error {
 /// to two minutes and in minutes past that (a commit running hooks has half an hour).
 fn stopped_in(lang: crate::i18n::Lang, args: &[&str], limit: Duration) -> String {
     let secs = limit.as_secs();
-    let after = if secs > 120 && secs % 60 == 0 {
+    let after = if secs > 120 && secs.is_multiple_of(60) {
         format!("{} min", secs / 60)
     } else {
         format!("{secs} s")
