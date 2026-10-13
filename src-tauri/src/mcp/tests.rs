@@ -684,19 +684,11 @@ fn the_server_starts_and_stops_from_a_thread_an_async_worker_or_a_single_threade
             let port = core.mcp.start(0).unwrap();
             core.mcp.stop();
             assert!(!core.mcp.status().running);
-            // Closed: a start right after can take the same port again. Something else may hold it
-            // for a moment in between (another test's server shares the range, and an outgoing
-            // connection may be given it as its own port): then it is tried again a little later.
-            let mut again = 0;
-            for _ in 0..100 {
-                again = core.mcp.start(port).unwrap();
-                core.mcp.stop();
-                if again == port {
-                    break;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-            }
-            assert_eq!(again, port);
+            // Closed: a start right after takes the same port again (the bind waits for what holds
+            // it for a moment, another test's server sharing the range or an outgoing connection
+            // given it as its own port).
+            assert_eq!(core.mcp.start(port).unwrap(), port);
+            core.mcp.stop();
         })
         .await
         .unwrap();
@@ -870,6 +862,61 @@ fn the_activity_log_is_cleared_on_demand() {
     });
     log.clear();
     assert!(log.entries().is_empty());
+}
+
+/// A port of the machine that something holds, and the listener that holds it.
+fn held_port() -> (std::net::TcpListener, u16) {
+    let holder = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let port = holder.local_addr().unwrap().port();
+    (holder, port)
+}
+
+#[test]
+fn a_saved_port_that_is_released_a_moment_later_is_taken_again_instead_of_another_one() {
+    // Stopped and started again at once: the old listener is not gone yet.
+    let (holder, port) = held_port();
+    let releasing = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        drop(holder);
+    });
+    let (_listener, got) = bind_within(port, Duration::from_secs(3)).unwrap();
+    releasing.join().unwrap();
+    assert_eq!(got, port);
+}
+
+#[test]
+fn a_saved_port_that_stays_taken_gives_another_one_of_the_range_after_the_wait_only() {
+    let (_holder, port) = held_port();
+    let wait = Duration::from_millis(200);
+    let started = std::time::Instant::now();
+    let (_listener, got) = bind_within(port, wait).unwrap();
+    let took = started.elapsed();
+    assert_ne!(got, port);
+    assert!(PORTS.contains(&got), "{got}");
+    assert!(took >= wait, "another port drawn after {took:?}");
+    assert!(took < Duration::from_secs(1), "waited {took:?}");
+}
+
+#[test]
+fn only_a_port_that_is_busy_for_now_is_waited_for() {
+    use std::io::{Error, ErrorKind};
+    assert!(worth_waiting_for(&Error::from(ErrorKind::AddrInUse)));
+    // What Windows answers for a port released a moment ago.
+    assert_eq!(
+        worth_waiting_for(&Error::from(ErrorKind::PermissionDenied)),
+        cfg!(windows)
+    );
+    for kind in [ErrorKind::AddrNotAvailable, ErrorKind::InvalidInput] {
+        assert!(!worth_waiting_for(&Error::from(kind)), "{kind:?}");
+    }
+}
+
+#[test]
+fn no_saved_port_draws_one_of_the_range_without_waiting() {
+    let started = std::time::Instant::now();
+    let (_listener, got) = bind_within(0, Duration::from_secs(3)).unwrap();
+    assert!(PORTS.contains(&got), "{got}");
+    assert!(started.elapsed() < Duration::from_secs(1));
 }
 
 #[tokio::test]

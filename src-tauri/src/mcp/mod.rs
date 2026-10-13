@@ -41,7 +41,7 @@ use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 use tauri::Runtime;
 use tokio::sync::watch;
@@ -518,14 +518,44 @@ fn new_token() -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// A listener on 127.0.0.1:`port`; when that one is taken (or 0), on a free port of `PORTS`
-/// (tried from a random one, so that two instances, an end-to-end test's beside the user's,
-/// rarely try the same ones).
+/// How long the port saved for the server is waited for, when something holds it: a server that
+/// stops and starts again at once (a setting, the project's switch) finds its old listener not
+/// quite gone, and must not move to another port (it would be declared again in every account of
+/// Claude Code).
+const BIND_RETRY: Duration = Duration::from_secs(3);
+const BIND_STEP: Duration = Duration::from_millis(25);
+
+/// A listener on 127.0.0.1:`port`, waited for up to `BIND_RETRY` when it is held; when that one
+/// stays taken (or is 0), on a free port of `PORTS` (tried from a random one, so that two
+/// instances, an end-to-end test's beside the user's, rarely try the same ones).
 fn bind(port: u16) -> Result<(TcpListener, u16)> {
+    bind_within(port, BIND_RETRY)
+}
+
+/// A port that is busy for now, which a moment makes free again: held by a listener on its way
+/// out, or, on Windows, answered « access denied » right after it was released. Any other error
+/// (an address the machine does not have...) does not pass with time.
+fn worth_waiting_for(e: &std::io::Error) -> bool {
+    use std::io::ErrorKind;
+    e.kind() == ErrorKind::AddrInUse || (cfg!(windows) && e.kind() == ErrorKind::PermissionDenied)
+}
+
+/// `bind`, with at most `wait` for the port asked for (tried again every `BIND_STEP`).
+fn bind_within(port: u16, wait: Duration) -> Result<(TcpListener, u16)> {
+    let mut refused = None;
     if port != 0 {
-        match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
-            Ok(l) => return Ok((l, port)),
-            Err(e) => log::warn!("mcp: port {port} taken ({e}), another one is chosen"),
+        let until = Instant::now() + wait;
+        loop {
+            match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
+                Ok(l) => return Ok((l, port)),
+                Err(e) if worth_waiting_for(&e) && Instant::now() < until => {
+                    std::thread::sleep(BIND_STEP);
+                }
+                Err(e) => {
+                    refused = Some(e);
+                    break;
+                }
+            }
         }
     }
     let (first, count) = (*PORTS.start(), PORTS.len() as u32);
@@ -536,6 +566,9 @@ fn bind(port: u16) -> Result<(TcpListener, u16)> {
             continue;
         }
         if let Ok(l) = TcpListener::bind((Ipv4Addr::LOCALHOST, p)) {
+            if let Some(e) = refused {
+                log::warn!("mcp: port {port} not available ({e}), {p} is used instead");
+            }
             return Ok((l, p));
         }
     }
