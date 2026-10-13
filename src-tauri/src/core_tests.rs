@@ -45,11 +45,7 @@ pub(crate) fn fake_cli() -> String {
 }
 
 pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
+    let out = crate::proc::output_in_files(Command::new("git").arg("-C").arg(dir).args(args))
         .expect("git");
     assert!(
         out.status.success(),

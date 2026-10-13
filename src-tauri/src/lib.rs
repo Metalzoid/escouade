@@ -33,6 +33,7 @@ mod planfiles;
 #[cfg(test)]
 mod planfiles_tests;
 mod pricing;
+mod proc;
 #[cfg(test)]
 mod process_tests;
 mod pty;

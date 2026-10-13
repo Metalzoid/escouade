@@ -177,7 +177,7 @@ async fn probe_dir(dir: &Path) -> Option<Engine> {
 /// (its messages may be translated): 128 is a pattern it cannot read. None for another answer.
 async fn finds(root: &str, flag: &str, pattern: &str) -> Option<bool> {
     let args = ["grep", "--no-index", "-q", flag, "-e", pattern];
-    let out = git::command(root, &args).output().await.ok()?;
+    let out = git::output(git::command(root, &args), &args).await.ok()?;
     match out.status.code() {
         Some(0) => Some(true),
         Some(1 | 128) => Some(false),
@@ -1090,11 +1090,9 @@ mod tests {
         let q = regex("caf([^[:alnum:]_]|$)");
         let args = grep_args(&q, &q.pattern, false, true);
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let out = git::command(&r.to_string_lossy(), &args)
-            .env("LC_ALL", "C")
-            .output()
-            .await
-            .unwrap();
+        let mut cmd = git::command(&r.to_string_lossy(), &args);
+        cmd.env("LC_ALL", "C");
+        let out = git::output(cmd, &args).await.unwrap();
         let lines: Vec<_> = out
             .stdout
             .split_inclusive(|b| *b == b'\n')

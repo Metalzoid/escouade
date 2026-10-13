@@ -2865,12 +2865,13 @@ async fn a_worktree_left_with_unresolved_conflicts_is_not_committed() {
     std::fs::write(wt.join("src").join("app.ts"), "const a = 2;\n").unwrap();
     git(&wt, &["commit", "-qam", "agent"]);
     commit_change(&r, "const a = 3;\n", "main change");
-    let merge = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&wt)
-        .args(["merge", "main"])
-        .output()
-        .unwrap();
+    let merge = crate::proc::output_in_files(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt)
+            .args(["merge", "main"]),
+    )
+    .unwrap();
     assert!(!merge.status.success());
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);

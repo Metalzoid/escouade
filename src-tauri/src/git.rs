@@ -32,8 +32,34 @@ pub(crate) fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
 }
 
 pub async fn run(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let out = command(cwd, args).output().await?;
+    let out = output(command(cwd, args), args).await?;
     checked(out, args)
+}
+
+/// Time limit of the commands that stay on the machine (a commit and its hooks, a big checkout…).
+pub(crate) const GIT_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// What `cmd` (a git command) prints, within `GIT_TIMEOUT` and without waiting for the end of
+/// its pipes once it has ended (see `proc`).
+pub(crate) async fn output(
+    cmd: tokio::process::Command,
+    args: &[&str],
+) -> Result<std::process::Output> {
+    match crate::proc::output_within(cmd, GIT_TIMEOUT).await {
+        Ok(out) => Ok(out),
+        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(stopped(args, GIT_TIMEOUT)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A command killed for not being done within `limit`.
+fn stopped(args: &[&str], limit: Duration) -> anyhow::Error {
+    anyhow::anyhow!(tr!(
+        "git {cmd} interrompu : toujours pas terminé après {s} s",
+        "git {cmd} stopped: still not done after {s} s",
+        cmd = args.first().unwrap_or(&""),
+        s = limit.as_secs()
+    ))
 }
 
 /// Time limits of the commands that reach a remote.
@@ -67,7 +93,7 @@ fn in_english(mut cmd: tokio::process::Command) -> tokio::process::Command {
 
 /// `run`, with git's messages in English (`in_english`).
 async fn run_english(cwd: &str, args: &[&str]) -> Result<Vec<u8>> {
-    let out = in_english(command(cwd, args)).output().await?;
+    let out = output(in_english(command(cwd, args)), args).await?;
     checked(out, args)
 }
 
@@ -97,18 +123,13 @@ async fn run_net_command(
     } else {
         NET_TIMEOUT
     };
-    match tokio::time::timeout(limit, child.wait_with_output()).await {
+    match tokio::time::timeout(limit, crate::proc::wait_output(child)).await {
         Ok(out) => checked(out?, args),
         Err(_) => {
             if let Some(j) = &job {
                 j.terminate();
             }
-            bail!(tr!(
-                "git {cmd} interrompu : toujours pas terminé après {s} s",
-                "git {cmd} stopped: still not done after {s} s",
-                cmd = args.first().unwrap_or(&""),
-                s = limit.as_secs()
-            ))
+            Err(stopped(args, limit))
         }
     }
 }
@@ -3832,11 +3853,7 @@ mod repo_tests {
     }
 
     fn git_in(dir: &Path, args: &[&str]) -> String {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args(args)
-            .output()
+        let out = crate::proc::output_in_files(Command::new("git").arg("-C").arg(dir).args(args))
             .unwrap();
         assert!(
             out.status.success(),
