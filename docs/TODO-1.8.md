@@ -12,7 +12,36 @@ Fait pour la 1.8 :
   - [ ] **Changer de vue aussi au clic droit sur un agent** (demandé le 2026-10-12) : dans le menu de sa carte de la barre latérale (`Sidebar.svelte`, à côté de « Dupliquer la conversation », « Ouvrir un terminal »…), « Vue Claude Code » ou « Vue Escouade » selon sa vue du moment. Mêmes règles que le bouton de l'en-tête (`Conversation.svelte`) : jamais pour un agent de ticket ni un agent archivé, même appel `api.setAgentView`. Textes fr et en.
 
 Aussi pour la 1.8 :
-- [ ] **Les sous-agents de chaque agent dans la barre latérale** (demandé le 2026-10-13) : sous la carte d'un agent, ses sous-agents en cours, chacun avec son titre, son modèle et ce qu'il fait (« Édite src/a.ts »), puis le nombre de ceux qui sont finis ; repliable par agent, replié quand il n'y en a pas en cours. Les données existent déjà : `PlanState.agents` (`src/lib/types.ts`, `SubAgent` : `title`, `kind`, `model`, `status`, `doing`, `tools`, `tokens`), tenu par le backend depuis le flux de l'agent ; aujourd'hui seul le bandeau « Plan » de la conversation les montre, et la carte dit seulement « Plan 3/7 · 2 sous-agents » (`plan.miniSubs`, `Sidebar.svelte`). Aussi en vue Claude Code (les hooks donnent les sous-agents). Textes fr et en ; penser à la hauteur de la barre (beaucoup de sous-agents en parallèle) et à la vue d'ensemble, qui pourrait les montrer de la même façon.
+- [ ] **Les sous-agents de chaque agent dans la barre latérale, et leur conversation** (demandé le 2026-10-13, puis complété le même jour : les dérouler, entrer dans la conversation d'un sous-agent et agir sur lui).
+  - **Dans la barre latérale** : sous la carte d'un agent qui a des sous-agents, un chevron les déroule. D'abord ceux en cours, chacun avec son titre, son modèle et ce qu'il fait (« Édite src/a.ts »), puis le nombre de ceux qui sont finis, qui se déroulent à leur tour. Replié quand aucun ne tourne. Les données existent déjà : `PlanState.agents` (`src/lib/types.ts`, `SubAgent` : `title`, `kind`, `model`, `status`, `doing`, `tools`, `tokens`), tenu par le backend depuis le flux de l'agent. Aujourd'hui, seul le bandeau « Plan » de la conversation les montre, et la carte dit seulement « Plan 3/7 · 2 sous-agents » (`plan.miniSubs`, `Sidebar.svelte`). Penser à la hauteur de la barre (beaucoup de sous-agents en parallèle) et à la vue d'ensemble, qui pourrait les montrer de la même façon.
+  - **Entrer dans sa conversation** : un clic sur un sous-agent (dans la barre, dans le bandeau « Plan » ou sur la ligne de son appel dans la conversation) ouvre sa conversation en grand, à la place de celle de l'agent, avec un fil d'Ariane « agent › sous-agent » pour revenir.
+    - Ce sont les éléments dont le `parent` est l'appel qui l'a lancé (`SubAgent.id`). Aujourd'hui, ils sont repliés sous la ligne de cet appel dans la conversation de l'agent (`Conversation.svelte`, `children` ; `ToolRow.svelte`, `childrenOf`), qui n'en montre que les outils et le dernier texte.
+    - En tête : son type, son modèle, sa consigne, ses tokens, sa durée. La consigne est le `prompt` de l'appel, que le backend ne garde pas aujourd'hui (`docs/PROTOCOL.md`, « Les sous-agents ») : à garder, borné.
+    - À la fin : son rapport (`handback_report` de la `task_notification`).
+    - Les sous-agents qu'il lance lui-même s'y déroulent de la même façon.
+  - **Agir sur lui** :
+    - l'arrêter : un bouton « Arrêter », par la requête de contrôle `stop_task` (listée dans `docs/PROTOCOL.md`, jamais utilisée par Escouade : à essayer) ;
+    - ses demandes de permission et ses questions apparaissent aussi dans sa vue, et on y répond ;
+    - lui écrire : à étudier. On ne connaît pas de moyen d'écrire à un sous-agent par le flux de Claude Code. Ce qu'on sait : l'agent peut relancer un sous-agent fini (`canContinueAgent` dans le `tool_use_result` de l'appel, outil `SendMessage` vers son `agentId`). À chercher dans le binaire, puis à essayer : une requête de contrôle qui écrit à une tâche. Sinon, un message à l'agent qui lui demande de transmettre, présenté comme tel dans l'interface.
+  - **Après coup** : la conversation d'un sous-agent fini reste lisible, même après un redémarrage (le journal d'Escouade, `conv.rs`, garde les éléments avec leur `parent`). La barre n'en garde que les derniers (`PlanState.agents`, 30 au plus) ; les plus anciens restent dans la conversation de l'agent.
+  - **Vue Claude Code** : les hooks donnent les sous-agents ; leur conversation est dans leur propre transcript (`transcript.rs` l'écarte aujourd'hui, `isSidechain`), à lire pour une vue en lecture seule. Pour agir, on passe par le terminal de Claude Code.
+  - Textes fr et en.
+- [ ] **Les tâches de fond de chaque agent, en détail** (demandé le 2026-10-13) : voir ce qui tourne en arrière-plan et ce qui s'y passe.
+  - **Aujourd'hui** : Claude Code annonce chaque tâche (`task_started`, `task_updated`, `task_progress`, `task_notification`), et la liste entière à chaque changement (`background_tasks_changed { tasks }`) ; voir `docs/PROTOCOL.md`, tableau des tâches. Mais :
+    - le réducteur du plan (`plan.rs`) ne garde que les sous-agents (`local_agent`) et les workflows (`local_workflow`) ;
+    - il ignore une commande lancée en arrière-plan (`local_bash`), une surveillance (`monitor_mcp`), un agent distant (`remote_agent`) et un coéquipier (`in_process_teammate`) ;
+    - `background_tasks_changed` est ignoré ;
+    - la fin d'une tâche n'est qu'une ligne discrète dans la conversation (`EventMessage.svelte`, « Tâche de fond terminée »).
+  - **À faire** :
+    - sur la carte de l'agent, le nombre de tâches en fond (« 2 en fond »), et leur liste dans la barre latérale, sous ses sous-agents, repliable de la même façon ;
+    - une vue détaillée (panneau, ou section du bandeau « Plan ») : pour chaque tâche, son type (commande, surveillance, sous-agent, workflow), sa commande ou sa description, depuis quand elle tourne, son état et, à la fin, son résumé ;
+    - sa sortie en direct : Claude Code l'écrit dans un fichier (`output_file` de la `task_notification`, `outputFile` du `tool_use_result`), à suivre en lecture seule comme un terminal ;
+    - « Arrêter » par `stop_task`, comme pour un sous-agent ;
+    - une commande au premier plan reste une ligne d'outil, jusqu'à ce qu'elle passe en fond (`task_updated` avec `is_backgrounded`) ;
+    - les tâches finies restent un moment dans la liste (les 10 dernières ?), qui se vide à une nouvelle session, comme le plan.
+  - **À mesurer d'abord** sur un vrai flux (une commande en fond, une surveillance, un sous-agent) : ce qui dit le mieux ce qui tourne, les débuts et fins (`task_started` / `task_notification`) ou la liste entière (`background_tasks_changed`), et ce que donne `output_file` pendant que la tâche tourne.
+  - **Vue Claude Code** : savoir si les hooks ou le transcript disent les tâches de fond (à vérifier).
+  - Textes fr et en.
 - [ ] **Coller une image dans un ticket du Kanban** (demandé le 2026-10-13) : une capture du bug ou une maquette, collée (ou glissée) dans la fenêtre d'un nouveau ticket, et aussi en le modifiant tant qu'il est « À faire ».
   - dans la fenêtre du ticket (`TicketForm.svelte`) : vignettes sous la description, retirables, avec les formats et limites des pièces jointes du chat (`src/lib/attachments.ts` : PNG, JPEG, GIF, WebP) ;
   - gardées avec le ticket, en fichiers à part (dossier du ticket sous `~/.escouade/`), pas dans le JSON des tickets ; effacées avec le ticket ;
