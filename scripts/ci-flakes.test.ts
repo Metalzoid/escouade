@@ -107,6 +107,16 @@ describe('parseLog', () => {
       expect(found).toEqual([{ system: 'Linux', test: 'probe::probe_hang', kind: 'hung' }]);
     });
 
+    it('does not take a slow test that ended for a blocked one', () => {
+      // nextest says SLOW past the minute, whether the test ends in 61 s or never; it kills the one
+      // that never ends (TIMEOUT / TMT), and a test that ends passes.
+      const text = log(
+        line(WIN, RUST, '        SLOW [>  60.000s] ( 400/1318) escouade branches_tests::a_slow_one'),
+        line(WIN, RUST, '        PASS [  75.113s] ( 401/1318) escouade branches_tests::a_slow_one'),
+      );
+      expect(parseLog(text)).toEqual([]);
+    });
+
     it('reads the name of a test in an integration binary', () => {
       const text = log(line(WIN, RUST, '        TIMEOUT [ 180.016s] (3/3) escouade::core_tests agents::a_stopped_agent'));
       expect(parseLog(text)).toEqual([{ system: 'Windows', test: 'agents::a_stopped_agent', kind: 'hung' }]);

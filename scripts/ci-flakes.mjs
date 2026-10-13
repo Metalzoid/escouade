@@ -9,8 +9,10 @@
 // run, which that one does not print.
 //
 // What is read: `test <name> ... FAILED` and `<name> has been running for over 60 seconds` (cargo
-// test), the FAIL / TIMEOUT / TMT / SLOW / FLAKY lines of cargo-nextest, and Playwright's list of
-// tests (`x`, or `✘`, for a try that failed, `ok`, or `✓`, for one that passed).
+// test), the FAIL / TIMEOUT / TMT / FLAKY lines of cargo-nextest, and Playwright's list of tests
+// (`x`, or `✘`, for a try that failed, `ok`, or `✓`, for one that passed). Not nextest's SLOW: it is
+// said of every test past the minute, one that ends included, which is slow and not blocked
+// (nextest kills the one that never ends: TIMEOUT / TMT).
 
 import { execFile } from 'node:child_process';
 import path from 'node:path';
@@ -38,17 +40,18 @@ function split(raw) {
 const CARGO_FAILED = /\btest (\S+) \.\.\. FAILED\b/;
 const CARGO_HUNG = /\btest (\S+) has been running for over \d+ seconds/;
 // `  TRY 3 FAIL [   0.009s] (2/3) escouade probe::probe_fail`, `FLAKY 2/3 [ 0.009s] (1/3) escouade
-// probe::probe_flaky`, `SLOW [> 60.000s] (───) escouade probe::probe_hang`: the status, the time, the
+// probe::probe_flaky`, `TMT [ 180.016s] (3/3) escouade probe::probe_hang`: the status, the time, the
 // progress, the test's binary and its name.
-const NEXTEST = /^\s*(?:TRY \d+ )?(FAIL|TIMEOUT|TMT|SLOW|FLAKY)\b(?: \d+\/\d+)?\s*\[[^\]]*\]\s*(?:\([^)]*\)\s*)?(.*\S)\s*$/;
-const NEXTEST_KIND = { FAIL: 'failed', TIMEOUT: 'hung', TMT: 'hung', SLOW: 'hung', FLAKY: 'flaky' };
+const NEXTEST = /^\s*(?:TRY \d+ )?(FAIL|TIMEOUT|TMT|FLAKY)\b(?: \d+\/\d+)?\s*\[[^\]]*\]\s*(?:\([^)]*\)\s*)?(.*\S)\s*$/;
+const NEXTEST_KIND = { FAIL: 'failed', TIMEOUT: 'hung', TMT: 'hung', FLAKY: 'flaky' };
 // `  x  37 tests\e2e\english.spec.ts:8:1 › the title (retry #1) (18.4s)`
 const PLAYWRIGHT =
   /^\s*(x|✘|×|ok|✓|✔)\s+\d+\s+(?:\[[^\]]*\]\s+›\s+)?(\S+\.spec\.[cm]?[jt]sx?):\d+:\d+\s+›\s+(.*?)(?:\s+\(retry #\d+\))?(?:\s+\(\d+(?:\.\d+)?(?:ms|s|m)\))?\s*$/;
 
 /**
  * The problems a CI log tells of, once each: `{ system, test, kind }`, `kind` being `failed` (it
- * failed, at its last try), `hung` (it ran for over a minute, or was killed after its delay) or
+ * failed, at its last try), `hung` (cargo test says it ran for over a minute, or nextest killed it
+ * after its delay; a test nextest only calls slow is not) or
  * `flaky` (it failed, then passed at a new try). A test's name does not hold its line number.
  */
 export function parseLog(log) {
