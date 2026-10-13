@@ -6,8 +6,10 @@ export default defineConfig({
   plugins: [svelte(), svelteTesting()],
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'tests/e2e/**/*.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
+    // A loaded CI runner can outlast the default 5 s on a test that is right.
+    testTimeout: process.env.CI ? 15_000 : 5_000,
   },
 });

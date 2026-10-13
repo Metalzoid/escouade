@@ -4,9 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Run again on demand, to measure how unstable the tests are (scripts/ci-flakes.mjs reads the runs).
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A run started by hand has a group of its own: neither a push nor another run replaces it.
+  group: ci-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -67,11 +70,15 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
+      # From here on, whatever the Rust tests did (the job fails all the same): a failure there
+      # must not hide what the end-to-end tests say, and the other way round.
       - name: Build the app for end-to-end tests
+        if: ${{ !cancelled() }}
         run: npx tauri build --debug --no-bundle
 
       # Surfaced as an annotation: the end-to-end tests need the Evergreen WebView2 runtime.
       - name: WebView2 runtime
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $id = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
@@ -82,23 +89,29 @@ jobs:
       # WebView2 150+ ignores the WEBVIEW2_* variables (and the per-user policy) in elevated processes,
       # and CI runners are elevated: open the app's DevTools port through the machine policy instead.
       - name: Open the app's WebView2 DevTools port
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
           New-Item -Path $key -Force | Out-Null
           New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222' -PropertyType String -Force | Out-Null
 
+      # A test that fails runs again twice (playwright.config.ts): the one that passes then is reported
+      # as flaky, and its trace is kept.
       - name: End-to-end tests (Playwright over WebView2)
+        if: ${{ !cancelled() }}
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
         run: npx playwright test
 
+      # The traces of the tests that failed, or that ran again (there is none when all passed first time).
       - name: Upload Playwright traces
-        if: failure()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/
+          if-no-files-found: ignore
           retention-days: 7
 
   linux:
@@ -142,6 +155,12 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      # The app's MCP server takes its port in 47000-47999, which a runner also hands out to the
+      # outgoing connections of other programs: keep that range out of the ephemeral ones, so a test
+      # (or the app) never finds its port taken by one of them.
+      - name: Keep the MCP port range out of the ephemeral ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=47000-47999
 
       # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
       # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin

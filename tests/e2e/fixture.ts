@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { waitForPortToClose } from './port';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target', 'debug', 'escouade.exe');
@@ -151,6 +152,16 @@ export const test = base.extend<{
   preStart: [{ run: () => ({}) }, { option: true }],
   app: async ({ appEnv, language, preStart }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
+    // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
+    // opens a fixed port through the machine policy instead (tests run one at a time).
+    const port = process.env.ESCOUADE_E2E_CDP_PORT
+      ? Number(process.env.ESCOUADE_E2E_CDP_PORT)
+      : 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50));
+    // The instance of the test before may still be dying, and answering on this port (always the same on CI):
+    // connect() would attach to it. Wait for it to be gone.
+    if (!(await waitForPortToClose(port))) {
+      throw new Error(`something still listens on port ${port} after 30 s: the app of the test before is not gone`);
+    }
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ccm-e2e-'));
     const data = path.join(root, 'data');
     fs.mkdirSync(data);
@@ -169,11 +180,6 @@ export const test = base.extend<{
     );
     const repo = makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');
-    // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
-    // opens a fixed port through the machine policy instead (tests run one at a time).
-    const port = process.env.ESCOUADE_E2E_CDP_PORT
-      ? Number(process.env.ESCOUADE_E2E_CDP_PORT)
-      : 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50));
     const stderr = path.join(root, 'app-stderr.log');
     const errFd = fs.openSync(stderr, 'w');
     const child: ChildProcess = spawn(EXE, [], {
@@ -253,6 +259,9 @@ export const test = base.extend<{
           // already gone
         }
       }
+      // The next test must not find this instance still answering on the port (it waits for that too, before it
+      // starts; a test that passed does not fail for it).
+      if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);
       // Windows releases the handles of killed processes (a terminal's shell sits in the repo)
       // with a delay: a temporary folder left behind must not fail the test.
       try {
