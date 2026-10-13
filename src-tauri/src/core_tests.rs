@@ -410,6 +410,64 @@ async fn an_agent_already_named_is_never_named_again_by_a_later_message() {
     assert!(!naming_asked(&h, &b));
 }
 
+/// What the window was told of `id` the first time it was told the agent is named.
+fn first_told_named(h: &Harness, id: &str) -> Value {
+    h.events
+        .lock()
+        .iter()
+        .find(|e| e["type"] == "agent" && e["agent"]["id"] == id && e["agent"]["named"] == true)
+        .map(|e| e["agent"].clone())
+        .expect("the window was never told the agent is named")
+}
+
+#[tokio::test]
+async fn an_agent_is_named_only_once_its_branch_is_renamed() {
+    let h = harness("name-after-rename");
+    let (p, _) = h.project(true).await;
+    h.core.settings.write().claude_language = "en".into();
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let first = a.worktree.unwrap();
+    assert_eq!(first.branch, "escouade/agent-1");
+    h.turn(&a.id, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a.id).named).await;
+    let branch = "escouade/create-the-fake-en";
+    // Whoever sees the agent named (a commit proposed meanwhile) finds the worktree on its last
+    // branch: the one git runs on, the one the agent says, and the one the window was told.
+    let wt = h.agent(&a.id).worktree.unwrap();
+    assert_eq!(wt.branch, branch);
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "--abbrev-ref", "HEAD"]),
+        branch
+    );
+    let told = first_told_named(&h, &a.id);
+    assert_eq!(told["name"], "create-the-fake-en");
+    assert_eq!(told["worktree"]["branch"], branch);
+}
+
+#[tokio::test]
+async fn an_agent_whose_branch_cannot_be_renamed_is_named_all_the_same() {
+    let h = harness("name-branch-taken");
+    let (p, r) = h.project(true).await;
+    h.core.settings.write().claude_language = "en".into();
+    // The branch its name would give is somebody else's.
+    git(&r, &["branch", "escouade/create-the-fake-en"]);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    h.turn(&a.id, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a.id).named).await;
+    let seen = h.agent(&a.id);
+    assert_eq!(seen.name, "create-the-fake-en");
+    let wt = seen.worktree.unwrap();
+    assert_eq!(wt.branch, "escouade/agent-1");
+    assert_eq!(
+        git(Path::new(&wt.path), &["rev-parse", "--abbrev-ref", "HEAD"]),
+        "escouade/agent-1"
+    );
+    assert_eq!(
+        first_told_named(&h, &a.id)["worktree"]["branch"],
+        "escouade/agent-1"
+    );
+}
+
 #[tokio::test]
 async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
     let h = harness("network");
@@ -2935,6 +2993,46 @@ async fn a_direct_commit_needs_a_message_and_something_to_commit() {
 }
 
 #[tokio::test]
+async fn a_commit_in_a_worktree_git_cannot_read_says_gits_error_not_that_nothing_is_left() {
+    let h = harness("commit-git-error");
+    let (p, _) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.unwrap().path);
+    let id = Some(a.meta.id);
+    std::fs::write(wt.join("src").join("app.ts"), "const a = 2;\n").unwrap();
+    let asked = strings(&["src/app.ts"]);
+    assert_eq!(
+        paths_of(&h.core.commit_preview(&p.id, id.clone()).await.unwrap()),
+        asked
+    );
+    // Its `.git` file no longer says where its repository is: git refuses every command in it.
+    std::fs::write(wt.join(".git"), "not a gitfile\n").unwrap();
+    let said = [
+        h.core
+            .commit_preview(&p.id, id.clone())
+            .await
+            .map(|_| ())
+            .unwrap_err(),
+        h.core
+            .commit_propose(&p.id, id.clone(), asked.clone())
+            .await
+            .unwrap_err(),
+        h.core
+            .commit_direct(&p.id, id.clone(), asked, "fix: x".into())
+            .await
+            .unwrap_err(),
+    ]
+    .map(|e| format!("{e:#}"));
+    for said in said {
+        // (In English: git runs in the C locale.)
+        assert!(said.contains("invalid gitfile format"), "{said}");
+        assert!(!said.contains("Plus rien à commiter"), "{said}");
+    }
+    // The files panel keeps its empty list for that worktree.
+    assert!(h.core.git_files(&p.id, id).await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn git_counts_attribute_files_to_the_agent_that_edited_them() {
     let h = harness("git-counts");
     let (p, r) = h.project(false).await;
@@ -5437,6 +5535,11 @@ async fn an_agent_on_a_second_account_runs_with_its_folder_and_one_on_principal_
     // Its name is asked of its account too.
     h.wait("its name", |h| h.agent(&a.id).named).await;
     assert_eq!(one_shots_with(&pro.config_dir), asked_before + 1);
+    // Named once its branch is renamed: the worktree is done changing before its file is written.
+    assert_ne!(
+        h.agent(&a.id).worktree.unwrap().branch,
+        a.worktree.as_ref().unwrap().branch
+    );
     // So is the message of a direct commit of its changes.
     std::fs::write(
         Path::new(&a.cwd).join("src").join("app.ts"),

@@ -3760,29 +3760,45 @@ impl<R: Runtime> Core<R> {
             name = format!("{slug}-{n}");
             n += 1;
         }
-        let (worktree, proc) = {
-            let mut rt = h.lock();
+        let worktree = {
+            let rt = h.lock();
             if rt.meta.named {
                 return Ok(());
             }
-            rt.meta.name = name.clone();
-            rt.meta.named = true;
-            (rt.meta.worktree.clone(), rt.proc.clone())
+            rt.meta.worktree.clone()
+        };
+        // The branch first, as well as it can be: the agent is said named only once the worktree
+        // is on its last branch (renamed or not), so that whoever sees it named (a commit
+        // proposed meanwhile) does not find git in the middle of the rename.
+        // (A branch that was there before the agent is the user's: it keeps its name.)
+        let mut renamed = None;
+        if let Some(wt) = worktree.filter(|wt| !wt.existing) {
+            let branch = format!("{}{name}", paths::BRANCH_PREFIX);
+            if let Ok(project) = self.project(&project_id) {
+                if !git::branch_exists(&project.path, &branch).await
+                    && git::rename_current_branch(&wt.path, &branch).await.is_ok()
+                {
+                    renamed = Some(branch);
+                }
+            }
+        }
+        let (named_now, proc) = {
+            let mut rt = h.lock();
+            if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
+                w.branch = branch;
+            }
+            // (Named by the user meanwhile: their name stands.)
+            let named_now = !rt.meta.named;
+            if named_now {
+                rt.meta.name = name.clone();
+                rt.meta.named = true;
+            }
+            (named_now, rt.proc.clone())
         };
         self.emit_agent(&h);
         self.request_save();
-        // (A branch that was there before the agent is the user's: it keeps its name.)
-        if let Some(wt) = worktree.filter(|wt| !wt.existing) {
-            let project = self.project(&project_id)?;
-            let branch = format!("{}{name}", paths::BRANCH_PREFIX);
-            if !git::branch_exists(&project.path, &branch).await
-                && git::rename_current_branch(&wt.path, &branch).await.is_ok()
-            {
-                if let Some(w) = h.lock().meta.worktree.as_mut() {
-                    w.branch = branch;
-                }
-                self.request_save();
-            }
+        if !named_now {
+            return Ok(());
         }
         if let Some(p) = proc {
             let _ = p
@@ -4486,11 +4502,32 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Dirty files for the files panel. `agent_id` + scope "agent" restricts to one agent.
+    /// Dirty files for the files panel. `agent_id` + scope "agent" restricts to one agent. A
+    /// worktree git cannot read lists nothing here (the panel shows the others); see
+    /// `git_files_checked`.
     pub async fn git_files(
         self: &Arc<Self>,
         project_id: &str,
         agent_id: Option<String>,
+    ) -> Result<Vec<FileChange>> {
+        self.dirty_files(project_id, agent_id, false).await
+    }
+
+    /// `git_files`, but a worktree git cannot read is git's error: for a commit, which must not
+    /// take a failure for « nothing to commit ».
+    async fn git_files_checked(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+    ) -> Result<Vec<FileChange>> {
+        self.dirty_files(project_id, agent_id, true).await
+    }
+
+    async fn dirty_files(
+        self: &Arc<Self>,
+        project_id: &str,
+        agent_id: Option<String>,
+        strict: bool,
     ) -> Result<Vec<FileChange>> {
         let project = self.project(project_id)?;
         let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
@@ -4533,7 +4570,12 @@ impl<R: Runtime> Core<R> {
         }
         for (id, wt, _) in &agents {
             if let Some(wt) = wt {
-                for mut f in git::file_changes(&wt.path).await.unwrap_or_default() {
+                let changes = match git::file_changes(&wt.path).await {
+                    Ok(changes) => changes,
+                    Err(e) if strict => return Err(e),
+                    Err(_) => Vec::new(),
+                };
+                for mut f in changes {
                     f.agent_id = Some(id.clone());
                     f.in_worktree = true;
                     out.push(f);
@@ -4800,7 +4842,8 @@ impl<R: Runtime> Core<R> {
             // The project's checkout, whoever edited its files.
             None => git::file_changes(&root).await?,
             // Its worktree, else the files it edited in the project's checkout.
-            Some(a) => self.git_files(project_id, Some(a)).await?,
+            // (A worktree git cannot read is git's error, not a list of nothing.)
+            Some(a) => self.git_files_checked(project_id, Some(a)).await?,
         };
         // A copied file (`.env`…) matches one of the copy's patterns, from the project's folder
         // (what the copy took) or the checkout's root (where it put it), and git ignores it. Git
