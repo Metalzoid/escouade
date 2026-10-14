@@ -10,7 +10,7 @@ Deux chantiers :
 Fait pour la 1.8 :
 - [x] **Vue Claude Code** (2026-10-12) : un agent peut tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade (bouton de l'en-tête, réglage pour les nouveaux agents). Escouade le suit par ses hooks HTTP et son transcript. Voir `docs/PROTOCOL.md`, « Vue Claude Code ».
   - [ ] À essayer sous Windows (ConPTY, `claude.exe` natif) et macOS avec un vrai compte : collage d'un message, Échap, `/clear`, une compaction, un sous-agent.
-  - [ ] Le jour où Codex, Copilot ou Cursor arrivent : leur propre interface en vue terminal, sur le même modèle (hooks ou journal de session).
+  - [ ] La même vue pour les autres moteurs (demandé le 2026-10-14) : voir le chapitre 1, « Vue terminal de chaque moteur ».
   - [ ] **Changer de vue aussi au clic droit sur un agent** (demandé le 2026-10-12) : dans le menu de sa carte de la barre latérale (`Sidebar.svelte`, à côté de « Dupliquer la conversation », « Ouvrir un terminal »…), « Vue Claude Code » ou « Vue Escouade » selon sa vue du moment. Mêmes règles que le bouton de l'en-tête (`Conversation.svelte`) : jamais pour un agent de ticket ni un agent archivé, même appel `api.setAgentView`. Textes fr et en.
 
 Aussi pour la 1.8 :
@@ -84,18 +84,19 @@ Repère : la 1.7 (cinq chantiers) a fait 266 commits et environ 78 000 lignes aj
 | Codex | ~30 % | Client JSON-RPC, traduction du flux, permissions, modes, comptes `CODEX_HOME`, quota, faux `codex`. Le premier moteur essuie les plâtres de l'interface. |
 | Copilot CLI | ~20 % | SDK Rust ou client JSON-RPC, traduction de ses 150 types d'événements, permissions typées, comptes `COPILOT_HOME`, crédits d'IA, faux `copilot`. |
 | Cursor CLI | ~15 % | Client ACP (JSON-RPC sur stdio, réutilisable pour d'autres moteurs), extensions `cursor/*` (questions, plan, tâches, sous-agents), comptes par clé d'API, faux `agent`. Ni quota ni coût connus. |
+| Vues terminal | ~10 % | Une commande de hooks commune, puis Codex et Copilot sur le modèle de la vue Claude Code (hooks, journal, reprise), OpenCode par `opencode attach`, Cursor en suivi réduit. |
 | OpenCode | ~25 % | Serveur HTTP + SSE par agent, traduction, règles de permission, faux `opencode`. Deux lignes d'API (v1, v2) à départager. Moins si OpenCode passe par le client ACP de Cursor (voir « Décisions »). |
 | Reste commun | ~13 % | Choix du moteur dans l'interface, textes à paramétrer (~100 « Claude » par langue), stats par moteur, one-shots, serveur MCP, docs, site. |
 
-Total : environ 1,2 fois la 1.7 avec Cursor, et plus d'incertitude qu'elle, car les quatre protocoles externes bougent vite :
+Total : environ 1,3 fois la 1.7 avec Cursor et les vues terminal, et plus d'incertitude qu'elle, car les quatre protocoles externes bougent vite :
 - le protocole de Codex est marqué « expérimental » ;
 - une partie des appels de Copilot l'est aussi, et son CLI sort une version tous les deux ou trois jours ;
 - le CLI de Cursor est en bêta, se met à jour seul, et sa version Windows native est récente ;
 - OpenCode est à cheval entre une v1 et une v2.
 
-En quota, avec le mode économe (Sonnet pour implémenter et relire), compter près d'une semaine d'abonnement Max, Cursor compris. C'est une extrapolation de la 1.7, à revoir après les essais.
+En quota, avec le mode économe (Sonnet pour implémenter et relire), compter une semaine d'abonnement Max environ, Cursor et vues terminal compris. C'est une extrapolation de la 1.7, à revoir après les essais.
 
-**Ordre conseillé et découpe possible** : Codex, puis Copilot, puis Cursor, puis OpenCode. Si la 1.8 doit être plus courte, Codex et Copilot d'abord, Cursor et OpenCode en 1.9.
+**Ordre conseillé et découpe possible** : Codex, puis Copilot, puis Cursor, puis OpenCode. Si la 1.8 doit être plus courte, Codex et Copilot d'abord, Cursor, OpenCode et les vues terminal en 1.9.
 - Codex et Copilot ressemblent davantage au modèle d'Escouade : un abonnement avec un quota, un bac à sable du système, un exécutable natif sous Windows.
 - Copilot lit déjà `CLAUDE.md` et `.claude/skills` : superpowers a des chances d'y marcher tel quel.
 - L'API d'OpenCode se stabilise en v2, et sa doc conseille WSL sous Windows.
@@ -112,7 +113,7 @@ En quota, avec le mode économe (Sonnet pour implémenter et relire), compter pr
 | CI et déploiements | ~8 % | Pastilles, journaux des jobs, vue « Environnements », aperçus. |
 | Reste commun | ~5 % | Notifications, vue d'ensemble, serveur MCP, docs, site. |
 
-Total : environ la moitié de la 1.7, avec moins d'incertitude que les moteurs, car les quatre API sont stables et documentées. Avec les moteurs, Cursor compris, la 1.8 ferait environ 1,7 fois la 1.7.
+Total : environ la moitié de la 1.7, avec moins d'incertitude que les moteurs, car les quatre API sont stables et documentées. Avec les moteurs, Cursor et les vues terminal compris, la 1.8 ferait environ 1,8 fois la 1.7.
 
 **Périmètre** (décidé le 2026-10-14) : tout le chapitre 2 en 1.8, pour l'instant. Si la 1.8 s'allonge, le repli est de garder connexions, PR des tickets et CI en 1.8, et de reporter la vue « Pull requests », la relecture par un agent et les déploiements en 1.9.
 
@@ -140,6 +141,12 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
 - [ ] **Second compte** : un `CODEX_HOME` à part, connexion (`codex login`, ChatGPT ou code d'appareil), entrée du trousseau propre à chaque dossier. Lire le quota par `account/rateLimits/read` sans lancer de tour, et voir ce qu'un app-server lancé pour ça seulement coûte.
 - [ ] **Reprise sur un autre compte** : un `rollout-*.jsonl` copié dans un autre `CODEX_HOME` se reprend-il par `thread/resume` ?
 - [ ] **Windows** : lancer le binaire natif, pas le `codex.cmd` de npm (comme `resolve_binary` le fait pour `claude`). Le process et ses enfants restent dans le Job de l'agent.
+- [ ] **Vue terminal** (voir « Vue terminal de chaque moteur ») :
+  - déclarer les hooks d'Escouade pour un seul process : `-c hooks…`, ou un fichier du `CODEX_HOME` ;
+  - la vérification de confiance des hooks (`/hooks`) bloque-t-elle ceux qu'Escouade ajoute ?
+  - un signal pour une permission en attente ;
+  - `codex resume <id>` sur un fil créé par l'app-server, et `thread/resume` sur une session de l'interface ;
+  - la touche qui interrompt, et le rollout pendant que la session tourne.
 
 ### Copilot CLI (Copilot SDK, JSON-RPC sur stdio)
 - [ ] **SDK Rust ou client maison** : la crate `github-copilot-sdk` (1.0.19, « generally available », Rust 1.94 au moins) parle à `copilot --server --stdio` en JSON-RPC 2.0, avec des en-têtes `Content-Length` comme LSP.
@@ -178,6 +185,11 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
 - [ ] **Second compte** : un `COPILOT_HOME` à part et `copilot login`. La connexion va dans le trousseau du système : chaque dossier y a-t-il son entrée ? Autre piste : un jeton par session (`github_token` du SDK, `COPILOT_GITHUB_TOKEN`).
 - [ ] **MCP par process** : `--additional-mcp-config @<fichier privé>` (vaut pour la session, remplace une entrée du même nom) et `--disable-mcp-server escouade` ; ou `mcpServers` à la création de session.
 - [ ] **Reprise et copie** : `resume_session` ; la copie à un événement donné (`sessions().fork(id, to_event_id)`, expérimental) ; `history.truncate`.
+- [ ] **Vue terminal** (voir « Vue terminal de chaque moteur ») :
+  - les hooks d'Escouade pour un seul process : le dossier de hooks d'un `COPILOT_HOME`, avec la garde du jeton ;
+  - un signal pour une permission en attente ;
+  - `copilot --resume <id>` sur une session créée par le SDK (ou par ACP), et l'inverse ;
+  - la touche qui interrompt, et `events.jsonl` pendant que la session tourne.
 
 ### Cursor CLI (`agent acp`, ACP sur stdio)
 - [ ] **Voie** : `agent acp` (Agent Client Protocol : JSON-RPC 2.0, un message par ligne, sur stdio) est la seule qui attende une permission ou une réponse à une question.
@@ -209,6 +221,10 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
 - [ ] **Mises à jour** : le CLI se met à jour seul (`agent update`). Peut-on le figer ? Sinon, comment Escouade vit une version non testée arrivée dans la nuit (voir « Versions »).
 - [ ] **Nom de la commande** : `agent` dans les docs, `cursor-agent` (ancien nom) encore cité. Chercher les deux. `agent` est un nom court qu'un autre programme peut avoir pris.
 - [ ] **Instructions lues** : `AGENTS.md` et `.cursor/rules`. `CLAUDE.md` et `.claude/skills` aussi ? À vérifier, pour superpowers.
+- [ ] **Vue terminal** (voir « Vue terminal de chaque moteur ») :
+  - les hooks que le CLI envoie dans sa version du jour (au dernier relevé du forum, seulement `beforeShellExecution` et `afterShellExecution`) ;
+  - où il garde ses conversations ;
+  - `agent --resume <id>` sur une session ouverte par ACP, et `session/load`, qui rejoue ce qui s'est passé dans l'interface.
 
 ### OpenCode (`opencode serve`, HTTP + SSE)
 - [ ] **Quelle ligne** : la v1.19 (`opencode-ai`, l'API documentée) ou la v2 (`@opencode/cli`, API refaite sous `/api/*`, « Experimental HttpApi surface »).
@@ -227,6 +243,10 @@ Chaque essai enregistre ses flux réels dans `tests/fixtures/` (comme `real-run-
 - [ ] **Windows natif** : dossier des données, shell de l'outil `bash` (Git Bash ?), marche sans WSL (la doc recommande WSL).
 - [ ] **Pas de bac à sable** du système (rien trouvé dans la doc) : à confirmer dans le code. Sans lui, seules les règles de permission protègent.
 - [ ] **Modèles** : liste des seuls fournisseurs connectés, fenêtre de contexte de chaque modèle, `variant` (effort) quand le modèle en a.
+- [ ] **Vue terminal** (voir « Vue terminal de chaque moteur ») :
+  - `opencode attach http://127.0.0.1:<port> --session <id> --dir <worktree>`, avec le mot de passe du serveur dans l'environnement (`OPENCODE_SERVER_PASSWORD`) ;
+  - une permission répondue dans l'interface est-elle vue par Escouade, et l'inverse ?
+  - deux clients à la fois sur une session.
 
 ## 1. Codex, Copilot CLI, Cursor CLI et OpenCode, à côté de Claude Code
 
@@ -428,6 +448,40 @@ Escouade tient déjà son propre journal normalisé de chaque conversation (`con
   - Cursor : `agent -p --output-format json`, avec un petit modèle, en lecture seule (mode `ask` ou sans `--force` : à vérifier).
   - OpenCode : `opencode run`, avec le modèle choisi.
 
+### Vue terminal de chaque moteur (demandé le 2026-10-14)
+But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un agent tourne dans l'interface en terminal de son moteur, à la place de la conversation d'Escouade. Escouade continue de le suivre : état sur sa carte, notifications, permission en attente, fin de tour, coût estimé, recherche dans sa conversation.
+
+- [ ] **Le modèle de la vue Claude Code**, repris pour chaque moteur :
+  - l'interface tourne dans un terminal intégré, dans le worktree de l'agent, avec l'environnement de son compte et le serveur MCP d'Escouade ;
+  - une session n'a qu'un process à la fois : changer de vue arrête l'un et reprend la session dans l'autre ;
+  - des hooks disent l'état en direct (début et fin de tour, permission ou question en attente) ;
+  - le journal de session du moteur donne la conversation, rejouée dans le traducteur du moteur ;
+  - un message de la fenêtre ou du serveur MCP est collé dans l'interface (collage entre crochets, puis Entrée), et une interruption envoie la touche du moteur (Échap chez Claude Code, à relever ailleurs) ;
+  - un agent de ticket reste sur le protocole ;
+  - quand l'interface demande la confiance du dossier, Escouade ne répond jamais à la place de l'utilisateur.
+- [ ] **Hooks par commande** : Claude Code appelle des hooks HTTP, alors que Codex et Copilot lancent des commandes.
+  - Escouade fournit une petite commande (`escouade-hook`, livrée avec l'app) qui lit l'événement sur son entrée et le poste au serveur de hooks d'Escouade, avec le jeton de l'interface lu dans l'environnement (`ESCOUADE_HOOK_TOKEN`).
+  - Sans ce jeton, elle sort aussitôt sans rien faire. Un hook déclaré dans un dossier que l'utilisateur partage avec ses propres sessions ne les touche donc pas.
+- [ ] **Par moteur** (à confirmer au point 0) :
+
+  | Moteur | Interface | État en direct | Conversation | Changer de vue |
+  |---|---|---|---|---|
+  | Codex | `codex` | hooks, stables depuis la 0.124 (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`…), par `hooks.json` ou `[hooks]` de `config.toml` | le `rollout-*.jsonl` de la session (format interne) | `codex resume <id>` ↔ `thread/resume`, dans le même `CODEX_HOME` |
+  | Copilot | `copilot` | hooks de `~/.copilot/hooks/*.json` (ou du `COPILOT_HOME` du compte) : `preToolUse`, `postToolUse`, `agentStop`, `sessionEnd`… | `session-state/<id>/events.jsonl` | `copilot --resume <id>` ↔ `resume_session` |
+  | Cursor | `agent` | hooks du CLI partiels : seuls `beforeShellExecution` et `afterShellExecution` partent (forum de Cursor), pas de `stop` | journal non relevé ; au retour en vue Escouade, `session/load` d'ACP rejoue l'historique | `agent --resume <id>` ↔ `session/load` |
+  | OpenCode | `opencode attach <adresse> --session <id>` | le flux SSE du serveur de l'agent, comme en vue Escouade | le même flux | rien à arrêter : l'interface se branche sur le serveur de l'agent, et les deux vues marchent en même temps |
+
+- [ ] **OpenCode d'abord** : c'est le plus simple, sans hook ni journal à lire. Seulement si OpenCode passe par `opencode serve` (voir « Décisions », « ACP comme voie commune »).
+- [ ] **Cursor en suivi réduit**, tant que son CLI n'envoie pas plus de hooks :
+  - pas de fin de tour ni de permission en attente sur la carte, ni de notification ;
+  - la vue le dit (« Suivi limité : Cursor ne prévient pas Escouade de la fin d'un tour ») ;
+  - l'historique revient au retour en vue Escouade ;
+  - à revoir à chaque version du CLI.
+- [ ] **Permission en attente** : Claude Code a `PermissionRequest`. Chez Codex et Copilot, trouver le signal : un hook dédié, ou le `PreToolUse` d'un outil que la politique fera demander. Sans lui, la carte ne dit pas « attend ta réponse ».
+- [ ] **Bouton et réglage** : « Vue Claude Code » devient « Vue <moteur> » (« Vue Codex »…) dans l'en-tête de la conversation et le clic droit sur la carte. Le réglage des nouveaux agents propose « Escouade » ou « Terminal du moteur ». Textes fr et en.
+- [ ] **Coût** : estimé depuis l'usage lu dans le journal, comme en vue Claude Code. Rien pour Cursor.
+- [ ] **Tests** : chaque faux moteur a aussi une interface factice, lancée dans un pseudo-terminal, qui écrit son journal et appelle ses hooks, comme pour la vue Claude Code (`tests/fixtures/tui-transcript.jsonl`, `tui-hooks.jsonl`).
+
 ### Ce qui reste propre à Claude Code
 - [ ] Ces fonctions sont masquées pour les autres moteurs, pas grisées :
   - Remote Control (Copilot envoie à son agent dans le cloud par `/delegate`, Cursor a ses agents dans le cloud : d'autres fonctions, hors de ce chantier).
@@ -472,6 +526,7 @@ Escouade tient déjà son propre journal normalisé de chaque conversation (`con
 - [ ] **ACP comme voie commune** : Cursor ne se pilote bien que par ACP, que parlent aussi Copilot CLI (`copilot --acp`, en préversion) et OpenCode (`opencode acp`).
   - Pour : un seul client ACP d'Escouade, plus les extensions de chaque moteur, servirait aux trois, au lieu du SDK de Copilot et du serveur HTTP d'OpenCode. Moins de code, et d'autres moteurs plus tard au même prix.
   - Contre : ACP est le plus petit dénominateur. Quota, crédits, coût et permissions typées passent peut-être seulement par les protocoles propres (à vérifier). Et sa v2 arrive.
+  - Pour OpenCode, garder `opencode serve` garde aussi `opencode attach` : sa vue terminal, la plus simple de toutes, se branche sur le serveur de l'agent.
   - Proposé : ACP pour Cursor. Pour Copilot et OpenCode, décider après le point 0, en comparant ce que donne chaque voie.
 - [ ] **Mot de l'interface** : « Moteur » (proposé) ? « Agent » est déjà pris.
 - [ ] **Repli sur un autre moteur** : quand tous les comptes du moteur d'un ticket ont passé le seuil, partir sur un moteur de secours ? Proposé : oui, en option, désactivée par défaut.
@@ -639,7 +694,8 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 5. Copilot, dans le même ordre que Codex.
 6. Cursor, par un client ACP, dans le même ordre.
 7. OpenCode, dans le même ordre (par le client ACP si c'est décidé).
-8. Déclaration du serveur MCP dans les configs des quatre moteurs, puis docs et site.
+8. Vues terminal : OpenCode (par `opencode attach`), Codex, Copilot, puis Cursor en suivi réduit.
+9. Déclaration du serveur MCP dans les configs des quatre moteurs, puis docs et site.
 
 Le chapitre 2 ne dépend pas du chapitre 1. Il peut passer avant les moteurs ou se faire en parallèle. Son ordre :
 1. Essais sur les dépôts de test.
