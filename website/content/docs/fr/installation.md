@@ -106,7 +106,7 @@ Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son lo
 
 - Si Claude Code n’est pas trouvé, un avertissement le dit : « Claude Code est introuvable sur ce poste. Installe-le (`irm https://claude.ai/install.ps1 | iex`) ou indique son chemin dans les réglages. » Ouvre alors les réglages avec le bouton ⚙ de la barre d’état ou `Ctrl+,`, onglet Claude Code. Sous macOS, `Ctrl` devient `⌘`.
 - Clique sur « + Ajouter un projet » pour ouvrir la fenêtre « Nouveau projet ». La [prise en main](quick-start) la décrit champ par champ et va jusqu’au premier commit.
-- Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage anonymes : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › À propos (voir [les réglages « À propos »](settings-about)).
+- Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › À propos (voir [les réglages « À propos »](settings-about)).
 
 La fenêtre s’ouvre en 1440 × 900 (1000 × 600 au minimum) ; Escouade retient ensuite sa taille et sa position. Tes projets, tes conversations et tes réglages sont écrits dans `~/.escouade/` : voir les [données locales](data).
 

@@ -1,11 +1,11 @@
 # Confidentialité
 
-Escouade travaille en local, sur ta machine. La seule chose qui part d’elle de son propre chef, et seulement si tu l’as acceptée, ce sont des statistiques d’usage anonymes. Cette page dit ce qui est envoyé, ce qui ne l’est jamais, où cela va et comment l’arrêter.
+Escouade travaille en local, sur ta machine. La seule chose qui part d’elle de son propre chef, et seulement si tu l’as acceptée, ce sont des statistiques d’usage, sans rien qui t’identifie. Cette page dit ce qui est envoyé, ce qui ne l’est jamais, où cela va et comment l’arrêter.
 
 ## En bref
 
 - Les statistiques sont **facultatives**. Escouade te pose la question au premier démarrage (y compris après une mise à jour d’une version qui n’en avait pas) et n’envoie rien avant que tu aies répondu « Partager les statistiques ».
-- Elles sont **anonymes** : un identifiant tiré au hasard, jamais dérivé de ta machine ni de toi, et aucun nom, chemin, code, conversation ni donnée Git.
+- Elles ne contiennent **rien qui t’identifie** : un identifiant tiré au hasard, jamais dérivé de ta machine ni de toi, et aucun nom, chemin, code, conversation ni donnée Git. Comme cet identifiant dure, le RGPD les traite comme des données personnelles pseudonymes : tu as donc des droits, plus bas.
 - Elles vont à un serveur **à nous**, hébergé en France. Aucun tiers ne les reçoit.
 - Tu peux les arrêter à tout moment, et l’identifiant est alors effacé.
 
@@ -73,7 +73,7 @@ Tous les événements portent aussi :
 
 Les statistiques sont reçues par [Aptabase](https://aptabase.com), un outil de mesure d’audience open source ([son code](https://github.com/aptabase/aptabase)). Il est **hébergé par l’auteur d’Escouade**, sur `aptabase.gagnaire.dev`, sur un serveur Scaleway dans un centre de données à Paris (France). Aucun tiers ne reçoit ces données, et rien ne passe par le cloud d’Aptabase.
 
-Côté serveur, Aptabase ne garde pas l’adresse IP. Il s’en sert à la réception pour déduire le pays et, quand il le peut, la région, et, combinée à un sel qui change chaque jour, pour calculer un identifiant de visiteur quotidien.
+Côté serveur, Aptabase ne garde pas l’adresse IP (celle que le serveur de ce site garde dans ses journaux est expliquée plus bas). Il s’en sert à la réception pour déduire le pays et, quand il le peut, la région, et, combinée à un sel qui change chaque jour, pour calculer un identifiant de visiteur quotidien.
 
 ## Comment les événements partent
 
@@ -83,12 +83,12 @@ Côté serveur, Aptabase ne garde pas l’adresse IP. Il s’en sert à la réce
 
 ## Combien de temps
 
-Le serveur supprime les événements automatiquement au bout de 5 ans (au bout de 182 jours pour ceux des versions de développement).
+Le serveur supprime les événements automatiquement au bout de 25 mois.
 
 ## Dire oui, non, ou changer d’avis
 
 - **Au premier démarrage**, une fenêtre « Aider à améliorer Escouade ? » propose « Partager les statistiques » ou « Non merci », avec un lien « Ce qui est envoyé, en détail » vers cette page. Si tu la fermes sans répondre (avec `Échap`), elle revient au démarrage suivant.
-- **Dans les réglages**, onglet « À propos », la ligne « Statistiques d’usage anonymes » a un interrupteur et un bouton « En détail » qui ouvre cette page. Il est désactivé tant que tu n’as pas accepté dans la fenêtre du premier démarrage.
+- **Dans les réglages**, onglet « À propos », la ligne « Statistiques d’usage » a un interrupteur et un bouton « En détail » qui ouvre cette page. Il est désactivé tant que tu n’as pas accepté dans la fenêtre du premier démarrage.
 - **Quand tu désactives**, l’identifiant de l’installation est oublié, son fichier `telemetry-id` est supprimé et les événements qui attendaient encore sont abandonnés. Si tu réactives, un nouvel identifiant est tiré : l’installation compte comme une nouvelle.
 
 Voir aussi [les réglages « À propos »](settings-about).
@@ -97,21 +97,39 @@ Voir aussi [les réglages « À propos »](settings-about).
 
 Une instance lancée avec un dossier de données à part (la variable `ESCOUADE_DATA_DIR`, utilisée par les tests et les démonstrations) n’envoie jamais rien. Voir [les données locales](data).
 
-## Pourquoi
+## Pourquoi, et sur quelle base
 
-Pour savoir combien de personnes utilisent Escouade (les utilisateurs actifs sur 30 jours, comptés par identifiant d’installation), quelles versions sont encore utilisées (pour savoir quand une ancienne version peut ne plus être prise en charge), sur quels systèmes, et quelles fonctionnalités servent, afin de décider quoi améliorer.
+Pour mesurer l’usage d’Escouade : combien de personnes l’utilisent (les utilisateurs actifs sur 30 jours, comptés par identifiant d’installation), quelles versions sont encore utilisées (pour savoir quand une ancienne version peut ne plus être prise en charge), sur quels systèmes, et quelles fonctionnalités servent, afin de décider quoi améliorer.
 
-## Anonymat
+La base légale est ton **consentement** (article 6.1.a du RGPD, et article 82 de la loi Informatique et Libertés pour l’identifiant gardé sur ta machine). Tu peux le retirer à tout moment, dans Réglages › À propos, sans que cela remette en cause ce qui a été fait avant.
 
-L’identifiant est tiré au hasard. Il ne dérive de rien de ta machine ni de toi, et rien ne permet de relier les statistiques à une personne.
+## Des données pseudonymes
 
-## Faire supprimer des données
+L’identifiant est tiré au hasard. Il ne dérive de rien de ta machine ni de toi, et les statistiques ne contiennent ni ton nom, ni ton adresse e-mail, ni tes projets. Mais, comme il reste le même d’un lancement à l’autre, il permet de reconnaître une installation : le RGPD traite donc ces statistiques comme des données personnelles pseudonymes. C’est pourquoi cette page donne aussi le responsable, la base légale, les destinataires et tes droits.
 
-Pour que les données d’une installation soient supprimées, ouvre une [demande sur GitHub](https://github.com/guillaume-gagnaire/escouade/issues) en indiquant l’identifiant qui est dans ton fichier `telemetry-id` (dans `~/.escouade/`). Tu peux aussi écrire à [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+## Le responsable du traitement
 
-## Qui est responsable
+GAGNAIRE DEVELOPPEMENT, SAS, 2 rue du Taillis, 33620 Cavignac, France, éditeur d’Escouade (voir les [mentions légales](/legal/)). Contact : [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev). Un délégué à la protection des données n’est pas obligatoire pour ce traitement : il n’y en a pas.
 
-Les statistiques sont gérées par GAGNAIRE DEVELOPPEMENT, éditeur d’Escouade (voir les [mentions légales](/legal/)). Contact : [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+## Qui reçoit les données
+
+Seule GAGNAIRE DEVELOPPEMENT. Son sous-traitant est Scaleway SAS, qui héberge le serveur à Paris. Aucune donnée ne sort de l’Union européenne.
+
+## Les journaux du serveur
+
+Le serveur qui reçoit les statistiques et celui qui sert ce site sont derrière un reverse proxy (Traefik, géré par Coolify). Il écrit un journal d’accès de chaque requête qu’il reçoit, y compris les statistiques envoyées par l’app et les visites de ce site : adresse IP, date, adresse demandée, navigateur (User-Agent) et page d’origine (referer).
+
+- **Pourquoi** : la sécurité et le bon fonctionnement du serveur. La base légale est l’intérêt légitime (article 6.1.f du RGPD).
+- **Où et combien de temps** : ces journaux restent sur le serveur, ne servent à rien d’autre et ne sont pas analysés. Ils tournent selon leur taille (six fichiers d’environ 20 Mo au plus, le plus ancien supprimé en premier) : ils disparaissent donc à mesure que le trafic passe.
+- Le serveur web propre au site (nginx) ne garde aucun journal d’accès.
+
+## Tes droits
+
+Tu as le droit d’accéder à tes données, de les faire rectifier ou effacer, de limiter leur traitement, de t’y opposer, de les récupérer (portabilité) et de retirer ton consentement.
+
+Pour les exercer, écris à [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev) en indiquant l’identifiant qui est dans ton fichier `telemetry-id` (dans `~/.escouade/`), ou ouvre une [demande sur GitHub](https://github.com/guillaume-gagnaire/escouade/issues). La réponse vient dans un délai d’un mois.
+
+Si tu estimes que tes droits ne sont pas respectés, tu peux porter plainte auprès de la CNIL : [www.cnil.fr/fr/plaintes](https://www.cnil.fr/fr/plaintes), 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07.
 
 ## Le code
 
@@ -127,4 +145,4 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 
 ## Ce site
 
-Le code de ce site n’inclut ni cookie ni outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`), pour te laisser sur la bonne langue à ta prochaine visite. Cette valeur reste dans ton navigateur et n’est envoyée nulle part.
+Le code de ce site n’inclut ni cookie ni outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`), pour te laisser sur la bonne langue à ta prochaine visite. Cette valeur reste dans ton navigateur et n’est envoyée nulle part. Comme pour les statistiques, le reverse proxy du serveur garde un journal d’accès de tes visites : voir [les journaux du serveur](#les-journaux-du-serveur).

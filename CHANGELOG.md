@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Modifications
+
+- Les statistiques d'usage ne se disent plus anonymes : leur identifiant tiré au hasard les rend pseudonymes au sens du RGPD. La fenêtre du premier lancement dit « sans rien qui t'identifie » et qu'elles sont gardées 25 mois ; le réglage s'appelle « Statistiques d'usage ». « Non merci » et « Partager les statistiques » ont le même aspect : refuser n'est pas moins visible qu'accepter. La page [Confidentialité](https://escouade.dev/privacy/) donne la base légale (ton consentement), tes droits et comment les exercer, la réclamation auprès de la CNIL, l'hébergeur et les journaux du serveur.
+
 ## [1.7.6] — 2026-10-13
 
 ### Ajouts

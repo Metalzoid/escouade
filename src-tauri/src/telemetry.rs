@@ -1,4 +1,4 @@
-//! « Statistiques d'usage anonymes »: what the app is used for, sent to Escouade's own Aptabase
+//! « Statistiques d'usage »: what the app is used for, sent to Escouade's own Aptabase
 //! (aptabase.gagnaire.dev) once the user said yes (`Settings::telemetry`, asked at the first
 //! start). An event says which feature was used, with the app's version and the system's; every
 //! one carries the install's random id (`DataDir::telemetry_id_file`), so that the users active

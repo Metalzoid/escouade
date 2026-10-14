@@ -71,7 +71,7 @@ pub struct Settings {
     /// wait for its own to reset. Off unless the user switches it on (not verified with a second
     /// real account): settings saved before it have it off too.
     pub switch_on_limit: bool,
-    /// « Statistiques d’usage anonymes » (`telemetry`): None until the user answered the question
+    /// « Statistiques d’usage » (`telemetry`): None until the user answered the question
     /// of the first start (settings saved before it have none: they are asked too).
     pub telemetry: Option<bool>,
 }

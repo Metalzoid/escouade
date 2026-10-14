@@ -168,9 +168,9 @@ export default {
     autoUpdate: 'Installer les mises à jour automatiquement',
     autoUpdateDesc: 'Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.',
     localData: 'Données locales',
-    telemetry: 'Statistiques d’usage anonymes',
+    telemetry: 'Statistiques d’usage',
     telemetryDesc:
-      'Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien de toi, de tes projets ni de ton code.',
+      'Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code.',
     telemetryMore: 'En détail',
   },
 

@@ -850,7 +850,7 @@ describe('SettingsModal', () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: null };
     render(SettingsModal, { tab: 'about' });
-    const share = screen.getByRole('switch', { name: 'Statistiques d’usage anonymes' });
+    const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(share);
     expect(tab('À propos')).toHaveClass('changed');
@@ -863,7 +863,7 @@ describe('SettingsModal', () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: true };
     render(SettingsModal, { tab: 'about' });
-    const share = screen.getByRole('switch', { name: 'Statistiques d’usage anonymes' });
+    const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(share);
     await save();

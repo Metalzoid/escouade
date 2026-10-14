@@ -1695,7 +1695,7 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// The answer to « Statistiques d’usage anonymes », kept at once (the question of the first
+    /// The answer to « Statistiques d’usage », kept at once (the question of the first
     /// start; the settings window saves it with the rest).
     pub fn set_telemetry(self: &Arc<Self>, consent: bool) -> Result<()> {
         let mut s = self.settings.read().clone();

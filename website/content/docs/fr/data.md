@@ -20,7 +20,7 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `logs/<agent>-setup.log` | La sortie complète de la dernière préparation du worktree d’un agent. Effacé avec l’agent. |
 | `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
-| `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage anonymes. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
+| `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
 | `app.log` | Le journal de l’application. Au démarrage, s’il dépasse environ 5 Mo, il devient `app.old.log`. |
 | `settings.broken.json`, `state.broken.json`… | Les copies des fichiers que l’app n’a pas pu lire (voir [Un fichier illisible](#un-fichier-illisible)). |
 
@@ -65,9 +65,9 @@ Escouade pilote Claude Code et garde ses propres conversations, mais elle s’ap
 - **La configuration MCP.** Quand « Claude peut piloter Escouade » est activé (Réglages › Claude Code), Escouade déclare son serveur MCP dans la configuration de Claude Code de chaque compte actif. Voir [le serveur MCP](mcp).
 - **Un nouveau compte** reprend de Principal, par lien ou par copie, ses réglages, son `CLAUDE.md`, ses skills, agents, commandes, plugins, hooks et styles de sortie. Jamais sa connexion ni son `.claude.json`.
 
-## Les statistiques d’usage anonymes
+## Les statistiques d’usage
 
-Si tu les as acceptées (question du premier démarrage, ou interrupteur de Réglages › À propos), Escouade envoie des statistiques d’usage anonymes à un serveur d’Escouade hébergé en France. Sur ton disque, elles ne laissent que `telemetry-id`, un UUID tiré au hasard, qui ne dérive de rien de ta machine ni de toi. Les événements attendent en mémoire et ne sont jamais écrits dans un fichier.
+Si tu les as acceptées (question du premier démarrage, ou interrupteur de Réglages › À propos), Escouade envoie des statistiques d’usage, sans rien qui t’identifie, à un serveur d’Escouade hébergé en France. Sur ton disque, elles ne laissent que `telemetry-id`, un UUID tiré au hasard, qui ne dérive de rien de ta machine ni de toi. Les événements attendent en mémoire et ne sont jamais écrits dans un fichier.
 
 Le détail de ce qui est envoyé, de ce qui ne l’est jamais et de la façon de demander une suppression est sur la page [Confidentialité](/privacy/). Voir aussi les [réglages « À propos »](settings-about).
 

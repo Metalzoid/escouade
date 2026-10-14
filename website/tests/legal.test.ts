@@ -58,7 +58,10 @@ describe('the legal notice’s Markdown', () => {
         expect(text, `${lang}: ${fact}`).toContain(fact);
       expect(text, lang).toMatch(lang === 'fr' ? /1 000 €/ : /€1,000/);
       expect(text, lang).toMatch(lang === 'fr' ? /142 050 €/ : /€142,050/);
-      expect(text, lang).not.toMatch(/\bTVA\b|\bVAT\b|\+33|tél/i);
+      expect(text, lang).toContain(lang === 'fr' ? 'TVA intracommunautaire FR63953269263' : 'EU VAT number FR63953269263');
+      expect(text, lang).toContain('+33 1 84 13 00 00');
+      expect(text, lang).not.toMatch(/anonym/i);
+      expect(text, lang).not.toMatch(/collecte aucune|collects no personal/);
     }
   });
 

@@ -1508,7 +1508,7 @@ pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
     Ok(())
 }
 
-/// The answer to « Statistiques d’usage anonymes », at the first start.
+/// The answer to « Statistiques d’usage », at the first start.
 #[tauri::command(async)]
 pub fn telemetry_set(core: CoreState, consent: bool) -> Res<()> {
     core.set_telemetry(consent).map_err(err)

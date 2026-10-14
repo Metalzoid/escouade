@@ -1,6 +1,6 @@
 # Settings: About
 
-The “About” tab of the settings shows Escouade’s version, looks for updates, says whether they install by themselves, sets the anonymous usage statistics, and shows where your local data lives.
+The “About” tab of the settings shows Escouade’s version, looks for updates, says whether they install by themselves, sets the usage statistics, and shows where your local data lives.
 
 ## Open the tab
 
@@ -14,7 +14,7 @@ The tab has a single group, “Escouade”, with four lines.
 |---|---|---|
 | “Escouade” followed by the version | The installed version. Below it, “Claude Code detected” or “Claude Code not found”, depending on whether Escouade finds `claude`. On the right, the “Check for updates” button. | — |
 | “Install updates automatically” | “Escouade restarts itself when no agent is working and everything is saved.” | On |
-| “Anonymous usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing about you, your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
+| “Usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
 | “Local data” | The folder where Escouade keeps its data: `~/.escouade/`. | — |
 
 If Claude Code isn’t found, give its path in the [“Claude Code”](settings-claude-code) tab.
@@ -49,13 +49,13 @@ If a version couldn’t install, Escouade no longer restarts by itself for it: y
 > [!NOTE]
 > On macOS, the automatic restart only happens if Escouade can replace its app without an administrator password. Otherwise, restart it yourself when the update is ready.
 
-## Anonymous usage statistics
+## Usage statistics
 
-Escouade can send anonymous usage statistics: the features used, the version of Escouade and the system, under an id drawn at random. They go to a server of Escouade’s hosted in France (Aptabase, open source), and to no third party.
+Escouade can send usage statistics, with nothing that identifies you: the features used, the version of Escouade and the system, under an id drawn at random. They go to a server of Escouade’s hosted in France (Aptabase, open source), and to no third party.
 
 They are off until you accept. At the first start, including on an install that existed before this feature, a “Help improve Escouade?” dialog asks: “Share statistics” or “No thanks”. Nothing is sent before you answer. If you close the dialog without answering (with `Esc`), it comes back at the next start.
 
-The line’s “In detail” button, like the dialog’s “What is sent, in detail” link, opens the [Privacy](/en/privacy/) page: the events sent and their props, what is never sent, how long it is kept, and how to ask for deletion.
+The line’s “In detail” button, like the dialog’s “What is sent, in detail” link, opens the [Privacy](/en/privacy/) page: the events sent and their props, what is never sent, how long it is kept (25 months), the legal basis and your rights.
 
 When you turn the switch off, the install id is forgotten, its `telemetry-id` file is deleted, and events still waiting are dropped. If you turn it on again, a new id is drawn: the install counts as a new one. An instance started with a separate data folder (see [local data](data)) never sends anything.
 

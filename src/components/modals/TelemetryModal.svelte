@@ -31,8 +31,9 @@
   <p class="p">{t('shell.telemetry.detail')}</p>
   <button class="link" onclick={more}>{t('shell.telemetry.more')}</button>
   {#snippet footer()}
-    <button class="btn ghost" disabled={busy} onclick={() => answer(false)}>{t('shell.telemetry.no')}</button>
-    <button class="btn primary" disabled={busy} onclick={() => answer(true)}>{t('shell.telemetry.yes')}</button>
+    <!-- Neither answer put forward: refusing looks as easy as accepting. -->
+    <button class="btn" disabled={busy} onclick={() => answer(false)}>{t('shell.telemetry.no')}</button>
+    <button class="btn" disabled={busy} onclick={() => answer(true)}>{t('shell.telemetry.yes')}</button>
   {/snippet}
 </Modal>
 

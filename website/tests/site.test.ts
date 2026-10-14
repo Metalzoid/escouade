@@ -89,6 +89,10 @@ describe('the server', () => {
     expect(conf).toContain(`return 301 https://${host}$request_uri;`);
   });
 
+  it('keeps no access log, in the redirect and in the site (the reverse proxy in front already logs)', () => {
+    expect(conf.match(/^\s*access_log off;$/gm)).toHaveLength(2);
+  });
+
   it('answers an unknown address with the generated 404 page', () => {
     expect(conf).toContain('error_page 404 /404.html;');
   });

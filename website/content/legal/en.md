@@ -8,6 +8,7 @@ This site is published by GAGNAIRE DEVELOPPEMENT, a société par actions simpli
 
 - RCS Libourne 953 269 263
 - SIRET 953 269 263 00018
+- EU VAT number FR63953269263
 
 ## Publication director
 
@@ -19,7 +20,7 @@ Guillaume Gagnaire, president.
 
 ## Host
 
-The site is served from a server in Paris (France), hosted by Scaleway, SAS with a share capital of €142,050, 8 rue de la Ville-l’Évêque, 75008 Paris, France, RCS Paris 433 115 904. Website: [www.scaleway.com](https://www.scaleway.com).
+The site is served from a server in Paris (France), hosted by Scaleway, SAS with a share capital of €142,050, 8 rue de la Ville-l’Évêque, 75008 Paris, France, RCS Paris 433 115 904, phone +33 1 84 13 00 00. Website: [www.scaleway.com](https://www.scaleway.com).
 
 ## Intellectual property
 
@@ -29,9 +30,9 @@ The site is served from a server in Paris (France), hosted by Scaleway, SAS with
 
 ## Personal data
 
-This site collects no personal data and sets no cookie. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key); that value stays in your browser.
+This site sets no cookie and has no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key); that value stays in your browser. The server, though, keeps an access log of every request (IP address, date, address requested, browser, referring page), for its security and operation, on the basis of legitimate interest; this log is rotated by size and used for nothing else.
 
-For the app’s optional, anonymous usage statistics, see the [Privacy](/en/privacy/) page.
+For the app’s optional usage statistics, and for your rights (access, rectification, erasure, objection, complaint to the CNIL), see the [Privacy](/en/privacy/) page.
 
 ## Credits
 

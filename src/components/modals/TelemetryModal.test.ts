@@ -21,6 +21,18 @@ describe('TelemetryModal', () => {
     expect(screen.getByText(/quelles fonctionnalités servent/)).toBeInTheDocument();
     expect(screen.getByText(/Jamais tes projets, ton code, tes conversations/)).toBeInTheDocument();
     expect(screen.getByText(/hébergé en France/)).toBeInTheDocument();
+    // Pseudonymous, not anonymous (the id persists): no promise of anonymity, and how long they are kept.
+    expect(screen.getByText(/sans rien qui t’identifie/)).toBeInTheDocument();
+    expect(screen.getByText(/gardées 25 mois/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/anonym/i);
+  });
+
+  it('puts no answer forward: both buttons look the same', () => {
+    fakeBackend();
+    render(TelemetryModal);
+    const yes = screen.getByRole('button', { name: 'Partager les statistiques' });
+    const no = screen.getByRole('button', { name: 'Non merci' });
+    expect(yes.className).toBe(no.className);
   });
 
   it('shares the statistics once the user says yes', async () => {

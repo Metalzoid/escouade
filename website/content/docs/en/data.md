@@ -20,7 +20,7 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `logs/<agent>-setup.log` | The full output of the last setup of an agent’s worktree. Deleted with the agent. |
 | `update.json` | The update being installed, noted for the next start and then deleted. |
 | `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
-| `telemetry-id` | The random id of this install, for the anonymous usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
+| `telemetry-id` | The random id of this install, for the usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
 | `app.log` | The app’s log. At startup, if it is over about 5 MB, it becomes `app.old.log`. |
 | `settings.broken.json`, `state.broken.json`… | Copies of files the app couldn’t read (see [An unreadable file](#an-unreadable-file)). |
 
@@ -65,9 +65,9 @@ Escouade drives Claude Code and keeps its own conversations, but it also relies 
 - **The MCP configuration.** When “Claude can drive Escouade” is on (Settings › Claude Code), Escouade declares its MCP server in the Claude Code configuration of each active account. See [the MCP server](mcp).
 - **A new account** takes from Main, by link or by copy, its settings, its `CLAUDE.md`, and its skills, agents, commands, plugins, hooks, and output styles. Never its sign-in or its `.claude.json`.
 
-## Anonymous usage statistics
+## Usage statistics
 
-If you accepted them (the first-start question, or the switch in Settings › About), Escouade sends anonymous usage statistics to a server of Escouade’s hosted in France. On your disk they leave only `telemetry-id`, a UUID drawn at random, derived from nothing about your machine or about you. Events wait in memory and are never written to a file.
+If you accepted them (the first-start question, or the switch in Settings › About), Escouade sends usage statistics, with nothing that identifies you, to a server of Escouade’s hosted in France. On your disk they leave only `telemetry-id`, a UUID drawn at random, derived from nothing about your machine or about you. Events wait in memory and are never written to a file.
 
 The detail of what is sent, what never is, and how to ask for deletion is on the [Privacy](/en/privacy/) page. See also the [“About” settings](settings-about).
 

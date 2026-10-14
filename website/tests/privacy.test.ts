@@ -101,6 +101,37 @@ describe('the privacy page’s Markdown', () => {
     }
   });
 
+  it('claims no anonymity, and says the data is pseudonymous personal data', () => {
+    for (const lang of LANGS) {
+      const text = source(lang);
+      expect(text, lang).not.toMatch(/anonym/i);
+      expect(text, lang).toMatch(lang === 'fr' ? /pseudonymes/ : /pseudonymous personal data/);
+    }
+  });
+
+  it('gives the controller, the legal basis, the recipients, the server logs, the rights and the CNIL', () => {
+    for (const lang of LANGS) {
+      const text = source(lang).replace(/ /g, ' ');
+      for (const fact of [
+        'GAGNAIRE DEVELOPPEMENT, SAS, 2 rue du Taillis, 33620 Cavignac',
+        '(mailto:guillaume@gagnaire.dev)',
+        '6.1.a',
+        'article 82',
+        '6.1.f',
+        'Scaleway SAS',
+        'Traefik',
+        'User-Agent',
+        'https://www.cnil.fr/fr/plaintes',
+        '3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07',
+      ])
+        expect(text, `${lang}: ${fact}`).toContain(fact);
+      expect(text, lang).toContain(lang === 'fr' ? '**consentement**' : '**consent**');
+      expect(text, lang).toContain(lang === 'fr' ? '25 mois' : '25 months');
+      expect(text, lang).not.toMatch(/182|5 ans|5 years/);
+      expect(text, lang).toMatch(lang === 'fr' ? /six fichiers d’environ 20 Mo/ : /six files of about 20 MB/);
+    }
+  });
+
   it('writes the typography the way the documentation does', () => {
     const prose = (s: string) => s.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
     for (const lang of LANGS) {
@@ -217,7 +248,9 @@ describe('the rest of the site', () => {
     for (const lang of LANGS) {
       const about = readFileSync(new URL(`../content/docs/${lang}/settings-about.md`, import.meta.url), 'utf8');
       const data = readFileSync(new URL(`../content/docs/${lang}/data.md`, import.meta.url), 'utf8');
-      expect(about, lang).toContain(lang === 'fr' ? 'Statistiques d’usage anonymes' : 'Anonymous usage statistics');
+      expect(about, lang).toContain(lang === 'fr' ? 'Statistiques d’usage' : 'Usage statistics');
+      expect(about, lang).toContain(lang === 'fr' ? 'rien qui t’identifie' : 'nothing that identifies you');
+      for (const doc of [about, data]) expect(doc, lang).not.toMatch(/anonym/i);
       expect(data, lang).toContain('`telemetry-id`');
     }
   });

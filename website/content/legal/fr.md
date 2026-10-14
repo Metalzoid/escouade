@@ -8,6 +8,7 @@ Ce site est édité par GAGNAIRE DEVELOPPEMENT, société par actions simplifié
 
 - RCS Libourne 953 269 263
 - SIRET 953 269 263 00018
+- TVA intracommunautaire FR63953269263
 
 ## Directeur de la publication
 
@@ -19,7 +20,7 @@ Guillaume Gagnaire, président.
 
 ## Hébergeur
 
-Le site est servi depuis un serveur situé à Paris (France), hébergé par Scaleway, SAS au capital de 142 050 €, 8 rue de la Ville-l’Évêque, 75008 Paris, France, RCS Paris 433 115 904. Site : [www.scaleway.com](https://www.scaleway.com).
+Le site est servi depuis un serveur situé à Paris (France), hébergé par Scaleway, SAS au capital de 142 050 €, 8 rue de la Ville-l’Évêque, 75008 Paris, France, RCS Paris 433 115 904, téléphone +33 1 84 13 00 00. Site : [www.scaleway.com](https://www.scaleway.com).
 
 ## Propriété intellectuelle
 
@@ -29,9 +30,9 @@ Le site est servi depuis un serveur situé à Paris (France), hébergé par Scal
 
 ## Données personnelles
 
-Ce site ne collecte aucune donnée personnelle et ne dépose aucun cookie. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`) ; cette valeur reste dans ton navigateur.
+Ce site ne dépose aucun cookie et n’a aucun outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`) ; cette valeur reste dans ton navigateur. Le serveur, lui, garde un journal d’accès de chaque requête (adresse IP, date, adresse demandée, navigateur, page d’origine), pour sa sécurité et son bon fonctionnement, sur la base de l’intérêt légitime ; ce journal tourne selon sa taille et ne sert à rien d’autre.
 
-Pour les statistiques d’usage anonymes, facultatives, de l’application, voir la page [Confidentialité](/privacy/).
+Pour les statistiques d’usage, facultatives, de l’application, et pour tes droits (accès, rectification, effacement, opposition, plainte à la CNIL), voir la page [Confidentialité](/privacy/).
 
 ## Crédits
 

@@ -1,11 +1,11 @@
 # Privacy
 
-Escouade works locally, on your machine. The only thing that leaves it on its own, and only if you accepted, is anonymous usage statistics. This page says what is sent, what never is, where it goes, and how to stop it.
+Escouade works locally, on your machine. The only thing that leaves it on its own, and only if you accepted, is usage statistics, with nothing that identifies you. This page says what is sent, what never is, where it goes, and how to stop it.
 
 ## In short
 
 - The statistics are **optional**. Escouade asks at the first start (existing installs too, after an update from a version that had none) and sends nothing until you answer “Share statistics”.
-- They are **anonymous**: an id drawn at random, never derived from your machine or from you, and no name, path, code, conversation or Git data.
+- They contain **nothing that identifies you**: an id drawn at random, never derived from your machine or from you, and no name, path, code, conversation or Git data. Because this id lasts, the GDPR treats them as pseudonymous personal data: so you have rights, below.
 - They go to a server **of ours**, hosted in France. No third party receives them.
 - You can stop them at any time, and the id is then deleted.
 
@@ -73,7 +73,7 @@ Every event also carries:
 
 The statistics are received by [Aptabase](https://aptabase.com), an open source analytics tool ([its source](https://github.com/aptabase/aptabase)). It is **self-hosted by Escouade’s author**, at `aptabase.gagnaire.dev`, on a Scaleway server in a datacenter in Paris (France). No third party receives this data, and nothing goes through Aptabase’s own cloud.
 
-On the server side, Aptabase does not store the IP address. It uses it on reception to derive the country and, when it can, the region, and, combined with a salt that changes every day, to compute a daily visitor hash.
+On the server side, Aptabase does not store the IP address (the one this site’s server keeps in its logs is explained below). It uses it on reception to derive the country and, when it can, the region, and, combined with a salt that changes every day, to compute a daily visitor hash.
 
 ## How events leave
 
@@ -83,12 +83,12 @@ On the server side, Aptabase does not store the IP address. It uses it on recept
 
 ## How long
 
-The server deletes events automatically after 5 years (after 182 days for those of development builds).
+The server deletes events automatically after 25 months.
 
 ## Saying yes, no, or changing your mind
 
 - **At the first start**, a “Help improve Escouade?” dialog offers “Share statistics” or “No thanks”, with a “What is sent, in detail” link to this page. If you close it without answering (with `Esc`), it comes back at the next start.
-- **In the settings**, “About” tab, the “Anonymous usage statistics” line has a switch and an “In detail” button that opens this page. It is off until you accept in the first-start dialog.
+- **In the settings**, “About” tab, the “Usage statistics” line has a switch and an “In detail” button that opens this page. It is off until you accept in the first-start dialog.
 - **When you turn it off**, the install id is forgotten, its `telemetry-id` file is deleted, and events still waiting are dropped. If you turn it on again, a new id is drawn: the install counts as a new one.
 
 See also [the “About” settings](settings-about).
@@ -97,21 +97,39 @@ See also [the “About” settings](settings-about).
 
 An instance started with a separate data folder (the `ESCOUADE_DATA_DIR` variable, used by tests and demos) never sends anything. See [local data](data).
 
-## Why
+## Why, and on what basis
 
-To know how many people use Escouade (users active over 30 days, counted by install id), which versions are still in use (to know when an old one can stop being supported), on which systems, and which features are used, in order to decide what to improve.
+To measure the use of Escouade: how many people use it (users active over 30 days, counted by install id), which versions are still in use (to know when an old one can stop being supported), on which systems, and which features are used, in order to decide what to improve.
 
-## Anonymity
+The legal basis is your **consent** (article 6.1.a of the GDPR, and article 82 of the French Informatique et Libertés law for the id stored on your machine). You can withdraw it at any time, in Settings › About, without affecting what was done before.
 
-The id is drawn at random. It is derived from nothing about your machine or about you, and nothing allows linking the statistics to a person.
+## Pseudonymous data
 
-## Asking for deletion
+The id is drawn at random. It is derived from nothing about your machine or about you, and the statistics contain neither your name, nor your e-mail address, nor your projects. But because it stays the same from one launch to the next, it can recognize an install: the GDPR therefore treats these statistics as pseudonymous personal data. That is why this page also gives the controller, the legal basis, the recipients and your rights.
 
-To have an install’s data deleted, open a [GitHub issue](https://github.com/guillaume-gagnaire/escouade/issues) giving the id in your `telemetry-id` file (in `~/.escouade/`). You can also write to [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+## The controller
 
-## Who is responsible
+GAGNAIRE DEVELOPPEMENT, SAS, 2 rue du Taillis, 33620 Cavignac, France, the publisher of Escouade (see the [legal notice](/en/legal/)). Contact: [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev). A data protection officer is not required for this processing: there is none.
 
-The statistics are managed by GAGNAIRE DEVELOPPEMENT, the publisher of Escouade (see the [legal notice](/en/legal/)). Contact: [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev).
+## Who receives the data
+
+Only GAGNAIRE DEVELOPPEMENT. Its processor is Scaleway SAS, which hosts the server in Paris. No data leaves the European Union.
+
+## Server logs
+
+The server that receives the statistics and the one that serves this site sit behind a reverse proxy (Traefik, run by Coolify). It writes an access log of every request it receives, including the statistics sent by the app and the visits to this site: IP address, date, address requested, browser (User-Agent) and referring page (referer).
+
+- **Why**: the security and operation of the server. The legal basis is legitimate interest (article 6.1.f of the GDPR).
+- **Where and how long**: these logs stay on the server, are not used for anything else, and are not analysed. They are rotated by size (at most six files of about 20 MB, the oldest deleted first), so they disappear as traffic goes on.
+- The site’s own web server (nginx) keeps no access log.
+
+## Your rights
+
+You have the right to access your data, to have it rectified or erased, to restrict its processing, to object to it, to take it with you (portability), and to withdraw your consent.
+
+To exercise them, write to [guillaume@gagnaire.dev](mailto:guillaume@gagnaire.dev) giving the id in your `telemetry-id` file (in `~/.escouade/`), or open a [GitHub issue](https://github.com/guillaume-gagnaire/escouade/issues). The answer comes within one month.
+
+If you think your rights are not respected, you can lodge a complaint with the CNIL: [www.cnil.fr/fr/plaintes](https://www.cnil.fr/fr/plaintes), 3 place de Fontenoy, TSA 80715, 75334 Paris Cedex 07, France.
 
 ## The code
 
@@ -127,4 +145,4 @@ Escouade has no account or server of its own for your projects, conversations or
 
 ## This site
 
-This site’s code includes no cookie and no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key), to leave you on the right language at your next visit. That value stays in your browser and is sent nowhere.
+This site’s code includes no cookie and no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key), to leave you on the right language at your next visit. That value stays in your browser and is sent nowhere. As with the statistics, the server’s reverse proxy keeps an access log of your visits: see [server logs](#server-logs).

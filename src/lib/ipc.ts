@@ -66,7 +66,7 @@ export const api = {
   mcpDeclareStatus: () => invoke<McpDeclaration[]>('mcp_declare_status'),
   /** The command that declares the server by hand in the account, with the real token: asked for when it is copied. */
   mcpManualCommand: (account: string) => invoke<string>('mcp_manual_command', { account }),
-  /** The answer to « Statistiques d’usage anonymes », saved at once. */
+  /** The answer to « Statistiques d’usage », saved at once. */
   telemetrySet: (consent: boolean) => invoke<void>('telemetry_set', { consent }),
   /** The settings, but for the Claude accounts (their tab changes them with the `account*` calls below). */
   saveSettings: (settings: Settings) => invoke<ShellInfo[]>('save_settings', { settings }),

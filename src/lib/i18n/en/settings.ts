@@ -149,9 +149,9 @@ export default defineZone('settings', {
     autoUpdate: 'Install updates automatically',
     autoUpdateDesc: 'Escouade restarts itself when no agent is working and everything is saved.',
     localData: 'Local data',
-    telemetry: 'Anonymous usage statistics',
+    telemetry: 'Usage statistics',
     telemetryDesc:
-      'The features used, the version of Escouade and the system, under an id drawn at random: nothing about you, your projects or your code.',
+      'The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.',
     telemetryMore: 'In detail',
   },
 
