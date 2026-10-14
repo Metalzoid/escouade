@@ -128,7 +128,9 @@ describe('the privacy page’s Markdown', () => {
       expect(text, lang).toContain(lang === 'fr' ? '**consentement**' : '**consent**');
       expect(text, lang).toContain(lang === 'fr' ? '25 mois' : '25 months');
       expect(text, lang).not.toMatch(/182|5 ans|5 years/);
-      expect(text, lang).toMatch(lang === 'fr' ? /six fichiers d’environ 20 Mo/ : /six files of about 20 MB/);
+      // The proxy's access logs: one year at most.
+      expect(text, lang).toMatch(lang === 'fr' ? /un an au plus/ : /one year at most/);
+      expect(text, lang).not.toMatch(/20 Mo|20 MB/);
     }
   });
 

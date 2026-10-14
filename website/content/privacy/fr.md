@@ -120,7 +120,7 @@ Seule GAGNAIRE DEVELOPPEMENT. Son sous-traitant est Scaleway SAS, qui héberge l
 Le serveur qui reçoit les statistiques et celui qui sert ce site sont derrière un reverse proxy (Traefik, géré par Coolify). Il écrit un journal d’accès de chaque requête qu’il reçoit, y compris les statistiques envoyées par l’app et les visites de ce site : adresse IP, date, adresse demandée, navigateur (User-Agent) et page d’origine (referer).
 
 - **Pourquoi** : la sécurité et le bon fonctionnement du serveur. La base légale est l’intérêt légitime (article 6.1.f du RGPD).
-- **Où et combien de temps** : ces journaux restent sur le serveur, ne servent à rien d’autre et ne sont pas analysés. Ils tournent selon leur taille (six fichiers d’environ 20 Mo au plus, le plus ancien supprimé en premier) : ils disparaissent donc à mesure que le trafic passe.
+- **Où et combien de temps** : ces journaux restent sur le serveur, ne servent à rien d’autre et ne sont pas analysés. Ils tournent chaque jour et sont gardés un an au plus : au-delà, ils sont supprimés.
 - Le serveur web propre au site (nginx) ne garde aucun journal d’accès.
 
 ## Tes droits

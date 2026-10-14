@@ -120,7 +120,7 @@ Only GAGNAIRE DEVELOPPEMENT. Its processor is Scaleway SAS, which hosts the serv
 The server that receives the statistics and the one that serves this site sit behind a reverse proxy (Traefik, run by Coolify). It writes an access log of every request it receives, including the statistics sent by the app and the visits to this site: IP address, date, address requested, browser (User-Agent) and referring page (referer).
 
 - **Why**: the security and operation of the server. The legal basis is legitimate interest (article 6.1.f of the GDPR).
-- **Where and how long**: these logs stay on the server, are not used for anything else, and are not analysed. They are rotated by size (at most six files of about 20 MB, the oldest deleted first), so they disappear as traffic goes on.
+- **Where and how long**: these logs stay on the server, are not used for anything else, and are not analysed. They are rotated every day and kept one year at most: past that, they are deleted.
 - The site’s own web server (nginx) keeps no access log.
 
 ## Your rights

@@ -32,7 +32,7 @@ GAGNAIRE DEVELOPPEMENT, SAS au capital de 1 000 €, 2 rue du Taillis, 33620 Cav
 | Destinataires | GAGNAIRE DEVELOPPEMENT seul. |
 | Sous-traitant | Scaleway SAS (hébergement). |
 | Transferts hors UE | Aucun. |
-| Durée de conservation | Rotation par taille : au plus six fichiers d'environ 20 Mo, les plus anciens supprimés en premier. Pas de durée maximale fixe à ce jour : à fixer (12 mois au plus) si le trafic laisse les fichiers vivre plus longtemps. |
+| Durée de conservation | Un an au plus : le conteneur `coolify-proxy-logrotate` (configuration du proxy dans Coolify) fait tourner le journal chaque jour et au-delà de 20 Mo, et supprime les fichiers tournés après 364 jours (variable `TRAEFIK_ACCESS_LOG_MAX_DAYS`). Mis en place le 14 octobre 2026, les lignes de plus d'un an des journaux existants alors purgées. |
 | Sécurité | Fichiers sur le serveur, accessibles au seul administrateur. |
 
 ## Le site

@@ -30,7 +30,7 @@ Le site est servi depuis un serveur situé à Paris (France), hébergé par Scal
 
 ## Données personnelles
 
-Ce site ne dépose aucun cookie et n’a aucun outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`) ; cette valeur reste dans ton navigateur. Le serveur, lui, garde un journal d’accès de chaque requête (adresse IP, date, adresse demandée, navigateur, page d’origine), pour sa sécurité et son bon fonctionnement, sur la base de l’intérêt légitime ; ce journal tourne selon sa taille et ne sert à rien d’autre.
+Ce site ne dépose aucun cookie et n’a aucun outil de mesure d’audience. Il garde seulement ton choix de langue dans le stockage local de ton navigateur (la clé `escouade-lang`) ; cette valeur reste dans ton navigateur. Le serveur, lui, garde un journal d’accès de chaque requête (adresse IP, date, adresse demandée, navigateur, page d’origine), pour sa sécurité et son bon fonctionnement, sur la base de l’intérêt légitime ; ce journal est gardé un an au plus et ne sert à rien d’autre.
 
 Pour les statistiques d’usage, facultatives, de l’application, et pour tes droits (accès, rectification, effacement, opposition, plainte à la CNIL), voir la page [Confidentialité](/privacy/).
 

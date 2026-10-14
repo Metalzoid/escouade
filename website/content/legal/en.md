@@ -30,7 +30,7 @@ The site is served from a server in Paris (France), hosted by Scaleway, SAS with
 
 ## Personal data
 
-This site sets no cookie and has no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key); that value stays in your browser. The server, though, keeps an access log of every request (IP address, date, address requested, browser, referring page), for its security and operation, on the basis of legitimate interest; this log is rotated by size and used for nothing else.
+This site sets no cookie and has no analytics tool. It only keeps your language choice in your browser’s local storage (the `escouade-lang` key); that value stays in your browser. The server, though, keeps an access log of every request (IP address, date, address requested, browser, referring page), for its security and operation, on the basis of legitimate interest; this log is kept one year at most and used for nothing else.
 
 For the app’s optional usage statistics, and for your rights (access, rectification, erasure, objection, complaint to the CNIL), see the [Privacy](/en/privacy/) page.
 
