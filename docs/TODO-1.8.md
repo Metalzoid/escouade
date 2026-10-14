@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86 et ESC-87 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87 et ESC-89 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -89,6 +89,13 @@ Aussi pour la 1.8 :
   - Par `revealItemInDir` du plugin opener, déjà présent : il manque la permission `opener:allow-reveal-item-in-dir`.
   - Sur le vide : le dossier racine de la source (projet ou worktree de l'agent).
   - À essayer avec un projet WSL et un worktree supprimé (refusé avec sa raison).
+- [ ] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89) : le rouvrir dans le même dossier le retrouve.
+  - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
+  - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
+  - Ajouter un projet dans le dossier d'un projet fermé (chemin normalisé : casse sous Windows, séparateurs, chemins WSL) lui rend son historique et son id, donc ses stats. La fenêtre d'ajout le dit (« Historique retrouvé : 12 agents, 34 tickets… ») et permet de partir d'un projet vierge.
+  - Les agents reviennent sans process ; un worktree disparu suit la règle d'aujourd'hui. Les réservations de comptes reviennent pour les comptes qui existent encore.
+  - Un ticket « En cours » à la fermeture : proposé, il revient bloqué avec « Reprendre » (à confirmer).
+  - Effacer vraiment : une case « Effacer aussi son historique » dans la fenêtre de fermeture, décochée par défaut, et la liste des projets fermés dans Réglages › Projets (dossier, taille, dernière activité) avec « Effacer l'historique ».
 - [x] **Blocage intermittent de la CI sous macOS** (traité le 2026-10-13) : un test qui crée un agent dans un worktree git ne finit parfois jamais, et le job est coupé au bout de 45 minutes. Ce n'est jamais le même test (`core_tests::the_project_diff_covers_the_checkout_and_each_agents_worktree`, `core_tests::an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_env_files`), seulement sous macOS, depuis le 10 octobre au moins (runs de 3ea4859, 24dfda6, 9d07e83, 170e1c3, 140db3e, ba58456). Ce qui a été fait : git ne dépend plus de la fin de ses tubes et s'arrête au bout de 2 minutes (30 minutes pour un commit, une fusion ou un `worktree add` qui lancent des hooks), `claude` et les lancements de test n'héritent plus des descripteurs ouverts de l'app sous macOS (ils tenaient les tubes de git ouverts), et nextest tue un test bloqué au bout de son délai et le nomme. À confirmer sur plusieurs runs macOS (`node scripts/ci-flakes.mjs`) avant de le tenir pour réglé.
 - [x] **Intégration Linear** (2026-10-12), à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
   - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;
@@ -480,10 +487,9 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
   - « Continuer sur <moteur> » sur la carte de fin d'un tour arrêté par la limite, pour le moteur suivant du projet (un menu s'il y en a plusieurs), à côté de « Reprendre sur <compte> » ;
   - « Continuer sur un autre moteur… » dans le menu de l'agent, à tout moment ;
   - une option, désactivée par défaut, « Continuer sur le moteur suivant quand tous les comptes d'un moteur sont épuisés » : l'agent y passe seul, et le pilote auto la suit pour les tickets.
-- [ ] **Retour** : le moteur quitté est mis de côté jusqu'à sa remise à zéro (pas d'allers-retours, comme le compte quitté aujourd'hui). Ensuite, « Revenir sur Claude » est proposé : une passation dans l'autre sens, ou l'ancienne session de ce moteur reprise et complétée par ce qui s'est passé depuis.
+- [ ] **Retour** (décidé le 2026-10-14 : jamais automatique) : le moteur quitté est mis de côté jusqu'à sa remise à zéro (pas d'allers-retours, comme le compte quitté aujourd'hui). Ensuite, l'agent reste sur son moteur de secours et « Revenir sur Claude » est proposé : une passation dans l'autre sens, ou l'ancienne session de ce moteur reprise et complétée par ce qui s'est passé depuis.
 - [ ] **Vue terminal** : l'agent continue dans la vue du moteur cible s'il en a une, sinon en vue Escouade.
 - [ ] **Tests** : deux faux moteurs du banc de conformité (limite sur le premier, suite sur le second, retour) ; essai réel Claude → Codex avant la release (ESC-52).
-- [ ] **À confirmer avec l'utilisateur** : si le retour peut être automatique.
 
 ### Coût, tokens, stats
 - [ ] **Codex** : les tokens d'un tour sont le `last` de `thread/tokenUsage/updated` (entrée, cache lu, cache écrit, sortie, raisonnement). Codex ne donne aucun coût en dollars : il est estimé avec une grille des modèles OpenAI dans `pricing.rs` et marqué « estimé ». Avec un abonnement ChatGPT, c'est un coût théorique, comme celui de Claude avec Max.
@@ -600,7 +606,7 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Pour OpenCode, garder `opencode serve` garde aussi `opencode attach` : sa vue terminal, la plus simple de toutes, se branche sur le serveur de l'agent.
   - Proposé : ACP pour Cursor. Pour Copilot et OpenCode, décider après le point 0, en comparant ce que donne chaque voie.
 - [ ] **Mot de l'interface** : « Moteur » (proposé) ? « Agent » est déjà pris.
-- [x] **Repli sur un autre moteur** (décidé le 2026-10-14) : oui, et pour un agent en cours, pas seulement pour les nouveaux tickets : voir « Continuer sur un autre moteur quand le quota est épuisé ». Décidé le même jour : l'automatique est une option, désactivée par défaut, et les moteurs de secours se règlent par projet, par les comptes réservés aux projets. Reste à confirmer : le retour.
+- [x] **Repli sur un autre moteur** (décidé le 2026-10-14) : oui, et pour un agent en cours, pas seulement pour les nouveaux tickets : voir « Continuer sur un autre moteur quand le quota est épuisé ». Décidé le même jour : l'automatique est une option, désactivée par défaut, et les moteurs de secours se règlent par projet, par les comptes réservés aux projets. Le retour n'est jamais automatique : « Revenir sur Claude » est proposé.
 - [ ] **Garde-fou d'OpenCode**, qui n'a pas de quota : un budget par jour en dollars, au-delà duquel le pilote auto se met en pause ?
 
 ## 2. Hébergeurs de code : GitHub, GitLab, Bitbucket, Gitea (demandé le 2026-10-14)
