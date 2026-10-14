@@ -1,6 +1,8 @@
 # Escouade 1.8 — à faire
 
-Un chantier : Codex, OpenCode et GitHub Copilot CLI comme moteurs d'agents, à côté de Claude Code.
+Deux chantiers :
+- Codex, OpenCode et GitHub Copilot CLI comme moteurs d'agents, à côté de Claude Code (chapitre 1) ;
+- GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 - L'avancée d'un agent qui exécute un plan (tâches, sous-agents, ce qui est en cours, essai avec superpowers), d'abord notée ici, est passée dans la 1.7 : voir `docs/TODO-1.7.md`, chantier 5.
 - Une seule forme d'infobulle dans toute l'app, d'abord notée ici, est passée dans la 1.7.1 : voir `CHANGELOG.md`.
@@ -95,6 +97,21 @@ En quota, avec le mode économe (Sonnet pour implémenter et relire), compter le
 - Codex et Copilot ressemblent davantage au modèle d'Escouade : un abonnement avec un quota, un bac à sable du système, un exécutable natif sous Windows.
 - Copilot lit déjà `CLAUDE.md` et `.claude/skills` : superpowers a des chances d'y marcher tel quel.
 - L'API d'OpenCode se stabilise en v2, et sa doc conseille WSL sous Windows.
+
+**Hébergeurs de code** (chapitre 2, estimation du 2026-10-14) :
+
+| Lot | Part de la 1.7 | Ce qui pèse |
+|---|---|---|
+| Essais sur de vrais dépôts | ~3 % | Quatre dépôts de test, chacun avec une CI et un déploiement ; un compte Bitbucket et un Gitea à fournir. |
+| Connexions et clients d'API | ~12 % | Quatre API (REST, plus GraphQL chez GitHub), plusieurs comptes par hébergeur, analyse des remotes, faux serveurs. |
+| PR des tickets | ~12 % | Colonne « En revue », cycle jusqu'au merge, corrections par l'agent, merge et auto-merge, pilote auto. |
+| PR hors tickets, relecture par un agent | ~8 % | Vue « Pull requests », agent sur une PR, relecture à valider avant publication. |
+| CI et déploiements | ~8 % | Pastilles, journaux des jobs, vue « Environnements », aperçus. |
+| Reste commun | ~5 % | Notifications, vue d'ensemble, serveur MCP, docs, site. |
+
+Total : environ la moitié de la 1.7, avec moins d'incertitude que les moteurs, car les quatre API sont stables et documentées. Avec les moteurs, la 1.8 ferait une fois et demie la 1.7.
+
+**Découpe possible** : connexions, PR des tickets et CI en 1.8 ; vue « Pull requests », relecture par un agent et déploiements en 1.9.
 
 ## 0. À vérifier avant de concevoir (essais jetables, avec les vrais CLI)
 
@@ -395,6 +412,156 @@ Escouade tient déjà son propre journal normalisé de chaque conversation (`con
 - [ ] **Repli sur un autre moteur** : quand tous les comptes du moteur d'un ticket ont passé le seuil, partir sur un moteur de secours ? Proposé : oui, en option, désactivée par défaut.
 - [ ] **Garde-fou d'OpenCode**, qui n'a pas de quota : un budget par jour en dollars, au-delà duquel le pilote auto se met en pause ?
 
+## 2. Hébergeurs de code : GitHub, GitLab, Bitbucket, Gitea (demandé le 2026-10-14)
+
+But : Escouade suit le travail des agents après le push, jusqu'à la production. Elle suit la pull request (merge request chez GitLab), sa CI, ses relectures et son merge, puis les déploiements. Les fonctionnalités ci-dessous sont des propositions, à trier avec l'utilisateur (voir « Décisions à prendre »).
+
+**Aujourd'hui** :
+- « Valider + PR » pousse la branche du ticket et ouvre la PR par `gh pr create` (`tickets.rs`, `open_pr`).
+- Sans `gh`, la page de comparaison de GitHub s'ouvre. Sur un autre hébergeur, la branche est seulement poussée.
+- Le ticket passe aussitôt « Terminé », et plus rien ne suit la PR.
+- Conséquence : un ticket qui l'attend (« Après ») part avant que son code soit dans la branche cible.
+
+### Ce qui sert déjà
+- Les comptes des intégrations (`integrations/mod.rs`, `Accounts`, un par service), leurs secrets dans le trousseau (`secrets.rs`), le réglage de proxy, le faux serveur HTTP des tests (`fake.rs`).
+- Le compte GitHub d'Issues, par jeton ou par celui de `gh` (`sync.rs`, `gh_token`).
+- L'adresse d'un remote GitHub reconnue (`board::github_repo`), la description de PR (`board::pr_body`), la page de comparaison (`board::compare_url`).
+- Un agent archivé dont le worktree a disparu se restaure depuis sa branche : de quoi rendre un ticket à son agent après la PR.
+- Les tests en échec à la validation renvoient le ticket à son agent avec les 80 dernières lignes : même mécanique pour la CI.
+- « Branches mergées » et la base du projet comptent déjà une branche mergée par une PR, une fois récupérée par fetch.
+
+### Connexions
+- [ ] **Un compte par instance**, et plusieurs par hébergeur (pro et perso, github.com et l'instance de l'entreprise) :
+  - GitHub : github.com, GHE.com et GitHub Enterprise Server (les mêmes hôtes que les comptes Copilot GHE du chapitre 1) ;
+  - GitLab : gitlab.com et les instances auto-hébergées ;
+  - Bitbucket Cloud. Bitbucket Data Center, dont l'API diffère, attend une autre version ;
+  - Gitea et Forgejo, Codeberg compris.
+- [ ] **Le projet trouve son compte par son remote** (celui de la branche cible, sinon `origin`) : l'hôte donne le compte.
+  - `board::github_repo` devient un analyseur par hébergeur : https, ssh, forme scp, port ssh, sous-groupes de GitLab (`groupe/sous-groupe/projet`), `workspace/dépôt` de Bitbucket.
+  - Un hôte inconnu propose « Connecter <hôte> ». Le type d'une instance auto-hébergée se devine en sondant `/api/v4/version` (GitLab) et `/api/v1/version` (Gitea, Forgejo).
+- [ ] **Jetons**, gardés dans le trousseau comme aujourd'hui :
+  - GitHub : celui de `gh` (`gh auth token --hostname <hôte>`), sinon un jeton à droits fins. Droits à documenter : pull requests et contenu en écriture ; checks, statuts, Actions et déploiements en lecture.
+  - GitLab : un jeton personnel (`api`), ou celui de `glab`. Aucune commande `glab auth token` n'est connue : il faudrait lire la sortie de `glab auth status --show-token --hostname <hôte>`.
+  - Bitbucket Cloud : un jeton d'API Atlassian à scopes (e-mail du compte + jeton). D'après Atlassian, les mots de passe d'application ne se créent plus depuis le 2025-09-09, et leur retrait était prévu le 2026-07-28.
+  - Gitea et Forgejo : un jeton d'accès à scopes.
+- [ ] **Une connexion, deux usages** : le compte GitHub d'Issues et celui des PR ne font qu'un (`Accounts.github` devient le compte de github.com).
+- [ ] **Réglages › Intégrations** : une section « Hébergeurs de code », avec l'état de chaque compte (connecté, jeton expiré, droits manquants listés) et les projets qui s'en servent.
+
+### Les PR des tickets
+- [ ] **Ouvrir la PR par l'API** des quatre hébergeurs : `gh` n'est plus nécessaire, il reste une source de jeton.
+  - Brouillon : le champ `draft` de GitHub, de Gitea et de Bitbucket (à vérifier) ; chez GitLab, le titre préfixé `Draft:`.
+  - Lien vers l'issue d'origine : `Closes #12` pour GitHub, GitLab et Gitea ; la clé Jira ou Linear dans le titre, comme aujourd'hui.
+  - Relecteurs et étiquettes par défaut dans les réglages du Kanban.
+  - Sans compte : comme aujourd'hui, mais avec la page de création de chaque hébergeur, remplie (`/compare/` de GitHub et de Gitea, `merge_requests/new?merge_request[source_branch]=…` de GitLab, `pull-requests/new?source=…` de Bitbucket).
+- [ ] **Colonne « En revue »**, entre « À tester » et « Terminé » (voir « Décisions ») : le ticket y passe à l'ouverture de sa PR et y reste jusqu'au merge. Elle n'apparaît que si le Kanban ouvre des PR ou qu'un ticket y est.
+- [ ] **Carte en revue** : numéro et lien, état (brouillon, ouverte, approuvée, changements demandés), CI (✓, ✗ ou ⏳, et le nombre de jobs), approbations (« 1/2 »), fils de discussion ouverts, conflit avec la cible.
+- [ ] **Mergée sur l'hébergeur** :
+  - le ticket passe « Terminé » (« ⤵ PR #12 mergée dans main ») ;
+  - l'issue externe suit et reçoit son commentaire (`sync.rs`) ;
+  - la branche locale part si le réglage le dit, et un fetch met la base à jour ;
+  - les tickets qui l'attendent partent alors, sur une cible qui a son code.
+- [ ] **Fermée sans merge** : le ticket est bloqué (« PR #12 fermée sans merge »), avec « Remettre à faire » et « Terminer quand même ».
+- [ ] **CI en échec** : « L'agent corrige ».
+  - Le ticket repart chez son agent, restauré depuis sa branche si son worktree n'est plus là.
+  - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (80 lignes par job, comme les tests).
+  - Il pousse, la PR se met à jour, et le ticket revient « En revue ».
+  - Avec le pilote auto, ça part seul, dans la limite des boucles du ticket.
+- [ ] **Changements demandés** : « L'agent traite les retours ».
+  - Il reçoit les commentaires non résolus arrivés depuis le dernier push : fichier, ligne, extrait du diff, auteur, texte.
+  - Il pousse ses corrections.
+  - Répondre sous chaque fil (« Corrigé dans abc1234 ») est un réglage, désactivé par défaut. Escouade ne résout jamais un fil seule.
+- [ ] **Conflit avec la cible** : « L'agent met à jour la branche », par un merge de la cible dans la branche, avec le traitement des conflits d'aujourd'hui (`on_conflict`). Le rebase, et son push forcé (`--force-with-lease`), seulement en réglage.
+- [ ] **Merger depuis Escouade** : « Merger » quand la PR est approuvée et verte, avec la stratégie du Kanban (parmi celles que le dépôt autorise). « Merger quand c'est vert » passe par l'auto-merge de l'hébergeur :
+  - GitHub : `enablePullRequestAutoMerge` (GraphQL), si le dépôt l'autorise ;
+  - GitLab : `merge_when_pipeline_succeeds` (ou `auto_merge`, selon la version) ;
+  - Gitea : `merge_when_checks_succeed`, seulement sur une branche protégée ;
+  - Bitbucket : aucun appel d'API connu. Son API merge tout de suite (demandes ouvertes BCLOUD-22055 et BCLOUD-22062). Escouade attend la CI puis merge elle-même tant qu'elle tourne, et le dit.
+- [ ] **Pilote auto** : un ticket en revue ne compte dans les agents en parallèle que quand son agent travaille.
+
+### Les PR hors tickets
+- [ ] **Agent ordinaire** : « Ouvrir une PR » sur sa branche (en-tête de la conversation, clic droit sur sa carte, sélecteur de branches).
+  - Push, puis titre et description proposés par Haiku, comme le message de commit ; brouillon au choix.
+  - Sa carte montre ensuite l'état de la PR et de sa CI.
+  - « L'agent corrige » et « L'agent traite les retours » s'y font en un clic, jamais seuls.
+- [ ] **Vue « Pull requests » du projet**, à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
+  - ouvrir dans le navigateur ;
+  - « Lancer un agent sur cette PR » : un worktree sur sa branche, comme « Reprendre une branche existante… ». Une PR venue d'un fork se récupère par `refs/pull/<n>/head` (GitHub, Gitea) ou `refs/merge-requests/<n>/head` (GitLab) ; pour Bitbucket, à voir ;
+  - « Faire relire par un agent » (ci-dessous).
+- [ ] **Relecture par un agent** : un agent lit le diff d'une PR et rédige une relecture, avec des commentaires par fichier et par ligne.
+  - L'utilisateur les garde, les corrige ou les écarte un par un dans Escouade, puis publie : review de GitHub et de Gitea, discussions de GitLab, commentaires de ligne de Bitbucket.
+  - Rien ne part sans lui.
+
+### La CI
+- [ ] **La branche cible** : une pastille dans l'en-tête du projet (« main ✗ depuis 2 h »). Réglage du pilote auto « Pause quand la CI de la cible est rouge », désactivé par défaut.
+- [ ] **Les branches poussées sans PR** (« Valider et pousser », agents) : la même pastille sur la carte.
+- [ ] **Les sources** : checks et statuts de GitHub, pipelines de GitLab, statuts de commit de Bitbucket, statuts combinés de Gitea. Une CI tierce (Jenkins, CircleCI, Buildkite…) ne donne qu'un statut et une adresse, pas de journal : la carte le dit.
+- [ ] **Le journal d'un job**, en lecture seule dans Escouade comme un terminal, avec « Envoyer à un agent ».
+- [ ] **« Relancer les jobs en échec »**, quand l'hébergeur le permet : GitHub Actions et GitLab ; Bitbucket Pipelines et Gitea Actions, à vérifier.
+
+### Les déploiements
+- [ ] **Après le merge**, Escouade suit les déploiements par environnement : déploiements et statuts de GitHub, environnements de GitLab, déploiements de Bitbucket Pipelines. Gitea n'a pas d'API de déploiements connue : seulement la CI de la cible.
+- [ ] **Un ticket est dans un environnement** dès qu'un déploiement réussi y porte un commit qui contient son merge (`git merge-base --is-ancestor` après un fetch, sans appel d'API de plus). Sa carte « Terminé » le dit (« staging ✓ · production ⏳ »), avec l'adresse de l'environnement.
+- [ ] **Vue « Environnements »** du projet : ce qui tourne où (commit, date, auteur), les tickets livrés dans chacun, et ceux mergés qui attendent la production (« 3 tickets pas encore en production »).
+- [ ] **Aperçus** : Vercel, Netlify, Cloudflare Pages… posent sur la PR un déploiement ou un statut avec une adresse. « Ouvrir l'aperçu » sur la carte en revue, à côté de « ▶ Tester ».
+- [ ] **Échec d'un déploiement** : une notification et une pastille sur l'environnement, avec le lien du job.
+
+### Notifications, vue d'ensemble, serveur MCP
+- [ ] **Notifications**, réglables une à une comme les autres : CI en échec, changements demandés, PR approuvée, PR mergée, conflit, relecture demandée à l'utilisateur, déploiement en production réussi ou en échec.
+- [ ] **Vue d'ensemble** : un groupe « Pull requests » (à merger, à corriger, relectures demandées).
+- [ ] **Serveur MCP** : `list_pull_requests` et `get_pull_request` (état, CI, relectures, fils ouverts, déploiements), et la PR du ticket dans `get_ticket`. L'agent d'un ticket peut y relire les retours lui-même. Commenter ou merger par le MCP : pas en 1.8.
+
+### Rafraîchissement et limites des API
+- [ ] **Pas de webhook** : l'app n'a pas d'adresse publique. Escouade interroge les hébergeurs, et seulement sur ce qu'elle suit : les PR des tickets en revue et des agents, la CI de la cible, les déploiements récents.
+  - Toutes les minutes quand la fenêtre est au premier plan, toutes les 5 minutes sinon ;
+  - tout de suite après un push d'Escouade et quand la fenêtre revient ;
+  - un bouton « Rafraîchir ».
+- [ ] **Économiser les quotas d'API** :
+  - GitHub : toutes les PR suivies d'un dépôt en une requête GraphQL, ou des requêtes REST conditionnelles (`If-None-Match` : une réponse 304 ne compte pas dans la limite) ;
+  - relever les limites de chaque hébergeur dans les essais (Bitbucket Cloud aurait la plus basse, à vérifier) ;
+  - ralentir à l'approche de la limite (`X-RateLimit-*`).
+- [ ] **Hébergeur injoignable ou jeton expiré** : la carte le dit (« GitLab injoignable depuis 10 min »). Une erreur ne déplace jamais un ticket.
+
+### À vérifier d'abord (essais jetables, sur de vrais dépôts)
+- [ ] **Un parcours enregistré par hébergeur**, rejoué dans les tests (`tests/fixtures/forges/`) : créer une PR ; lire son état, ses checks, ses relectures et ses commentaires de ligne ; merger ; auto-merge ; lire le journal d'un job. Routes des journaux : `/actions/jobs/{id}/logs` chez GitHub, `/jobs/:id/trace` chez GitLab, journal d'une étape de Bitbucket Pipelines, Actions de Gitea (routes à relever, versions récentes seulement).
+- [ ] **Dépôts de test** : github.com, gitlab.com, Bitbucket Cloud, et Codeberg (Forgejo) ou un Gitea en local par Docker. Chacun a une CI qui échoue puis passe, et un déploiement.
+- [ ] **`glab`** : lire son jeton par `glab auth status --show-token`, ou dans son fichier de config.
+- [ ] **Bitbucket** : le jeton d'API Atlassian (e-mail + jeton, scopes), les PR en brouillon, la relance d'un pipeline, les limites horaires.
+- [ ] **Gitea et Forgejo** : les écarts entre les deux API sur ce dont Escouade a besoin (Forgejo diverge depuis 2024), et la plus ancienne version de chacun à prendre en charge.
+- [ ] **Forks** : un projet dont `origin` est un fork et `upstream` le dépôt d'origine. Sur quel dépôt ouvrir la PR ? Aujourd'hui, `gh pr create --repo` (`tickets.rs`).
+
+### Tests
+- [ ] **Faux hébergeurs** sur le modèle de `fake.rs`, nourris des réponses enregistrées pendant les essais.
+- [ ] **Tests unitaires** :
+  - l'analyse des adresses de remote (https, ssh, scp, sous-groupes, ports) ;
+  - l'état d'une PR lu dans chaque API (brouillon, approuvée, changements demandés, CI rouge, en cours ou verte, conflit, mergée, fermée) ;
+  - les commentaires arrivés depuis le dernier push ;
+  - l'appartenance d'un ticket à un déploiement.
+- [ ] **Cycle d'un ticket** : PR ouverte, CI rouge, l'agent corrige, CI verte, PR approuvée puis mergée, ticket « Terminé », puis déployé. Le pilote auto, et « Après » qui attend le merge.
+- [ ] **e2e** : la carte en revue et ses actions, la vue « Pull requests ».
+- [ ] **Avant la release**, un essai réel par hébergeur, sur les dépôts de test.
+
+### Docs
+- [ ] SPEC (section « Hébergeurs de code »), README, CHANGELOG.
+- [ ] Site, en français et en anglais : pages de doc des intégrations et du Kanban, captures.
+- [ ] Statistiques d'usage : les nouveaux événements (PR ouverte, PR mergée, correction de CI, relecture par un agent), sans nom ni adresse. Les ajouter à la page Confidentialité du site, qui liste chaque événement.
+- [ ] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Le dire dans la page Confidentialité.
+
+### Décisions à prendre
+- [ ] **Colonne « En revue »**, ou ticket « Terminé » avec l'état de sa PR ? Proposé : la colonne. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.
+- [ ] **Correction automatique par le pilote auto** :
+  - CI en échec : proposé activée, dans la limite des boucles ;
+  - retours de relecture : proposé désactivée, car un relecteur humain peut attendre une discussion plutôt qu'un correctif.
+- [ ] **Ce qu'Escouade publie au nom de l'utilisateur** (réponses sous les fils, relecture rédigée par un agent) : proposé, rien sans un réglage ou une validation à la main.
+- [ ] **Mot de l'interface** : « PR » partout, ou « MR » sur GitLab ? Proposé : le mot de l'hébergeur.
+- [ ] **Worktree pendant la revue** : le garder jusqu'au merge (corrections plus rapides, mais disque et `node_modules`), ou le supprimer comme aujourd'hui et le recréer au besoin depuis la branche ? Proposé : comme aujourd'hui.
+- [ ] **Ce qui entre dans la 1.8** : voir « Ampleur ».
+
+### Plus tard
+- Import des issues de GitLab et de Gitea dans le Kanban, comme GitHub Issues. Peu coûteux une fois les comptes faits : à remonter en 1.8 si le temps le permet.
+- Approuver depuis Escouade un déploiement en attente (environnements protégés de GitHub et de GitLab).
+- « Inclus dans v1.8.0 » sur un ticket, d'après les releases de l'hébergeur.
+- Bitbucket Data Center, Azure DevOps.
+
 ## Ordre proposé
 
 1. Essais du point 0 sur les trois moteurs. Ils décident de la ligne d'OpenCode, de la voie de Copilot (crate ou client maison), du commit sous les bacs à sable de Codex et de Copilot, et de la façon de passer le serveur MCP.
@@ -406,3 +573,12 @@ Escouade tient déjà son propre journal normalisé de chaque conversation (`con
 5. Copilot, dans le même ordre que Codex.
 6. OpenCode, dans le même ordre.
 7. Déclaration du serveur MCP dans les configs des trois moteurs, puis docs et site.
+
+Le chapitre 2 ne dépend pas du chapitre 1. Il peut passer avant les moteurs ou se faire en parallèle. Son ordre :
+1. Essais sur les dépôts de test.
+2. Connexions et clients d'API des quatre hébergeurs.
+3. PR des tickets : ouverture par l'API, colonne « En revue », merge sur l'hébergeur.
+4. CI : pastilles, journaux, « L'agent corrige », puis « L'agent traite les retours ».
+5. PR hors tickets, vue « Pull requests », relecture par un agent.
+6. Déploiements et vue « Environnements ».
+7. Notifications, vue d'ensemble, serveur MCP, puis docs et site.
