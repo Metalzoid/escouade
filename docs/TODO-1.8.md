@@ -4,6 +4,13 @@ Deux chantiers :
 - Codex, GitHub Copilot CLI, Cursor CLI et OpenCode comme moteurs d'agents, à côté de Claude Code (chapitre 1 ; Cursor ajouté le 2026-10-14) ;
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
+Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
+- ESC-11 à ESC-21 : « Aussi pour la 1.8 » ;
+- ESC-22 à ESC-25 : essais du point 0 ;
+- ESC-26 à ESC-36 : refonte multi-moteurs ;
+- ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
+- ESC-53 à ESC-70 : hébergeurs de code.
+
 - L'avancée d'un agent qui exécute un plan (tâches, sous-agents, ce qui est en cours, essai avec superpowers), d'abord notée ici, est passée dans la 1.7 : voir `docs/TODO-1.7.md`, chantier 5.
 - Une seule forme d'infobulle dans toute l'app, d'abord notée ici, est passée dans la 1.7.1 : voir `CHANGELOG.md`.
 
@@ -88,13 +95,13 @@ Repère : la 1.7 (cinq chantiers) a fait 266 commits et environ 78 000 lignes aj
 | Lot | Part de la 1.7 | Ce qui pèse |
 |---|---|---|
 | Essais réels (point 0) | ~8 % | Il faut l'utilisateur pour les connexions : compte ChatGPT, clé d'un fournisseur pour OpenCode, compte GitHub avec Copilot, compte Cursor. |
-| Extraction d'une interface « moteur », avec Claude seul | ~10 % | Refacto de `claude.rs`, `agent.rs` et `core.rs` (lancement, reprise, copie, one-shots), sans changement de comportement. |
-| Codex | ~30 % | Client JSON-RPC, traduction du flux, permissions, modes, comptes `CODEX_HOME`, quota, faux `codex`. Le premier moteur essuie les plâtres de l'interface. |
-| Copilot CLI | ~20 % | SDK Rust ou client JSON-RPC, traduction de ses 150 types d'événements, permissions typées, comptes `COPILOT_HOME`, crédits d'IA, faux `copilot`. |
-| Cursor CLI | ~15 % | Client ACP (JSON-RPC sur stdio, réutilisable pour d'autres moteurs), extensions `cursor/*` (questions, plan, tâches, sous-agents), comptes par clé d'API, faux `agent`. Ni quota ni coût connus. |
-| Vues terminal | ~10 % | Une commande de hooks commune, puis Codex et Copilot sur le modèle de la vue Claude Code (hooks, journal, reprise), OpenCode par `opencode attach`, Cursor en suivi réduit. |
-| OpenCode | ~25 % | Serveur HTTP + SSE par agent, traduction, règles de permission, faux `opencode`. Deux lignes d'API (v1, v2) à départager. Moins si OpenCode passe par le client ACP de Cursor (voir « Décisions »). |
-| Reste commun | ~13 % | Choix du moteur dans l'interface, textes à paramétrer (~100 « Claude » par langue), stats par moteur, one-shots, serveur MCP, docs, site. |
+| Refonte multi-moteurs, avec Claude seul | ~30 % | Extraction de l'interface « moteur » (refacto de `claude.rs`, `agent.rs` et `core.rs`), données, registre et capacités, interface, comptes et quotas, textes, one-shots, MCP, vue terminal générique, banc de conformité, moteur ACP générique. Elle prend une part de chaque moteur et du reste commun. |
+| Codex | ~25 % | Client JSON-RPC, traduction du flux, permissions, modes, comptes `CODEX_HOME`, quota, faux `codex`. Le premier moteur essuie les plâtres de l'interface. |
+| Copilot CLI | ~18 % | SDK Rust ou client JSON-RPC, traduction de ses 150 types d'événements, permissions typées, comptes `COPILOT_HOME`, crédits d'IA, faux `copilot`. |
+| Cursor CLI | ~10 % | Par le moteur ACP générique de la refonte : extensions `cursor/*` (questions, plan, tâches, sous-agents), comptes par clé d'API, faux `agent`. Ni quota ni coût connus. |
+| Vues terminal | ~6 % | La vue générique est dans la refonte : Codex et Copilot sur le modèle de la vue Claude Code (hooks, journal, reprise), OpenCode par `opencode attach`, Cursor en suivi réduit. |
+| OpenCode | ~22 % | Serveur HTTP + SSE par agent, traduction, règles de permission, faux `opencode`. Deux lignes d'API (v1, v2) à départager. Moins si OpenCode passe par le moteur ACP générique (voir « Décisions »). |
+| Reste commun | ~5 % | Déclaration du serveur MCP dans les configs des moteurs, docs, site. Le reste est dans la refonte. |
 
 Total : environ 1,3 fois la 1.7 avec Cursor et les vues terminal, et plus d'incertitude qu'elle, car les quatre protocoles externes bougent vite :
 - le protocole de Codex est marqué « expérimental » ;
@@ -283,6 +290,26 @@ But : un agent tourne sur Claude Code, Codex, Copilot CLI, Cursor CLI ou OpenCod
 | Transcripts | `~/.claude/projects/…/*.jsonl` | `$CODEX_HOME/sessions/…/rollout-*.jsonl` (format interne) | `~/.copilot/session-state/<id>/events.jsonl` | non relevés | SQLite, schéma non public |
 
 Escouade tient déjà son propre journal normalisé de chaque conversation (`conv.rs`). La recherche, la relecture, les cartes et les stats lisent ce journal, pas les transcripts des CLI, donc les transcripts des autres moteurs n'ont pas à être lus.
+
+### Refonte multi-moteurs, avant le premier moteur (demandé le 2026-10-14)
+But : rendre Escouade multi-moteurs en profondeur avant d'écrire Codex, Copilot, Cursor ou OpenCode. Ajouter un moteur, ceux-ci puis d'autres, se résume ensuite à écrire son adaptateur, déclarer ses capacités et fournir son faux moteur.
+
+Elle regroupe ce qui était « Extraction d'une interface moteur » et « Reste commun », plus trois briques : la vue terminal générique, le banc de conformité et le moteur ACP générique. Les sections suivantes de ce chapitre gardent le détail de chaque partie. Ce qui y est propre à un moteur se fait avec lui.
+
+Lots, dans l'ordre :
+1. **Interface « moteur »** : extraction de Claude Code, sans changement de comportement (voir « Un moteur par agent »).
+2. **Données** : moteur de l'agent, du ticket et du projet ; colonne `engine` des stats.
+3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ».
+4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »).
+5. **Comptes et quotas par moteur** (voir « Comptes et quotas », « Coût, tokens, stats »).
+6. **Textes et consignes** indépendants du moteur (voir « Textes »).
+7. **Textes rédigés** par moteur (voir « Textes rédigés par un modèle »).
+8. **Serveur MCP** par moteur (voir « Serveur MCP d'Escouade »).
+9. **Vue terminal générique** et commande `escouade-hook` (voir « Vue terminal de chaque moteur »).
+10. **Banc de conformité** des moteurs, et guide `docs/ENGINES.md` « Ajouter un moteur ».
+11. **Moteur ACP générique** : client, extensions propres à un moteur, faux agent ACP.
+
+Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisateur, et le faux moteur du banc se branche sans toucher au cœur.
 
 ### Un moteur par agent
 - [ ] `AgentMeta.engine` vaut `claude`, `codex`, `copilot`, `cursor` ou `opencode`. Par défaut, `claude` (les agents d'avant la 1.8). Un agent garde son moteur toute sa vie : une conversation ne change pas de moteur, et sa copie garde le même.
@@ -694,16 +721,15 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 ## Ordre proposé
 
 1. Essais du point 0 sur les quatre moteurs. Ils décident de la ligne d'OpenCode, de la voie de Copilot (crate, client maison ou ACP), d'ACP comme voie commune, du commit sous les bacs à sable de Codex, de Copilot et de Cursor, et de la façon de passer le serveur MCP.
-2. Extraction de l'interface « moteur », avec Claude seul, sans changement de comportement.
+2. Refonte multi-moteurs (ses 11 lots), avec Claude seul, sans changement visible.
 3. Codex, en deux temps :
    - Lancement, conversation, permissions, questions, modèles et modes, plan.
    - Comptes, quota, stats, serveur MCP.
-4. Commun : choix du moteur dans l'interface, textes, one-shots.
-5. Copilot, dans le même ordre que Codex.
-6. Cursor, par un client ACP, dans le même ordre.
-7. OpenCode, dans le même ordre (par le client ACP si c'est décidé).
-8. Vues terminal : OpenCode (par `opencode attach`), Codex, Copilot, puis Cursor en suivi réduit.
-9. Déclaration du serveur MCP dans les configs des quatre moteurs, puis docs et site.
+4. Copilot, dans le même ordre que Codex, puis GitHub Enterprise et OpenRouter.
+5. Cursor, par le moteur ACP générique, dans le même ordre.
+6. OpenCode, dans le même ordre (par le moteur ACP si c'est décidé).
+7. Vues terminal : OpenCode (par `opencode attach`), Codex, Copilot, puis Cursor en suivi réduit.
+8. Déclaration du serveur MCP dans les configs des quatre moteurs, puis docs et site, puis un essai réel de chaque moteur.
 
 Le chapitre 2 ne dépend pas du chapitre 1. Il peut passer avant les moteurs ou se faire en parallèle. Son ordre :
 1. Essais sur les dépôts de test.
