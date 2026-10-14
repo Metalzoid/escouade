@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86 et ESC-87 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -79,6 +79,16 @@ Aussi pour la 1.8 :
   - le glisser-déposer qui réordonne les onglets fait défiler la barre près de ses bords ;
   - la zone qui déplace la fenêtre (`data-tauri-drag-region`) garde sa place à droite des onglets ;
   - tests : Vitest pour le défilement et l'onglet actif ramené en vue ; e2e avec une dizaine de projets, à la taille de la fenêtre de la CI (1028×779).
+- [ ] **Site : présenter Escouade comme un ADE complet** (demandé le 2026-10-14, ESC-86). Le site, le README et PRODUCT.md présentent Escouade comme « le poste de pilotage de tes agents Claude Code » (« Une escouade de Claude. Une seule fenêtre. », « Toutes tes sessions Claude Code dans une seule fenêtre… »). C'est réducteur : c'est un environnement de développement agentique (ADE) complet.
+  - Le récit suit le cycle de développement : planifier (Kanban, tickets, imports, pilote auto), coder (agents en parallèle, éditeur, terminaux), relire et tester (Git, « ▶ Tester », lancements), livrer (commit, merge, PR, puis le suivi de la 1.8), piloter (quotas, coût, stats, notifications, MCP).
+  - D'abord deux ou trois directions de récit montrées sur aperçu ; l'utilisateur choisit.
+  - Puis meta, hero, sections, FAQ et appel final en français et en anglais, la page « Ce qu'est Escouade » de la doc, le README et la section « Positioning » de PRODUCT.md.
+  - Rien d'annoncé qui ne soit livré, et un récit qui ne repose pas sur le nom « Claude », pour accueillir les moteurs de la 1.8 sans être réécrit. La description du dépôt GitHub ne change qu'avec l'accord de l'utilisateur.
+- [ ] **Éditeur : « Afficher dans l'Explorateur »** au clic droit sur un fichier ou un dossier de l'arborescence (demandé le 2026-10-14, ESC-87). Le menu (`treeMenu` d'`EditorView.svelte`) n'a aucune entrée vers l'explorateur du système.
+  - L'entrée est nommée comme le système : « Afficher dans l'Explorateur » (Windows), « Afficher dans le Finder » (macOS), « Ouvrir le dossier contenant » (Linux).
+  - Par `revealItemInDir` du plugin opener, déjà présent : il manque la permission `opener:allow-reveal-item-in-dir`.
+  - Sur le vide : le dossier racine de la source (projet ou worktree de l'agent).
+  - À essayer avec un projet WSL et un worktree supprimé (refusé avec sa raison).
 - [x] **Blocage intermittent de la CI sous macOS** (traité le 2026-10-13) : un test qui crée un agent dans un worktree git ne finit parfois jamais, et le job est coupé au bout de 45 minutes. Ce n'est jamais le même test (`core_tests::the_project_diff_covers_the_checkout_and_each_agents_worktree`, `core_tests::an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_env_files`), seulement sous macOS, depuis le 10 octobre au moins (runs de 3ea4859, 24dfda6, 9d07e83, 170e1c3, 140db3e, ba58456). Ce qui a été fait : git ne dépend plus de la fin de ses tubes et s'arrête au bout de 2 minutes (30 minutes pour un commit, une fusion ou un `worktree add` qui lancent des hooks), `claude` et les lancements de test n'héritent plus des descripteurs ouverts de l'app sous macOS (ils tenaient les tubes de git ouverts), et nextest tue un test bloqué au bout de son délai et le nomme. À confirmer sur plusieurs runs macOS (`node scripts/ci-flakes.mjs`) avant de le tenir pour réglé.
 - [x] **Intégration Linear** (2026-10-12), à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
   - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;

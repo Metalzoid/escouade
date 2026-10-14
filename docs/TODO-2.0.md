@@ -2,7 +2,7 @@
 
 Un chantier : le nouveau design de l'app, dans la langue visuelle du site.
 
-Tickets du Kanban d'Escouade, créés le 2026-10-14 : ESC-71 à ESC-85 (les 11 lots, les deux nouveautés, la revue finale, puis la vidéo et le site). Le premier attend la fin de la 1.8.
+Tickets du Kanban d'Escouade, créés le 2026-10-14 : ESC-71 à ESC-85 (les 11 lots, les deux nouveautés, la revue finale, puis la vidéo et le site). Le premier attend la fin de la 1.8, nouveau récit du site (ESC-86) compris.
 
 ## D'où ça vient (2026-10-12)
 
