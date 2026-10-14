@@ -111,7 +111,7 @@ En quota, avec le mode économe (Sonnet pour implémenter et relire), compter le
 
 Total : environ la moitié de la 1.7, avec moins d'incertitude que les moteurs, car les quatre API sont stables et documentées. Avec les moteurs, la 1.8 ferait une fois et demie la 1.7.
 
-**Découpe possible** : connexions, PR des tickets et CI en 1.8 ; vue « Pull requests », relecture par un agent et déploiements en 1.9.
+**Périmètre** (décidé le 2026-10-14) : tout le chapitre 2 en 1.8, pour l'instant. Si la 1.8 s'allonge, le repli est de garder connexions, PR des tickets et CI en 1.8, et de reporter la vue « Pull requests », la relecture par un agent et les déploiements en 1.9.
 
 ## 0. À vérifier avant de concevoir (essais jetables, avec les vrais CLI)
 
@@ -414,7 +414,7 @@ Escouade tient déjà son propre journal normalisé de chaque conversation (`con
 
 ## 2. Hébergeurs de code : GitHub, GitLab, Bitbucket, Gitea (demandé le 2026-10-14)
 
-But : Escouade suit le travail des agents après le push, jusqu'à la production. Elle suit la pull request (merge request chez GitLab), sa CI, ses relectures et son merge, puis les déploiements. Les fonctionnalités ci-dessous sont des propositions, à trier avec l'utilisateur (voir « Décisions à prendre »).
+But : Escouade suit le travail des agents après le push, jusqu'à la production. Elle suit la pull request (merge request chez GitLab), sa CI, ses relectures et son merge, puis les déploiements. Les fonctionnalités ci-dessous sont des propositions. Trois décisions ont été prises le 2026-10-14 (colonne « En revue », corrections automatiques, tout en 1.8) ; les autres restent dans « Décisions à prendre ».
 
 **Aujourd'hui** :
 - « Valider + PR » pousse la branche du ticket et ouvre la PR par `gh pr create` (`tickets.rs`, `open_pr`).
@@ -453,7 +453,7 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - Lien vers l'issue d'origine : `Closes #12` pour GitHub, GitLab et Gitea ; la clé Jira ou Linear dans le titre, comme aujourd'hui.
   - Relecteurs et étiquettes par défaut dans les réglages du Kanban.
   - Sans compte : comme aujourd'hui, mais avec la page de création de chaque hébergeur, remplie (`/compare/` de GitHub et de Gitea, `merge_requests/new?merge_request[source_branch]=…` de GitLab, `pull-requests/new?source=…` de Bitbucket).
-- [ ] **Colonne « En revue »**, entre « À tester » et « Terminé » (voir « Décisions ») : le ticket y passe à l'ouverture de sa PR et y reste jusqu'au merge. Elle n'apparaît que si le Kanban ouvre des PR ou qu'un ticket y est.
+- [ ] **Colonne « En revue »**, entre « À tester » et « Terminé » (décidé le 2026-10-14) : le ticket y passe à l'ouverture de sa PR et y reste jusqu'au merge. Elle n'apparaît que si le Kanban ouvre des PR ou qu'un ticket y est.
 - [ ] **Carte en revue** : numéro et lien, état (brouillon, ouverte, approuvée, changements demandés), CI (✓, ✗ ou ⏳, et le nombre de jobs), approbations (« 1/2 »), fils de discussion ouverts, conflit avec la cible.
 - [ ] **Mergée sur l'hébergeur** :
   - le ticket passe « Terminé » (« ⤵ PR #12 mergée dans main ») ;
@@ -465,8 +465,9 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
   - Le ticket repart chez son agent, restauré depuis sa branche si son worktree n'est plus là.
   - L'agent reçoit le nom des jobs en échec et la fin de leurs journaux (80 lignes par job, comme les tests).
   - Il pousse, la PR se met à jour, et le ticket revient « En revue ».
-  - Avec le pilote auto, ça part seul, dans la limite des boucles du ticket.
+  - Avec le pilote auto, ça part seul, dans la limite des boucles du ticket (décidé le 2026-10-14). Sans lui, un bouton sur la carte.
 - [ ] **Changements demandés** : « L'agent traite les retours ».
+  - Escouade le propose dès que des retours arrivent (décidé le 2026-10-14) : une notification, et sur la carte, le nombre de retours avec « L'agent corrige les retours ». L'agent ne part qu'après ce clic, même avec le pilote auto.
   - Il reçoit les commentaires non résolus arrivés depuis le dernier push : fichier, ligne, extrait du diff, auteur, texte.
   - Il pousse ses corrections.
   - Répondre sous chaque fil (« Corrigé dans abc1234 ») est un réglage, désactivé par défaut. Escouade ne résout jamais un fil seule.
@@ -547,14 +548,14 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste, et les appels vont de l'app à l'hébergeur. Le dire dans la page Confidentialité.
 
 ### Décisions à prendre
-- [ ] **Colonne « En revue »**, ou ticket « Terminé » avec l'état de sa PR ? Proposé : la colonne. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.
-- [ ] **Correction automatique par le pilote auto** :
-  - CI en échec : proposé activée, dans la limite des boucles ;
-  - retours de relecture : proposé désactivée, car un relecteur humain peut attendre une discussion plutôt qu'un correctif.
+- [x] **Colonne « En revue »** (décidé le 2026-10-14) : une colonne entre « À tester » et « Terminé », plutôt qu'un ticket « Terminé » avec l'état de sa PR. Elle répare au passage « Après » : aujourd'hui, un ticket part avant que le code qu'il attend soit mergé.
+- [x] **Correction automatique par le pilote auto** (décidé le 2026-10-14) :
+  - CI en échec : corrigée seule, dans la limite des boucles ;
+  - retours de relecture : Escouade propose de les faire corriger par l'agent dès qu'ils arrivent, et l'agent ne part qu'avec l'accord de l'utilisateur (un relecteur humain peut attendre une discussion plutôt qu'un correctif).
 - [ ] **Ce qu'Escouade publie au nom de l'utilisateur** (réponses sous les fils, relecture rédigée par un agent) : proposé, rien sans un réglage ou une validation à la main.
 - [ ] **Mot de l'interface** : « PR » partout, ou « MR » sur GitLab ? Proposé : le mot de l'hébergeur.
 - [ ] **Worktree pendant la revue** : le garder jusqu'au merge (corrections plus rapides, mais disque et `node_modules`), ou le supprimer comme aujourd'hui et le recréer au besoin depuis la branche ? Proposé : comme aujourd'hui.
-- [ ] **Ce qui entre dans la 1.8** : voir « Ampleur ».
+- [x] **Ce qui entre dans la 1.8** (décidé le 2026-10-14) : tout le chapitre 2, pour l'instant. La découpe de « Ampleur » reste le repli si la 1.8 s'allonge.
 
 ### Plus tard
 - Import des issues de GitLab et de Gitea dans le Kanban, comme GitHub Issues. Peu coûteux une fois les comptes faits : à remonter en 1.8 si le temps le permet.
