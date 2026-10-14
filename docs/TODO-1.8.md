@@ -7,7 +7,7 @@ Deux chantiers :
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
 - ESC-11 à ESC-21, puis ESC-86 et ESC-87 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
-- ESC-26 à ESC-36 : refonte multi-moteurs ;
+- ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
 - ESC-53 à ESC-70 : hébergeurs de code.
 
@@ -318,11 +318,12 @@ Lots, dans l'ordre :
 9. **Vue terminal générique** et commande `escouade-hook` (voir « Vue terminal de chaque moteur »).
 10. **Banc de conformité** des moteurs, et guide `docs/ENGINES.md` « Ajouter un moteur ».
 11. **Moteur ACP générique** : client, extensions propres à un moteur, faux agent ACP.
+12. **Continuer sur un autre moteur** quand le quota est épuisé (voir la section du même nom, ESC-88).
 
 Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisateur, et le faux moteur du banc se branche sans toucher au cœur.
 
 ### Un moteur par agent
-- [ ] `AgentMeta.engine` vaut `claude`, `codex`, `copilot`, `cursor` ou `opencode`. Par défaut, `claude` (les agents d'avant la 1.8). Un agent garde son moteur toute sa vie : une conversation ne change pas de moteur, et sa copie garde le même.
+- [ ] `AgentMeta.engine` vaut `claude`, `codex`, `copilot`, `cursor` ou `opencode`. Par défaut, `claude` (les agents d'avant la 1.8). Un agent a un moteur à la fois. Il en change seulement par une passation (voir « Continuer sur un autre moteur quand le quota est épuisé »), et chaque tour garde le moteur qui l'a fait ; sa copie prend son moteur du moment.
 - [ ] Ce qui est propre à Claude passe derrière une interface « moteur ». C'est aujourd'hui le process stdio et ses requêtes de contrôle (`claude.rs`), et la traduction des frames en éléments de conversation (`AgentRt::handle_frame`). L'interface couvre : lancer, reprendre, copier, envoyer un message avec ses pièces jointes, interrompre, changer de modèle, d'effort ou de mode, répondre à une permission ou une question, lire l'usage, arrêter.
 - [ ] Chaque moteur traduit son flux dans les mêmes éléments de conversation (`user`, `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`, `event`) et les mêmes changements du bandeau « Plan ».
 - [ ] **D'abord une extraction pure**, avec Claude seul et sans aucun changement de comportement : les tests existants (`core_tests`, `agent.rs`, e2e) passent tels quels.
@@ -452,12 +453,31 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Si le point 0 trouve une source : une barre « usage du mois », comme pour Copilot.
   - Sinon : pas de barre, un lien vers le tableau de bord dans le panneau des comptes, et pas de pause au quota pour le pilote auto, comme pour OpenCode.
   - Un tour arrêté par la limite devient une carte qui le dit.
-- [ ] **Bascule automatique** : entre comptes du même moteur seulement. Les nouveaux agents et tickets partent sur le compte suivant sous le seuil. Reprendre un agent Codex, Copilot ou Cursor sur un autre compte ne se fait que si l'essai du point 0 l'a permis.
+- [ ] **Bascule automatique** : entre comptes du même moteur seulement (passer à un autre moteur : voir la section suivante). Les nouveaux agents et tickets partent sur le compte suivant sous le seuil. Reprendre un agent Codex, Copilot ou Cursor sur un autre compte ne se fait que si l'essai du point 0 l'a permis.
 - [ ] **OpenCode** : il n'a pas de quota d'abonnement (il passe par les API des fournisseurs).
   - Un seul compte en 1.8 : sa config par défaut.
   - Pas de barre de quota : la barre d'état montre seulement le coût du jour.
   - Pas de pause au quota pour le pilote auto (voir « Décisions »).
 - [ ] **Barre d'état** : le groupe des quotas montre les comptes du moteur de l'agent affiché (sinon, du moteur par défaut du projet). Le panneau des comptes les liste tous, groupés par moteur.
+
+### Continuer sur un autre moteur quand le quota est épuisé (demandé le 2026-10-14, ESC-88)
+But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un agent arrêté par la limite attend la remise à zéro, ou reprend sur un autre compte Claude (docs/SPEC.md, « Reprise sur un autre compte »). Quand tous les comptes du moteur d'un agent sont épuisés, il doit pouvoir continuer sur un autre moteur.
+
+- [ ] **Une passation, pas une copie de session** : une session ne passe pas d'un moteur à l'autre.
+  - Même agent, même conversation dans Escouade, même worktree, même branche. Un nouveau process du moteur cible, sur le compte que choisit sa propre règle.
+  - Le premier message est un dossier de passation construit par Escouade depuis son journal (`conv.rs`), sans le moteur épuisé : demandes de l'utilisateur ; travail fait (derniers messages de l'agent, avancement, tâches du plan) ; fichiers modifiés (`git status`, `diff --stat`) ; tour coupé, et où ; question ou permission en attente.
+  - Pour un ticket, son protocole (critères, boucle, bilan) repasse par les consignes ajoutées.
+  - Le dossier est borné à la fenêtre de contexte du modèle cible ; les tours anciens peuvent être résumés par le modèle des textes rédigés du moteur cible.
+- [ ] **Mode et modèle** : le même mode si le moteur cible l'a, sinon le plus proche qui n'autorise jamais plus. Un modèle de passation par moteur, réglable (par défaut, son meilleur).
+- [ ] **Dans la conversation** : une séparation « Suite sur Codex · quota Claude épuisé jusqu'à 18:00 », puis la marque du moteur sur les tours suivants. La carte montre le moteur du moment. Chaque tour garde son moteur (stats, coût).
+- [ ] **Quand** :
+  - « Continuer sur <moteur> » sur la carte de fin d'un tour arrêté par la limite, à côté de « Reprendre sur <compte> » ;
+  - « Continuer sur un autre moteur… » dans le menu de l'agent, à tout moment ;
+  - automatique selon un réglage « Quand tous les comptes d'un moteur sont épuisés » : attendre la remise à zéro (comme aujourd'hui), demander, ou continuer sur le premier moteur prêt d'une liste ordonnée « Moteurs de secours ». Le pilote auto le suit pour les tickets.
+- [ ] **Retour** : le moteur quitté est mis de côté jusqu'à sa remise à zéro (pas d'allers-retours, comme le compte quitté aujourd'hui). Ensuite, « Revenir sur Claude » est proposé : une passation dans l'autre sens, ou l'ancienne session de ce moteur reprise et complétée par ce qui s'est passé depuis.
+- [ ] **Vue terminal** : l'agent continue dans la vue du moteur cible s'il en a une, sinon en vue Escouade.
+- [ ] **Tests** : deux faux moteurs du banc de conformité (limite sur le premier, suite sur le second, retour) ; essai réel Claude → Codex avant la release (ESC-52).
+- [ ] **À confirmer avec l'utilisateur** : le comportement par défaut (demander, ou continuer seul), la liste des moteurs de secours (pour toute l'app ou par projet), et si le retour peut être automatique entre deux tours.
 
 ### Coût, tokens, stats
 - [ ] **Codex** : les tokens d'un tour sont le `last` de `thread/tokenUsage/updated` (entrée, cache lu, cache écrit, sortie, raisonnement). Codex ne donne aucun coût en dollars : il est estimé avec une grille des modèles OpenAI dans `pricing.rs` et marqué « estimé ». Avec un abonnement ChatGPT, c'est un coût théorique, comme celui de Claude avec Max.
@@ -574,7 +594,7 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Pour OpenCode, garder `opencode serve` garde aussi `opencode attach` : sa vue terminal, la plus simple de toutes, se branche sur le serveur de l'agent.
   - Proposé : ACP pour Cursor. Pour Copilot et OpenCode, décider après le point 0, en comparant ce que donne chaque voie.
 - [ ] **Mot de l'interface** : « Moteur » (proposé) ? « Agent » est déjà pris.
-- [ ] **Repli sur un autre moteur** : quand tous les comptes du moteur d'un ticket ont passé le seuil, partir sur un moteur de secours ? Proposé : oui, en option, désactivée par défaut.
+- [x] **Repli sur un autre moteur** (décidé le 2026-10-14) : oui, et pour un agent en cours, pas seulement pour les nouveaux tickets : voir « Continuer sur un autre moteur quand le quota est épuisé ». Restent à confirmer : le comportement par défaut, la liste des moteurs de secours, le retour.
 - [ ] **Garde-fou d'OpenCode**, qui n'a pas de quota : un budget par jour en dollars, au-delà duquel le pilote auto se met en pause ?
 
 ## 2. Hébergeurs de code : GitHub, GitLab, Bitbucket, Gitea (demandé le 2026-10-14)
@@ -731,7 +751,7 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 ## Ordre proposé
 
 1. Essais du point 0 sur les quatre moteurs. Ils décident de la ligne d'OpenCode, de la voie de Copilot (crate, client maison ou ACP), d'ACP comme voie commune, du commit sous les bacs à sable de Codex, de Copilot et de Cursor, et de la façon de passer le serveur MCP.
-2. Refonte multi-moteurs (ses 11 lots), avec Claude seul, sans changement visible.
+2. Refonte multi-moteurs (ses 12 lots), avec Claude seul, sans changement visible.
 3. Codex, en deux temps :
    - Lancement, conversation, permissions, questions, modèles et modes, plan.
    - Comptes, quota, stats, serveur MCP.
