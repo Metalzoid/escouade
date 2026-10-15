@@ -9,6 +9,7 @@ export default {
     copyFailed: 'Copie impossible : {error}',
     renameFailed: 'Renommage impossible : {error}',
     deleteFailed: 'Suppression impossible : {error}',
+    revealFailed: 'Ouverture du gestionnaire de fichiers impossible : {error}',
     compareFailed: 'Comparaison impossible : {error}',
     navigateFailed: 'Navigation impossible : {error}',
     tabsKeepOldName: 'Les onglets restent à l’ancien nom : {error}',
@@ -43,6 +44,10 @@ export default {
     newFile: 'Nouveau fichier…',
     newFolder: 'Nouveau dossier…',
     openTerminal: 'Ouvrir un terminal ici',
+    /** Shows the file or folder selected in the system's file manager, named as the system names it. */
+    reveal: { windows: 'Afficher dans l’Explorateur', mac: 'Afficher dans le Finder', linux: 'Ouvrir le dossier contenant' },
+    /** The same from the free space: the folder of the source opens, not the one holding it. */
+    revealRoot: { windows: 'Afficher dans l’Explorateur', mac: 'Afficher dans le Finder', linux: 'Ouvrir le dossier' },
     rename: 'Renommer…',
     /** The Delete key, as written on the keyboard (shown in the menu). */
     deleteKey: 'Suppr',

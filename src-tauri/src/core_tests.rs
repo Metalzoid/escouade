@@ -3778,6 +3778,108 @@ async fn a_terminal_is_refused_for_an_agent_whose_worktree_vanished() {
 }
 
 #[tokio::test]
+async fn the_file_manager_selects_a_file_or_folder_of_the_source_or_opens_its_folder() {
+    use crate::fsedit::Reveal;
+    let h = harness("core-reveal-target");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = PathBuf::from(a.meta.worktree.clone().unwrap().path);
+    let id = Some(a.meta.id.clone());
+    std::fs::create_dir_all(wt.join("src").join("deep")).unwrap();
+    let opened = |t: Reveal| match t {
+        Reveal::Open(dir) => dir,
+        other => panic!("{other:?}"),
+    };
+    let selected = |t: Reveal| match t {
+        Reveal::Select(path) => path,
+        other => panic!("{other:?}"),
+    };
+
+    // The free space: the folder of the source opened, the project's or the agent's worktree.
+    let dir = opened(h.core.reveal_target(&p.id, None, None).await.unwrap());
+    assert!(same_dir(&dir.to_string_lossy(), &r), "{dir:?}");
+    let dir = opened(h.core.reveal_target(&p.id, id.clone(), None).await.unwrap());
+    assert!(same_dir(&dir.to_string_lossy(), &wt), "{dir:?}");
+    let dir = opened(
+        h.core
+            .reveal_target(&p.id, id.clone(), Some(" "))
+            .await
+            .unwrap(),
+    );
+    assert!(same_dir(&dir.to_string_lossy(), &wt), "{dir:?}");
+
+    // A file or a folder of the tree: selected, in the source shown.
+    let file = selected(
+        h.core
+            .reveal_target(&p.id, None, Some("src/app.ts"))
+            .await
+            .unwrap(),
+    );
+    assert!(
+        same_dir(&file.to_string_lossy(), &r.join("src").join("app.ts")),
+        "{file:?}"
+    );
+    let file = selected(
+        h.core
+            .reveal_target(&p.id, id.clone(), Some("src/app.ts"))
+            .await
+            .unwrap(),
+    );
+    // Joined by components below a worktree's root: the tree's `/` is not mixed with its `\`.
+    assert_eq!(file, wt.join("src").join("app.ts"));
+    let dir = selected(
+        h.core
+            .reveal_target(&p.id, id.clone(), Some("src/deep"))
+            .await
+            .unwrap(),
+    );
+    assert_eq!(dir, wt.join("src").join("deep"));
+    // A name is taken as written: one starting with a space is not another file.
+    std::fs::write(wt.join(" lead.ts"), "").unwrap();
+    let file = selected(
+        h.core
+            .reveal_target(&p.id, id, Some(" lead.ts"))
+            .await
+            .unwrap(),
+    );
+    assert_eq!(file, wt.join(" lead.ts"));
+}
+
+#[tokio::test]
+async fn the_file_manager_takes_no_path_spelled_outside_the_source_nor_one_not_there() {
+    let h = harness("core-reveal-confined");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let id = Some(a.meta.id.clone());
+    let outside = r.parent().unwrap().to_string_lossy().to_string();
+
+    for source in [None, id.clone()] {
+        for path in ["..", "../..", "src/../..", outside.as_str()] {
+            let err = h
+                .core
+                .reveal_target(&p.id, source.clone(), Some(path))
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("hors du dossier"), "{path}: {err}");
+        }
+        let err = h
+            .core
+            .reveal_target(&p.id, source.clone(), Some("src/gone.ts"))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(err, "src/gone.ts introuvable");
+    }
+    // An agent the app does not know shows nothing of the project instead.
+    assert!(h
+        .core
+        .reveal_target(&p.id, Some("ghost".into()), None)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
 async fn the_editor_says_so_when_the_worktree_of_its_agent_vanished() {
     let h = harness("core-edit-root-gone");
     let (p, _) = h.project(true).await;
@@ -3797,8 +3899,17 @@ async fn the_editor_says_so_when_the_worktree_of_its_agent_vanished() {
     assert_eq!(e.to_string(), gone);
     let e = h.core.fs_tree(&p.id, id.clone()).await.unwrap_err();
     assert_eq!(e.to_string(), gone);
-    let e = h.core.edit_kept(&p.id, id).await.unwrap_err();
+    let e = h.core.edit_kept(&p.id, id.clone()).await.unwrap_err();
     assert_eq!(e.to_string(), gone);
+    // Nor shown in the system's file manager: not the app's own folder in its place.
+    for path in [None, Some("src/app.ts")] {
+        let e = h
+            .core
+            .reveal_target(&p.id, id.clone(), path)
+            .await
+            .unwrap_err();
+        assert_eq!(e.to_string(), gone, "{path:?}");
+    }
     // Nothing made again where the worktree was.
     assert!(!Path::new(&wt.path).exists());
     // The project's own files are still there to edit.

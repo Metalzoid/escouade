@@ -46,6 +46,7 @@ Right-clicking a row, or the free space under the rows, opens a menu:
 | “New file…” | Opens a name field in the row’s folder (the root on the free space). A name like `src/lib/a.ts` also creates the missing folders. |
 | “New folder…” | The same for a folder. Git doesn’t list an empty folder: the tree shows it all the same. |
 | “Open a terminal here” | Opens a [terminal](terminals) in that folder of the source. |
+| “Reveal in File Explorer” (Windows), “Reveal in Finder” (macOS), “Open containing folder” (Linux) | Opens the system’s file manager on the file or folder, selected. On the free space, opens the source’s folder: the project’s, or the agent’s worktree (“Open the folder” on Linux). If the agent’s worktree no longer exists, a message says so. |
 | “Rename…” (`F2`) | Replaces the row with a field. A name like `other/a.ts` moves the file. Open tabs follow. |
 | “Delete” (`Del`, `⌘⌫` on macOS) | Sends the file or folder to the trash after confirmation (“It goes to the trash.”; for a folder, “The folder and its 12 files go to the trash.”). |
 | “Copy path” and “Copy relative path” | Copy the full path, or the path from the source’s root. |

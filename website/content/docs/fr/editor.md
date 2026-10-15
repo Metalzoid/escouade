@@ -46,6 +46,7 @@ Un clic droit sur une ligne, ou sur l’espace libre sous les lignes, ouvre un m
 | « Nouveau fichier… » | Ouvre un champ de nom dans le dossier de la ligne (la racine sur l’espace libre). Un nom comme `src/lib/a.ts` crée aussi les dossiers qui manquent. |
 | « Nouveau dossier… » | Même chose pour un dossier. Git ne liste pas un dossier vide : l’arborescence le montre quand même. |
 | « Ouvrir un terminal ici » | Ouvre un [terminal](terminals) dans ce dossier de la source. |
+| « Afficher dans l’Explorateur » (Windows), « Afficher dans le Finder » (macOS), « Ouvrir le dossier contenant » (Linux) | Ouvre le gestionnaire de fichiers du système sur le fichier ou le dossier, sélectionné. Sur l’espace libre, ouvre le dossier de la source : celui du projet, ou le worktree de l’agent (« Ouvrir le dossier » sous Linux). Si le worktree de l’agent n’existe plus, un message le dit. |
 | « Renommer… » (`F2`) | Remplace la ligne par un champ. Un nom comme `autre/a.ts` déplace le fichier. Les onglets ouverts suivent. |
 | « Supprimer » (`Suppr`, `⌘⌫` sous macOS) | Envoie le fichier ou le dossier à la corbeille après confirmation (« Il part dans la corbeille. » ; pour un dossier, « Le dossier et ses 12 fichiers partent dans la corbeille. »). |
 | « Copier le chemin » et « Copier le chemin relatif » | Copient le chemin complet, ou le chemin à partir de la racine de la source. |

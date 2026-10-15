@@ -898,6 +898,27 @@ pub async fn fs_delete(
     Ok(())
 }
 
+/// Shows a file or a folder of the source in the system's file manager, selected; the source's
+/// folder opened when no path is given.
+#[tauri::command]
+pub async fn fs_reveal(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: Option<String>,
+) -> Res<()> {
+    let what = core
+        .reveal_target(&project_id, agent_id, path.as_deref())
+        .await
+        .map_err(err)?;
+    // The file manager can take a moment to answer (WSL's share starts its distribution, D-Bus
+    // waits for the file manager): off the async workers.
+    tokio::task::spawn_blocking(move || fsedit::reveal(what))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
+}
+
 /// Creates an empty folder, its parents with it; refused when something is already there.
 #[tauri::command]
 pub async fn fs_mkdir(

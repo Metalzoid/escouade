@@ -159,6 +159,8 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Texte | Plain text | langue d’un fichier inconnu |
 | Définitions | Definitions | liste des endroits où mène un identifiant |
 | Suppr | Del | la touche, dans le menu de l’arborescence |
+| Afficher dans l’Explorateur / Afficher dans le Finder / Ouvrir le dossier contenant | Reveal in File Explorer / Reveal in Finder / Open containing folder | menu de l’arborescence, nommé comme le système (Windows, macOS, Linux) ; sur l’espace libre sous Linux, « Ouvrir le dossier » → “Open the folder” |
+| gestionnaire de fichiers | file manager | l’Explorateur, le Finder ou celui du bureau Linux, quand le texte vaut pour les trois |
 
 ## L4 — settings
 

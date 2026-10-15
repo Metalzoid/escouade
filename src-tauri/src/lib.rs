@@ -317,6 +317,7 @@ pub fn run() {
             commands::fs_create,
             commands::fs_rename,
             commands::fs_delete,
+            commands::fs_reveal,
             commands::fs_mkdir,
             commands::fs_base,
             commands::code_search,

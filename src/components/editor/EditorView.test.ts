@@ -16,6 +16,15 @@ import '../../test/pointer';
 import QuickOpen from '../QuickOpen.svelte';
 import EditorView from './EditorView.svelte';
 
+// The system the menus are written for: Windows, unless a test says otherwise.
+const os = vi.hoisted(() => ({ current: 'windows' as 'windows' | 'mac' | 'linux' }));
+vi.mock('../../lib/platform', async (original) => ({
+  ...(await original<typeof import('../../lib/platform')>()),
+  get OS() {
+    return os.current;
+  },
+}));
+
 // The xterm.js instance a terminal draws on is not one of jsdom's: only where it is asked to open is looked at.
 vi.mock('../../lib/terminals', () => ({
   openTerminal: vi.fn((projectId: string, shell: string, name: string) => Promise.resolve({ id: 't1', projectId, name, shell })),
@@ -40,6 +49,7 @@ describe('EditorView', () => {
   beforeEach(() => {
     resetApp({ agents: [agent()] });
     app.git.p1 = gitInfo({ modified: 1 });
+    os.current = 'windows';
   });
 
   it('opens on the first changed file, with its tree, tab and comparison', async () => {
@@ -795,6 +805,7 @@ describe('EditorView tree, as VS Code’s explorer', () => {
         'Nouveau fichier…',
         'Nouveau dossier…',
         'Ouvrir un terminal ici',
+        'Afficher dans l’Explorateur',
         '',
         'Renommer…',
         'Supprimer',
@@ -802,14 +813,136 @@ describe('EditorView tree, as VS Code’s explorer', () => {
         'Copier le chemin',
         'Copier le chemin relatif',
       ]);
-      expect([items[3].separator, items[6].separator]).toEqual([true, true]);
+      expect([items[4].separator, items[7].separator]).toEqual([true, true]);
       expect(items.find((i) => i.label === 'Renommer…')?.hint).toBe('F2');
       expect(items.find((i) => i.label === 'Supprimer')).toMatchObject({ hint: 'Suppr', danger: true });
       menu.close();
       // The root of the source is neither renamed nor deleted.
       await fireEvent.contextMenu(screen.getByRole('tree'));
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouveau fichier…', 'Nouveau dossier…', 'Ouvrir un terminal ici']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual([
+        'Nouveau fichier…',
+        'Nouveau dossier…',
+        'Ouvrir un terminal ici',
+        'Afficher dans l’Explorateur',
+      ]);
       menu.close();
+    });
+  });
+
+  describe('showing in the file manager', () => {
+    afterEach(() => {
+      os.current = 'windows';
+    });
+
+    /** The entry of the menu of `target` that shows it in the file manager, as `label` names it, chosen. */
+    const pick = async (target: Element, label: string) => {
+      await fireEvent.contextMenu(target);
+      const entry = menu.open!.items.find((i) => i.label === label);
+      expect(entry, menu.open!.items.map((i) => i.label).join(' | ')).toBeDefined();
+      entry!.onClick!();
+      menu.close();
+    };
+    const revealed = (be: ReturnType<typeof backend>) => be.called('fs_reveal').map((c) => c.args);
+
+    it('shows a file or a folder selected in the Explorer, and opens the folder of the source from the free space', async () => {
+      const be = creating();
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(item(/app\.ts/), 'Afficher dans l’Explorateur');
+      await pick(item(/src/), 'Afficher dans l’Explorateur');
+      await pick(item(/README/), 'Afficher dans l’Explorateur');
+      await pick(screen.getByRole('tree'), 'Afficher dans l’Explorateur');
+      expect(revealed(be)).toEqual([
+        { projectId: 'p1', agentId: null, path: 'src/app.ts' },
+        { projectId: 'p1', agentId: null, path: 'src' },
+        { projectId: 'p1', agentId: null, path: 'README.md' },
+        { projectId: 'p1', agentId: null, path: null },
+      ]);
+    });
+
+    it('shows them in the source shown: the worktree of the agent being browsed', async () => {
+      const wt = { path: 'C:/code/demo-api/.claude/worktrees/wt', branch: 'escouade/wt', baseBranch: 'main' };
+      resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: wt })] });
+      const be = creating();
+      await app.openEditor({ source: 'a2', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(item(/app\.ts/), 'Afficher dans l’Explorateur');
+      await pick(screen.getByRole('tree'), 'Afficher dans l’Explorateur');
+      expect(revealed(be)).toEqual([
+        { projectId: 'p1', agentId: 'a2', path: 'src/app.ts' },
+        { projectId: 'p1', agentId: 'a2', path: null },
+      ]);
+    });
+
+    it('names the entry as each system names its file manager, the free space’s too', async () => {
+      const be = creating();
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      os.current = 'mac';
+      await pick(item(/app\.ts/), 'Afficher dans le Finder');
+      await pick(item(/src/), 'Afficher dans le Finder');
+      await pick(screen.getByRole('tree'), 'Afficher dans le Finder');
+      // The free space opens the folder of the source, not the one holding it.
+      os.current = 'linux';
+      await pick(item(/app\.ts/), 'Ouvrir le dossier contenant');
+      await pick(item(/src/), 'Ouvrir le dossier contenant');
+      await pick(screen.getByRole('tree'), 'Ouvrir le dossier');
+      os.current = 'windows';
+      await pick(item(/src/), 'Afficher dans l’Explorateur');
+      expect(revealed(be).map((a) => a.path)).toEqual(['src/app.ts', 'src', null, 'src/app.ts', 'src', null, 'src']);
+    });
+
+    it('names it in English', async () => {
+      setLang('en');
+      creating();
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      const labels = async (target: Element) => {
+        await fireEvent.contextMenu(target);
+        const shown = menu.open!.items[3].label;
+        menu.close();
+        return shown;
+      };
+      const all: string[] = [];
+      for (const system of ['windows', 'mac', 'linux'] as const) {
+        os.current = system;
+        all.push(await labels(item(/app\.ts/)), await labels(screen.getByRole('tree')));
+      }
+      expect(all).toEqual([
+        'Reveal in File Explorer',
+        'Reveal in File Explorer',
+        'Reveal in Finder',
+        'Reveal in Finder',
+        'Open containing folder',
+        'Open the folder',
+      ]);
+    });
+
+    it('tells why it is refused: the worktree of the agent removed', async () => {
+      const wt = { path: 'C:/code/demo-api/.claude/worktrees/wt', branch: 'escouade/wt', baseBranch: 'main' };
+      resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: wt })] });
+      creating({ fs_reveal: () => Promise.reject("Le worktree de l'agent n'existe plus") });
+      await app.openEditor({ source: 'a2', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(screen.getByRole('tree'), 'Afficher dans l’Explorateur');
+      await expect
+        .poll(() => app.toasts.map((t) => [t.text, t.kind]))
+        .toEqual([["Ouverture du gestionnaire de fichiers impossible : Le worktree de l'agent n'existe plus", 'error']]);
+    });
+
+    it('tells in English why it is refused: a file gone', async () => {
+      setLang('en');
+      creating({ fs_reveal: () => Promise.reject('src/app.ts not found') });
+      await app.openEditor({ source: 'project', path: 'src/app.ts' });
+      render(EditorView, { project: project() });
+      await screen.findByRole('treeitem', { name: /app\.ts/ });
+      await pick(item(/app\.ts/), 'Reveal in File Explorer');
+      await expect.poll(() => app.toasts.map((t) => t.text)).toEqual(['Could not open the file manager: src/app.ts not found']);
     });
   });
 
@@ -1870,6 +2003,7 @@ describe('EditorView in English', () => {
   beforeEach(() => {
     resetApp({ agents: [agent()] });
     app.git.p1 = gitInfo({ modified: 1 });
+    os.current = 'windows';
     setLang('en');
   });
 
@@ -1927,6 +2061,7 @@ describe('EditorView in English', () => {
       'New file…',
       'New folder…',
       'Open a terminal here',
+      'Reveal in File Explorer',
       '',
       'Rename…',
       'Delete',

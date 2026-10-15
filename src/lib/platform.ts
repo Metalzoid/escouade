@@ -1,9 +1,22 @@
-// What differs between Windows and macOS in the interface: the main modifier key and how
-// shortcuts are written.
+// What differs between Windows, macOS and Linux in the interface: the main modifier key, how
+// shortcuts are written, the name of the file manager.
 import { t } from './i18n';
 
+/** A system the app runs on, for what the interface names after it (its file manager). */
+export type Os = 'windows' | 'mac' | 'linux';
+
+/** The system of what the WebView says of it: its `navigator.platform`, else its user agent. */
+export function osOf(platform: string): Os {
+  if (/Mac/i.test(platform)) return 'mac';
+  // At the start of a word: « darwin » holds « win ».
+  return /\bWin/i.test(platform) ? 'windows' : 'linux';
+}
+
+/** The system the app runs on. */
+export const OS: Os = typeof navigator !== 'undefined' ? osOf(navigator.platform || navigator.userAgent) : 'windows';
+
 /** True on macOS. */
-export const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent);
+export const IS_MAC = OS === 'mac';
 
 /** The app's shortcut modifier is held alone: Cmd on macOS, Ctrl elsewhere (for a key or a click). */
 export function primaryKey(e: { ctrlKey: boolean; metaKey: boolean }, mac = IS_MAC): boolean {

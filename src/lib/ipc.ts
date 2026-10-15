@@ -206,6 +206,8 @@ export const api = {
     invoke<void>('fs_rename', { projectId, agentId, from, to }),
   /** Sends a file or a folder to the system's trash; never the root nor the agents' worktrees. */
   fsDelete: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_delete', { projectId, agentId, path }),
+  /** Shows a file or a folder in the system's file manager, selected; null opens the source's folder. */
+  fsReveal: (projectId: string, agentId: string | null, path: string | null) => invoke<void>('fs_reveal', { projectId, agentId, path }),
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),

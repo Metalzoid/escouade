@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { keyLabel, primaryKey } from './platform';
+import { keyLabel, osOf, primaryKey } from './platform';
 
 const key = (init: KeyboardEventInit) => new KeyboardEvent('keydown', init);
 
 describe('platform', () => {
+  it('tells the system from what the WebView says of it', () => {
+    // WebView2, WKWebView, WebKitGTK.
+    expect(osOf('Win32')).toBe('windows');
+    expect(osOf('MacIntel')).toBe('mac');
+    expect(osOf('Linux x86_64')).toBe('linux');
+    // Without a platform, the user agent: the « darwin » jsdom says under macOS is no Windows.
+    expect(osOf('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')).toBe('windows');
+    expect(osOf('Mozilla/5.0 (darwin) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/26.1.0')).not.toBe('windows');
+    expect(osOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15')).toBe('mac');
+    expect(osOf('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15')).toBe('linux');
+  });
+
   it('uses Cmd on macOS and Ctrl elsewhere', () => {
     expect(primaryKey(key({ key: 'j', metaKey: true }), true)).toBe(true);
     expect(primaryKey(key({ key: 'j', ctrlKey: true }), true)).toBe(false);

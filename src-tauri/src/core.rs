@@ -5229,6 +5229,31 @@ impl<R: Runtime> Core<R> {
         Ok(dir.to_string_lossy().into_owned())
     }
 
+    /// What « Afficher dans l'Explorateur » shows of an editor source: the file or folder `path` of
+    /// its tree selected, or, without one, the source's folder opened, where a terminal opens (the
+    /// agent's worktree, else the project's folder). Refused for a worktree no longer there.
+    pub async fn reveal_target(
+        &self,
+        project_id: &str,
+        agent_id: Option<String>,
+        path: Option<&str>,
+    ) -> Result<fsedit::Reveal> {
+        let (root, base) = self.edit_root(project_id, agent_id).await?;
+        let folder = match base {
+            Some(_) => root.clone(),
+            None => self.project(project_id)?.path,
+        };
+        // A name is taken as written: one can start or end with a space.
+        let rel = path.filter(|p| !p.trim().is_empty()).map(str::to_string);
+        // The disk is looked at off the async workers: a `\\wsl.localhost` path wakes its
+        // distribution up.
+        tokio::task::spawn_blocking(move || match rel {
+            Some(rel) => fsedit::reveal_path(Path::new(&root), &rel).map(fsedit::Reveal::Select),
+            None => fsedit::reveal_folder(PathBuf::from(folder)),
+        })
+        .await?
+    }
+
     pub async fn git_diff(
         self: &Arc<Self>,
         project_id: &str,

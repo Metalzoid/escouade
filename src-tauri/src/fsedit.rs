@@ -3,11 +3,11 @@
 
 use crate::git;
 use crate::i18n::{self, Lang};
-use crate::paths::contained;
+use crate::paths::{contained, outside};
 use crate::testlaunch;
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// The tag that opens `NotFound::wire`: the editor tells a missing file by it, and writes the text.
@@ -490,6 +490,117 @@ pub fn to_trash(path: &Path) -> Result<()> {
     })?
 }
 
+/// What the system's file manager is asked to show (« Afficher dans l'Explorateur »).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reveal {
+    /// A folder opened: the root of a source.
+    Open(PathBuf),
+    /// A file or a folder, selected in the folder holding it.
+    Select(PathBuf),
+}
+
+/// The file or folder `rel` of `root`, to select in the system's file manager: refused when its
+/// spelling leaves the root (absolute, a drive, `..`) or when nothing is there. It is the path as
+/// written that stays in the root, not where a link on it leads: the tree lists a link, so it is
+/// shown, not refused as `contained` would. The plugin canonicalizes it under macOS and Linux (the
+/// file manager shows where it leads, a broken one fails and its folder is opened, see
+/// `reveal_with`); under Windows the link itself is shown. Joined by components, as the system
+/// writes its paths.
+pub fn reveal_path(root: &Path, rel: &str) -> Result<PathBuf> {
+    let mut path = root.to_path_buf();
+    for c in Path::new(rel).components() {
+        match c {
+            Component::Normal(name) => path.push(name),
+            Component::CurDir => {}
+            _ => return Err(outside(rel)),
+        }
+    }
+    if std::fs::symlink_metadata(&path).is_err() {
+        return Err(not_found(rel));
+    }
+    Ok(path)
+}
+
+/// The folder `dir` of a source, to open in the system's file manager: refused, in the app's words
+/// rather than the system's, when it is no longer there (moved, its WSL distribution gone).
+pub fn reveal_folder(dir: PathBuf) -> Result<Reveal> {
+    if !dir.is_dir() {
+        bail!(tr!(
+            "Le dossier {dir} n'existe plus",
+            "The folder {dir} no longer exists",
+            dir = dir.display()
+        ));
+    }
+    Ok(Reveal::Open(dir))
+}
+
+/// Shows `what` in the system's file manager: the Explorer, the Finder, or the desktop's on Linux
+/// (asked through D-Bus). On a thread of its own, as the trash: Windows' shell wants COM set up its
+/// way on the thread that calls it.
+pub fn reveal(what: Reveal) -> Result<()> {
+    std::thread::spawn(move || {
+        reveal_with(
+            &what,
+            |path| {
+                select_and_again(
+                    path,
+                    |p| tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| anyhow!(e)),
+                    || std::thread::sleep(std::time::Duration::from_secs(1)),
+                )
+            },
+            |dir| tauri_plugin_opener::open_path(dir, None::<&str>).map_err(|e| anyhow!(e)),
+        )
+        .inspect_err(|e| log::warn!("reveal {what:?}: {e:#}"))
+    })
+    .join()
+    .map_err(|_| {
+        anyhow!(tr!(
+            "le gestionnaire de fichiers n’a pas répondu",
+            "the file manager didn’t respond"
+        ))
+    })?
+}
+
+/// Selects `path` with `select`; under Windows, a second time once `wait` is over. The Explorer
+/// sometimes opens its new window on the folder without selecting the item, though the call
+/// succeeded (2 times in 20 from a fresh process, about 1 in 4 from the app, on 2026-10-15). The
+/// second call is an empirical fix, of unknown cause (the call repeated, or the thread kept alive a
+/// second longer; a thread kept for the app's life did not help): with it, the item was selected
+/// 20 times in 20 out of the app and 22 times in 22 in it, always in a single window.
+fn select_and_again(
+    path: &Path,
+    select: impl Fn(&Path) -> Result<()>,
+    wait: impl FnOnce(),
+) -> Result<()> {
+    select(path)?;
+    if cfg!(windows) {
+        wait();
+        // The window is shown already: a failure now changes nothing for the user.
+        let _ = select(path);
+    }
+    Ok(())
+}
+
+/// `what` shown by `select` and `open`. An item that cannot be selected (no file manager answering
+/// on D-Bus under Linux, a broken link) has the folder holding it opened instead, as « Ouvrir le
+/// dossier contenant » says; when that fails too, the selection's error is the one told.
+fn reveal_with(
+    what: &Reveal,
+    select: impl FnOnce(&Path) -> Result<()>,
+    open: impl Fn(&Path) -> Result<()>,
+) -> Result<()> {
+    match what {
+        Reveal::Open(dir) => open(dir),
+        Reveal::Select(path) => select(path).or_else(|e| {
+            log::warn!("select {}: {e:#}", path.display());
+            match path.parent() {
+                Some(dir) => open(dir).map_err(|_| e),
+                None => Err(e),
+            }
+        }),
+    }
+}
+
 /// The names of a path, lowercase: case is ignored on Windows and macOS.
 fn lower_parts(s: &str) -> Vec<String> {
     s.split(['/', '\\'])
@@ -944,6 +1055,116 @@ pub async fn base(root: &str, base_branch: Option<&str>, rel: &str) -> Result<Op
 mod tests {
     use super::*;
     use crate::paths::test_dir;
+
+    #[test]
+    fn an_item_the_file_manager_cannot_select_has_its_folder_opened() {
+        let item = PathBuf::from("root").join("src").join("app.ts");
+        let opened = std::cell::RefCell::new(Vec::new());
+        let open = |d: &Path| {
+            opened.borrow_mut().push(d.to_path_buf());
+            Ok(())
+        };
+        // Selected: nothing else is opened.
+        reveal_with(&Reveal::Select(item.clone()), |_| Ok(()), open).unwrap();
+        assert!(opened.borrow().is_empty());
+        // Not selected (no file manager answering on D-Bus under Linux): the folder holding it.
+        let refused = |_: &Path| Err(anyhow!("org.freedesktop.DBus.Error.ServiceUnknown"));
+        reveal_with(&Reveal::Select(item.clone()), refused, open).unwrap();
+        assert_eq!(*opened.borrow(), vec![PathBuf::from("root").join("src")]);
+        // Neither: what the selection said.
+        let e = reveal_with(&Reveal::Select(item), refused, |_| {
+            Err(anyhow!("no xdg-open"))
+        })
+        .unwrap_err();
+        assert_eq!(e.to_string(), "org.freedesktop.DBus.Error.ServiceUnknown");
+        // A folder is opened, not selected.
+        let root = PathBuf::from("root");
+        reveal_with(&Reveal::Open(root.clone()), refused, open).unwrap();
+        assert_eq!(opened.borrow().last(), Some(&root));
+    }
+
+    #[test]
+    fn the_explorer_is_asked_again_to_select_the_item_once_its_window_is_there() {
+        let path = Path::new("root").join("src").join("app.ts");
+        let calls = std::cell::Cell::new(0);
+        let waited = std::cell::Cell::new(false);
+        let select = |_: &Path| {
+            calls.set(calls.get() + 1);
+            Ok(())
+        };
+        select_and_again(&path, select, || waited.set(true)).unwrap();
+        let expected = if cfg!(windows) { (2, true) } else { (1, false) };
+        assert_eq!((calls.get(), waited.get()), expected);
+        // A selection refused is not asked again: the folder holding the item is opened instead.
+        calls.set(0);
+        let refused = |_: &Path| {
+            calls.set(calls.get() + 1);
+            Err(anyhow!("refused"))
+        };
+        let e = select_and_again(&path, refused, || panic!("no wait")).unwrap_err();
+        assert_eq!((calls.get(), e.to_string()), (1, "refused".to_string()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_broken_link_of_the_tree_has_its_folder_opened() {
+        let root = test_dir("fsedit-reveal-broken-link");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::os::unix::fs::symlink(root.join("nowhere"), root.join("src").join("gone")).unwrap();
+        // Listed by the tree, so taken: it is there, as a link.
+        let path = reveal_path(&root, "src/gone").unwrap();
+        assert_eq!(path, root.join("src").join("gone"));
+        // The plugin canonicalizes it first, which fails before any file manager is asked: the
+        // folder holding it is opened instead.
+        let opened = std::cell::RefCell::new(Vec::new());
+        reveal_with(
+            &Reveal::Select(path),
+            |p| tauri_plugin_opener::reveal_item_in_dir(p).map_err(|e| anyhow!(e)),
+            |d| {
+                opened.borrow_mut().push(d.to_path_buf());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(*opened.borrow(), vec![root.join("src")]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_leading_out_of_the_source_is_taken_as_written() {
+        let base = test_dir("fsedit-reveal-link-out");
+        let (root, outside) = (base.join("repo"), base.join("elsewhere"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("out")).unwrap();
+        // The path written is in the source, so it is not refused: the link itself is what is asked
+        // for…
+        let path = reveal_path(&root, "out").unwrap();
+        assert_eq!(path, root.join("out"));
+        // …and the plugin, which canonicalizes it under macOS and Linux, shows where it leads: a
+        // folder out of the source. (Not called here: it would open the Finder on a Mac.)
+        let shown = std::fs::canonicalize(&path).unwrap();
+        assert!(
+            !shown.starts_with(std::fs::canonicalize(&root).unwrap()),
+            "{shown:?}"
+        );
+        assert_eq!(shown, std::fs::canonicalize(&outside).unwrap());
+        // A `..` written to get there is refused all the same.
+        let e = reveal_path(&root, "../elsewhere").unwrap_err().to_string();
+        assert!(e.contains("hors du dossier"), "{e}");
+    }
+
+    #[test]
+    fn the_folder_of_a_source_gone_is_said_in_the_app_s_words() {
+        let dir = test_dir("fsedit-reveal-folder");
+        assert_eq!(
+            reveal_folder(dir.clone()).unwrap(),
+            Reveal::Open(dir.clone())
+        );
+        let gone = dir.join("gone");
+        let e = reveal_folder(gone.clone()).unwrap_err().to_string();
+        assert_eq!(e, format!("Le dossier {} n'existe plus", gone.display()));
+    }
 
     #[test]
     fn decodes_text_line_endings_bom_and_binary() {

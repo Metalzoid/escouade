@@ -21,7 +21,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
-  import { IS_MAC, keyLabel } from '../../lib/platform';
+  import { IS_MAC, keyLabel, OS } from '../../lib/platform';
   import { clamp, observeWidth } from '../../lib/resize';
   import { app } from '../../lib/state.svelte';
   import { terminalIn } from '../../lib/term-actions';
@@ -302,6 +302,12 @@
     terminalIn(project.id, dir ? { agentId, subdir: dir } : { agentId }, dir ? basename(dir) : (srcAgent?.name ?? project.name));
   }
 
+  /** Shows the file or folder `path` of the source shown in the system's file manager, selected; null opens its folder. */
+  const showInFiles = (path: string | null) =>
+    api
+      .fsReveal(project.id, sourceAgent(source), path)
+      .catch((e) => app.toast(t('editor.toast.revealFailed', { error: String(e) }), 'error'));
+
   /** Opens the field renaming the file or folder of the row `r`, in its place. */
   function startRename(r: TreeRow) {
     if (busy || r.kind === 'new') return;
@@ -466,6 +472,7 @@
       { label: t('editor.menu.newFile'), onClick: () => startNew(dir) },
       { label: t('editor.menu.newFolder'), onClick: () => startNew(dir, 'dir') },
       { label: t('editor.menu.openTerminal'), onClick: () => terminalHere(dir) },
+      { label: t(r ? `editor.menu.reveal.${OS}` : `editor.menu.revealRoot.${OS}`), onClick: () => showInFiles(r?.path ?? null) },
     ];
     // The root of the source is neither renamed nor deleted.
     if (r) {
