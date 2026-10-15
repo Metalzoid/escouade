@@ -12,6 +12,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Avec beaucoup de projets ouverts, leurs onglets défilent dans la barre du haut au lieu d'être coupés : à la molette, au pavé tactile ou par la barre de défilement fine qui paraît au survol. Le « + » qui ajoute un projet reste toujours visible, et l'onglet du projet choisi (clic, notification, raccourci clavier, vue d'ensemble) revient de lui-même dans la barre. Un fondu au bord dit qu'il y a des onglets cachés de ce côté ; il clignote dans la couleur de l'alerte quand l'un d'eux attend qu'on le regarde. Un onglet glissé près d'un bord fait défiler la barre pour être déposé parmi les onglets cachés.
 - Dans la vue Claude Code, une image collée (`Ctrl+V`, `Cmd+V` sous macOS), par exemple une capture d'écran, arrive à Claude Code : elle apparaît dans son champ comme « [Image #1] ». Plusieurs images copiées ensemble arrivent chacune à leur tour. Avant, le collage d'une image ne faisait rien : le terminal collait un texte vide. Du texte collé arrive comme avant, même quand le presse-papiers tient aussi une image (des cellules d'un tableur). Une image de plus de 18 Mo est refusée, avec un message qui le dit. Sous macOS, `Ctrl+V` arrive maintenant à Claude Code, dont c'est la touche pour lire l'image du presse-papiers.
+- Sous macOS et Linux, la connexion à un compte Claude ne referme plus le navigateur qu'elle a ouvert, qu'elle se termine ou que tu fermes son terminal. Claude Code et ce qu'il a lancé sans fenêtre sont toujours arrêtés.
 
 ## [1.7.6] — 2026-10-13
 
