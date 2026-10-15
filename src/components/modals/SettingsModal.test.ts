@@ -824,11 +824,26 @@ describe('SettingsModal', () => {
   });
 
   it('checks for an update on demand', async () => {
-    fakeBackend();
+    const backend = fakeBackend({ update_check: () => ({ kind: 'none' }) });
     render(SettingsModal, { tab: 'about' });
     expect(screen.getByText('Escouade 1.3.1', { selector: '[role="tabpanel"] *' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
+    // Asked by the user: the backend is told, so that a failure is never kept quiet.
+    expect(backend.called('update_check').map((c) => c.args)).toEqual([{ manual: true }]);
+  });
+
+  it('tells why a check on demand failed, instead of saying there is nothing new', async () => {
+    fakeBackend({
+      update_check: () => ({ kind: 'failed', trouble: { message: '403 Forbidden de github.com', show: true, page: null } }),
+    });
+    render(SettingsModal, { tab: 'about' });
+    const button = screen.getByRole('button', { name: 'Rechercher une mise à jour' });
+    await userEvent.click(button);
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Vérification des mises à jour impossible : 403 Forbidden de github.com');
+    // The check is over once its button is back.
+    await expect.poll(() => (button as HTMLButtonElement).disabled).toBe(false);
+    expect(app.toasts.map((t) => t.text)).toEqual(['Vérification des mises à jour impossible : 403 Forbidden de github.com']);
   });
 
   it('installs updates by itself unless told not to', async () => {
@@ -1193,7 +1208,7 @@ describe('SettingsModal in English', () => {
   });
 
   it('tells the update check and the saved settings in English', async () => {
-    const backend = fakeBackend({ save_settings: () => [] });
+    const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
     render(SettingsModal, { tab: 'about' });
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('No update available.');

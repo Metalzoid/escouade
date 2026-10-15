@@ -1032,11 +1032,12 @@ class AppState {
     this.closeEditor(next.projectId);
   }
 
-  toast(text: string, kind: Toast['kind'] = 'info', action?: ToastAction) {
+  /** `ms` is for a toast with more to read and do than the usual time allows; without it, the time follows the toast's kind and button. */
+  toast(text: string, kind: Toast['kind'] = 'info', action?: ToastAction, ms?: number) {
     const id = ++this.toastId;
     this.toasts.push(action ? { id, text, kind, action } : { id, text, kind });
     // One with a button stays long enough to reach it.
-    setTimeout(() => this.dismissToast(id), action ? 12_000 : kind === 'error' ? 7000 : 3500);
+    setTimeout(() => this.dismissToast(id), ms ?? (action ? 12_000 : kind === 'error' ? 7000 : 3500));
   }
 
   dismissToast(id: number) {

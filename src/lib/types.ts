@@ -294,6 +294,20 @@ export interface FoundRelease {
   notes: string;
 }
 
+/** An update check or download that failed, as the backend explains it. */
+export interface UpdateTrouble {
+  /** The cause, in the language of the interface. */
+  message: string;
+  /** Whether to tell the user now: a check asked for, or failures in a row for long enough. Otherwise it is retried in silence. */
+  show: boolean;
+  /** The page of the release, to take the installer from in the browser when the download is what failed. */
+  page: string | null;
+}
+
+export type CheckedUpdate = { kind: 'found'; update: FoundRelease } | { kind: 'none' } | { kind: 'failed'; trouble: UpdateTrouble };
+
+export type DownloadedUpdate = { kind: 'ready' } | { kind: 'superseded' } | { kind: 'failed'; trouble: UpdateTrouble };
+
 /** A command run in a worktree once it is made (setup) or before it is removed (teardown). */
 export interface WorktreeStep {
   id: string;

@@ -1,13 +1,20 @@
 // Auto-update through GitHub Releases (tauri-plugin-updater, driven by the backend: see update-check).
 // A version found downloads at once, its signature checked, and the backend keeps it: it installs with a
 // restart (« Redémarrer maintenant », or the backend's own once the app is at rest), or when the app is closed.
+// A check or a download that fails is retried at the next check; whether the user hears of it is the backend's
+// call (`show`: asked for, or failures in a row for long enough), so a passing network failure stays quiet.
 
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { t } from './i18n';
-import { check, type FoundUpdate } from './update-check';
+import { check, UpdateTrouble, type FoundUpdate } from './update-check';
 import { app } from './state.svelte';
 
 const FIRST_CHECK_MS = 8000;
 const CHECK_EVERY_MS = 5 * 60_000;
+// How long a failed download's toast with the browser button stays: the cause is often long (a company proxy
+// explaining itself), and the toast has no close button, so the usual 12 s of a toast with a button is too short
+// to read it and then act.
+const DOWNLOAD_FAILED_WITH_PAGE_MS = 30_000;
 
 // The update downloading or downloaded: found again by a later check, it is not downloaded again.
 let latest: FoundUpdate | null = null;
@@ -35,13 +42,33 @@ async function download(update: FoundUpdate, manual: boolean) {
     if (latest !== update) return;
     // Downloaded again at the next check.
     forget();
-    if (manual) app.toast(t('shell.update.downloadFailed', { error: String(e) }), 'error');
+    if (e instanceof UpdateTrouble) {
+      if (e.show) tellDownloadFailed(e);
+    } else if (manual) {
+      // The call itself broke: only the user who asked hears of it.
+      app.toast(t('shell.update.downloadFailed', { error: String(e) }), 'error');
+    }
   }
 }
 
-export async function checkForUpdate(manual = false): Promise<boolean> {
+/** The cause, and when the backend knows the page of the release, a way to take the installer from the browser. */
+function tellDownloadFailed(trouble: UpdateTrouble) {
+  const text = t('shell.update.downloadFailed', { error: trouble.message });
+  const page = trouble.page;
+  if (!page) {
+    app.toast(text, 'error');
+    return;
+  }
+  app.toast(text, 'error', { label: t('shell.update.openInBrowser'), onClick: () => app.run(openUrl(page)) }, DOWNLOAD_FAILED_WITH_PAGE_MS);
+}
+
+/**
+ * Looks for an update: true when one is on offer, false when the app is up to date, null when the check failed
+ * (not the same as up to date: the update it had stays on offer).
+ */
+export async function checkForUpdate(manual = false): Promise<boolean | null> {
   try {
-    const update = await check();
+    const update = await check(manual);
     if (!update) {
       free(latest);
       forget();
@@ -60,8 +87,13 @@ export async function checkForUpdate(manual = false): Promise<boolean> {
     void download(update, manual);
     return true;
   } catch (e) {
-    if (manual) app.toast(t('shell.update.checkFailed', { error: String(e) }), 'error');
-    return false;
+    // The backend decides whether its own explanation is told; a call that broke is told to the user who asked only.
+    if (e instanceof UpdateTrouble) {
+      if (e.show) app.toast(t('shell.update.checkFailed', { error: e.message }), 'error');
+    } else if (manual) {
+      app.toast(t('shell.update.checkFailed', { error: String(e) }), 'error');
+    }
+    return null;
   }
 }
 

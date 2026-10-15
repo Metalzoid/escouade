@@ -1368,24 +1368,31 @@ pub async fn suggest_run_commands(
     core.suggest_run_commands(&project_id).await.map_err(err)
 }
 
-/// Looks for a newer release, through the network settings as they are now.
+/// Looks for a newer release, through the network settings as they are now. `manual`: the user
+/// asked, a failure is shown whatever the checks before it did; else it is kept quiet until it goes
+/// on. A failure is an answer (`failed`, with its cause), not an error of the command.
 #[tauri::command]
 pub async fn update_check(
     app: tauri::AppHandle,
     core: CoreState<'_>,
     updates: State<'_, crate::updates::Updates>,
-) -> Res<Option<crate::updates::Found>> {
+    manual: bool,
+) -> Res<crate::updates::Checked> {
     let settings = core.settings.read().clone();
-    crate::updates::check(&app, &settings, &updates)
-        .await
-        .map_err(err)
+    Ok(crate::updates::check(&app, &settings, &updates, manual).await)
 }
 
-/// Downloads the update found as `id`, its signature checked, and keeps it until it installs:
-/// true when it is the one ready now.
+/// Downloads the update found as `id`, its signature checked, and keeps it until it installs. A
+/// download that fails reads latest.json again and is tried once more before it is told (`failed`,
+/// with its cause and the release's page, for the browser), under the rule of `update_check`
+/// for `manual`.
 #[tauri::command]
-pub async fn update_download(updates: State<'_, crate::updates::Updates>, id: u32) -> Res<bool> {
-    updates.download(id).await.map_err(err)
+pub async fn update_download(
+    updates: State<'_, crate::updates::Updates>,
+    id: u32,
+    manual: bool,
+) -> Res<crate::updates::Downloaded> {
+    Ok(updates.downloaded(id, manual).await)
 }
 
 /// « Redémarrer maintenant »: the update downloaded installs, the app stopped cleanly first, and

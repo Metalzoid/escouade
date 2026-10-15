@@ -49,7 +49,8 @@
     checking = true;
     const found = await checkForUpdate(true);
     checking = false;
-    if (!found) app.toast(t('settings.about.noUpdate'), 'info');
+    // A check that failed has told why: it is not "nothing new".
+    if (found === false) app.toast(t('settings.about.noUpdate'), 'info');
   }
 </script>
 

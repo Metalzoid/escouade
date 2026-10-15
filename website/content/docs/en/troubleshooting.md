@@ -71,6 +71,14 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 **Fix.** In Settings › Network, fill in “HTTP(S) proxy” (for example `http://user:password@proxy:3128`) and, if needed, “Exclusions” (the `NO_PROXY` list, separated by commas). The proxy is passed to Claude Code processes, quota reads, integrations, and updates. For an agent, it applies the next time its process (re)starts. For the built-in terminals, the launch commands, and the worktree setup and teardown commands to use it too, turn on “Also apply the proxy to the built-in terminals” (off by default). See the [Network settings](settings-network).
 
+### A company proxy refuses the update
+
+**Symptom.** The message “Couldn’t download the update” or “Couldn’t check for updates” mentions a “403 Forbidden”, asks whether it is “blocked by the network or a proxy?”, says that “your company’s proxy” refused the installer, or says the proxy asks for authentication.
+
+**Cause.** A company proxy (Zscaler, Netskope, Squid…) often lets the check through but refuses the installer to a client that isn’t a browser. Escouade announces itself honestly (`Escouade/<version>`) and doesn’t pass itself off as a browser; when the proxy refuses the request, it doesn’t make it again without the proxy. An automatic check only shows its error after several failures in a row, over more than an hour.
+
+**Fix.** If the message says the proxy asks for authentication, put the username and password in the proxy’s address, in Settings › Network (for example `http://user:password@proxy:3128`). Otherwise, click “Download in the browser” in the message: the release’s page opens, and the proxy may ask you to confirm a warning. For the built-in update to go through, ask your IT department to allow `github.com` and `release-assets.githubusercontent.com`, and the download of the release files for the client whose User-Agent starts with `Escouade/`. The details are in [“Behind a company proxy”](updates#behind-a-company-proxy).
+
 ### A corporate certificate makes connections fail
 
 **Symptom.** An “UnknownIssuer” error, or another TLS failure, for integrations, quotas, updates, or Claude Code.

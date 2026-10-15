@@ -1,13 +1,13 @@
 # Mises à jour
 
-Escouade se met à jour seule depuis les releases GitHub : elle télécharge en arrière-plan, puis installe au redémarrage que tu choisis ou, si tu le permets, d’elle-même quand elle est au repos. Cette page dit comment, selon le système, et où lire les nouveautés.
+Escouade se met à jour seule depuis les releases GitHub : elle télécharge en arrière-plan, puis installe au redémarrage que tu choisis ou, si tu le permets, d’elle-même quand elle est au repos. Cette page dit comment, selon le système, que faire si ça échoue, et où lire les nouveautés.
 
 ## Comment ça marche
 
-- Escouade cherche une nouvelle version peu après son démarrage, puis cinq minutes après la fin de chaque vérification. Elle lit le fichier `latest.json` de la dernière release publiée sur [GitHub](https://github.com/guillaume-gagnaire/escouade/releases).
+- Escouade cherche une nouvelle version peu après son démarrage, puis cinq minutes après la fin de chaque vérification. Elle lit le fichier `latest.json` de la dernière release publiée sur [GitHub](https://github.com/guillaume-gagnaire/escouade/releases). Une release n’est publiée qu’une fois les fichiers des trois systèmes déposés et vérifiés : Escouade ne tombe jamais sur une release à moitié construite.
 - Quand une version plus récente existe, elle la télécharge aussitôt, sans rien te demander, et vérifie sa signature. Pendant le téléchargement, la barre d’état affiche « Mise à jour 1.8.0… » (avec le numéro de la version).
 - Une fois téléchargée, la mise à jour attend : la barre d’état affiche « Mise à jour 1.8.0 prête · Redémarrer ». Elle s’installe quand tu redémarres l’app, quand l’app redémarre d’elle-même, ou quand tu la quittes.
-- L’installation se fait sans fenêtre d’installeur. Le proxy et la vérification des certificats réglés dans Réglages › Réseau valent aussi pour les vérifications et les téléchargements.
+- L’installation se fait sans fenêtre d’installeur. Le proxy et la vérification des certificats réglés dans Réglages › Réseau valent aussi pour les vérifications et les téléchargements. Quand quelque chose échoue, voir [« Quand ça échoue »](#quand-ca-echoue).
 
 ## Installer une mise à jour
 
@@ -49,7 +49,53 @@ L’app reste sur l’ancienne version et le dit : « La mise à jour vers 1.8.
 
 ## Chercher à la main
 
-Réglages › À propos montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. », ou la mise à jour apparaît dans la barre d’état. Une panne est dite telle quelle : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de ce que le serveur a répondu. Derrière un proxy ou un certificat d’entreprise, voir le [dépannage](troubleshooting).
+Réglages › À propos montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. » (seulement quand la vérification a vraiment répondu), ou la mise à jour apparaît dans la barre d’état. Quand tu cherches toi-même, une panne se dit toujours, avec sa raison : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de la cause. Une recherche automatique est plus patiente : voir [« Quand ça échoue »](#quand-ca-echoue). Derrière un proxy ou un certificat d’entreprise, voir [« Derrière un proxy d’entreprise »](#derriere-un-proxy-d-entreprise) et le [dépannage](troubleshooting).
+
+## Quand ça échoue
+
+Escouade ne te dérange pas pour un accroc passager.
+
+- **Elle réessaie seule.** Un échec passager (réseau coupé, réponse 403, 404, 408, 425, 429 ou 5xx du serveur, réponse illisible) est réessayé une fois, trois secondes plus tard. Un téléchargement qui échoue relit d’abord `latest.json` et, si la même version y figure toujours, réessaie une fois avec ce que le fichier indique : le lien d’un fichier a pu expirer.
+- **Elle se tait d’abord.** Pour une recherche ou un téléchargement automatique, l’erreur n’apparaît qu’après au moins trois échecs de suite, étalés sur au moins une heure, et une seule fois par série d’échecs. Une série dont le dernier échec date de plus de trente minutes repart de zéro : un échec avant une mise en veille et deux au réveil ne font pas une alerte. La recherche et le téléchargement ont chacun leur série, et un succès clôt la sienne : un proxy qui refuse l’installateur toutes les cinq minutes finit donc par se dire, même quand la recherche passe.
+- **Elle le dit tout de suite quand tu cherches toi-même.** « Rechercher une mise à jour » montre toujours l’échec, avec sa raison.
+
+L’erreur dit ce que la requête a rencontré :
+
+- le code HTTP, par exemple « 403 Forbidden » ;
+- le domaine qui a répondu, une fois les redirections suivies (`github.com`, `release-assets.githubusercontent.com`…) ;
+- le proxy par lequel la requête est passée, s’il y en a un, par exemple `127.0.0.1:9000` ;
+- ce que la réponse dit d’elle-même : l’en-tête `Proxy-Agent`, ou un en-tête `Server` ou une page de blocage qui nomme un proxy connu (Zscaler, Netskope, Squid, Blue Coat, Forcepoint, Fortinet, Palo Alto, Umbrella, Sophos, Skyhigh…), dont elle cite le début. Un simple en-tête `Via` ne suffit pas à nommer un proxy : certains l’ajoutent à toutes leurs réponses, même au refus d’un site.
+
+Pour un 403, elle ajoute « bloqué par le réseau ou un proxy ? ». Par exemple : « 403 Forbidden de release-assets.githubusercontent.com, par le proxy 127.0.0.1:9000 (Zscaler/6.2) : bloqué par le réseau ou un proxy ? ». Pour un 407, elle dit que le proxy demande une authentification, et qu’il faut mettre l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau.
+
+Escouade s’annonce avec un User-Agent honnête, `Escouade/<version> (<système>; <architecture>)` pour la recherche comme pour le téléchargement. Elle ne se fait jamais passer pour un navigateur.
+
+## Derrière un proxy d’entreprise
+
+Un proxy d’entreprise (Zscaler, Netskope, Squid…) laisse souvent passer la recherche, un petit fichier, mais refuse l’installateur à tout client qui n’est pas un navigateur. Escouade ne contourne pas cette règle : elle le dit, et te laisse une issue.
+
+### Ce que dit le message
+
+Quand un proxy d’entreprise qui se fait connaître refuse l’installateur, le message le nomme : « le proxy de ton entreprise (Zscaler/6.2) a refusé l’installateur (403 Forbidden de release-assets.githubusercontent.com, par le proxy 127.0.0.1:9000). Télécharge-le dans le navigateur : il faudra peut-être confirmer l’avertissement du proxy. »
+
+Quand le proxy refuse la requête (403, 407, tunnel refusé), Escouade ne la refait pas sans lui : elle ne contourne aucune règle de ton entreprise, et le message explique le refus. Pour un 407, il dit que le proxy demande une authentification : mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`).
+
+Seul un proxy injoignable (réglé mais arrêté, ou poste hors du réseau de l’entreprise) entraîne un second essai, sans proxy. [Le journal de l’app](troubleshooting#ou-est-le-journal-de-l-app) dit alors si l’accès direct a marché, et si les deux essais échouent, le message d’échec les dit.
+
+### Télécharger dans le navigateur
+
+Un téléchargement raté propose le bouton « Télécharger dans le navigateur », dans un message qui reste affiché trente secondes. Il ouvre la page de la release sur GitHub, où tu prends le fichier de ton système : l’installeur `.exe` sous Windows, le `.dmg` sous macOS, l’`AppImage` ou le `.deb` sous Linux. Le navigateur est autorisé là où Escouade ne l’est pas, mais le proxy peut te demander de confirmer un avertissement avant de laisser passer le fichier. Installe-le comme à la première installation (voir [l’installation](installation)) ; tes réglages, tes projets et tes conversations restent où ils sont.
+
+### Quoi demander au service informatique
+
+Demande d’autoriser :
+
+- les domaines `github.com` (la recherche et la page de la release) et `release-assets.githubusercontent.com` (où GitHub sert les fichiers des releases) ;
+- le téléchargement des fichiers de la release pour le client dont le User-Agent commence par `Escouade/` : le `.exe` (Windows), le `.app.tar.gz` (macOS, pour la mise à jour ; le `.dmg` sert à l’installation), l’`AppImage` et le `.deb` (Linux).
+
+### Le réglage de proxy
+
+Si ton entreprise te donne l’adresse de son proxy, renseigne-la dans Réglages › Réseau : la recherche et le téléchargement passent alors par lui. Si le proxy déchiffre le trafic avec un certificat de l’entreprise, installe ce certificat sur le système. Voir [les réglages du réseau](settings-network).
 
 ## Selon le système
 

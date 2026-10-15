@@ -14,6 +14,8 @@ use crate::model::{now_ms, AgentStatus, Settings, UiEvent};
 use crate::paths::DataDir;
 use anyhow::{anyhow, bail, Result};
 use parking_lot::Mutex;
+use reqwest::header::USER_AGENT;
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -25,8 +27,21 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+mod net;
+use net::{probe, Failure, Network, Route, Via, What, RELEASES_URL};
+#[cfg(test)]
+mod fake_server;
+#[cfg(test)]
+mod flow_tests;
+#[cfg(test)]
+mod net_tests;
+
 /// How long a check may take.
 const TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long a check waits before trying again after a failure that may pass (a release whose files
+/// are still being added, a link renewed, a network that comes back).
+const RETRY_PAUSE: Duration = Duration::from_secs(3);
 
 /// How long a download may take: a large installer behind a slow proxy takes its time, but one
 /// that hangs is tried again at a later check.
@@ -90,7 +105,91 @@ impl<T> Kept<T> {
     }
 }
 
+/// What a check or a download fails with, as the window is told of it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Trouble {
+    /// The cause: the window puts what was being done before it.
+    pub message: String,
+    /// To be shown now: the user asked for it, or the failures have gone on long enough (`Streak`).
+    pub show: bool,
+    /// Where to download the update in a browser, for a download that failed.
+    pub page: Option<String>,
+}
+
+/// What a check found, as the window is told of it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Checked {
+    Found { update: Found },
+    None,
+    Failed { trouble: Trouble },
+}
+
+/// How a download ended, as the window is told of it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Downloaded {
+    /// The update is downloaded, its signature checked: it installs.
+    Ready,
+    /// A newer one started downloading meanwhile, or this one was withdrawn.
+    Superseded,
+    Failed {
+        trouble: Trouble,
+    },
+}
+
+/// Failures that follow one another, for an error that is shown only when it goes on: a check
+/// every few minutes that fails because the network is down for a moment is no one's business.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Streak {
+    /// The first of the failures, in ms.
+    since: i64,
+    /// The last of them, in ms.
+    last: i64,
+    count: u32,
+    /// The series has been shown by the rule, once.
+    told: bool,
+}
+
+/// How long the failures must have gone on to be shown (ms), and how many they must be.
+pub const SHOW_AFTER: i64 = 60 * 60_000;
+pub const SHOW_AFTER_FAILURES: u32 = 3;
+
+/// A series whose last failure is older than this (ms) is over: the checks come every few
+/// minutes, so a longer silence is a sleep or a network that was away, and a failure before it
+/// and two after it are no series.
+pub const STREAK_GAP: i64 = 30 * 60_000;
+
+impl Streak {
+    /// Another failure at `now` (ms). True when it is to be shown: `manual` (the user asked and
+    /// waits for an answer), or the failures have gone on for `SHOW_AFTER`, `SHOW_AFTER_FAILURES`
+    /// of them, and the series has not been shown yet. A series that went quiet for more than
+    /// `STREAK_GAP` starts over with this one.
+    fn failed(&mut self, manual: bool, now: i64) -> bool {
+        if self.count > 0 && now - self.last > STREAK_GAP {
+            *self = Self::default();
+        }
+        if self.count == 0 {
+            self.since = now;
+        }
+        self.last = now;
+        self.count = self.count.saturating_add(1);
+        let due = !self.told && self.count >= SHOW_AFTER_FAILURES && now - self.since >= SHOW_AFTER;
+        // What the rule showed is not shown again; what the user asked for does not spend the rule.
+        self.told |= due;
+        manual || due
+    }
+
+    /// A success ends the series.
+    fn succeeded(&mut self) {
+        *self = Self::default();
+    }
+}
+
 type Fetching<'a> = Pin<Box<dyn Future<Output = Result<Box<dyn Package>>> + Send + 'a>>;
+
+type Reading<'a> = Pin<Box<dyn Future<Output = Result<Option<Arc<dyn Release>>>> + Send + 'a>>;
 
 /// An update a check found: the plugin's, or a test's.
 pub trait Release: Send + Sync {
@@ -98,6 +197,9 @@ pub trait Release: Send + Sync {
     fn notes(&self) -> &str;
     /// Downloads it and checks its signature.
     fn fetch(&self) -> Fetching<'_>;
+    /// Reads `latest.json` again, a new check with the same settings: what it finds now. A link
+    /// that expired, a release published again: the download is tried once more with this.
+    fn again(&self) -> Reading<'_>;
 }
 
 /// What runs right before the app goes for an install (`Package::install`).
@@ -116,12 +218,74 @@ pub trait Package: Send + Sync {
 /// hands it.
 type Slot = Arc<Mutex<Option<Hook>>>;
 
-struct PluginRelease {
+/// The update the plugin found, with the way it was found: a download goes the same way, and
+/// latest.json is read again the same way (`Release::again`).
+struct PluginRelease<R: Runtime> {
     update: Update,
     slot: Slot,
+    /// The route the check went through: the one that worked.
+    route: Route,
+    checker: Arc<Checker<R>>,
 }
 
-impl Release for PluginRelease {
+impl<R: Runtime> PluginRelease<R> {
+    fn package(&self, update: Update, bytes: Vec<u8>) -> Box<dyn Package> {
+        Box::new(PluginPackage {
+            update,
+            bytes,
+            slot: self.slot.clone(),
+        })
+    }
+
+    /// The download failed: what answered is read (`net::probe`), and a proxy that is not there is
+    /// gone around once, the way the check does. One that answered is never: what it refuses is
+    /// its company's rule.
+    async fn refused(
+        &self,
+        mut update: Update,
+        error: tauri_plugin_updater::Error,
+    ) -> Result<Box<dyn Package>> {
+        let net = &self.checker.net;
+        let accept = "application/octet-stream";
+        let mut failure = probe(
+            &update.download_url,
+            net,
+            self.route,
+            accept,
+            What::Download,
+            net::chain(&error),
+        )
+        .await;
+        // The link comes from latest.json: the browser is sent to its release only on the origins
+        // that file is known to be served from (`net::release_page`).
+        failure.trusted = self.checker.endpoints.clone();
+        if matches!(net.via(self.route), Via::Proxy(_)) && failure.proxy_unreachable() {
+            update.proxy = None;
+            update.no_proxy = true;
+            match update.download(|_, _| {}, || {}).await {
+                Ok(bytes) => {
+                    log::warn!("download through the proxy failed ({failure}), direct worked");
+                    return Ok(self.package(update, bytes));
+                }
+                Err(e) => {
+                    let direct = probe(
+                        &update.download_url,
+                        net,
+                        Route::Direct,
+                        accept,
+                        What::Download,
+                        net::chain(&e),
+                    )
+                    .await;
+                    failure.direct = Some(Box::new(direct));
+                }
+            }
+        }
+        Err(anyhow::Error::new(failure))
+    }
+}
+
+impl<R: Runtime> Release for PluginRelease<R> {
     fn version(&self) -> &str {
         &self.update.version
     }
@@ -135,12 +299,17 @@ impl Release for PluginRelease {
             // The check's limit would cut the download (it bounds the whole request).
             let mut update = self.update.clone();
             update.timeout = Some(DOWNLOAD_TIMEOUT);
-            let bytes = update.download(|_, _| {}, || {}).await?;
-            Ok(Box::new(PluginPackage {
-                update,
-                bytes,
-                slot: self.slot.clone(),
-            }) as Box<dyn Package>)
+            match update.download(|_, _| {}, || {}).await {
+                Ok(bytes) => Ok(self.package(update, bytes)),
+                Err(e) => self.refused(update, e).await,
+            }
+        })
+    }
+
+    fn again(&self) -> Reading<'_> {
+        Box::pin(async move {
+            let found = self.checker.find(self.route).await?;
+            Ok(found.map(|c| Arc::new(self.checker.release(c)) as Arc<dyn Release>))
         })
     }
 }
@@ -308,6 +477,10 @@ pub struct Updates {
     installed: Mutex<Option<Installed>>,
     /// A version that did not install at the last try: no automatic restart for it.
     failed: Mutex<Option<String>>,
+    /// The checks that failed one after the other, and the downloads: two series, for a download
+    /// refused every time must be told even though the checks go through.
+    check_streak: Mutex<Streak>,
+    download_streak: Mutex<Streak>,
 }
 
 impl Default for Updates {
@@ -326,6 +499,8 @@ impl Default for Updates {
             plan: Mutex::default(),
             installed: Mutex::default(),
             failed: Mutex::default(),
+            check_streak: Mutex::default(),
+            download_streak: Mutex::default(),
         }
     }
 }
@@ -354,6 +529,55 @@ impl Updates {
         *ready = None;
     }
 
+    /// A check failed at `now` (ms): what the window is told of it.
+    pub fn check_failed(&self, error: &anyhow::Error, manual: bool, now: i64) -> Trouble {
+        Trouble {
+            message: trouble_text(error),
+            show: self.check_streak.lock().failed(manual, now),
+            page: None,
+        }
+    }
+
+    /// A check went through, whether it found something or not: the series ends.
+    pub fn check_succeeded(&self) {
+        self.check_streak.lock().succeeded();
+    }
+
+    /// A download failed at `now` (ms): what the window is told of it, with the page of the
+    /// release for the browser, which gets there when the app cannot.
+    pub fn download_failed(&self, error: &anyhow::Error, manual: bool, now: i64) -> Trouble {
+        let page = error
+            .downcast_ref::<Failure>()
+            .map_or_else(|| RELEASES_URL.into(), Failure::page_url);
+        Trouble {
+            message: trouble_text(error),
+            show: self.download_streak.lock().failed(manual, now),
+            page: Some(page),
+        }
+    }
+
+    /// An update is downloaded and checked: the series ends.
+    pub fn download_succeeded(&self) {
+        self.download_streak.lock().succeeded();
+    }
+
+    /// Downloads the update found as `id` (`download`), as the window is told how it went.
+    pub async fn downloaded(&self, id: u32, manual: bool) -> Downloaded {
+        match self.download(id).await {
+            Ok(true) => {
+                self.download_succeeded();
+                Downloaded::Ready
+            }
+            Ok(false) => Downloaded::Superseded,
+            Err(e) => {
+                log::warn!("the update did not download: {e:#}");
+                Downloaded::Failed {
+                    trouble: self.download_failed(&e, manual, now_ms()),
+                }
+            }
+        }
+    }
+
     /// Downloads the update found as `id` and keeps it ready, unless it already is; an older one
     /// downloaded is no longer offered meanwhile. True when it is the one ready now.
     pub async fn download(&self, id: u32) -> Result<bool> {
@@ -372,7 +596,10 @@ impl Updates {
             *ready = None;
             self.downloads.fetch_add(1, Ordering::AcqRel) + 1
         };
-        let package = release.fetch().await?;
+        let package = match release.fetch().await {
+            Ok(package) => package,
+            Err(first) => retried(&*release, &version, first).await?,
+        };
         let mut ready = self.ready.lock();
         // A newer one started meanwhile, or this one was withdrawn.
         if self.downloads.load(Ordering::Acquire) != started {
@@ -455,46 +682,239 @@ impl Updates {
     }
 }
 
-/// Looks for a newer release through the proxy, its certificate checked unless TLS verification
-/// is off; the update found is kept for its download. None found: the one downloaded, if any,
-/// was withdrawn.
+/// A download that failed gets a second try: its link may have expired or the release have been
+/// published again, so latest.json is read again, and the same version found there is downloaded
+/// once more with what it gives. Nothing there, another version, or a reading that fails: the
+/// failure of the first try, which is what went wrong.
+async fn retried(
+    release: &dyn Release,
+    version: &str,
+    first: anyhow::Error,
+) -> Result<Box<dyn Package>> {
+    match release.again().await {
+        Ok(Some(again)) if again.version() == version => {
+            log::warn!(
+                "download of {version} failed ({first:#}): latest.json read again, trying once more"
+            );
+            again.fetch().await
+        }
+        Ok(_) => Err(first),
+        Err(e) => {
+            log::warn!("latest.json not read again after a download failed: {e:#}");
+            Err(first)
+        }
+    }
+}
+
+/// What the window is told of a failure: the words of a request that was probed, else the error's.
+fn trouble_text(error: &anyhow::Error) -> String {
+    match error.downcast_ref::<Failure>() {
+        Some(failure) => failure.describe(i18n::ui()),
+        None => format!("{error:#}"),
+    }
+}
+
+/// An update the plugin found, and what came with it.
+struct Candidate {
+    update: Update,
+    slot: Slot,
+    route: Route,
+}
+
+/// A check of the updates: how to reach the network, and where latest.json is.
+struct Checker<R: Runtime> {
+    app: AppHandle<R>,
+    net: Network,
+    /// Where latest.json is (`plugins.updater.endpoints`), or a test's server.
+    endpoints: Vec<Url>,
+    /// How long before a failure that may pass is tried again.
+    pause: Duration,
+}
+
+impl<R: Runtime> Checker<R> {
+    /// A check through the network settings as they are now.
+    fn new(app: &AppHandle<R>, settings: &Settings) -> Result<Self> {
+        Ok(Self {
+            app: app.clone(),
+            net: Network::from_settings(settings)?,
+            endpoints: configured_endpoints(app)?,
+            pause: RETRY_PAUSE,
+        })
+    }
+
+    /// A release of this check's.
+    fn release(self: &Arc<Self>, found: Candidate) -> PluginRelease<R> {
+        PluginRelease {
+            update: found.update,
+            slot: found.slot,
+            route: found.route,
+            checker: self.clone(),
+        }
+    }
+
+    /// The plugin's updater for a request that goes `route`.
+    fn updater(&self, route: Route, slot: &Slot) -> Result<tauri_plugin_updater::Updater> {
+        let (hook_slot, app) = (slot.clone(), self.app.clone());
+        let mut builder = self
+            .app
+            .updater_builder()
+            .timeout(TIMEOUT)
+            .endpoints(self.endpoints.clone())?
+            .header(USER_AGENT, net::user_agent())?
+            .on_before_exit(move || {
+                // Taken first: the lock is not held while the app stops.
+                let hook = hook_slot.lock().take();
+                if let Some(hook) = hook {
+                    hook();
+                }
+                // What the plugin's own hook does, which this one replaces: the tray icon goes now.
+                app.cleanup_before_exit();
+            });
+        match self.net.via(route) {
+            Via::Nothing => builder = builder.no_proxy(),
+            Via::Proxy(proxy) => builder = builder.proxy(proxy.clone()),
+            Via::System => {}
+        }
+        if self.net.insecure_tls {
+            builder = builder.configure_client(|c| c.danger_accept_invalid_certs(true));
+        }
+        Ok(builder.build()?)
+    }
+
+    /// One request of the plugin, `route` the way it goes. The plugin does not say what answered
+    /// when it fails: the request is made again to learn it, and the failure is a `Failure`.
+    async fn once(&self, route: Route) -> Result<Option<Candidate>> {
+        let slot = Slot::default();
+        let updater = self.updater(route, &slot)?;
+        match updater.check().await {
+            Ok(update) => Ok(update.map(|update| Candidate {
+                update,
+                slot,
+                route,
+            })),
+            Err(e) => {
+                let Some(endpoint) = self.endpoints.last() else {
+                    return Err(e.into());
+                };
+                // The plugin's last error is that of the last endpoint.
+                let failure = probe(
+                    endpoint,
+                    &self.net,
+                    route,
+                    "application/json",
+                    What::Check,
+                    net::chain(&e),
+                )
+                .await;
+                Err(anyhow::Error::new(failure))
+            }
+        }
+    }
+
+    /// A try `route` the way, and if the proxy of the settings is not there (its connection
+    /// refused or timed out, its name unknown, no word to its tunnel), one without it: only once
+    /// per check. A proxy that answers is never gone around, whatever it says: its refusal is its
+    /// company's rule, and the failure says so.
+    async fn attempt(&self, route: Route) -> Result<Option<Candidate>> {
+        let error = match self.once(route).await {
+            Ok(found) => return Ok(found),
+            Err(e) => e,
+        };
+        let mut failure = match error.downcast::<Failure>() {
+            Ok(failure) => failure,
+            Err(other) => return Err(other),
+        };
+        if matches!(self.net.via(route), Via::Proxy(_)) && failure.proxy_unreachable() {
+            match self.once(Route::Direct).await {
+                Ok(found) => {
+                    log::warn!("update check through the proxy failed ({failure}), direct worked");
+                    return Ok(found);
+                }
+                Err(e) => {
+                    if let Ok(direct) = e.downcast::<Failure>() {
+                        failure.direct = Some(Box::new(direct));
+                    }
+                }
+            }
+        }
+        Err(anyhow::Error::new(failure))
+    }
+
+    /// Looks for the update, starting `route` the way: what the settings ask for, then without
+    /// the proxy if it is not there, and once more after a pause if the failure may pass.
+    async fn find(&self, route: Route) -> Result<Option<Candidate>> {
+        match self.attempt(route).await {
+            Err(e) if e.downcast_ref::<Failure>().is_some_and(Failure::transient) => {
+                log::warn!(
+                    "update check failed ({e:#}): trying once more in {:?}",
+                    self.pause
+                );
+                tokio::time::sleep(self.pause).await;
+                self.attempt(route).await
+            }
+            done => done,
+        }
+    }
+
+    /// `find`, the result kept for its download and told to the window.
+    async fn run(self: &Arc<Self>, updates: &Updates, manual: bool) -> Checked {
+        match self.find(Route::Proxy).await {
+            Ok(Some(found)) => {
+                updates.check_succeeded();
+                Checked::Found {
+                    update: updates.offer(Arc::new(self.release(found))),
+                }
+            }
+            Ok(None) => {
+                updates.check_succeeded();
+                updates.withdraw();
+                Checked::None
+            }
+            Err(e) => {
+                log::warn!("the check for updates failed: {e:#}");
+                Checked::Failed {
+                    trouble: updates.check_failed(&e, manual, now_ms()),
+                }
+            }
+        }
+    }
+}
+
+/// Where latest.json is, from the plugin's configuration (`plugins.updater.endpoints`).
+fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
+    let config = app.config();
+    let endpoints: Vec<Url> = config
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|c| c.get("endpoints"))
+        .and_then(|e| e.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.as_str()?.parse().ok())
+        .collect();
+    if endpoints.is_empty() {
+        bail!("Updater does not have any endpoints set.");
+    }
+    Ok(endpoints)
+}
+
+/// Looks for a newer release through the network settings as they are now, the proxy and the
+/// certificate checks of the settings; the update found is kept for its download. None found: the
+/// one downloaded, if any, was withdrawn. A failure is told with its cause, and shown (`manual`: the
+/// user asked) or kept quiet until it goes on (`Updates::check_failed`).
 pub async fn check<R: Runtime>(
     app: &AppHandle<R>,
     settings: &Settings,
     updates: &Updates,
-) -> Result<Option<Found>> {
-    let slot = Slot::default();
-    let mut builder = app.updater_builder().timeout(TIMEOUT).on_before_exit({
-        let (slot, app) = (slot.clone(), app.clone());
-        move || {
-            // Taken first: the lock is not held while the app stops.
-            let hook = slot.lock().take();
-            if let Some(hook) = hook {
-                hook();
-            }
-            // What the plugin's own hook does, which this one replaces: the tray icon goes now.
-            app.cleanup_before_exit();
-        }
-    });
-    let proxy = settings.proxy_url.trim();
-    if !proxy.is_empty() {
-        builder = builder.proxy(proxy.parse().map_err(|e| {
-            anyhow!(tr!(
-                "adresse du proxy invalide : {e}",
-                "invalid proxy address: {e}"
-            ))
-        })?);
+    manual: bool,
+) -> Checked {
+    match Checker::new(app, settings) {
+        Ok(checker) => Arc::new(checker).run(updates, manual).await,
+        Err(e) => Checked::Failed {
+            trouble: updates.check_failed(&e, manual, now_ms()),
+        },
     }
-    if settings.insecure_tls {
-        builder = builder.configure_client(|c| c.danger_accept_invalid_certs(true));
-    }
-    let Some(update) = builder.build()?.check().await? else {
-        updates.withdraw();
-        return Ok(None);
-    };
-    Ok(Some(
-        updates.offer(Arc::new(PluginRelease { update, slot })),
-    ))
 }
 
 /// What the app is doing now that a restart would cut.
@@ -1276,12 +1696,25 @@ mod tests {
         fetches: AtomicUsize,
         /// The download fails.
         broken: AtomicBool,
+        /// The download fails with this, a request that was probed.
+        refused: Mutex<Option<net::Failure>>,
         /// The download waits for it.
         gate: Option<Arc<Notify>>,
         log: Log,
         /// What the package's install does: like the plugin's, or failing before or after
         /// `before_exit`.
         install: Install,
+        /// Told apart in the errors of its download.
+        name: &'static str,
+        /// What reading latest.json again finds, and how many times it was read.
+        again: Mutex<Again>,
+        readings: AtomicUsize,
+    }
+
+    enum Again {
+        Nothing,
+        Fails,
+        Finds(Arc<FakeRelease>),
     }
 
     #[derive(Clone, Copy, PartialEq)]
@@ -1296,9 +1729,13 @@ mod tests {
             version: version.into(),
             fetches: AtomicUsize::new(0),
             broken: AtomicBool::new(false),
+            refused: Mutex::new(None),
             gate: None,
             log: Log::default(),
             install: Install::Ok,
+            name: "first",
+            again: Mutex::new(Again::Nothing),
+            readings: AtomicUsize::new(0),
         }
     }
 
@@ -1317,13 +1754,28 @@ mod tests {
                 if let Some(gate) = &self.gate {
                     gate.notified().await;
                 }
+                let refused = self.refused.lock().clone();
+                if let Some(failure) = refused {
+                    return Err(anyhow::Error::new(failure));
+                }
                 if self.broken.load(Ordering::Acquire) {
-                    bail!("Download request failed with status: 502");
+                    bail!("Download request failed with status: 502 ({})", self.name);
                 }
                 Ok(Box::new(FakePackage {
                     log: self.log.clone(),
                     install: self.install,
                 }) as Box<dyn Package>)
+            })
+        }
+
+        fn again(&self) -> Reading<'_> {
+            Box::pin(async move {
+                self.readings.fetch_add(1, Ordering::AcqRel);
+                match &*self.again.lock() {
+                    Again::Nothing => Ok(None),
+                    Again::Fails => bail!("latest.json: 502"),
+                    Again::Finds(release) => Ok(Some(release.clone() as Arc<dyn Release>)),
+                }
             })
         }
     }
@@ -1436,6 +1888,437 @@ mod tests {
         gate.notify_one();
         assert!(!within("the download", downloading).await.unwrap().unwrap());
         assert!(u.ready().is_none());
+    }
+
+    // ---------- a download that fails ----------
+
+    /// `first` and `second`, the same version, `second` being what reading latest.json again finds
+    /// after `first`'s download failed.
+    fn broken_then(second: FakeRelease) -> (Arc<FakeRelease>, Arc<FakeRelease>) {
+        let (first, second) = (Arc::new(release("1.6.0")), Arc::new(second));
+        first.broken.store(true, Ordering::Release);
+        *first.again.lock() = Again::Finds(second.clone());
+        (first, second)
+    }
+
+    fn named(name: &'static str, version: &str) -> FakeRelease {
+        FakeRelease {
+            name,
+            ..release(version)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_download_that_fails_reads_latest_json_again_and_tries_what_it_gives() {
+        let u = Updates::default();
+        let (first, second) = broken_then(named("second", "1.6.0"));
+        let id = u.offer(first.clone()).id;
+        assert!(u.download(id).await.unwrap());
+        assert_eq!(first.fetches.load(Ordering::Acquire), 1);
+        assert_eq!(first.readings.load(Ordering::Acquire), 1);
+        assert_eq!(second.fetches.load(Ordering::Acquire), 1);
+        // The one kept is the version found, ready to install.
+        assert_eq!(u.ready().unwrap().version, "1.6.0");
+    }
+
+    #[tokio::test]
+    async fn a_download_tried_again_is_tried_once_only_and_its_failure_is_the_one_told() {
+        let u = Updates::default();
+        let second = named("second", "1.6.0");
+        second.broken.store(true, Ordering::Release);
+        let (first, second) = broken_then(second);
+        let id = u.offer(first.clone()).id;
+        let e = u.download(id).await.unwrap_err();
+        assert!(e.to_string().contains("(second)"), "{e}");
+        assert_eq!(first.fetches.load(Ordering::Acquire), 1);
+        assert_eq!(second.fetches.load(Ordering::Acquire), 1);
+        // Latest.json was read once: the second try does not read it again.
+        assert_eq!(first.readings.load(Ordering::Acquire), 1);
+        assert_eq!(second.readings.load(Ordering::Acquire), 0);
+        assert!(u.ready().is_none());
+    }
+
+    #[tokio::test]
+    async fn a_download_is_not_tried_again_with_another_version_nothing_or_a_reading_that_failed() {
+        for again in [
+            Again::Finds(Arc::new(named("newer", "1.7.0"))),
+            Again::Nothing,
+            Again::Fails,
+        ] {
+            let u = Updates::default();
+            let first = Arc::new(release("1.6.0"));
+            first.broken.store(true, Ordering::Release);
+            let other = match &again {
+                Again::Finds(other) => Some(other.clone()),
+                _ => None,
+            };
+            *first.again.lock() = again;
+            let id = u.offer(first.clone()).id;
+            // The first failure is the one told.
+            let e = u.download(id).await.unwrap_err();
+            assert!(e.to_string().contains("(first)"), "{e}");
+            assert_eq!(first.fetches.load(Ordering::Acquire), 1);
+            assert_eq!(first.readings.load(Ordering::Acquire), 1);
+            if let Some(other) = other {
+                assert_eq!(other.fetches.load(Ordering::Acquire), 0);
+            }
+            assert!(u.ready().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_download_that_goes_through_reads_nothing_again() {
+        let u = Updates::default();
+        let r = Arc::new(release("1.6.0"));
+        let id = u.offer(r.clone()).id;
+        assert!(u.download(id).await.unwrap());
+        assert_eq!(r.readings.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn a_download_withdrawn_while_it_is_read_again_is_not_kept() {
+        // The release is withdrawn while the second try downloads: it ends after, and is not kept.
+        let gate = Arc::new(Notify::new());
+        let (first, second) = broken_then(FakeRelease {
+            gate: Some(gate.clone()),
+            ..named("second", "1.6.0")
+        });
+        let u = Arc::new(Updates::default());
+        let id = u.offer(first.clone()).id;
+        let downloading = tokio::spawn({
+            let u = u.clone();
+            async move { u.download(id).await }
+        });
+        fetching(&second).await;
+        u.withdraw();
+        gate.notify_one();
+        assert!(!within("the download", downloading).await.unwrap().unwrap());
+        assert!(u.ready().is_none());
+    }
+
+    // ---------- the failures told ----------
+
+    /// 5 minutes, the pace of the checks in these tests.
+    const EVERY: i64 = 5 * 60_000;
+
+    fn boom() -> anyhow::Error {
+        anyhow!("boom")
+    }
+
+    #[test]
+    fn failures_that_go_on_for_less_than_an_hour_or_are_fewer_than_three_stay_quiet() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        // Six in 25 minutes.
+        for i in 0..6 {
+            let trouble = u.check_failed(&boom(), false, t + i * EVERY);
+            assert!(!trouble.show, "failure {i}");
+            assert_eq!(trouble.message, "boom");
+            assert_eq!(trouble.page, None);
+        }
+        // Two failures an hour apart are two: not enough.
+        let u = Updates::default();
+        assert!(!u.check_failed(&boom(), false, t).show);
+        assert!(!u.check_failed(&boom(), false, t + SHOW_AFTER).show);
+    }
+
+    #[test]
+    fn failures_that_went_on_for_an_hour_are_told_once_and_not_again() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        assert!(!u.check_failed(&boom(), false, t).show);
+        assert!(!u.check_failed(&boom(), false, t + STREAK_GAP).show);
+        // The third, an hour after the first.
+        assert!(u.check_failed(&boom(), false, t + SHOW_AFTER).show);
+        // Not told again, however long it goes on.
+        for i in 1..=60 {
+            assert!(
+                !u.check_failed(&boom(), false, t + SHOW_AFTER + i * EVERY)
+                    .show,
+                "failure {i} after the hour"
+            );
+        }
+    }
+
+    #[test]
+    fn failures_every_five_minutes_are_told_when_the_hour_is_up() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        // Twelve failures in 55 minutes: not an hour yet.
+        for i in 0..12 {
+            assert!(!u.check_failed(&boom(), false, t + i * EVERY).show, "{i}");
+        }
+        // The thirteenth, an hour after the first.
+        assert!(u.check_failed(&boom(), false, t + 12 * EVERY).show);
+        assert!(!u.check_failed(&boom(), false, t + 13 * EVERY).show);
+    }
+
+    #[test]
+    fn a_failure_before_a_sleep_and_two_after_it_are_not_a_series() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        // The last failure of the series is over half an hour old when the next comes (the
+        // computer slept): a series that starts again, of one, then of two.
+        assert!(!u.check_failed(&boom(), false, t).show);
+        assert!(!u.check_failed(&boom(), false, t + 70 * 60_000).show);
+        assert!(!u.check_failed(&boom(), false, t + 71 * 60_000).show);
+    }
+
+    #[test]
+    fn a_series_that_went_quiet_for_more_than_half_an_hour_starts_over_and_may_be_told_again() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        // Exactly half an hour between two failures is not a gap, a millisecond more is.
+        u.check_failed(&boom(), false, t);
+        u.check_failed(&boom(), false, t + STREAK_GAP);
+        assert!(u.check_failed(&boom(), false, t + 2 * STREAK_GAP).show);
+        // Told. Then silence for more than the gap: a new series, told again after its own hour.
+        let later = t + 2 * STREAK_GAP + STREAK_GAP + 1;
+        for i in 0..12 {
+            assert!(
+                !u.check_failed(&boom(), false, later + i * EVERY).show,
+                "{i}"
+            );
+        }
+        assert!(u.check_failed(&boom(), false, later + 12 * EVERY).show);
+        // A gap of a millisecond more than the limit ends a series that was about to be told.
+        let u = Updates::default();
+        for i in 0..12 {
+            u.check_failed(&boom(), false, t + i * EVERY);
+        }
+        let last = t + 11 * EVERY;
+        assert!(!u.check_failed(&boom(), false, last + STREAK_GAP + 1).show);
+        assert!(
+            !u.check_failed(&boom(), false, last + STREAK_GAP + 1 + EVERY)
+                .show
+        );
+    }
+
+    #[test]
+    fn a_success_ends_the_series_and_the_next_one_starts_over() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        u.check_failed(&boom(), false, t);
+        u.check_failed(&boom(), false, t + EVERY);
+        u.check_succeeded();
+        // Two more, long after: a new series of two.
+        assert!(!u.check_failed(&boom(), false, t + 3 * SHOW_AFTER).show);
+        assert!(
+            !u.check_failed(&boom(), false, t + 3 * SHOW_AFTER + EVERY)
+                .show
+        );
+        // A series that was told, ended, then begun again, is told again.
+        let u = Updates::default();
+        for i in 0..3 {
+            u.check_failed(&boom(), false, t + i * SHOW_AFTER / 2);
+        }
+        u.check_succeeded();
+        let later = t + 10 * SHOW_AFTER;
+        assert!(!u.check_failed(&boom(), false, later).show);
+        assert!(!u.check_failed(&boom(), false, later + SHOW_AFTER / 2).show);
+        assert!(u.check_failed(&boom(), false, later + SHOW_AFTER).show);
+    }
+
+    #[test]
+    fn a_failure_the_user_asked_for_is_always_shown() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        assert!(u.check_failed(&boom(), true, t).show);
+        assert!(u.check_failed(&boom(), true, t + 1).show);
+        // The automatic rule is not spent by it: the series goes on from the first failure.
+        for i in 1..12 {
+            assert!(!u.check_failed(&boom(), false, t + i * EVERY).show, "{i}");
+        }
+        assert!(u.check_failed(&boom(), false, t + SHOW_AFTER).show);
+        assert!(!u.check_failed(&boom(), false, t + SHOW_AFTER + 1).show);
+        assert!(u.check_failed(&boom(), true, t + SHOW_AFTER + 2).show);
+    }
+
+    #[test]
+    fn the_series_of_the_checks_and_of_the_downloads_are_apart() {
+        let u = Updates::default();
+        let t = 10_000_000;
+        // Downloads refused every 5 minutes while the checks go through: told after an hour.
+        for i in 0..12 {
+            u.check_succeeded();
+            assert!(!u.download_failed(&boom(), false, t + i * EVERY).show);
+        }
+        assert!(u.download_failed(&boom(), false, t + 12 * EVERY).show);
+        // Checks failing do not touch it.
+        let u = Updates::default();
+        for i in 0..3 {
+            u.check_failed(&boom(), false, t + i * SHOW_AFTER / 2);
+        }
+        assert!(!u.download_failed(&boom(), false, t + SHOW_AFTER).show);
+        // Nor does a download that went through end the series of the checks.
+        let u = Updates::default();
+        for i in 0..12 {
+            u.check_failed(&boom(), false, t + i * EVERY);
+        }
+        u.download_succeeded();
+        assert!(u.check_failed(&boom(), false, t + 12 * EVERY).show);
+        // And a check that went through, not the downloads'.
+        let u = Updates::default();
+        for i in 0..12 {
+            u.download_failed(&boom(), false, t + i * EVERY);
+        }
+        u.check_succeeded();
+        assert!(u.download_failed(&boom(), false, t + 12 * EVERY).show);
+    }
+
+    #[test]
+    fn a_failure_of_the_network_is_told_in_its_own_words_and_any_other_in_the_errors() {
+        let u = Updates::default();
+        let failure = net::Failure {
+            what: net::What::Download,
+            url: "https://github.com/me/app/releases/download/v1.8.0/app-setup.exe".into(),
+            status: Some(404),
+            answered: true,
+            host: "release-assets.githubusercontent.com".into(),
+            proxy: None,
+            agent: None,
+            page: None,
+            detail: String::new(),
+            stuck: None,
+            trusted: Vec::new(),
+            direct: None,
+        };
+        let told = u.download_failed(&anyhow::Error::new(failure), true, 1);
+        assert_eq!(
+            told.message,
+            "404 Not Found de release-assets.githubusercontent.com"
+        );
+        // The release's page for the browser, whatever the failure: a download has a page.
+        assert_eq!(
+            told.page.as_deref(),
+            Some("https://github.com/me/app/releases/tag/v1.8.0")
+        );
+        let other = u.download_failed(&anyhow!("Cette mise à jour n'est plus proposée"), true, 2);
+        assert_eq!(other.message, "Cette mise à jour n'est plus proposée");
+        assert_eq!(other.page.as_deref(), Some(net::RELEASES_URL));
+        // A check has no page to download from.
+        let check = u.check_failed(&anyhow::Error::new(refused_check()), true, 3);
+        assert_eq!(check.page, None);
+        assert!(check.message.starts_with("403 Forbidden de github.com"));
+    }
+
+    fn refused_check() -> net::Failure {
+        net::Failure {
+            what: net::What::Check,
+            url: "https://github.com/me/app/releases/latest/download/latest.json".into(),
+            status: Some(403),
+            answered: true,
+            host: "github.com".into(),
+            proxy: None,
+            agent: None,
+            page: None,
+            detail: String::new(),
+            stuck: None,
+            trusted: Vec::new(),
+            direct: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn the_window_is_told_how_a_download_ended() {
+        let u = Updates::default();
+        // A failure, told in the words of the failure, and the series begun.
+        let r = Arc::new(release("1.6.0"));
+        *r.refused.lock() = Some(refused_check());
+        let id = u.offer(r.clone()).id;
+        let Downloaded::Failed { trouble } = u.downloaded(id, true).await else {
+            panic!("the download should fail");
+        };
+        assert!(trouble.show);
+        assert!(trouble.message.starts_with("403 Forbidden de github.com"));
+        // Then it goes through: the series is over, and the window is told so. Three failures
+        // after it, long after the first, are a new series of three that has not gone on for an
+        // hour (it would be told if the first failure still counted).
+        *r.refused.lock() = None;
+        let id = u.offer(r.clone()).id;
+        assert_eq!(u.downloaded(id, false).await, Downloaded::Ready);
+        let t = now_ms() + 2 * SHOW_AFTER;
+        for i in 0..3 {
+            assert!(!u.download_failed(&boom(), false, t + i * EVERY).show);
+        }
+        // An id no longer offered is a failure too, not a refusal to answer.
+        let Downloaded::Failed { trouble } = u.downloaded(99, false).await else {
+            panic!("an id that is gone fails");
+        };
+        assert!(trouble.message.contains("n'est plus proposée"));
+    }
+
+    #[tokio::test]
+    async fn a_download_withdrawn_meanwhile_is_told_as_superseded() {
+        let u = Arc::new(Updates::default());
+        let gate = Arc::new(Notify::new());
+        let r = Arc::new(FakeRelease {
+            gate: Some(gate.clone()),
+            ..release("1.6.0")
+        });
+        let id = u.offer(r.clone()).id;
+        let downloading = tokio::spawn({
+            let u = u.clone();
+            async move { u.downloaded(id, false).await }
+        });
+        fetching(&r).await;
+        u.withdraw();
+        gate.notify_one();
+        assert_eq!(
+            within("the download", downloading).await.unwrap(),
+            Downloaded::Superseded
+        );
+    }
+
+    #[test]
+    fn the_window_reads_what_a_check_and_a_download_found_in_camel_case_tagged_by_kind() {
+        use serde_json::json;
+        let found = Found {
+            id: 3,
+            version: "1.8.0".into(),
+            notes: "- Nouveau".into(),
+        };
+        let trouble = Trouble {
+            message: "403 Forbidden de github.com".into(),
+            show: true,
+            page: Some("https://github.com/me/app/releases/tag/v1.8.0".into()),
+        };
+        fn value<T: Serialize>(v: &T) -> serde_json::Value {
+            serde_json::to_value(v).unwrap()
+        }
+        assert_eq!(
+            value(&Checked::Found {
+                update: found.clone()
+            }),
+            json!({ "kind": "found", "update": { "id": 3, "version": "1.8.0", "notes": "- Nouveau" } })
+        );
+        assert_eq!(value(&Checked::None), json!({ "kind": "none" }));
+        assert_eq!(
+            value(&Checked::Failed {
+                trouble: trouble.clone()
+            }),
+            json!({ "kind": "failed", "trouble": {
+                "message": "403 Forbidden de github.com",
+                "show": true,
+                "page": "https://github.com/me/app/releases/tag/v1.8.0"
+            } })
+        );
+        assert_eq!(value(&Downloaded::Ready), json!({ "kind": "ready" }));
+        assert_eq!(
+            value(&Downloaded::Superseded),
+            json!({ "kind": "superseded" })
+        );
+        assert_eq!(
+            value(&Downloaded::Failed {
+                trouble: Trouble {
+                    page: None,
+                    ..trouble
+                }
+            }),
+            json!({ "kind": "failed", "trouble": {
+                "message": "403 Forbidden de github.com", "show": true, "page": null
+            } })
+        );
     }
 
     // ---------- install ----------

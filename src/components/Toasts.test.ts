@@ -48,4 +48,45 @@ describe('Toasts', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(app.toasts).toEqual([]);
   });
+
+  it('keeps a toast 3.5 s, an error 7 s, and one with a button 12 s, when it asks for nothing else', async () => {
+    vi.useFakeTimers();
+    app.toast('info');
+    app.toast('error', 'error');
+    app.toast('button', 'ok', { label: 'Ouvrir', onClick() {} });
+    const shown = () => app.toasts.map((t) => t.text);
+
+    await vi.advanceTimersByTimeAsync(3_499);
+    expect(shown()).toEqual(['info', 'error', 'button']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).toEqual(['error', 'button']);
+    await vi.advanceTimersByTimeAsync(3_499);
+    expect(shown()).toEqual(['error', 'button']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).toEqual(['button']);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(shown()).toEqual(['button']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).toEqual([]);
+  });
+
+  it('keeps a toast for the time it asks for, longer or shorter than the default, and the others as usual', async () => {
+    vi.useFakeTimers();
+    app.toast('long', 'error', { label: 'Ouvrir', onClick() {} }, 30_000);
+    app.toast('short', 'error', undefined, 1_000);
+    app.toast('usual');
+    const shown = () => app.toasts.map((t) => t.text);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(shown()).toEqual(['long', 'short', 'usual']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).toEqual(['long', 'usual']);
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(shown()).toEqual(['long']);
+    // Past the 12 s a button gets by default.
+    await vi.advanceTimersByTimeAsync(26_499);
+    expect(shown()).toEqual(['long']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(shown()).toEqual([]);
+  });
 });

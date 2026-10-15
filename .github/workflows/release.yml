@@ -3,6 +3,10 @@ name: Release
 # A tag `vX.Y.Z` (pushed, or created with a release on GitHub's page) publishes a release: NSIS
 # installer (Windows), universal app and disk image (macOS), AppImage and .deb (Linux), signed
 # updater artifacts and the latest.json of the in-app updater, which holds the three systems. The app gets the tag's version.
+# The release is a draft while the three builds upload to it (~30 min, each one rewriting
+# latest.json), and the last job publishes it once latest.json and every file it names are in:
+# the in-app updater reads the latest release, so it never meets a half-built one. A failed build
+# just leaves the draft, and the previous release stays the latest.
 # It only builds: the tests run on each push to main (ci.yml), and a tag is put on a commit whose
 # CI is green.
 on:
@@ -16,6 +20,8 @@ jobs:
   create:
     name: Create the release
     runs-on: ubuntu-latest
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
     steps:
       - uses: actions/checkout@v7
 
@@ -27,23 +33,48 @@ jobs:
 
       # Created before the long builds, while the tag is still the head of main: once main has
       # moved past it, GITHUB_TOKEN may no longer create the release ("Resource not accessible by
-      # integration", it would need the `workflows` permission it cannot have). tauri-action then
-      # finds this release and only uploads the installers, their signatures and latest.json to it.
+      # integration", it would need the `workflows` permission it cannot have). It is a draft, and
+      # the builds and the last job find it by its id: the by-tag lookups do not see a draft. A
+      # release that already exists for the tag (made on GitHub's page, or a run started again)
+      # goes back to draft; the API lists drafts too, `gh release view` does not.
       - name: Create the release
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" > /dev/null 2>&1 && exit 0
-          flags=()
-          [[ "$TAG" == *-* ]] && flags+=(--prerelease)
-          # The version's section of CHANGELOG.md (a sentence pointing at the commits without one).
-          node scripts/changelog.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --verify-tag --title "Escouade $TAG" \
-            --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+          release_id() {
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq 'map(select(.tag_name == env.TAG)) | first | .id // empty'
+          }
+          prerelease=false
+          [[ "$TAG" == *-* ]] && prerelease=true
+          id=$(release_id)
+          if [ -n "$id" ]; then
+            # A pre-release tag keeps its mark too, whatever the page of GitHub was ticked with.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=true -F prerelease=$prerelease > /dev/null
+          else
+            flags=()
+            [ "$prerelease" = true ] && flags+=(--prerelease)
+            # The version's section of CHANGELOG.md (a sentence pointing at the commits without one).
+            node scripts/changelog.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
+            gh release create "$TAG" --verify-tag --draft --title "Escouade $TAG" \
+              --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+            # The list may take a moment to show the new draft.
+            for attempt in 1 2 3 4 5; do
+              id=$(release_id)
+              [ -n "$id" ] && break
+              sleep 3
+            done
+          fi
+          if [ -z "$id" ]; then
+            echo "::error::No release found for $TAG, the builds have nowhere to upload"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build and publish (${{ matrix.name }})
+    name: Build and upload (${{ matrix.name }})
     needs: create
     strategy:
       fail-fast: false
@@ -138,36 +169,87 @@ jobs:
             echo 'ESCOUADE_NOTES_END'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build, sign and publish
+      # Uploads to the draft the create job made, by its id: tauri-action looks a release up by
+      # tag (getReleaseByTag), which does not see a draft, and would make a second release. With
+      # releaseId it creates and edits nothing, it only uploads the installers, their signatures
+      # and latest.json. A job started again replaces its files of the same name: harmless.
+      # tagName is still needed, it rewrites the `…/download/untagged-…/` links a draft gives in
+      # latest.json to `…/download/<tag>/`; releaseBody is the notes of latest.json.
+      - name: Build, sign and upload to the draft
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          releaseId: ${{ needs.create.outputs.release-id }}
           tagName: ${{ github.ref_name }}
-          releaseName: Escouade ${{ github.ref_name }}
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
-  # The updater reads the latest release: one without latest.json, or whose latest.json misses a
-  # system (one build failed), would stop updates. Back to draft, the previous release is the
-  # latest again.
-  guard:
-    name: Keep the updater on a complete release
+  # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
+  # is published once its latest.json holds every system and each file it names is in: the three
+  # builds each rewrite latest.json, and two at the same instant can lose one's system.
+  publish:
+    name: Publish the release once every system is in
     needs: [create, build]
-    if: always() && needs.build.result != 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Back to draft
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Check latest.json and the files it names
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create.outputs.release-id }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null || exit 0
-          echo "::error::$TAG was not built for every system: back to draft, the updater stays on the previous release"
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=true
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/assets.json"
+          asset=$(jq -r 'map(select(.name == "latest.json")) | first | .id // empty' "$RUNNER_TEMP/assets.json")
+          if [ -z "$asset" ]; then
+            echo "::error::The draft of $TAG has no latest.json"
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > "$RUNNER_TEMP/latest.json"
+          node scripts/release-check.mjs "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/assets.json" "$TAG"
+
+      # By id, as the draft is not found by tag. A pre-release cannot be the latest release. If
+      # GitHub refuses ("Resource not accessible by integration"), the draft is complete: publish
+      # it by hand, `gh release edit <tag> --draft=false --latest`.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.create.outputs.release-id }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          latest=true
+          if [[ "$TAG" == *-* ]]; then latest=false; fi
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=$latest > /dev/null
+
+      # What the in-app updater downloads: the latest release's, or the pre-release's own (it is
+      # never the latest). GitHub's cache can take a moment to follow the publication.
+      - name: Check what the updater reads
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *-* ]]; then
+            url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/latest.json"
+          else
+            url="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/latest.json"
+          fi
+          expected="${TAG#v}"
+          for attempt in 1 2 3 4 5 6; do
+            version=$(curl -fsSL "$url" | jq -r '.version // empty') || version=
+            if [ "$version" = "$expected" ]; then
+              echo "$url says version $version"
+              exit 0
+            fi
+            echo "Try $attempt of 6: $url says '${version}', expected '$expected'"
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
+          done
+          echo "::error::The updater would not read $TAG: $url does not say version $expected"
           exit 1

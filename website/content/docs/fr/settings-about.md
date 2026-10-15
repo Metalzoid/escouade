@@ -21,7 +21,7 @@ Si Claude Code est introuvable, indique son chemin dans l’onglet [« Claude C
 
 ## Rechercher une mise à jour
 
-Escouade cherche seule : une première fois quelques secondes après son démarrage, puis cinq minutes après la fin de chaque recherche. Le bouton « Rechercher une mise à jour » (il dit « Recherche… » pendant l’appel) lance une recherche tout de suite. Sans version plus récente, un message dit « Aucune mise à jour disponible. » ; si la recherche échoue, un message d’erreur le dit.
+Escouade cherche seule : une première fois quelques secondes après son démarrage, puis cinq minutes après la fin de chaque recherche. Le bouton « Rechercher une mise à jour » (il dit « Recherche… » pendant l’appel) lance une recherche tout de suite. Sans version plus récente, un message dit « Aucune mise à jour disponible. » ; si la recherche échoue, un message d’erreur en donne la raison. Seule une recherche lancée par ce bouton le montre tout de suite : une recherche automatique attend plusieurs échecs de suite (voir [« Quand ça échoue »](updates#quand-ca-echoue)).
 
 Une version trouvée est téléchargée aussitôt et sa signature est vérifiée, puis elle attend. Quand elle est prête, la barre d’état affiche un bouton, par exemple « Mise à jour 1.8.0 prête · Redémarrer ». Il ouvre une fenêtre, par exemple « Escouade 1.8.0 est prête », qui montre les notes de la version. « Redémarrer maintenant » installe la mise à jour. Il est grisé tant qu’un fichier de l’éditeur n’est pas enregistré (la fenêtre te le dit), et la fenêtre prévient quand des agents travaillent, car le redémarrage interrompt leur tour. « Plus tard » ferme la fenêtre sans rien installer.
 

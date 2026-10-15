@@ -71,6 +71,14 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Solution.** Dans Réglages › Réseau, renseigne « Proxy HTTP(S) » (par exemple `http://utilisateur:motdepasse@proxy:3128`) et, si besoin, « Exclusions » (la liste `NO_PROXY`, séparée par des virgules). Le proxy est transmis aux processus Claude Code, à la lecture des quotas, aux intégrations et aux mises à jour. Pour un agent, il s’applique au prochain (re)démarrage de son processus. Pour que les terminaux intégrés, les commandes de lancement et les commandes de préparation et de démontage des worktrees l’utilisent aussi, active « Appliquer aussi le proxy aux terminaux intégrés » (désactivé par défaut). Voir les [réglages Réseau](settings-network).
 
+### La mise à jour est refusée par un proxy d’entreprise
+
+**Symptôme.** Le message « Téléchargement de la mise à jour impossible » ou « Vérification des mises à jour impossible » parle d’un « 403 Forbidden », demande si c’est « bloqué par le réseau ou un proxy ? », dit que « le proxy de ton entreprise » a refusé l’installateur, ou dit que le proxy demande une authentification.
+
+**Cause.** Un proxy d’entreprise (Zscaler, Netskope, Squid…) laisse souvent passer la recherche mais refuse l’installateur à un client qui n’est pas un navigateur. Escouade s’annonce honnêtement (`Escouade/<version>`) et ne se fait pas passer pour un navigateur ; quand le proxy refuse la requête, elle ne la refait pas sans lui. Une recherche automatique ne montre son erreur qu’après plusieurs échecs de suite, sur plus d’une heure.
+
+**Solution.** Si le message dit que le proxy demande une authentification, mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`). Sinon, clique sur « Télécharger dans le navigateur » dans le message : la page de la release s’ouvre, et le proxy peut demander de confirmer un avertissement. Pour que la mise à jour intégrée passe, demande au service informatique d’autoriser `github.com` et `release-assets.githubusercontent.com`, et le téléchargement des fichiers de la release pour le client dont le User-Agent commence par `Escouade/`. Le détail est dans [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
+
 ### Un certificat d’entreprise fait échouer les connexions
 
 **Symptôme.** Une erreur « UnknownIssuer », ou un autre échec TLS, pour les intégrations, les quotas, les mises à jour ou Claude Code.

@@ -21,7 +21,7 @@ If Claude Code isn’t found, give its path in the [“Claude Code”](settings-
 
 ## Check for updates
 
-Escouade looks on its own: once a few seconds after it starts, then five minutes after each check ends. The “Check for updates” button (it reads “Checking…” during the call) starts a check right away. With no newer version, a message says “No update available.”; if the check fails, an error message says so.
+Escouade looks on its own: once a few seconds after it starts, then five minutes after each check ends. The “Check for updates” button (it reads “Checking…” during the call) starts a check right away. With no newer version, a message says “No update available.”; if the check fails, an error message gives the reason. Only a check started with this button shows it right away: an automatic check waits for several failures in a row (see [“When it fails”](updates#when-it-fails)).
 
 A version found is downloaded right away and its signature is checked, then it waits. When it’s ready, the status bar shows a button, for example “Update 1.8.0 ready · Restart”. It opens a window, for example “Escouade 1.8.0 is ready”, which shows the version’s notes. “Restart now” installs the update. It’s grayed out while a file in the editor isn’t saved (the window tells you), and the window warns you when agents are working, since the restart interrupts their turn. “Later” closes the window without installing anything.
 

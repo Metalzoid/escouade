@@ -161,7 +161,15 @@ La CI (`.github/workflows/ci.yml`) exécute l'ensemble sur chaque push et pull r
 
    Ou crée la release depuis la page GitHub (« Draft a new release », nouveau tag `v0.2.0` sur `main`, « Publish ») : l'app prend la version du tag, même si celle de `main` n'a pas été montée.
 
-Le workflow `release.yml` vérifie que le tag est une version, crée la release, puis, sous Windows et sous macOS en parallèle, donne à l'app la version du tag, lance les tests, construit l'installeur (`.exe` NSIS ; `.dmg` et `.app.tar.gz` universels), le signe et l'ajoute à la release avec le `latest.json` utilisé par la mise à jour automatique, commun aux deux systèmes. La mise à jour lit le `latest.json` de la dernière release : si une construction échoue, la release repasse en brouillon, pour que la mise à jour retrouve la précédente. Pour réessayer, supprime ce brouillon et son tag sur GitHub, corrige, puis publie à nouveau.
+Le workflow `release.yml` vérifie que le tag est une version et crée la release **en brouillon** (une release déjà créée sur la page GitHub y repasse). Puis, sous Windows, macOS et Linux en parallèle, il donne à l'app la version du tag, construit les installeurs (`.exe` NSIS ; `.dmg` et `.app.tar.gz` universels ; `.AppImage` et `.deb`), les signe et les dépose dans ce brouillon, retrouvé par son identifiant, avec le `latest.json` utilisé par la mise à jour automatique, commun aux trois systèmes. Les tests ne sont pas rejoués ici : ils tournent à chaque push sur `main` (`ci.yml`).
+
+La mise à jour lit le `latest.json` de la dernière release : la release n'est donc publiée qu'à la fin, par le dernier job, une fois les trois constructions réussies. Il vérifie (`scripts/release-check.mjs`) que `latest.json` est celui de la version et contient chaque système, et que chaque fichier qu'il désigne est bien dans le brouillon ; puis il publie la release comme « latest » (une pré-version, tag `vX.Y.Z-…`, ne l'est jamais) et contrôle ce que lit la mise à jour.
+
+Si quelque chose casse :
+
+- **une construction échoue** : la release reste en brouillon et la précédente reste la dernière pour la mise à jour. Relance les jobs ratés avec `gh run rerun <id> --failed` : leurs fichiers sont redéposés dans le même brouillon, sans danger ;
+- **le contrôle de la publication échoue faute d'une plateforme** (deux constructions ont réécrit `latest.json` au même instant) : relance tout le run avec `gh run rerun <id>` ;
+- **la publication elle-même est refusée** (« Resource not accessible by integration ») : le brouillon est complet, publie-le à la main avec `gh release edit vX.Y.Z --draft=false --latest` (sans `--latest` pour une pré-version).
 
 Tague toujours la tête de `main`, et attends que la release soit créée (première minute du workflow) avant de pousser d'autres commits : une fois `main` plus loin que le tag, le `GITHUB_TOKEN` des Actions n'a plus le droit de créer la release (« Resource not accessible by integration »).
 

@@ -61,9 +61,11 @@ export default {
     notReady: 'La mise à jour vers {version} n’est plus prête : Escouade te la proposera de nouveau une fois téléchargée.',
     installed: 'Escouade {version} est installée.',
     seeNotes: 'Voir les nouveautés',
-    /** `{error}`: what the updater answered, as received. */
+    /** `{error}`: the cause the backend gives, already in the language of the interface (or what the call answered, as received). */
     downloadFailed: 'Téléchargement de la mise à jour impossible : {error}',
     checkFailed: 'Vérification des mises à jour impossible : {error}',
+    /** The button of a failed download: the page of the release, where the installer can be taken from. */
+    openInBrowser: 'Télécharger dans le navigateur',
   },
   /** The question of the first start: the usage statistics (`telemetry`). */
   telemetry: {

@@ -8,18 +8,19 @@ import type {
   Attachment,
   BoardSettings,
   BranchInfo,
+  CheckedUpdate,
   ClaudeLocated,
   CommitScope,
   Container,
   ConvItem,
   ConvSearchResult,
+  DownloadedUpdate,
   ExternalIssue,
   FileBase,
   FileChange,
   FileText,
   FileTree,
   FolderInfo,
-  FoundRelease,
   GitLog,
   InitialState,
   Integration,
@@ -286,10 +287,16 @@ export const api = {
   suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
   /** The launch commands Claude suggests for the project, from what it reads of it, with how many it gave that were refused; nothing is saved. */
   suggestRunCommands: (projectId: string) => invoke<RunSuggestion>('suggest_run_commands', { projectId }),
-  /** A newer release, through the network settings (proxy, TLS verification), kept by the backend for its download. */
-  updateCheck: () => invoke<FoundRelease | null>('update_check'),
-  /** Downloads the release found, its signature checked, kept by the backend until it installs: true once it is the one ready. */
-  updateDownload: (id: number) => invoke<boolean>('update_download', { id }),
+  /**
+   * A newer release, through the network settings (proxy, TLS verification), kept by the backend for its download.
+   * `manual`: the user asked, so a failure is always to be shown.
+   */
+  updateCheck: (manual: boolean) => invoke<CheckedUpdate>('update_check', { manual }),
+  /**
+   * Downloads the release found, its signature checked, kept by the backend until it installs: ready once it is the
+   * one, superseded when a newer one took its place meanwhile.
+   */
+  updateDownload: (id: number, manual: boolean) => invoke<DownloadedUpdate>('update_download', { id, manual }),
   updateClose: (id: number) => invoke<void>('update_close', { id }),
   /** « Redémarrer maintenant »: the update downloaded installs, the app stopped cleanly first, and the app starts again. */
   updateRestart: () => invoke<void>('update_restart'),
