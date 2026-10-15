@@ -6,7 +6,7 @@ export default defineZone('mcp', {
     title: 'Escouade in Claude',
     enable: 'Claude and the agents can drive Escouade',
     enableDesc:
-      'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota. An agent already running gets the tools the next time its process starts.',
+      'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
     declared: 'Declared in Claude · {accounts}',
     account: '{name} account',
     working: 'Declaring in Claude…',
@@ -50,6 +50,13 @@ export default defineZone('mcp', {
     answerQuestion: 'Answer a question',
     reportProgress: 'Report progress',
     splitTicket: 'Split its ticket',
+    approveTicket: 'Approve a ticket',
+    rejectTicket: 'Send a ticket back',
+    resumeTicket: 'Resume a ticket',
+    resolveConflict: 'Resolve a conflict',
+    dismissBlock: 'Dismiss a block',
+    deleteTicket: 'Delete a ticket',
+    waitTicket: 'Wait for tickets',
   },
   progress: {
     label: 'What the agent says it is doing',

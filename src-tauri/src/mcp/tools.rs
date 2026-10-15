@@ -17,18 +17,23 @@
 //!
 //! A call the router refuses before its tool (unknown, arguments that do not fit the schema) is
 //! logged by `call_tool`. What a tool's arguments name is found by `resolve`; what the reading
-//! ones answer is built by `read`, and what the ones that act do is in `act`.
+//! ones answer is built by `read` (`wait_ticket`, which waits for a change, by `wait`), and what
+//! the ones that act do is in `act`.
 //!
-//! None runs a command or the tests, merges or deletes. Two answer an agent's request as the user
-//! does in the window (`answer_permission`, `answer_question`), and never for good: a lasting
-//! permission rule (« Toujours autoriser ») stays the user's to give there. `set_board` changes
-//! what the window's Kanban settings do, but not what runs without a question: the mode that asks
-//! for no permission at all (`bypassPermissions`) and the test command stay the user's to give
-//! there too. `tests::EXPOSED` lists exactly what the router holds, so a tool is added knowingly.
+//! None runs a command of its own. The ones of the board's flow do what the window's buttons do,
+//! through the same functions of the core: `approve_ticket` runs the tests (the command the user
+//! gave) and merges (or pushes), and `delete_ticket` deletes, each refused where the window refuses.
+//! Two answer an agent's request as the user does in the window (`answer_permission`,
+//! `answer_question`), and never for good: a lasting permission rule (« Toujours autoriser ») stays
+//! the user's to give there. `set_board` changes what the window's Kanban settings do, but not what
+//! runs without a question: the mode that asks for no permission at all (`bypassPermissions`) and
+//! the test command stay the user's to give there too. `tests::EXPOSED` lists exactly what the
+//! router holds, so a tool is added knowingly.
 
 use super::act;
 use super::activity::{self, Outcome};
 use super::read;
+use super::wait;
 use super::Caller;
 use crate::core::Core;
 use crate::model::Column;
@@ -374,6 +379,22 @@ pub struct AnswerQuestionArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct WaitTicketArgs {
+    #[schemars(
+        description = "The tickets to watch (20 at most): their keys (like ATL-12, in any case) or their ids."
+    )]
+    pub tickets: Vec<String>,
+    #[schemars(
+        description = "The most seconds to wait: 120 by default, 240 at most (a longer wait is cut to it), 1 at least."
+    )]
+    pub timeout: Option<u64>,
+    #[schemars(
+        description = "The since the previous wait_ticket answered, or that an action on the ticket gave (approve_ticket, reject_ticket, resume_ticket, resolve_conflict, dismiss_block: the ticket as it was before), as it was given, even across other tool calls: a ticket whose state differs from the one it holds is answered at once, a change made between the two calls included. Leave it out and each ticket's state at the call is the one compared."
+    )]
+    pub since: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateTicketArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -584,6 +605,58 @@ pub struct SetBoardArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ApproveTicketArgs {
+    #[schemars(
+        description = "The ticket to approve: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RejectTicketArgs {
+    #[schemars(
+        description = "The ticket to send back: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+    #[schemars(
+        description = "What is wrong, or what to do: the agent reads it as test feedback, followed by who sent the ticket back."
+    )]
+    pub comment: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ResumeTicketArgs {
+    #[schemars(
+        description = "The blocked In progress ticket to take up: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ResolveConflictArgs {
+    #[schemars(
+        description = "The To review ticket stopped on a merge conflict: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DismissBlockArgs {
+    #[schemars(
+        description = "The blocked To review ticket: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteTicketArgs {
+    #[schemars(
+        description = "The ticket to delete, in any column: its key (like ATL-12, in any case) or its id."
+    )]
+    pub ticket: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateAgentArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -704,7 +777,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, the model and the effort of its agent when start_ticket gave it its own (left out otherwise), and the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none). An agent of Escouade may leave out the ticket to read its own.",
+        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, the model and the effort of its agent when start_ticket gave it its own (left out otherwise), the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none), and where it stands in the board's flow: its agent (id, name, status, and how many requests wait for an answer; null before it starts), its branch and its worktree, those of its agent (null before it starts; kept once the ticket is done, when the worktree may be gone), why it is blocked (blocked) and whether that is a merge conflict (conflict), the validation step running (step: Validation… or Approving…, Tests…, Commit…, Merge…, Push…) and, once it is approved, its outcome (text, the pull request's url, and the commit it made on the target branch). An agent of Escouade may leave out the ticket to read its own.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_ticket(
@@ -772,6 +845,25 @@ impl<R: Runtime> Tools<R> {
             ("project", args.project.as_deref()),
         ]);
         ctx.reply("list_requests", &asked, result)
+    }
+
+    #[tool(
+        description = "Wait until one of the tickets named changes, then say what changed: its column, its block (blocked, conflict), its agent starting or ceasing to wait for an answer (waiting: list_requests gives the requests), its agent coming to rest in To review (resting: the ticket can be approved), or the ticket deleted (gone). Answers at the first change, or after timeout seconds (120 by default, 240 at most) with changed false. For each change, what changed (what) and how the ticket was (before); every ticket named is given as it is now (key, id, column, blocked, conflict, step, waiting, resting, gone). Each answer gives since: pass it to the next wait_ticket (even across other tool calls) and a ticket whose state differs from the one it holds is answered at once, a change made between the two calls included; without since, each ticket's state at the call is the one compared.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn wait_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        context: RequestContext<RoleServer>,
+        Parameters(args): Parameters<WaitTicketArgs>,
+    ) -> CallToolResult {
+        let tickets = args.tickets.join(", ");
+        let timeout = args.timeout.map(|t| t.to_string());
+        let asked = summary(&[("tickets", Some(&tickets)), ("timeout", timeout.as_deref())]);
+        // Cancelled when the client leaves: its connection closes (a stateless request has no
+        // other way to be cancelled).
+        let result = wait::wait(&ctx.core, args, context.ct.cancelled()).await;
+        ctx.reply("wait_ticket", &asked, result)
     }
 
     #[tool(
@@ -862,6 +954,117 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = act::start_ticket(&ctx.core, &ctx.caller, args);
         ctx.reply("start_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Approve a To review ticket, as the Approve… button does: the tests first when the project's board runs them, then the commit, then what its board settings say (merge into the target branch, push the branch and open a pull request, push the branch, or keep it); a ticket whose branch brings nothing more than its target (merged already) is closed without merging again. Answers once the approval has started, not at its end: follow it with wait_ticket or get_ticket (step, blocked, column, outcome). Failing tests send the ticket back In progress to its agent with their output, as the window does; any other step that fails leaves the ticket in To review, blocked with the reason. Refused for a ticket that is not in To review, while its agent works, while its approval already runs, for your own ticket when you are an agent (it would merge your work without a review), and for a ticket of another project when you are an agent. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows, a fast approval included.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = true
+        )
+    )]
+    async fn approve_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ApproveTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::approve_ticket(&ctx.core, &ctx.caller, args);
+        ctx.reply("approve_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Send a To review ticket back for rework, as the Send back button does: it goes back In progress with the same agent and worktree, on loop 1 again, and the comment is sent to its agent, which reads it as test feedback followed by who sent the ticket back (sent back by <you> through Escouade), then fixes it, checks every criterion again and ends with its report. Refused for a blank comment, for a ticket that is not in To review or has no agent, while its agent works (wait for the end of its turn), while its approval runs, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn reject_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<RejectTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("ticket", Some(&args.ticket)),
+            ("comment", Some(args.comment.trim())),
+        ]);
+        let result = act::reject_ticket(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("reject_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Take up a blocked In progress ticket, as the Resume button does: its agent goes on where it was (an agent that never got the ticket gets it, with its description and criteria), or, when its agent is gone, the ticket starts again with a new agent even if the autopilot is off. Refused for a ticket that is not In progress or not blocked, while its agent waits for its quota (the answer says until when), while the Claude account that would take it is held back (past its quota threshold or at its usage limit: the answer says until when), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn resume_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ResumeTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::resume_ticket(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("resume_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Hand a merge conflict to the ticket's agent, as the \"Let the agent resolve\" button does on a To review ticket whose approval stopped on a conflict: the target branch is merged into the ticket's branch with the conflicts left in its worktree (with the rebase strategy, the agent is asked to rebase instead), the ticket goes back In progress on loop 1, and the agent is asked to resolve the conflicts and to end with its report. Refused for a ticket that is not in To review or has no conflict, while its approval runs, while its agent works, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. It uses the quota. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn resolve_conflict(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ResolveConflictArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::resolve_conflict(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("resolve_conflict", &asked, result)
+    }
+
+    #[tool(
+        description = "Dismiss the block of a To review ticket (a merge conflict, a step that failed), as the Cancel button does: the block goes and nothing else changes, the ticket stays in To review to be approved again, sent back, or its conflict handed to its agent. Refused for a ticket that is not in To review or not blocked, while its approval runs, for your own ticket when you are an agent, and for a ticket of another project when you are an agent. Answers the ticket as get_ticket does, and since, the cursor of the ticket as it was before: pass it to wait_ticket to be told at once of what follows.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn dismiss_block(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DismissBlockArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::dismiss_block(&ctx.core, &ctx.caller, args);
+        ctx.reply("dismiss_block", &asked, result)
+    }
+
+    #[tool(
+        description = "Delete a ticket of any column, as the window's Delete does: the card is gone for good and this cannot be undone; a ticket In progress or To review has its agent archived (its worktree is kept); the tickets that came after it no longer wait for it. Refused while the ticket's approval runs (wait for its end), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. Answers the ticket's key, deleted (true) and agentArchived (whether its agent was archived with it).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_ticket(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DeleteTicketArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let result = act::delete_ticket(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("delete_ticket", &asked, result)
     }
 
     #[tool(

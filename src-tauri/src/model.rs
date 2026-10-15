@@ -556,6 +556,10 @@ pub struct Ticket {
     /// is quoted then).
     pub outcome_claude: Option<String>,
     pub outcome_url: Option<String>,
+    /// The commit its merge made on the target (the merge commit, the squash commit, or the last
+    /// commit rebased); None when it was not merged (pull request, push, kept, nothing to merge)
+    /// or before 1.8.
+    pub outcome_commit: Option<String>,
     /// "Lancer" was clicked while the autopilot is off.
     pub forced: bool,
     /// Its agent was reminded once to end with its report.
@@ -2271,6 +2275,28 @@ mod tests {
             back.outcome_claude.as_deref(),
             Some("⤵ Merged into main · squash")
         );
+    }
+
+    #[test]
+    fn a_ticket_done_before_1_8_has_no_merge_commit_and_one_kept_is_saved_and_read_back() {
+        // A state.json of 1.7: its done tickets have an `outcome` and no commit.
+        let s: PersistedState = serde_json::from_value(json!({
+            "projects": [],
+            "tickets": [{
+                "id": "t1", "projectId": "p1", "key": "DEM-1", "column": "done",
+                "outcome": "⤵ Mergé dans main · squash"
+            }]
+        }))
+        .unwrap();
+        assert_eq!(s.tickets[0].outcome_commit, None);
+        let v = serde_json::to_value(Ticket {
+            outcome_commit: Some("0a1b2c".into()),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["outcomeCommit"], json!("0a1b2c"));
+        let back: Ticket = serde_json::from_value(v).unwrap();
+        assert_eq!(back.outcome_commit.as_deref(), Some("0a1b2c"));
     }
 
     #[test]

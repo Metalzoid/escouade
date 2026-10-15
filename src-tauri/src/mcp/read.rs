@@ -295,6 +295,43 @@ pub(crate) struct TicketView {
     #[serde(skip_serializing_if = "String::is_empty")]
     effort: String,
     external: Option<External>,
+    /// Its agent: None before it starts, and still named once the ticket is done (archived).
+    agent: Option<TicketAgent>,
+    /// Its agent's branch, else the existing one it takes up; None before its agent starts. Kept
+    /// once the ticket is done.
+    branch: Option<String>,
+    /// Its agent's worktree, kept once the ticket is done even when the cleanup removed it.
+    worktree: Option<String>,
+    /// Why it no longer moves on by itself.
+    blocked: Option<String>,
+    /// The block is a merge conflict, which `resolve_conflict` hands to its agent.
+    conflict: bool,
+    /// The validation step running (« Validation… » or « Approving… », the first being stored in
+    /// the interface's language of the moment, « Tests… », « Commit… », « Merge… », « Push… »):
+    /// None when no approval runs.
+    step: Option<String>,
+    /// What its approval did, once it is done.
+    outcome: Option<Outcome>,
+}
+
+/// A ticket's agent, as `get_ticket` sums it up.
+#[derive(Serialize)]
+struct TicketAgent {
+    id: String,
+    /// None, with the status, for an agent that no longer exists.
+    name: Option<String>,
+    status: Option<AgentStatus>,
+    /// How many requests wait for an answer, as `list_agents` counts them.
+    requests: usize,
+}
+
+/// What a ticket's approval did: what the card says, the pull request it opened, the commit it
+/// made on the target.
+#[derive(Serialize)]
+struct Outcome {
+    text: String,
+    url: Option<String>,
+    commit: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -314,15 +351,34 @@ struct External {
     error: Option<String>,
 }
 
-/// `t` as `get_ticket` answers it. Reads the tickets (the keys of those it comes after): never
-/// call it with the tickets' lock held (a write one would deadlock, a read one too behind a
-/// writer waiting for it).
+/// `t` as `get_ticket` answers it. Reads the tickets (the keys of those it comes after) and its
+/// agent: never call it with the tickets' lock held (a write one would deadlock, a read one too
+/// behind a writer waiting for it), nor with that agent's.
 pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView {
     let keys = ticket_keys(core);
     let keys: HashMap<&str, &str> = keys
         .iter()
         .map(|(id, key)| (id.as_str(), key.as_str()))
         .collect();
+    let mut worktree = None;
+    let agent = t.agent_id.as_ref().map(|id| {
+        let Ok(h) = core.agent(id) else {
+            return TicketAgent {
+                id: id.clone(),
+                name: None,
+                status: None,
+                requests: 0,
+            };
+        };
+        let rt = h.lock();
+        worktree = rt.meta.worktree.clone();
+        TicketAgent {
+            id: id.clone(),
+            name: Some(rt.meta.name.clone()),
+            status: Some(rt.meta.status),
+            requests: answerable_views(&rt).count(),
+        }
+    });
     TicketView {
         id: t.id.clone(),
         key: t.key.clone(),
@@ -343,6 +399,20 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
             key: e.key.clone(),
             url: e.url.clone(),
             error: e.error.clone(),
+        }),
+        agent,
+        branch: worktree
+            .as_ref()
+            .map(|w| w.branch.clone())
+            .or_else(|| Some(t.branch.clone()).filter(|b| !b.is_empty())),
+        worktree: worktree.map(|w| w.path),
+        blocked: t.blocked.clone(),
+        conflict: t.conflict,
+        step: t.step.clone(),
+        outcome: t.outcome.as_ref().map(|text| Outcome {
+            text: text.clone(),
+            url: t.outcome_url.clone(),
+            commit: t.outcome_commit.clone(),
         }),
     }
 }

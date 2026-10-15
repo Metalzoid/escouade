@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::test::mock_app;
 
-fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDraft {
+pub(crate) fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDraft {
     TicketDraft {
         title: title.into(),
         description: String::new(),
@@ -47,13 +47,13 @@ impl Harness {
         self.core.ticket(id).unwrap()
     }
 
-    fn set_board(&self, project_id: &str, f: impl FnOnce(&mut BoardSettings)) {
+    pub(crate) fn set_board(&self, project_id: &str, f: impl FnOnce(&mut BoardSettings)) {
         let mut s = self.core.project(project_id).unwrap().board;
         f(&mut s);
         self.core.board_set(project_id, s).unwrap();
     }
 
-    async fn wait_ticket(&self, id: &str, what: &str, pred: impl Fn(&Ticket) -> bool) {
+    pub(crate) async fn wait_ticket(&self, id: &str, what: &str, pred: impl Fn(&Ticket) -> bool) {
         self.wait(what, |h| pred(&h.ticket(id))).await
     }
 
@@ -61,7 +61,7 @@ impl Harness {
         self.agent(self.ticket(ticket_id).agent_id.as_deref().unwrap())
     }
 
-    fn worktree_of(&self, ticket_id: &str) -> PathBuf {
+    pub(crate) fn worktree_of(&self, ticket_id: &str) -> PathBuf {
         PathBuf::from(self.agent_of(ticket_id).worktree.unwrap().path)
     }
 
@@ -93,7 +93,7 @@ impl Harness {
     }
 
     /// The app's settings changed by `f`, saved as the window does.
-    fn set_settings(&self, f: impl FnOnce(&mut Settings)) {
+    pub(crate) fn set_settings(&self, f: impl FnOnce(&mut Settings)) {
         let mut s = self.core.settings.read().clone();
         f(&mut s);
         self.core.save_settings(s).unwrap();
@@ -169,14 +169,14 @@ impl Harness {
     }
 
     /// Claude Code can no longer be found: no agent process starts.
-    fn lose_claude(&self) {
+    pub(crate) fn lose_claude(&self) {
         self.core.settings.write().claude_path =
             self.dir.join("absent.cmd").to_string_lossy().to_string();
     }
 
     /// Waits until the fake CLI in `dir` read a message starting with `start` (it logs what it
     /// reads: right after a send, it may not have yet).
-    async fn wait_sent(&self, dir: &Path, start: &str) {
+    pub(crate) async fn wait_sent(&self, dir: &Path, start: &str) {
         self.wait("message read by the agent", |h| {
             h.stdin_messages(dir).iter().any(|m| {
                 m["message"]["content"]
@@ -223,7 +223,7 @@ impl Harness {
 }
 
 /// Waits until the ticket's agent is running a turn.
-async fn wait_running(h: &Harness, ticket_id: &str) -> String {
+pub(crate) async fn wait_running(h: &Harness, ticket_id: &str) -> String {
     h.wait("turn running", |h| {
         h.ticket(ticket_id)
             .agent_id
@@ -2558,7 +2558,7 @@ async fn resuming_a_ticket_whose_agent_waits_for_its_quota_is_refused() {
 // ---------- validation ----------
 
 /// A ticket of `title` that reached "À tester", and its worktree ([ok]: in one loop).
-async fn reviewed(h: &Harness, project_id: &str, title: &str) -> (Ticket, PathBuf) {
+pub(crate) async fn reviewed(h: &Harness, project_id: &str, title: &str) -> (Ticket, PathBuf) {
     let t = h
         .core
         .ticket_create(project_id, draft(title, &[], 5))
@@ -3060,6 +3060,58 @@ async fn a_ticket_with_nothing_to_merge_is_done_without_a_change() {
 }
 
 #[tokio::test]
+async fn a_merged_ticket_keeps_the_commit_its_merge_made_on_the_target() {
+    for strategy in ["merge", "squash", "rebase"] {
+        let h = harness(&format!("tk-outcome-commit-{strategy}"));
+        let (p, r) = h.project(false).await;
+        h.set_board(&p.id, |s| s.strategy = strategy.into());
+        let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+        // The target moved on meanwhile, so each strategy has a commit of its own to make.
+        commit_change(&r, "const a = 2;\n", "main avance");
+        let before = git(&r, &["rev-parse", "main"]);
+        h.core.ticket_approve(&t.id).await.unwrap();
+        let t = h.ticket(&t.id);
+        assert_eq!(t.column, Column::Done, "{strategy}: {:?}", t.blocked);
+        // The target's head: the merge commit, the squash commit, or the last commit rebased.
+        let head = git(&r, &["rev-parse", "refs/heads/main"]);
+        assert_ne!(head, before, "{strategy}");
+        assert_eq!(
+            t.outcome_commit.as_deref(),
+            Some(head.as_str()),
+            "{strategy}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_ticket_that_was_not_merged_keeps_no_commit() {
+    // Kept, pushed, proposed (without gh: finished in the browser), and nothing to merge.
+    for (case, action) in [
+        ("keep", "keep"),
+        ("push", "push"),
+        ("pr", "pr"),
+        ("nothing", "merge"),
+    ] {
+        let h = harness(&format!("tk-outcome-no-commit-{case}"));
+        let (p, r) = h.project(false).await;
+        github_remote(&h, &r);
+        *h.core.gh.write() = None;
+        h.set_board(&p.id, |s| s.action = action.into());
+        let title = if case == "nothing" {
+            "Rien à changer [ok] [rien]"
+        } else {
+            "Fichier [ok]"
+        };
+        let (t, _) = reviewed(&h, &p.id, title).await;
+        h.core.ticket_approve(&t.id).await.unwrap();
+        let t = h.ticket(&t.id);
+        assert_eq!(t.column, Column::Done, "{case}: {:?}", t.blocked);
+        assert!(t.outcome.is_some(), "{case}");
+        assert_eq!(t.outcome_commit, None, "{case}");
+    }
+}
+
+#[tokio::test]
 async fn a_second_validation_while_one_runs_is_refused() {
     let h = harness("tk-double");
     let (p, r) = h.project(false).await;
@@ -3070,6 +3122,96 @@ async fn a_second_validation_while_one_runs_is_refused() {
     assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
     // Done: no third one either.
     assert!(h.core.ticket_approve(&t.id).await.is_err());
+}
+
+#[tokio::test]
+async fn an_approval_not_waited_for_is_refused_as_the_windows_then_runs_in_the_background() {
+    let h = harness("tk-approve-detached");
+    let (p, r) = h.project(false).await;
+    let go = h.dir.join("go");
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = gated_tests(&go, 0);
+    });
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let works = || h.core.works.load(Ordering::Acquire);
+    assert_eq!(works(), 0);
+    // Refused at once, as the window's, with nothing started: no work counted either.
+    let e = h.core.ticket_approve_detached("absent").unwrap_err();
+    assert_eq!(format!("{e:#}"), "ticket introuvable");
+    assert_eq!(works(), 0);
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Doing;
+            Ok(())
+        })
+        .unwrap();
+    let e = h.core.ticket_approve_detached(&t.id).unwrap_err();
+    assert_eq!(format!("{e:#}"), "Ce ticket n'est pas à tester.");
+    assert_eq!(works(), 0);
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(h.ticket(&t.id).step, None);
+    // It answers while the tests still run: the approval is under way, its end is not waited for.
+    h.core.ticket_approve_detached(&t.id).unwrap();
+    // Counted from the moment the approval is held, not from when its task begins: the app does not
+    // restart for an update in between.
+    assert!(works() > 0);
+    assert_eq!(h.ticket(&t.id).column, Column::Review);
+    assert!(h.ticket(&t.id).step.is_some());
+    h.wait_ticket(&t.id, "tests running", |t| {
+        t.step.as_deref() == Some("Tests…")
+    })
+    .await;
+    // The app does not restart for an update meanwhile, and a second approval refused leaves the
+    // count as it is.
+    let counted = works();
+    assert!(counted > 0);
+    let e = h.core.ticket_approve_detached(&t.id).unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "La validation de ce ticket est déjà en cours."
+    );
+    assert_eq!(works(), counted);
+    // The tests pass: it goes on to the end by itself, as an approval awaited does.
+    std::fs::write(&go, "").unwrap();
+    h.wait_ticket(&t.id, "done", |t| t.column == Column::Done)
+        .await;
+    let done = h.ticket(&t.id);
+    assert_eq!(done.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+    h.wait("the work to be over", |h| {
+        h.core.works.load(Ordering::Acquire) == 0
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn an_approval_not_waited_for_that_fails_blocks_the_ticket_and_tells_the_user() {
+    let h = harness("tk-approve-detached-fails");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // The project's folder has changes of its own on the target: the merge is refused.
+    std::fs::write(r.join("src").join("app.ts"), "const a = 99; // en cours\n").unwrap();
+    h.core.ticket_approve_detached(&t.id).unwrap();
+    let reason = "Le dossier du projet a des modifications non commitées sur main";
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.step.as_deref(), t.blocked.as_deref()),
+        (Column::Review, None, Some(reason))
+    );
+    h.wait("the alert", |h| {
+        h.alerts()
+            .iter()
+            .any(|a| a.ends_with(&format!("DEM-1 bloqué : {reason}")))
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -3212,7 +3354,7 @@ async fn validating_left_as_is_keeps_the_agent_and_its_changes() {
 }
 
 /// A test command that waits for the file `go`, then ends with `code`.
-fn gated_tests(go: &Path, code: u8) -> String {
+pub(crate) fn gated_tests(go: &Path, code: u8) -> String {
     format!(
         "node -e \"const t = setInterval(() => {{ if (require('fs').existsSync('{}')) {{ clearInterval(t); process.exitCode = {code}; }} }}, 20)\"",
         go.to_string_lossy().replace('\\', "/")
@@ -3948,7 +4090,7 @@ async fn a_copied_file_the_agent_committed_is_neither_pushed_nor_proposed() {
 }
 
 /// A ticket to test whose change of src/app.ts conflicts with one committed on main meanwhile.
-async fn conflicting(h: &Harness, project_id: &str, r: &Path) -> (Ticket, PathBuf) {
+pub(crate) async fn conflicting(h: &Harness, project_id: &str, r: &Path) -> (Ticket, PathBuf) {
     let (t, wt) = reviewed(h, project_id, "Conflit [ok]").await;
     std::fs::write(wt.join("src").join("app.ts"), "const a = 2;\n").unwrap();
     commit_change(r, "const a = 3;\n", "main change");
@@ -4190,7 +4332,8 @@ async fn a_rejected_ticket_goes_back_to_the_same_agent_with_the_comment() {
     let (p, _) = h.project(false).await;
     let (t, wt) = reviewed(&h, &p.id, "Renvoi [ok]").await;
     let agent = h.ticket(&t.id).agent_id;
-    assert!(h.core.ticket_reject(&t.id, "  ").await.is_err());
+    let e = h.core.ticket_reject(&t.id, "  ").await.unwrap_err();
+    assert_eq!(format!("{e:#}"), "Dis ce qui ne va pas.");
     assert_eq!(h.ticket(&t.id).column, Column::Review);
     // Not while it is being validated.
     let validation = |step: Option<&str>| {

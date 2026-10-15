@@ -1118,12 +1118,14 @@ fn strategy_label(strategy: &str) -> &'static str {
 
 /// What became of a ticket approved, written in the two languages it is read in: the interface's
 /// (`ui`, the card) and that of the texts for Claude (`claude`, what the comment published for the
-/// team quotes: in the card's, it would mix two languages), with the link that goes with it.
+/// team quotes: in the card's, it would mix two languages), with the link that goes with it and,
+/// for a merge, the commit it made on the target.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Outcome {
     pub ui: String,
     pub claude: String,
     pub url: Option<String>,
+    pub commit: Option<String>,
 }
 
 impl Outcome {
@@ -1133,6 +1135,7 @@ impl Outcome {
             ui: text(i18n::ui()),
             claude: text(claude),
             url: None,
+            commit: None,
         }
     }
 
@@ -1141,6 +1144,11 @@ impl Outcome {
             url: Some(url),
             ..self
         }
+    }
+
+    /// The commit the merge made on the target, when it can be read.
+    pub fn with_commit(self, commit: Option<String>) -> Self {
+        Self { commit, ..self }
     }
 }
 

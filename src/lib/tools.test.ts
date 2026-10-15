@@ -107,6 +107,14 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__answer_question')).toBe('Escouade · Répondre à une question');
     expect(toolLabel('mcp__escouade__get_board')).toBe('Escouade · Lire les réglages du Kanban');
     expect(toolLabel('mcp__escouade__set_board')).toBe('Escouade · Régler le Kanban');
+    // The flow of the Kanban: approve, send back, resume, conflicts, blocks, delete, wait.
+    expect(toolLabel('mcp__escouade__approve_ticket')).toBe('Escouade · Valider un ticket');
+    expect(toolLabel('mcp__escouade__reject_ticket')).toBe('Escouade · Renvoyer un ticket');
+    expect(toolLabel('mcp__escouade__resume_ticket')).toBe('Escouade · Reprendre un ticket');
+    expect(toolLabel('mcp__escouade__resolve_conflict')).toBe('Escouade · Résoudre un conflit');
+    expect(toolLabel('mcp__escouade__dismiss_block')).toBe('Escouade · Écarter un blocage');
+    expect(toolLabel('mcp__escouade__delete_ticket')).toBe('Escouade · Supprimer un ticket');
+    expect(toolLabel('mcp__escouade__wait_ticket')).toBe('Escouade · Attendre des tickets');
     // One this window does not know yet: as Claude names it.
     expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
     // Another server's keep their names.
@@ -179,6 +187,13 @@ describe('the tools of Escouade’s own server', () => {
     setLang('en');
     expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Create a ticket');
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Start an agent');
+    expect(toolLabel('mcp__escouade__approve_ticket')).toBe('Escouade · Approve a ticket');
+    expect(toolLabel('mcp__escouade__reject_ticket')).toBe('Escouade · Send a ticket back');
+    expect(toolLabel('mcp__escouade__resume_ticket')).toBe('Escouade · Resume a ticket');
+    expect(toolLabel('mcp__escouade__resolve_conflict')).toBe('Escouade · Resolve a conflict');
+    expect(toolLabel('mcp__escouade__dismiss_block')).toBe('Escouade · Dismiss a block');
+    expect(toolLabel('mcp__escouade__delete_ticket')).toBe('Escouade · Delete a ticket');
+    expect(toolLabel('mcp__escouade__wait_ticket')).toBe('Escouade · Wait for tickets');
     expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
   });
 });

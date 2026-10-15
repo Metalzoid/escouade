@@ -8,7 +8,7 @@ export default {
     /** The one switch (ESC-91): Claude Code outside Escouade and every agent of Escouade, each with a token of its own. */
     enable: 'Claude et les agents peuvent piloter Escouade',
     enableDesc:
-      'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+      'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
     /** `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
     declared: 'Déclaré dans Claude · {accounts}',
     account: 'compte {name}',
@@ -57,6 +57,13 @@ export default {
     answerQuestion: 'Répondre à une question',
     reportProgress: 'Donner son avancement',
     splitTicket: 'Découper son ticket',
+    approveTicket: 'Valider un ticket',
+    rejectTicket: 'Renvoyer un ticket',
+    resumeTicket: 'Reprendre un ticket',
+    resolveConflict: 'Résoudre un conflit',
+    dismissBlock: 'Écarter un blocage',
+    deleteTicket: 'Supprimer un ticket',
+    waitTicket: 'Attendre des tickets',
   },
   progress: {
     /** What a status line an agent reported (`report_progress`) is, for assistive technologies; the line is the agent's own words. */

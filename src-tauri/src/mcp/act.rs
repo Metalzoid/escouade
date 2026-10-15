@@ -24,7 +24,15 @@
 //!   user's), never by the agent that asked, and only once: a request that no longer waits (the user
 //!   or another client answered it, the agent stopped) or one of an agent in the Claude Code view
 //!   (its interface asks in its terminal) is refused with the reason. The card of the conversation
-//!   says who answered, and a refusal tells Claude who refused.
+//!   says who answered, and a refusal tells Claude who refused;
+//! - the tools of the board's flow (`approve_ticket`, `reject_ticket`, `resume_ticket`,
+//!   `resolve_conflict`, `dismiss_block`, `delete_ticket`) act as the window's buttons do and are
+//!   refused where the window refuses, in its words (`delete_ticket` also while the ticket's approval
+//!   runs: it would go on without it); all but the last answer the ticket and its `since`, for
+//!   `wait_ticket`. An agent never approves nor sends back its own ticket, nor acts on it with the
+//!   others: that is the user's, or another client's. What the flow sends to an agent (a ticket sent
+//!   back, resumed, a conflict handed over) goes only while the agent's account is not held back, and
+//!   a ticket sent back says who sent it back.
 //!
 //! A refusal (`ToolError::Refused`) is a guard saying no; a failure (`ToolError::Failed`) is
 //! something asked that does not fit (a name, an empty title…). `report_progress` and
@@ -32,15 +40,17 @@
 
 use super::activity;
 use super::read::{
-    answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys,
+    answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys, TicketView,
 };
 use super::resolve;
 use super::tools::{
-    AnswerPermissionArgs, AnswerQuestionArgs, CreateAgentArgs, CreateTicketArgs, DecisionArg,
-    MoveTicketArgs, PositionArg, QuestionAnswer, ReportProgressArgs, SendMessageArgs, SetBoardArgs,
-    SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateTicketArgs,
-    SPLIT_MAX,
+    AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateTicketArgs,
+    DecisionArg, DeleteTicketArgs, DismissBlockArgs, MoveTicketArgs, PositionArg, QuestionAnswer,
+    RejectTicketArgs, ReportProgressArgs, ResolveConflictArgs, ResumeTicketArgs, SendMessageArgs,
+    SetBoardArgs, SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError,
+    UpdateTicketArgs, SPLIT_MAX,
 };
+use super::wait;
 use super::Caller;
 use crate::accounts;
 use crate::agent::Waiting;
@@ -48,8 +58,10 @@ use crate::board::{Held, MoveTo};
 use crate::core::{supports_effort, AgentOptions, Core};
 use crate::git;
 use crate::i18n;
-use crate::model::{BoardSettings, Column, PauseReason, Project, PROGRESS_LINE_MAX};
-use crate::tickets::{ticket_agent_options, title_missing, TicketDraft};
+use crate::model::{BoardSettings, Column, PauseReason, Project, Ticket, PROGRESS_LINE_MAX};
+use crate::telemetry::Event;
+use crate::tickets::{comment_missing, ticket_agent_options, title_missing, Refusal, TicketDraft};
+use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
 use tauri::Runtime;
@@ -911,6 +923,274 @@ pub(super) async fn set_board<R: Runtime>(
     let saved = core.board_set(&project.id, changed).map_err(failure)?;
     let changes = board_changes(i18n::ui(), &board, &saved.board);
     Ok((json(&board_view(core, &saved).await)?, changes))
+}
+
+// ---------- the board's flow ----------
+
+/// An agent does not act on its own ticket: the one it works on (its ticket names it, or its own
+/// record names the ticket). `why` says it, in the words of the tool.
+fn not_own_ticket<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    t: &Ticket,
+    why: String,
+) -> Result<(), ToolError> {
+    let Caller::Agent(id) = caller else {
+        return Ok(());
+    };
+    let own = t.agent_id.as_deref() == Some(id.as_str())
+        || core
+            .agent(id)
+            .is_ok_and(|h| h.lock().meta.ticket_id.as_deref() == Some(t.id.as_str()));
+    if own {
+        return Err(ToolError::Refused(why));
+    }
+    Ok(())
+}
+
+/// What an agent is told when it acts on its own ticket with a tool of the flow that is neither the
+/// approval nor the sending back.
+fn own_ticket_with_this_tool() -> String {
+    tr!(
+        "Un agent n’agit pas sur son propre ticket avec cet outil : c’est à l’utilisateur ou à un autre client de le faire.",
+        "An agent does not act on its own ticket with this tool: the user or another client does."
+    )
+}
+
+/// The ticket's agent, unless it is gone or archived: the one a message of the flow reaches.
+fn live_agent_of<R: Runtime>(core: &Core<R>, t: &Ticket) -> Option<resolve::AgentRef> {
+    let h = core.agent(t.agent_id.as_deref()?).ok()?;
+    let rt = h.lock();
+    (!rt.meta.archived).then(|| resolve::AgentRef::of(&rt.meta))
+}
+
+/// The agent is at work: the core refuses first, in the window's words, held account or not.
+fn at_work<R: Runtime>(core: &Core<R>, agent: &resolve::AgentRef) -> bool {
+    core.agent(&agent.id)
+        .is_ok_and(|h| h.lock().meta.status.is_active())
+}
+
+/// The error of a call of the core that ends by sending the ticket's agent a message
+/// (`Core::send_or_block`): the ticket moves first (sent back, unblocked, handed over), then is
+/// blocked with the reason when the message fails. Once it differs from `before` in its column or
+/// its block, the call is told as taken into account; else it is the refusal it looks like.
+fn unsent<R: Runtime>(core: &Core<R>, before: &Ticket, e: anyhow::Error) -> ToolError {
+    let moved = core
+        .ticket(&before.id)
+        .is_ok_and(|now| now.column != before.column || now.blocked != before.blocked);
+    if !moved {
+        return refusal(e);
+    }
+    // (The error's own full stop is the sentence's.)
+    let (key, e) = (&before.key, format!("{e:#}"));
+    let e = e.trim_end().trim_end_matches('.');
+    ToolError::Failed(tr!(
+        "{key} a été pris en compte, mais son agent n’a pas reçu le message : {e}. Le ticket est bloqué avec cette raison.",
+        "{key} was taken into account, but its agent did not get the message: {e}. The ticket is blocked with that reason."
+    ))
+}
+
+/// What an action of the flow answers: the ticket as `get_ticket` gives it, and its `since`.
+#[derive(Serialize)]
+struct Answered {
+    #[serde(flatten)]
+    ticket: TicketView,
+    since: String,
+}
+
+/// The ticket as `get_ticket` answers it now, once the core did what was asked, and `since`: the
+/// `wait_ticket` cursor of the ticket as it was before (`wait::since`). What the action sets off
+/// may be over before the client waits for it (a quick approval): from this cursor the wait is told
+/// of it all the same.
+fn answer<R: Runtime>(core: &Core<R>, id: &str, since: String) -> Result<String, ToolError> {
+    let ticket = ticket_view(core, &core.ticket(id).map_err(failure)?);
+    json(&Answered { ticket, since })
+}
+
+/// `approve_ticket`: the window's « Valider… ». Answers once the approval has started: its tests,
+/// commit, merge or push go on in the background, and are followed on the ticket.
+pub(super) fn approve_ticket<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: ApproveTicketArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    // Its own work merged without a review: that is the user's call.
+    not_own_ticket(
+        core,
+        caller,
+        &t,
+        tr!(
+            "Un agent ne valide pas son propre ticket : il fusionnerait son travail sans relecture.",
+            "An agent does not approve its own ticket: it would merge its work without a review."
+        ),
+    )?;
+    let since = wait::since(core, &t);
+    core.ticket_approve_detached(&t.id).map_err(refusal)?;
+    // Counted in the usage statistics once it started, as the window's.
+    core.telemetry.track(Event::TicketApproved);
+    answer(core, &t.id, since)
+}
+
+/// `reject_ticket`: the window's « Renvoyer », the comment going to the ticket's agent followed by
+/// who sent the ticket back.
+pub(super) async fn reject_ticket<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: RejectTicketArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    not_own_ticket(
+        core,
+        caller,
+        &t,
+        tr!(
+            "Un agent ne renvoie pas son propre ticket.",
+            "An agent does not send back its own ticket."
+        ),
+    )?;
+    let said = a.comment.trim().trim_end_matches('.').trim_end();
+    if said.is_empty() {
+        return Err(failure(comment_missing()));
+    }
+    // Where the window would go ahead, the comment reaches the agent: not while its account is held,
+    // unless the agent works, which the core refuses first.
+    if t.column == Column::Review && t.step.is_none() {
+        if let Some(agent) = live_agent_of(core, &t).filter(|a| !at_work(core, a)) {
+            account_not_held(core, &agent)?;
+        }
+    }
+    // Under its author's name: the agent is not to take it for the user's own words.
+    let origin = activity::caller_name(core, Some(caller));
+    let comment = tr_in!(
+        core.lang().claude,
+        "{said} (renvoyé par {origin} via Escouade)",
+        "{said} (sent back by {origin} through Escouade)"
+    );
+    let since = wait::since(core, &t);
+    core.ticket_reject(&t.id, &comment)
+        .await
+        .map_err(|e| unsent(core, &t, e))?;
+    answer(core, &t.id, since)
+}
+
+/// `resume_ticket`: the window's « Reprendre » on a blocked ticket « En cours ».
+pub(super) async fn resume_ticket<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: ResumeTicketArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
+    // Where the window would go ahead: a message to the ticket's agent, else a new agent. One that
+    // waits for its quota is refused by the core, which says until when.
+    if t.column == Column::Doing && t.blocked.is_some() {
+        match live_agent_of(core, &t) {
+            Some(agent) => {
+                let waits = core
+                    .agent(&agent.id)
+                    .is_ok_and(|h| h.lock().meta.resume_at.is_some());
+                if !waits {
+                    account_not_held(core, &agent)?;
+                }
+            }
+            None => not_held(core, &t.project_id)?,
+        }
+    }
+    let since = wait::since(core, &t);
+    core.ticket_resume(&t.id)
+        .await
+        .map_err(|e| unsent(core, &t, e))?;
+    answer(core, &t.id, since)
+}
+
+/// `resolve_conflict`: the window's « L'agent résout » on a ticket « À tester » stopped on a
+/// conflict.
+pub(super) async fn resolve_conflict<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: ResolveConflictArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
+    if t.column != Column::Review {
+        return Err(refusal(Refusal::NotInReview.into()));
+    }
+    if t.step.is_some() {
+        return Err(refusal(Refusal::ApprovingAlready.into()));
+    }
+    if !t.conflict {
+        return Err(ToolError::Refused(tr!(
+            "Ce ticket n’a pas de conflit à résoudre.",
+            "This ticket has no conflict to resolve."
+        )));
+    }
+    // Not while its account is held, unless the agent works, which the core refuses first.
+    if let Some(agent) = live_agent_of(core, &t).filter(|a| !at_work(core, a)) {
+        account_not_held(core, &agent)?;
+    }
+    let since = wait::since(core, &t);
+    core.ticket_resolve_conflict(&t.id)
+        .await
+        .map_err(|e| unsent(core, &t, e))?;
+    answer(core, &t.id, since)
+}
+
+/// `dismiss_block`: the window's « Annuler » on a blocked ticket « À tester ».
+pub(super) fn dismiss_block<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: DismissBlockArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
+    if t.column != Column::Review {
+        return Err(refusal(Refusal::NotInReview.into()));
+    }
+    // The block of a step under way is not there yet, or is the last try's.
+    if t.step.is_some() {
+        return Err(refusal(Refusal::ApprovingAlready.into()));
+    }
+    if t.blocked.is_none() && !t.conflict {
+        return Err(ToolError::Refused(tr!(
+            "Ce ticket n’est pas bloqué.",
+            "This ticket isn’t blocked."
+        )));
+    }
+    let since = wait::since(core, &t);
+    core.ticket_dismiss(&t.id).map_err(refusal)?;
+    answer(core, &t.id, since)
+}
+
+/// `delete_ticket`: the window's « Supprimer », whatever the ticket's column.
+pub(super) async fn delete_ticket<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: DeleteTicketArgs,
+) -> Result<String, ToolError> {
+    let t = resolve::ticket(core, &a.ticket)?;
+    own_project_only(core, caller, &t.project_id)?;
+    not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
+    // Its approval would go on without it: merging a ticket that is gone.
+    if t.step.is_some() {
+        return Err(ToolError::Refused(tr!(
+            "La validation de ce ticket est en cours : attends sa fin pour le supprimer.",
+            "This ticket is being approved: wait for the end of its approval to delete it."
+        )));
+    }
+    // A ticket under way has its agent archived with it.
+    let agent = matches!(t.column, Column::Doing | Column::Review)
+        .then(|| live_agent_of(core, &t))
+        .flatten();
+    core.ticket_delete(&t.id).await.map_err(failure)?;
+    // Said as it is: an agent that could not be archived is only logged by the core.
+    let archived = agent.is_some_and(|a| core.agent(&a.id).is_ok_and(|h| h.lock().meta.archived));
+    json(&json!({ "key": t.key, "deleted": true, "agentArchived": archived }))
 }
 
 // ---------- agents ----------

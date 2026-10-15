@@ -5,7 +5,7 @@
 
 use super::tools::ToolError;
 use crate::core::Core;
-use crate::model::{Project, Ticket};
+use crate::model::{AgentMeta, Project, Ticket};
 use std::collections::HashMap;
 use tauri::Runtime;
 
@@ -60,6 +60,18 @@ pub(crate) struct AgentRef {
     pub created_at: i64,
 }
 
+impl AgentRef {
+    pub(crate) fn of(m: &AgentMeta) -> Self {
+        Self {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            project_id: m.project_id.clone(),
+            archived: m.archived,
+            created_at: m.created_at,
+        }
+    }
+}
+
 /// The agent `asked` names, in `project` when one is given: its id (archived ones too), else its
 /// name in any case among the agents not archived, else among the archived ones.
 pub(crate) fn agent<R: Runtime>(
@@ -78,17 +90,7 @@ pub(crate) fn agent<R: Runtime>(
         .agents
         .read()
         .values()
-        .map(|h| {
-            let rt = h.lock();
-            let m = &rt.meta;
-            AgentRef {
-                id: m.id.clone(),
-                name: m.name.clone(),
-                project_id: m.project_id.clone(),
-                archived: m.archived,
-                created_at: m.created_at,
-            }
-        })
+        .map(|h| AgentRef::of(&h.lock().meta))
         .filter(|a| project.is_none_or(|p| a.project_id == p.id))
         .collect();
     agents.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));

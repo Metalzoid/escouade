@@ -6,8 +6,8 @@ use super::act::{board_change, board_changes};
 use super::tests::{ACTING, AGENTS_ONLY, EXPOSED};
 use super::tools::{SetBoardArgs, ToolError};
 use super::tools_tests::{
-    as_agent, external, keys, last_entry, other_project, project, put, put_agent, read, refused,
-    ticket, Client,
+    as_agent, external, keys, last_entry, link, other_project, project, put, put_agent, read,
+    refused, ticket, Client,
 };
 use crate::accounts::PRINCIPAL;
 use crate::board::clock;
@@ -15,8 +15,11 @@ use crate::core::RESUME_MARGIN_MS;
 use crate::core_tests::{agent_on, git, harness, Harness};
 use crate::model::*;
 use crate::tickets::TicketDraft;
+use crate::tickets_tests::{conflicting, draft, gated_tests, reviewed, wait_running};
 use crate::usage::Reading;
+use base64::Engine;
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
 
 /// A ticket made as the window makes one (at the end of « À faire »).
 async fn made(h: &Harness, p: &Project, title: &str) -> Ticket {
@@ -108,7 +111,24 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         assert!(v["description"].as_str().unwrap().len() > 60, "{name}: {v}");
         // They change something: the client must not take them for reads.
         assert_eq!(v["annotations"]["readOnlyHint"], false, "{name}: {v}");
-        assert_eq!(v["annotations"]["openWorldHint"], false, "{name}: {v}");
+        // Only an approval may reach beyond Escouade (it may push and open a pull request).
+        assert_eq!(
+            v["annotations"]["openWorldHint"],
+            *name == "approve_ticket",
+            "{name}: {v}"
+        );
+        // And of the board's flow, only an approval and a deletion cannot be taken back.
+        let destructive = match *name {
+            "approve_ticket" | "delete_ticket" => Some(true),
+            "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block" => Some(false),
+            _ => None,
+        };
+        if let Some(destructive) = destructive {
+            assert_eq!(
+                v["annotations"]["destructiveHint"], destructive,
+                "{name}: {v}"
+            );
+        }
         for (arg, spec) in schema(name)["properties"].as_object().unwrap() {
             assert!(
                 spec["description"]
@@ -133,6 +153,16 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     assert_eq!(required("stop_agent"), ["agent"]);
     assert_eq!(required("report_progress"), ["line"]);
     assert_eq!(required("split_ticket"), ["tickets"]);
+    assert_eq!(required("reject_ticket"), ["comment", "ticket"]);
+    for name in [
+        "approve_ticket",
+        "resume_ticket",
+        "resolve_conflict",
+        "dismiss_block",
+        "delete_ticket",
+    ] {
+        assert_eq!(required(name), ["ticket"], "{name}");
+    }
     let position = schema("move_ticket")["properties"]["position"].to_string();
     for p in ["top", "bottom", "before"] {
         assert!(position.contains(p), "{position}");
@@ -246,6 +276,13 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "after": [],
             "progress": [],
             "external": null,
+            "agent": null,
+            "branch": null,
+            "worktree": null,
+            "blocked": null,
+            "conflict": false,
+            "step": null,
+            "outcome": null,
         })
     );
     // Made on the board, the window told as it is for a ticket made there.
@@ -2032,6 +2069,1230 @@ async fn a_message_is_refused_when_the_account_of_the_agent_it_goes_to_is_held_a
     )
     .await;
     turn_over(&h, &main.id).await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- the board's flow: approve, send back, resume, resolve, dismiss, delete ----------
+
+/// A ticket of `p` in `column` with an agent of its own, as the app keeps them (no process): the
+/// ticket and the agent name each other.
+fn staffed(h: &Harness, p: &Project, key: &str, column: Column, at: i64) -> (Ticket, AgentMeta) {
+    let t = put(h, ticket(p, key, key, column, at));
+    let a = put_agent(h, p, &format!("agent-{}", key.to_lowercase()), at);
+    link(h, &a.id, &t.id);
+    (stored(h, &t.id), a)
+}
+
+/// `t` with its approval running (at its `step`).
+fn approving(h: &Harness, t: &Ticket, step: &str) -> Ticket {
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.step = Some(step.into());
+            Ok(())
+        })
+        .unwrap();
+    stored(h, &t.id)
+}
+
+/// What an action answered as the ticket's state before it: the one mark of its `since`, the
+/// cursor `wait_ticket` takes.
+fn before_of(answer: &Value) -> Value {
+    let since = answer["since"].as_str().expect("an answer with a since");
+    let marks: Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(since)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(marks.as_array().map(Vec::len), Some(1), "{marks}");
+    marks[0].clone()
+}
+
+/// What `wait_ticket` tells of `key` from the `since` an action answered: at once, well before the
+/// 20 seconds the wait is given.
+async fn told_since(c: &Client, key: &str, since: &Value) -> Value {
+    let began = Instant::now();
+    let v = read(
+        c,
+        "wait_ticket",
+        json!({ "tickets": [key], "timeout": 20, "since": since }),
+    )
+    .await;
+    assert!(began.elapsed() < Duration::from_secs(10), "{v}");
+    v
+}
+
+/// What `tool` turns `args` down with, as the activity log says it (`outcome`: « refused » for a
+/// guard, « error » for something asked that does not fit), and that `left` is as it was.
+async fn turned_down(
+    h: &Harness,
+    c: &Client,
+    tool: &'static str,
+    args: Value,
+    outcome: &str,
+    left: &Ticket,
+) -> String {
+    let why = refused(c, tool, args).await;
+    let logged = entry(h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.outcome,
+            logged.message.as_deref()
+        ),
+        (tool, outcome, Some(why.as_str()))
+    );
+    assert_eq!(&stored(h, &left.id), left, "{tool}: {why}");
+    why
+}
+
+const NOT_IN_REVIEW: &str = "Ce ticket n'est pas à tester.";
+const APPROVING: &str = "La validation de ce ticket est déjà en cours.";
+const NOT_BLOCKED: &str = "Ce ticket n’est pas bloqué.";
+/// What the core says of a ticket that is not blocked when it is resumed: not the words of `dismiss_block`.
+const RESUME_NOT_BLOCKED: &str = "Ce ticket n'est pas bloqué.";
+const OWN_TICKET: &str = "Un agent n’agit pas sur son propre ticket avec cet outil : c’est à l’utilisateur ou à un autre client de le faire.";
+
+#[tokio::test]
+async fn the_tools_of_the_flow_refuse_an_agent_that_acts_on_its_own_ticket_or_on_another_projects()
+{
+    let h = harness("mcp-act-flow-agents");
+    let p = project(&h).await;
+    let other = other_project(&h, "autre").await;
+    let (own, agent) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    // Its record names the ticket though the ticket names another agent: it is the same ticket.
+    let relieved = put_agent(&h, &p, "releve", 2);
+    h.core.agent(&relieved.id).unwrap().lock().meta.ticket_id = Some(own.id.clone());
+    let elsewhere = put_agent(&h, &other, "ailleurs", 3);
+    let args = |tool: &str| match tool {
+        "reject_ticket" => json!({ "ticket": own.key, "comment": "Pas bon" }),
+        _ => json!({ "ticket": own.key }),
+    };
+    for (tool, said) in [
+        (
+            "approve_ticket",
+            "Un agent ne valide pas son propre ticket : il fusionnerait son travail sans relecture.",
+        ),
+        (
+            "reject_ticket",
+            "Un agent ne renvoie pas son propre ticket.",
+        ),
+        ("resume_ticket", OWN_TICKET),
+        ("resolve_conflict", OWN_TICKET),
+        ("dismiss_block", OWN_TICKET),
+        ("delete_ticket", OWN_TICKET),
+    ] {
+        // Whatever state the ticket is in, the agent that works on it is refused first.
+        for (who, caller) in [("its agent", &agent), ("the one its record names", &relieved)] {
+            let c = as_agent(&h, &caller.id).await;
+            let why = turned_down(&h, &c, tool, args(tool), "refused", &own).await;
+            assert_eq!(why, said, "{tool}, {who}");
+            assert_eq!(entry(&h).caller, caller.name, "{tool}, {who}");
+            c.cancel().await.unwrap();
+        }
+        // An agent of another project acts on its own project alone.
+        let c = as_agent(&h, &elsewhere.id).await;
+        let why = turned_down(&h, &c, tool, args(tool), "refused", &own).await;
+        assert_eq!(
+            why,
+            "L’agent ailleurs n’agit que dans son propre projet (autre) : le projet demo n’est pas le sien.",
+            "{tool}"
+        );
+        c.cancel().await.unwrap();
+        // Claude outside Escouade acts on any (what it does is checked by each tool's own test):
+        // an unknown ticket is told so, for every tool.
+        let c = external(&h).await;
+        let none = refused(&c, tool, json!({ "ticket": "ZZZ-9", "comment": "x" })).await;
+        assert!(none.contains("Aucun ticket « ZZZ-9 »"), "{tool}: {none}");
+        assert_eq!(entry(&h).outcome, "error", "{tool}");
+        c.cancel().await.unwrap();
+    }
+    assert_eq!(stored(&h, &own.id), own);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_approved_where_the_window_does_not_offer_it() {
+    let h = harness("mcp-act-approve-guards");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    // Not in « À tester ».
+    for (i, column) in [Column::Todo, Column::Doing, Column::Done]
+        .into_iter()
+        .enumerate()
+    {
+        let t = put(
+            &h,
+            ticket(&p, &format!("DEM-{}", i + 1), "Ailleurs", column, 1),
+        );
+        let why = turned_down(&h, &c, "approve_ticket", ask(&t), "refused", &t).await;
+        assert_eq!(why, NOT_IN_REVIEW, "{column:?}");
+    }
+    // Its agent works: its files would be committed mid-write.
+    let (busy, agent) = staffed(&h, &p, "DEM-4", Column::Review, 4);
+    h.core.agent(&agent.id).unwrap().lock().meta.status = AgentStatus::Running;
+    let why = turned_down(&h, &c, "approve_ticket", ask(&busy), "refused", &busy).await;
+    assert_eq!(
+        why,
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
+    );
+    // Its approval already runs.
+    let (running, _) = staffed(&h, &p, "DEM-5", Column::Review, 5);
+    let running = approving(&h, &running, "Tests…");
+    let why = turned_down(&h, &c, "approve_ticket", ask(&running), "refused", &running).await;
+    assert_eq!(why, APPROVING);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_approved_in_the_background_merged_and_its_merge_commit_kept() {
+    let h = harness("mcp-act-approve");
+    let (p, r) = h.project(false).await;
+    // Held at its tests, to see the approval under way.
+    let go = h.dir.join("go");
+    h.set_board(&p.id, |s| {
+        s.tests_first = true;
+        s.test_command = gated_tests(&go, 0);
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let agent = t.agent_id.clone().unwrap();
+    let c = external(&h).await;
+    let seen = ticket_events(&h, &t.id);
+    let v = read(&c, "approve_ticket", json!({ "ticket": "dem-1" })).await;
+    // It answers while the approval runs: the ticket as `get_ticket` gives it, not yet merged.
+    assert_eq!(
+        (v["key"].as_str(), v["column"].as_str()),
+        (Some("DEM-1"), Some("review"))
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.caller.as_str(),
+            logged.tool.as_str(),
+            logged.summary.as_str(),
+            logged.outcome
+        ),
+        (
+            "Claude (hors Escouade)",
+            "approve_ticket",
+            "ticket: dem-1",
+            "ok"
+        )
+    );
+    h.wait_ticket(&t.id, "its tests to run", |t| {
+        t.step.as_deref() == Some("Tests…")
+    })
+    .await;
+    // The window was told of it, as of an approval made there.
+    assert!(ticket_events(&h, &t.id) > seen);
+    // A second approval meanwhile is refused as the window's.
+    let again = refused(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(again, APPROVING);
+    assert_eq!(entry(&h).outcome, "refused");
+    // The tests pass: the rest goes by itself, as for the window's approval.
+    std::fs::write(&go, "").unwrap();
+    h.wait_ticket(&t.id, "the ticket to be done", |t| t.column == Column::Done)
+        .await;
+    let done = stored(&h, &t.id);
+    assert_eq!(done.outcome.as_deref(), Some("⤵ Mergé dans main · squash"));
+    assert_eq!(
+        (done.step.as_deref(), done.blocked.as_deref()),
+        (None, None)
+    );
+    // Its merge commit is kept: the target's head.
+    let head = git(&r, &["rev-parse", "refs/heads/main"]);
+    assert_eq!(done.outcome_commit.as_deref(), Some(head.as_str()));
+    // A client reads it with `get_ticket`, with the outcome's text.
+    let read_back = read(&c, "get_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(
+        read_back["outcome"],
+        json!({ "text": "⤵ Mergé dans main · squash", "url": null, "commit": head })
+    );
+    assert_eq!(git(&r, &["rev-list", "--count", "HEAD"]), "2");
+    assert_eq!(
+        std::fs::read_to_string(r.join("dem-1.txt")).unwrap(),
+        "Boucle 1\n"
+    );
+    // Cleaned up: its agent archived, its worktree gone.
+    assert!(h.agent(&agent).archived);
+    assert!(!wt.exists());
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
+        && e["ticket"]["id"] == t.id.as_str()
+        && e["ticket"]["column"] == "done"));
+    // Done: nothing more to approve.
+    let late = refused(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(late, NOT_IN_REVIEW);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_approval_made_through_the_server_is_counted_in_the_usage_statistics_as_the_windows_is()
+{
+    let h = harness("mcp-act-approve-counted");
+    let (p, _) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // Counted from now on: saying yes counts the start.
+    h.core.set_telemetry(true).unwrap();
+    let counted = || -> Vec<Value> {
+        let events = h.core.telemetry.pending();
+        events.into_iter().map(|e| e["eventName"].clone()).collect()
+    };
+    assert_eq!(counted(), [json!("app_started")]);
+    let c = external(&h).await;
+    // Refused, as the window's would be: nothing happened, nothing is counted.
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Doing;
+            Ok(())
+        })
+        .unwrap();
+    refused(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(counted(), [json!("app_started")]);
+    h.core
+        .edit_ticket(&t.id, |x| {
+            x.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    read(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(counted(), [json!("app_started"), json!("ticket_approved")]);
+    h.wait_ticket(&t.id, "the ticket to be done", |t| t.column == Column::Done)
+        .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_whose_branch_was_merged_already_is_closed_without_merging_again() {
+    let h = harness("mcp-act-approve-nothing");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [commite]").await;
+    // Merged by hand: squashed on the target, then its branch taken back to the target.
+    git(&r, &["merge", "--squash", "ticket/dem-1"]);
+    git(&r, &["commit", "-qm", "À la main"]);
+    git(&wt, &["reset", "--keep", "main"]);
+    let head = git(&r, &["rev-parse", "refs/heads/main"]);
+    let commits = git(&r, &["rev-list", "--count", "main"]);
+    let c = external(&h).await;
+    read(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    h.wait_ticket(&t.id, "the ticket to be done", |t| t.column == Column::Done)
+        .await;
+    let done = stored(&h, &t.id);
+    assert_eq!(done.outcome.as_deref(), Some("∅ Aucune modification"));
+    // Nothing merged: the target is as it was, and no merge commit is kept.
+    assert_eq!(git(&r, &["rev-parse", "refs/heads/main"]), head);
+    assert_eq!(git(&r, &["rev-list", "--count", "main"]), commits);
+    assert_eq!(done.outcome_commit, None);
+    assert!(h.agent(done.agent_id.as_deref().unwrap()).archived);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_fast_approval_is_told_by_the_since_its_answer_gave_when_the_wait_comes_after_its_end() {
+    let h = harness("mcp-act-approve-since");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok] [commite]").await;
+    // Nothing to merge: the approval ends at once, before a wait could take its baseline.
+    git(&r, &["merge", "--squash", "ticket/dem-1"]);
+    git(&r, &["commit", "-qm", "À la main"]);
+    git(&wt, &["reset", "--keep", "main"]);
+    let c = external(&h).await;
+    let v = read(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    // The ticket as it was before the approval: in review, its agent at rest.
+    let before = before_of(&v);
+    assert_eq!(
+        (&before["id"], &before["column"], &before["resting"]),
+        (&json!(t.id), &json!("review"), &json!(true))
+    );
+    h.wait_ticket(&t.id, "the ticket to be done", |t| t.column == Column::Done)
+        .await;
+    // A wait that begins now would see a ticket done and nothing more: with the answer's since it
+    // is told at once that the ticket left « À tester ».
+    let told = told_since(&c, &t.key, &v["since"]).await;
+    assert_eq!(told["changed"], json!(true));
+    assert!(
+        told["changes"][0]["what"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("column")),
+        "{told}"
+    );
+    assert_eq!(told["changes"][0]["before"]["column"], json!("review"));
+    assert_eq!(told["tickets"][0]["column"], json!("done"));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_approval_that_fails_blocks_the_ticket_in_to_review_and_the_server_has_answered() {
+    let h = harness("mcp-act-approve-fails");
+    let (p, r) = h.project(false).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // The project's folder has changes of its own on the target: the merge is refused.
+    std::fs::write(r.join("src").join("app.ts"), "const a = 99; // en cours\n").unwrap();
+    let c = external(&h).await;
+    read(&c, "approve_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(entry(&h).outcome, "ok");
+    h.wait_ticket(&t.id, "the ticket to be blocked", |t| t.blocked.is_some())
+        .await;
+    let blocked = stored(&h, &t.id);
+    assert_eq!(
+        (
+            blocked.column,
+            blocked.step.as_deref(),
+            blocked.blocked.as_deref()
+        ),
+        (
+            Column::Review,
+            None,
+            Some("Le dossier du projet a des modifications non commitées sur main")
+        )
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_sent_back_with_the_comment_followed_by_who_sent_it_back() {
+    let h = harness("mcp-act-reject");
+    let (p, _) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Renvoi [ok]").await;
+    let agent = t.agent_id.clone().unwrap();
+    let c = external(&h).await;
+    let v = read(
+        &c,
+        "reject_ticket",
+        json!({ "ticket": "dem-1", "comment": "  Le bouton est mal placé.  " }),
+    )
+    .await;
+    // Back in progress, with the same agent.
+    assert_eq!(
+        (v["key"].as_str(), v["column"].as_str()),
+        (Some("DEM-1"), Some("doing"))
+    );
+    // Its since is the ticket as it was: in review, its agent at rest.
+    let before = before_of(&v);
+    assert_eq!(
+        (&before["column"], &before["resting"]),
+        (&json!("review"), &json!(true))
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.caller.as_str(),
+            logged.tool.as_str(),
+            logged.summary.as_str(),
+            logged.outcome
+        ),
+        (
+            "Claude (hors Escouade)",
+            "reject_ticket",
+            "ticket: dem-1 · comment: Le bouton est mal placé.",
+            "ok"
+        )
+    );
+    // The agent reads the comment as test feedback, never as the user's words: it says who sent it.
+    h.wait_sent(
+        &wt,
+        "Retour de test sur DEM-1 : Le bouton est mal placé (renvoyé par Claude (hors Escouade) via Escouade). Corrige, revérifie tous les critères, puis termine par le bilan.",
+    )
+    .await;
+    h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
+        .await;
+    let back = stored(&h, &t.id);
+    // Loop 1 again, its second loop all the same.
+    assert_eq!(
+        (back.agent_id.as_deref(), back.iteration, back.loops),
+        (Some(agent.as_str()), 1, 2)
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_sent_back_by_an_agent_names_it_in_the_language_of_the_texts_for_claude() {
+    let h = harness("mcp-act-reject-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let (t, wt) = reviewed(&h, &p.id, "Rework [ok]").await;
+    let reviewer = put_agent(&h, &p, "relecteur", 5);
+    let c = as_agent(&h, &reviewer.id).await;
+    read(
+        &c,
+        "reject_ticket",
+        json!({ "ticket": t.key, "comment": "the button is misplaced" }),
+    )
+    .await;
+    h.wait_sent(
+        &wt,
+        "Test feedback on DEM-1: the button is misplaced (sent back by relecteur through Escouade). Fix it, check every criterion again, then end with the report.",
+    )
+    .await;
+    h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(entry(&h).caller, "relecteur");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_sent_back_without_a_comment_or_where_the_window_does_not_offer_it() {
+    let h = harness("mcp-act-reject-guards");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let ask = |t: &Ticket| json!({ "ticket": t.key, "comment": "Pas bon" });
+    let (review, agent) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    // A comment is needed, a blank one is none: something asked that does not fit.
+    for blank in ["", "   \n "] {
+        let why = turned_down(
+            &h,
+            &c,
+            "reject_ticket",
+            json!({ "ticket": review.key, "comment": blank }),
+            "error",
+            &review,
+        )
+        .await;
+        assert_eq!(why, "Dis ce qui ne va pas.");
+    }
+    // Not in « À tester ».
+    for (i, column) in [Column::Todo, Column::Doing, Column::Done]
+        .into_iter()
+        .enumerate()
+    {
+        let t = put(
+            &h,
+            ticket(&p, &format!("DEM-{}", i + 2), "Ailleurs", column, 1),
+        );
+        let why = turned_down(&h, &c, "reject_ticket", ask(&t), "refused", &t).await;
+        assert_eq!(why, NOT_IN_REVIEW, "{column:?}");
+    }
+    // Without an agent to send it to.
+    let orphan = put(&h, ticket(&p, "DEM-5", "Orphelin", Column::Review, 5));
+    let why = turned_down(&h, &c, "reject_ticket", ask(&orphan), "refused", &orphan).await;
+    assert_eq!(why, "Ce ticket n'a pas d'agent.");
+    // Its agent works: the end of that turn would be read as the end of the rework.
+    let (busy, worker) = staffed(&h, &p, "DEM-6", Column::Review, 6);
+    h.core.agent(&worker.id).unwrap().lock().meta.status = AgentStatus::Running;
+    let why = turned_down(&h, &c, "reject_ticket", ask(&busy), "refused", &busy).await;
+    assert_eq!(
+        why,
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer."
+    );
+    // Its approval runs.
+    let (running, _) = staffed(&h, &p, "DEM-7", Column::Review, 7);
+    let running = approving(&h, &running, "Merge…");
+    let why = turned_down(&h, &c, "reject_ticket", ask(&running), "refused", &running).await;
+    assert_eq!(why, APPROVING);
+    // Nothing was sent to any agent.
+    assert_eq!(h.agent(&agent.id).prompts, 0);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_sent_back_while_its_agents_account_is_held_back_and_only_then() {
+    let h = harness("mcp-act-reject-accounts");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+    used_up(&h, PRINCIPAL, end);
+    let ask = |t: &Ticket| json!({ "ticket": t.key, "comment": "Pas bon" });
+    // Where the window would go ahead, the message would spend the held account's quota.
+    let (review, agent) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    let held = turned_down(&h, &c, "reject_ticket", ask(&review), "refused", &review).await;
+    assert!(
+        held.contains("pause")
+            && held.contains("5 h")
+            && held.contains(&clock(end + RESUME_MARGIN_MS)),
+        "{held}"
+    );
+    assert_eq!(h.agent(&agent.id).prompts, 0);
+    // Where it would not, the window's own refusal is the one told.
+    let (running, _) = staffed(&h, &p, "DEM-2", Column::Review, 2);
+    let running = approving(&h, &running, "Tests…");
+    let why = turned_down(&h, &c, "reject_ticket", ask(&running), "refused", &running).await;
+    assert_eq!(why, APPROVING);
+    let (doing, _) = staffed(&h, &p, "DEM-3", Column::Doing, 3);
+    let why = turned_down(&h, &c, "reject_ticket", ask(&doing), "refused", &doing).await;
+    assert_eq!(why, NOT_IN_REVIEW);
+    // Its agent works, on the held account all the same: the window says it first.
+    let (busy, worker) = staffed(&h, &p, "DEM-4", Column::Review, 4);
+    h.core.agent(&worker.id).unwrap().lock().meta.status = AgentStatus::Running;
+    let why = turned_down(&h, &c, "reject_ticket", ask(&busy), "refused", &busy).await;
+    assert_eq!(
+        why,
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour le renvoyer."
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// The block of a ticket whose agent got no message: Claude Code is nowhere to be found.
+const NO_CLAUDE_BLOCK: &str =
+    "Erreur : Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.";
+
+/// What a tool says when its message failed after the ticket moved.
+fn unsent(key: &str) -> String {
+    format!("{key} a été pris en compte, mais son agent n’a pas reçu le message : Claude Code introuvable. Installe-le ou indique son chemin dans les réglages. Le ticket est bloqué avec cette raison.")
+}
+
+#[tokio::test]
+async fn a_message_that_fails_after_the_ticket_moved_says_so_and_the_ticket_is_blocked_with_the_reason(
+) {
+    let h = harness("mcp-act-unsent");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    h.lose_claude();
+    // Sent back: in progress again, blocked, and the call is not told as a refusal.
+    let (review, _) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    let said = refused(
+        &c,
+        "reject_ticket",
+        json!({ "ticket": review.key, "comment": "Pas bon" }),
+    )
+    .await;
+    assert_eq!(said, unsent("DEM-1"));
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.outcome,
+            logged.message.as_deref()
+        ),
+        ("reject_ticket", "error", Some(said.as_str()))
+    );
+    let moved = stored(&h, &review.id);
+    assert_eq!(
+        (moved.column, moved.blocked.as_deref()),
+        (Column::Doing, Some(NO_CLAUDE_BLOCK))
+    );
+    // Resumed: no longer blocked for what it was, blocked for this.
+    let (blocked, _) = staffed(&h, &p, "DEM-2", Column::Doing, 2);
+    h.core
+        .edit_ticket(&blocked.id, |x| {
+            x.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    let said = refused(&c, "resume_ticket", json!({ "ticket": blocked.key })).await;
+    assert_eq!(said, unsent("DEM-2"));
+    assert_eq!(entry(&h).outcome, "error");
+    assert_eq!(
+        stored(&h, &blocked.id).blocked.as_deref(),
+        Some(NO_CLAUDE_BLOCK)
+    );
+    // Blocked for the very same reason as before: nothing moved, the failure is a refusal.
+    let (same, _) = staffed(&h, &p, "DEM-3", Column::Doing, 3);
+    h.core
+        .edit_ticket(&same.id, |x| {
+            x.blocked = Some(NO_CLAUDE_BLOCK.into());
+            Ok(())
+        })
+        .unwrap();
+    let same = stored(&h, &same.id);
+    let why = turned_down(
+        &h,
+        &c,
+        "resume_ticket",
+        json!({ "ticket": same.key }),
+        "refused",
+        &same,
+    )
+    .await;
+    assert_eq!(
+        why,
+        "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages."
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_conflict_handed_over_whose_message_fails_says_so_and_the_ticket_is_blocked() {
+    let h = harness("mcp-act-resolve-unsent");
+    let (p, r) = h.project(false).await;
+    let (t, _) = conflicting(&h, &p.id, &r).await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    // Its process gone and Claude Code nowhere: the conflicts cannot be told to the agent.
+    let agent = t.agent_id.clone().unwrap();
+    if let Some(proc) = h.core.agent(&agent).unwrap().lock().detach() {
+        proc.kill();
+    }
+    h.lose_claude();
+    let c = external(&h).await;
+    let said = refused(&c, "resolve_conflict", json!({ "ticket": "dem-1" })).await;
+    assert_eq!(said, unsent("DEM-1"));
+    assert_eq!(entry(&h).outcome, "error");
+    let moved = stored(&h, &t.id);
+    assert_eq!(
+        (moved.column, moved.conflict, moved.blocked.as_deref()),
+        (Column::Doing, false, Some(NO_CLAUDE_BLOCK))
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_blocked_ticket_is_taken_up_by_its_agent() {
+    let h = harness("mcp-act-resume");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    let agent = wait_running(&h, &t.id).await;
+    h.core.interrupt(&agent).await.unwrap();
+    h.wait_ticket(&t.id, "the ticket to be blocked", |t| t.blocked.is_some())
+        .await;
+    assert_eq!(stored(&h, &t.id).blocked.as_deref(), Some("Interrompu"));
+    let c = external(&h).await;
+    let v = read(&c, "resume_ticket", json!({ "ticket": "dem-1" })).await;
+    let logged = entry(&h);
+    // Its since is the ticket as it was: in progress, blocked.
+    let before = before_of(&v);
+    assert_eq!(before["column"], json!("doing"));
+    assert!(before["blocked"].is_number(), "{before}");
+    // Taken up, it is no longer blocked: a second call is refused. Made at once: once its agent has
+    // ended its turn, the ticket is no longer in progress, and the refusal would be another.
+    let again = refused(&c, "resume_ticket", json!({ "ticket": "DEM-1" })).await;
+    assert_eq!(again, RESUME_NOT_BLOCKED);
+    assert_eq!(
+        (v["key"].as_str(), v["column"].as_str()),
+        (Some("DEM-1"), Some("doing"))
+    );
+    assert_eq!(stored(&h, &t.id).blocked, None);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.summary.as_str(),
+            logged.outcome
+        ),
+        ("resume_ticket", "ticket: dem-1", "ok")
+    );
+    // Its agent goes on where it was.
+    h.wait_sent(
+        &h.worktree_of(&t.id),
+        "Reprends le ticket DEM-1 là où tu en étais, puis termine par le bilan.",
+    )
+    .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_blocked_ticket_whose_agent_is_gone_starts_again_even_with_the_autopilot_off() {
+    let h = harness("mcp-act-resume-gone");
+    let p = project(&h).await;
+    let t = made(&h, &p, "Repartir [ok]").await;
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 2;
+            t.agent_id = Some("disparu".into());
+            t.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    let c = external(&h).await;
+    read(&c, "resume_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(entry(&h).outcome, "ok");
+    h.wait_ticket(&t.id, "started again to test", |t| {
+        t.column == Column::Review
+    })
+    .await;
+    assert_ne!(stored(&h, &t.id).agent_id.as_deref(), Some("disparu"));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_resumed_where_the_window_does_not_offer_it() {
+    use chrono::TimeZone;
+    let h = harness("mcp-act-resume-guards");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    // Not in progress.
+    for (i, column) in [Column::Todo, Column::Review, Column::Done]
+        .into_iter()
+        .enumerate()
+    {
+        let t = put(
+            &h,
+            Ticket {
+                blocked: Some("Erreur".into()),
+                ..ticket(&p, &format!("DEM-{}", i + 1), "Ailleurs", column, 1)
+            },
+        );
+        let why = turned_down(&h, &c, "resume_ticket", ask(&t), "refused", &t).await;
+        assert_eq!(why, "Ce ticket n'est pas en cours.", "{column:?}");
+    }
+    // Not blocked: taken up already.
+    let (moving, _) = staffed(&h, &p, "DEM-4", Column::Doing, 4);
+    let why = turned_down(&h, &c, "resume_ticket", ask(&moving), "refused", &moving).await;
+    assert_eq!(why, RESUME_NOT_BLOCKED);
+    // Its agent waits for its quota: a message now would meet the limit again.
+    let (waiting, agent) = staffed(&h, &p, "DEM-5", Column::Doing, 5);
+    let at = chrono::Local
+        .with_ymd_and_hms(2026, 10, 3, 15, 7, 0)
+        .unwrap()
+        .timestamp_millis();
+    h.core.agent(&agent.id).unwrap().lock().meta.resume_at = Some(at);
+    h.core
+        .edit_ticket(&waiting.id, |x| {
+            x.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    let waiting = stored(&h, &waiting.id);
+    let why = turned_down(&h, &c, "resume_ticket", ask(&waiting), "refused", &waiting).await;
+    assert_eq!(why, "En attente du quota — reprise à 15:07");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_blocked_ticket_is_not_resumed_while_the_account_that_would_take_it_is_held_back() {
+    let h = harness("mcp-act-resume-accounts");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+    used_up(&h, PRINCIPAL, end);
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    let held_for = |said: &str| {
+        said.contains("pause")
+            && said.contains("5 h")
+            && said.contains(&clock(end + RESUME_MARGIN_MS))
+    };
+    // Its agent is there: the message would spend its account's quota.
+    let (blocked, agent) = staffed(&h, &p, "DEM-1", Column::Doing, 1);
+    h.core
+        .edit_ticket(&blocked.id, |x| {
+            x.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    let blocked = stored(&h, &blocked.id);
+    let why = turned_down(&h, &c, "resume_ticket", ask(&blocked), "refused", &blocked).await;
+    assert!(held_for(&why), "{why}");
+    assert_eq!(h.agent(&agent.id).prompts, 0);
+    // It is gone: a new agent would start on a held account.
+    let gone = put(&h, ticket(&p, "DEM-2", "Sans agent", Column::Doing, 2));
+    h.core
+        .edit_ticket(&gone.id, |x| {
+            x.agent_id = Some("disparu".into());
+            x.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    let gone = stored(&h, &gone.id);
+    let why = turned_down(&h, &c, "resume_ticket", ask(&gone), "refused", &gone).await;
+    assert!(held_for(&why), "{why}");
+    // Not blocked: the window's own refusal is the one told, held or not.
+    let (moving, _) = staffed(&h, &p, "DEM-3", Column::Doing, 3);
+    let why = turned_down(&h, &c, "resume_ticket", ask(&moving), "refused", &moving).await;
+    assert_eq!(why, RESUME_NOT_BLOCKED);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_conflict_is_handed_to_the_tickets_agent_which_gets_the_target_merged_into_its_branch() {
+    let h = harness("mcp-act-resolve");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = conflicting(&h, &p.id, &r).await;
+    let agent = t.agent_id.clone();
+    // The approval stops on the conflict and asks what to do.
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let stopped = stored(&h, &t.id);
+    assert_eq!(
+        (stopped.column, stopped.conflict, stopped.blocked.as_deref()),
+        (Column::Review, true, Some("Conflit avec main"))
+    );
+    let c = external(&h).await;
+    let v = read(&c, "resolve_conflict", json!({ "ticket": "dem-1" })).await;
+    assert_eq!(
+        (v["key"].as_str(), v["column"].as_str()),
+        (Some("DEM-1"), Some("doing"))
+    );
+    // Its since is the ticket as it was: in review, stopped on the conflict.
+    let before = before_of(&v);
+    assert_eq!(
+        (&before["column"], &before["conflict"]),
+        (&json!("review"), &json!(true))
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.summary.as_str(),
+            logged.outcome
+        ),
+        ("resolve_conflict", "ticket: dem-1", "ok")
+    );
+    // The target is merged into its branch, the conflicts left in the worktree for the agent.
+    h.wait_sent(
+        &wt,
+        "Le merge de main dans ta branche a des conflits sur : src/app.ts.",
+    )
+    .await;
+    assert!(git(&wt, &["diff", "--name-only", "--diff-filter=U"]).contains("src/app.ts"));
+    let handed = stored(&h, &t.id);
+    assert_eq!(
+        (
+            handed.agent_id,
+            handed.iteration,
+            handed.conflict,
+            handed.blocked,
+            handed.step
+        ),
+        (agent, 1, false, None, None)
+    );
+    // The project's folder was left as it was.
+    assert_eq!(git(&r, &["status", "--porcelain"]), "");
+    // Its agent answers with its report: to test again.
+    h.wait_ticket(&t.id, "to test again", |t| t.column == Column::Review)
+        .await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_conflict_is_not_handed_over_where_the_window_does_not_offer_it() {
+    let h = harness("mcp-act-resolve-guards");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    // Not in « À tester », a conflict or not.
+    for (i, column) in [Column::Todo, Column::Doing, Column::Done]
+        .into_iter()
+        .enumerate()
+    {
+        let t = put(
+            &h,
+            Ticket {
+                conflict: true,
+                blocked: Some("Conflit avec main".into()),
+                ..ticket(&p, &format!("DEM-{}", i + 1), "Ailleurs", column, 1)
+            },
+        );
+        let why = turned_down(&h, &c, "resolve_conflict", ask(&t), "refused", &t).await;
+        assert_eq!(why, NOT_IN_REVIEW, "{column:?}");
+    }
+    // Its approval runs.
+    let (running, _) = staffed(&h, &p, "DEM-4", Column::Review, 4);
+    h.core
+        .edit_ticket(&running.id, |x| {
+            x.conflict = true;
+            Ok(())
+        })
+        .unwrap();
+    let running = approving(&h, &stored(&h, &running.id), "Merge…");
+    let why = turned_down(
+        &h,
+        &c,
+        "resolve_conflict",
+        ask(&running),
+        "refused",
+        &running,
+    )
+    .await;
+    assert_eq!(why, APPROVING);
+    // Blocked by something else than a conflict (a step that failed), or not blocked at all.
+    for (key, blocked) in [("DEM-5", Some("Tests en échec")), ("DEM-6", None)] {
+        let (t, _) = staffed(&h, &p, key, Column::Review, 5);
+        h.core
+            .edit_ticket(&t.id, |x| {
+                x.blocked = blocked.map(str::to_string);
+                Ok(())
+            })
+            .unwrap();
+        let t = stored(&h, &t.id);
+        let why = turned_down(&h, &c, "resolve_conflict", ask(&t), "refused", &t).await;
+        assert_eq!(why, "Ce ticket n’a pas de conflit à résoudre.", "{key}");
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_conflict_is_not_handed_over_while_its_agents_account_is_held_back_and_only_then() {
+    let h = harness("mcp-act-resolve-accounts");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let end = h.core.pause_now() + 3_600_000;
+    used_up(&h, PRINCIPAL, end);
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    let stopped_on_a_conflict = |key: &str, at: i64| {
+        let (t, agent) = staffed(&h, &p, key, Column::Review, at);
+        h.core
+            .edit_ticket(&t.id, |x| {
+                x.conflict = true;
+                x.blocked = Some("Conflit avec main".into());
+                Ok(())
+            })
+            .unwrap();
+        (stored(&h, &t.id), agent)
+    };
+    // The message to its agent would spend the held account's quota.
+    let (stopped, agent) = stopped_on_a_conflict("DEM-1", 1);
+    let why = turned_down(
+        &h,
+        &c,
+        "resolve_conflict",
+        ask(&stopped),
+        "refused",
+        &stopped,
+    )
+    .await;
+    assert!(
+        why.contains("pause")
+            && why.contains("5 h")
+            && why.contains(&clock(end + RESUME_MARGIN_MS)),
+        "{why}"
+    );
+    assert_eq!(h.agent(&agent.id).prompts, 0);
+    // Where the window would not go ahead, its own refusal is the one told.
+    let (running, _) = stopped_on_a_conflict("DEM-2", 2);
+    let running = approving(&h, &running, "Merge…");
+    let why = turned_down(
+        &h,
+        &c,
+        "resolve_conflict",
+        ask(&running),
+        "refused",
+        &running,
+    )
+    .await;
+    assert_eq!(why, APPROVING);
+    // Its agent works, on the held account all the same: the window says it first.
+    let (busy, worker) = stopped_on_a_conflict("DEM-3", 3);
+    {
+        let worker = h.core.agent(&worker.id).unwrap();
+        let mut rt = worker.lock();
+        rt.meta.status = AgentStatus::Running;
+        rt.meta.worktree = Some(Worktree {
+            path: h.dir.join("dem-3").to_string_lossy().into(),
+            branch: "ticket/dem-3".into(),
+            base_branch: "main".into(),
+            existing: false,
+        });
+    }
+    let why = turned_down(&h, &c, "resolve_conflict", ask(&busy), "refused", &busy).await;
+    assert_eq!(
+        why,
+        "L'agent de ce ticket travaille encore : attends la fin de son tour pour valider."
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn the_block_of_a_ticket_to_review_is_dismissed_and_the_ticket_stays_to_review() {
+    let h = harness("mcp-act-dismiss");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    // A conflict, and a step that failed.
+    for (key, blocked, conflict) in [
+        ("DEM-1", "Conflit avec main", true),
+        (
+            "DEM-2",
+            "Le dossier du projet a des modifications non commitées sur main",
+            false,
+        ),
+    ] {
+        let (t, _) = staffed(&h, &p, key, Column::Review, 1);
+        h.core
+            .edit_ticket(&t.id, |x| {
+                x.conflict = conflict;
+                x.blocked = Some(blocked.into());
+                Ok(())
+            })
+            .unwrap();
+        let before = stored(&h, &t.id);
+        let seen = ticket_events(&h, &t.id);
+        let v = read(&c, "dismiss_block", json!({ "ticket": key.to_lowercase() })).await;
+        assert_eq!(
+            (v["key"].as_str(), v["column"].as_str()),
+            (Some(key), Some("review"))
+        );
+        let logged = entry(&h);
+        assert_eq!(
+            (logged.tool.as_str(), logged.outcome),
+            ("dismiss_block", "ok")
+        );
+        assert_eq!(logged.summary, format!("ticket: {}", key.to_lowercase()));
+        // The block goes, nothing else changes; the window is told.
+        assert_eq!(
+            stored(&h, &t.id),
+            Ticket {
+                blocked: None,
+                conflict: false,
+                ..before
+            },
+            "{key}"
+        );
+        assert!(ticket_events(&h, &t.id) > seen, "{key}");
+        // The answer's since is the ticket as it was, blocked: a wait from it is told at once that
+        // the block went (and the conflict).
+        assert_eq!(before_of(&v)["conflict"], json!(conflict), "{key}");
+        let told = told_since(&c, key, &v["since"]).await;
+        let what = if conflict {
+            json!(["blocked", "conflict"])
+        } else {
+            json!(["blocked"])
+        };
+        assert_eq!(told["changes"][0]["what"], what, "{key}");
+        assert_eq!(
+            told["changes"][0]["before"]["blocked"],
+            json!(true),
+            "{key}"
+        );
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_block_is_not_dismissed_where_the_window_does_not_offer_it() {
+    let h = harness("mcp-act-dismiss-guards");
+    let p = project(&h).await;
+    let c = external(&h).await;
+    let ask = |t: &Ticket| json!({ "ticket": t.key });
+    // Not in « À tester »: the block of a ticket under way is the autopilot's, and an agent's.
+    for (i, column) in [Column::Todo, Column::Doing, Column::Done]
+        .into_iter()
+        .enumerate()
+    {
+        let t = put(
+            &h,
+            Ticket {
+                blocked: Some("Interrompu".into()),
+                ..ticket(&p, &format!("DEM-{}", i + 1), "Ailleurs", column, 1)
+            },
+        );
+        let why = turned_down(&h, &c, "dismiss_block", ask(&t), "refused", &t).await;
+        assert_eq!(why, NOT_IN_REVIEW, "{column:?}");
+    }
+    // Its approval runs: the block it may make is not yet there to dismiss.
+    let (running, _) = staffed(&h, &p, "DEM-4", Column::Review, 4);
+    let running = approving(&h, &running, "Tests…");
+    let why = turned_down(&h, &c, "dismiss_block", ask(&running), "refused", &running).await;
+    assert_eq!(why, APPROVING);
+    // Nothing blocks it.
+    let (free, _) = staffed(&h, &p, "DEM-5", Column::Review, 5);
+    let why = turned_down(&h, &c, "dismiss_block", ask(&free), "refused", &free).await;
+    assert_eq!(why, NOT_BLOCKED);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_deleted_whatever_its_column_and_the_ones_after_it_no_longer_wait_for_it() {
+    let h = harness("mcp-act-delete");
+    let p = project(&h).await;
+    let first = made(&h, &p, "Premier").await;
+    let second = made_after(&h, &p, "Deuxième", &[&first]).await;
+    let c = external(&h).await;
+    let seen = ticket_events(&h, &second.id);
+    let v = read(&c, "delete_ticket", json!({ "ticket": "dem-1" })).await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-1", "deleted": true, "agentArchived": false })
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.summary.as_str(),
+            logged.outcome
+        ),
+        ("delete_ticket", "ticket: dem-1", "ok")
+    );
+    // Gone for good, the window told, and the ticket that came after it no longer waits for it.
+    assert!(h.core.ticket(&first.id).is_err());
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticketRemoved"
+        && e["id"] == first.id.as_str()
+        && e["projectId"] == p.id.as_str()));
+    assert!(stored(&h, &second.id).after.is_empty());
+    assert!(ticket_events(&h, &second.id) > seen);
+    let again = refused(&c, "delete_ticket", json!({ "ticket": first.id })).await;
+    assert!(again.contains("Aucun ticket"), "{again}");
+
+    // One to review: its agent is archived (its worktree kept), and the answer says so.
+    let (review, agent) = staffed(&h, &p, "DEM-7", Column::Review, 7);
+    let v = read(&c, "delete_ticket", json!({ "ticket": review.key })).await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-7", "deleted": true, "agentArchived": true })
+    );
+    assert!(h.core.ticket(&review.id).is_err());
+    assert!(h.agent(&agent.id).archived);
+    // One in progress, its agent at work: as the window deletes it.
+    let (doing, worker) = staffed(&h, &p, "DEM-8", Column::Doing, 8);
+    h.core.agent(&worker.id).unwrap().lock().meta.status = AgentStatus::Running;
+    let v = read(&c, "delete_ticket", json!({ "ticket": doing.key })).await;
+    assert_eq!(v["agentArchived"], true);
+    assert!(h.agent(&worker.id).archived);
+    // One done leaves its agent as it was: it is no longer the ticket's to archive.
+    let (done, finished) = staffed(&h, &p, "DEM-9", Column::Done, 9);
+    let v = read(&c, "delete_ticket", json!({ "ticket": done.key })).await;
+    assert_eq!(v["agentArchived"], false);
+    assert!(!h.agent(&finished.id).archived);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_is_not_deleted_while_its_approval_runs() {
+    let h = harness("mcp-act-delete-approving");
+    let p = project(&h).await;
+    let (own, agent) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    let own = approving(&h, &own, "Merge…");
+    let c = external(&h).await;
+    let why = turned_down(
+        &h,
+        &c,
+        "delete_ticket",
+        json!({ "ticket": own.key }),
+        "refused",
+        &own,
+    )
+    .await;
+    assert_eq!(
+        why,
+        "La validation de ce ticket est en cours : attends sa fin pour le supprimer."
+    );
+    // An agent of the ticket is refused first: the ticket is not its to act on.
+    let a = as_agent(&h, &agent.id).await;
+    let why = turned_down(
+        &h,
+        &a,
+        "delete_ticket",
+        json!({ "ticket": own.key }),
+        "refused",
+        &own,
+    )
+    .await;
+    assert_eq!(why, OWN_TICKET);
+    // The approval over, it is deleted as any.
+    h.core
+        .edit_ticket(&own.id, |x| {
+            x.step = None;
+            Ok(())
+        })
+        .unwrap();
+    let v = read(&c, "delete_ticket", json!({ "ticket": own.key })).await;
+    assert_eq!(v["deleted"], json!(true));
+    assert!(h.core.ticket(&own.id).is_err());
+    a.cancel().await.unwrap();
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

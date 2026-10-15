@@ -17,13 +17,18 @@ use tauri::test::{mock_app, MockRuntime};
 
 /// The tools the server offers, sorted: those that read (`READING`, M2), those that act
 /// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
-/// here knowingly. None may run a command or the tests, merge or delete; the only two that answer
-/// for the user (`ANSWERING`) never give a lasting permission.
+/// here knowingly. None may run a command; the flow tools do what the window's buttons of the
+/// board do, and so two are named for it (`NAMED_FOR_IT`: approving runs the tests and merges,
+/// deleting deletes). The only two that answer for the user (`ANSWERING`) never give a lasting
+/// permission.
 pub(super) const EXPOSED: &[&str] = &[
     "answer_permission",
     "answer_question",
+    "approve_ticket",
     "create_agent",
     "create_ticket",
+    "delete_ticket",
+    "dismiss_block",
     "get_agent_summary",
     "get_board",
     "get_ticket",
@@ -33,13 +38,17 @@ pub(super) const EXPOSED: &[&str] = &[
     "list_requests",
     "list_tickets",
     "move_ticket",
+    "reject_ticket",
     "report_progress",
+    "resolve_conflict",
+    "resume_ticket",
     "send_message",
     "set_board",
     "split_ticket",
     "start_ticket",
     "stop_agent",
     "update_ticket",
+    "wait_ticket",
 ];
 
 /// Those of `EXPOSED` that only read.
@@ -52,15 +61,22 @@ pub(super) const READING: &[&str] = &[
     "list_projects",
     "list_requests",
     "list_tickets",
+    "wait_ticket",
 ];
 
 /// Those that act, under the guardrails of the window and the autopilot.
 pub(super) const ACTING: &[&str] = &[
     "answer_permission",
     "answer_question",
+    "approve_ticket",
     "create_agent",
     "create_ticket",
+    "delete_ticket",
+    "dismiss_block",
     "move_ticket",
+    "reject_ticket",
+    "resolve_conflict",
+    "resume_ticket",
     "send_message",
     "set_board",
     "start_ticket",
@@ -70,6 +86,10 @@ pub(super) const ACTING: &[&str] = &[
 
 /// Those that answer an agent's request for the user.
 pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
+
+/// The flow tools named for what they do, as the window's buttons are: (tool, the word of
+/// `FORBIDDEN` it holds).
+const NAMED_FOR_IT: &[(&str, &str)] = &[("approve_ticket", "approve"), ("delete_ticket", "delete")];
 
 /// Those an external Claude is refused.
 pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
@@ -239,7 +259,7 @@ async fn claude_outside_escouade_initializes_and_lists_the_tools_with_its_token(
 }
 
 #[tokio::test]
-async fn the_server_offers_exactly_its_tools_and_none_that_accepts_runs_merges_or_deletes() {
+async fn the_server_offers_exactly_its_tools_and_only_two_are_named_for_approving_or_deleting() {
     // The router the app ships, without the test's tool.
     let shipped = names(&Tools::<MockRuntime>::tool_router().list_all());
     assert_eq!(shipped, EXPOSED);
@@ -255,6 +275,10 @@ async fn the_server_offers_exactly_its_tools_and_none_that_accepts_runs_merges_o
         for word in FORBIDDEN {
             // The two tools that answer for the user are named for it, and only they.
             if ANSWERING.contains(&name.as_str()) && ["permission", "answer"].contains(word) {
+                continue;
+            }
+            // So are the two of the flow that approve (tests, commit, merge) and delete.
+            if NAMED_FOR_IT.contains(&(name.as_str(), *word)) {
                 continue;
             }
             assert!(!name.contains(word), "{name} holds {word}");

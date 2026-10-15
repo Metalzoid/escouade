@@ -70,7 +70,7 @@ describe('McpSection', () => {
     expect(switchEl()).toHaveAttribute('aria-checked', 'false');
     expect(
       screen.getByText(
-        'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+        'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -281,7 +281,7 @@ describe('McpSection', () => {
     expect(screen.getByRole('switch', { name: 'Claude and the agents can drive Escouade' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota. An agent already running gets the tools the next time its process starts.',
+        'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();

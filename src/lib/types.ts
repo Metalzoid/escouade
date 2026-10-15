@@ -360,6 +360,8 @@ export interface Ticket {
   /** The same in the language of the texts for Claude (what the comment published for the team quotes); the window shows `outcome`. */
   outcomeClaude: string | null;
   outcomeUrl: string | null;
+  /** The commit its merge made on the target; null when it was not merged (pull request, push, kept, nothing to merge) or before 1.8. */
+  outcomeCommit: string | null;
   forced: boolean;
   reminded: boolean;
   cost: number;

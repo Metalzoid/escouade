@@ -197,6 +197,10 @@ pub(crate) fn title_missing() -> anyhow::Error {
     ))
 }
 
+pub(crate) fn comment_missing() -> anyhow::Error {
+    anyhow!(tr!("Dis ce qui ne va pas.", "Say what’s wrong."))
+}
+
 /// The notification of a ticket that reached « À tester », or got blocked (`blocked`, why).
 pub(crate) fn ticket_alert(lang: Lang, key: &str, ready: bool, blocked: &str) -> String {
     if ready {
@@ -1715,6 +1719,29 @@ impl<R: Runtime> Core<R> {
     pub async fn ticket_approve(self: &Arc<Self>, id: &str) -> Result<()> {
         // To the end of its cleanup (agent archived, worktree removed), after its step is over.
         let _working = self.working();
+        let t = self.approve_begin(id)?;
+        self.approve_run(id, t).await;
+        Ok(())
+    }
+
+    /// "Valider…" for a client that does not wait for its end (the MCP server): refused as the
+    /// window's, then run in the background; follow it on the ticket (step, blocked, column).
+    pub fn ticket_approve_detached(self: &Arc<Self>, id: &str) -> Result<()> {
+        // Held before the first step is set on the ticket and to the end of the background run: the
+        // app does not restart for an update in between.
+        let working = self.working_owned();
+        let t = self.approve_begin(id)?;
+        let (core, id) = (self.clone(), id.to_string());
+        tauri::async_runtime::spawn(async move {
+            let _working = working;
+            core.approve_run(&id, t).await;
+        });
+        Ok(())
+    }
+
+    /// The checks of an approval, and its first step set on the ticket ("Validation…"): from then
+    /// on it is held, and a second one is refused.
+    fn approve_begin(self: &Arc<Self>, id: &str) -> Result<Ticket> {
         let t = self.ticket(id)?;
         if t.column != Column::Review {
             bail!(Refusal::NotInReview);
@@ -1727,7 +1754,7 @@ impl<R: Runtime> Core<R> {
         if busy {
             bail!(Refusal::AgentBusy);
         }
-        let t = self.edit_ticket(id, |t| {
+        self.edit_ticket(id, |t| {
             if t.column != Column::Review {
                 bail!(Refusal::NotInReview);
             }
@@ -1738,7 +1765,12 @@ impl<R: Runtime> Core<R> {
             t.conflict = false;
             t.step = Some(tr!("Validation…", "Approving…"));
             Ok(t.clone())
-        })?;
+        })
+    }
+
+    /// The approval `approve_begin` started: its validation, a failed step blocking the ticket,
+    /// then what may start starts.
+    async fn approve_run(self: &Arc<Self>, id: &str, t: Ticket) {
         if let Err(e) = self.validate(&t).await {
             log::warn!("ticket {}: validation failed: {e:#}", t.key);
             let reason = error_line(&e);
@@ -1757,7 +1789,6 @@ impl<R: Runtime> Core<R> {
             }
         }
         self.schedule();
-        Ok(())
     }
 
     async fn validate(self: &Arc<Self>, t: &Ticket) -> Result<()> {
@@ -1911,6 +1942,7 @@ impl<R: Runtime> Core<R> {
             x.outcome = Some(outcome.ui);
             x.outcome_claude = Some(outcome.claude);
             x.outcome_url = outcome.url;
+            x.outcome_commit = outcome.commit;
             x.done_at = Some(now_ms());
             x.cost = cost;
             Ok(())
@@ -2038,12 +2070,20 @@ impl<R: Runtime> Core<R> {
             drop_worktree(&repo, &tmp).await;
         }
         self.git.refresh(&project.id);
+        // The commit the merge made, read before another merge into the target may go.
+        let commit = match &result {
+            Ok(git::Integrated::Done) => git::branch_head(&repo, target).await,
+            _ => None,
+        };
         // The target is as it was: the next merge into this repository may go.
         drop(merging);
         match result? {
-            git::Integrated::Done => Ok(Some(board::Outcome::of(self.lang().claude, |l| {
-                board::merged_outcome(l, target, &s.strategy)
-            }))),
+            git::Integrated::Done => Ok(Some(
+                board::Outcome::of(self.lang().claude, |l| {
+                    board::merged_outcome(l, target, &s.strategy)
+                })
+                .with_commit(commit),
+            )),
             git::Integrated::Conflict(files) => {
                 self.on_conflict(t, s, target, files).await?;
                 Ok(None)
@@ -2304,7 +2344,7 @@ impl<R: Runtime> Core<R> {
     pub async fn ticket_reject(self: &Arc<Self>, id: &str, comment: &str) -> Result<()> {
         let comment = comment.trim();
         if comment.is_empty() {
-            bail!(tr!("Dis ce qui ne va pas.", "Say what’s wrong."));
+            return Err(comment_missing());
         }
         let busy = self
             .ticket(id)?

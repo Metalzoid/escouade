@@ -1,17 +1,22 @@
 //! The tools that read, called by a real MCP client (rmcp's) on a test core: real git
 //! repositories, the fake `claude`, tickets put on the boards as they are (their autopilot off).
 
+use super::requests_tests::{asks, bash, live};
 use super::tests::{client, names, started, EXPOSED, READING};
 use crate::agent::AgentRt;
 use crate::core::RESUME_MARGIN_MS;
 use crate::core_tests::{git, harness, Harness};
 use crate::model::*;
 use crate::usage::Reading;
+use base64::Engine;
 use rmcp::model::CallToolRequestParams;
 use rmcp::service::RunningService;
 use rmcp::RoleClient;
 use serde_json::{json, Value};
+use std::future::Future;
+use std::net::Ipv4Addr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub(super) type Client = RunningService<RoleClient, ()>;
 
@@ -185,6 +190,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     let required = |name: &str| schema(name)["required"].clone();
     assert_eq!(required("list_tickets"), json!(["project"]));
     assert_eq!(required("get_agent_summary"), json!(["agent"]));
+    assert_eq!(required("wait_ticket"), json!(["tickets"]));
     assert_eq!(required("get_board"), json!(["project"]));
     for name in [
         "list_projects",
@@ -205,6 +211,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "list_tickets",
         "get_ticket",
         "get_agent_summary",
+        "wait_ticket",
         "get_board",
     ] {
         let s = schema(name);
@@ -526,6 +533,14 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             "url": "https://example.atlassian.net/browse/ATL-12",
             "error": "401 Unauthorized",
         },
+        // Nothing of the flow yet: no agent, no branch, nothing blocked, running or done.
+        "agent": null,
+        "branch": null,
+        "worktree": null,
+        "blocked": null,
+        "conflict": false,
+        "step": null,
+        "outcome": null,
     });
     assert_eq!(
         read(&c, "get_ticket", json!({ "ticket": "dem-2" })).await,
@@ -562,6 +577,133 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
     assert_eq!(
         (&own["model"], &own["effort"]),
         (&json!("opus"), &json!("max"))
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_tells_its_agent_branch_block_step_and_outcome_to_follow_the_flow() {
+    let h = harness("mcp-get-ticket-flow");
+    let p = project(&h).await;
+    async fn get(c: &Client, key: &str) -> Value {
+        read(c, "get_ticket", json!({ "ticket": key })).await
+    }
+    // To review on a merge conflict, its agent at rest in its worktree.
+    let conflict = put(
+        &h,
+        Ticket {
+            blocked: Some("Conflit de merge".into()),
+            conflict: true,
+            ..ticket(&p, "DEM-1", "Le conflit", Column::Review, 1)
+        },
+    );
+    let rest = put_agent(&h, &p, "dem-1-le-conflit", 1);
+    h.core.agent(&rest.id).unwrap().lock().meta.worktree = Some(Worktree {
+        path: "/travail/dem-1".into(),
+        branch: "ticket/dem-1".into(),
+        base_branch: "main".into(),
+        existing: false,
+    });
+    link(&h, &rest.id, &conflict.id);
+    // In progress, its agent asking for two permissions: how many wait is told.
+    let working = put(&h, ticket(&p, "DEM-2", "En cours", Column::Doing, 2));
+    let asking = live(&h, &p, "dem-2-en-cours").await;
+    link(&h, &asking.id, &working.id);
+    asks(&h, &asking.id, "r1", bash("ls"));
+    asks(&h, &asking.id, "r2", bash("pwd"));
+    // Its approval running, on an existing branch it takes up, without an agent.
+    put(
+        &h,
+        Ticket {
+            step: Some("Tests…".into()),
+            branch: "feat/existante".into(),
+            ..ticket(&p, "DEM-3", "La validation", Column::Review, 3)
+        },
+    );
+    // Done, merged: what it made, and its agent gone.
+    put(
+        &h,
+        Ticket {
+            agent_id: Some("a-parti".into()),
+            outcome: Some("⤵ Mergé dans main · squash".into()),
+            outcome_url: Some("https://example.com/pull/7".into()),
+            outcome_commit: Some("0123abc".into()),
+            ..ticket(&p, "DEM-4", "Fini", Column::Done, 4)
+        },
+    );
+    // Done with nothing to link to.
+    put(
+        &h,
+        Ticket {
+            outcome: Some("∅ Aucune modification".into()),
+            ..ticket(&p, "DEM-5", "Déjà là", Column::Done, 5)
+        },
+    );
+    let c = external(&h).await;
+    let v = get(&c, "DEM-1").await;
+    assert_eq!(
+        v["agent"],
+        json!({ "id": rest.id, "name": "dem-1-le-conflit", "status": "idle", "requests": 0 })
+    );
+    assert_eq!(
+        (&v["branch"], &v["worktree"]),
+        (&json!("ticket/dem-1"), &json!("/travail/dem-1"))
+    );
+    assert_eq!(
+        (&v["blocked"], &v["conflict"], &v["step"], &v["outcome"]),
+        (
+            &json!("Conflit de merge"),
+            &json!(true),
+            &json!(null),
+            &json!(null)
+        )
+    );
+    let v = get(&c, "DEM-2").await;
+    assert_eq!(v["agent"]["id"], json!(asking.id));
+    assert_eq!(v["agent"]["requests"], json!(2));
+    assert_eq!(
+        (&v["blocked"], &v["conflict"]),
+        (&json!(null), &json!(false))
+    );
+    // The same count as `list_agents` gives.
+    let listed = read(&c, "list_agents", json!({})).await;
+    let row = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == json!(asking.id))
+        .unwrap();
+    assert_eq!(row["requests"], v["agent"]["requests"]);
+    assert_eq!(row["status"], v["agent"]["status"]);
+    let v = get(&c, "DEM-3").await;
+    assert_eq!(
+        (&v["agent"], &v["branch"], &v["worktree"], &v["step"]),
+        (
+            &json!(null),
+            &json!("feat/existante"),
+            &json!(null),
+            &json!("Tests…")
+        )
+    );
+    // An agent that is gone: its id is all that is left.
+    let v = get(&c, "DEM-4").await;
+    assert_eq!(
+        v["agent"],
+        json!({ "id": "a-parti", "name": null, "status": null, "requests": 0 })
+    );
+    assert_eq!(
+        v["outcome"],
+        json!({
+            "text": "⤵ Mergé dans main · squash",
+            "url": "https://example.com/pull/7",
+            "commit": "0123abc",
+        })
+    );
+    let v = get(&c, "DEM-5").await;
+    assert_eq!(
+        v["outcome"],
+        json!({ "text": "∅ Aucune modification", "url": null, "commit": null })
     );
     c.cancel().await.unwrap();
     h.core.mcp.stop();
@@ -953,6 +1095,526 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(false), json!(true)));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- wait_ticket ----------
+
+/// How far into a wait the change it waits for is made: the wait has most likely begun.
+const CHANGE_AFTER: Duration = Duration::from_millis(300);
+
+/// How far into a wait a ticket is deleted: the wait names it, so it must have found it first
+/// (a ticket deleted before is an unknown one to the call).
+const DELETE_AFTER: Duration = Duration::from_secs(1);
+
+/// The timeout of a wait that must be answered by a change: far beyond the time the answer takes,
+/// even on a loaded machine.
+const LONG: u64 = 20;
+
+/// What `wait_ticket` answers to `args`, and how long it took.
+async fn waited(c: &Client, args: Value) -> (Value, Duration) {
+    let began = Instant::now();
+    let answer = read(c, "wait_ticket", args).await;
+    (answer, began.elapsed())
+}
+
+/// The `since` of `tickets` (keys) as they are now, from a first short wait. A wait that begins
+/// with it compares the tickets with it, whether it has looked at them yet when the change is made
+/// or not: what it answers does not depend on timing.
+async fn baseline(c: &Client, tickets: Value) -> Value {
+    let (v, _) = waited(c, json!({ "tickets": tickets, "timeout": 1 })).await;
+    v["since"].clone()
+}
+
+/// `waited`, with `change` made `after` into it (`args` hold the `since` to compare with).
+async fn waited_after(
+    c: &Client,
+    args: Value,
+    after: Duration,
+    change: impl Future<Output = ()>,
+) -> (Value, Duration) {
+    let change = async {
+        tokio::time::sleep(after).await;
+        change.await;
+    };
+    tokio::join!(waited(c, args), change).0
+}
+
+/// `waited_after` `CHANGE_AFTER`.
+async fn waited_during(
+    c: &Client,
+    args: Value,
+    change: impl Future<Output = ()>,
+) -> (Value, Duration) {
+    waited_after(c, args, CHANGE_AFTER, change).await
+}
+
+/// A change of the ticket, as the core makes one.
+fn edit(h: &Harness, id: &str, f: impl FnOnce(&mut Ticket)) {
+    h.core
+        .edit_ticket(id, |t| {
+            f(t);
+            Ok(())
+        })
+        .unwrap();
+}
+
+/// Answered by the change, well before the `LONG` seconds the wait was given.
+fn answered_by_the_change(took: Duration) {
+    assert!(took < Duration::from_secs(10), "{took:?}");
+}
+
+/// What `before` says of a ticket as it was: in `column`, nothing else going on.
+fn calm(column: &str) -> Value {
+    json!({
+        "column": column,
+        "blocked": false,
+        "conflict": false,
+        "waiting": false,
+        "resting": false,
+    })
+}
+
+/// What `tickets` says of a ticket that is in `column`, nothing else going on.
+fn still_in(key: &str, id: &str, column: &str) -> Value {
+    json!({
+        "key": key,
+        "id": id,
+        "column": column,
+        "blocked": null,
+        "conflict": false,
+        "step": null,
+        "waiting": false,
+        "resting": false,
+        "gone": false,
+    })
+}
+
+#[tokio::test]
+async fn a_change_during_the_wait_is_answered_at_once_with_what_changed_and_how_it_was() {
+    let h = harness("mcp-wait-change");
+    let p = project(&h).await;
+    let one = put(&h, ticket(&p, "DEM-1", "Un", Column::Doing, 1));
+    let two = put(&h, ticket(&p, "DEM-2", "Deux", Column::Doing, 2));
+    let c = external(&h).await;
+    let since = baseline(&c, json!(["dem-1", "DEM-2"])).await;
+    let args = json!({ "tickets": ["dem-1", "DEM-2"], "timeout": LONG, "since": since });
+    // The first one is blocked.
+    let (v, took) = waited_during(&c, args, async {
+        edit(&h, &one.id, |t| t.blocked = Some("Tests en échec".into()));
+    })
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(v["changed"], json!(true));
+    assert_eq!(
+        v["changes"],
+        json!([{ "key": "DEM-1", "what": ["blocked"], "before": calm("doing") }])
+    );
+    // Every ticket asked is given as it is now, in the order asked.
+    let mut blocked = still_in("DEM-1", &one.id, "doing");
+    blocked["blocked"] = json!("Tests en échec");
+    assert_eq!(
+        v["tickets"],
+        json!([blocked, still_in("DEM-2", &two.id, "doing")])
+    );
+    assert!(v["waited"].is_u64(), "{v}");
+    assert_eq!(
+        last_entry(&h),
+        (
+            "Claude (hors Escouade)".into(),
+            "wait_ticket".into(),
+            "tickets: dem-1, DEM-2 · timeout: 20".into(),
+            "ok"
+        )
+    );
+    // The second one goes to review: its column.
+    let args = json!({ "tickets": ["dem-1", "DEM-2"], "timeout": LONG, "since": v["since"] });
+    let (v, took) = waited_during(&c, args, async {
+        edit(&h, &two.id, |t| t.column = Column::Review);
+    })
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        v["changes"],
+        json!([{ "key": "DEM-2", "what": ["column"], "before": calm("doing") }])
+    );
+    // A merge conflict stops the first one: its column, its block and the conflict.
+    let args = json!({ "tickets": ["dem-1", "DEM-2"], "timeout": LONG, "since": v["since"] });
+    let (v, took) = waited_during(&c, args, async {
+        edit(&h, &one.id, |t| {
+            t.column = Column::Review;
+            t.blocked = Some("Conflit de merge".into());
+            t.conflict = true;
+        });
+    })
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        v["changes"],
+        json!([{
+            "key": "DEM-1",
+            "what": ["column", "blocked", "conflict"],
+            "before": {
+                "column": "doing", "blocked": true, "conflict": false,
+                "waiting": false, "resting": false,
+            },
+        }])
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn without_a_change_it_answers_after_its_timeout_that_nothing_changed_and_gives_since() {
+    let h = harness("mcp-wait-timeout");
+    let p = project(&h).await;
+    let one = put(&h, ticket(&p, "DEM-1", "Un", Column::Doing, 1));
+    let two = put(&h, ticket(&p, "DEM-2", "Deux", Column::Todo, 2));
+    let c = external(&h).await;
+    // A ticket named twice is watched once, and a blank since is none.
+    let (v, took) = waited(
+        &c,
+        json!({ "tickets": ["DEM-1", "dem-1", two.id], "timeout": 1, "since": " " }),
+    )
+    .await;
+    assert!(
+        took >= Duration::from_secs(1) && took < Duration::from_secs(10),
+        "{took:?}"
+    );
+    assert_eq!((&v["changed"], &v["changes"]), (&json!(false), &json!([])));
+    assert_eq!(v["waited"], json!(1));
+    assert_eq!(
+        v["tickets"],
+        json!([
+            still_in("DEM-1", &one.id, "doing"),
+            still_in("DEM-2", &two.id, "todo"),
+        ])
+    );
+    // The cursor: base64url without padding, a list of what is watched of each ticket.
+    let since = v["since"].as_str().unwrap();
+    assert!(
+        since
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+        "{since}"
+    );
+    let cursor: Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(since)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        cursor,
+        json!([
+            {
+                "id": one.id, "column": "doing", "blocked": null,
+                "conflict": false, "waiting": false, "resting": false,
+            },
+            {
+                "id": two.id, "column": "todo", "blocked": null,
+                "conflict": false, "waiting": false, "resting": false,
+            },
+        ])
+    );
+    assert_eq!(
+        last_entry(&h),
+        (
+            "Claude (hors Escouade)".into(),
+            "wait_ticket".into(),
+            format!("tickets: DEM-1, dem-1, {} · timeout: 1", two.id),
+            "ok"
+        )
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_change_made_between_two_calls_is_answered_at_once_by_the_since_of_the_first() {
+    let h = harness("mcp-wait-since");
+    let p = project(&h).await;
+    let t = put(&h, ticket(&p, "DEM-1", "Un", Column::Doing, 1));
+    let c = external(&h).await;
+    // A first answer, for its cursor.
+    let since = baseline(&c, json!(["DEM-1"])).await;
+    let (first, _) = waited_during(
+        &c,
+        json!({ "tickets": ["DEM-1"], "timeout": LONG, "since": since }),
+        async {
+            edit(&h, &t.id, |t| t.blocked = Some("Bloqué".into()));
+        },
+    )
+    .await;
+    assert_eq!(first["changes"][0]["what"], json!(["blocked"]));
+    // It goes to review, its block gone, before the next call: which it would miss without it.
+    edit(&h, &t.id, |t| {
+        t.column = Column::Review;
+        t.blocked = None;
+    });
+    let (second, took) = waited(
+        &c,
+        json!({ "tickets": ["DEM-1"], "timeout": LONG, "since": first["since"] }),
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        second["changes"],
+        json!([{
+            "key": "DEM-1",
+            "what": ["column", "blocked"],
+            "before": {
+                "column": "doing", "blocked": true, "conflict": false,
+                "waiting": false, "resting": false,
+            },
+        }])
+    );
+    // What it said is not told again, and a ticket its cursor does not hold is as it is at the
+    // call: nothing changed.
+    put(&h, ticket(&p, "DEM-2", "Deux", Column::Doing, 2));
+    let (third, took) = waited(
+        &c,
+        json!({ "tickets": ["DEM-1", "DEM-2"], "timeout": 1, "since": second["since"] }),
+    )
+    .await;
+    assert!(took >= Duration::from_secs(1), "{took:?}");
+    assert_eq!(third["changed"], json!(false));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_that_comes_to_rest_in_to_review_makes_its_ticket_resting() {
+    let h = harness("mcp-wait-resting");
+    let p = project(&h).await;
+    let review = put(&h, ticket(&p, "DEM-1", "À relire", Column::Review, 1));
+    let worker = put_agent(&h, &p, "dem-1-a-relire", 1);
+    link(&h, &worker.id, &review.id);
+    let status = |s: AgentStatus| h.core.agent(&worker.id).unwrap().lock().meta.status = s;
+    status(AgentStatus::Running);
+    // Idle, but its ticket is in progress: it is not ready to approve.
+    let doing = put(&h, ticket(&p, "DEM-2", "En cours", Column::Doing, 2));
+    let idle = put_agent(&h, &p, "dem-2-en-cours", 2);
+    link(&h, &idle.id, &doing.id);
+    let c = external(&h).await;
+    let since = baseline(&c, json!(["DEM-1", "DEM-2"])).await;
+    let (v, took) = waited_during(
+        &c,
+        json!({ "tickets": ["DEM-1", "DEM-2"], "timeout": LONG, "since": since }),
+        async { status(AgentStatus::Idle) },
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        v["changes"],
+        json!([{ "key": "DEM-1", "what": ["resting"], "before": calm("review") }])
+    );
+    let resting: Vec<bool> = v["tickets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["resting"].as_bool().unwrap())
+        .collect();
+    assert_eq!(resting, [true, false]);
+    // At work again (sent back, a conflict handed over): no longer resting.
+    let (v, took) = waited_during(
+        &c,
+        json!({ "tickets": ["DEM-1"], "timeout": LONG, "since": v["since"] }),
+        async { status(AgentStatus::Running) },
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(v["changes"][0]["what"], json!(["resting"]));
+    assert_eq!(v["tickets"][0]["resting"], json!(false));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_request_that_waits_for_an_answer_makes_its_ticket_waiting_until_it_is_answered() {
+    let h = harness("mcp-wait-waiting");
+    let p = project(&h).await;
+    let t = put(&h, ticket(&p, "DEM-1", "Demande", Column::Doing, 1));
+    let agent = live(&h, &p, "dem-1-demande").await;
+    link(&h, &agent.id, &t.id);
+    let c = external(&h).await;
+    let since = baseline(&c, json!(["DEM-1"])).await;
+    let (v, took) = waited_during(
+        &c,
+        json!({ "tickets": ["DEM-1"], "timeout": LONG, "since": since }),
+        async { asks(&h, &agent.id, "r1", bash("ls")) },
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        v["changes"],
+        json!([{ "key": "DEM-1", "what": ["waiting"], "before": calm("doing") }])
+    );
+    assert_eq!(v["tickets"][0]["waiting"], json!(true));
+    // The user answers it in the window: it no longer waits.
+    let (v, took) = waited_during(
+        &c,
+        json!({ "tickets": ["DEM-1"], "timeout": LONG, "since": v["since"] }),
+        async {
+            h.core
+                .answer_permission(&agent.id, "r1", "allow", None)
+                .unwrap()
+        },
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(v["changes"][0]["what"], json!(["waiting"]));
+    assert_eq!(v["tickets"][0]["waiting"], json!(false));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_deleted_during_the_wait_is_gone_and_left_out_of_since() {
+    let h = harness("mcp-wait-gone");
+    let p = project(&h).await;
+    let gone = put(&h, ticket(&p, "DEM-1", "Un", Column::Todo, 1));
+    let kept = put(&h, ticket(&p, "DEM-2", "Deux", Column::Todo, 2));
+    let c = external(&h).await;
+    let since = baseline(&c, json!(["DEM-1", "DEM-2"])).await;
+    let (v, took) = waited_after(
+        &c,
+        json!({ "tickets": ["DEM-1", "DEM-2"], "timeout": LONG, "since": since }),
+        DELETE_AFTER,
+        async { h.core.ticket_delete(&gone.id).await.unwrap() },
+    )
+    .await;
+    answered_by_the_change(took);
+    assert_eq!(
+        v["changes"],
+        json!([{ "key": "DEM-1", "what": ["gone"], "before": calm("todo") }])
+    );
+    // It is still named, as it was last seen.
+    let mut last = still_in("DEM-1", &gone.id, "todo");
+    last["gone"] = json!(true);
+    assert_eq!(
+        v["tickets"],
+        json!([last, still_in("DEM-2", &kept.id, "todo")])
+    );
+    let cursor: Value = serde_json::from_slice(
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(v["since"].as_str().unwrap())
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cursor.as_array().unwrap().len(), 1);
+    assert_eq!(cursor[0]["id"], json!(kept.id));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_wait_stops_when_its_client_drops_the_connection_and_the_log_says_it_was_cancelled() {
+    use tokio::io::AsyncWriteExt;
+    let h = harness("mcp-wait-cancelled");
+    let p = project(&h).await;
+    put(&h, ticket(&p, "DEM-1", "Un", Column::Doing, 1));
+    let (port, token) = started(&h);
+    // A raw request, to be able to leave: a long wait on a ticket that does not change.
+    let body = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": { "name": "wait_ticket", "arguments": { "tickets": ["DEM-1"], "timeout": 60 } },
+    })
+    .to_string();
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-11-25\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let mut stream = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    stream.write_all(request.as_bytes()).await.unwrap();
+    tokio::time::sleep(CHANGE_AFTER).await;
+    assert!(
+        h.core.mcp.activity.entries().is_empty(),
+        "answered before the client left"
+    );
+    // The client gives up: the wait stops and is logged, long before its minute is over.
+    drop(stream);
+    let began = Instant::now();
+    let entry = loop {
+        if let Some(e) = h.core.mcp.activity.entries().pop() {
+            break e;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(10),
+            "the wait goes on though its client left"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(
+        (entry.tool.as_str(), entry.outcome, entry.message.as_deref()),
+        (
+            "wait_ticket",
+            "error",
+            Some("Attente annulée par le client.")
+        )
+    );
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_wait_asked_for_nothing_too_much_an_unknown_ticket_or_a_since_that_is_none_fails() {
+    let h = harness("mcp-wait-failures");
+    let p = project(&h).await;
+    put(&h, ticket(&p, "DEM-1", "Un", Column::Doing, 1));
+    let c = external(&h).await;
+    let failed = |said: String| {
+        let e = h.core.mcp.activity.entries().pop().unwrap();
+        assert_eq!((e.tool.as_str(), e.outcome), ("wait_ticket", "error"));
+        assert_eq!(e.message.as_deref(), Some(said.as_str()));
+        said
+    };
+    let said = refused(&c, "wait_ticket", json!({ "tickets": [] })).await;
+    assert_eq!(
+        failed(said),
+        "Donne au moins un ticket à attendre : sa clé ou son id."
+    );
+    // Twenty at most.
+    let many: Vec<String> = (0..21).map(|_| "DEM-1".into()).collect();
+    let said = refused(&c, "wait_ticket", json!({ "tickets": many })).await;
+    assert_eq!(failed(said), "21 tickets : 20 au plus.");
+    let said = refused(&c, "wait_ticket", json!({ "tickets": ["DEM-1", "DEM-9"] })).await;
+    assert!(
+        said.starts_with("Aucun ticket « DEM-9 ». Tickets : DEM-1 « Un »"),
+        "{said}"
+    );
+    failed(said);
+    let said = refused(&c, "wait_ticket", json!({ "tickets": [" "] })).await;
+    assert_eq!(failed(said), "Donne un ticket : sa clé ou son id.");
+    // A cursor is the one an answer gave, as it was given: not any text, nor any JSON.
+    let not_json = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode("pas du json");
+    let not_marks = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode("{}");
+    for since in ["!?", &not_json, &not_marks] {
+        let said = refused(
+            &c,
+            "wait_ticket",
+            json!({ "tickets": ["DEM-1"], "since": since }),
+        )
+        .await;
+        assert_eq!(
+            failed(said),
+            "since n’est pas un curseur rendu par wait_ticket : redonne-le tel qu’il t’a été donné, ou laisse-le de côté."
+        );
+    }
+    // A timeout that is no number is the router's refusal, which says what it expected.
+    let said = refused(
+        &c,
+        "wait_ticket",
+        json!({ "tickets": ["DEM-1"], "timeout": "long" }),
+    )
+    .await;
+    assert!(said.contains("\"long\"") && said.contains("u64"), "{said}");
+    let e = h.core.mcp.activity.entries().pop().unwrap();
+    assert_eq!((e.tool.as_str(), e.outcome), ("wait_ticket", "error"));
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

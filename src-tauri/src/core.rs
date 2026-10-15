@@ -611,6 +611,16 @@ impl Drop for Working<'_> {
     }
 }
 
+/// `Working`, for work a task of its own goes on with: it owns the core, so it can be taken before
+/// the task is spawned.
+pub(crate) struct WorkingOwned<R: Runtime>(Arc<Core<R>>);
+
+impl<R: Runtime> Drop for WorkingOwned<R> {
+    fn drop(&mut self) {
+        self.0.works.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 pub struct Core<R: Runtime = Wry> {
     /// Itself, for what runs in the background from a method that only has `&self`.
     me: std::sync::Weak<Self>,
@@ -2859,6 +2869,12 @@ impl<R: Runtime> Core<R> {
     pub(crate) fn working(&self) -> Working<'_> {
         self.works.fetch_add(1, Ordering::AcqRel);
         Working(&self.works)
+    }
+
+    /// `working`, for a task spawned from here: counted from now, not from when the task begins.
+    pub(crate) fn working_owned(self: &Arc<Self>) -> WorkingOwned<R> {
+        self.works.fetch_add(1, Ordering::AcqRel);
+        WorkingOwned(self.clone())
     }
 
     /// A window that subscribes (started, or reloaded and so without the files it held) has no unsaved file yet.

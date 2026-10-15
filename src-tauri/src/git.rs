@@ -905,6 +905,18 @@ pub async fn branch_exists(repo: &str, branch: &str) -> bool {
     ref_exists(repo, &format!("refs/heads/{branch}")).await
 }
 
+/// The commit the local branch `branch` points at; None when `repo` has no such branch (a revision
+/// or a tag of that name is none, as for `branch_exists`).
+pub async fn branch_head(repo: &str, branch: &str) -> Option<String> {
+    if !branch_exists(repo, branch).await {
+        return None;
+    }
+    text(repo, &["rev-parse", &format!("refs/heads/{branch}")])
+        .await
+        .ok()
+        .filter(|hash| !hash.is_empty())
+}
+
 /// The local branches, the checked-out one first.
 pub async fn branches(repo: &str) -> Result<Vec<String>> {
     let out = text(
@@ -5651,6 +5663,22 @@ sleep {seconds}
         assert!(e.to_string().contains("main~1"), "{e}");
         assert_eq!(head_branch(&r).await, "main");
         assert!(local_of(&r, "side^").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_branch_head_is_the_commit_of_a_local_branch_and_none_for_anything_else() {
+        let r = repo("git-branch-head");
+        let first = text(&r, &["rev-parse", "HEAD"]).await.unwrap();
+        git(&r, &["commit", "-q", "--allow-empty", "-m", "second"]);
+        let second = text(&r, &["rev-parse", "HEAD"]).await.unwrap();
+        git(&r, &["branch", "side", &first]);
+        assert_eq!(branch_head(&r, "main").await, Some(second));
+        assert_eq!(branch_head(&r, "side").await, Some(first));
+        // A revision, a tag or a branch that is not there is no branch.
+        git(&r, &["tag", "v1"]);
+        for not_a_branch in ["main~1", "main^{commit}", "v1", "absent", ""] {
+            assert_eq!(branch_head(&r, not_a_branch).await, None, "{not_a_branch}");
+        }
     }
 
     #[tokio::test]
