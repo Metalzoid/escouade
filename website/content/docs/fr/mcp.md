@@ -1,6 +1,6 @@
 # Le serveur MCP
 
-Le serveur MCP d’Escouade laisse Claude (dans un terminal, un autre outil ou un agent d’Escouade) lire tes projets, tes agents et tes tickets, créer, modifier et lancer des tickets, et piloter des agents, sous les mêmes garde-fous que le pilote auto.
+Le serveur MCP d’Escouade laisse Claude (dans un terminal, un autre outil ou un agent d’Escouade) lire tes projets, tes agents et tes tickets, créer, modifier et lancer des tickets, et piloter des agents, y compris répondre à leurs demandes, sous les mêmes garde-fous que le pilote auto.
 
 ## À quoi il sert
 
@@ -10,7 +10,7 @@ MCP (Model Context Protocol) est le protocole par lequel Claude Code appelle des
 - **Un autre outil** qui parle MCP peut se connecter de la même façon (voir [Jeton et réseau](#jeton-et-reseau)).
 - **Un agent d’Escouade**, de n’importe quel projet, avec un jeton à lui (voir [Les agents d’Escouade et le serveur](#les-agents-d-escouade-et-le-serveur)).
 
-Le serveur tourne sur ta machine seule. Il ne sert qu’à lire et à commander ; il n’accepte aucune permission à ta place, ne lance aucune commande, ne merge rien et ne supprime rien.
+Le serveur tourne sur ta machine seule. Il ne sert qu’à lire et à commander ; il ne lance aucune commande, ne merge rien et ne supprime rien. Il peut répondre à la demande d’un agent à ta place, mais jamais par « Toujours autoriser » : une règle de permission qui dure reste ta décision, dans la fenêtre.
 
 ## Activer « Claude et les agents peuvent piloter Escouade »
 
@@ -37,16 +37,17 @@ Dans les arguments, un projet se nomme par son id ou son nom (casse libre), un a
 
 ### Lire
 
-Ces six outils ne changent rien.
+Ces sept outils ne changent rien.
 
 | Outil | Arguments | Ce qu’il rend |
 |---|---|---|
 | `list_projects` | aucun | Les projets, dans l’ordre de l’app : id, nom, dossier, branche git courante, nombre d’agents (archivés exclus) et nombre de tickets dans chaque colonne. |
-| `list_agents` | `project` (facultatif) | Les agents non archivés, du plus ancien au plus récent, de tous les projets ou d’un seul : id, nom, projet, état (`idle`, `running`, `waiting`, `done` ou `error`), si une question ou une autorisation attend ta réponse, clé de leur ticket, modèle, compte Claude et coût en dollars. |
+| `list_agents` | `project` (facultatif) | Les agents non archivés, du plus ancien au plus récent, de tous les projets ou d’un seul : id, nom, projet, état (`idle`, `running`, `waiting`, `done` ou `error`), si une question ou une autorisation attend ta réponse et combien, clé de leur ticket, modèle, compte Claude et coût en dollars. |
 | `list_tickets` | `project`, `column` (facultatif : `todo`, `doing`, `review` ou `done`) | Les tickets d’un projet dans l’ordre du Kanban : id, clé, titre, colonne, clés des tickets qu’ils attendent, nom de leur agent et motif du blocage. |
 | `get_ticket` | `ticket` | Un ticket entier : titre, description, critères (atteints ou non, avec la note de l’agent), boucles (la courante et le maximum), colonne, tickets attendus, avancement et ticket externe d’origine (Jira, Trello, GitHub ou Linear). Un agent d’Escouade peut omettre `ticket` pour lire le sien. |
 | `get_usage` | aucun | Le quota de chaque compte Claude : si les nouveaux agents y partent maintenant, l’usage de ses fenêtres de 5 h et hebdomadaire (`pct` de 0 à 100, `resetsAt`), et pourquoi le pilote auto retient les tickets (`reason` : `fiveHour`, `week` ou `limit`), jusqu’à quand. |
-| `get_agent_summary` | `agent`, `project` (facultatif) | Un agent sans sa conversation : id, nom, état, clé du ticket, dernier message (2 000 caractères au plus ; un message plus long donne son début et sa fin) et fichiers modifiés (les 100 derniers au plus). |
+| `get_agent_summary` | `agent`, `project` (facultatif) | Un agent sans sa conversation : id, nom, état, clé du ticket, dernier message (2 000 caractères au plus ; un message plus long donne son début et sa fin) et fichiers modifiés (les 100 derniers au plus), avec le nombre et le type des demandes qui attendent une réponse. |
+| `list_requests` | `agent` (facultatif), `project` (facultatif) | Les questions et les demandes d’autorisation qui attendent ta réponse, d’un agent, d’un projet ou de tous, dans l’ordre où elles sont venues : l’agent et la clé de son ticket, `request` (l’id que nomment les deux outils de réponse), `type` (`permission`, `question`, ou `plan` pour un plan à approuver), depuis quand, l’outil et ce sur quoi il agit (la commande, le fichier, le plan entier), tout ce que Claude Code a envoyé (le contenu d’un fichier à écrire, les chaînes d’un Edit, les options d’une commande), la raison, si Claude Code la refuserait par défaut, et pour une question ses questions avec leurs options et si plusieurs se choisissent. `cut` dit si un texte a été coupé : la demande entière est dans la conversation. Un agent en vue Claude Code n’a rien ici : ses demandes sont dans son terminal. |
 
 ### Agir
 
@@ -61,6 +62,8 @@ Ces outils font ce que tu ferais dans la fenêtre, par les mêmes fonctions : la
 | `create_agent` | `project`, `message`, `worktree`, `model` | Crée un agent dans un projet, avec son premier message, sans changer l’agent que tu regardes. `worktree` (vrai ou faux) dit s’il travaille dans un worktree à lui, sinon le projet décide ; `model` se nomme comme dans Claude Code (`sonnet`, `opus`, `haiku`…). Rend l’id et le nom de l’agent. |
 | `send_message` | `agent`, `project`, `text` | Écrit à un agent. Un agent au travail lit le message après son tour en cours (la réponse dit `queued`). |
 | `stop_agent` | `agent`, `project` | Interrompt le tour en cours d’un agent, comme le bouton stop de sa conversation. L’agent reste, et peut recevoir un message ensuite. |
+| `answer_permission` | `agent`, `project`, `request`, `decision` (`allow` ou `deny`), `message` | Répond à une demande d’autorisation d’un agent comme « Autoriser » et « Refuser » de sa carte, ou approuve (`allow`) ou renvoie (`deny`) son plan. `message`, avec `deny`, dit à l’agent pourquoi, ou quoi faire à la place. « Toujours autoriser » n’est pas offert (`always` est refusé) : une règle durable reste ta décision, dans la fenêtre. La carte de la demande, dans la conversation de l’agent, dit qui a répondu (« Autorisé par `<auteur>` via Escouade »), et l’agent lit qui a refusé. |
+| `answer_question` | `agent`, `project`, `request`, `answers` | Répond à une question d’un agent comme sa carte de question : pour chaque question (`question`, son texte, qu’on peut omettre quand il n’y en a qu’une), les libellés des options choisies (`choices`, plusieurs seulement quand la question l’accepte) ou un texte libre (`text`). Chaque question veut une réponse. La carte dit « Répondu par `<auteur>` via Escouade », et l’agent lit chaque réponse suivie de son auteur. |
 
 Un titre fait 200 caractères au plus, une description 10 000, et un ticket 30 critères de 500 caractères au plus. Un ticket créé par le serveur a le nombre de boucles par défaut, 5, et sa propre branche.
 
@@ -81,9 +84,10 @@ Les outils qui agissent suivent les règles de la fenêtre et du pilote auto :
 - **En parallèle.** Le maximum de tickets « En parallèle » du projet n’est pas dépassé par `start_ticket`, ni son maximum d’agents qui travaillent en même temps par `create_agent`.
 - **Dépendances.** Un ticket qui vient après des tickets non terminés n’est pas lancé sans eux : le refus dit lesquels, et `update_ticket` retire les dépendances. Une dépendance circulaire est refusée.
 - **Le Kanban.** `start_ticket` est refusé quand le Kanban du projet ne démarre rien pour l’instant (la branche cible n’a aucun commit ou est introuvable, aucun compte actif ne sert le projet) ; le refus dit pourquoi.
-- **Les agents d’Escouade** n’agissent que dans leur propre projet (ils lisent les autres), ne s’écrivent pas à eux-mêmes et ne s’arrêtent pas eux-mêmes. On n’écrit pas à un agent archivé.
-- **Aucun outil** n’accepte une permission, ne répond à ta place, ne lance une commande ou un test, ne merge, ni ne supprime (projet, agent ou ticket). Un agent poussé par un contenu piégé ne peut donc pas s’en servir pour monter en droits.
-- **Ce qui vient du serveur n’est jamais pris pour toi.** Un message envoyé à un agent (`send_message`, premier message de `create_agent`) est lu par l’agent et montré dans sa conversation sous « Message de `<auteur>` : », l’auteur étant le nom de l’agent qui l’envoie ou « Claude (hors Escouade) ». Un ticket créé ou découpé par le serveur se termine par « Créé par `<auteur>` via Escouade », un ticket modifié par « Modifié par `<auteur>` via Escouade », sur sa carte comme dans le protocole de son agent.
+- **Les agents d’Escouade** n’agissent que dans leur propre projet (ils lisent les autres), ne s’écrivent pas à eux-mêmes, ne s’arrêtent pas eux-mêmes et ne répondent pas à leurs propres demandes. On n’écrit pas à un agent archivé.
+- **Répondre à une demande.** Une fois « Claude et les agents peuvent piloter Escouade » allumé, tout client du serveur voit les demandes de tous les projets et peut y répondre, Claude hors Escouade comme les agents, sans réglage de plus ; un agent ne répond qu’à celles des agents de son propre projet, jamais aux siennes. `answer_permission` n’offre que `allow` et `deny` : « Toujours autoriser » reste ta décision, dans la fenêtre. Une demande qui n’attend plus de réponse (tu y as répondu dans la fenêtre, un autre client aussi, ou l’agent ne tourne plus) est refusée, et si deux réponses arrivent en même temps, une seule passe. Un agent en vue Claude Code n’a rien à répondre ici : ses demandes sont dans son terminal.
+- **Aucun outil** ne lance une commande ou un test, ne merge, ni ne supprime (projet, agent ou ticket). Un agent poussé par un contenu piégé ne peut donc pas s’en servir pour monter en droits. L’exception est la réponse aux demandes des agents : avec l’interrupteur allumé, un agent peut autoriser, une demande à la fois et jamais pour de bon, ce qu’un autre agent de son projet demande.
+- **Ce qui vient du serveur n’est jamais pris pour toi.** Un message envoyé à un agent (`send_message`, premier message de `create_agent`) est lu par l’agent et montré dans sa conversation sous « Message de `<auteur>` : », l’auteur étant le nom de l’agent qui l’envoie ou « Claude (hors Escouade) ». Un ticket créé ou découpé par le serveur se termine par « Créé par `<auteur>` via Escouade », un ticket modifié par « Modifié par `<auteur>` via Escouade », sur sa carte comme dans le protocole de son agent. La carte d’une demande à laquelle le serveur a répondu dit qui l’a fait (« Autorisé par `<auteur>` via Escouade », « Refusé par `<auteur>` via Escouade », « Répondu par `<auteur>` via Escouade »), et un refus, comme chaque réponse à une question, dit à Claude de qui il vient, pas que c’est toi (« Refusé par `<auteur>` via Escouade », « SQLite (réponse de `<auteur>` via Escouade) »).
 
 Une demande d’autorisation d’un outil d’Escouade le nomme en clair (« Escouade · Créer un ticket », « Escouade · Lancer un agent »…) et montre ce que Claude lui donne, un argument par ligne. Une valeur de plus de 2 000 caractères est coupée : la carte dit combien ne sont pas montrés et renvoie à la conversation.
 
@@ -91,7 +95,7 @@ Une demande d’autorisation d’un outil d’Escouade le nomme en clair (« Es
 
 L’interrupteur « Claude et les agents peuvent piloter Escouade » sert aussi les agents d’Escouade, ceux de tous les projets : il n’y a rien à permettre dans les réglages d’un projet.
 
-- **Allumé**, chaque agent reçoit le serveur au démarrage de son processus, avec un jeton à lui : il agit en son nom, jamais comme Claude hors Escouade. Il lit les tickets et les agents, et peut créer des tickets ou lancer d’autres agents, ce qui dépense du quota.
+- **Allumé**, chaque agent reçoit le serveur au démarrage de son processus, avec un jeton à lui : il agit en son nom, jamais comme Claude hors Escouade. Il lit les tickets et les agents, et peut créer des tickets ou lancer d’autres agents, ce qui dépense du quota. Il voit aussi les questions et les demandes d’autorisation des agents de tous les projets, et peut répondre à celles des agents de son propre projet.
 - **Éteint**, les agents déjà lancés perdent les outils tout de suite, et Escouade tient son serveur à l’écart de chaque agent qui démarre, même si une entrée `escouade` reste dans ta config de Claude Code : ses outils sont refusés, et le serveur lui-même n’est pas chargé (Escouade démarre l’agent avec le réglage `deniedMcpServers` de Claude Code). L’agent ne reçoit donc ni les outils, ni les instructions du serveur.
 - **Un agent déjà lancé** quand tu allumes l’interrupteur garde un processus sans les outils. Sa conversation affiche « Outils d’Escouade au prochain démarrage » avec « Relancer » : son processus s’arrête et le suivant reprend la même session : la conversation reste, une commande lancée en arrière-plan s’arrête. Le bouton attend qu’il ait fini ce qu’il fait (son tour, ta réponse, la préparation de son worktree, un sous-agent ou un workflow en arrière-plan). En vue Claude Code, « Relancer » redémarre son interface. Réglages › Claude Code dit combien d’agents sont dans ce cas.
 - Ce n’est pas un cloisonnement : un agent n’agit que dans son propre projet, mais lit les autres.

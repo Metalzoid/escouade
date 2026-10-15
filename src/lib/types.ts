@@ -925,6 +925,8 @@ export interface QuestionItem extends Base {
   toolUseId: string;
   questions: Question[];
   answers: Record<string, string> | null;
+  /** Who answered, when it was a client of the MCP server and not the user in the window (an agent's name, « Claude (hors Escouade) »). */
+  by?: string;
   cancelled?: boolean;
   ts: number;
 }
@@ -940,6 +942,8 @@ export interface PermissionItem extends Base {
   defaultNo: boolean;
   decision: 'allow' | 'always' | 'deny' | null;
   message?: string | null;
+  /** Who answered, when it was a client of the MCP server and not the user in the window (an agent's name, « Claude (hors Escouade) »). */
+  by?: string;
   cancelled?: boolean;
   ts: number;
 }

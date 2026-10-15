@@ -22,6 +22,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   get_ticket: 'mcp.tools.getTicket',
   get_usage: 'mcp.tools.getUsage',
   get_agent_summary: 'mcp.tools.getAgentSummary',
+  list_requests: 'mcp.tools.listRequests',
   create_ticket: 'mcp.tools.createTicket',
   update_ticket: 'mcp.tools.updateTicket',
   move_ticket: 'mcp.tools.moveTicket',
@@ -29,6 +30,8 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   create_agent: 'mcp.tools.createAgent',
   send_message: 'mcp.tools.sendMessage',
   stop_agent: 'mcp.tools.stopAgent',
+  answer_permission: 'mcp.tools.answerPermission',
+  answer_question: 'mcp.tools.answerQuestion',
   report_progress: 'mcp.tools.reportProgress',
   split_ticket: 'mcp.tools.splitTicket',
 };

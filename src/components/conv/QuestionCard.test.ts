@@ -74,6 +74,24 @@ describe('QuestionCard', () => {
     expect(screen.queryByRole('button', { name: 'SQLite' })).not.toBeInTheDocument();
   });
 
+  it('says who answered when a client of the MCP server did, and nothing of an author when the user did', () => {
+    const answers = { 'Quelle base de données ?': 'PostgreSQL' };
+    const { unmount } = render(QuestionCard, { item: item({ answers, by: 'agent-2' }), agentId: 'a1', pending: false });
+    expect(screen.getByText('→ PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByText('Répondu par agent-2 via Escouade')).toBeInTheDocument();
+    unmount();
+    render(QuestionCard, { item: item({ answers }), agentId: 'a1', pending: false });
+    expect(screen.getByText('→ PostgreSQL')).toBeInTheDocument();
+    expect(screen.queryByText(/via Escouade/)).not.toBeInTheDocument();
+  });
+
+  it('says in English who answered through the MCP server', () => {
+    setLang('en');
+    const answers = { 'Quelle base de données ?': 'PostgreSQL' };
+    render(QuestionCard, { item: item({ answers, by: 'Claude (outside Escouade)' }), agentId: 'a1', pending: false });
+    expect(screen.getByText('Answered by Claude (outside Escouade) through Escouade')).toBeInTheDocument();
+  });
+
   it('says when the question was never answered', () => {
     render(QuestionCard, { item: item(), agentId: 'a1', pending: false });
     expect(screen.getByText('Question restée sans réponse')).toBeInTheDocument();

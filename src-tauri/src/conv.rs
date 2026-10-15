@@ -126,7 +126,6 @@ impl Conv {
         self.index.contains_key(id)
     }
 
-    #[cfg(test)]
     pub fn get(&mut self, id: &str) -> Option<&Value> {
         self.ensure_loaded();
         self.index.get(id).map(|&i| &self.items[i])

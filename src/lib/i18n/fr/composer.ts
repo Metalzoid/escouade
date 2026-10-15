@@ -80,6 +80,9 @@ export default {
     denied: 'Refusé',
     allowed: 'Autorisé',
     alwaysAllowed: 'Toujours autorisé',
+    /** Answered through the MCP server, not by the user in the window: `author` is an agent's name or « Claude (hors Escouade) ». */
+    allowedBy: 'Autorisé par {author} via Escouade',
+    deniedBy: 'Refusé par {author} via Escouade',
     cancelled: 'Demande annulée',
   },
 
@@ -89,5 +92,7 @@ export default {
     orWrite: 'ou réponds librement dans le champ ci-dessous',
     submit: 'Valider',
     unanswered: 'Question restée sans réponse',
+    /** Answered through the MCP server, not by the user in the window (see `permission.allowedBy`). */
+    answeredBy: 'Répondu par {author} via Escouade',
   },
 } as const satisfies Tree;

@@ -136,6 +136,8 @@
       <div class="done-q">{q.question}</div>
       <div class="ans mono">→ {item.answers[q.question] ?? '—'}</div>
     {/each}
+    <!-- Answered through the MCP server and not by the user in the window: it says by whom. -->
+    {#if item.by}<div class="by">{t('composer.question.answeredBy', { author: item.by })}</div>{/if}
   </div>
 {:else}
   <div class="card done">
@@ -255,5 +257,9 @@
   }
   .ans {
     font-size: 11.5px;
+  }
+  .by {
+    font-size: 11.5px;
+    color: var(--dim);
   }
 </style>

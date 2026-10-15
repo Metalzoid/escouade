@@ -32,6 +32,13 @@
   // A tool of Escouade's own server creates tickets, starts agents…: all it is given is read here, not a summary.
   const escouade = $derived(isEscouadeTool(item.toolName));
   const args = $derived(escouade ? escouadeArgs(item.input) : []);
+  // Answered through the MCP server and not by the user in the window: the line says by whom.
+  const verdict = $derived.by(() => {
+    const author = item.by;
+    if (item.decision === 'deny') return author ? t('composer.permission.deniedBy', { author }) : t('composer.permission.denied');
+    if (item.decision === 'always') return t('composer.permission.alwaysAllowed');
+    return author ? t('composer.permission.allowedBy', { author }) : t('composer.permission.allowed');
+  });
 
   async function decide(decision: 'allow' | 'always' | 'deny') {
     busy = true;
@@ -115,9 +122,7 @@
   </div>
 {:else}
   <div class="line mono" class:denied={item.decision === 'deny'}>
-    {#if item.decision === 'deny'}✕ {t('composer.permission.denied')}{:else if item.decision}✓ {item.decision === 'always'
-        ? t('composer.permission.alwaysAllowed')
-        : t('composer.permission.allowed')}{:else}· {t('composer.permission.cancelled')}{/if}
+    {#if item.decision === 'deny'}✕ {verdict}{:else if item.decision}✓ {verdict}{:else}· {t('composer.permission.cancelled')}{/if}
     · {toolLabel(item.toolName)}
     {isPlan ? '' : summary}
     {#if item.message}<span class="msg">— {item.message}</span>{/if}

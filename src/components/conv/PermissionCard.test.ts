@@ -71,6 +71,35 @@ describe('PermissionCard', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
+  it('says who answered when a client of the MCP server did, and nothing of an author when the user did', () => {
+    const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
+    const { unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
+    expect(screen.getByText(/✓ Autorisé par agent-2 via Escouade/)).toBeInTheDocument();
+    unmount();
+    const { unmount: refused } = render(
+      PermissionCard,
+      answered({ decision: 'deny', by: 'Claude (hors Escouade)', message: 'utilise npm run clean' }),
+    );
+    const line = screen.getByText(/✕ Refusé par Claude \(hors Escouade\) via Escouade/);
+    expect(line).toHaveClass('denied');
+    expect(line).toHaveTextContent(/utilise npm run clean/);
+    refused();
+    // The user's own answer, in the window: no author on the line.
+    render(PermissionCard, answered({ decision: 'allow' }));
+    expect(screen.getByText(/✓ Autorisé/)).toBeInTheDocument();
+    expect(screen.queryByText(/via Escouade/)).not.toBeInTheDocument();
+  });
+
+  it('says in English who answered through the MCP server', () => {
+    setLang('en');
+    const answered = (over: Partial<PermissionItem>) => ({ item: item(over), agentId: 'a1', pending: false, cwd: 'C:\\code' });
+    const { unmount } = render(PermissionCard, answered({ decision: 'allow', by: 'agent-2' }));
+    expect(screen.getByText(/✓ Allowed by agent-2 through Escouade/)).toBeInTheDocument();
+    unmount();
+    render(PermissionCard, answered({ decision: 'deny', by: 'Claude (outside Escouade)' }));
+    expect(screen.getByText(/✕ Denied by Claude \(outside Escouade\) through Escouade/)).toBeInTheDocument();
+  });
+
   it('makes the refusal its main button when Claude Code would refuse it by default', () => {
     fakeBackend();
     const { unmount } = render(PermissionCard, { item: item(), agentId: 'a1', pending: true, cwd: 'C:\\code' });

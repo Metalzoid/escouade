@@ -971,6 +971,25 @@ function startSession() {
       result();
       return;
     }
+    if (text.includes('exit plan')) {
+      // The plan mode's end: ExitPlanMode asks for the plan to be approved (a permission).
+      const tuid = `toolu_x${msg}`;
+      const input = { plan: '# Plan\n\n1. Écrire le test\n2. Faire passer le test' };
+      assistant({ type: 'tool_use', id: tuid, name: 'ExitPlanMode', input });
+      pendingAnswer = { id: 'req_plan', tuid, kind: 'permission', plan: true };
+      out({
+        type: 'control_request',
+        request_id: 'req_plan',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'ExitPlanMode',
+          input,
+          tool_use_id: tuid,
+          permission_suggestions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }],
+        },
+      });
+      return;
+    }
     if (text.includes('question')) return askQuestion();
     if (text.includes('permission')) {
       const tuid = `toolu_p${msg}`;
@@ -1034,6 +1053,9 @@ function startSession() {
       toolResult(p.tuid, `Réponses : ${JSON.stringify(answers)}`, { tool_use_result: { answers } });
       if (p.then) return p.then();
       streamText(`Choix retenu : ${Object.values(answers).join(', ')}`);
+    } else if (r.behavior === 'allow' && p.plan) {
+      toolResult(p.tuid, 'Plan approuvé');
+      streamText(r.updatedPermissions ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');
     } else if (r.behavior === 'allow') {
       toolResult(p.tuid, 'build supprimé', { tool_use_result: { stdout: 'build supprimé', stderr: '', interrupted: false } });
       streamText(r.updatedPermissions ? 'Commande exécutée (règle enregistrée).' : 'Commande exécutée.');

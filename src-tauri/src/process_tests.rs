@@ -247,9 +247,10 @@ async fn answering_a_question_resumes_the_turn() {
     assert_eq!(h.lock().view().pending, vec!["req_question".to_string()]);
 
     h.lock()
-        .answer_question(
+        .answer_question_by(
             "req_question",
             json!({ "Quelle base de données ?": "SQLite" }),
+            None,
             &mut Effects::default(),
         )
         .unwrap();
@@ -276,7 +277,7 @@ async fn permission_always_forwards_the_suggested_rules_and_deny_forwards_the_re
     })
     .await;
     h.lock()
-        .answer_permission("req_perm", "always", None, &mut Effects::default())
+        .answer_permission_by("req_perm", "always", None, None, &mut Effects::default())
         .unwrap();
     wait_for(&h, "turn end", |rt| rt.meta.status == AgentStatus::Done).await;
     assert!(items(&h)
@@ -289,10 +290,11 @@ async fn permission_always_forwards_the_suggested_rules_and_deny_forwards_the_re
     })
     .await;
     h.lock()
-        .answer_permission(
+        .answer_permission_by(
             "req_perm",
             "deny",
             Some("utilise npm run clean".into()),
+            None,
             &mut Effects::default(),
         )
         .unwrap();
@@ -317,6 +319,181 @@ async fn permission_always_forwards_the_suggested_rules_and_deny_forwards_the_re
         .find(|i| i["kind"] == "tool" && i["name"] == "Bash")
         .unwrap();
     assert_eq!(tool["status"], "error");
+}
+
+#[tokio::test]
+async fn an_answer_given_through_the_server_says_who_gave_it_to_the_conversation_and_to_claude() {
+    let dir = temp_dir("answer-by");
+    let h = new_agent(&dir);
+    let proc = spawn(&h, &dir.join("log.jsonl"));
+
+    // A question answered in the window has no author: the card keeps saying nothing of one.
+    send(&h, &proc, "question");
+    wait_for(&h, "question", |rt| rt.meta.status == AgentStatus::Waiting).await;
+    h.lock()
+        .answer_question_by(
+            "req_question",
+            json!({ "Quelle base de données ?": "SQLite" }),
+            None,
+            &mut Effects::default(),
+        )
+        .unwrap();
+    wait_for(&h, "turn end", |rt| rt.meta.status == AgentStatus::Done).await;
+    let all = items(&h);
+    let q = all.iter().find(|i| i["kind"] == "question").unwrap();
+    assert!(q.get("by").is_none(), "{q}");
+    // Claude reads the user's answer as it is, with no author.
+    assert!(all
+        .iter()
+        .any(|i| i["kind"] == "text" && i["text"] == "Choix retenu : SQLite"));
+
+    // The same question answered through the server: the item keeps who answered.
+    send(&h, &proc, "question encore");
+    wait_for(&h, "question 2", |rt| {
+        rt.meta.status == AgentStatus::Waiting
+    })
+    .await;
+    h.lock()
+        .answer_question_by(
+            "req_question",
+            json!({ "Quelle base de données ?": "PostgreSQL" }),
+            Some("agent-2"),
+            &mut Effects::default(),
+        )
+        .unwrap();
+    wait_for(&h, "turn end 2", |rt| rt.meta.status == AgentStatus::Done).await;
+    let all = items(&h);
+    let q = all.iter().rfind(|i| i["kind"] == "question").unwrap();
+    // The card keeps the answer as it was given; Claude reads it with who gave it.
+    assert_eq!(q["answers"]["Quelle base de données ?"], "PostgreSQL");
+    assert_eq!(q["by"], "agent-2");
+    assert!(all.iter().any(|i| i["kind"] == "text"
+        && i["text"] == "Choix retenu : PostgreSQL (réponse de agent-2 via Escouade)"));
+
+    // A permission allowed through the server: the item says by whom.
+    send(&h, &proc, "permission");
+    wait_for(&h, "permission", |rt| {
+        rt.meta.status == AgentStatus::Waiting
+    })
+    .await;
+    h.lock()
+        .answer_permission_by(
+            "req_perm",
+            "allow",
+            None,
+            Some("Claude (hors Escouade)"),
+            &mut Effects::default(),
+        )
+        .unwrap();
+    wait_for(&h, "turn end 3", |rt| rt.meta.status == AgentStatus::Done).await;
+    let all = items(&h);
+    let p = all.iter().rfind(|i| i["kind"] == "permission").unwrap();
+    assert_eq!(
+        (p["decision"].as_str(), p["by"].as_str()),
+        (Some("allow"), Some("Claude (hors Escouade)"))
+    );
+
+    // Refused with a message: Claude is told who refused (never « L'utilisateur a refusé »), the
+    // card keeps the message as it was written.
+    send(&h, &proc, "permission encore");
+    wait_for(&h, "permission 2", |rt| {
+        rt.meta.status == AgentStatus::Waiting
+    })
+    .await;
+    h.lock()
+        .answer_permission_by(
+            "req_perm",
+            "deny",
+            Some("utilise npm run clean".into()),
+            Some("agent-2"),
+            &mut Effects::default(),
+        )
+        .unwrap();
+    wait_for(&h, "turn end 4", |rt| rt.meta.status == AgentStatus::Done).await;
+    let all = items(&h);
+    assert!(all
+        .iter()
+        .any(|i| i["text"] == "Compris : Refusé par agent-2 via Escouade : utilise npm run clean"));
+    let p = all.iter().rfind(|i| i["kind"] == "permission").unwrap();
+    assert_eq!(
+        (
+            p["decision"].as_str(),
+            p["message"].as_str(),
+            p["by"].as_str()
+        ),
+        (Some("deny"), Some("utilise npm run clean"), Some("agent-2"))
+    );
+
+    // Refused without a word: Claude is still told who refused.
+    send(&h, &proc, "permission encore une fois");
+    wait_for(&h, "permission 3", |rt| {
+        rt.meta.status == AgentStatus::Waiting
+    })
+    .await;
+    h.lock()
+        .answer_permission_by(
+            "req_perm",
+            "deny",
+            None,
+            Some("agent-2"),
+            &mut Effects::default(),
+        )
+        .unwrap();
+    wait_for(&h, "turn end 5", |rt| rt.meta.status == AgentStatus::Done).await;
+    assert!(items(&h)
+        .iter()
+        .any(|i| i["text"] == "Compris : Refusé par agent-2 via Escouade."));
+}
+
+#[tokio::test]
+async fn a_request_answered_twice_says_it_was_answered_and_one_that_never_was_says_it_is_not_found()
+{
+    let dir = temp_dir("answer-twice");
+    let h = new_agent(&dir);
+    let proc = spawn(&h, &dir.join("log.jsonl"));
+    send(&h, &proc, "permission");
+    wait_for(&h, "permission", |rt| {
+        rt.meta.status == AgentStatus::Waiting
+    })
+    .await;
+    let mut fx = Effects::default();
+    h.lock()
+        .answer_permission_by("req_perm", "allow", None, None, &mut fx)
+        .unwrap();
+    // The window (or a client) answers what has just been answered.
+    let again = h
+        .lock()
+        .answer_permission_by("req_perm", "deny", None, None, &mut fx)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(again, "Cette demande a déjà reçu une réponse.");
+    // An id that never was: not found.
+    let never = h
+        .lock()
+        .answer_permission_by("nope", "allow", None, None, &mut fx)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(never, "demande introuvable");
+    wait_for(&h, "turn end", |rt| rt.meta.status == AgentStatus::Done).await;
+
+    send(&h, &proc, "question");
+    wait_for(&h, "question", |rt| rt.meta.status == AgentStatus::Waiting).await;
+    let answers = json!({ "Quelle base de données ?": "SQLite" });
+    h.lock()
+        .answer_question_by("req_question", answers.clone(), None, &mut fx)
+        .unwrap();
+    let again = h
+        .lock()
+        .answer_question_by("req_question", answers, None, &mut fx)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(again, "Cette demande a déjà reçu une réponse.");
+    let never = h
+        .lock()
+        .answer_question_by("nope", json!({}), None, &mut fx)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(never, "question introuvable");
 }
 
 #[tokio::test]

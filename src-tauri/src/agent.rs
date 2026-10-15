@@ -11,7 +11,7 @@ use crate::paths::relative_slash;
 use crate::plan::{Change, PlanState};
 use crate::planfiles::{self, FileList};
 use crate::pricing::{self, Usage};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -91,6 +91,21 @@ struct PendingReq {
     suggestions: Value,
     /// What the agent's view says of it, worked out once when it comes.
     view: PendingView,
+    /// When it came (ms): the first time, when Claude Code asks it again.
+    since: i64,
+}
+
+/// A request waiting for an answer, as the MCP server's tools read it (`AgentRt::waiting`): the
+/// view, which is all « Vue d'ensemble » needs, and what a client that answers must also know.
+#[derive(Debug, Clone)]
+pub struct Waiting {
+    pub view: PendingView,
+    /// When it came (epoch milliseconds).
+    pub since: i64,
+    /// What Claude Code asked with, as it sent it: a plan to approve, a question's options with
+    /// their descriptions and whether several may be picked. Not for a client to show whole (a
+    /// command, a file's content): the view caps what it says of it.
+    pub input: Value,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -636,12 +651,45 @@ impl AgentRt {
     }
 
     /// A request comes after those waiting already: the one asked first stays the one shown
-    /// first. Asked again, a request keeps its place.
+    /// first. Asked again, a request keeps its place, and the time it first came.
     fn add_pending(&mut self, req: PendingReq) {
         match self.pending.iter_mut().find(|p| p.item_id == req.item_id) {
-            Some(p) => *p = req,
+            Some(p) => {
+                let since = p.since;
+                *p = PendingReq { since, ..req };
+            }
             None => self.pending.push(req),
         }
+    }
+
+    /// The request `request_id` has its answer already: the user's, in the window, or a client's.
+    /// Its card in the conversation holds it (a request cancelled has none).
+    fn was_answered(&mut self, request_id: &str) -> bool {
+        self.conv
+            .get(request_id)
+            .is_some_and(|item| match item["kind"].as_str() {
+                Some("permission") => !item["decision"].is_null(),
+                Some("question") => !item["answers"].is_null(),
+                _ => false,
+            })
+    }
+
+    /// The views of the requests waiting for an answer, in the order they came: counted or typed
+    /// without copying them (`waiting` copies what Claude Code sent).
+    pub fn waiting_views(&self) -> impl Iterator<Item = &PendingView> {
+        self.pending.iter().map(|p| &p.view)
+    }
+
+    /// The requests waiting for an answer, in the order they came.
+    pub fn waiting(&self) -> Vec<Waiting> {
+        self.pending
+            .iter()
+            .map(|p| Waiting {
+                view: p.view.clone(),
+                since: p.since,
+                input: p.input.clone(),
+            })
+            .collect()
     }
 
     /// Takes the request `request_id` out of those waiting, the others keeping their order.
@@ -655,38 +703,71 @@ impl AgentRt {
         self.pending.iter().any(|p| p.item_id == request_id)
     }
 
-    pub fn answer_question(
+    /// The answer to a question: the user's in the window, or `by`'s (a client of the MCP server,
+    /// named as its activity log names it), which the conversation's card then says.
+    pub fn answer_question_by(
         &mut self,
         request_id: &str,
         answers: Value,
+        by: Option<&str>,
         fx: &mut Effects,
     ) -> Result<()> {
         let proc = self.proc.clone().ok_or_else(not_running)?;
-        let p = self
-            .take_pending(request_id)
-            .ok_or_else(|| anyhow!(tr!("question introuvable", "question not found")))?;
+        let Some(p) = self.take_pending(request_id) else {
+            bail!(if self.was_answered(request_id) {
+                already_answered()
+            } else {
+                tr!("question introuvable", "question not found")
+            });
+        };
         let mut input = p.input.clone();
-        input["answers"] = answers.clone();
+        // Claude reads an answer given through the server with who gave it, never as the user's
+        // own words; the card keeps it as it was given.
+        input["answers"] = match by {
+            Some(by) => signed_answers(i18n::claude(), by, &answers),
+            None => answers.clone(),
+        };
         proc.respond(
             request_id,
             json!({ "behavior": "allow", "updatedInput": input, "toolUseID": p.tool_use_id }),
         )?;
-        self.patch(&p.item_id, json!({ "answers": answers }), fx);
+        let mut patch = json!({ "answers": answers });
+        answered_by(&mut patch, by);
+        self.patch(&p.item_id, patch, fx);
         self.after_answer(fx);
         Ok(())
     }
 
-    pub fn answer_permission(
+    /// The answer to a permission: the user's in the window, or `by`'s (as `answer_question_by`).
+    /// A refusal by `by` tells Claude who refused (« Refusé par <by> via Escouade »), never that
+    /// the user did.
+    pub fn answer_permission_by(
         &mut self,
         request_id: &str,
         decision: &str,
         message: Option<String>,
+        by: Option<&str>,
         fx: &mut Effects,
     ) -> Result<()> {
         let proc = self.proc.clone().ok_or_else(not_running)?;
-        let p = self
-            .take_pending(request_id)
-            .ok_or_else(|| anyhow!(tr!("demande introuvable", "request not found")))?;
+        let Some(p) = self.take_pending(request_id) else {
+            bail!(if self.was_answered(request_id) {
+                already_answered()
+            } else {
+                tr!("demande introuvable", "request not found")
+            });
+        };
+        // A plan sent back through the server without a word: as the window says it, keep
+        // planning (the card keeps it too, as the window's does).
+        let message = if decision == "deny"
+            && by.is_some()
+            && p.view.tool == "ExitPlanMode"
+            && blank(&message)
+        {
+            Some(keep_planning(i18n::claude()))
+        } else {
+            message
+        };
         let response = match decision {
             "allow" => {
                 json!({ "behavior": "allow", "updatedInput": p.input, "toolUseID": p.tool_use_id })
@@ -695,18 +776,21 @@ impl AgentRt {
                 "behavior": "allow", "updatedInput": p.input, "toolUseID": p.tool_use_id,
                 "updatedPermissions": p.suggestions,
             }),
-            _ => json!({
-                "behavior": "deny", "toolUseID": p.tool_use_id,
-                "message": message.clone().filter(|m| !m.trim().is_empty())
-                    .unwrap_or_else(|| refused_action(i18n::claude())),
-            }),
+            _ => {
+                let told = match by {
+                    Some(by) => refused_by(i18n::claude(), by, message.as_deref()),
+                    None => message
+                        .clone()
+                        .filter(|m| !m.trim().is_empty())
+                        .unwrap_or_else(|| refused_action(i18n::claude())),
+                };
+                json!({ "behavior": "deny", "toolUseID": p.tool_use_id, "message": told })
+            }
         };
         proc.respond(request_id, response)?;
-        self.patch(
-            &p.item_id,
-            json!({ "decision": decision, "message": message }),
-            fx,
-        );
+        let mut patch = json!({ "decision": decision, "message": message });
+        answered_by(&mut patch, by);
+        self.patch(&p.item_id, patch, fx);
         self.after_answer(fx);
         Ok(())
     }
@@ -1634,6 +1718,7 @@ impl AgentRt {
                     input,
                     suggestions,
                     view,
+                    since: now_ms(),
                 });
                 self.set_status(AgentStatus::Waiting, fx);
                 fx.notify = Some(AgentAlert::new(NotifyKind::Question, body));
@@ -1915,6 +2000,79 @@ fn refused_action(lang: Lang) -> String {
         lang,
         "L'utilisateur a refusé cette action.",
         "The user refused this action."
+    )
+}
+
+/// What Claude is told when a plan is refused without a word, in `lang`: the window's own
+/// « Continuer à planifier ».
+fn keep_planning(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Continue à planifier : le plan ne me convient pas encore.",
+        "Keep planning: the plan doesn’t work for me yet."
+    )
+}
+
+/// `message` has no text to speak of.
+fn blank(message: &Option<String>) -> bool {
+    message.as_deref().is_none_or(|m| m.trim().is_empty())
+}
+
+/// What Claude is told of an action refused through the server by `by` (the name its activity
+/// log gives the client), in `lang`: who refused, and the reason when there is one. Never that the
+/// user did.
+fn refused_by(lang: Lang, by: &str, message: Option<&str>) -> String {
+    let by = by.split_whitespace().collect::<Vec<_>>().join(" ");
+    match message.map(str::trim).filter(|m| !m.is_empty()) {
+        Some(message) => tr_in!(
+            lang,
+            "Refusé par {by} via Escouade : {message}",
+            "Refused by {by} through Escouade: {message}"
+        ),
+        None => tr_in!(
+            lang,
+            "Refusé par {by} via Escouade.",
+            "Refused by {by} through Escouade."
+        ),
+    }
+}
+
+/// The answers of a question (`{ <question>: <answer> }`) as Claude is given those that come
+/// through the server, in `lang`: each text followed by who gave it, « SQLite (réponse de <by> via
+/// Escouade) ». The author is one line (an agent's name, « Claude (hors Escouade) »).
+fn signed_answers(lang: Lang, by: &str, answers: &Value) -> Value {
+    let by = by.split_whitespace().collect::<Vec<_>>().join(" ");
+    let Some(map) = answers.as_object() else {
+        return answers.clone();
+    };
+    map.iter()
+        .map(|(question, answer)| {
+            let signed = match answer.as_str() {
+                Some(answer) => Value::String(tr_in!(
+                    lang,
+                    "{answer} (réponse de {by} via Escouade)",
+                    "{answer} (answer from {by} through Escouade)"
+                )),
+                None => answer.clone(),
+            };
+            (question.clone(), signed)
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+/// The patch of an answered request, saying who answered when it was not the user in the window.
+fn answered_by(patch: &mut Value, by: Option<&str>) {
+    if let Some(by) = by {
+        patch["by"] = json!(by);
+    }
+}
+
+/// Refused: the request has its answer already, from the user or from a client.
+fn already_answered() -> String {
+    tr!(
+        "Cette demande a déjà reçu une réponse.",
+        "This request has already been answered."
     )
 }
 
@@ -2222,6 +2380,99 @@ mod tests {
             &mut Effects::default(),
         );
         assert_eq!(a.view().pending, ids[1..]);
+    }
+
+    #[test]
+    fn the_waiting_requests_say_when_they_came_and_keep_it_when_asked_again() {
+        let mut a = rt();
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":"npm test"}}),
+        );
+        asks(
+            &mut a,
+            "r2",
+            json!({"tool_name":"AskUserQuestion","tool_use_id":"t2","input":{"questions":[
+                {"question":"Quoi ?","multiSelect":true,"options":[{"label":"A"},{"label":"B"}]}]}}),
+        );
+        let waiting = a.waiting();
+        let ids: Vec<&str> = waiting.iter().map(|w| w.view.id.as_str()).collect();
+        assert_eq!(ids, ["r1", "r2"]);
+        assert!(waiting[0].since > 0 && waiting[0].since <= waiting[1].since);
+        // The request as Claude Code sent it: what the view leaves out (a question's choice of
+        // several options) is there.
+        assert_eq!(waiting[0].input["command"], "npm test");
+        assert_eq!(waiting[1].input["questions"][0]["multiSelect"], true);
+        // Asked again, it keeps its place and the time it first came.
+        let first = waiting[0].since;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":"npm test -- --all"}}),
+        );
+        let waiting = a.waiting();
+        assert_eq!(waiting[0].view.id, "r1");
+        assert_eq!(waiting[0].since, first);
+        assert_eq!(waiting[0].input["command"], "npm test -- --all");
+    }
+
+    #[test]
+    fn an_answer_given_through_the_server_tells_claude_who_gave_it() {
+        let answers = json!({ "Base ?": "SQLite", "Outils ?": "ESLint, Vitest", "Autre ?": 3 });
+        assert_eq!(
+            signed_answers(Lang::Fr, "agent-2", &answers),
+            json!({
+                "Base ?": "SQLite (réponse de agent-2 via Escouade)",
+                "Outils ?": "ESLint, Vitest (réponse de agent-2 via Escouade)",
+                // Only a text is signed.
+                "Autre ?": 3,
+            })
+        );
+        assert_eq!(
+            signed_answers(
+                Lang::En,
+                "Claude (outside Escouade)",
+                &json!({ "Base?": "SQLite" })
+            ),
+            json!({ "Base?": "SQLite (answer from Claude (outside Escouade) through Escouade)" })
+        );
+        // The author is one line, whatever its name holds.
+        assert_eq!(
+            signed_answers(Lang::En, "agent\n2  b", &json!({ "Q?": "A" })),
+            json!({ "Q?": "A (answer from agent 2 b through Escouade)" })
+        );
+    }
+
+    #[test]
+    fn what_claude_is_told_of_a_refusal_through_the_server_names_who_refused() {
+        assert_eq!(
+            refused_by(Lang::Fr, "agent-2", Some("utilise npm run clean")),
+            "Refusé par agent-2 via Escouade : utilise npm run clean"
+        );
+        assert_eq!(
+            refused_by(
+                Lang::En,
+                "Claude (outside Escouade)",
+                Some("use npm run clean")
+            ),
+            "Refused by Claude (outside Escouade) through Escouade: use npm run clean"
+        );
+        // Without a word of its own, or with a blank one, the refusal alone.
+        assert_eq!(
+            refused_by(Lang::Fr, "agent-2", None),
+            "Refusé par agent-2 via Escouade."
+        );
+        assert_eq!(
+            refused_by(Lang::En, "agent-2", Some("  \n")),
+            "Refused by agent-2 through Escouade."
+        );
+        // The author is one line, whatever its name holds.
+        assert_eq!(
+            refused_by(Lang::En, "agent\n2  b", None),
+            "Refused by agent 2 b through Escouade."
+        );
     }
 
     #[test]

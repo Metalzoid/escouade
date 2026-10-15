@@ -19,8 +19,10 @@
 //! logged by `call_tool`. What a tool's arguments name is found by `resolve`; what the reading
 //! ones answer is built by `read`, and what the ones that act do is in `act`.
 //!
-//! None accepts a permission, answers for the user, runs a command or the tests, merges or
-//! deletes: `tests::EXPOSED` lists exactly what the router holds, so a tool is added knowingly.
+//! None runs a command or the tests, merges or deletes. Two answer an agent's request as the user
+//! does in the window (`answer_permission`, `answer_question`), and never for good: a lasting
+//! permission rule (« Toujours autoriser ») stays the user's to give there. `tests::EXPOSED` lists
+//! exactly what the router holds, so a tool is added knowingly.
 
 use super::act;
 use super::activity::{self, Outcome};
@@ -238,6 +240,112 @@ pub struct GetAgentSummaryArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListRequestsArgs {
+    #[schemars(
+        description = "Only this agent's requests: its id, or its name in any case. Leave it out for every agent's."
+    )]
+    pub agent: Option<String>,
+    #[schemars(
+        description = "Only the requests of this project's agents (and the project to look for the agent's name in: two projects may each have an agent of that name): its id, or its name in any case. Leave it out for every project's."
+    )]
+    pub project: Option<String>,
+}
+
+/// How `answer_permission` answers. `Always` is no choice the schema offers (nor the error of a
+/// decision that is none lists it): a lasting permission rule is the user's to give, in the window,
+/// so it is read to be refused with the reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, schemars::JsonSchema)]
+#[schemars(rename_all = "lowercase", inline)]
+pub enum DecisionArg {
+    Allow,
+    Deny,
+    #[schemars(skip)]
+    Always,
+}
+
+impl<'de> Deserialize<'de> for DecisionArg {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let said = String::deserialize(deserializer)?;
+        match said.as_str() {
+            "allow" => Ok(DecisionArg::Allow),
+            "deny" => Ok(DecisionArg::Deny),
+            "always" => Ok(DecisionArg::Always),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown decision `{other}`, expected `allow` or `deny`"
+            ))),
+        }
+    }
+}
+
+impl DecisionArg {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            DecisionArg::Allow => "allow",
+            DecisionArg::Deny => "deny",
+            DecisionArg::Always => "always",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AnswerPermissionArgs {
+    #[schemars(description = "The agent that asks: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for the agent's name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The request to answer: its id, as list_requests gives it (request)."
+    )]
+    pub request: String,
+    #[schemars(
+        description = "allow: the tool runs (or the plan is approved); deny: it does not (or the agent keeps planning). Always allow is not offered: a lasting permission rule is the user's to give, in the window."
+    )]
+    pub decision: DecisionArg,
+    #[schemars(
+        description = "Only with deny: what the agent should know of the refusal, or do instead. Leave it out to refuse without a word."
+    )]
+    pub message: Option<String>,
+}
+
+/// One question's answer, for `answer_question`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct QuestionAnswer {
+    #[schemars(
+        description = "The question this answers: its text, as list_requests gives it. Leave it out when the request asks a single question."
+    )]
+    pub question: Option<String>,
+    #[schemars(
+        description = "The options picked, by their labels as list_requests gives them: one, or several when the question allows it (multiSelect). Give this or text, not both."
+    )]
+    pub choices: Option<Vec<String>>,
+    #[schemars(
+        description = "A free answer, when no option fits. Give this or choices, not both."
+    )]
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AnswerQuestionArgs {
+    #[schemars(description = "The agent that asks: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for the agent's name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The request to answer: its id, as list_requests gives it (request)."
+    )]
+    pub request: String,
+    #[schemars(
+        description = "One answer for each of the request's questions: the options picked (choices) or a free text."
+    )]
+    pub answers: Vec<QuestionAnswer>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateTicketArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -401,7 +509,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer, the key of their ticket (null when none), their model, their Claude account and what they cost so far in US dollars.",
+        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their model, their Claude account and what they cost so far in US dollars.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -455,7 +563,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \") and the files it edited (the latest 100 at most, relative to its folder).",
+        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_agent_summary(
@@ -469,6 +577,23 @@ impl<R: Runtime> Tools<R> {
             ("project", args.project.as_deref()),
         ]);
         ctx.reply("get_agent_summary", &asked, result)
+    }
+
+    #[tool(
+        description = "List the questions and the permissions that Escouade's Claude Code agents wait for an answer to, in the order they came, of every agent, of every agent of one project, or of one agent: for each, the agent (id, name, project, projectId, the key of its ticket, null when none), request (its id, which answer_permission and answer_question name), type (permission, question, or plan for a plan the agent asks to have approved), since (epoch milliseconds), tool, arg (what the tool acts on: the command, the file, the whole plan; a command or a plan up to 20,000 characters), input (for a permission, all it asks as Claude Code sent it: the content to write, the strings of an edit, the flags of a command; each text up to 20,000 characters), description, reason (the permission rule Claude Code met), defaultNo (Claude Code would refuse it by default), and for a question its questions with their options (label and description) and whether several may be picked (multiSelect). cut is true when a text was cut: the request in the conversation has it whole. An agent in the Claude Code view has none here: its requests are in its terminal.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_requests(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ListRequestsArgs>,
+    ) -> CallToolResult {
+        let result = read::requests(&ctx.core, args.agent.as_deref(), args.project.as_deref());
+        let asked = summary(&[
+            ("agent", args.agent.as_deref()),
+            ("project", args.project.as_deref()),
+        ]);
+        ctx.reply("list_requests", &asked, result)
     }
 
     #[tool(
@@ -619,6 +744,54 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = act::stop_agent(&ctx.core, &ctx.caller, args).await;
         ctx.reply("stop_agent", &asked, result)
+    }
+
+    #[tool(
+        description = "Answer a permission an agent of Escouade asks for, or approve or refuse its plan, as the Allow and Deny buttons of its conversation do: allow lets the tool run (or approves the plan), deny refuses it, and the message tells the agent why, or what to do instead. Always allow is not offered: a lasting permission rule is the user's to give, in the window. Refused for a request of your own when you are an agent, for an agent of another project when you are an agent, for a request that no longer waits (the user or another client answered it, or its agent no longer runs), and for an agent in the Claude Code view (its requests are in its terminal). The agent's conversation shows who answered (Allowed by <you> through Escouade) and a refusal tells the agent who refused. Answers the agent's id and name, the request and the decision.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn answer_permission(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<AnswerPermissionArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("request", Some(&args.request)),
+            ("decision", Some(args.decision.name())),
+            ("message", args.message.as_deref()),
+        ]);
+        let result = act::answer_permission(&ctx.core, &ctx.caller, args);
+        ctx.reply("answer_permission", &asked, result)
+    }
+
+    #[tool(
+        description = "Answer a question an agent of Escouade asks (AskUserQuestion), as the question card of its conversation does: for each of the request's questions, the options picked by their labels (several only when the question allows it) or a free text. Every question needs an answer. Refused for a request of your own when you are an agent, for an agent of another project when you are an agent, for a request that no longer waits (the user or another client answered it, or its agent no longer runs), and for an agent in the Claude Code view (its requests are in its terminal). The agent's conversation shows who answered (Answered by <you> through Escouade), and the agent reads each answer followed by who gave it (SQLite (answer from <you> through Escouade)). Answers the agent's id and name, the request and the answers as given.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn answer_question(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<AnswerQuestionArgs>,
+    ) -> CallToolResult {
+        let answers = act::answers_summary(&args.answers);
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("request", Some(&args.request)),
+            ("answers", Some(&answers)),
+        ]);
+        let result = act::answer_question(&ctx.core, &ctx.caller, args);
+        ctx.reply("answer_question", &asked, result)
     }
 
     #[tool(

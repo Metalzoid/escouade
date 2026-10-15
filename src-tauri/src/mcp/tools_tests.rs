@@ -185,7 +185,13 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     let required = |name: &str| schema(name)["required"].clone();
     assert_eq!(required("list_tickets"), json!(["project"]));
     assert_eq!(required("get_agent_summary"), json!(["agent"]));
-    for name in ["list_projects", "list_agents", "get_ticket", "get_usage"] {
+    for name in [
+        "list_projects",
+        "list_agents",
+        "list_requests",
+        "get_ticket",
+        "get_usage",
+    ] {
         assert!(
             required(name).as_array().is_none_or(|r| r.is_empty()),
             "{name}"
@@ -194,6 +200,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     // Every argument says what it takes, in English, and a column is one of the four.
     for name in [
         "list_agents",
+        "list_requests",
         "list_tickets",
         "get_ticket",
         "get_agent_summary",
@@ -316,6 +323,7 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "projectId": p.id,
             "status": "idle",
             "waiting": false,
+            "requests": 0,
             "ticket": "DEM-1",
             "model": "sonnet",
             "account": "Principal",
@@ -323,8 +331,13 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
         })
     );
     assert_eq!(
-        (&all[1]["status"], &all[1]["waiting"], &all[1]["ticket"]),
-        (&json!("waiting"), &json!(true), &json!(null))
+        (
+            &all[1]["status"],
+            &all[1]["waiting"],
+            &all[1]["requests"],
+            &all[1]["ticket"]
+        ),
+        (&json!("waiting"), &json!(true), &json!(1), &json!(null))
     );
     assert!(all[1]["cost"].is_number(), "{}", all[1]);
     assert_eq!(
@@ -757,6 +770,8 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "ticket": null,
             "lastMessage": "Fichier modifié.",
             "touchedFiles": ["src/app.ts"],
+            "requests": 0,
+            "waitingFor": [],
         })
     );
     assert_eq!(
@@ -795,9 +810,11 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "id",
             "lastMessage",
             "name",
+            "requests",
             "status",
             "ticket",
-            "touchedFiles"
+            "touchedFiles",
+            "waitingFor"
         ]
     );
     // The 100 latest files it edited.

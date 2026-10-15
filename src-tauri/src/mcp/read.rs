@@ -1,14 +1,19 @@
 //! What the tools that read answer (`tools`): the projects, agents, tickets and quota as the model
 //! reads them, in JSON with keys in camelCase. Never a whole conversation: an agent is summed up
-//! by its last message (cut) and the files it edited.
+//! by its last message (cut) and the files it edited. The requests that wait for an answer
+//! (`requests`) are the agents' own, as their cards in the conversation have them.
 
 use super::resolve;
 use super::tools::ToolError;
 use super::Caller;
 use crate::accounts;
+use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
 use crate::git;
-use crate::model::{AgentStatus, Column, Criterion, PauseReason, RateWindow, Service, Ticket};
+use crate::model::{
+    AgentStatus, Column, Criterion, PauseReason, PendingView, RateWindow, Service, Ticket,
+    MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
+};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -114,6 +119,8 @@ struct AgentRow {
     status: AgentStatus,
     /// A question or a permission waits for the user's answer.
     waiting: bool,
+    /// How many of them a client can answer (`list_requests` lists them).
+    requests: usize,
     /// Its ticket's key.
     ticket: Option<String>,
     model: String,
@@ -148,6 +155,9 @@ pub(super) fn agents<R: Runtime>(
                 .cloned()
                 .unwrap_or_default(),
             waiting: !v.pending.is_empty(),
+            requests: core
+                .agent(&v.meta.id)
+                .map_or(0, |h| answerable_views(&h.lock()).count()),
             ticket: v.meta.ticket_id.as_ref().and_then(|t| keys.get(t).cloned()),
             account: accounts::get(&settings, &v.meta.account).name,
             cost: dollars(v.meta.cost + v.live_cost),
@@ -433,6 +443,10 @@ struct Summary {
     last_message: Option<String>,
     /// The latest `TOUCHED_MAX` files it began to edit, relative to its folder.
     touched_files: Vec<String>,
+    /// How many requests wait for an answer (`list_requests` lists them), and their types in the
+    /// order they came.
+    requests: usize,
+    waiting_for: Vec<&'static str>,
 }
 
 /// `get_agent_summary`: the agent `agent` names (in `project` when given), summed up.
@@ -458,6 +472,7 @@ pub(super) fn agent_summary<R: Runtime>(
             .and_then(|v| v["text"].as_str())
             .map(|t| start_and_end(t, LAST_MESSAGE_MAX, LAST_MESSAGE_START));
         let files = &rt.meta.touched_files;
+        let asked: Vec<&'static str> = answerable_views(&rt).map(request_type).collect();
         let from = files.len().saturating_sub(TOUCHED_MAX);
         let summary = Summary {
             id: rt.meta.id.clone(),
@@ -466,6 +481,8 @@ pub(super) fn agent_summary<R: Runtime>(
             ticket: None,
             last_message,
             touched_files: files[from..].to_vec(),
+            requests: asked.len(),
+            waiting_for: asked,
         };
         (summary, rt.meta.ticket_id.clone())
     };
@@ -478,6 +495,314 @@ pub(super) fn agent_summary<R: Runtime>(
             .map(|t| t.key.clone())
     });
     json(&summary)
+}
+
+// ---------- the requests that wait for an answer ----------
+
+/// The longest plan, command or text of an input `list_requests` gives, in characters: the
+/// overview's 2,000 would hide the most of one, and a plan is approved, a command run, on what is
+/// read of it, a client having nowhere else to read the request.
+const LONG_MAX: usize = 20_000;
+
+/// Of a plan or a command longer than that, the most its start keeps: the rest goes to its end.
+const LONG_START: usize = 4_000;
+
+/// The views of the requests of the agent a client may answer (`answerable`), without copying.
+pub(super) fn answerable_views(rt: &AgentRt) -> impl Iterator<Item = &PendingView> {
+    let open = !rt.meta.terminal && rt.proc.is_some();
+    rt.waiting_views().filter(move |_| open)
+}
+
+/// The requests of the agent a client may answer: those its process waits for, which are in the
+/// conversation's cards. In the Claude Code view the interface asks in its terminal, and a request
+/// of a process that is gone is none any more (`on_exit` drops them): either way, none.
+pub(super) fn answerable(rt: &AgentRt) -> Vec<Waiting> {
+    if rt.meta.terminal || rt.proc.is_none() {
+        return Vec::new();
+    }
+    rt.waiting()
+}
+
+/// The tools that run what their `command` says (the keys of their input are the same).
+const COMMAND_TOOLS: &[&str] = &["Bash", "PowerShell", "SlashCommand"];
+
+/// The most items of a list, or keys of an object, an input gives.
+const INPUT_ITEMS_MAX: usize = 50;
+
+/// `input` as a request gives it: every text capped (`LONG_MAX` characters), a list or an object
+/// to `INPUT_ITEMS_MAX` items; `cut` is set when something was.
+fn bounded(input: &Value, cut: &mut bool) -> Value {
+    match input {
+        Value::String(s) => Value::String(capped_to(s, LONG_MAX, cut)),
+        Value::Array(items) => {
+            *cut |= items.len() > INPUT_ITEMS_MAX;
+            Value::Array(
+                items
+                    .iter()
+                    .take(INPUT_ITEMS_MAX)
+                    .map(|i| bounded(i, cut))
+                    .collect(),
+            )
+        }
+        Value::Object(map) => {
+            *cut |= map.len() > INPUT_ITEMS_MAX;
+            Value::Object(
+                map.iter()
+                    .take(INPUT_ITEMS_MAX)
+                    .map(|(k, v)| (k.clone(), bounded(v, cut)))
+                    .collect(),
+            )
+        }
+        other => other.clone(),
+    }
+}
+
+/// What a request is, as the tools say it: `permission`, `question`, or `plan` for the plan an
+/// agent asks to have approved (a permission of `ExitPlanMode`).
+pub(super) fn request_type(view: &PendingView) -> &'static str {
+    match (view.kind.as_str(), view.tool.as_str()) {
+        ("question", _) => "question",
+        (_, "ExitPlanMode") => "plan",
+        _ => "permission",
+    }
+}
+
+/// One question of an `AskUserQuestion`, as Claude Code sent it.
+pub(super) struct Asked {
+    pub question: String,
+    pub header: Option<String>,
+    /// Several options may be picked.
+    pub multi_select: bool,
+    pub options: Vec<AskedOption>,
+}
+
+pub(super) struct AskedOption {
+    pub label: String,
+    pub description: Option<String>,
+}
+
+/// The questions of the input of an `AskUserQuestion`, all of them.
+pub(super) fn asked_questions(input: &Value) -> Vec<Asked> {
+    let text = |v: &Value| v.as_str().filter(|s| !s.is_empty()).map(str::to_string);
+    let list = |v: &Value| v.as_array().cloned().unwrap_or_default();
+    list(&input["questions"])
+        .iter()
+        .filter_map(|q| {
+            Some(Asked {
+                question: q["question"].as_str()?.to_string(),
+                header: text(&q["header"]),
+                multi_select: q["multiSelect"].as_bool().unwrap_or(false),
+                options: list(&q["options"])
+                    .iter()
+                    .filter_map(|o| {
+                        Some(AskedOption {
+                            label: o["label"].as_str()?.to_string(),
+                            description: text(&o["description"]),
+                        })
+                    })
+                    .collect(),
+            })
+        })
+        .collect()
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RequestAgent {
+    id: String,
+    name: String,
+    /// Its project's name, and its id (two projects may have the same name).
+    project: String,
+    project_id: String,
+    /// Its ticket's key.
+    ticket: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QuestionRow {
+    question: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    header: Option<String>,
+    multi_select: bool,
+    options: Vec<OptionRow>,
+}
+
+#[derive(Serialize)]
+struct OptionRow {
+    label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RequestRow {
+    /// The request's id, which `answer_permission` and `answer_question` name.
+    request: String,
+    #[serde(rename = "type")]
+    kind: &'static str,
+    agent: RequestAgent,
+    /// When it came (epoch milliseconds).
+    since: i64,
+    tool: String,
+    /// What the tool is asked to act on (the whole plan, for a plan); none for a question.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    arg: String,
+    /// What Claude Code sent, bounded, for a permission: `arg` sums it up, this is all it asks
+    /// (the content to write, the flags of a command…).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input: Option<Value>,
+    description: Option<String>,
+    /// The permission rule Claude Code met.
+    reason: Option<String>,
+    /// Claude Code would refuse it by default.
+    default_no: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    questions: Vec<QuestionRow>,
+    /// A text was cut: the card in the conversation has it whole.
+    cut: bool,
+}
+
+/// `text` in `max` characters at most; `cut` is set when it was longer.
+fn capped_to(text: &str, max: usize, cut: &mut bool) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    *cut = true;
+    text.chars().take(max).collect()
+}
+
+/// `text` in `MAX_PENDING_FIELD` characters at most, as the agent's view caps what it says.
+fn capped(text: &str, cut: &mut bool) -> String {
+    capped_to(text, MAX_PENDING_FIELD, cut)
+}
+
+/// `w` as `list_requests` gives it: the agent's view of it (all it says besides the questions),
+/// the questions with what the view leaves out, a plan or a command up to `LONG_MAX` characters,
+/// and the input of a permission.
+fn request_row(agent: RequestAgent, w: Waiting) -> RequestRow {
+    let kind = request_type(&w.view);
+    let PendingView {
+        id,
+        tool,
+        arg,
+        description,
+        reason,
+        cut,
+        default_no,
+        ..
+    } = w.view;
+    let (mut arg, mut cut) = (arg, cut);
+    let mut questions = Vec::new();
+    let mut input = None;
+    if kind == "question" {
+        let all = asked_questions(&w.input);
+        cut |= all.len() > MAX_PENDING_ITEMS;
+        for q in all.into_iter().take(MAX_PENDING_ITEMS) {
+            cut |= q.options.len() > MAX_PENDING_ITEMS;
+            questions.push(QuestionRow {
+                question: capped(&q.question, &mut cut),
+                header: q.header.map(|h| capped(&h, &mut cut)),
+                multi_select: q.multi_select,
+                options: q
+                    .options
+                    .into_iter()
+                    .take(MAX_PENDING_ITEMS)
+                    .map(|o| OptionRow {
+                        label: capped(&o.label, &mut cut),
+                        description: o.description.map(|d| capped(&d, &mut cut)),
+                    })
+                    .collect(),
+            });
+        }
+    } else {
+        // The view caps `arg` at what the overview shows. A plan is approved, and a command run,
+        // on what is read of it: they are given up to `LONG_MAX`. The view's `cut` held their
+        // cut, among others: it stays only when the text fitted the view's cap (something else
+        // was cut).
+        let whole = match (kind, tool.as_str()) {
+            ("plan", _) => w.input["plan"].as_str(),
+            (_, t) if COMMAND_TOOLS.contains(&t) => w.input["command"].as_str(),
+            _ => None,
+        };
+        if let Some(text) = whole {
+            let shown = start_and_end(text, LONG_MAX, LONG_START);
+            let text_cut = shown != text.trim();
+            cut = text_cut || (cut && text.chars().count() <= MAX_PENDING_FIELD);
+            arg = shown;
+        }
+        if kind == "permission" {
+            input = Some(bounded(&w.input, &mut cut));
+        }
+    }
+    RequestRow {
+        request: id,
+        kind,
+        agent,
+        since: w.since,
+        tool,
+        arg,
+        input,
+        description,
+        reason,
+        default_no,
+        questions,
+        cut,
+    }
+}
+
+/// `list_requests`: the requests waiting for an answer, in the order they came, of the agent
+/// `agent` names (in `project` when given), of the agents of `project`, or of every agent not
+/// archived.
+pub(super) fn requests<R: Runtime>(
+    core: &Core<R>,
+    agent: Option<&str>,
+    project: Option<&str>,
+) -> Result<String, ToolError> {
+    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
+    let only = agent
+        .map(|a| resolve::agent(core, a, scope.as_ref()))
+        .transpose()?;
+    let projects: HashMap<String, String> = core
+        .projects
+        .read()
+        .iter()
+        .map(|p| (p.id.clone(), p.name.clone()))
+        .collect();
+    let keys = ticket_keys(core);
+    // The agents' handles taken out of the map, to lock them one at a time.
+    let handles: Vec<_> = core.agents.read().values().cloned().collect();
+    let mut agents: Vec<(i64, String, RequestAgent, Vec<Waiting>)> = Vec::new();
+    for h in handles {
+        let rt = h.lock();
+        let m = &rt.meta;
+        let wanted = match &only {
+            Some(a) => m.id == a.id,
+            None => !m.archived && scope.as_ref().is_none_or(|p| m.project_id == p.id),
+        };
+        if !wanted {
+            continue;
+        }
+        let who = RequestAgent {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            project: projects.get(&m.project_id).cloned().unwrap_or_default(),
+            project_id: m.project_id.clone(),
+            ticket: m.ticket_id.as_ref().and_then(|t| keys.get(t).cloned()),
+        };
+        agents.push((m.created_at, m.id.clone(), who, answerable(&rt)));
+    }
+    agents.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
+    // Each agent's in its order; across agents, by when they came (the sort keeps the order of
+    // those that came at the same millisecond).
+    let mut rows: Vec<RequestRow> = agents
+        .into_iter()
+        .flat_map(|(_, _, who, waiting)| waiting.into_iter().map(move |w| (who.clone(), w)))
+        .map(|(who, w)| request_row(who, w))
+        .collect();
+    rows.sort_by_key(|r| r.since);
+    json(&rows)
 }
 
 /// A reply of the agent itself (its main thread's text, not a subagent's) that says something.

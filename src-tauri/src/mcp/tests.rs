@@ -17,9 +17,11 @@ use tauri::test::{mock_app, MockRuntime};
 
 /// The tools the server offers, sorted: those that read (`READING`, M2), those that act
 /// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
-/// here knowingly. None may accept a permission, answer for the user, run a command or the tests,
-/// merge or delete.
+/// here knowingly. None may run a command or the tests, merge or delete; the only two that answer
+/// for the user (`ANSWERING`) never give a lasting permission.
 pub(super) const EXPOSED: &[&str] = &[
+    "answer_permission",
+    "answer_question",
     "create_agent",
     "create_ticket",
     "get_agent_summary",
@@ -27,6 +29,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_usage",
     "list_agents",
     "list_projects",
+    "list_requests",
     "list_tickets",
     "move_ticket",
     "report_progress",
@@ -44,11 +47,14 @@ pub(super) const READING: &[&str] = &[
     "get_usage",
     "list_agents",
     "list_projects",
+    "list_requests",
     "list_tickets",
 ];
 
 /// Those that act, under the guardrails of the window and the autopilot.
 pub(super) const ACTING: &[&str] = &[
+    "answer_permission",
+    "answer_question",
     "create_agent",
     "create_ticket",
     "move_ticket",
@@ -57,6 +63,9 @@ pub(super) const ACTING: &[&str] = &[
     "stop_agent",
     "update_ticket",
 ];
+
+/// Those that answer an agent's request for the user.
+pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
 
 /// Those an external Claude is refused.
 pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
@@ -240,6 +249,10 @@ async fn the_server_offers_exactly_its_tools_and_none_that_accepts_runs_merges_o
     assert_eq!(listed, expected);
     for name in &listed {
         for word in FORBIDDEN {
+            // The two tools that answer for the user are named for it, and only they.
+            if ANSWERING.contains(&name.as_str()) && ["permission", "answer"].contains(word) {
+                continue;
+            }
             assert!(!name.contains(word), "{name} holds {word}");
         }
     }

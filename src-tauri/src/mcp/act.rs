@@ -14,22 +14,30 @@
 //! - an agent never writes to nor stops itself, and acts on its own project alone (it reads the
 //!   others: the tools that read are open);
 //! - a message sent to an agent, and the first one of an agent created, reach it under its author's
-//!   name (« Message de <author> : »): never as the user's own words.
+//!   name (« Message de <author> : »): never as the user's own words;
+//! - an agent's request (a permission, a question, a plan) is answered as the window's card does,
+//!   by any client but never for good (« Toujours autoriser » is refused: a lasting rule is the
+//!   user's), never by the agent that asked, and only once: a request that no longer waits (the user
+//!   or another client answered it, the agent stopped) or one of an agent in the Claude Code view
+//!   (its interface asks in its terminal) is refused with the reason. The card of the conversation
+//!   says who answered, and a refusal tells Claude who refused.
 //!
 //! A refusal (`ToolError::Refused`) is a guard saying no; a failure (`ToolError::Failed`) is
 //! something asked that does not fit (a name, an empty title…). `report_progress` and
 //! `split_ticket` are for the agents of Escouade alone.
 
 use super::activity;
-use super::read::{json, ticket_view, todo_keys};
+use super::read::{answerable, asked_questions, json, request_type, ticket_view, todo_keys};
 use super::resolve;
 use super::tools::{
-    CreateAgentArgs, CreateTicketArgs, MoveTicketArgs, PositionArg, ReportProgressArgs,
-    SendMessageArgs, SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError,
-    UpdateTicketArgs, SPLIT_MAX,
+    AnswerPermissionArgs, AnswerQuestionArgs, CreateAgentArgs, CreateTicketArgs, DecisionArg,
+    MoveTicketArgs, PositionArg, QuestionAnswer, ReportProgressArgs, SendMessageArgs,
+    SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateTicketArgs,
+    SPLIT_MAX,
 };
 use super::Caller;
 use crate::accounts;
+use crate::agent::Waiting;
 use crate::board::{Held, MoveTo};
 use crate::core::{AgentOptions, Core};
 use crate::i18n;
@@ -755,6 +763,316 @@ pub(super) async fn stop_agent<R: Runtime>(
         .is_ok_and(|h| h.lock().meta.status.is_active());
     core.interrupt(&found.id).await.map_err(failure)?;
     json(&json!({ "id": found.id, "name": found.name, "interrupted": interrupted }))
+}
+
+// ---------- the requests of the agents ----------
+
+/// The request `asked` of the agent `found`, still waiting for an answer. Refused when it no longer
+/// waits (the user answered it in the window, or another client did, or the agent stopped), and
+/// for an agent in the Claude Code view, whose requests are in its terminal.
+fn waiting_request<R: Runtime>(
+    core: &Core<R>,
+    found: &resolve::AgentRef,
+    asked: &str,
+) -> Result<Waiting, ToolError> {
+    let name = &found.name;
+    let h = core.agent(&found.id).map_err(|_| {
+        ToolError::Failed(tr!(
+            "L’agent {name} n’existe plus.",
+            "The agent {name} is gone."
+        ))
+    })?;
+    let rt = h.lock();
+    if rt.meta.terminal {
+        return Err(ToolError::Refused(tr!(
+            "L’agent {name} est en vue Claude Code : ses demandes sont dans son terminal, c’est là qu’on y répond.",
+            "The agent {name} is in the Claude Code view: its requests are in its terminal, where they are answered."
+        )));
+    }
+    let asked = asked.trim();
+    let mut waiting = answerable(&rt);
+    let Some(i) = waiting.iter().position(|w| w.view.id == asked) else {
+        // The ones that wait are told: an id mistyped is no answer someone else gave.
+        let ids = waiting
+            .iter()
+            .map(|w| w.view.id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let ids = if ids.is_empty() {
+            tr!("aucune", "none")
+        } else {
+            ids
+        };
+        return Err(ToolError::Refused(tr!(
+            "Cette demande n’attend plus de réponse : l’utilisateur ou un autre client y a déjà répondu, ou l’agent ne tourne plus (ou ce n’est pas l’identifiant d’une de ses demandes). Demandes de l’agent {name} qui attendent : {ids}.",
+            "This request no longer waits for an answer: the user or another client has already answered it, or the agent no longer runs (or it is not the id of one of its requests). Requests of the agent {name} that wait: {ids}."
+        )));
+    };
+    Ok(waiting.swap_remove(i))
+}
+
+/// Why the core could not answer `request` of `found`: it no longer waits (the user, or another
+/// client, answered it between the check and the answer), else what the core said.
+pub(super) fn not_answered<R: Runtime>(
+    core: &Core<R>,
+    found: &resolve::AgentRef,
+    request: &str,
+    why: anyhow::Error,
+) -> ToolError {
+    match waiting_request(core, found, request) {
+        Err(gone) => gone,
+        Ok(_) => refusal(why),
+    }
+}
+
+/// `answer_permission`: the window's « Autoriser » or « Refuser » for a permission, or the approval
+/// of a plan. Never « Toujours autoriser ».
+pub(super) fn answer_permission<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: AnswerPermissionArgs,
+) -> Result<String, ToolError> {
+    if a.decision == DecisionArg::Always {
+        return Err(ToolError::Refused(tr!(
+            "« Toujours autoriser » n’est pas offert par le serveur : une règle de permission qui dure reste la décision de l’utilisateur, à prendre dans la fenêtre d’Escouade. Réponds allow ou deny, pour cette demande seulement.",
+            "“Always allow” is not offered by the server: a lasting permission rule stays the user’s decision, to make in Escouade’s window. Answer allow or deny, for this request only."
+        )));
+    }
+    let found = other_agent(
+        core,
+        caller,
+        &a.agent,
+        a.project.as_deref(),
+        tr!(
+            "Un agent ne répond pas à ses propres demandes.",
+            "An agent does not answer its own requests."
+        ),
+    )?;
+    let waiting = waiting_request(core, &found, &a.request)?;
+    let request = waiting.view.id;
+    if waiting.view.kind != "permission" {
+        return Err(ToolError::Failed(tr!(
+            "La demande {request} est une question : réponds-y avec answer_question.",
+            "The request {request} is a question: answer it with answer_question."
+        )));
+    }
+    let message = a
+        .message
+        .as_deref()
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string);
+    if a.decision == DecisionArg::Allow && message.is_some() {
+        return Err(ToolError::Failed(tr!(
+            "Un message ne va qu’avec un refus (decision deny) : l’agent n’en reçoit pas quand tu autorises.",
+            "A message only goes with a refusal (decision deny): the agent gets none when you allow."
+        )));
+    }
+    // Under its author's name: the card and, for a refusal, Claude are told who answered.
+    let origin = activity::caller_name(core, Some(caller));
+    let decision = a.decision.name();
+    core.answer_permission_by(&found.id, &request, decision, message, Some(&origin))
+        .map_err(|e| not_answered(core, &found, &request, e))?;
+    json(&json!({
+        "id": found.id, "name": found.name, "request": request, "decision": decision,
+    }))
+}
+
+/// `answer_question`: what the window's question card sends, `{ <question>: <answer> }`, for the
+/// answers given.
+pub(super) fn answer_question<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: AnswerQuestionArgs,
+) -> Result<String, ToolError> {
+    let found = other_agent(
+        core,
+        caller,
+        &a.agent,
+        a.project.as_deref(),
+        tr!(
+            "Un agent ne répond pas à ses propres demandes.",
+            "An agent does not answer its own requests."
+        ),
+    )?;
+    let waiting = waiting_request(core, &found, &a.request)?;
+    let request = waiting.view.id.clone();
+    if request_type(&waiting.view) != "question" {
+        return Err(ToolError::Failed(tr!(
+            "La demande {request} est une demande de permission (ou un plan) : réponds-y avec answer_permission.",
+            "The request {request} is a permission (or a plan): answer it with answer_permission."
+        )));
+    }
+    let answers = question_answers(&waiting.input, &a.answers)?;
+    let origin = activity::caller_name(core, Some(caller));
+    core.answer_question_by(
+        &found.id,
+        &request,
+        serde_json::Value::Object(answers.clone()),
+        Some(&origin),
+    )
+    .map_err(|e| not_answered(core, &found, &request, e))?;
+    json(&json!({
+        "id": found.id, "name": found.name, "request": request, "answers": answers,
+    }))
+}
+
+/// The answers of a question card as the window sends them (`{ <question>: <answer> }`, the
+/// question as Claude Code asked it, the labels of several options joined by « , »): every question
+/// answered once, by options it offers (several only where it allows them) or by a free text.
+fn question_answers(
+    input: &serde_json::Value,
+    given: &[QuestionAnswer],
+) -> Result<serde_json::Map<String, serde_json::Value>, ToolError> {
+    let questions = asked_questions(input);
+    let n = questions.len();
+    let all = questions
+        .iter()
+        .map(|q| format!("« {} »", q.question))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if n == 0 {
+        return Err(ToolError::Failed(tr!(
+            "Cette demande ne pose aucune question.",
+            "This request asks no question."
+        )));
+    }
+    if given.is_empty() {
+        return Err(ToolError::Failed(tr!(
+            "Donne une réponse à chaque question de la demande : elle en pose {n}. Questions : {all}",
+            "Give an answer to each question of the request: it asks {n}. Questions: {all}"
+        )));
+    }
+    let mut picked: Vec<Option<String>> = vec![None; n];
+    for answer in given {
+        let named = answer
+            .question
+            .as_deref()
+            .map(str::trim)
+            .filter(|q| !q.is_empty());
+        let i = match named {
+            None if n == 1 => 0,
+            None => {
+                return Err(ToolError::Failed(tr!(
+                    "La demande pose {n} questions : donne la question de chaque réponse (argument question). Questions : {all}",
+                    "The request asks {n} questions: give the question each answer is for (argument question). Questions: {all}"
+                )))
+            }
+            Some(text) => {
+                let lower = text.to_lowercase();
+                questions
+                    .iter()
+                    .position(|q| q.question.trim() == text)
+                    .or_else(|| {
+                        questions
+                            .iter()
+                            .position(|q| q.question.trim().to_lowercase() == lower)
+                    })
+                    .ok_or_else(|| {
+                        ToolError::Failed(tr!(
+                            "Aucune question « {text} » dans la demande. Questions : {all}",
+                            "No question “{text}” in the request. Questions: {all}"
+                        ))
+                    })?
+            }
+        };
+        let q = &questions[i];
+        let question = &q.question;
+        if picked[i].is_some() {
+            return Err(ToolError::Failed(tr!(
+                "Deux réponses à la question « {question} » : une seule suffit.",
+                "Two answers to the question “{question}”: one is enough."
+            )));
+        }
+        let text = answer
+            .text
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty());
+        let choices = answer.choices.as_deref().filter(|c| !c.is_empty());
+        picked[i] = Some(match (choices, text) {
+            (None, Some(text)) => text.to_string(),
+            (Some(choices), None) => {
+                // The options named, as the question gave them, each once.
+                let mut labels: Vec<&str> = Vec::new();
+                for c in choices {
+                    let c = c.trim();
+                    let lower = c.to_lowercase();
+                    let option = q.options.iter().find(|o| o.label.trim() == c).or_else(|| {
+                        q.options
+                            .iter()
+                            .find(|o| o.label.trim().to_lowercase() == lower)
+                    });
+                    let Some(option) = option else {
+                        let options = q
+                            .options
+                            .iter()
+                            .map(|o| o.label.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        return Err(ToolError::Failed(tr!(
+                            "« {c} » n’est pas une option de la question « {question} ». Options : {options}. Pour une réponse libre, donne text.",
+                            "“{c}” is not an option of the question “{question}”. Options: {options}. For a free answer, give text."
+                        )));
+                    };
+                    if !labels.contains(&option.label.as_str()) {
+                        labels.push(&option.label);
+                    }
+                }
+                if labels.len() > 1 && !q.multi_select {
+                    let count = labels.len();
+                    return Err(ToolError::Failed(tr!(
+                        "La question « {question} » n’accepte qu’un choix ({count} donnés).",
+                        "The question “{question}” takes one choice only ({count} given)."
+                    )));
+                }
+                labels.join(", ")
+            }
+            _ => {
+                return Err(ToolError::Failed(tr!(
+                    "La réponse à la question « {question} » doit donner choices ou text, un seul des deux.",
+                    "The answer to the question “{question}” must give choices or text, one of the two."
+                )))
+            }
+        });
+    }
+    let mut answers = serde_json::Map::new();
+    for (q, answer) in questions.iter().zip(picked) {
+        let Some(answer) = answer else {
+            let question = &q.question;
+            return Err(ToolError::Failed(tr!(
+                "La question « {question} » n’a pas de réponse : chaque question en veut une.",
+                "The question “{question}” has no answer: each question needs one."
+            )));
+        };
+        answers.insert(q.question.clone(), serde_json::Value::String(answer));
+    }
+    Ok(answers)
+}
+
+/// What the activity log says `answer_question` was asked: each answer, « question → answer » (the
+/// answer alone when the question is not named), one after the other.
+pub(super) fn answers_summary(answers: &[QuestionAnswer]) -> String {
+    answers
+        .iter()
+        .map(|a| {
+            let said = match (&a.choices, &a.text) {
+                (Some(choices), _) if !choices.is_empty() => choices.join(", "),
+                (_, Some(text)) => text.trim().to_string(),
+                _ => String::new(),
+            };
+            match a
+                .question
+                .as_deref()
+                .map(str::trim)
+                .filter(|q| !q.is_empty())
+            {
+                Some(question) => format!("{question} → {said}"),
+                None => said,
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
 }
 
 // ---------- for the agents of Escouade ----------

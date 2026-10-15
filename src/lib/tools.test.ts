@@ -102,6 +102,9 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Lancer un agent');
     expect(toolLabel('mcp__escouade__list_projects')).toBe('Escouade · Lister les projets');
     expect(toolLabel('mcp__escouade__get_agent_summary')).toBe('Escouade · Résumer un agent');
+    expect(toolLabel('mcp__escouade__list_requests')).toBe('Escouade · Lister les demandes en attente');
+    expect(toolLabel('mcp__escouade__answer_permission')).toBe('Escouade · Répondre à une demande d’autorisation');
+    expect(toolLabel('mcp__escouade__answer_question')).toBe('Escouade · Répondre à une question');
     // One this window does not know yet: as Claude names it.
     expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
     // Another server's keep their names.

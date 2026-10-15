@@ -3080,15 +3080,31 @@ impl<R: Runtime> Core<R> {
         Ok(out)
     }
 
+    /// The user's answer to an agent's question, from the window.
     pub fn answer_question(
         self: &Arc<Self>,
         id: &str,
         request_id: &str,
         answers: Value,
     ) -> Result<()> {
-        self.with_agent(id, |rt, fx| rt.answer_question(request_id, answers, fx))
+        self.answer_question_by(id, request_id, answers, None)
     }
 
+    /// An answer to an agent's question given by `by`, a client of the MCP server (named as the
+    /// activity log names it): the same as the window's, and its card says who answered.
+    pub fn answer_question_by(
+        self: &Arc<Self>,
+        id: &str,
+        request_id: &str,
+        answers: Value,
+        by: Option<&str>,
+    ) -> Result<()> {
+        self.with_agent(id, |rt, fx| {
+            rt.answer_question_by(request_id, answers, by, fx)
+        })
+    }
+
+    /// The user's answer to an agent's permission, from the window.
     pub fn answer_permission(
         self: &Arc<Self>,
         id: &str,
@@ -3096,8 +3112,21 @@ impl<R: Runtime> Core<R> {
         decision: &str,
         message: Option<String>,
     ) -> Result<()> {
+        self.answer_permission_by(id, request_id, decision, message, None)
+    }
+
+    /// An answer to an agent's permission given by `by`, a client of the MCP server: the same as
+    /// the window's, its card says who answered, and a refusal tells Claude who refused.
+    pub fn answer_permission_by(
+        self: &Arc<Self>,
+        id: &str,
+        request_id: &str,
+        decision: &str,
+        message: Option<String>,
+        by: Option<&str>,
+    ) -> Result<()> {
         self.with_agent(id, |rt, fx| {
-            rt.answer_permission(request_id, decision, message, fx)
+            rt.answer_permission_by(request_id, decision, message, by, fx)
         })
     }
 

@@ -72,6 +72,8 @@ export default defineZone('composer', {
     denied: 'Denied',
     allowed: 'Allowed',
     alwaysAllowed: 'Always allowed',
+    allowedBy: 'Allowed by {author} through Escouade',
+    deniedBy: 'Denied by {author} through Escouade',
     cancelled: 'Request canceled',
   },
 
@@ -80,5 +82,6 @@ export default defineZone('composer', {
     orWrite: 'or answer freely in the field below',
     submit: 'Submit',
     unanswered: 'Question left unanswered',
+    answeredBy: 'Answered by {author} through Escouade',
   },
 });
