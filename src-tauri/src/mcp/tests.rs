@@ -25,6 +25,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "create_agent",
     "create_ticket",
     "get_agent_summary",
+    "get_board",
     "get_ticket",
     "get_usage",
     "list_agents",
@@ -34,6 +35,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "move_ticket",
     "report_progress",
     "send_message",
+    "set_board",
     "split_ticket",
     "start_ticket",
     "stop_agent",
@@ -43,6 +45,7 @@ pub(super) const EXPOSED: &[&str] = &[
 /// Those of `EXPOSED` that only read.
 pub(super) const READING: &[&str] = &[
     "get_agent_summary",
+    "get_board",
     "get_ticket",
     "get_usage",
     "list_agents",
@@ -59,6 +62,7 @@ pub(super) const ACTING: &[&str] = &[
     "create_ticket",
     "move_ticket",
     "send_message",
+    "set_board",
     "start_ticket",
     "stop_agent",
     "update_ticket",
@@ -1168,6 +1172,54 @@ async fn an_entry_names_its_caller_and_keeps_its_texts_short_on_one_line() {
     assert_eq!(told["type"], "mcpActivity");
     assert_eq!(told["entry"]["tool"], "get_ticket");
     assert_eq!(told["entry"]["outcome"], "error");
+}
+
+#[tokio::test]
+async fn an_entry_that_says_what_a_call_changed_keeps_a_message_far_longer_than_a_line_of_text() {
+    let h = harness("mcp-record-changed");
+    // Thirteen settings with their values before and after outgrow the 300 characters of a line.
+    let changes = (0..13)
+        .map(|i| format!("setting{i}: valeur avant → valeur après"))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    assert!(changes.chars().count() > 300 && changes.chars().count() < 1500);
+    activity::record(
+        &h.core,
+        Some(&Caller::External),
+        "set_board",
+        "project: demo",
+        Outcome::Changed(changes.clone()),
+    );
+    let e = h.core.mcp.activity.entries().pop().unwrap();
+    assert_eq!((e.outcome, e.message.as_deref()), ("ok", Some(&*changes)));
+    let told = h.events.lock().last().cloned().unwrap();
+    assert_eq!(told["entry"]["outcome"], "ok");
+    assert_eq!(told["entry"]["message"], changes.as_str());
+
+    // Still one line, and a bound of its own: cut at 1 500 characters with « … ».
+    let long = format!("a: 1 → 2\n{}", "x".repeat(2_000));
+    activity::record(
+        &h.core,
+        Some(&Caller::External),
+        "set_board",
+        "project: demo",
+        Outcome::Changed(long),
+    );
+    let e = h.core.mcp.activity.entries().pop().unwrap();
+    let message = e.message.unwrap();
+    assert!(!message.contains('\n'));
+    assert_eq!(message.chars().count(), 1_500);
+    assert!(message.starts_with("a: 1 → 2 xxx") && message.ends_with('…'));
+    // What a refusal or a failure says stays a line of 300.
+    activity::record(
+        &h.core,
+        Some(&Caller::External),
+        "set_board",
+        "project: demo",
+        Outcome::Refused("y".repeat(400)),
+    );
+    let e = h.core.mcp.activity.entries().pop().unwrap();
+    assert_eq!(e.message.unwrap().chars().count(), 300);
 }
 
 #[test]

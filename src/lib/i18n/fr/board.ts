@@ -36,6 +36,10 @@ export default {
     resync: 'Resynchroniser',
     loop: 'Boucle {iteration}/{max}',
     partial: 'Objectif partiel',
+    // Its own model or effort, which come before the Kanban's for its agent (the label of the chip, and its tooltip).
+    ownModel: 'Modèle de ce ticket : {model} (avant celui du Kanban)',
+    ownEffort: 'Effort de ce ticket : {effort} (avant celui du Kanban)',
+    ownBoth: 'Modèle de ce ticket : {model}, effort {effort} (avant celui du Kanban)',
     doneHeading: 'Ce qui a été fait',
     progressLabel: 'Avancement',
     moreSteps: { one: '{count} autre élément', other: '{count} autres éléments' },

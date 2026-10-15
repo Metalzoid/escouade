@@ -21,6 +21,8 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   list_tickets: 'mcp.tools.listTickets',
   get_ticket: 'mcp.tools.getTicket',
   get_usage: 'mcp.tools.getUsage',
+  get_board: 'mcp.tools.getBoard',
+  set_board: 'mcp.tools.setBoard',
   get_agent_summary: 'mcp.tools.getAgentSummary',
   list_requests: 'mcp.tools.listRequests',
   create_ticket: 'mcp.tools.createTicket',

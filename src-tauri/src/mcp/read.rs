@@ -11,7 +11,7 @@ use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
 use crate::git;
 use crate::model::{
-    AgentStatus, Column, Criterion, PauseReason, PendingView, RateWindow, Service, Ticket,
+    AgentStatus, Column, Criterion, PauseReason, PendingView, Project, RateWindow, Service, Ticket,
     MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
 };
 use serde::Serialize;
@@ -288,6 +288,12 @@ pub(crate) struct TicketView {
     after: Vec<String>,
     /// The features in place so far, as its agent last listed them.
     progress: Vec<String>,
+    /// The model and effort of its agent alone (`start_ticket` gave them); left out when it has
+    /// none of its own, the board's being its agent's.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    model: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    effort: String,
     external: Option<External>,
 }
 
@@ -330,6 +336,8 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         column: t.column,
         after: after_keys(t, &keys),
         progress: t.progress.clone(),
+        model: t.model.clone(),
+        effort: t.effort.clone(),
         external: t.external.as_ref().map(|e| External {
             service: e.service,
             key: e.key.clone(),
@@ -350,6 +358,89 @@ pub(super) fn ticket<R: Runtime>(
         None => own_ticket(core, caller)?,
     };
     json(&ticket_view(core, &t))
+}
+
+/// A project's Kanban settings, as `get_board` answers them (and `set_board` after a change): the
+/// names `SetBoardArgs` takes, so that the answer can be given back as it is.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BoardView {
+    project: String,
+    /// Its id, which names it too (`set_board` takes either, and ignores this key).
+    project_id: String,
+    /// "merge", "pr", "push" or "keep".
+    action: String,
+    /// Where tickets merge: the Kanban's, else the branch the project is on (empty on a detached
+    /// HEAD).
+    target: String,
+    /// "merge", "squash" or "rebase".
+    strategy: String,
+    draft: bool,
+    cleanup: bool,
+    conventional: bool,
+    /// "ask", "agent" or "abort".
+    conflict: String,
+    max_parallel: u32,
+    autopilot: bool,
+    /// What the Kanban sets for its tickets' agents; empty: the app's (`defaults`).
+    model: String,
+    effort: String,
+    mode: String,
+    defaults: BoardDefaults,
+    /// On only with a test command, as the window shows it.
+    tests_first: bool,
+    test_command: String,
+    prefix: String,
+}
+
+/// What the tickets' agents go with when the Kanban sets nothing: the app's defaults.
+#[derive(Serialize)]
+struct BoardDefaults {
+    model: String,
+    effort: String,
+    mode: String,
+}
+
+/// `project`'s Kanban settings as `get_board` answers them. Async for the branch the project is
+/// on, which is the target while the Kanban has none (the first ticket fixes it).
+pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) -> BoardView {
+    let b = &project.board;
+    let target = if b.target.is_empty() {
+        git::head_branch(&project.path).await
+    } else {
+        b.target.clone()
+    };
+    let settings = core.settings.read();
+    BoardView {
+        project: project.name.clone(),
+        project_id: project.id.clone(),
+        action: b.action.clone(),
+        target,
+        strategy: b.strategy.clone(),
+        draft: b.draft,
+        cleanup: b.cleanup,
+        conventional: b.conventional,
+        conflict: b.conflict.clone(),
+        max_parallel: b.max_parallel.clamp(1, 6),
+        autopilot: b.autopilot,
+        model: b.model.clone(),
+        effort: b.effort.clone(),
+        mode: b.mode.clone(),
+        defaults: BoardDefaults {
+            model: settings.default_model.clone(),
+            effort: settings.default_effort.clone(),
+            mode: settings.default_mode.clone(),
+        },
+        tests_first: b.tests_first_on(),
+        test_command: b.test_command.clone(),
+        prefix: b.prefix.clone(),
+    }
+}
+
+/// `get_board`: the Kanban settings of `project`.
+pub(super) async fn board<R: Runtime>(core: &Core<R>, project: &str) -> Result<String, ToolError> {
+    let project = resolve::project(core, project)?;
+    json(&board_view(core, &project).await)
 }
 
 /// The ticket the calling agent works on. Claude outside Escouade has none.

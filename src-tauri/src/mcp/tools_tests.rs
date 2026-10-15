@@ -4,7 +4,7 @@
 use super::tests::{client, names, started, EXPOSED, READING};
 use crate::agent::AgentRt;
 use crate::core::RESUME_MARGIN_MS;
-use crate::core_tests::{harness, Harness};
+use crate::core_tests::{git, harness, Harness};
 use crate::model::*;
 use crate::usage::Reading;
 use rmcp::model::CallToolRequestParams;
@@ -185,6 +185,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     let required = |name: &str| schema(name)["required"].clone();
     assert_eq!(required("list_tickets"), json!(["project"]));
     assert_eq!(required("get_agent_summary"), json!(["agent"]));
+    assert_eq!(required("get_board"), json!(["project"]));
     for name in [
         "list_projects",
         "list_agents",
@@ -204,6 +205,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "list_tickets",
         "get_ticket",
         "get_agent_summary",
+        "get_board",
     ] {
         let s = schema(name);
         for (arg, spec) in s["properties"].as_object().unwrap() {
@@ -542,9 +544,25 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             "ok"
         )
     );
-    // Not imported: no external ticket.
+    // Not imported: no external ticket. No model or effort of its own either: they are left out.
     let plain = read(&c, "get_ticket", json!({ "ticket": "DEM-1" })).await;
     assert_eq!(plain["external"], json!(null));
+    assert!(!plain.as_object().unwrap().contains_key("model"));
+    assert!(!plain.as_object().unwrap().contains_key("effort"));
+    // Launched with a model and an effort of its own (`start_ticket`): read back, its agent's alone.
+    put(
+        &h,
+        Ticket {
+            model: "opus".into(),
+            effort: "max".into(),
+            ..ticket(&p, "DEM-3", "Architecture", Column::Doing, 3)
+        },
+    );
+    let own = read(&c, "get_ticket", json!({ "ticket": "dem-3" })).await;
+    assert_eq!(
+        (&own["model"], &own["effort"]),
+        (&json!("opus"), &json!("max"))
+    );
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -935,6 +953,163 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     h.core.update_usage(|_| {});
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(false), json!(true)));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_boards_settings_are_read_whole_with_the_apps_defaults_and_the_branch_it_merges_into() {
+    let h = harness("mcp-get-board");
+    let (p, r) = h.project(false).await;
+    let p = still(&h, &p);
+    let c = external(&h).await;
+    // A Kanban that has no target yet merges into the branch the project is on, and says so.
+    git(&r, &["checkout", "-qb", "develop"]);
+    let expected = json!({
+        "project": "demo",
+        "projectId": p.id,
+        "action": "merge",
+        "target": "develop",
+        "strategy": "squash",
+        "draft": false,
+        "cleanup": true,
+        "conventional": true,
+        "conflict": "ask",
+        "maxParallel": 2,
+        "autopilot": false,
+        "model": "",
+        "effort": "",
+        "mode": "",
+        "defaults": { "model": "sonnet", "effort": "medium", "mode": "auto" },
+        "testsFirst": false,
+        "testCommand": "",
+        "prefix": "",
+    });
+    assert_eq!(
+        read(&c, "get_board", json!({ "project": "DEMO" })).await,
+        expected
+    );
+    // It reads, it does not fix the target: that is the first ticket's.
+    assert_eq!(h.core.project(&p.id).unwrap().board.target, "");
+    assert_eq!(
+        last_entry(&h),
+        (
+            "Claude (hors Escouade)".into(),
+            "get_board".into(),
+            "project: DEMO".into(),
+            "ok"
+        )
+    );
+
+    // Every setting as the Kanban has it, the defaults as the app has them.
+    {
+        let mut s = h.core.settings.write();
+        s.default_model = "opus".into();
+        s.default_effort = "high".into();
+        s.default_mode = "plan".into();
+    }
+    h.core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                action: "pr".into(),
+                target: "main".into(),
+                strategy: "rebase".into(),
+                draft: true,
+                cleanup: false,
+                conventional: false,
+                conflict: "agent".into(),
+                max_parallel: 4,
+                autopilot: false,
+                model: "haiku".into(),
+                effort: "low".into(),
+                mode: "acceptEdits".into(),
+                tests_first: true,
+                test_command: "npm test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let board = read(&c, "get_board", json!({ "project": p.id })).await;
+    assert_eq!(
+        board,
+        json!({
+            "project": "demo",
+            "projectId": p.id,
+            "action": "pr",
+            // The one the Kanban has, not the branch the project is on.
+            "target": "main",
+            "strategy": "rebase",
+            "draft": true,
+            "cleanup": false,
+            "conventional": false,
+            "conflict": "agent",
+            "maxParallel": 4,
+            "autopilot": false,
+            "model": "haiku",
+            "effort": "low",
+            "mode": "acceptEdits",
+            "defaults": { "model": "opus", "effort": "high", "mode": "plan" },
+            "testsFirst": true,
+            "testCommand": "npm test",
+            "prefix": "",
+        })
+    );
+
+    // Tests first with no test command to run is off, as the window shows it and the validation
+    // takes it: so does it say.
+    let stored = h.core.project(&p.id).unwrap().board;
+    h.core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                tests_first: true,
+                test_command: "  ".into(),
+                ..stored.clone()
+            },
+        )
+        .unwrap();
+    let off = read(&c, "get_board", json!({ "project": "demo" })).await;
+    assert_eq!(
+        (&off["testsFirst"], &off["testCommand"]),
+        (&json!(false), &json!("  "))
+    );
+    assert!(h.core.project(&p.id).unwrap().board.tests_first);
+    h.core.board_set(&p.id, stored).unwrap();
+
+    // The tickets' key prefix is the first ticket's.
+    let made = h
+        .core
+        .ticket_create(
+            &p.id,
+            crate::tickets::TicketDraft {
+                title: "Un".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(made.key, "DEM-1");
+    assert_eq!(
+        read(&c, "get_board", json!({ "project": "demo" })).await["prefix"],
+        "DEM"
+    );
+
+    // An agent of another project reads it too: the tools that read are open.
+    let other = other_project(&h, "autre").await;
+    let theirs = put_agent(&h, &other, "leur-agent", 1);
+    let agent = as_agent(&h, &theirs.id).await;
+    assert_eq!(
+        read(&agent, "get_board", json!({ "project": "demo" })).await["action"],
+        "pr"
+    );
+    assert_eq!(last_entry(&h).0, "leur-agent");
+    agent.cancel().await.unwrap();
+
+    // A project that is none: an error that says so.
+    let said = refused(&c, "get_board", json!({ "project": "nope" })).await;
+    assert!(said.contains("Aucun projet « nope »"), "{said}");
+    assert_eq!(last_entry(&h).3, "error");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

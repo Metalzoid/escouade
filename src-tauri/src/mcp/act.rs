@@ -13,6 +13,10 @@
 //!   the window (a confirmation): here it is refused, and the refusal says which tickets;
 //! - an agent never writes to nor stops itself, and acts on its own project alone (it reads the
 //!   others: the tools that read are open);
+//! - a project's Kanban settings are set as the window's form sets them (`set_board`, the same
+//!   function of the core), under its checks; what runs without a question stays the user's, given
+//!   in the window: the mode `bypassPermissions` (kept when the Kanban is on it already) and the
+//!   test command, which tests first needs (the server sets none);
 //! - a message sent to an agent, and the first one of an agent created, reach it under its author's
 //!   name (« Message de <author> : »): never as the user's own words;
 //! - an agent's request (a permission, a question, a plan) is answered as the window's card does,
@@ -27,11 +31,13 @@
 //! `split_ticket` are for the agents of Escouade alone.
 
 use super::activity;
-use super::read::{answerable, asked_questions, json, request_type, ticket_view, todo_keys};
+use super::read::{
+    answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys,
+};
 use super::resolve;
 use super::tools::{
     AnswerPermissionArgs, AnswerQuestionArgs, CreateAgentArgs, CreateTicketArgs, DecisionArg,
-    MoveTicketArgs, PositionArg, QuestionAnswer, ReportProgressArgs, SendMessageArgs,
+    MoveTicketArgs, PositionArg, QuestionAnswer, ReportProgressArgs, SendMessageArgs, SetBoardArgs,
     SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateTicketArgs,
     SPLIT_MAX,
 };
@@ -39,10 +45,11 @@ use super::Caller;
 use crate::accounts;
 use crate::agent::Waiting;
 use crate::board::{Held, MoveTo};
-use crate::core::{AgentOptions, Core};
+use crate::core::{supports_effort, AgentOptions, Core};
+use crate::git;
 use crate::i18n;
-use crate::model::{Column, PauseReason, Project, PROGRESS_LINE_MAX};
-use crate::tickets::{title_missing, TicketDraft};
+use crate::model::{BoardSettings, Column, PauseReason, Project, PROGRESS_LINE_MAX};
+use crate::tickets::{ticket_agent_options, title_missing, TicketDraft};
 use serde_json::json;
 use std::sync::Arc;
 use tauri::Runtime;
@@ -525,6 +532,9 @@ pub(super) fn start_ticket<R: Runtime>(
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
+    // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
+    let model = model_setting(core, a.model.as_deref())?;
+    let effort = effort_setting(i18n::ui(), a.effort.as_deref())?;
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
         not_held(core, &t.project_id)?;
@@ -568,8 +578,339 @@ pub(super) fn start_ticket<R: Runtime>(
             )));
         }
     }
-    core.ticket_start(&t.id).map_err(refusal)?;
-    json(&json!({ "key": t.key, "starting": true }))
+    core.ticket_start_with(&t.id, model, effort)
+        .map_err(refusal)?;
+    // What its agent goes with: its ticket's own, else its Kanban's, else the app's.
+    let started = core.ticket(&t.id).unwrap_or(t);
+    let board = project_of(core, &started.project_id)?.board;
+    let (model, effort, _) = ticket_agent_options(&started, &board, &core.settings.read());
+    let mut answer = json!({ "key": started.key, "starting": true, "model": model });
+    // A model that takes no effort (Haiku) goes without one: none is said.
+    if supports_effort(&model) {
+        answer["effort"] = json!(effort);
+    }
+    json(&answer)
+}
+
+// ---------- the Kanban's settings ----------
+
+/// The efforts Claude Code takes (`--effort`).
+const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+/// The modes a Kanban may be set to here: `bypassPermissions` is the user's to choose, in the
+/// window (`mode_setting`).
+const MODES: [&str; 4] = ["auto", "default", "plan", "acceptEdits"];
+/// The most branches an error lists: a repository may have hundreds.
+const BRANCHES_LISTED: usize = 20;
+
+/// A model given for a Kanban's agents or a ticket's: `None` when left out, an empty one when it
+/// goes back to the default, else one the app offers (`model`).
+fn model_setting<R: Runtime>(
+    core: &Core<R>,
+    asked: Option<&str>,
+) -> Result<Option<String>, ToolError> {
+    asked
+        .map(|m| model(core, Some(m)).map(Option::unwrap_or_default))
+        .transpose()
+}
+
+/// An effort given for a Kanban's agents or a ticket's: `None` when left out, an empty one when it
+/// goes back to the default, else one of `EFFORTS` (in any case).
+fn effort_setting(lang: i18n::Lang, asked: Option<&str>) -> Result<Option<String>, ToolError> {
+    let Some(asked) = asked.map(str::trim) else {
+        return Ok(None);
+    };
+    if asked.is_empty() {
+        return Ok(Some(String::new()));
+    }
+    match EFFORTS.iter().find(|e| e.eq_ignore_ascii_case(asked)) {
+        Some(effort) => Ok(Some(effort.to_string())),
+        None => Err(ToolError::Failed(tr_in!(
+            lang,
+            "Effort « {asked} » inconnu. Efforts : {choices}.",
+            "Unknown effort “{asked}”. Efforts: {choices}.",
+            choices = EFFORTS.join(", ")
+        ))),
+    }
+}
+
+/// A mode given for a Kanban's agents: `None` when left out, an empty one when it goes back to the
+/// default, else one of `MODES`. `bypassPermissions` (no permission request at all) is the user's
+/// decision, taken in the window: refused, unless `current`, the Kanban's own, already is it.
+fn mode_setting(
+    lang: i18n::Lang,
+    current: &str,
+    asked: Option<&str>,
+) -> Result<Option<String>, ToolError> {
+    let Some(asked) = asked.map(str::trim) else {
+        return Ok(None);
+    };
+    if asked.is_empty() {
+        return Ok(Some(String::new()));
+    }
+    if asked.eq_ignore_ascii_case("bypassPermissions") {
+        if current == "bypassPermissions" {
+            return Ok(Some(current.to_string()));
+        }
+        return Err(ToolError::Refused(tr_in!(
+            lang,
+            "Lancer des agents sans aucune demande de permission est une décision de l’utilisateur : le mode bypassPermissions se règle dans la fenêtre (Réglages › Kanban).",
+            "Running agents with no permission request at all is the user’s decision: set the mode bypassPermissions in the window (Settings › Kanban)."
+        )));
+    }
+    match MODES.iter().find(|m| m.eq_ignore_ascii_case(asked)) {
+        Some(mode) => Ok(Some(mode.to_string())),
+        None => Err(ToolError::Failed(tr_in!(
+            lang,
+            "Mode « {asked} » inconnu. Modes : {choices}.",
+            "Unknown mode “{asked}”. Modes: {choices}.",
+            choices = MODES.join(", ")
+        ))),
+    }
+}
+
+/// A target branch given for a Kanban: `None` when left out or when it leaves the Kanban's as it
+/// is, else one of the project's local `branches`, trimmed. It leaves it as it is when it is the
+/// Kanban's own (`kept`, even a branch deleted since, or none) or what `get_board` shows while the
+/// Kanban has none (`current`, the branch the project is on): giving back what `get_board` said
+/// is no change, nor a refusal.
+fn target_setting(
+    lang: i18n::Lang,
+    kept: &str,
+    current: &str,
+    branches: &[String],
+    asked: Option<&str>,
+) -> Result<Option<String>, ToolError> {
+    let Some(asked) = asked.map(str::trim) else {
+        return Ok(None);
+    };
+    if asked == kept || (kept.is_empty() && asked == current) {
+        return Ok(None);
+    }
+    if asked.is_empty() {
+        return Err(ToolError::Failed(tr_in!(
+            lang,
+            "La branche cible ne peut pas être vide : donne une branche locale du projet, ou laisse target de côté pour garder l’actuelle.",
+            "The target branch cannot be empty: give a local branch of the project, or leave target out to keep the current one."
+        )));
+    }
+    if branches.iter().any(|b| b == asked) {
+        return Ok(Some(asked.to_string()));
+    }
+    let listed = branches
+        .iter()
+        .take(BRANCHES_LISTED)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let choices = match branches.len() {
+        n if n > BRANCHES_LISTED => {
+            tr_in!(
+                lang,
+                "{listed}, … ({n} au total)",
+                "{listed}, … ({n} in all)"
+            )
+        }
+        _ => listed,
+    };
+    Err(ToolError::Failed(tr_in!(
+        lang,
+        "« {asked} » n’est pas une branche locale du projet. Branches : {choices}.",
+        "“{asked}” is not a local branch of the project. Branches: {choices}."
+    )))
+}
+
+/// The Kanban settings `a` asks for, over `board`: only the fields given change. Checked as the
+/// window's form is (the model through `model_setting`, given as `model`: empty is the app's), and
+/// what is the user's alone stays so (`mode_setting`, and tests first, which needs a test command
+/// the server does not set). `branches` are the project's local ones and `current` the one it is on
+/// (empty on a detached HEAD): git is read only for a target that is not the Kanban's (`set_board`).
+/// Nothing is returned for a change when one field is refused.
+pub(super) fn board_change(
+    lang: i18n::Lang,
+    board: &BoardSettings,
+    branches: &[String],
+    current: &str,
+    a: &SetBoardArgs,
+    model: Option<String>,
+) -> Result<BoardSettings, ToolError> {
+    let nothing = a.action.is_none()
+        && a.target.is_none()
+        && a.strategy.is_none()
+        && a.draft.is_none()
+        && a.cleanup.is_none()
+        && a.conventional.is_none()
+        && a.conflict.is_none()
+        && a.max_parallel.is_none()
+        && a.autopilot.is_none()
+        && model.is_none()
+        && a.effort.is_none()
+        && a.mode.is_none()
+        && a.tests_first.is_none();
+    if nothing {
+        return Err(ToolError::Failed(tr_in!(
+            lang,
+            "Donne au moins un réglage à changer : action, target, strategy, draft, cleanup, conventional, conflict, maxParallel, autopilot, model, effort, mode ou testsFirst.",
+            "Give at least one setting to change: action, target, strategy, draft, cleanup, conventional, conflict, maxParallel, autopilot, model, effort, mode or testsFirst."
+        )));
+    }
+    let effort = effort_setting(lang, a.effort.as_deref())?;
+    let mode = mode_setting(lang, &board.mode, a.mode.as_deref())?;
+    let target = target_setting(lang, &board.target, current, branches, a.target.as_deref())?;
+    if let Some(n) = a.max_parallel.filter(|n| !(1..=6).contains(n)) {
+        return Err(ToolError::Failed(tr_in!(
+            lang,
+            "Le maximum de tickets en parallèle va de 1 à 6 ({n} donné).",
+            "The most tickets in parallel goes from 1 to 6 ({n} given)."
+        )));
+    }
+    // Only turning it on needs a command: one already on (the window shows it off with no command,
+    // as `get_board` does) is taken as it is.
+    if a.tests_first == Some(true) && !board.tests_first && board.test_command.trim().is_empty() {
+        return Err(ToolError::Refused(tr_in!(
+            lang,
+            "Le Kanban n’a pas de commande de test, et le serveur n’en lance aucune : règle-la dans la fenêtre (Réglages › Kanban), puis active « Relancer les tests avant ».",
+            "The Kanban has no test command, and the server runs none: set it in the window (Settings › Kanban), then turn on “Re-run the tests first”."
+        )));
+    }
+    let mut s = board.clone();
+    if let Some(action) = a.action {
+        s.action = action.name().into();
+    }
+    if let Some(target) = target {
+        s.target = target;
+    }
+    if let Some(strategy) = a.strategy {
+        s.strategy = strategy.name().into();
+    }
+    if let Some(conflict) = a.conflict {
+        s.conflict = conflict.name().into();
+    }
+    s.draft = a.draft.unwrap_or(s.draft);
+    s.cleanup = a.cleanup.unwrap_or(s.cleanup);
+    s.conventional = a.conventional.unwrap_or(s.conventional);
+    s.max_parallel = a.max_parallel.unwrap_or(s.max_parallel);
+    s.autopilot = a.autopilot.unwrap_or(s.autopilot);
+    // Asked as `get_board` shows it: left as it is.
+    if let Some(on) = a.tests_first.filter(|on| *on != board.tests_first_on()) {
+        s.tests_first = on;
+    }
+    if let Some(model) = model {
+        s.model = model;
+    }
+    if let Some(effort) = effort {
+        s.effort = effort;
+    }
+    if let Some(mode) = mode {
+        s.mode = mode;
+    }
+    Ok(s)
+}
+
+/// What `after` changes of `before`, as the activity log says it: each setting `set_board` sets that
+/// has changed, « name: before → after », in the order of the tool's arguments; else that nothing
+/// did. A model, an effort or a mode left empty is the app's (« (défaut) »), a target left empty
+/// is none. Tests first is the one `get_board` shows: on only with a test command to run.
+pub(super) fn board_changes(
+    lang: i18n::Lang,
+    before: &BoardSettings,
+    after: &BoardSettings,
+) -> String {
+    let default = tr_in!(lang, "(défaut)", "(default)");
+    let none = tr_in!(lang, "(aucune)", "(none)");
+    let said = |value: &str, empty: &str| match value {
+        "" => empty.to_string(),
+        value => value.to_string(),
+    };
+    let on = |b: &BoardSettings| b.tests_first_on().to_string();
+    let rows = [
+        ("action", before.action.clone(), after.action.clone()),
+        (
+            "target",
+            said(&before.target, &none),
+            said(&after.target, &none),
+        ),
+        ("strategy", before.strategy.clone(), after.strategy.clone()),
+        ("draft", before.draft.to_string(), after.draft.to_string()),
+        (
+            "cleanup",
+            before.cleanup.to_string(),
+            after.cleanup.to_string(),
+        ),
+        (
+            "conventional",
+            before.conventional.to_string(),
+            after.conventional.to_string(),
+        ),
+        ("conflict", before.conflict.clone(), after.conflict.clone()),
+        (
+            "maxParallel",
+            before.max_parallel.to_string(),
+            after.max_parallel.to_string(),
+        ),
+        (
+            "autopilot",
+            before.autopilot.to_string(),
+            after.autopilot.to_string(),
+        ),
+        (
+            "model",
+            said(&before.model, &default),
+            said(&after.model, &default),
+        ),
+        (
+            "effort",
+            said(&before.effort, &default),
+            said(&after.effort, &default),
+        ),
+        (
+            "mode",
+            said(&before.mode, &default),
+            said(&after.mode, &default),
+        ),
+        ("testsFirst", on(before), on(after)),
+    ];
+    let changed: Vec<String> = rows
+        .into_iter()
+        .filter(|(_, from, to)| from != to)
+        .map(|(name, from, to)| format!("{name}: {from} → {to}"))
+        .collect();
+    if changed.is_empty() {
+        return tr_in!(
+            lang,
+            "Aucun changement : le Kanban était déjà réglé ainsi.",
+            "No change: the Kanban was already set so."
+        );
+    }
+    changed.join(" · ")
+}
+
+/// `set_board`: the window's Settings › Kanban, through the same function of the core (the window
+/// is told, the board saved and scheduled again). Answers the settings as `get_board` does, and
+/// what changed, for the activity log (`board_changes`).
+pub(super) async fn set_board<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: SetBoardArgs,
+) -> Result<(String, String), ToolError> {
+    let project = resolve::project(core, &a.project)?;
+    own_project_only(core, caller, &project.id)?;
+    let model = model_setting(core, a.model.as_deref())?;
+    // Git is read only for a target that is not the Kanban's own: giving that one back needs no
+    // repository at all.
+    let kept = core.project(&project.id).map_err(failure)?.board.target;
+    let (branches, current) = match a.target.as_deref().map(str::trim) {
+        Some(asked) if asked != kept => (
+            git::branches(&project.path).await.map_err(failure)?,
+            git::head_branch(&project.path).await,
+        ),
+        _ => (Vec::new(), String::new()),
+    };
+    // The Kanban as it is now: what the window changed meanwhile is not written over.
+    let board = core.project(&project.id).map_err(failure)?.board;
+    let changed = board_change(i18n::ui(), &board, &branches, &current, &a, model)?;
+    let saved = core.board_set(&project.id, changed).map_err(failure)?;
+    let changes = board_changes(i18n::ui(), &board, &saved.board);
+    Ok((json(&board_view(core, &saved).await)?, changes))
 }
 
 // ---------- agents ----------

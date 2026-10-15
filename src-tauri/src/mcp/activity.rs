@@ -17,10 +17,18 @@ pub const KEPT: usize = 200;
 /// a header) could be anything.
 const TEXT_MAX: usize = 300;
 
+/// The longest message of a call that says what it changed (`Outcome::Changed`), in characters:
+/// one line too, but every setting a call set, with its value before and after, may not fit in the
+/// `TEXT_MAX` of a request's own text.
+const CHANGED_MAX: usize = 1_500;
+
 /// How a call ended, or why a request was refused, as the log says it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     Ok,
+    /// Ended well, and says what it changed (`set_board`: each setting from its value to its new
+    /// one): logged as "ok", with that text as its message.
+    Changed(String),
     /// Refused by a guard (a request without a valid token, a tool the caller may not use, the
     /// autopilot's pause…): the message says why.
     Refused(String),
@@ -82,10 +90,11 @@ pub fn record<R: Runtime>(
     summary: &str,
     outcome: Outcome,
 ) {
-    let (outcome, message) = match outcome {
-        Outcome::Ok => ("ok", None),
-        Outcome::Refused(m) => ("refused", Some(m)),
-        Outcome::Error(m) => ("error", Some(m)),
+    let (outcome, message, longest) = match outcome {
+        Outcome::Ok => ("ok", None, TEXT_MAX),
+        Outcome::Changed(m) => ("ok", Some(m), CHANGED_MAX),
+        Outcome::Refused(m) => ("refused", Some(m), TEXT_MAX),
+        Outcome::Error(m) => ("error", Some(m), TEXT_MAX),
     };
     let entry = ActivityEntry {
         at: now_ms(),
@@ -93,7 +102,7 @@ pub fn record<R: Runtime>(
         tool: tool.to_string(),
         summary: clip(summary),
         outcome,
-        message: message.map(|m| clip(&m)),
+        message: message.map(|m| clip_to(&m, longest)),
     };
     core.mcp.activity.push(entry.clone());
     core.hub.emit(UiEvent::McpActivity { entry });
@@ -115,14 +124,19 @@ pub fn caller_name<R: Runtime>(core: &Core<R>, caller: Option<&Caller>) -> Strin
 
 /// `text` on one line, of `TEXT_MAX` characters at most (cut with « … »).
 pub(crate) fn clip(text: &str) -> String {
+    clip_to(text, TEXT_MAX)
+}
+
+/// `text` on one line, of `max` characters at most (cut with « … »).
+fn clip_to(text: &str, max: usize) -> String {
     let line: String = text
         .chars()
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
-    if line.chars().count() <= TEXT_MAX {
+    if line.chars().count() <= max {
         return line;
     }
-    let mut cut: String = line.chars().take(TEXT_MAX - 1).collect();
+    let mut cut: String = line.chars().take(max - 1).collect();
     cut.push('…');
     cut
 }

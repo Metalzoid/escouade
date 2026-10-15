@@ -105,6 +105,8 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__list_requests')).toBe('Escouade · Lister les demandes en attente');
     expect(toolLabel('mcp__escouade__answer_permission')).toBe('Escouade · Répondre à une demande d’autorisation');
     expect(toolLabel('mcp__escouade__answer_question')).toBe('Escouade · Répondre à une question');
+    expect(toolLabel('mcp__escouade__get_board')).toBe('Escouade · Lire les réglages du Kanban');
+    expect(toolLabel('mcp__escouade__set_board')).toBe('Escouade · Régler le Kanban');
     // One this window does not know yet: as Claude names it.
     expect(toolLabel('mcp__escouade__frobnicate')).toBe('Escouade · frobnicate');
     // Another server's keep their names.
@@ -126,6 +128,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(arg('report_progress', { line: 'Tests verts' })).toBe('Tests verts');
     expect(arg('list_tickets', { project: 'demo', column: 'todo' })).toBe('demo');
     expect(arg('list_projects', {})).toBe('');
+    // The Kanban a tool reads or sets is its project's; a ticket started with its own model is the ticket.
+    expect(arg('get_board', { project: 'demo' })).toBe('demo');
+    expect(arg('set_board', { project: 'demo', autopilot: true, model: 'sonnet' })).toBe('demo');
+    expect(arg('start_ticket', { ticket: 'DEM-4', model: 'opus', effort: 'max' })).toBe('DEM-4');
   });
 
   it('give each argument in clear, in its order: a text as written, a list one item per line, anything else as JSON', () => {

@@ -88,7 +88,7 @@ Archiving or deleting the agent of an “In progress” or “To review” ticke
 
 ## What a card shows
 
-Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, and Linear](integrations#failed-syncs)).
+Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, and Linear](integrations#failed-syncs)). A ticket that has a model or an effort of its own, given by the [MCP server](mcp) (`start_ticket`), shows them in a tag next to its key (“Opus · Max”): they come before the Kanban’s for its agent. With Haiku (the ticket’s, else the Kanban’s, else the app’s), which takes no effort, the tag shows none.
 
 | Column | The card shows |
 |---|---|

@@ -371,6 +371,10 @@ export interface Ticket {
   external: ExternalRef | null;
   /** An existing branch its agent takes up; empty: its own, `ticket/<key>`, made at its start. */
   branch: string;
+  /** The model its agent runs, over the Kanban's (the MCP `start_ticket` sets it); empty: the Kanban's. */
+  model: string;
+  /** The effort its agent runs at, over the Kanban's; empty: the Kanban's. */
+  effort: string;
 }
 
 export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';

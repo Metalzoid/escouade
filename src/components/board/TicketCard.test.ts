@@ -699,6 +699,105 @@ describe('TicketCard foot', () => {
   });
 });
 
+// A ticket that has its own model or effort (the MCP `start_ticket` sets them) says so on every card: they come before
+// the Kanban's for its agent.
+describe('TicketCard with a model or an effort of its own', () => {
+  beforeEach(() => resetApp({ agents: [agent({ status: 'running' })] }));
+
+  const own = (container: HTMLElement) => container.querySelector<HTMLElement>('.top .own');
+
+  it('shows the model and the effort next to the key, with what they are in a tooltip and for a screen reader', () => {
+    fakeBackend();
+    const { container } = show(ticket({ model: 'opus', effort: 'max' }));
+    const label = 'Modèle de ce ticket : Opus, effort Max (avant celui du Kanban)';
+    const chip = screen.getByLabelText(label);
+    expect(chip).toHaveTextContent('Opus · Max');
+    expect(chip).toHaveAttribute('data-tip', label);
+    expect(own(container)).toBe(chip);
+  });
+
+  it('shows the version Claude Code runs for the model once it told', () => {
+    app.models = [{ value: 'opus', resolvedModel: 'claude-opus-5-5' }];
+    fakeBackend();
+    show(ticket({ model: 'opus' }));
+    expect(screen.getByLabelText('Modèle de ce ticket : Opus 5.5 (avant celui du Kanban)')).toHaveTextContent('Opus 5.5');
+  });
+
+  it('shows only the one it has: the model, or the effort', () => {
+    fakeBackend();
+    const { unmount } = show(ticket({ model: 'sonnet' }));
+    expect(screen.getByLabelText('Modèle de ce ticket : Sonnet (avant celui du Kanban)')).toHaveTextContent(/^Sonnet$/);
+    unmount();
+    show(ticket({ effort: 'xhigh' }));
+    expect(screen.getByLabelText('Effort de ce ticket : Très élevé (avant celui du Kanban)')).toHaveTextContent(/^Très élevé$/);
+  });
+
+  it('shows nothing when the ticket follows the Kanban', () => {
+    fakeBackend();
+    const { container } = show(ticket());
+    expect(own(container)).toBeNull();
+    expect(screen.queryByLabelText(/de ce ticket/)).not.toBeInTheDocument();
+  });
+
+  it('shows it in every column, the first line of the card', () => {
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done' })] });
+    fakeBackend();
+    for (const column of ['todo', 'doing', 'review', 'done'] as const) {
+      const { container, unmount } = show(doing({ column, model: 'opus', effort: 'low' }));
+      expect(own(container), column).toHaveTextContent('Opus · Bas');
+      unmount();
+    }
+  });
+
+  // Haiku takes no effort: its agent starts without one, so the card does not claim one (the ticket's model, else the
+  // Kanban's, else the app's is the model its agent runs).
+  it('leaves the effort out when the model of its agent takes none: its own Haiku', () => {
+    fakeBackend();
+    const { container } = show(ticket({ model: 'haiku', effort: 'max' }));
+    const chip = screen.getByLabelText('Modèle de ce ticket : Haiku (avant celui du Kanban)');
+    expect(chip).toHaveTextContent(/^Haiku$/);
+    expect(chip).toHaveAttribute('data-tip', 'Modèle de ce ticket : Haiku (avant celui du Kanban)');
+    expect(own(container)).toBe(chip);
+    expect(screen.queryByLabelText(/effort/)).not.toBeInTheDocument();
+  });
+
+  it('shows nothing for an effort alone when the Kanban is on Haiku', () => {
+    fakeBackend();
+    const { container } = show(ticket({ effort: 'max' }), project({ board: board({ model: 'haiku' }) }));
+    expect(own(container)).toBeNull();
+    expect(screen.queryByLabelText(/de ce ticket/)).not.toBeInTheDocument();
+  });
+
+  it('shows nothing for an effort alone when the Kanban follows an app on Haiku', () => {
+    app.settings.defaultModel = 'haiku';
+    fakeBackend();
+    const { container } = show(ticket({ effort: 'max' }));
+    expect(own(container)).toBeNull();
+  });
+
+  it('keeps the effort when the model of its agent takes one: its own model over a Kanban on Haiku, a Kanban on Opus', () => {
+    fakeBackend();
+    const { unmount } = show(ticket({ model: 'sonnet', effort: 'max' }), project({ board: board({ model: 'haiku' }) }));
+    expect(screen.getByLabelText('Modèle de ce ticket : Sonnet, effort Max (avant celui du Kanban)')).toHaveTextContent('Sonnet · Max');
+    unmount();
+    show(ticket({ effort: 'high' }), project({ board: board({ model: 'opus' }) }));
+    expect(screen.getByLabelText('Effort de ce ticket : Élevé (avant celui du Kanban)')).toHaveTextContent(/^Élevé$/);
+  });
+
+  it('knows a full Haiku id for Haiku too', () => {
+    fakeBackend();
+    const { container } = show(ticket({ model: 'claude-haiku-4-5', effort: 'low' }));
+    expect(own(container)).toHaveTextContent(/^Haiku 4.5$/);
+  });
+
+  it('says it in English', () => {
+    fakeBackend();
+    setLang('en');
+    show(ticket({ model: 'opus', effort: 'max' }));
+    expect(screen.getByLabelText('This ticket’s model: Opus, effort Max (over the Kanban’s)')).toHaveTextContent('Opus · Max');
+  });
+});
+
 // The window in English: the texts of the card come from the English catalog, its counts follow the plural rules of the
 // language and its amounts and times are written as English does. (What `lib/board.ts` and `lib/spend.ts` say is theirs.)
 describe('TicketCard in English', () => {

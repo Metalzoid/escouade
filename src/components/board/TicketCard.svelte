@@ -8,6 +8,7 @@
   import { SERVICES, shortName } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
+  import { EFFORTS, modelLabel, supportsEffort } from '../../lib/models';
   import { openAddress } from '../../lib/recipe';
   import { estimateHint, fSpentUsd } from '../../lib/spend';
   import { app } from '../../lib/state.svelte';
@@ -37,6 +38,23 @@
   const agent = $derived(ticket.agentId ? app.agents[ticket.agentId] : undefined);
   /** What every agent of the ticket used so far: the card of a finished ticket keeps the cost it was closed with. */
   const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
+  /**
+   * Its own model and effort, which its agent runs over the Kanban's (empty: the Kanban's): the chip beside the key. The
+   * effort is left out when the model its agent runs (the ticket's, else the Kanban's, else the app's) takes none:
+   * Haiku starts without one.
+   */
+  const own = $derived.by(() => {
+    const runs = ticket.model || s.model || app.settings.defaultModel;
+    const model = ticket.model ? modelLabel(ticket.model, app.models) : '';
+    const effort = ticket.effort && supportsEffort(runs) ? (EFFORTS.find((e) => e.value === ticket.effort)?.label ?? ticket.effort) : '';
+    if (!model && !effort) return null;
+    const label = !effort
+      ? t('board.card.ownModel', { model })
+      : !model
+        ? t('board.card.ownEffort', { effort })
+        : t('board.card.ownBoth', { model, effort });
+    return { text: [model, effort].filter(Boolean).join(' · '), label };
+  });
   const met = $derived(criteriaMet(ticket));
   const total = $derived(ticket.criteria.length);
   /** The foot's figures: what the ticket cost, the criteria met of a ticket to test, the loops of a finished one. */
@@ -225,6 +243,7 @@
         >{/if}
     {/if}
     <span class="key mono">{ticket.key}</span>
+    {#if own}<span class="own mono" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
     <div style="flex:1"></div>
     {#if ticket.column === 'doing'}<span class="loop mono"
         >{t('board.card.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span
@@ -478,6 +497,19 @@
   .small[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
+  }
+  /* Cut with an ellipsis before it pushes the loop or the partial goal out of a narrow column: the tooltip says it whole. */
+  .own {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--elev2);
+    color: var(--muted);
   }
   .loop {
     font-size: 10.5px;

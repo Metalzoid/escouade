@@ -207,6 +207,8 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     doneAt: null,
     external: null,
     branch: '',
+    model: '',
+    effort: '',
     ...over,
   };
 }

@@ -572,6 +572,10 @@ pub struct Ticket {
     /// local one or a remote one (`origin/feat`); empty: its own branch, `ticket/<key>`, made at
     /// its start.
     pub branch: String,
+    /// The model and the effort of this ticket's agent alone, given by `start_ticket` (the MCP
+    /// tool); empty: the board's.
+    pub model: String,
+    pub effort: String,
 }
 
 /// A project's board: what validating a ticket does, and its agents.
@@ -626,6 +630,15 @@ impl Default for BoardSettings {
             prefix: String::new(),
             next_number: 1,
         }
+    }
+}
+
+impl BoardSettings {
+    /// Whether the tests run again before a ticket is approved: tests first is on, with a test
+    /// command to run (one that is empty is no command: the window shows tests first off, and the
+    /// validation skips it).
+    pub fn tests_first_on(&self) -> bool {
+        self.tests_first && !self.test_command.trim().is_empty()
     }
 }
 

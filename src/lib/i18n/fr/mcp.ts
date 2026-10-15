@@ -42,6 +42,8 @@ export default {
     listTickets: 'Lister les tickets',
     getTicket: 'Lire un ticket',
     getUsage: 'Lire le quota',
+    getBoard: 'Lire les réglages du Kanban',
+    setBoard: 'Régler le Kanban',
     getAgentSummary: 'Résumer un agent',
     listRequests: 'Lister les demandes en attente',
     createTicket: 'Créer un ticket',

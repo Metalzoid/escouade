@@ -88,7 +88,7 @@ Archiver ou supprimer l’agent d’un ticket « En cours » ou « À tester�
 
 ## Ce que montre une carte
 
-Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub et Linear](integrations#synchronisations-qui-echouent)).
+Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub et Linear](integrations#synchronisations-qui-echouent)). Un ticket qui a son propre modèle ou son propre effort, donnés par le [serveur MCP](mcp) (`start_ticket`), les montre dans une étiquette à côté de sa clé (« Opus · Max ») : ils passent avant ceux du Kanban pour son agent. Avec Haiku (celui du ticket, sinon du Kanban, sinon de l’app), qui ne gère pas l’effort, l’étiquette n’en affiche pas.
 
 | Colonne | La carte montre |
 |---|---|

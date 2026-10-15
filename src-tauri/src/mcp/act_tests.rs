@@ -2,7 +2,9 @@
 //! repositories and the fake `claude`. Each does what the window does, under the guardrails of the
 //! window and the autopilot; every call, refused ones included, is in the activity log.
 
+use super::act::{board_change, board_changes};
 use super::tests::{ACTING, AGENTS_ONLY, EXPOSED};
+use super::tools::{SetBoardArgs, ToolError};
 use super::tools_tests::{
     as_agent, external, keys, last_entry, other_project, project, put, put_agent, read, refused,
     ticket, Client,
@@ -10,7 +12,7 @@ use super::tools_tests::{
 use crate::accounts::PRINCIPAL;
 use crate::board::clock;
 use crate::core::RESUME_MARGIN_MS;
-use crate::core_tests::{agent_on, harness, Harness};
+use crate::core_tests::{agent_on, git, harness, Harness};
 use crate::model::*;
 use crate::tickets::TicketDraft;
 use crate::usage::Reading;
@@ -125,6 +127,7 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     assert_eq!(required("update_ticket"), ["ticket"]);
     assert_eq!(required("move_ticket"), ["position", "ticket"]);
     assert_eq!(required("start_ticket"), ["ticket"]);
+    assert_eq!(required("set_board"), ["project"]);
     assert_eq!(required("create_agent"), ["message", "project"]);
     assert_eq!(required("send_message"), ["agent", "text"]);
     assert_eq!(required("stop_agent"), ["agent"]);
@@ -134,6 +137,65 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     for p in ["top", "bottom", "before"] {
         assert!(position.contains(p), "{position}");
     }
+    // The Kanban's settings, named as `get_board` answers them (it can be given back as it is),
+    // the choices of the three that have a few written in the schema.
+    let board = schema("set_board");
+    let mut names: Vec<&str> = board["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "action",
+            "autopilot",
+            "cleanup",
+            "conflict",
+            "conventional",
+            "draft",
+            "effort",
+            "maxParallel",
+            "mode",
+            "model",
+            "project",
+            "strategy",
+            "target",
+            "testsFirst"
+        ]
+    );
+    for (arg, choices) in [
+        ("action", &["merge", "pr", "push", "keep"][..]),
+        ("strategy", &["merge", "squash", "rebase"]),
+        ("conflict", &["ask", "agent", "abort"]),
+    ] {
+        let spec = board["properties"][arg].to_string();
+        for choice in choices {
+            assert!(spec.contains(choice), "{arg}: {spec}");
+        }
+    }
+    // What a refusal comes of is said before the call: the mode that is the user's to give, the
+    // test command it does not set.
+    let (mode, tests) = (
+        board["properties"]["mode"]["description"].as_str().unwrap(),
+        board["properties"]["testsFirst"]["description"]
+            .as_str()
+            .unwrap(),
+    );
+    assert!(mode.contains("bypassPermissions"), "{mode}");
+    assert!(tests.contains("test command"), "{tests}");
+    // And the tool says it is for the next tickets' agents, not the ones already at work.
+    let described = tools.iter().find(|t| t.name == "set_board").unwrap();
+    let said = serde_json::to_value(described).unwrap()["description"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        said.contains("bypassPermissions") && said.contains("already"),
+        "{said}"
+    );
     assert!(
         schema("report_progress")["properties"]["line"]["description"]
             .as_str()
@@ -1619,6 +1681,7 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
             json!({ "ticket": t_other.key, "position": "top" }),
         ),
         ("start_ticket", json!({ "ticket": t_other.key })),
+        ("set_board", json!({ "project": "autre", "draft": true })),
         (
             "create_agent",
             json!({ "project": other.id, "message": "x" }),
@@ -1969,6 +2032,1005 @@ async fn a_message_is_refused_when_the_account_of_the_agent_it_goes_to_is_held_a
     )
     .await;
     turn_over(&h, &main.id).await;
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- the Kanban's settings, and the model of a ticket ----------
+
+/// The board of `p`, as the core keeps it.
+fn board_of(h: &Harness, p: &Project) -> BoardSettings {
+    h.core.project(&p.id).unwrap().board
+}
+
+/// What the tools do not set, written as the core has it (the key's prefix and number, the test
+/// command, the user's own choice of mode).
+fn edit_board(h: &Harness, p: &Project, f: impl FnOnce(&mut BoardSettings)) {
+    let mut projects = h.core.projects.write();
+    f(&mut projects.iter_mut().find(|q| q.id == p.id).unwrap().board);
+}
+
+/// How many `project` events the window was sent for `p`.
+fn project_events(h: &Harness, p: &Project) -> usize {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "project" && e["project"]["id"] == p.id.as_str())
+        .count()
+}
+
+/// The models the window offers: a model is checked against them.
+fn known_models(h: &Harness) {
+    *h.core.models.write() = ["sonnet", "opus", "haiku"]
+        .iter()
+        .map(|m| ModelInfo {
+            value: m.to_string(),
+            resolved_model: format!("claude-{m}-9"),
+        })
+        .collect();
+}
+
+#[tokio::test]
+async fn a_boards_settings_change_only_the_ones_given_and_the_core_and_the_window_follow() {
+    let h = harness("mcp-act-set-board");
+    let p = project(&h).await;
+    git(&h.dir.join("repo"), &["branch", "develop"]);
+    known_models(&h);
+    edit_board(&h, &p, |b| {
+        b.prefix = "DEM".into();
+        b.next_number = 7;
+        b.target = "main".into();
+        b.test_command = "npm test".into();
+    });
+    let c = external(&h).await;
+    let before = board_of(&h, &p);
+    let seen = project_events(&h, &p);
+
+    let v = read(
+        &c,
+        "set_board",
+        json!({
+            "project": "demo", "action": "pr", "strategy": "squash", "draft": true,
+            "model": "opus", "effort": "max",
+        }),
+    )
+    .await;
+    // The others are what they were: the prefix and the number, the target, the test command.
+    let after = BoardSettings {
+        action: "pr".into(),
+        draft: true,
+        model: "opus".into(),
+        effort: "max".into(),
+        ..before.clone()
+    };
+    assert_eq!(board_of(&h, &p), after);
+    // The answer is `get_board`'s, after the change.
+    assert_eq!(
+        v,
+        json!({
+            "project": "demo",
+            "projectId": p.id,
+            "action": "pr",
+            "target": "main",
+            "strategy": "squash",
+            "draft": true,
+            "cleanup": true,
+            "conventional": true,
+            "conflict": "ask",
+            "maxParallel": 2,
+            "autopilot": false,
+            "model": "opus",
+            "effort": "max",
+            "mode": "",
+            "defaults": { "model": "sonnet", "effort": "medium", "mode": "auto" },
+            "testsFirst": false,
+            "testCommand": "npm test",
+            "prefix": "DEM",
+        })
+    );
+    let logged = entry(&h);
+    assert_eq!(read(&c, "get_board", json!({ "project": "demo" })).await, v);
+    // The window is told as it is for the settings it changes itself.
+    assert_eq!(project_events(&h, &p), seen + 1);
+    let told = h
+        .events
+        .lock()
+        .iter()
+        .rev()
+        .find(|e| e["type"] == "project" && e["project"]["id"] == p.id.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(told["project"]["board"]["action"], "pr");
+    assert_eq!(told["project"]["board"]["draft"], true);
+    // The call is in the activity log with what it was given, and what it changed, each setting
+    // from its value to its new one: not the strategy, given as it was.
+    assert_eq!(
+        (
+            logged.caller.as_str(),
+            logged.tool.as_str(),
+            logged.outcome,
+            logged.summary.as_str(),
+            logged.message.as_deref()
+        ),
+        (
+            "Claude (hors Escouade)",
+            "set_board",
+            "ok",
+            "project: demo · action: pr · strategy: squash · draft: true · model: opus · effort: max",
+            Some("action: merge → pr · draft: false → true · model: (défaut) → opus · effort: (défaut) → max")
+        )
+    );
+
+    // Every setting at once, the target and the choices as the window has them; an empty model
+    // and effort are the app's.
+    let v = read(
+        &c,
+        "set_board",
+        json!({
+            "project": p.id, "action": "keep", "target": " develop ", "strategy": "rebase",
+            "draft": false, "cleanup": false, "conventional": false, "conflict": "agent",
+            "maxParallel": 6, "autopilot": true, "model": "", "effort": "", "mode": "plan",
+            "testsFirst": true,
+        }),
+    )
+    .await;
+    let everything = BoardSettings {
+        action: "keep".into(),
+        target: "develop".into(),
+        strategy: "rebase".into(),
+        draft: false,
+        cleanup: false,
+        conventional: false,
+        conflict: "agent".into(),
+        max_parallel: 6,
+        autopilot: true,
+        model: String::new(),
+        effort: String::new(),
+        mode: "plan".into(),
+        tests_first: true,
+        ..after
+    };
+    assert_eq!(board_of(&h, &p), everything);
+    assert_eq!(
+        (
+            &v["target"],
+            &v["maxParallel"],
+            &v["mode"],
+            &v["testsFirst"]
+        ),
+        (&json!("develop"), &json!(6), &json!("plan"), &json!(true))
+    );
+    let logged = entry(&h);
+    // Thirteen settings, each said from its value to its new one: more than a line's 300 characters.
+    let said = "action: pr → keep · target: main → develop · strategy: squash → rebase · draft: true → false · cleanup: true → false · conventional: true → false · conflict: ask → agent · maxParallel: 2 → 6 · autopilot: false → true · model: opus → (défaut) · effort: max → (défaut) · mode: (défaut) → plan · testsFirst: false → true";
+    assert!(said.chars().count() > 300);
+    assert_eq!(logged.message.as_deref(), Some(said));
+    let summary = logged.summary;
+    for given in [
+        "action: keep",
+        "target:  develop ",
+        "strategy: rebase",
+        "draft: false",
+        "cleanup: false",
+        "conventional: false",
+        "conflict: agent",
+        "maxParallel: 6",
+        "autopilot: true",
+        "model: ",
+        "effort: ",
+        "mode: plan",
+        "testsFirst: true",
+    ] {
+        assert!(summary.contains(given), "{given} not in {summary}");
+    }
+
+    // What `get_board` answers can be given back as it is: nothing changes, and the log says so.
+    let got = read(&c, "get_board", json!({ "project": "demo" })).await;
+    assert_eq!(read(&c, "set_board", got.clone()).await, got);
+    assert_eq!(board_of(&h, &p), everything);
+    let logged = entry(&h);
+    assert_eq!(
+        (logged.outcome, logged.message.as_deref()),
+        (
+            "ok",
+            Some("Aucun changement : le Kanban était déjà réglé ainsi.")
+        )
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_setting_that_does_not_fit_or_is_the_users_to_give_is_refused_with_the_reason_and_nothing_changes(
+) {
+    let h = harness("mcp-act-set-board-refused");
+    let p = project(&h).await;
+    git(&h.dir.join("repo"), &["branch", "develop"]);
+    known_models(&h);
+    edit_board(&h, &p, |b| {
+        b.prefix = "DEM".into();
+        b.next_number = 4;
+        b.target = "main".into();
+    });
+    let c = external(&h).await;
+    let before = board_of(&h, &p);
+    let seen = project_events(&h, &p);
+
+    // (What is asked, how the log says it ended, what the answer says.)
+    let cases: Vec<(Value, &str, Vec<&str>)> = vec![
+        // Nothing to change.
+        (
+            json!({ "project": "demo" }),
+            "error",
+            vec!["au moins un réglage"],
+        ),
+        // A model the app does not offer, or no model's name: the other settings given with it
+        // wait too.
+        (
+            json!({ "project": "demo", "draft": true, "model": "gpt" }),
+            "error",
+            vec!["gpt", "sonnet", "opus"],
+        ),
+        (
+            json!({ "project": "demo", "model": "--permission-mode" }),
+            "error",
+            vec!["--permission-mode"],
+        ),
+        (
+            json!({ "project": "demo", "draft": true, "effort": "ultra" }),
+            "error",
+            vec!["ultra", "low, medium, high, xhigh, max"],
+        ),
+        (
+            json!({ "project": "demo", "mode": "yolo" }),
+            "error",
+            vec!["yolo", "auto, default, plan, acceptEdits"],
+        ),
+        // No permission request at all is the user's decision, taken in the window.
+        (
+            json!({ "project": "demo", "mode": "bypassPermissions" }),
+            "refused",
+            vec!["bypassPermissions", "Réglages › Kanban"],
+        ),
+        (
+            json!({ "project": "demo", "target": "nope" }),
+            "error",
+            vec!["nope", "main", "develop"],
+        ),
+        (
+            json!({ "project": "demo", "target": "origin/main" }),
+            "error",
+            vec!["origin/main"],
+        ),
+        (
+            json!({ "project": "demo", "target": "  " }),
+            "error",
+            vec!["vide"],
+        ),
+        (
+            json!({ "project": "demo", "maxParallel": 0 }),
+            "error",
+            vec!["1", "6"],
+        ),
+        (
+            json!({ "project": "demo", "maxParallel": 7 }),
+            "error",
+            vec!["1", "6"],
+        ),
+        // The server runs no command: the test command is the user's, set in the window.
+        (
+            json!({ "project": "demo", "testsFirst": true }),
+            "refused",
+            vec!["commande de test", "Réglages › Kanban"],
+        ),
+    ];
+    for (args, outcome, says) in cases {
+        let said = refused(&c, "set_board", args.clone()).await;
+        for part in says {
+            assert!(said.contains(part), "{args}: {said}");
+        }
+        let logged = entry(&h);
+        assert_eq!(
+            (logged.tool.as_str(), logged.outcome),
+            ("set_board", outcome),
+            "{args}"
+        );
+        assert_eq!(logged.message.as_deref(), Some(said.as_str()), "{args}");
+        assert_eq!(board_of(&h, &p), before, "{args}");
+    }
+    assert_eq!(project_events(&h, &p), seen);
+    // A project that is none.
+    let none = refused(&c, "set_board", json!({ "project": "nope", "draft": true })).await;
+    assert!(none.contains("Aucun projet « nope »"), "{none}");
+
+    // The boundaries are in: one agent in parallel, six; the app's mode by an empty one; no tests
+    // first, with no command, is no change to refuse.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 1, "testsFirst": false, "mode": "" }),
+    )
+    .await;
+    assert_eq!((&v["maxParallel"], &v["mode"]), (&json!(1), &json!("")));
+    read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 6 }),
+    )
+    .await;
+    assert_eq!(board_of(&h, &p).max_parallel, 6);
+    for effort in ["low", "medium", "high", "xhigh", "max"] {
+        let v = read(
+            &c,
+            "set_board",
+            json!({ "project": "demo", "effort": effort }),
+        )
+        .await;
+        assert_eq!(v["effort"], effort);
+    }
+    for mode in ["auto", "default", "plan", "acceptEdits"] {
+        let v = read(&c, "set_board", json!({ "project": "demo", "mode": mode })).await;
+        assert_eq!(v["mode"], mode);
+    }
+    // A model by the name the window offers, in any case, or by the name it stands for.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "model": " OPUS " }),
+    )
+    .await;
+    assert_eq!(v["model"], "opus");
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "model": "claude-sonnet-9" }),
+    )
+    .await;
+    assert_eq!(v["model"], "claude-sonnet-9");
+    let v = read(&c, "set_board", json!({ "project": "demo", "model": "" })).await;
+    assert_eq!(v["model"], "");
+
+    // Bypassing the permissions is not given here, but a Kanban the user set to it keeps it, and
+    // can be taken off it.
+    edit_board(&h, &p, |b| b.mode = "bypassPermissions".into());
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "mode": "bypassPermissions", "draft": true }),
+    )
+    .await;
+    assert_eq!(
+        (&v["mode"], &v["draft"]),
+        (&json!("bypassPermissions"), &json!(true))
+    );
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "mode": "plan" }),
+    )
+    .await;
+    assert_eq!(v["mode"], "plan");
+    // Once off it, it is the user's again.
+    let again = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "mode": "bypassPermissions" }),
+    )
+    .await;
+    assert!(again.contains("Réglages › Kanban"), "{again}");
+    assert_eq!(board_of(&h, &p).mode, "plan");
+
+    // The command is the user's; with one, tests first is a setting like the others, and the
+    // command stays what it is.
+    edit_board(&h, &p, |b| b.test_command = "npm test".into());
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "testsFirst": true }),
+    )
+    .await;
+    assert_eq!(
+        (&v["testsFirst"], &v["testCommand"]),
+        (&json!(true), &json!("npm test"))
+    );
+    let kept = board_of(&h, &p);
+    assert_eq!(
+        (kept.prefix.as_str(), kept.next_number, kept.target.as_str()),
+        ("DEM", 4, "main")
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// What `get_board` answers for `project`, given back to `set_board` as it is: accepted, answered
+/// the same, the Kanban as it was. Returns what `get_board` said.
+async fn board_taken_back(h: &Harness, c: &Client, p: &Project, project: &str) -> Value {
+    let before = board_of(h, p);
+    let got = read(c, "get_board", json!({ "project": project })).await;
+    let said = read(c, "set_board", got.clone()).await;
+    assert_eq!(said, got);
+    assert_eq!(board_of(h, p), before, "{got}");
+    got
+}
+
+#[tokio::test]
+async fn a_kanban_with_no_target_takes_back_the_branch_get_board_shows_and_leaves_none_on_a_detached_head(
+) {
+    let h = harness("mcp-act-back-target");
+    let p = project(&h).await;
+    let repo = h.dir.join("repo");
+    let c = external(&h).await;
+
+    // No target yet: the branch the project is on is shown, and kept off the Kanban.
+    let got = board_taken_back(&h, &c, &p, "demo").await;
+    assert_eq!(got["target"], "main");
+    assert_eq!(board_of(&h, &p).target, "");
+    // The same asked by hand, around with spaces.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": " main " }),
+    )
+    .await;
+    assert_eq!(v["target"], "main");
+    assert_eq!(board_of(&h, &p).target, "");
+
+    // A detached HEAD: no branch to show, the target is empty, and giving it back is no refusal.
+    git(&repo, &["checkout", "-q", "--detach"]);
+    let got = board_taken_back(&h, &c, &p, "demo").await;
+    assert_eq!(got["target"], "");
+    let v = read(&c, "set_board", json!({ "project": "demo", "target": "" })).await;
+    assert_eq!(v["target"], "");
+    assert_eq!(board_of(&h, &p).target, "");
+    // Any other branch is checked all the same, and a real one is set.
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": "nope" }),
+    )
+    .await;
+    assert!(said.contains("nope") && said.contains("main"), "{said}");
+    assert_eq!(board_of(&h, &p).target, "");
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": "main" }),
+    )
+    .await;
+    assert_eq!(v["target"], "main");
+    assert_eq!(board_of(&h, &p).target, "main");
+    assert_eq!(
+        entry(&h).message.as_deref(),
+        Some("target: (aucune) → main")
+    );
+    // Once the Kanban has one, an empty target is a refusal again.
+    let said = refused(&c, "set_board", json!({ "project": "demo", "target": "" })).await;
+    assert!(said.contains("vide"), "{said}");
+
+    // A repository without a commit: its branch is shown, though git lists none.
+    let fresh = other_project(&h, "vide").await;
+    let got = board_taken_back(&h, &c, &fresh, "vide").await;
+    assert!(!got["target"].as_str().unwrap().is_empty(), "{got}");
+    assert_eq!(board_of(&h, &fresh).target, "");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_kanban_stored_with_tests_first_and_no_test_command_is_read_off_and_taken_back_as_it_is()
+{
+    let h = harness("mcp-act-back-tests-first");
+    let p = project(&h).await;
+    edit_board(&h, &p, |b| {
+        b.target = "main".into();
+        b.tests_first = true;
+        b.test_command = "  ".into();
+    });
+    let c = external(&h).await;
+
+    // The window shows it off, the validation ignores it: so does get_board, and the Kanban is
+    // left as it is when that is given back.
+    let got = board_taken_back(&h, &c, &p, "demo").await;
+    assert_eq!(got["testsFirst"], false);
+    assert!(board_of(&h, &p).tests_first);
+    // Asked on: it is on already, nothing changes (the window shows it off all the same).
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "testsFirst": true }),
+    )
+    .await;
+    assert_eq!(v["testsFirst"], false);
+    assert!(board_of(&h, &p).tests_first);
+    // Asked off, as get_board shows it: it stays as it is too.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "testsFirst": false, "draft": true }),
+    )
+    .await;
+    assert_eq!(
+        (&v["testsFirst"], &v["draft"]),
+        (&json!(false), &json!(true))
+    );
+    assert!(board_of(&h, &p).tests_first);
+
+    // Off for good it cannot be turned on with no command: the user's to give, in the window.
+    edit_board(&h, &p, |b| b.tests_first = false);
+    let before = board_of(&h, &p);
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "testsFirst": true }),
+    )
+    .await;
+    assert!(said.contains("commande de test"), "{said}");
+    assert_eq!(board_of(&h, &p), before);
+
+    // With a command it is what get_board says, and what is given back changes nothing.
+    edit_board(&h, &p, |b| {
+        b.tests_first = true;
+        b.test_command = "npm test".into();
+    });
+    let got = board_taken_back(&h, &c, &p, "demo").await;
+    assert_eq!(got["testsFirst"], true);
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "testsFirst": false }),
+    )
+    .await;
+    assert_eq!(v["testsFirst"], false);
+    assert!(!board_of(&h, &p).tests_first);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_target_branch_deleted_since_is_taken_back_as_get_board_shows_it_and_no_other_missing_one_is_taken(
+) {
+    let h = harness("mcp-act-back-deleted-target");
+    let p = project(&h).await;
+    git(&h.dir.join("repo"), &["branch", "develop"]);
+    edit_board(&h, &p, |b| b.target = "gone".into());
+    let c = external(&h).await;
+
+    // It is not a local branch any more, but it is the Kanban's: shown, and given back as it is.
+    let got = board_taken_back(&h, &c, &p, "demo").await;
+    assert_eq!(got["target"], "gone");
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": "gone", "draft": true }),
+    )
+    .await;
+    assert_eq!((&v["target"], &v["draft"]), (&json!("gone"), &json!(true)));
+    assert_eq!(board_of(&h, &p).target, "gone");
+    // Another one that is missing stays a refusal, the Kanban's own is not touched.
+    let before = board_of(&h, &p);
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": "nope" }),
+    )
+    .await;
+    assert!(
+        said.contains("nope") && said.contains("main") && said.contains("develop"),
+        "{said}"
+    );
+    assert_eq!(board_of(&h, &p), before);
+    // A branch that exists replaces it.
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "target": "develop" }),
+    )
+    .await;
+    assert_eq!(v["target"], "develop");
+    assert_eq!(board_of(&h, &p).target, "develop");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_sets_the_board_of_its_own_project_alone_and_claude_outside_escouade_any() {
+    let h = harness("mcp-act-set-board-own");
+    let p = project(&h).await;
+    let other = other_project(&h, "autre").await;
+    let mine = put_agent(&h, &p, "mon-agent", 1);
+    let c = as_agent(&h, &mine.id).await;
+    let theirs_before = board_of(&h, &other);
+
+    let why = refused(
+        &c,
+        "set_board",
+        json!({ "project": "autre", "draft": true }),
+    )
+    .await;
+    assert!(
+        why.contains("mon-agent")
+            && why.contains("propre projet (demo)")
+            && why.contains("le projet autre"),
+        "{why}"
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (logged.caller.as_str(), logged.tool.as_str(), logged.outcome),
+        ("mon-agent", "set_board", "refused")
+    );
+    assert_eq!(board_of(&h, &other), theirs_before);
+    // It reads theirs all the same, and sets its own.
+    assert_eq!(
+        read(&c, "get_board", json!({ "project": "autre" })).await["draft"],
+        false
+    );
+    let v = read(&c, "set_board", json!({ "project": "demo", "draft": true })).await;
+    assert_eq!(v["draft"], true);
+    assert!(board_of(&h, &p).draft);
+    assert_eq!(entry(&h).caller, "mon-agent");
+    c.cancel().await.unwrap();
+
+    // Claude outside Escouade is the user's: it sets any project's.
+    let outside = external(&h).await;
+    let v = read(
+        &outside,
+        "set_board",
+        json!({ "project": "autre", "maxParallel": 3, "action": "push" }),
+    )
+    .await;
+    assert_eq!(
+        (&v["project"], &v["projectId"], &v["maxParallel"]),
+        (&json!("autre"), &json!(other.id), &json!(3))
+    );
+    let theirs = board_of(&h, &other);
+    assert_eq!((theirs.action.as_str(), theirs.max_parallel), ("push", 3));
+    // Not the other's.
+    assert_eq!(board_of(&h, &p).max_parallel, 2);
+    outside.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_call_that_changes_nothing_says_so_even_when_it_gives_the_values_the_kanban_has() {
+    let h = harness("mcp-act-set-board-same");
+    let p = project(&h).await;
+    edit_board(&h, &p, |b| b.target = "main".into());
+    let c = external(&h).await;
+    let before = board_of(&h, &p);
+    let v = read(
+        &c,
+        "set_board",
+        json!({
+            "project": "demo", "action": "merge", "target": "main", "draft": false,
+            "maxParallel": 2, "model": "", "mode": "",
+        }),
+    )
+    .await;
+    assert_eq!(v["action"], "merge");
+    assert_eq!(board_of(&h, &p), before);
+    let logged = entry(&h);
+    assert_eq!(
+        (logged.outcome, logged.message.as_deref()),
+        (
+            "ok",
+            Some("Aucun changement : le Kanban était déjà réglé ainsi.")
+        )
+    );
+    assert!(
+        logged.summary.contains("draft: false"),
+        "{}",
+        logged.summary
+    );
+    // One that changes something says that alone, whatever else it gave.
+    read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "action": "merge", "draft": true, "maxParallel": 2 }),
+    )
+    .await;
+    assert_eq!(entry(&h).message.as_deref(), Some("draft: false → true"));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[test]
+fn what_a_set_board_changed_is_said_in_the_language_of_the_interface_each_setting_from_its_value_to_its_new_one(
+) {
+    use crate::i18n::check::french_in;
+    use crate::i18n::Lang::{En, Fr};
+    let before = BoardSettings {
+        model: "opus".into(),
+        test_command: "npm test".into(),
+        ..Default::default()
+    };
+    let after = BoardSettings {
+        target: "main".into(),
+        model: String::new(),
+        effort: "high".into(),
+        mode: "plan".into(),
+        tests_first: true,
+        ..before.clone()
+    };
+    let fr = board_changes(Fr, &before, &after);
+    let en = board_changes(En, &before, &after);
+    assert_eq!(
+        fr,
+        "target: (aucune) → main · model: opus → (défaut) · effort: (défaut) → high · mode: (défaut) → plan · testsFirst: false → true"
+    );
+    assert_eq!(
+        en,
+        "target: (none) → main · model: opus → (default) · effort: (default) → high · mode: (default) → plan · testsFirst: false → true"
+    );
+    assert_eq!(french_in(&en), None);
+    // Tests first with no command is off, as the window and get_board show it: nothing to say.
+    let stored = BoardSettings {
+        tests_first: true,
+        ..Default::default()
+    };
+    for lang in [Fr, En] {
+        let none = board_changes(lang, &stored, &BoardSettings::default());
+        assert_eq!(none, board_changes(lang, &stored, &stored));
+    }
+    assert_eq!(
+        board_changes(Fr, &stored, &stored),
+        "Aucun changement : le Kanban était déjà réglé ainsi."
+    );
+    assert_eq!(
+        board_changes(En, &stored, &stored),
+        "No change: the Kanban was already set so."
+    );
+    // The key's prefix and number are not settings of the tool: never said.
+    let numbered = BoardSettings {
+        prefix: "DEM".into(),
+        next_number: 9,
+        ..Default::default()
+    };
+    assert_eq!(
+        board_changes(En, &BoardSettings::default(), &numbered),
+        "No change: the Kanban was already set so."
+    );
+}
+
+#[test]
+fn the_refusals_of_set_board_are_written_in_the_language_of_the_interface() {
+    use crate::i18n::check::french_in;
+    use crate::i18n::Lang::{En, Fr};
+    // A Kanban with a target: an empty one is then a refusal.
+    let board = BoardSettings {
+        target: "main".into(),
+        ..Default::default()
+    };
+    let branches = ["main".to_string(), "develop".to_string()];
+    let said = |lang, args: Value| {
+        let a: SetBoardArgs = serde_json::from_value(args).unwrap();
+        match board_change(lang, &board, &branches, "main", &a, None) {
+            Err(ToolError::Refused(m)) => ("refused", m),
+            Err(ToolError::Failed(m)) => ("error", m),
+            Ok(_) => panic!("accepted"),
+        }
+    };
+    let cases = [
+        (json!({ "project": "p" }), "error"),
+        (json!({ "project": "p", "effort": "ultra" }), "error"),
+        (json!({ "project": "p", "mode": "yolo" }), "error"),
+        (
+            json!({ "project": "p", "mode": "bypassPermissions" }),
+            "refused",
+        ),
+        (json!({ "project": "p", "target": "nope" }), "error"),
+        (json!({ "project": "p", "target": " " }), "error"),
+        (json!({ "project": "p", "maxParallel": 9 }), "error"),
+        (json!({ "project": "p", "testsFirst": true }), "refused"),
+    ];
+    for (args, kind) in cases {
+        let (fr_kind, fr) = said(Fr, args.clone());
+        let (en_kind, en) = said(En, args.clone());
+        assert_eq!((fr_kind, en_kind), (kind, kind), "{args}");
+        assert_ne!(fr, en, "{args}");
+        assert_eq!(french_in(&en), None, "{args}: {en}");
+    }
+    assert_eq!(
+        said(En, json!({ "project": "p", "mode": "bypassPermissions" })).1,
+        "Running agents with no permission request at all is the user’s decision: set the mode bypassPermissions in the window (Settings › Kanban)."
+    );
+    assert_eq!(
+        said(En, json!({ "project": "p", "effort": "ultra" })).1,
+        "Unknown effort “ultra”. Efforts: low, medium, high, xhigh, max."
+    );
+    assert_eq!(
+        said(En, json!({ "project": "p", "target": "nope" })).1,
+        "“nope” is not a local branch of the project. Branches: main, develop."
+    );
+    assert_eq!(
+        said(En, json!({ "project": "p", "testsFirst": true })).1,
+        "The Kanban has no test command, and the server runs none: set it in the window (Settings › Kanban), then turn on “Re-run the tests first”."
+    );
+    // The most branches listed, for a repository that has hundreds.
+    let many: Vec<String> = (0..60).map(|i| format!("b{i}")).collect();
+    let a: SetBoardArgs =
+        serde_json::from_value(json!({ "project": "p", "target": "nope" })).unwrap();
+    let Err(ToolError::Failed(listed)) = board_change(En, &board, &many, "b0", &a, None) else {
+        panic!("accepted")
+    };
+    assert!(
+        listed.contains("b19") && !listed.contains("b20"),
+        "{listed}"
+    );
+    assert!(listed.contains("60"), "{listed}");
+}
+
+#[tokio::test]
+async fn a_ticket_is_launched_with_a_model_and_an_effort_of_its_own_and_the_answer_says_what_its_agent_goes_with(
+) {
+    let h = harness("mcp-act-start-model");
+    let p = project(&h).await;
+    known_models(&h);
+    let a = made(&h, &p, "Architecture [ok]").await;
+    let b = made(&h, &p, "Petit [ok]").await;
+    let third = made(&h, &p, "Moyen [ok]").await;
+    let c = external(&h).await;
+
+    // Refused before anything is written, or started: the ticket is as it was.
+    for (args, says) in [
+        (
+            json!({ "ticket": a.key, "model": "gpt" }),
+            vec!["gpt", "sonnet", "opus"],
+        ),
+        (
+            json!({ "ticket": a.key, "model": "opus", "effort": "ultra" }),
+            vec!["ultra", "low, medium, high, xhigh, max"],
+        ),
+        (json!({ "ticket": a.key, "effort": "huge" }), vec!["huge"]),
+    ] {
+        let said = refused(&c, "start_ticket", args.clone()).await;
+        for part in says {
+            assert!(said.contains(part), "{args}: {said}");
+        }
+        assert_eq!(entry(&h).outcome, "error", "{args}");
+        let t = stored(&h, &a.id);
+        assert_eq!(
+            (t.column, t.forced, t.model.as_str(), t.effort.as_str()),
+            (Column::Todo, false, "", ""),
+            "{args}"
+        );
+    }
+
+    // Its own, for this ticket alone: written on it, and answered.
+    let v = read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": "dem-1", "model": " opus ", "effort": "max" }),
+    )
+    .await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-1", "starting": true, "model": "opus", "effort": "max" })
+    );
+    let t = stored(&h, &a.id);
+    assert_eq!((t.model.as_str(), t.effort.as_str()), ("opus", "max"));
+    let logged = entry(&h);
+    assert_eq!(
+        (logged.tool.as_str(), logged.outcome),
+        ("start_ticket", "ok")
+    );
+    assert_eq!(
+        logged.summary,
+        "ticket: dem-1 · model:  opus  · effort: max"
+    );
+
+    // Without them nothing is written, and the answer says what its agent takes: the app's.
+    let v = read(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-2", "starting": true, "model": "sonnet", "effort": "medium" })
+    );
+    let t = stored(&h, &b.id);
+    assert_eq!((t.model.as_str(), t.effort.as_str()), ("", ""));
+    assert_eq!(entry(&h).summary, "ticket: DEM-2");
+
+    // Each goes with what it was told (the agent of a ticket is made when its turn comes).
+    for id in [&a.id, &b.id] {
+        h.wait("its agent to be made", |h| stored(h, id).agent_id.is_some())
+            .await;
+    }
+    let agent = |id: &str| h.agent(&stored(&h, id).agent_id.unwrap());
+    let (first, second) = (agent(&a.id), agent(&b.id));
+    assert_eq!(
+        (first.model.as_str(), first.effort.as_str()),
+        ("opus", "max")
+    );
+    assert_eq!(
+        (second.model.as_str(), second.effort.as_str()),
+        ("sonnet", "medium")
+    );
+
+    // The Kanban's comes before the app's, and a ticket's own before the Kanban's, each of the
+    // two apart.
+    h.core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                model: "opus".into(),
+                effort: "high".into(),
+                max_parallel: 6,
+                ..board_of(&h, &p)
+            },
+        )
+        .unwrap();
+    let v = read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": third.key, "model": "sonnet" }),
+    )
+    .await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-3", "starting": true, "model": "sonnet", "effort": "high" })
+    );
+    let t = stored(&h, &third.id);
+    assert_eq!((t.model.as_str(), t.effort.as_str()), ("sonnet", ""));
+
+    h.wait("its agent to be made", |h| {
+        stored(h, &third.id).agent_id.is_some()
+    })
+    .await;
+    let last = agent(&third.id);
+    assert_eq!(
+        (last.model.as_str(), last.effort.as_str()),
+        ("sonnet", "high")
+    );
+    for id in [&a.id, &b.id, &third.id] {
+        h.wait("its turn to end", |h| {
+            stored(h, id).column == Column::Review
+        })
+        .await;
+    }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn the_answer_of_start_ticket_has_no_effort_when_the_model_of_its_agent_takes_none() {
+    let h = harness("mcp-act-start-haiku");
+    let p = project(&h).await;
+    known_models(&h);
+    let a = made(&h, &p, "Petit [ok]").await;
+    let b = made(&h, &p, "Autre [ok]").await;
+    let c = external(&h).await;
+
+    // Haiku takes no effort: given or not, it is not the agent's, and the answer leaves it out.
+    let v = read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": a.key, "model": "haiku", "effort": "high" }),
+    )
+    .await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-1", "starting": true, "model": "haiku" })
+    );
+    // The same for a Kanban on haiku, with a ticket that says nothing of its own.
+    h.core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                model: "haiku".into(),
+                effort: "low".into(),
+                ..board_of(&h, &p)
+            },
+        )
+        .unwrap();
+    let v = read(&c, "start_ticket", json!({ "ticket": b.key })).await;
+    assert_eq!(
+        v,
+        json!({ "key": "DEM-2", "starting": true, "model": "haiku" })
+    );
+    for id in [&a.id, &b.id] {
+        h.wait("its turn to end", |h| {
+            stored(h, id).column == Column::Review
+        })
+        .await;
+    }
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

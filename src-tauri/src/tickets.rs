@@ -161,6 +161,31 @@ fn archived_holds(lang: Lang, agent: &str, branch: &str) -> String {
     )
 }
 
+/// The model, the effort and the permission mode a ticket's agent goes with. The model and the
+/// effort: its ticket's own (`start_ticket` gave it one), else its board's, else the app's
+/// defaults. The mode: its board's, else the app's, but `default` instead of `auto` for a model that
+/// has no auto mode (the Composer does not offer it either): the one place that rule applies.
+pub(crate) fn ticket_agent_options(
+    t: &Ticket,
+    board: &BoardSettings,
+    settings: &Settings,
+) -> (String, String, String) {
+    let first = |own: &str, board: &str, app: &str| {
+        [own, board]
+            .into_iter()
+            .find(|v| !v.is_empty())
+            .unwrap_or(app)
+            .to_string()
+    };
+    let model = first(&t.model, &board.model, &settings.default_model);
+    let effort = first(&t.effort, &board.effort, &settings.default_effort);
+    let mut mode = first("", &board.mode, &settings.default_mode);
+    if mode == "auto" && !crate::core::supports_auto(&model) {
+        mode = "default".into();
+    }
+    (model, effort, mode)
+}
+
 fn ticket_not_found() -> anyhow::Error {
     anyhow!(tr!("ticket introuvable", "ticket not found"))
 }
@@ -535,6 +560,18 @@ impl<R: Runtime> Core<R> {
 
     /// "Lancer": a ticket that starts even with the autopilot off.
     pub fn ticket_start(self: &Arc<Self>, id: &str) -> Result<()> {
+        self.ticket_start_with(id, None, None)
+    }
+
+    /// `ticket_start`, giving the ticket's agent a model and an effort of its own (the MCP tool's
+    /// `start_ticket`): `Some` writes it on the ticket, an empty one going back to the board's,
+    /// `None` leaves it as it is. Nothing is written for a ticket that has started already.
+    pub fn ticket_start_with(
+        self: &Arc<Self>,
+        id: &str,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> Result<()> {
         // A project no account serves starts nothing, nor later on its own once one does.
         let project = self.ticket(id)?.project_id;
         if !accounts::serves_any(&self.settings.read(), Some(&project)) {
@@ -549,6 +586,12 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             t.forced = true;
+            if let Some(model) = model {
+                t.model = model;
+            }
+            if let Some(effort) = effort {
+                t.effort = effort;
+            }
             Ok(())
         })?;
         self.telemetry
@@ -1121,7 +1164,8 @@ impl<R: Runtime> Core<R> {
         let settings = self.settings.read().clone();
         // What its Claude is told, from its protocol to its first message.
         let lang = self.lang().claude;
-        let or = |v: &str, default: &str| Some(if v.is_empty() { default } else { v }.to_string());
+        // Its ticket's own model and effort come first, then the board's; the mode is the board's.
+        let (model, effort, mode) = ticket_agent_options(t, s, &settings);
         // The branch it takes up may still be in the worktree of its earlier agent, archived.
         if !t.branch.is_empty() {
             self.release_archived_holder(project, t).await?;
@@ -1147,9 +1191,9 @@ impl<R: Runtime> Core<R> {
             .create_agent_with(
                 &project.id,
                 AgentOptions {
-                    model: or(&s.model, &settings.default_model),
-                    effort: or(&s.effort, &settings.default_effort),
-                    mode: or(&s.mode, &settings.default_mode),
+                    model: Some(model),
+                    effort: Some(effort),
+                    mode: Some(mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
                     worktree: new_branch,
                     append_prompt: Some(board::protocol_prompt_for(lang, t, ports, isola)),
@@ -1727,7 +1771,7 @@ impl<R: Runtime> Core<R> {
         // Its test launches stop first: their servers would hold the worktree's files and ports.
         self.stop_test_runs(&agent_id);
         // Tests.
-        if s.tests_first && !s.test_command.trim().is_empty() {
+        if s.tests_first_on() {
             self.set_step(&t.id, "Tests…");
             let settings = self.settings.read().clone();
             let shell = crate::pty::detect_shells(&settings)

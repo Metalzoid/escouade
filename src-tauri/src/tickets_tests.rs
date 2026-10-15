@@ -6060,3 +6060,247 @@ async fn a_ticket_started_again_takes_its_branch_back_from_its_archived_agent_un
         .count();
     assert_eq!(held, 1);
 }
+
+#[tokio::test]
+async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_started_for_good() {
+    let h = harness("tk-start-with");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Au choix [ok]", &[], 5))
+        .await
+        .unwrap();
+    // Nothing starts meanwhile: what is written on the ticket can be read before its agent goes.
+    h.core.pause_after_limit("principal");
+    let own = |h: &Harness| {
+        let t = h.ticket(&t.id);
+        (t.forced, t.model, t.effort)
+    };
+    assert_eq!(own(&h), (false, String::new(), String::new()));
+    h.core
+        .ticket_start_with(&t.id, Some("opus".into()), Some("max".into()))
+        .unwrap();
+    assert_eq!(own(&h), (true, "opus".into(), "max".into()));
+    // Left out, it stays; the window's « Lancer » leaves what is there as well.
+    h.core
+        .ticket_start_with(&t.id, None, Some("high".into()))
+        .unwrap();
+    assert_eq!(own(&h), (true, "opus".into(), "high".into()));
+    h.core.ticket_start(&t.id).unwrap();
+    assert_eq!(own(&h), (true, "opus".into(), "high".into()));
+    // Empty, it goes back to the board's, each one apart.
+    h.core
+        .ticket_start_with(&t.id, Some(String::new()), None)
+        .unwrap();
+    assert_eq!(own(&h), (true, String::new(), "high".into()));
+    h.core
+        .ticket_start_with(&t.id, None, Some(String::new()))
+        .unwrap();
+    assert_eq!(own(&h), (true, String::new(), String::new()));
+    h.core
+        .ticket_start_with(&t.id, Some("haiku".into()), None)
+        .unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+
+    // Once it has started nothing is written: it is not « À faire » any more.
+    h.core.autopilot_resume();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(h.agent_of(&t.id).model, "haiku");
+    let err = h
+        .core
+        .ticket_start_with(&t.id, Some("opus".into()), Some("max".into()))
+        .unwrap_err();
+    assert_eq!(format!("{err:#}"), "Ce ticket est déjà parti.");
+    let t = h.ticket(&t.id);
+    assert_eq!((t.model.as_str(), t.effort.as_str()), ("haiku", ""));
+}
+
+#[tokio::test]
+async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_ticket_else_of_the_board_else_of_the_app(
+) {
+    let h = harness("tk-agent-model");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.autopilot = false;
+        s.model = "sonnet".into();
+        s.effort = "low".into();
+        s.max_parallel = 3;
+    });
+    let mut ids = Vec::new();
+    for title in [
+        "Architecture [ok]",
+        "Petit [ok]",
+        "Modèle seul [ok]",
+        "Rien [ok]",
+    ] {
+        let t = h
+            .core
+            .ticket_create(&p.id, draft(title, &[], 5))
+            .await
+            .unwrap();
+        ids.push(t.id);
+    }
+    let [own, board, only_model, app] = &ids[..] else {
+        panic!("{ids:?}")
+    };
+    // The ticket's own, in the Kanban that is on sonnet: opus with all its effort.
+    h.core
+        .ticket_start_with(own, Some("opus".into()), Some("max".into()))
+        .unwrap();
+    // None: the Kanban's. A model alone: the Kanban's effort stays.
+    h.core.ticket_start(board).unwrap();
+    h.core
+        .ticket_start_with(only_model, Some("haiku".into()), None)
+        .unwrap();
+    for id in [own, board, only_model] {
+        h.wait_ticket(id, "to test", |t| t.column == Column::Review)
+            .await;
+    }
+    // What the agents were made with, and launched with.
+    let launched = |id: &str| {
+        let a = h.agent_of(id);
+        let argv = h.launches(&h.worktree_of(id)).pop().unwrap();
+        let after = |flag: &str| {
+            let at = argv.iter().position(|x| x == flag);
+            at.map(|at| argv[at + 1].clone())
+        };
+        (a.model, a.effort, after("--model"), after("--effort"))
+    };
+    let said = |m: &str, e: &str| {
+        (
+            m.to_string(),
+            e.to_string(),
+            Some(m.to_string()),
+            Some(e.to_string()),
+        )
+    };
+    assert_eq!(launched(own), said("opus", "max"));
+    assert_eq!(launched(board), said("sonnet", "low"));
+    // Haiku takes no effort: the flag is left out, as for any agent of that model.
+    let (model, effort, flag_model, flag_effort) = launched(only_model);
+    assert_eq!(
+        (model.as_str(), effort.as_str(), flag_model.as_deref()),
+        ("haiku", "low", Some("haiku"))
+    );
+    assert_eq!(flag_effort, None);
+    // What it was given stays with the ticket, what it was not, none.
+    assert_eq!(h.ticket(own).model, "opus");
+    assert_eq!(h.ticket(board).model, "");
+    assert_eq!(h.ticket(only_model).effort, "");
+
+    // A Kanban that has none: the app's.
+    h.set_board(&p.id, |s| {
+        s.model.clear();
+        s.effort.clear();
+    });
+    {
+        let mut s = h.core.settings.write();
+        s.default_model = "opus".into();
+        s.default_effort = "high".into();
+    }
+    h.core.ticket_start(app).unwrap();
+    h.wait_ticket(app, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(launched(app), said("opus", "high"));
+}
+
+#[tokio::test]
+async fn a_ticket_agent_on_a_model_that_has_no_auto_mode_goes_in_the_default_mode_instead() {
+    let h = harness("tk-agent-auto");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.autopilot = false;
+        s.mode = "auto".into();
+        s.model = "sonnet".into();
+        s.max_parallel = 6;
+    });
+    let mut ids = Vec::new();
+    for title in [
+        "Haiku seul [ok]",
+        "Opus [ok]",
+        "Kanban [ok]",
+        "Kanban haiku [ok]",
+        "Appli haiku [ok]",
+        "Plan haiku [ok]",
+    ] {
+        let t = h
+            .core
+            .ticket_create(&p.id, draft(title, &[], 5))
+            .await
+            .unwrap();
+        ids.push(t.id);
+    }
+    let [haiku, opus, board, board_haiku, app_haiku, plan_haiku] = &ids[..] else {
+        panic!("{ids:?}")
+    };
+    // The mode its agent was made with, and launched with; its model and its effort flag as well.
+    let launched = |id: &str| {
+        let argv = h.launches(&h.worktree_of(id)).pop().unwrap();
+        let after = |flag: &str| {
+            let at = argv.iter().position(|x| x == flag);
+            at.map(|at| argv[at + 1].clone())
+        };
+        let (model, mode) = (h.agent_of(id).model, h.agent_of(id).mode);
+        (
+            (model, mode),
+            (
+                after("--model"),
+                after("--permission-mode"),
+                after("--effort"),
+            ),
+        )
+    };
+    let said = |model: &str, mode: &str, effort: Option<&str>| {
+        (
+            (model.to_string(), mode.to_string()),
+            (
+                Some(model.to_string()),
+                Some(mode.to_string()),
+                effort.map(str::to_string),
+            ),
+        )
+    };
+
+    // A Kanban in auto mode: a ticket given haiku goes in the default mode (haiku takes no auto
+    // mode, the Composer does not offer it), and no effort. Another model keeps auto.
+    h.core
+        .ticket_start_with(haiku, Some("haiku".into()), None)
+        .unwrap();
+    h.core
+        .ticket_start_with(opus, Some("opus".into()), None)
+        .unwrap();
+    h.core.ticket_start(board).unwrap();
+    for id in [haiku, opus, board] {
+        h.wait_ticket(id, "to test", |t| t.column == Column::Review)
+            .await;
+    }
+    assert_eq!(launched(haiku), said("haiku", "default", None));
+    assert_eq!(launched(opus), said("opus", "auto", Some("medium")));
+    assert_eq!(launched(board), said("sonnet", "auto", Some("medium")));
+
+    // The agent is made with the Kanban as it is when its ticket goes: each is waited for before
+    // the next change.
+    // The Kanban's own model is haiku: the same, with a ticket that says nothing of its own.
+    h.set_board(&p.id, |s| s.model = "haiku".into());
+    h.core.ticket_start(board_haiku).unwrap();
+    h.wait_ticket(board_haiku, "its agent", |t| t.agent_id.is_some())
+        .await;
+    // The mode left to the app's (auto), with a Kanban on haiku: the default mode as well.
+    h.core.settings.write().default_mode = "auto".into();
+    h.set_board(&p.id, |s| s.mode.clear());
+    h.core.ticket_start(app_haiku).unwrap();
+    h.wait_ticket(app_haiku, "its agent", |t| t.agent_id.is_some())
+        .await;
+    // Plan mode is a mode haiku takes: it stays.
+    h.set_board(&p.id, |s| s.mode = "plan".into());
+    h.core.ticket_start(plan_haiku).unwrap();
+    for id in [board_haiku, app_haiku, plan_haiku] {
+        h.wait_ticket(id, "to test", |t| t.column == Column::Review)
+            .await;
+    }
+    assert_eq!(launched(board_haiku), said("haiku", "default", None));
+    assert_eq!(launched(app_haiku), said("haiku", "default", None));
+    assert_eq!(launched(plan_haiku), said("haiku", "plan", None));
+}

@@ -21,8 +21,10 @@
 //!
 //! None runs a command or the tests, merges or deletes. Two answer an agent's request as the user
 //! does in the window (`answer_permission`, `answer_question`), and never for good: a lasting
-//! permission rule (« Toujours autoriser ») stays the user's to give there. `tests::EXPOSED` lists
-//! exactly what the router holds, so a tool is added knowingly.
+//! permission rule (« Toujours autoriser ») stays the user's to give there. `set_board` changes
+//! what the window's Kanban settings do, but not what runs without a question: the mode that asks
+//! for no permission at all (`bypassPermissions`) and the test command stay the user's to give
+//! there too. `tests::EXPOSED` lists exactly what the router holds, so a tool is added knowingly.
 
 use super::act;
 use super::activity::{self, Outcome};
@@ -98,9 +100,35 @@ impl<R: Runtime> ToolCtx<R> {
         summary: &str,
         result: Result<String, ToolError>,
     ) -> CallToolResult {
+        self.answer(tool, summary, result.map(|text| (text, Outcome::Ok)))
+    }
+
+    /// `reply`, for a tool that also says what it changed: `Ok` is the text the model reads and,
+    /// for the log, what the call changed (its message, which a refusal or a failure keeps as it
+    /// says why).
+    pub fn reply_changed(
+        &self,
+        tool: &str,
+        summary: &str,
+        result: Result<(String, String), ToolError>,
+    ) -> CallToolResult {
+        self.answer(
+            tool,
+            summary,
+            result.map(|(text, changed)| (text, Outcome::Changed(changed))),
+        )
+    }
+
+    /// The answer, and the log's entry: `Ok` is the text and how the log says it ended.
+    fn answer(
+        &self,
+        tool: &str,
+        summary: &str,
+        result: Result<(String, Outcome), ToolError>,
+    ) -> CallToolResult {
         let (outcome, answer) = match result {
-            Ok(text) => (
-                Outcome::Ok,
+            Ok((text, outcome)) => (
+                outcome,
                 CallToolResult::success(vec![ContentBlock::text(text)]),
             ),
             Err(ToolError::Refused(m)) => (
@@ -417,6 +445,142 @@ pub struct StartTicketArgs {
         description = "The ticket to launch: its key (like ATL-12, in any case) or its id."
     )]
     pub ticket: String,
+    #[schemars(
+        description = "The model of this ticket's agent, as Claude Code names it (sonnet, opus, haiku…), for this ticket alone: it takes precedence over the Kanban's, e.g. keep opus on an architecture ticket while the Kanban is on sonnet. An empty string goes back to the Kanban's. Leave it out to leave it as it is."
+    )]
+    pub model: Option<String>,
+    #[schemars(
+        description = "The effort of this ticket's agent (low, medium, high, xhigh or max), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string goes back to the Kanban's. Leave it out to leave it as it is."
+    )]
+    pub effort: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetBoardArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+}
+
+/// What validating a ticket does, as `set_board` names it.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ActionArg {
+    Merge,
+    Pr,
+    Push,
+    Keep,
+}
+
+impl ActionArg {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            ActionArg::Merge => "merge",
+            ActionArg::Pr => "pr",
+            ActionArg::Push => "push",
+            ActionArg::Keep => "keep",
+        }
+    }
+}
+
+/// How a merge goes in, as `set_board` names it.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum StrategyArg {
+    Merge,
+    Squash,
+    Rebase,
+}
+
+impl StrategyArg {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            StrategyArg::Merge => "merge",
+            StrategyArg::Squash => "squash",
+            StrategyArg::Rebase => "rebase",
+        }
+    }
+}
+
+/// What a merge conflict does, as `set_board` names it.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ConflictArg {
+    Ask,
+    Agent,
+    Abort,
+}
+
+impl ConflictArg {
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            ConflictArg::Ask => "ask",
+            ConflictArg::Agent => "agent",
+            ConflictArg::Abort => "abort",
+        }
+    }
+}
+
+// Named as `get_board` answers them (camelCase), so that its answer can be given back as it is.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBoardArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(
+        description = "What approving a ticket does: merge (into the target branch), pr (push its branch and open a pull request), push (push its branch only) or keep (nothing: the changes stay in its worktree). Leave it out to keep the current one."
+    )]
+    pub action: Option<ActionArg>,
+    #[schemars(
+        description = "The target branch: where tickets merge, the base of their pull request and of their branch. One of the project's local branches, unless it is the current one (the Kanban's own, or the branch get_board shows while the Kanban has none): it is then left as it is. Leave it out to keep the current one."
+    )]
+    pub target: Option<String>,
+    #[schemars(
+        description = "How a merge goes in: merge (a merge commit), squash or rebase. Leave it out to keep the current one."
+    )]
+    pub strategy: Option<StrategyArg>,
+    #[schemars(
+        description = "true: the pull request opens as a draft. Leave it out to keep the current one."
+    )]
+    pub draft: Option<bool>,
+    #[schemars(
+        description = "true: the ticket's worktree is deleted once it is approved. Leave it out to keep the current one."
+    )]
+    pub cleanup: Option<bool>,
+    #[schemars(
+        description = "true: the commit messages are written by Haiku in the Conventional Commits form. Leave it out to keep the current one."
+    )]
+    pub conventional: Option<bool>,
+    #[schemars(
+        description = "What a merge conflict does: ask (the user decides), agent (the ticket's agent resolves it) or abort (cancel the merge). Leave it out to keep the current one."
+    )]
+    pub conflict: Option<ConflictArg>,
+    #[schemars(
+        description = "The most tickets in progress at once, 1 to 6. Leave it out to keep the current one."
+    )]
+    pub max_parallel: Option<u32>,
+    #[schemars(
+        description = "true: the autopilot starts the To do tickets by itself as soon as a place is free; false: they wait to be launched by hand. Leave it out to keep the current one."
+    )]
+    pub autopilot: Option<bool>,
+    #[schemars(
+        description = "The model of the tickets' agents, as Claude Code names it (sonnet, opus, haiku…). An empty string is the app's default model. Leave it out to keep the current one."
+    )]
+    pub model: Option<String>,
+    #[schemars(
+        description = "The effort of the tickets' agents: low, medium, high, xhigh or max. An empty string is the app's default effort. Leave it out to keep the current one."
+    )]
+    pub effort: Option<String>,
+    #[schemars(
+        description = "The permission mode of the tickets' agents: auto, default, plan or acceptEdits. An empty string is the app's default mode. bypassPermissions (no permission request at all) is the user's to give, in the window: it is refused here unless the Kanban is already on it. auto does not apply to a model that has no auto mode (Haiku): its agents go in the default mode. Leave it out to keep the current one."
+    )]
+    pub mode: Option<String>,
+    #[schemars(
+        description = "true: the tests run again before approving a ticket, and a failing test sends it back to its agent. Refused to turn it on when the Kanban has no test command: it is set in the window, the server runs no command (it is off with none, as get_board says). Leave it out to keep the current one."
+    )]
+    pub tests_first: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -540,7 +704,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, and the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none). An agent of Escouade may leave out the ticket to read its own.",
+        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, the model and the effort of its agent when start_ticket gave it its own (left out otherwise), and the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none). An agent of Escouade may leave out the ticket to read its own.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_ticket(
@@ -551,6 +715,20 @@ impl<R: Runtime> Tools<R> {
         let result = read::ticket(&ctx.core, &ctx.caller, args.ticket.as_deref());
         let asked = summary(&[("ticket", args.ticket.as_deref())]);
         ctx.reply("get_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Read a project's Kanban settings: the project (its name, and projectId), what approving a ticket does (action: merge, pr, push or keep; target: the branch tickets merge into, the base of their pull request and of their branch, the project's current branch while the Kanban has none, empty on a detached HEAD; strategy: merge, squash or rebase; draft; cleanup; conventional commit messages; conflict: ask, agent or abort), maxParallel (the most tickets in progress at once), autopilot, the model, effort and mode of the tickets' agents (an empty string is the app's default, given by defaults), testsFirst (true only when tests first is on and testCommand is not empty, as the window shows it), testCommand and the tickets' key prefix. set_board changes them, and takes this answer back as it is.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_board(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<GetBoardArgs>,
+    ) -> CallToolResult {
+        let result = read::board(&ctx.core, &args.project).await;
+        let asked = summary(&[("project", Some(&args.project))]);
+        ctx.reply("get_board", &asked, result)
     }
 
     #[tool(
@@ -665,7 +843,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. Answers once it is queued; follow it with get_ticket. It uses the quota.",
+        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. You may give the ticket's agent its own model and effort (they take precedence over the Kanban's, which get_board gives, for this ticket alone; an empty string goes back to the Kanban's): they are checked before anything starts. A model that has no auto mode (Haiku) starts its agent in the default mode where the Kanban's is auto. Answers once it is queued, with the model and the effort its agent starts with (the ticket's, else the Kanban's, else the app's default; no effort for a model that takes none, Haiku); follow it with get_ticket. It uses the quota.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -677,9 +855,54 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<StartTicketArgs>,
     ) -> CallToolResult {
-        let asked = summary(&[("ticket", Some(&args.ticket))]);
+        let asked = summary(&[
+            ("ticket", Some(&args.ticket)),
+            ("model", args.model.as_deref()),
+            ("effort", args.effort.as_deref()),
+        ]);
         let result = act::start_ticket(&ctx.core, &ctx.caller, args);
         ctx.reply("start_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Change a project's Kanban settings, the same ones as the window's Settings > Kanban: what approving a ticket does (action, target, strategy, draft, cleanup, conventional, conflict), how many tickets run at once (maxParallel, 1 to 6), the autopilot, and the model, effort and mode of the tickets' agents (an empty string is the app's default). The fields you leave out stay as they are; read them first with get_board, whose answer can be given back as it is (nothing changes then). Checked as the window does, and nothing changes when one is refused: the model must be one the app offers, the effort one of low, medium, high, xhigh or max, the mode one of auto, default, plan or acceptEdits, the target a local branch of the project (one that is the Kanban's own, or the branch get_board shows while it has none, is left as it is), maxParallel between 1 and 6. Refused: the mode bypassPermissions (agents that never ask for a permission are the user's to allow, in the window) unless the Kanban is already on it, and turning testsFirst on when the Kanban has no test command (the server runs no command, and does not set one). An agent of Escouade only sets the Kanban of its own project. It changes the tickets that start from now on, not the agents already at work. Answers the settings as get_board does, after the change.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn set_board(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<SetBoardArgs>,
+    ) -> CallToolResult {
+        let given = |v: Option<bool>| v.map(|v| v.to_string());
+        let (draft, cleanup, conventional) = (
+            given(args.draft),
+            given(args.cleanup),
+            given(args.conventional),
+        );
+        let (autopilot, tests_first) = (given(args.autopilot), given(args.tests_first));
+        let max_parallel = args.max_parallel.map(|n| n.to_string());
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("action", args.action.map(ActionArg::name)),
+            ("target", args.target.as_deref()),
+            ("strategy", args.strategy.map(StrategyArg::name)),
+            ("draft", draft.as_deref()),
+            ("cleanup", cleanup.as_deref()),
+            ("conventional", conventional.as_deref()),
+            ("conflict", args.conflict.map(ConflictArg::name)),
+            ("maxParallel", max_parallel.as_deref()),
+            ("autopilot", autopilot.as_deref()),
+            ("model", args.model.as_deref()),
+            ("effort", args.effort.as_deref()),
+            ("mode", args.mode.as_deref()),
+            ("testsFirst", tests_first.as_deref()),
+        ]);
+        let result = act::set_board(&ctx.core, &ctx.caller, args).await;
+        ctx.reply_changed("set_board", &asked, result)
     }
 
     #[tool(
@@ -854,7 +1077,7 @@ impl<R: Runtime> Tools<R> {
 #[tool_handler(
     router = self.router,
     name = "escouade",
-    instructions = "Escouade runs Claude Code agents on a Kanban board of tickets, project by project. Its tools read and act on its projects, agents and tickets. Name a project by its id or its name, an agent by its id or its name, a ticket by its key (like ATL-12) or its id."
+    instructions = "Escouade runs Claude Code agents on a Kanban board of tickets, project by project. Its tools read and act on its projects, agents, tickets and Kanban settings. Name a project by its id or its name, an agent by its id or its name, a ticket by its key (like ATL-12) or its id."
 )]
 impl<R: Runtime> ServerHandler for Tools<R> {
     /// A call goes to its tool, which logs it (`ToolCtx::reply`); one the router answers itself

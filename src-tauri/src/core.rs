@@ -855,6 +855,12 @@ pub fn supports_effort(model: &str) -> bool {
     !model.to_lowercase().contains("haiku")
 }
 
+/// Whether a model takes the permission mode `auto`: every one but Haiku. The rule of
+/// `supportsAuto` in `src/lib/models.ts`, which keeps the Composer from offering it.
+pub fn supports_auto(model: &str) -> bool {
+    !model.to_lowercase().contains("haiku")
+}
+
 pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
     let mut a: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
     a.extend(["--model".into(), m.model.clone()]);
@@ -6145,6 +6151,23 @@ impl<R: Runtime> Core<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_mode_is_taken_by_every_model_but_haiku_as_the_composer_offers_it() {
+        // The rule of `supportsAuto` (src/lib/models.ts), the effort's as well.
+        for model in [
+            "haiku",
+            "Haiku",
+            "claude-haiku-4-5",
+            "CLAUDE-HAIKU-4-5-20251001",
+        ] {
+            assert!(!supports_auto(model), "{model}");
+            assert!(!supports_effort(model), "{model}");
+        }
+        for model in ["sonnet", "opus", "claude-sonnet-4-5", "claude-opus-4-1", ""] {
+            assert!(supports_auto(model), "{model}");
+        }
+    }
 
     #[test]
     fn the_answer_of_claude_p_is_found_after_a_warning() {

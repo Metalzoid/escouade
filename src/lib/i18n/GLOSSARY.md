@@ -221,6 +221,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Boucles max | Max loops | |
 | Critères d’acceptation | Acceptance criteria | le formulaire d’un ticket |
 | Objectif partiel | Partial goal | |
+| Modèle de ce ticket : Opus, effort Max (avant celui du Kanban) | This ticket’s model: Opus, effort Max (over the Kanban’s) | l’étiquette d’une carte dont le ticket a son propre modèle ou effort (donnés par `start_ticket` du serveur MCP), à côté de sa clé : « Opus · Max » |
 | Ce qui a été fait | What was done | |
 | Avancement | Progress | |
 | Resynchroniser | Resync | ticket importé |
@@ -398,7 +399,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | journal d’activité | activity log | ce que le serveur MCP a reçu et répondu |
 | requête refusée | request refused | « Requête refusée : jeton inconnu » → “Request refused: unknown token” |
 | en-tête (HTTP) | (HTTP) header | « en-tête Host », “Host header” |
-| Escouade · Créer un ticket | Escouade · Create a ticket | badge d’un outil du serveur d’Escouade : « Lister les projets / agents / tickets » → “List the projects / agents / tickets”, « Lire un ticket / le quota » → “Read a ticket / the quota”, « Résumer un agent » → “Sum up an agent”, « Modifier / Déplacer un ticket » → “Edit / Move a ticket”, « Lancer un ticket / un agent » → “Start a ticket / an agent”, « Envoyer un message » → “Send a message”, « Arrêter un agent » → “Stop an agent”, « Lister les demandes en attente » → “List the waiting requests”, « Répondre à une demande d’autorisation / une question » → “Answer a permission request / a question”, « Donner son avancement » → “Report progress”, « Découper son ticket » → “Split its ticket” |
+| Escouade · Créer un ticket | Escouade · Create a ticket | badge d’un outil du serveur d’Escouade : « Lister les projets / agents / tickets » → “List the projects / agents / tickets”, « Lire un ticket / le quota / les réglages du Kanban » → “Read a ticket / the quota / the Kanban settings”, « Régler le Kanban » → “Set the Kanban”, « Résumer un agent » → “Sum up an agent”, « Modifier / Déplacer un ticket » → “Edit / Move a ticket”, « Lancer un ticket / un agent » → “Start a ticket / an agent”, « Envoyer un message » → “Send a message”, « Arrêter un agent » → “Stop an agent”, « Lister les demandes en attente » → “List the waiting requests”, « Répondre à une demande d’autorisation / une question » → “Answer a permission request / a question”, « Donner son avancement » → “Report progress”, « Découper son ticket » → “Split its ticket” |
 | ligne d’état (d’un agent) | status line | ce qu’un agent annonce faire par `report_progress`, sous son nom et sur la carte de son ticket : « Ce que l’agent dit faire » → “What the agent says it is doing” |
 | le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
 | le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
