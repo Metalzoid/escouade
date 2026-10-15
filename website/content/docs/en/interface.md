@@ -118,7 +118,7 @@ The “Launch” section lists the project’s launch commands (development serv
 
 ### Terminals
 
-The “Terminals” section lists the project’s open terminals. The `+` button (“New terminal”) offers the shells detected on the machine, and `Ctrl+T` opens one right away. A click on a terminal shows it in the main area, the × closes it, and a terminal whose shell stopped is marked “exited”. See [terminals](terminals).
+The “Terminals” section lists the project’s open terminals. The `+` button (“New terminal”) offers the shells detected on the machine, then “In the worktree of…”, which lists the project’s agents that have a worktree (not the archived ones) to open a terminal in it; the entry isn’t there when no agent has one. `Ctrl+T` opens one right away. A click on a terminal shows it in the main area, the × closes it, and a terminal whose shell stopped is marked “exited”. See [terminals](terminals).
 
 ### The foot of the sidebar
 
@@ -135,6 +135,7 @@ The header of an agent’s conversation shows, from left to right:
 | Name and status | The agent’s name (double-click to rename it) and its status. |
 | `project / branch` | The project, and the agent’s branch if it has a worktree, otherwise the branch of the project’s folder. |
 | “Editor” | Opens the editor on the agent’s files. |
+| “Terminal” | For an agent in a worktree (not archived): opens a [terminal](terminals) in that worktree. |
 | “▶ Test” or “Prepare launch” | For an agent in a worktree: launch its work to try it, or ask the agent how to launch it. See [review and approve](testing). |
 | “Claude Code view” or “Escouade view” | Runs the agent in Claude Code’s own interface, or brings it back to Escouade’s conversation. Absent for a ticket’s agent. See [the Claude Code view](claude-code-view). |
 | The model | The agent’s model, with its version. |

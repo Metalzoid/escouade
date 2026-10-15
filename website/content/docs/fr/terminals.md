@@ -9,7 +9,7 @@ Un terminal est un vrai shell, dans un pseudo-terminal (ConPTY sous Windows, pty
 | Pour ouvrir… | Fais ceci |
 |---|---|
 | Un terminal dans le dossier du projet | `Ctrl+T` (`⌘T` sous macOS), ou le bouton + de la section « Terminaux » de la barre latérale. Le raccourci utilise le premier shell de la liste ; le bouton + propose chaque shell. |
-| Un terminal dans le worktree d’un agent | Clic droit sur la carte de l’agent, puis « Ouvrir un terminal ». Sans worktree, le terminal s’ouvre dans le dossier du projet. Voir [les worktrees](worktrees). |
+| Un terminal dans le worktree d’un agent | Le bouton « Terminal » de l’en-tête de sa conversation, juste après « Éditeur » ; ou le bouton + de la section « Terminaux », puis « Dans le worktree de… » et le nom de l’agent ; ou un clic droit sur la carte de l’agent, puis « Ouvrir un terminal ». Le bouton et le menu + ne concernent que les agents qui ont un worktree et ne sont pas archivés (« Dans le worktree de… » n’apparaît pas quand il n’y en a aucun) ; sans worktree, le clic droit ouvre le terminal dans le dossier du projet. Voir [les worktrees](worktrees). |
 | Un terminal dans un dossier de l’éditeur | Clic droit sur un dossier de l’arborescence de [l’éditeur](editor), puis « Ouvrir un terminal ici ». Sur l’espace libre, c’est la racine de la source (le worktree de l’agent ou le projet). |
 
 Un terminal est nommé d’après son shell et un numéro (`pwsh-1`), ou d’après son shell et l’agent ou le dossier d’où il vient (`pwsh · refacto-auth`, `pwsh · src`). Il s’ajoute à la section « Terminaux » du projet, avec le nombre de terminaux ouverts : un clic sur sa ligne l’affiche, la croix de la ligne le ferme. Quand le shell s’arrête, la ligne porte « terminé ».

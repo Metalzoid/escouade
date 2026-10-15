@@ -541,6 +541,135 @@ describe('Sidebar terminal entry', () => {
   });
 });
 
+describe('Sidebar terminals menu (ESC-18)', () => {
+  const wt = (id: string) => ({ path: `C:\\code\\demo-api\\.claude\\worktrees\\${id}`, branch: `escouade/${id}`, baseBranch: 'main' });
+  const plus = () => getByTip(document.body, 'Nouveau terminal');
+  const labels = () => menu.open!.items.map((i) => i.label);
+
+  beforeEach(() => {
+    vi.mocked(openTerminal).mockClear();
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web' })],
+      agents: [
+        // Created in this order, which is not the alphabetical one: the sidebar lists them so.
+        agent({ id: 'a1', name: 'zeta', worktree: wt('a1'), createdAt: 1 }),
+        agent({ id: 'a2', name: 'alpha', worktree: wt('a2'), createdAt: 2 }),
+        // In the project's folder, archived, or of another project: no worktree to open one in.
+        agent({ id: 'a3', name: 'dans-le-dossier', createdAt: 3 }),
+        agent({ id: 'a4', name: 'vieux', worktree: wt('a4'), archived: true, createdAt: 4 }),
+        agent({ id: 'a5', name: 'ailleurs', projectId: 'p2', worktree: wt('a5'), createdAt: 5 }),
+      ],
+    });
+    app.shells = [
+      { id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' },
+      { id: 'bash', label: 'Git Bash', path: 'bash.exe' },
+    ];
+    fakeBackend();
+  });
+  afterEach(() => menu.close());
+
+  it('lists the shells, then « Dans le worktree de… » after a separator', async () => {
+    render(Sidebar, { project: project() });
+    await userEvent.click(plus());
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'Dans le worktree de…']);
+    expect(menu.open!.items[2]).toMatchObject({ separator: true });
+    // The shells still open a terminal in the project.
+    menu.open!.items[1].onClick!();
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'bash', 'bash-1', undefined);
+  });
+
+  it('replaces the menu with the agents of the project that have a worktree, in the order of the sidebar', async () => {
+    render(Sidebar, { project: project() });
+    await userEvent.click(plus());
+    menu.open!.items[3].onClick!();
+    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    // Neither the one in the project’s folder, the archived one, nor the other project’s.
+    expect(menu.open!.items.every((i) => i.hint === undefined && !i.separator)).toBe(true);
+    // Opened from the button, as the first menu was: the keyboard works it.
+    expect(menu.open).toMatchObject({ keyboard: true });
+  });
+
+  it('opens a terminal in the worktree of the agent chosen, named after it', async () => {
+    render(Sidebar, { project: project() });
+    await userEvent.click(plus());
+    menu.open!.items[3].onClick!();
+    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    menu.open!.items.find((i) => i.label === 'alpha')!.onClick!();
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
+    await expect.poll(() => app.term?.name).toBe('pwsh · alpha');
+  });
+
+  it('works from the keyboard: the focus goes into the second menu and comes back to the button', async () => {
+    render(Sidebar, { project: project() });
+    render(ContextMenu);
+    plus().focus();
+    await userEvent.keyboard('{Enter}');
+    // (Its name carries the hint: the shell’s glyph.)
+    expect(await screen.findByRole('menuitem', { name: /^PowerShell 7/ })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Dans le worktree de…' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    const first = await screen.findByRole('menuitem', { name: 'zeta' });
+    expect(screen.queryByRole('menuitem', { name: /^PowerShell 7/ })).toBeNull();
+    await vi.waitFor(() => expect(first).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(plus()).toHaveFocus();
+  });
+
+  it('works with the mouse as well', async () => {
+    render(Sidebar, { project: project() });
+    render(ContextMenu);
+    await userEvent.click(plus());
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Dans le worktree de…' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'zeta' }));
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · zeta', { agentId: 'a1' });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('offers neither the entry nor a separator when no agent of the project has a worktree to open', async () => {
+    resetApp({
+      projects: [project(), project({ id: 'p2', name: 'studio-web' })],
+      agents: [
+        agent({ id: 'a3', name: 'dans-le-dossier' }),
+        agent({ id: 'a4', name: 'vieux', worktree: wt('a4'), archived: true, createdAt: 2 }),
+        agent({ id: 'a5', name: 'ailleurs', projectId: 'p2', worktree: wt('a5'), createdAt: 3 }),
+      ],
+    });
+    app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    render(Sidebar, { project: project() });
+    await userEvent.click(plus());
+    expect(labels()).toEqual(['PowerShell 7']);
+    menu.close();
+    // No agent at all: the same.
+    resetApp({ projects: [project()], agents: [] });
+    app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    await userEvent.click(plus());
+    expect(labels()).toEqual(['PowerShell 7']);
+  });
+
+  it('keeps telling there is no shell, whatever the agents', async () => {
+    app.shells = [];
+    render(Sidebar, { project: project() });
+    await userEvent.click(plus());
+    expect(menu.open).toBeNull();
+    expect(app.toasts.at(-1)).toMatchObject({
+      text: 'Aucun shell détecté (PowerShell 7, Git Bash, WSL). Vérifie les réglages.',
+      kind: 'error',
+    });
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    render(Sidebar, { project: project() });
+    await userEvent.click(getByTip(document.body, 'New terminal'));
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'In the worktree of…']);
+    menu.open!.items[3].onClick!();
+    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+  });
+});
+
 describe('Sidebar editor entries', () => {
   it('browses the project branch from its footer, an agent from its menu', async () => {
     resetApp({ agents: [agent()] });

@@ -27,6 +27,7 @@ export default defineZone('nav', {
     noTerminals: 'No open terminals',
     exited: 'exited',
     noShell: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.',
+    inWorktree: 'In the worktree of…',
     modified: '~{n} modified',
     added: '+{n} added',
     deleted: '−{n} deleted',

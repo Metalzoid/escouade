@@ -199,16 +199,40 @@
     ]);
   }
 
+  /** The agents of the project that have a worktree to open a terminal in (not the archived ones), as the list shows them. */
+  const worktreeAgents = () => app.projectAgents.filter((a) => a.worktree);
+
+  /** The agents whose worktree can hold a terminal, one entry each. */
+  function worktreeMenu() {
+    if (!termMenuBtn || !worktreeAgents().length) return;
+    menu.showAt(
+      termMenuBtn,
+      worktreeAgents().map((a) => ({ label: a.name, onClick: () => terminalIn(project.id, { agentId: a.id }, a.name) })),
+    );
+  }
+
   function shellMenu() {
     if (!termMenuBtn) return;
     if (!app.shells.length) {
       app.toast(t('nav.sidebar.noShell'), 'error');
       return;
     }
-    menu.showAt(
-      termMenuBtn,
-      app.shells.map((s) => ({ label: s.label, hint: SHELL_GLYPH[s.id]?.glyph, onClick: () => newTerminal(project.id, s.id) })),
-    );
+    menu.showAt(termMenuBtn, [
+      ...app.shells.map((s) => ({ label: s.label, hint: SHELL_GLYPH[s.id]?.glyph, onClick: () => newTerminal(project.id, s.id) })),
+      ...(worktreeAgents().length
+        ? [
+            { label: '', separator: true },
+            {
+              label: t('nav.sidebar.inWorktree'),
+              // Once this menu is gone and has given the focus back to the button: the next one takes it from there.
+              onClick: async () => {
+                await tick();
+                worktreeMenu();
+              },
+            },
+          ]
+        : []),
+    ]);
   }
 </script>
 

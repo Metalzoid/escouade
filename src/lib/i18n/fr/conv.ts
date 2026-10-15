@@ -10,6 +10,8 @@ export default {
     renameTitle: "Renommer l'agent",
     renameHint: 'Double-clic pour renommer',
     editorHint: 'Parcourir et éditer les fichiers de cet agent',
+    terminal: 'Terminal',
+    terminalHint: 'Ouvrir un terminal dans le worktree de l’agent',
     test: 'Tester',
     testIsolaHint: 'Lance les services isola de ce worktree et ouvre la fonctionnalité dans le navigateur',
     testHint: 'Lance le worktree de cet agent et ouvre la fonctionnalité dans le navigateur',

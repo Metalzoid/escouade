@@ -255,6 +255,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Terminaux / terminal terminé | Terminals / exited | un terminal dont le shell s’est arrêté |
 | À voir (un agent à regarder) | Needs a look | l’info-bulle d’un onglet de projet qui clignote |
 | Réduire / Agrandir / Restaurer (la fenêtre) | Minimize / Maximize / Restore | boutons de la barre de titre |
+| Dans le worktree de… | In the worktree of… | entrée du menu du + des Terminaux : ouvre la liste des agents du projet qui ont un worktree, pour y ouvrir un terminal |
 
 ## L8 — conv, composer
 
@@ -271,6 +272,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Préparer le lancement | Prepare launch | |
 | Disposition | Layout | classique / côte à côte → classic / side by side |
 | archivé | archived | |
+| Terminal | Terminal | bouton de l’en-tête d’un agent à worktree : ouvre un terminal dans son worktree |
 
 ## L9 — runs, shell
 

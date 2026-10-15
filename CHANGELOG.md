@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Ajouts
+
+- Tu ouvres un terminal dans le worktree d'un agent de deux façons de plus. Le bouton + de la section « Terminaux » de la barre latérale propose, après les shells, « Dans le worktree de… » : un second menu liste les agents du projet qui ont un worktree (pas les archivés), et le terminal s'ouvre dans celui que tu choisis. Et l'en-tête de la conversation d'un agent à worktree a un bouton « Terminal », juste après « Éditeur ». L'entrée du menu n'apparaît que s'il y a au moins un tel agent, et le bouton n'existe ni pour un agent sans worktree ni pour un agent archivé.
+
 ## [1.7.8] — 2026-10-15
 
 ### Ajouts

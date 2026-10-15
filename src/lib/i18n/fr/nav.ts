@@ -30,6 +30,8 @@ export default {
     noTerminals: 'Aucun terminal ouvert',
     exited: 'terminé',
     noShell: 'Aucun shell détecté (PowerShell 7, Git Bash, WSL). Vérifie les réglages.',
+    /** In the menu of the « + » of the terminals: opens the list of the agents whose worktree can hold one. */
+    inWorktree: 'Dans le worktree de…',
     modified: '~{n} modifiés',
     added: '+{n} ajoutés',
     deleted: '−{n} supprimés',

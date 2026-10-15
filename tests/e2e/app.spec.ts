@@ -433,6 +433,37 @@ test('a terminal runs commands in the project folder', async ({ app }) => {
   await expect.poll(() => fs.existsSync(path.join(app.repo, 'e2e-terminal.txt')), { timeout: 20_000 }).toBe(true);
 });
 
+test('a terminal opens in the worktree of an agent from the + of the terminals and from its conversation’s header', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo, { worktrees: true, firstAgent: false });
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  const worktrees = path.join(app.repo, '.claude', 'worktrees');
+  await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees) : [])).toEqual(['agent-1']);
+  const wt = path.join(worktrees, 'agent-1');
+  // The + builds its menu when clicked: the app must know of the worktree by then, not only the disk.
+  await expect(page.locator('.card').first()).toContainText('⎇ agent-1');
+  /** Writes a file from the terminal shown, which must be in the worktree. */
+  const write = async (file: string) => {
+    const term = page.locator('.xterm:visible');
+    await expect(term).toBeVisible();
+    await page.waitForTimeout(2500); // PowerShell start-up
+    await term.click();
+    await page.keyboard.type(`Set-Content ${file} ok`);
+    await page.keyboard.press('Enter');
+    await expect.poll(() => fs.existsSync(path.join(wt, file)), { timeout: 20_000 }).toBe(true);
+    expect(fs.existsSync(path.join(app.repo, file))).toBe(false);
+  };
+
+  await page.getByRole('button', { name: 'Nouveau terminal' }).click();
+  await page.getByRole('menuitem', { name: 'Dans le worktree de…' }).click();
+  await page.getByRole('menuitem', { name: 'agent-1', exact: true }).click();
+  await write('e2e-plus.txt');
+
+  await page.locator('.card').first().click();
+  await page.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await write('e2e-header.txt');
+});
+
 test('in the Claude Code view, a pasted image goes to Claude Code as a file, and pasted text as before', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);

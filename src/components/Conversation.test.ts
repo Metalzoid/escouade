@@ -18,6 +18,8 @@ vi.mock('../lib/terminals', () => ({
   getXTerm: () => undefined,
   mountTerminal() {},
   disposeTerminal() {},
+  // The terminal of the header, in the agent’s worktree: only what is asked of the backend is looked at.
+  openTerminal: vi.fn((projectId: string, shell: string, name: string) => Promise.resolve({ id: `t-${name}`, projectId, name, shell })),
 }));
 
 import { applyConvOps, conversationOf, releaseIdle } from '../lib/conversations.svelte';
@@ -26,6 +28,7 @@ import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
 import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
+import { openTerminal } from '../lib/terminals';
 import Conversation from './Conversation.svelte';
 
 // jsdom has no layout: give scrollable elements a fixed geometry.
@@ -1303,6 +1306,85 @@ describe('Conversation editor entry', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Ouvrir src/auth.ts dans l’éditeur' }));
     await waitFor(() => expect(app.editor.p1?.places.project?.active).toBe('src/auth.ts'));
     expect(app.editor.p1).toMatchObject({ on: true, source: 'project', reveal: { path: 'src/auth.ts', line: 7 } });
+  });
+});
+
+describe('Conversation terminal entry (ESC-18)', () => {
+  const PWSH = { id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' };
+  /** An agent of this name, with the shells the app found, in a conversation drawn. */
+  function open(over: Partial<Agent> = {}, shells = [PWSH]) {
+    const a = agent({ id: 'tw1', name: 'refacto-auth', ...over });
+    resetApp({ projects: [project()], agents: [a] });
+    app.shells = shells;
+    fakeBackend({ get_conversation: () => [] });
+    return { a, ...render(Conversation, { agent: a, project: project() }) };
+  }
+  beforeEach(() => vi.mocked(openTerminal).mockClear());
+
+  it('opens a terminal in the worktree of the agent from its header, named after it', async () => {
+    open({ worktree: WT });
+    await userEvent.click(screen.getByRole('button', { name: 'Terminal' }));
+    expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'tw1' });
+    await waitFor(() => expect(app.term?.name).toBe('pwsh · refacto-auth'));
+  });
+
+  it('sits right after the editor button, with the glyph of the first shell, its text and its tooltip', () => {
+    open({ worktree: WT });
+    const button = screen.getByRole('button', { name: 'Terminal' });
+    expect(screen.getByRole('button', { name: 'Éditeur' }).nextElementSibling).toBe(button);
+    expect(button).toHaveClass('btn', 'term');
+    expect(button.querySelector('.glyph')).toHaveTextContent('PS');
+    expect(button.querySelector('.glyph')).toHaveClass('mono');
+    // Its text is what a narrow header hides: it is named without it.
+    expect(button.querySelector('.lbl')).toHaveTextContent('Terminal');
+    expect(button).toHaveAttribute('data-tip', 'Ouvrir un terminal dans le worktree de l’agent');
+  });
+
+  it('takes the glyph of the first shell the app found, « $_ » when it found none', () => {
+    const first = open({ worktree: WT }, [
+      { id: 'wsl', label: 'WSL', path: 'wsl.exe' },
+      { id: 'bash', label: 'Git Bash', path: 'bash.exe' },
+    ]);
+    expect(screen.getByRole('button', { name: 'Terminal' }).querySelector('.glyph')).toHaveTextContent('λ');
+    first.unmount();
+    open({ worktree: WT }, []);
+    expect(screen.getByRole('button', { name: 'Terminal' }).querySelector('.glyph')).toHaveTextContent('$_');
+  });
+
+  it('says so when the app found no shell, and opens nothing', async () => {
+    open({ worktree: WT }, []);
+    await userEvent.click(screen.getByRole('button', { name: 'Terminal' }));
+    expect(openTerminal).not.toHaveBeenCalled();
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' });
+  });
+
+  it('is not offered to an agent without a worktree', () => {
+    open();
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
+    // The editor button is still there.
+    expect(screen.getByRole('button', { name: 'Éditeur' })).toBeInTheDocument();
+  });
+
+  it('is not offered to an archived agent, whose worktree is gone', () => {
+    open({ worktree: WT, archived: true });
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
+  });
+
+  it('follows the agent: offered once its worktree is there, taken back when it is archived', async () => {
+    const { a, rerender } = open();
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
+    await rerender({ agent: { ...a, worktree: WT }, project: project() });
+    expect(screen.getByRole('button', { name: 'Terminal' })).toBeInTheDocument();
+    await rerender({ agent: { ...a, worktree: WT, archived: true }, project: project() });
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument();
+  });
+
+  it('is written in English', () => {
+    setLang('en');
+    open({ worktree: WT });
+    const button = screen.getByRole('button', { name: 'Terminal' });
+    expect(button.querySelector('.lbl')).toHaveTextContent('Terminal');
+    expect(button).toHaveAttribute('data-tip', 'Open a terminal in the agent’s worktree');
   });
 });
 

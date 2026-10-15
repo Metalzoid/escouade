@@ -13,6 +13,7 @@
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { editsByTurn } from '../lib/tools';
   import { app } from '../lib/state.svelte';
+  import { SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
@@ -121,6 +122,8 @@
   });
   // The editor shows the agent's own checkout: its worktree, else the project's.
   const editorSource = $derived(agent.worktree ? agent.id : 'project');
+  // Its terminal is the first shell found, in its worktree: the button wears that shell's glyph.
+  const termGlyph = $derived(SHELL_GLYPH[app.shells[0]?.id ?? '']?.glyph ?? '$_');
   const openFile = (abs: string, line: number | null) =>
     app.openEditor({ projectId: project.id, source: editorSource, abs, line: line ?? undefined });
   const duration = $derived(fDur(agent.activeMs + (agent.activeSince ? app.now - agent.activeSince : 0)));
@@ -485,6 +488,17 @@
     >
       <span class="mono glyph">&lt;/&gt;</span><span class="lbl">{t('common.editor')}</span>
     </button>
+    <!-- A terminal in the agent's worktree: one that works in the project's folder has the terminals of the sidebar. -->
+    {#if agent.worktree && !agent.archived}
+      <button
+        class="btn term"
+        aria-label={t('conv.header.terminal')}
+        use:tip={t('conv.header.terminalHint')}
+        onclick={() => terminalIn(project.id, { agentId: agent.id }, agent.name)}
+      >
+        <span class="mono glyph">{termGlyph}</span><span class="lbl">{t('conv.header.terminal')}</span>
+      </button>
+    {/if}
     {#if agent.recipe || agent.isola}
       {#if canTest(agent)}
         <button
@@ -768,6 +782,7 @@
     text-overflow: ellipsis;
   }
   .edit,
+  .term,
   .test,
   .view {
     height: 28px;
@@ -780,6 +795,7 @@
     flex: none;
   }
   .edit .glyph,
+  .term .glyph,
   .test .glyph,
   .view .glyph {
     font-size: 11px;
@@ -839,6 +855,7 @@
       display: none;
     }
     .edit .lbl,
+    .term .lbl,
     .test .lbl,
     .view .lbl {
       display: none;

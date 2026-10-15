@@ -8,6 +8,8 @@ export default defineZone('conv', {
     renameTitle: 'Rename the agent',
     renameHint: 'Double-click to rename',
     editorHint: 'Browse and edit the files of this agent',
+    terminal: 'Terminal',
+    terminalHint: 'Open a terminal in the agent’s worktree',
     test: 'Test',
     testIsolaHint: 'Launch the isola services of this worktree and open the feature in the browser',
     testHint: 'Launch the worktree of this agent and open the feature in the browser',

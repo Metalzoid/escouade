@@ -118,7 +118,7 @@ La section « Lancement » liste les commandes de lancement du projet (serveur
 
 ### Terminaux
 
-La section « Terminaux » liste les terminaux ouverts du projet. Le bouton `+` (« Nouveau terminal ») propose les shells détectés sur la machine, et `Ctrl+T` en ouvre un tout de suite. Un clic sur un terminal l’affiche dans la zone principale, le × le ferme, et un terminal dont le shell s’est arrêté est marqué « terminé ». Voir [les terminaux](terminals).
+La section « Terminaux » liste les terminaux ouverts du projet. Le bouton `+` (« Nouveau terminal ») propose les shells détectés sur la machine, puis « Dans le worktree de… », qui liste les agents du projet ayant un worktree (pas les archivés) pour y ouvrir un terminal ; l’entrée n’existe pas quand aucun agent n’en a. `Ctrl+T` en ouvre un tout de suite. Un clic sur un terminal l’affiche dans la zone principale, le × le ferme, et un terminal dont le shell s’est arrêté est marqué « terminé ». Voir [les terminaux](terminals).
 
 ### Le pied de la barre
 
@@ -135,6 +135,7 @@ L’en-tête de la conversation d’un agent montre, de gauche à droite :
 | Nom et statut | Le nom de l’agent (double-clic pour le renommer) et son statut. |
 | `projet / branche` | Le projet, et la branche de l’agent s’il a un worktree, sinon celle du dossier du projet. |
 | « Éditeur » | Ouvre l’éditeur sur les fichiers de l’agent. |
+| « Terminal » | Pour un agent dans un worktree (pas archivé) : ouvre un [terminal](terminals) dans ce worktree. |
 | « ▶ Tester » ou « Préparer le lancement » | Pour un agent dans un worktree : lancer son travail pour l’essayer, ou demander à l’agent comment le lancer. Voir [tester et valider](testing). |
 | « Vue Claude Code » ou « Vue Escouade » | Fait tourner l’agent dans l’interface de Claude Code elle-même, ou le ramène dans la conversation d’Escouade. Absent pour un agent de ticket. Voir [la vue Claude Code](claude-code-view). |
 | Le modèle | Le modèle de l’agent, avec sa version. |
