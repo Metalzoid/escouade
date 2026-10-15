@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90 à ESC-96 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90 à ESC-97 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -117,6 +117,11 @@ Aussi pour la 1.8 :
   - Capture en 16 kHz mono, niveau montré pendant l'écoute, transcription dans un fil à part ; modèle téléchargé avec sa taille, une progression et une somme de contrôle, choix du modèle et de la langue ; texte inséré au curseur du compositeur, jamais envoyé seul, tapé dans le terminal en vue Claude Code.
   - Permissions du micro (macOS : `NSMicrophoneUsageDescription` et droit `audio-input` pour la notarisation ; Windows ; Linux) ; build de whisper.cpp (cmake, `libasound2-dev`) en CI et au Release sur les trois systèmes, taille et temps mesurés.
   - À choisir avec l'utilisateur : appuyer pour parler ou bascule, raccourci, modèle par défaut, service en ligne maintenant ou plus tard, formulaire des tickets aussi.
+- [ ] **Mode conversation vocale, comme celui de ChatGPT** (demandé le 2026-10-15, ESC-97, après ESC-96) : on parle, le message part après le silence, la réponse de l'agent est lue à voix haute, puis l'écoute reprend.
+  - Choix de l'utilisateur : synthèse par Piper en local, avec des voix agrégées venant de PiperHub, pour chaque langue un agrégat des voix de haute définition.
+  - Voix téléchargées à la demande (somme de contrôle), choisies par langue, essai écoutable, vitesse et volume ; réponse lue phrase par phrase, sans le code, les tableaux ni les outils ; pas d'écho du haut-parleur dans le micro ; questions et permissions de l'agent lues et répondues à la voix, ou conversation en pause.
+  - Licences à vérifier : Escouade est en MIT, Piper et espeak-ng sous GPL (sauf erreur) : un programme Piper à part, téléchargé et lancé en process séparé ; licence et attribution de chaque voix.
+  - À choisir avec l'utilisateur : ce qu'est l'agrégat et la voix par défaut de chaque langue, envoi seul après le silence, ce qui est lu d'une longue réponse, barge-in, vue Claude Code aussi.
 - [ ] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89) : le rouvrir dans le même dossier le retrouve.
   - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
   - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
