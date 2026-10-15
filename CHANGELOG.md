@@ -8,6 +8,10 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Les statistiques d'usage ne se disent plus anonymes : leur identifiant tiré au hasard les rend pseudonymes au sens du RGPD. La fenêtre du premier lancement dit « sans rien qui t'identifie » et qu'elles sont gardées 25 mois ; le réglage s'appelle « Statistiques d'usage ». « Non merci » et « Partager les statistiques » ont le même aspect : refuser n'est pas moins visible qu'accepter. La page [Confidentialité](https://escouade.dev/privacy/) donne la base légale (ton consentement), tes droits et comment les exercer, la réclamation auprès de la CNIL, l'hébergeur et les journaux du serveur.
 
+### Corrections
+
+- Avec beaucoup de projets ouverts, leurs onglets défilent dans la barre du haut au lieu d'être coupés : à la molette, au pavé tactile ou par la barre de défilement fine qui paraît au survol. Le « + » qui ajoute un projet reste toujours visible, et l'onglet du projet choisi (clic, notification, raccourci clavier, vue d'ensemble) revient de lui-même dans la barre. Un fondu au bord dit qu'il y a des onglets cachés de ce côté ; il clignote dans la couleur de l'alerte quand l'un d'eux attend qu'on le regarde. Un onglet glissé près d'un bord fait défiler la barre pour être déposé parmi les onglets cachés.
+
 ## [1.7.6] — 2026-10-13
 
 ### Ajouts

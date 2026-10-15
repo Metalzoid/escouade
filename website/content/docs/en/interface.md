@@ -24,6 +24,8 @@ Closing the window does not quit Escouade and does not stop the agents: the wind
 
 From left to right: the logo, the “Overview” button, one tab per project followed by the `+` button (“Add a project”), then “Editor” (when a project is on screen) and “Stats”. On Windows and Linux, Escouade draws the window buttons itself (“Minimize”, “Maximize” or “Restore”, “Close”). The empty parts of the bar move the window.
 
+When the tabs don’t fit in the bar, they scroll: with the wheel, the touchpad, or the thin scroll bar that shows under them on hover. The `+` button stays in view at their right, and so does the empty part that moves the window. A fade at an edge says tabs are hidden on that side; it blinks in the alert’s color when one of them blinks. The tab of the project on screen comes back into the bar by itself, however you show it (click, notification, shortcut, “Overview”).
+
 ### A project tab
 
 A tab shows a square in the project’s color, its name, then signs that only appear when they apply:
@@ -38,7 +40,7 @@ A tab shows a square in the project’s color, its name, then signs that only ap
 A tab’s tooltip also gives the path of the project’s folder.
 
 - A click shows the project. `Ctrl+1` to `Ctrl+9` show project n.
-- Drag a tab to change the order of the projects; the order is kept.
+- Drag a tab to change the order of the projects; the order is kept. Near an edge of the bar, the tabs scroll, so you can drop it among the hidden ones.
 - A right click, or a middle click, opens the project’s menu:
 
 | Entry | What it does |

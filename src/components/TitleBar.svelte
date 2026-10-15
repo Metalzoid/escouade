@@ -1,20 +1,158 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { openPath } from '@tauri-apps/plugin-opener';
+  import { untrack } from 'svelte';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { menu } from '../lib/menu.svelte';
   import { askCloseProject } from '../lib/project-actions';
   import { app } from '../lib/state.svelte';
   import { IS_MAC, keyLabel } from '../lib/platform';
+  import {
+    alertColor,
+    edgeSpeed,
+    hiddenSides,
+    mostPressing,
+    revealScroll,
+    thumb,
+    thumbDrag,
+    wheelScroll,
+    type Metrics,
+  } from '../lib/tab-strip';
   import { PROJECT_COLORS } from '../lib/theme';
   import type { Project } from '../lib/types';
   import { tip } from '../lib/tip';
+
+  /** Width of the fades at the edges of the tabs, and the room left around a tab brought into view. */
+  const FADE = 28;
 
   const win = getCurrentWindow();
   let maximized = $state(false);
   let dragId = $state<string | null>(null);
   let dropIndex = $state<number | null>(null);
+
+  // The tabs scroll sideways in their strip when they are more than its room holds.
+  let scroller = $state<HTMLElement>();
+  let track = $state<HTMLElement>();
+  const tabEls: Record<string, HTMLElement | null> = $state({});
+  let metrics = $state.raw<Metrics>({ scroll: 0, view: 0, content: 0 });
+  let boxes = $state.raw<Record<string, { left: number; width: number }>>({});
+  /** Where the pointer was when the thumb of the scroll bar was taken, and the scroll then. */
+  let held = $state<{ x: number; from: number } | null>(null);
+  /** Where a tab being dragged is, for the edges of the strip to scroll. */
+  let dragAt: { x: number; y: number } | null = null;
+  let edgeFrame = 0;
+  /** When the edges scrolled last: their speed is per 60th of a second, whatever the screen's rate. */
+  let edgeTime = 0;
+  /** The first tab brought into view (at start) is there at once; the next ones glide. */
+  let glide = false;
+
+  const tabs = $derived(app.projects.map((p) => ({ p, s: stats(p), active: app.ui.view === 'project' && app.ui.activeProject === p.id })));
+  const sides = $derived(
+    hiddenSides(
+      tabs.flatMap(({ p, s, active }) => (boxes[p.id] ? [{ ...boxes[p.id], alert: active ? null : s.alert }] : [])),
+      metrics,
+    ),
+  );
+  const bar = $derived(thumb(metrics));
+
+  function read(): Metrics {
+    return { scroll: scroller!.scrollLeft, view: scroller!.clientWidth, content: scroller!.scrollWidth };
+  }
+
+  function measure() {
+    if (!scroller) return;
+    metrics = read();
+    boxes = Object.fromEntries(
+      Object.entries(tabEls).flatMap(([id, el]) => (el ? [[id, { left: el.offsetLeft, width: el.offsetWidth }]] : [])),
+    );
+  }
+
+  /** The tab of the project on screen (none behind the statistics or « Vue d’ensemble »). */
+  function activeTab(): HTMLElement | null {
+    return app.ui.view === 'project' && app.ui.activeProject ? (tabEls[app.ui.activeProject] ?? null) : null;
+  }
+
+  // Measured again when the room or the tabs change size, and when the tabs change order. The tab on screen stays in
+  // view when the room narrows or a badge widens it, unless it was scrolled out of view.
+  $effect(() => {
+    if (!scroller || !track) return;
+    const ro = new ResizeObserver(() => {
+      const box = app.ui.activeProject ? boxes[app.ui.activeProject] : undefined;
+      const seen = !!box && box.left >= metrics.scroll - 0.5 && box.left + box.width <= metrics.scroll + metrics.view + 0.5;
+      measure();
+      const el = activeTab();
+      if (seen && el) reveal(el, false);
+    });
+    ro.observe(scroller);
+    ro.observe(track);
+    return () => ro.disconnect();
+  });
+  $effect(() => {
+    void app.projects.map((p) => p.id).join();
+    untrack(measure);
+  });
+
+  // The tab of the project on screen comes into view, however it was chosen: a click, a notification, a shortcut,
+  // an agent picked in « Vue d’ensemble », the project on screen chosen again.
+  $effect(() => {
+    void app.chosen;
+    const el = activeTab();
+    if (el && scroller) {
+      untrack(() => reveal(el, glide && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
+      glide = true;
+    }
+  });
+
+  function reveal(el: HTMLElement, smooth: boolean) {
+    const m = read();
+    const to = revealScroll(m, el.offsetLeft, el.offsetWidth, FADE);
+    if (to !== m.scroll) scroller!.scrollTo({ left: to, behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  // The bar is one row: the wheel scrolls it sideways.
+  function onWheel(e: WheelEvent) {
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+    const by = wheelScroll(e, scroller.clientWidth);
+    if (by === null) return;
+    e.preventDefault();
+    scroller.scrollLeft += by;
+  }
+
+  // A tab dragged near an edge of the strip scrolls it, to be dropped among the tabs out of view.
+  function onDragOver(e: DragEvent) {
+    if (dragId === null) return;
+    dragAt = { x: e.clientX, y: e.clientY };
+    if (!edgeFrame) {
+      edgeTime = 0;
+      edgeFrame = requestAnimationFrame(scrollAtEdge);
+    }
+  }
+
+  function scrollAtEdge(now: number) {
+    edgeFrame = 0;
+    if (dragId === null || !dragAt || !scroller) return;
+    const frames = edgeTime ? Math.min(3, (now - edgeTime) / (1000 / 60)) : 1;
+    edgeTime = now;
+    const r = scroller.getBoundingClientRect();
+    if (dragAt.y >= r.top && dragAt.y <= r.bottom) scroller.scrollLeft += edgeSpeed(dragAt.x, r.left, r.right) * frames;
+    edgeFrame = requestAnimationFrame(scrollAtEdge);
+  }
+
+  $effect(() => () => cancelAnimationFrame(edgeFrame));
+
+  function onThumbDown(e: PointerEvent) {
+    if (e.button !== 0 || !scroller) return;
+    e.preventDefault();
+    held = { x: e.clientX, from: scroller.scrollLeft };
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!held || !scroller) return;
+    // Released out of the window, where its pointerup never came.
+    if (!(e.buttons & 1)) return void (held = null);
+    scroller.scrollLeft = thumbDrag(read(), held.from, e.clientX - held.x);
+  }
 
   $effect(() => {
     win.isMaximized().then((m) => (maximized = m));
@@ -31,13 +169,7 @@
     const agents = Object.values(app.agents).filter((a) => a.projectId === p.id && !a.archived);
     const seen = app.attentionIn(p.id);
     // The most pressing kind sets the blink's color: an error, then a question, then an end.
-    const alert = seen.some((a) => a.status === 'error')
-      ? 'var(--del)'
-      : seen.some((a) => a.status === 'waiting')
-        ? 'var(--wait)'
-        : seen.length
-          ? 'var(--ok)'
-          : null;
+    const alert = mostPressing(seen.map((a) => alertColor(a.status)));
     return {
       waiting: agents.filter((a) => a.status === 'waiting').length,
       running: agents.some((a) => a.status === 'running'),
@@ -97,6 +229,13 @@
   }
 </script>
 
+<svelte:window
+  ondragover={onDragOver}
+  onpointermove={onPointerMove}
+  onpointerup={() => (held = null)}
+  onpointercancel={() => (held = null)}
+/>
+
 <header class="bar" class:mac={IS_MAC} data-tauri-drag-region>
   <div class="brand" data-tauri-drag-region>
     <img class="mark" src="/logo.svg" alt="Escouade" draggable="false" />
@@ -131,45 +270,77 @@
     </button>
   </div>
   <nav class="tabs" data-tauri-drag-region>
-    {#each app.projects as p, i (p.id)}
-      {@const s = stats(p)}
-      {@const active = app.ui.view === 'project' && app.ui.activeProject === p.id}
-      <button
-        class="tab"
-        class:active
-        class:alert={!!s.alert && !active}
-        class:drop-before={dropIndex === i && dragId !== p.id}
-        style:--tab-color={p.color}
-        style:--alert={s.alert}
-        draggable="true"
-        use:tip={s.alertTitle && !active ? `${s.alertTitle}\n${p.path}` : p.path}
-        onclick={() => app.selectProject(p.id)}
-        oncontextmenu={(e) => tabMenu(e, p)}
-        onauxclick={(e) => e.button === 1 && tabMenu(e, p)}
-        ondragstart={(e) => {
-          dragId = p.id;
-          e.dataTransfer?.setData('text/plain', p.id);
-        }}
-        ondragover={(e) => {
-          e.preventDefault();
-          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          dropIndex = e.clientX < r.left + r.width / 2 ? i : i + 1;
-        }}
-        ondrop={(e) => {
-          e.preventDefault();
-          onDrop();
-        }}
-        ondragend={() => ((dragId = null), (dropIndex = null))}
+    <!-- The tabs scroll in their strip; « + » stays out of it, always in view. -->
+    <div class="strip" style:--fade="{FADE}px" onwheel={onWheel}>
+      <!-- The middle button's press would start the browser's autoscroll in the strip (Chromium): its click opens the
+           menu of a tab. Not an interaction of its own: the tabs in it are buttons. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="scroller"
+        bind:this={scroller}
+        onscroll={measure}
+        onmousedown={(e) => e.button === 1 && e.preventDefault()}
+        data-tauri-drag-region
       >
-        <span class="swatch" style:background={p.color}></span>
-        <span class="name">{p.name}</span>
-        {#if s.running && !s.waiting}<span class="dot" style="width:6px;height:6px;background:var(--ok)"></span>{/if}
-        {#if s.changes > 0}
-          <span class="delta" use:tip={t('nav.titleBar.delta')}>Δ {s.changes}</span>
-        {/if}
-        {#if s.waiting > 0}<span class="pill" use:tip={t('nav.titleBar.waiting')}>{s.waiting}</span>{/if}
-      </button>
-    {/each}
+        <div class="track" bind:this={track} data-tauri-drag-region>
+          {#each tabs as { p, s, active }, i (p.id)}
+            <button
+              class="tab"
+              class:active
+              class:alert={!!s.alert && !active}
+              class:drop-before={dropIndex === i && dragId !== p.id}
+              style:--tab-color={p.color}
+              style:--alert={s.alert}
+              draggable="true"
+              bind:this={tabEls[p.id]}
+              use:tip={s.alertTitle && !active ? `${s.alertTitle}\n${p.path}` : p.path}
+              onclick={() => app.selectProject(p.id)}
+              oncontextmenu={(e) => tabMenu(e, p)}
+              onauxclick={(e) => e.button === 1 && tabMenu(e, p)}
+              ondragstart={(e) => {
+                dragId = p.id;
+                e.dataTransfer?.setData('text/plain', p.id);
+              }}
+              ondragover={(e) => {
+                e.preventDefault();
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                dropIndex = e.clientX < r.left + r.width / 2 ? i : i + 1;
+              }}
+              ondrop={(e) => {
+                e.preventDefault();
+                onDrop();
+              }}
+              ondragend={() => ((dragId = null), (dropIndex = null))}
+            >
+              <span class="swatch" style:background={p.color}></span>
+              <span class="name">{p.name}</span>
+              {#if s.running && !s.waiting}<span class="dot" style="width:6px;height:6px;background:var(--ok)"></span>{/if}
+              {#if s.changes > 0}
+                <span class="delta" use:tip={t('nav.titleBar.delta')}>Δ {s.changes}</span>
+              {/if}
+              {#if s.waiting > 0}<span class="pill" use:tip={t('nav.titleBar.waiting')}>{s.waiting}</span>{/if}
+            </button>
+          {/each}
+        </div>
+      </div>
+      <!-- Tabs out of view at an edge: a fade, in the color of a blink among them. -->
+      {#if sides.left.hidden}
+        <div class="fade left" class:alert={!!sides.left.alert} style:--alert={sides.left.alert} aria-hidden="true"></div>
+      {/if}
+      {#if sides.right.hidden}
+        <div class="fade right" class:alert={!!sides.right.alert} style:--alert={sides.right.alert} aria-hidden="true"></div>
+      {/if}
+      {#if bar}
+        <div
+          class="thumb"
+          class:held={!!held}
+          style:left="{bar.left}px"
+          style:width="{bar.width}px"
+          onpointerdown={onThumbDown}
+          aria-hidden="true"
+        ></div>
+      {/if}
+    </div>
     <button
       class="add"
       use:tip={t('nav.titleBar.addProject')}
@@ -271,9 +442,112 @@
   .tabs {
     display: flex;
     align-items: flex-end;
-    gap: 2px;
     min-width: 0;
-    overflow: hidden;
+  }
+  /* Over the bar's bottom border, which the tab on screen covers to join the view under it. */
+  .strip {
+    position: relative;
+    display: flex;
+    align-self: stretch;
+    min-width: 0;
+    margin-bottom: -1px;
+  }
+  /* Its own scroll bar is the thin one drawn over it (.thumb): the browser's would take room under the tabs. */
+  .scroller {
+    display: flex;
+    align-items: flex-end;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    /* A tab reached by the keyboard is left clear of the fades. */
+    scroll-padding-inline: var(--fade);
+  }
+  .scroller::-webkit-scrollbar {
+    display: none;
+  }
+  .track {
+    position: relative;
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+  .track .tab {
+    margin-bottom: 0;
+  }
+  /* Over the tabs, not over the bar's bottom border. */
+  .fade {
+    position: absolute;
+    bottom: 1px;
+    width: var(--fade);
+    height: 37px;
+    pointer-events: none;
+  }
+  .fade.left {
+    left: 0;
+    background: linear-gradient(to right, var(--panel) 15%, transparent);
+  }
+  .fade.right {
+    right: 0;
+    background: linear-gradient(to left, var(--panel) 15%, transparent);
+  }
+  /* A tab out of view blinks: its color at the edge, blinking with it. */
+  .fade.alert::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    animation: fadeAlert 1.1s ease-in-out infinite alternate;
+  }
+  .fade.left.alert::after {
+    background: linear-gradient(to right, color-mix(in oklch, var(--alert) 60%, transparent), transparent);
+    box-shadow: inset 2px 0 0 var(--alert);
+  }
+  .fade.right.alert::after {
+    background: linear-gradient(to left, color-mix(in oklch, var(--alert) 60%, transparent), transparent);
+    box-shadow: inset -2px 0 0 var(--alert);
+  }
+  @keyframes fadeAlert {
+    from {
+      opacity: 0.35;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fade.alert::after {
+      animation: none;
+      opacity: 0.8;
+    }
+  }
+  /* The thin scroll bar, shown while the pointer is over the tabs: on the bar's bottom border and the very bottom of the
+     tabs, which it takes from them only there. */
+  .thumb {
+    position: absolute;
+    bottom: 0;
+    height: 4px;
+    display: flex;
+    align-items: flex-end;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .thumb::after {
+    content: '';
+    flex: 1;
+    height: 3px;
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--muted) 45%, transparent);
+    transition: height 0.1s;
+  }
+  .strip:hover .thumb,
+  .thumb.held {
+    opacity: 1;
+  }
+  .thumb:hover::after,
+  .thumb.held::after {
+    height: 4px;
+    background: color-mix(in oklch, var(--muted) 70%, transparent);
   }
   .tab {
     height: 37px;

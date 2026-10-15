@@ -24,6 +24,8 @@ Fermer la fenêtre ne quitte pas Escouade et ne coupe pas les agents : elle se r
 
 De gauche à droite : le logo, le bouton « Vue d’ensemble », un onglet par projet suivi du bouton `+` (« Ajouter un projet »), puis « Éditeur » (quand un projet est affiché) et « Stats ». Sous Windows et Linux, Escouade dessine elle-même les boutons de la fenêtre (« Réduire », « Agrandir » ou « Restaurer », « Fermer »). Les parties vides de la barre servent à déplacer la fenêtre.
 
+Quand les onglets ne tiennent pas dans la barre, ils défilent : à la molette, au pavé tactile, ou par la fine barre de défilement qui paraît sous eux au survol. Le bouton `+` reste visible à leur droite, et la partie vide qui déplace la fenêtre aussi. Un fondu au bord dit qu’il y a des onglets cachés de ce côté ; il clignote dans la couleur de l’alerte quand l’un d’eux clignote. L’onglet du projet affiché revient de lui-même dans la barre, quelle que soit la façon de l’afficher (clic, notification, raccourci, « Vue d’ensemble »).
+
 ### Un onglet de projet
 
 Un onglet montre un carré de la couleur du projet, son nom, puis des signes qui ne s’affichent que s’ils ont lieu d’être :
@@ -38,7 +40,7 @@ Un onglet montre un carré de la couleur du projet, son nom, puis des signes qui
 L’infobulle d’un onglet donne aussi le chemin du dossier du projet.
 
 - Un clic affiche le projet. `Ctrl+1` à `Ctrl+9` affichent le projet n.
-- Glisse un onglet pour changer l’ordre des projets ; l’ordre est gardé.
+- Glisse un onglet pour changer l’ordre des projets ; l’ordre est gardé. Près d’un bord de la barre, les onglets défilent, pour le déposer parmi ceux qui étaient cachés.
 - Un clic droit, ou un clic du milieu, ouvre le menu du projet :
 
 | Entrée | Ce qu’elle fait |

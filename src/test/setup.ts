@@ -14,7 +14,15 @@ class RO {
   disconnect() {}
 }
 (globalThis as any).ResizeObserver ??= RO;
-if (typeof Element !== 'undefined') Element.prototype.scrollIntoView ??= () => {};
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollIntoView ??= () => {};
+  // At once, whatever the behavior asked: there is no layout to glide over.
+  Element.prototype.scrollTo ??= function (this: Element, to?: ScrollToOptions | number, y?: number) {
+    const o = typeof to === 'object' ? to : { left: to, top: y };
+    if (o.left !== undefined) this.scrollLeft = o.left;
+    if (o.top !== undefined) this.scrollTop = o.top;
+  } as Element['scrollTo'];
+}
 // CodeMirror measures its text with ranges: without layout in jsdom there is nothing to measure.
 if (typeof Range !== 'undefined') {
   Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;

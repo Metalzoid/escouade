@@ -996,7 +996,8 @@ function startSession() {
     }
     if (text.includes('slow')) {
       streamText('Je commence…');
-      slowTimer = setTimeout(() => result(), 30_000);
+      // "slow 3s" ends after 3 seconds, a plain "slow" after 30.
+      slowTimer = setTimeout(() => result(), Number(/slow (\d+)s/.exec(text)?.[1] ?? 30) * 1000);
       return;
     }
     streamText(`Bonjour, tu as dit : ${text}`);

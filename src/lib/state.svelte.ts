@@ -232,6 +232,8 @@ class AppState {
   /** A version that did not install at the last try: told of once it is downloaded again. */
   failedUpdate = $state<string | null>(null);
   focusComposer = $state(0);
+  /** Counts the projects and agents chosen, the one on screen again included: its project's tab comes back into view. */
+  chosen = $state(0);
   /**
    * Agents that asked a question, finished or failed while not on screen, and that the user
    * has not looked at since: their project tab and their card blink.
@@ -669,6 +671,7 @@ class AppState {
   selectProject(id: string) {
     this.ui.activeProject = id;
     this.ui.view = 'project';
+    this.chosen++;
     this.persistUi();
   }
 
@@ -724,6 +727,7 @@ class AppState {
     }
     this.persistUi();
     this.focusComposer++;
+    this.chosen++;
   }
 
   selectTerm(id: string | null) {

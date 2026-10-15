@@ -71,7 +71,7 @@ Aussi pour la 1.8 :
   - **dépendances** : un worktree neuf n'a pas de `node_modules`. C'est le rôle des étapes de préparation du worktree (`WorktreeStep`), à rappeler dans le message d'erreur ou la doc ;
   - **cycle de vie** : ces commandes s'arrêtent quand l'agent est archivé ou supprimé, ou quand son worktree est retiré, comme ses lancements de test aujourd'hui ;
   - **lien avec le « Lancement de test » des tickets** (recette proposée par l'agent, `testlaunch.rs`) : ne pas faire deux fois la même chose. Par exemple, la recette pourrait partir des commandes de lancement du projet quand il en a.
-- [ ] **Les onglets des projets ne défilent pas** (bug signalé le 2026-10-14). Avec beaucoup de projets ouverts, ceux qui ne tiennent pas dans la barre du haut sont coupés et inaccessibles, et le « + » qui ajoute un projet disparaît avec eux. Cause : `.tabs` est en `overflow: hidden` et chaque onglet en `flex-shrink: 0` (`TitleBar.svelte`). À faire :
+- [x] **Les onglets des projets ne défilent pas** (bug signalé le 2026-10-14, corrigé le 2026-10-15, ESC-20). Avec beaucoup de projets ouverts, ceux qui ne tiennent pas dans la barre du haut sont coupés et inaccessibles, et le « + » qui ajoute un projet disparaît avec eux. Cause : `.tabs` est en `overflow: hidden` et chaque onglet en `flex-shrink: 0` (`TitleBar.svelte`). À faire :
   - la barre des onglets défile à l'horizontale : molette (le défilement vertical devient horizontal), pavé tactile, barre de défilement fine au survol ;
   - le « + » reste visible, hors de la zone qui défile ;
   - l'onglet du projet choisi revient dans la zone visible (`scrollIntoView`), quelle que soit la façon de le choisir : clic sur une notification, raccourci clavier, vue d'ensemble ;
