@@ -1723,7 +1723,13 @@ async fn a_freshly_started_process_is_not_idle_stopped() {
     let h = harness("fresh");
     let (p, _) = h.project(false).await;
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // The warm-up of the agent just made is waited for and its process idle-stopped first: started
+    // before `last_activity` was set back, it is what `ensure_process` would find, and the idle stop
+    // would rightly stop it.
+    h.wait("warm-up", |h| h.alive(&id)).await;
     h.core.agent(&id).unwrap().lock().meta.last_activity = 0;
+    h.core.stop_idle_processes();
+    h.wait("idle stop", |h| !h.alive(&id)).await;
     h.core.ensure_process(&id).await.unwrap();
     h.core.stop_idle_processes();
     tokio::time::sleep(Duration::from_millis(300)).await;
