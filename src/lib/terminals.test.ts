@@ -5,6 +5,8 @@ import { fakeBackend, resetApp } from '../test/ipc';
 // What xterm.js was given to paste, in the order it came, and the key handlers it was given.
 const pasted = vi.hoisted(() => [] as string[]);
 const keyHandlers = vi.hoisted(() => [] as ((e: KeyboardEvent) => boolean)[]);
+// Whether the program in the terminal asked for bracketed pastes (Claude Code does as it starts).
+const modes = vi.hoisted(() => ({ bracketedPasteMode: true }));
 
 // xterm.js draws on a canvas: stood in for, only the spawn, the keys and what is pasted are looked at.
 vi.mock('@xterm/xterm', () => ({
@@ -12,6 +14,7 @@ vi.mock('@xterm/xterm', () => ({
     cols = 100;
     rows = 30;
     options = {};
+    modes = modes;
     unicode = { activeVersion: '' };
     loadAddon() {}
     open() {}
@@ -117,6 +120,7 @@ describe('pasting in Claude Code’s interface', () => {
   beforeEach(() => {
     resetApp();
     pasted.length = 0;
+    modes.bracketedPasteMode = true;
   });
 
   /**
@@ -153,6 +157,31 @@ describe('pasting in Claude Code’s interface', () => {
     await waitFor(() => expect(pasted).toEqual([PATH]));
     expect(backend.called('paste_image')[0].args).toEqual({ id: 'a1', mediaType: 'image/png', data: btoa(String.fromCharCode(...PNG)) });
     expect(backend.called('clipboard_image')).toHaveLength(0);
+  });
+
+  it('waits for Claude Code to take pastes bracketed before typing an image’s path: typed raw, the path is no image', async () => {
+    modes.bracketedPasteMode = false;
+    fakeBackend({ agent_terminal: () => info, paste_image: () => PATH });
+    await paste(clipboard({ files: [capture()] }));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(pasted).toEqual([]);
+    modes.bracketedPasteMode = true;
+    await waitFor(() => expect(pasted).toEqual([PATH]));
+  });
+
+  it('types an image’s path all the same when the program never asks for bracketed pastes', async () => {
+    modes.bracketedPasteMode = false;
+    fakeBackend({ agent_terminal: () => info, paste_image: () => PATH });
+    await paste(clipboard({ files: [capture()] }));
+    vi.useFakeTimers();
+    try {
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(pasted).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(pasted).toEqual([PATH]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('pastes each image copied on its own, in their order: Claude Code takes one path a paste, spaces and all', async () => {

@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Corrections
+
+- Dans la vue Claude Code, une image collée juste à l'ouverture de la vue, avant que Claude Code ait fini de démarrer, arrive bien comme une image : Escouade attend que Claude Code soit prêt à la recevoir, au lieu de taper son chemin comme du texte.
+
 ## [1.7.7] — 2026-10-15
 
 ### Ajouts

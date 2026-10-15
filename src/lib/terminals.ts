@@ -218,6 +218,9 @@ function pasteImages(x: XTerm, agentId: string) {
     },
     true,
   );
+  // Said on the terminal once its pastes go through here (after its interface started): what the
+  // end-to-end tests wait for before pasting.
+  x.host.dataset.pastes = 'images';
 }
 
 async function paste(term: Terminal, agentId: string, pasted: Pasted) {
@@ -232,8 +235,22 @@ async function paste(term: Terminal, agentId: string, pasted: Pasted) {
       app.toast(t('conv.terminal.imageTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }), 'error');
       continue;
     }
-    term.paste(await api.pasteImage(agentId, imageType(f)!, await base64(f)));
+    const path = await api.pasteImage(agentId, imageType(f)!, await base64(f));
+    await bracketed(term);
+    term.paste(path);
   }
+}
+
+/**
+ * How long an image's path waits for the interface to take pastes bracketed: Claude Code asks for
+ * them as it starts, and a path pasted before is typed, never taken for the image.
+ */
+const BRACKETED_WAIT = 5000;
+
+/** Once `term` takes pastes bracketed, or after `BRACKETED_WAIT` (a program that never asks). */
+async function bracketed(term: Terminal) {
+  const until = Date.now() + BRACKETED_WAIT;
+  while (!term.modes.bracketedPasteMode && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
 }
 
 /** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */

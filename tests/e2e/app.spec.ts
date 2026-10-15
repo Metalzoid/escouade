@@ -438,9 +438,9 @@ test('in the Claude Code view, a pasted image goes to Claude Code as a file, and
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Vue Claude Code' }).click();
   await expect.poll(() => app.launches().some((l) => l.argv.includes('--settings')), { timeout: 20_000 }).toBe(true);
-  const field = page.locator('main .xterm textarea');
-  await expect(field).toBeAttached();
-  await page.waitForTimeout(1000); // the fake's start-up
+  // Its pastes go through Escouade once its interface started (a fixed wait was too short on CI).
+  const field = page.locator('main [data-pastes="images"] .xterm textarea');
+  await expect(field).toBeAttached({ timeout: 20_000 });
   // What WebView2 gives a paste: a screenshot is a PNG file without text; text has no file.
   const paste = (content: { png?: number[]; text?: string }) =>
     field.evaluate((el, { png, text }) => {
