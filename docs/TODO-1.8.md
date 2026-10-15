@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90, ESC-91, ESC-92 et ESC-93 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90, ESC-91, ESC-92, ESC-93 et ESC-94 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -102,6 +102,11 @@ Aussi pour la 1.8 :
   - Jamais deux interrupteurs qui se contredisent (leçon d'ESC-91) : le global allumé montre celui du projet allumé et grisé, avec la raison ; la carte de l'agent dit d'où lui vient son remote control.
   - Mêmes noms « projet · agent » et même session après un redémarrage ; vue Claude Code comprise ; l'événement de statistiques dit d'où il vient.
   - Décidé le 2026-10-15 : un agent se met à part au clic droit (« Désactiver le remote control »), et le reste malgré le réglage, redémarrage compris, jusqu'à ce qu'on le rallume ; les agents des tickets sont compris ; les process restent lancés (un par agent en remote control), et la description du réglage le dit.
+- [ ] **Assistant de configuration à la création d'un projet** (demandé le 2026-10-15, ESC-94, après ESC-89). Aujourd'hui, « Nouveau projet » (`NewProjectModal.svelte`) ne demande que dossier, nom, couleur, premier agent et worktree par agent ; tout ce qui fait marcher la méthode de travail (worktrees, lancement, Kanban, compte, intégrations) se règle à part, après coup.
+  - Une fenêtre en étapes, chacune avec « Passer » : point de départ (« Copier la configuration de <projet> », « Configuration recommandée », « Partir de zéro »), worktrees (avec « Remplir automatiquement »), lancement, Kanban, compte et commit, intégrations, récapitulatif.
+  - La copie liste les réglages par groupe, cochables ; ce qui dépend du dossier (branche cible, dossiers des commandes, dossier des worktrees, compte) est vérifié dans le nouveau dépôt ; ni les liens des intégrations ni les tickets ne sont copiés.
+  - Contrôles avec leur correction : dépôt sans commit, branche cible introuvable, worktrees dans un dossier suivi, aucun compte, Claude Code introuvable. « Créer sans l'assistant » reste possible ; l'assistant se rouvre depuis Réglages › Projets ; l'historique d'un projet fermé (ESC-89) passe avant lui.
+  - À choisir avec l'utilisateur sur un aperçu : les étapes, la « Configuration recommandée », ce qui est copié par défaut, une ou plusieurs pages.
 - [ ] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89) : le rouvrir dans le même dossier le retrouve.
   - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
   - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
