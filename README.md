@@ -211,4 +211,6 @@ Il existe en français (à la racine) et en anglais (sous `/en/`) ; ses textes s
 
 ## Licence
 
-MIT, voir [LICENSE](LICENSE).
+GPL-3.0 ou ultérieure (`GPL-3.0-or-later`), voir [LICENSE](LICENSE).
+
+Escouade est un logiciel libre : tu peux le redistribuer et le modifier selon les termes de la licence publique générale GNU, publiée par la Free Software Foundation, version 3 ou (à ton choix) toute version ultérieure. Il est distribué dans l'espoir qu'il sera utile, mais sans aucune garantie. Les versions jusqu'à la 1.7.7 comprise ont été publiées sous licence MIT.

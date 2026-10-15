@@ -24,7 +24,7 @@ The site is served from a server in Paris (France), hosted by Scaleway, SAS with
 
 ## Intellectual property
 
-- **The app.** Escouade is open source software under the MIT license ([the license text](https://github.com/guillaume-gagnaire/escouade/blob/main/LICENSE)). © 2026 Guillaume Gagnaire.
+- **The app.** Escouade is open source software under the GNU General Public License, version 3 or later (GPL-3.0-or-later; [the license text](https://github.com/guillaume-gagnaire/escouade/blob/main/LICENSE)). © 2026 Guillaume Gagnaire.
 - **The site.** Its texts, screenshots and video are © GAGNAIRE DEVELOPPEMENT, unless stated otherwise.
 - **Trademarks.** Claude and Claude Code are trademarks of Anthropic. Escouade is an independent project, not affiliated with Anthropic.
 

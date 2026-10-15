@@ -8,6 +8,10 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Le clic droit sur la carte d'un agent, dans la barre latérale, change aussi sa vue : « Vue Claude Code » quand il est dans la vue d'Escouade, « Vue Escouade » quand il est dans celle de Claude Code, comme le bouton de l'en-tête de sa conversation. L'entrée n'existe pas pour un agent de ticket ni pour un agent archivé.
 
+### Modifications
+
+- Escouade passe sous licence GPL-3.0 (ou ultérieure), une licence libre qui garde le code ouvert : tu peux toujours l'utiliser, le modifier et le redistribuer, mais une version modifiée que quelqu'un distribue doit l'être sous la même licence, avec ses sources. Les versions jusqu'à la 1.7.7 comprise restent sous licence MIT.
+
 ### Corrections
 
 - Dans la vue Claude Code, une image collée juste à l'ouverture de la vue, avant que Claude Code ait fini de démarrer, arrive bien comme une image : Escouade attend que Claude Code soit prêt à la recevoir, au lieu de taper son chemin comme du texte.

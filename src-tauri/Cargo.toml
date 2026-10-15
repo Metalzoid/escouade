@@ -3,7 +3,7 @@ name = "escouade"
 version = "1.7.7"
 description = "Le poste de pilotage de tes agents Claude Code"
 authors = ["Guillaume Gagnaire"]
-license = "MIT"
+license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 

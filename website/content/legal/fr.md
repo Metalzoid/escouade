@@ -24,7 +24,7 @@ Le site est servi depuis un serveur situé à Paris (France), hébergé par Scal
 
 ## Propriété intellectuelle
 
-- **L’application.** Escouade est un logiciel libre, sous licence MIT ([le texte de la licence](https://github.com/guillaume-gagnaire/escouade/blob/main/LICENSE)). © 2026 Guillaume Gagnaire.
+- **L’application.** Escouade est un logiciel libre, sous licence publique générale GNU, version 3 ou ultérieure (GPL-3.0-or-later ; [le texte de la licence](https://github.com/guillaume-gagnaire/escouade/blob/main/LICENSE)). © 2026 Guillaume Gagnaire.
 - **Le site.** Ses textes, ses captures d’écran et sa vidéo sont © GAGNAIRE DEVELOPPEMENT, sauf mention contraire.
 - **Marques.** Claude et Claude Code sont des marques d’Anthropic. Escouade est un projet indépendant, non affilié à Anthropic.
 

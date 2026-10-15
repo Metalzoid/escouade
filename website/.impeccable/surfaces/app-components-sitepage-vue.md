@@ -20,7 +20,7 @@ Toute la page unique du site (`website/`, français à la racine, anglais sous `
 
 ## Constraints
 
-- Garder : téléchargement, GitHub, version, plateformes, gratuit et open source (MIT), FR/EN avec leurs liens, vidéo et sous-titres, les 11 captures, le Kanban nommé ainsi, la mention d'indépendance.
+- Garder : téléchargement, GitHub, version, plateformes, gratuit et open source (GPL-3.0), FR/EN avec leurs liens, vidéo et sous-titres, les 11 captures, le Kanban nommé ainsi, la mention d'indépendance.
 - Texte : on peut couper, regrouper et réécrire, sans aucun fait nouveau ; les textes changés sont montrés à l'utilisateur avant tout commit.
 - Nuxt 4 statique sous `/escouade/` ; polices servies par le site.
 - `prefers-reduced-motion` : aucune entrée animée, démonstration à l'arrêt sur un état parlant ; sans JavaScript, tout est visible. Ce qui bouge seul a une pause (WCAG 2.2.2).

@@ -32,7 +32,7 @@ export const fr: Catalog = {
     lede: 'Toutes tes sessions Claude Code dans une seule fenêtre : autant d’agents que tu veux, en parallèle, et un signal dès que l’un d’eux a besoin de toi.',
     download: 'Télécharger pour Windows, macOS et Linux',
     github: 'Voir sur GitHub',
-    meta: 'Version {version} · Windows 10 et 11, macOS 11 et plus, Linux · Gratuit et open source (MIT)',
+    meta: 'Version {version} · Windows 10 et 11, macOS 11 et plus, Linux · Gratuit et open source (GPL-3.0)',
     video: 'Voir la vidéo',
   },
 
@@ -172,7 +172,7 @@ export const fr: Catalog = {
     items: [
       {
         q: 'C’est gratuit ?',
-        a: 'Oui, et open source, sous licence MIT. Escouade utilise ton propre Claude Code : ton abonnement Claude ou ta clé API, sans intermédiaire.',
+        a: 'Oui, et open source, sous licence GPL-3.0 (ou ultérieure). Escouade utilise ton propre Claude Code : ton abonnement Claude ou ta clé API, sans intermédiaire.',
       },
       {
         q: 'Où vont mes données ?',
@@ -213,7 +213,7 @@ export const fr: Catalog = {
 
   footer: {
     github: 'GitHub',
-    license: 'Licence MIT',
+    license: 'Licence GPL-3.0',
     privacy: 'Confidentialité',
     legal: 'Mentions légales',
     note: 'Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',
