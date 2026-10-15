@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86, ESC-87 et ESC-89 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89 et ESC-90 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -96,6 +96,13 @@ Aussi pour la 1.8 :
   - Les agents reviennent sans process ; un worktree disparu suit la règle d'aujourd'hui. Les réservations de comptes reviennent pour les comptes qui existent encore.
   - Un ticket « En cours » à la fermeture revient bloqué (« Projet fermé pendant le ticket »), avec « Reprendre » (décidé le 2026-10-14).
   - Effacer vraiment : une case « Effacer aussi son historique » dans la fenêtre de fermeture, décochée par défaut, et la liste des projets fermés dans Réglages › Projets (dossier, taille, dernière activité) avec « Effacer l'historique ».
+- [ ] **Serveur MCP : mener tout le flux du Kanban** (demandé le 2026-10-15, ESC-90). Un client MCP crée, modifie, réordonne et lance les tickets, mais ne peut pas finir le flux : un agent « chef d'escouade » qui contrôle le travail des tickets ne peut pas les passer en « Terminé ».
+  - Outils, par les mêmes fonctions du cœur que la fenêtre (`tickets.rs`) : `approve_ticket` (« Valider… », `ticket_approve`), `reject_ticket` (« Renvoyer » avec un commentaire, `ticket_reject`), `resume_ticket` (« Reprendre », `ticket_resume`), `resolve_conflict` (« L'agent résout ») et `dismiss_block` (« Annuler »), `delete_ticket`, `set_autopilot` (pilote auto d'un projet, par `board_set`).
+  - `get_ticket` dit aussi l'agent du ticket, sa branche, son worktree, la raison de son blocage, l'étape en cours, le conflit et le résultat (commit de merge, URL de la PR), de quoi relire le travail avant de valider.
+  - Garde-fous : les refus de la fenêtre ; un agent ne valide ni ne renvoie son propre ticket ; un agent d'Escouade n'agit que dans son projet ; `destructive_hint` pour `delete_ticket` et `approve_ticket`.
+  - À choisir avec l'utilisateur : valider (merge, push, PR en son nom) permis à tout client ou derrière un réglage, et par défaut ; supprimer un ticket parti ou seulement « À faire » ; un outil `wait_ticket` qui rend la main au prochain changement d'un ticket, borné, ou rien.
+  - Hors périmètre : répondre aux permissions et aux questions de l'agent d'un ticket.
+  - Textes fr et en (journal d'activité, `src/lib/tools.ts`) ; docs : `docs/SPEC.md`, `docs/PROTOCOL.md`, pages MCP du site, CHANGELOG.
 - [x] **Blocage intermittent de la CI sous macOS** (traité le 2026-10-13) : un test qui crée un agent dans un worktree git ne finit parfois jamais, et le job est coupé au bout de 45 minutes. Ce n'est jamais le même test (`core_tests::the_project_diff_covers_the_checkout_and_each_agents_worktree`, `core_tests::an_agent_made_for_a_ticket_has_its_branch_from_a_base_and_the_projects_env_files`), seulement sous macOS, depuis le 10 octobre au moins (runs de 3ea4859, 24dfda6, 9d07e83, 170e1c3, 140db3e, ba58456). Ce qui a été fait : git ne dépend plus de la fin de ses tubes et s'arrête au bout de 2 minutes (30 minutes pour un commit, une fusion ou un `worktree add` qui lancent des hooks), `claude` et les lancements de test n'héritent plus des descripteurs ouverts de l'app sous macOS (ils tenaient les tubes de git ouverts), et nextest tue un test bloqué au bout de son délai et le nomme. À confirmer sur plusieurs runs macOS (`node scripts/ci-flakes.mjs`) avant de le tenir pour réglé.
 - [x] **Intégration Linear** (2026-10-12), à côté de Jira, Trello et GitHub Issues (`src-tauri/src/integrations/`, sur le modèle de `jira.rs` et `github.rs`) :
   - connexion par clé d'API personnelle (en-tête `Authorization`), gardée dans le trousseau comme les autres (`secrets.rs`) ;
