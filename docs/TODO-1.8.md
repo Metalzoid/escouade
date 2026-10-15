@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90, ESC-91, ESC-92, ESC-93, ESC-94 et ESC-95 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90 à ESC-96 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -111,6 +111,11 @@ Aussi pour la 1.8 :
   - Ce que l'API lit reste dans le message ; tout autre fichier, ou trop gros, est copié dans un dossier de l'agent hors du dépôt (`~/.escouade/attachments/<agent>/`), donné à Claude Code par `--add-dir` (chemin traduit sous WSL), et le message en donne le chemin.
   - Puces dans le compositeur (icône, nom, taille), « Tous les fichiers » dans la fenêtre de choix ; même chose en vue Claude Code (chemin tapé, comme les images d'ESC-16) et pour les fichiers d'un ticket ; copies effacées avec l'agent, le projet ou le ticket.
   - À choisir avec l'utilisateur : taille maximale ou aucune, copie ou chemin d'origine d'un fichier déposé, gros textes par chemin ou refusés, durée de conservation.
+- [ ] **Mode vocal pour dicter les prompts** (demandé le 2026-10-15, ESC-96).
+  - Choix de l'utilisateur : le micro capté côté Rust avec `cpal`, pas dans la page (les trois webviews se comportent différemment, et leur reconnaissance vocale n'est pas fiable) ; transcription par Whisper en local (`whisper-rs`, modèle téléchargé à la demande) : gratuite, tout reste sur la machine (« local et transparent »). Un service en ligne avec la clé de l'utilisateur pourrait être une option.
+  - Capture en 16 kHz mono, niveau montré pendant l'écoute, transcription dans un fil à part ; modèle téléchargé avec sa taille, une progression et une somme de contrôle, choix du modèle et de la langue ; texte inséré au curseur du compositeur, jamais envoyé seul, tapé dans le terminal en vue Claude Code.
+  - Permissions du micro (macOS : `NSMicrophoneUsageDescription` et droit `audio-input` pour la notarisation ; Windows ; Linux) ; build de whisper.cpp (cmake, `libasound2-dev`) en CI et au Release sur les trois systèmes, taille et temps mesurés.
+  - À choisir avec l'utilisateur : appuyer pour parler ou bascule, raccourci, modèle par défaut, service en ligne maintenant ou plus tard, formulaire des tickets aussi.
 - [ ] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89) : le rouvrir dans le même dossier le retrouve.
   - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
   - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
