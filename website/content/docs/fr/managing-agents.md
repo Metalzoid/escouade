@@ -128,6 +128,7 @@ Un clic droit sur la carte d’un agent ouvre son menu.
 | Intégrer main | Fait entrer la branche de base de l’agent dans la sienne (le nom de la base est écrit dans l’entrée, ici `main`). Seulement pour un agent qui a un worktree. Voir [les branches](branches). |
 | Ouvrir dans l’éditeur | Ouvre l’[éditeur](editor) sur le worktree de l’agent, ou sur le projet. |
 | Ouvrir un terminal | Ouvre un [terminal](terminals) dans le worktree de l’agent, ou dans le dossier du projet. |
+| Vue Claude Code, ou Vue Escouade | Fait tourner l’agent dans l’interface de Claude Code elle-même, ou le ramène dans la conversation d’Escouade, comme le bouton de l’en-tête (voir [la vue Claude Code](claude-code-view)). Absente pour un agent de ticket. |
 | Activer le remote control | Rend l’agent joignable depuis claude.ai et l’app Claude (voir [le remote control](remote-control)). Absente pour un agent en [vue Claude Code](claude-code-view), où c’est la commande `/remote-control` de Claude Code qui le fait. |
 | Supprimer… | Retire l’agent après confirmation. Voir plus bas. |
 

@@ -8,13 +8,13 @@ Escouade’s conversation shows the essentials of an agent’s work, but not eve
 
 ## Switching views
 
-In an agent’s conversation header, the “Claude Code view” button (`>_`) launches Claude Code’s interface in a terminal that takes the place of the conversation. The button becomes “Escouade view” (`◧`): a click takes you back to the conversation. The session is the same in both directions: Escouade stops the process of one view and resumes the session in the other (`--resume`), so the agent forgets nothing. The choice is kept for each agent. The interface starts when you show the agent (the terminal then says “Starting Claude Code…”), including after Escouade restarts, and picks up its session.
+In an agent’s conversation header, the “Claude Code view” button (`>_`) launches Claude Code’s interface in a terminal that takes the place of the conversation. The button becomes “Escouade view” (`◧`): a click takes you back to the conversation. The menu of the agent’s card in the sidebar (right click) offers the same: “Claude Code view” or “Escouade view”. The session is the same in both directions: Escouade stops the process of one view and resumes the session in the other (`--resume`), so the agent forgets nothing. The choice is kept for each agent. The interface starts when you show the agent (the terminal then says “Starting Claude Code…”), including after Escouade restarts, and picks up its session.
 
 Switching to the Claude Code view is refused in three cases, with a message; switching back to the Escouade view is refused in none of them:
 
 - **The agent is still working**: switch views once its turn is over.
 - **Remote control is on**: turn it off first. In Claude Code’s interface, its `/remote-control` command does it (see [remote control](remote-control)).
-- **The agent works on a ticket**: a ticket agent stays in Escouade’s view, which its board drives (see [the Kanban](board)). The button doesn’t exist for it, nor for an archived agent.
+- **The agent works on a ticket**: a ticket agent stays in Escouade’s view, which its board drives (see [the Kanban](board)). Neither the button nor the entry of its card’s menu exists for it, nor for an archived agent.
 
 If the interface stops (you typed `/exit`, or the process was killed), the terminal shows “Claude Code stopped.” and a “Restart” button; if it doesn’t start, “Claude Code didn’t start:” followed by the error, with the same button. Archiving or deleting the agent also closes its terminal.
 

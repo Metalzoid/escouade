@@ -4,7 +4,7 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
-  import { copyRemoteLink, integrateBase, openRemote, toggleRemote } from '../lib/agent-actions';
+  import { canSwitchView, copyRemoteLink, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { startAgentOn } from '../lib/branch-actions';
   import { ticketTag } from '../lib/board';
   import { shortBranch } from '../lib/branches';
@@ -99,6 +99,10 @@
             // In its worktree, else in the project's folder (the backend knows which).
             { label: t('nav.sidebar.menu.openTerminal'), onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name) },
           ]),
+      // As the button of its conversation's header.
+      ...(canSwitchView(a)
+        ? [{ label: t(a.terminal ? 'nav.sidebar.menu.toRich' : 'nav.sidebar.menu.toTerminal'), onClick: () => switchView(a) }]
+        : []),
       ...remoteItems(a),
       { label: '', separator: true },
       { label: t('nav.sidebar.menu.delete'), danger: true, onClick: () => confirmDelete(a) },

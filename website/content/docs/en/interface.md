@@ -106,6 +106,7 @@ A right click on a card opens its menu:
 | “Integrate …” | For an agent in a worktree: brings the project’s base branch into its own. |
 | “Open in editor” | Opens the editor on its worktree, otherwise on the project’s folder. |
 | “Open a terminal” | Opens a terminal in its worktree, otherwise in the project’s folder. |
+| “Claude Code view” or “Escouade view” | Switches views, like the button in its conversation header. Absent for a ticket’s agent and for an archived agent. See [the Claude Code view](claude-code-view). |
 | “Turn on remote control” or “Turn off remote control” | Makes the session reachable from claude.ai and the Claude app (“claude.ai, mobile”). When the link is available, “Open on claude.ai” and “Copy the claude.ai link” appear. Absent in the [Claude Code view](claude-code-view), where Claude Code’s own `/remote-control` command does it. |
 | “Delete…” | Stops the Claude process and removes the conversation from the application; the Claude Code session stays on disk. For an agent with a worktree, a checkbox offers to delete the worktree too, and its branch if it was created for the agent. |
 

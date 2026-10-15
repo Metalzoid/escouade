@@ -39,6 +39,8 @@ export default defineZone('nav', {
       archiveHint: 'keeps the conversation',
       prepareLaunch: 'Prepare launch',
       openTerminal: 'Open a terminal',
+      toTerminal: 'Claude Code view',
+      toRich: 'Escouade view',
       remoteOff: 'Turn off remote control',
       remoteOn: 'Turn on remote control',
       remoteOnHint: 'claude.ai, mobile',

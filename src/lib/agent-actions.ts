@@ -97,6 +97,15 @@ export async function integrateBase(agent: Agent) {
   }
 }
 
+/**
+ * « Vue Claude Code » / « Vue Escouade », from the header of its conversation or the menu of its card: never for a
+ * ticket's agent, which its board drives over the stream, nor for an archived one.
+ */
+export const canSwitchView = (agent: Agent) => !agent.ticketId && !agent.archived;
+
+/** Into the other view; the backend's refusals (a turn under way, remote control on) are told. */
+export const switchView = (agent: Agent) => app.run(api.setAgentView(agent.id, !agent.terminal));
+
 /** Remote Control on / off: the agent becomes reachable from claude.ai and the Claude app. */
 export async function toggleRemote(agent: Agent) {
   const on = !agent.remoteControl;

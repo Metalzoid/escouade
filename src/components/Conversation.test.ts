@@ -1667,6 +1667,18 @@ describe('« Vue Claude Code »', () => {
     render(Conversation, { agent: a, project: project() });
     expect(screen.queryByRole('button', { name: 'Vue Claude Code' })).toBeNull();
   });
+
+  it('is never offered to an archived agent, in either view', () => {
+    setLang('fr');
+    for (const terminal of [false, true]) {
+      const a = agent({ id: 'vt4', status: 'done', archived: true, terminal });
+      resetApp({ projects: [project()], agents: [a] });
+      fakeBackend({ get_conversation: () => [] });
+      const { unmount } = render(Conversation, { agent: a, project: project() });
+      expect(screen.queryByRole('button', { name: /^Vue (Claude Code|Escouade)$/ })).toBeNull();
+      unmount();
+    }
+  });
 });
 
 describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {

@@ -43,6 +43,8 @@ export default {
       archiveHint: 'garde la conversation',
       prepareLaunch: 'Préparer le lancement',
       openTerminal: 'Ouvrir un terminal',
+      toTerminal: 'Vue Claude Code',
+      toRich: 'Vue Escouade',
       remoteOff: 'Désactiver le remote control',
       remoteOn: 'Activer le remote control',
       remoteOnHint: 'claude.ai, mobile',

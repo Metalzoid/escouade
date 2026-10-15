@@ -718,6 +718,84 @@ describe('Sidebar copies of an agent', () => {
   });
 });
 
+describe('Sidebar « Vue Claude Code » / « Vue Escouade »', () => {
+  const VIEWS = ['Vue Claude Code', 'Vue Escouade'];
+  const menuOf = async (name: RegExp) => {
+    await fireEvent.contextMenu(screen.getByRole('button', { name }));
+    return menu.open!.items.map((i) => i.label);
+  };
+  const click = (label: string) => menu.open!.items.find((i) => i.label === label)!.onClick!();
+  // The list of archived agents, opened by one test, is not closed by the reset.
+  afterEach(() => (app.showArchived = false));
+
+  it('puts an agent in Escouade’s view into Claude Code’s, as the button of its header', async () => {
+    resetApp({ agents: [agent()] });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    const labels = await menuOf(/refacto-auth/);
+    expect(labels).toContain('Vue Claude Code');
+    expect(labels).not.toContain('Vue Escouade');
+    // By the entries that open its worktree elsewhere.
+    expect(labels.indexOf('Vue Claude Code')).toBe(labels.indexOf('Ouvrir un terminal') + 1);
+    click('Vue Claude Code');
+    expect(backend.called('set_agent_view')).toEqual([{ cmd: 'set_agent_view', args: { id: 'a1', terminal: true } }]);
+  });
+
+  it('puts an agent in Claude Code’s view back into Escouade’s', async () => {
+    resetApp({ agents: [agent({ terminal: true })] });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    const labels = await menuOf(/refacto-auth/);
+    expect(labels).toContain('Vue Escouade');
+    expect(labels).not.toContain('Vue Claude Code');
+    click('Vue Escouade');
+    expect(backend.called('set_agent_view')).toEqual([{ cmd: 'set_agent_view', args: { id: 'a1', terminal: false } }]);
+  });
+
+  it('tells why the backend refused it', async () => {
+    resetApp({ agents: [agent({ status: 'running' })] });
+    fakeBackend({
+      set_agent_view: () => {
+        throw 'L’agent travaille encore : change de vue quand son tour est fini.';
+      },
+    });
+    render(Sidebar, { project: project() });
+    await menuOf(/refacto-auth/);
+    click('Vue Claude Code');
+    await expect
+      .poll(() => app.toasts.map((t) => [t.text, t.kind]))
+      .toEqual([['L’agent travaille encore : change de vue quand son tour est fini.', 'error']]);
+  });
+
+  it('is never offered to a ticket’s agent, in either view: its board drives it over the stream', async () => {
+    resetApp({
+      agents: [agent({ ticketId: 't1' }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, ticketId: 't2', terminal: true })],
+      tickets: [ticket({ agentId: 'a1', column: 'doing' }), ticket({ id: 't2', key: 'DEM-2', agentId: 'a2', column: 'review' })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    for (const name of [/refacto-auth/, /tests-e2e/]) {
+      const labels = await menuOf(name);
+      expect(labels).toContain('Renommer');
+      for (const view of VIEWS) expect(labels).not.toContain(view);
+    }
+  });
+
+  it('is never offered to an archived agent, in either view', async () => {
+    resetApp({
+      agents: [agent({ archived: true }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, archived: true, terminal: true })],
+    });
+    fakeBackend();
+    app.showArchived = true;
+    render(Sidebar, { project: project() });
+    for (const name of [/refacto-auth/, /tests-e2e/]) {
+      const labels = await menuOf(name);
+      expect(labels).toContain('Restaurer');
+      for (const view of VIEWS) expect(labels).not.toContain(view);
+    }
+  });
+});
+
 describe('Sidebar in English', () => {
   it('writes the plan line with the plural of English', () => {
     setLang('en');
@@ -837,6 +915,7 @@ describe('Sidebar in English', () => {
       'Integrate main',
       'Open in editor',
       'Open a terminal',
+      'Claude Code view',
       '',
       'Turn off remote control',
       'Open on claude.ai',
@@ -845,6 +924,15 @@ describe('Sidebar in English', () => {
       'Delete…',
     ]);
     expect(menu.open!.items.find((i) => i.label === 'Archive')).toMatchObject({ hint: 'keeps the conversation' });
+  });
+
+  it('offers to go back to Escouade’s view in English', async () => {
+    app.agents.a1 = { ...app.agents.a1, terminal: true };
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(items()).toContain('Escouade view');
+    expect(items()).not.toContain('Claude Code view');
   });
 
   it('asks in English before archiving and deleting', async () => {

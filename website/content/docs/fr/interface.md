@@ -106,6 +106,7 @@ Un clic droit sur une carte ouvre son menu :
 | « Intégrer … » | Pour un agent dans un worktree : fait entrer la branche de base du projet dans la sienne. |
 | « Ouvrir dans l’éditeur » | Ouvre l’éditeur sur son worktree, sinon sur le dossier du projet. |
 | « Ouvrir un terminal » | Ouvre un terminal dans son worktree, sinon dans le dossier du projet. |
+| « Vue Claude Code » ou « Vue Escouade » | Change de vue, comme le bouton de l’en-tête de sa conversation. Absente pour un agent de ticket et pour un agent archivé. Voir [la vue Claude Code](claude-code-view). |
 | « Activer le remote control » ou « Désactiver le remote control » | Rend la session accessible depuis claude.ai et l’app Claude (« claude.ai, mobile »). Quand le lien est disponible, « Ouvrir sur claude.ai » et « Copier le lien claude.ai » apparaissent. Absente en [vue Claude Code](claude-code-view), où c’est la commande `/remote-control` de Claude Code qui le fait. |
 | « Supprimer… » | Arrête le processus Claude et retire la conversation de l’application ; la session Claude Code reste sur le disque. Pour un agent avec un worktree, une case propose de supprimer aussi le worktree, et sa branche si elle a été créée pour l’agent. |
 

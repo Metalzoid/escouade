@@ -8,13 +8,13 @@ La conversation d’Escouade montre l’essentiel du travail d’un agent, mais 
 
 ## Passer d’une vue à l’autre
 
-Dans l’en-tête de la conversation d’un agent, le bouton « Vue Claude Code » (`>_`) lance l’interface de Claude Code dans un terminal qui prend la place de la conversation. Le bouton devient « Vue Escouade » (`◧`) : un clic te ramène à la conversation. La session est la même dans les deux sens : Escouade arrête le processus de l’une des vues et reprend la session dans l’autre (`--resume`), donc l’agent n’oublie rien. Le choix est gardé pour chaque agent. L’interface démarre quand tu affiches l’agent (le terminal dit alors « Démarrage de Claude Code… »), y compris après un redémarrage d’Escouade, et reprend sa session.
+Dans l’en-tête de la conversation d’un agent, le bouton « Vue Claude Code » (`>_`) lance l’interface de Claude Code dans un terminal qui prend la place de la conversation. Le bouton devient « Vue Escouade » (`◧`) : un clic te ramène à la conversation. Le menu de la carte de l’agent, dans la barre latérale (clic droit), propose la même chose : « Vue Claude Code » ou « Vue Escouade ». La session est la même dans les deux sens : Escouade arrête le processus de l’une des vues et reprend la session dans l’autre (`--resume`), donc l’agent n’oublie rien. Le choix est gardé pour chaque agent. L’interface démarre quand tu affiches l’agent (le terminal dit alors « Démarrage de Claude Code… »), y compris après un redémarrage d’Escouade, et reprend sa session.
 
 Le passage à la vue Claude Code est refusé dans trois cas, avec un message ; le retour à la vue Escouade, lui, n’est refusé dans aucun :
 
 - **L’agent travaille encore** : change de vue quand son tour est fini.
 - **Le remote control est activé** : coupe-le d’abord. Dans l’interface de Claude Code, c’est sa commande `/remote-control` qui le fait (voir [le remote control](remote-control)).
-- **L’agent travaille sur un ticket** : un agent de ticket reste dans la vue d’Escouade, que son tableau pilote (voir [le Kanban](board)). Le bouton n’existe pas pour lui, ni pour un agent archivé.
+- **L’agent travaille sur un ticket** : un agent de ticket reste dans la vue d’Escouade, que son tableau pilote (voir [le Kanban](board)). Ni le bouton ni l’entrée du menu de sa carte n’existent pour lui, ni pour un agent archivé.
 
 Si l’interface s’arrête (tu as tapé `/exit`, ou le processus a été tué), le terminal affiche « Claude Code s’est arrêté. » et un bouton « Relancer » ; si elle ne démarre pas, « Claude Code n’a pas démarré : » suivi de l’erreur, avec le même bouton. Archiver ou supprimer l’agent ferme aussi son terminal.
 

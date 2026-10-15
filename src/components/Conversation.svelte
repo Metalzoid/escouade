@@ -4,6 +4,7 @@
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
+  import { canSwitchView, switchView } from '../lib/agent-actions';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fNum, fTok } from '../lib/format';
@@ -506,14 +507,14 @@
       </button>
     {/if}
     <!-- « Vue Claude Code »: never for a ticket's agent, which its board drives over the stream. -->
-    {#if !agent.ticketId && !agent.archived}
+    {#if canSwitchView(agent)}
       <button
         class="btn view"
         class:on={agent.terminal}
         aria-pressed={agent.terminal}
         aria-label={agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal')}
         use:tip={agent.terminal ? t('conv.header.toRichHint') : t('conv.header.toTerminalHint')}
-        onclick={() => app.run(api.setAgentView(agent.id, !agent.terminal))}
+        onclick={() => switchView(agent)}
       >
         <span class="mono glyph">{agent.terminal ? '◧' : '>_'}</span><span class="lbl"
           >{agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal')}</span

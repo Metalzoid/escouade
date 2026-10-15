@@ -128,6 +128,7 @@ A right-click on an agent’s card opens its menu.
 | Integrate main | Brings the agent’s base branch into its own (the base’s name is written in the entry, `main` here). Only for an agent that has a worktree. See [branches](branches). |
 | Open in editor | Opens the [editor](editor) on the agent’s worktree, or on the project. |
 | Open a terminal | Opens a [terminal](terminals) in the agent’s worktree, or in the project’s folder. |
+| Claude Code view, or Escouade view | Runs the agent in Claude Code’s own interface, or brings it back to Escouade’s conversation, like the header’s button (see [the Claude Code view](claude-code-view)). Absent for a ticket’s agent. |
 | Turn on remote control | Makes the agent reachable from claude.ai and the Claude app (see [remote control](remote-control)). Absent for an agent in the [Claude Code view](claude-code-view), where Claude Code’s own `/remote-control` command does it. |
 | Delete… | Removes the agent after confirmation. See below. |
 
