@@ -8,6 +8,10 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Tu ouvres un terminal dans le worktree d'un agent de deux façons de plus. Le bouton + de la section « Terminaux » de la barre latérale propose, après les shells, « Dans le worktree de… » : un second menu liste les agents du projet qui ont un worktree (pas les archivés), et le terminal s'ouvre dans celui que tu choisis. Et l'en-tête de la conversation d'un agent à worktree a un bouton « Terminal », juste après « Éditeur ». L'entrée du menu n'apparaît que s'il y a au moins un tel agent, et le bouton n'existe ni pour un agent sans worktree ni pour un agent archivé.
 
+### Corrections
+
+- Un lien de la conversation d'un agent s'ouvre dans ton navigateur, quel que soit le clic (normal, du milieu, avec Ctrl ou Maj, ou Entrée au clavier), et ne remplace plus jamais l'interface d'Escouade. Avant, la page se chargeait dans la fenêtre, sans bouton retour : il ne restait qu'à tuer l'app. Un lien vide (`[texte]()`) ne recharge plus l'interface non plus. Les liens que Claude Code écrit lui-même dans les terminaux et dans la vue Claude Code (le lien d'une pull request, par exemple) s'ouvrent aussi dans le navigateur, sans la confirmation en anglais « Do you want to navigate to … ? » : avant, elle s'affichait, puis rien ne s'ouvrait. Quoi qu'il arrive, la fenêtre refuse de quitter l'interface : une page web part dans le navigateur, une adresse e-mail dans ton client de messagerie, le reste n'ouvre nulle part. Et si l'interface restait un jour bloquée ou blanche, « Recharger l'interface », dans le menu de l'icône de la zone de notification, la recharge (en demandant d'abord si des fichiers de l'éditeur ne sont pas enregistrés). ([#9](https://github.com/guillaume-gagnaire/escouade/issues/9))
+
 ## [1.7.8] — 2026-10-15
 
 ### Ajouts

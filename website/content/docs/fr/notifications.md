@@ -44,7 +44,7 @@ Quand la fenêtre n’est pas au premier plan, le bouton d’Escouade clignote d
 
 ### La zone de notification
 
-Escouade garde une icône dans la zone de notification (la barre des menus sous macOS). Une pastille ambre s’y pose dans le coin tant qu’au moins un agent attend une réponse, et l’infobulle donne le compte (« Escouade — 2 agents en attente »). Un clic sur l’icône affiche la fenêtre ; son menu propose « Afficher » et « Quitter ». Fermer la fenêtre la cache seulement : les agents continuent, et ils te préviennent comme d’habitude (voir [les agents](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)).
+Escouade garde une icône dans la zone de notification (la barre des menus sous macOS). Une pastille ambre s’y pose dans le coin tant qu’au moins un agent attend une réponse, et l’infobulle donne le compte (« Escouade — 2 agents en attente »). Un clic sur l’icône affiche la fenêtre ; son menu propose « Afficher », « Recharger l’interface » et « Quitter ». « Recharger l’interface » ramène la fenêtre sur l’interface d’Escouade si elle reste un jour bloquée ou blanche, et te demande d’abord confirmation s’il reste des fichiers non enregistrés dans l’éditeur. Fermer la fenêtre la cache seulement : les agents continuent, et ils te préviennent comme d’habitude (voir [les agents](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)).
 
 ## Ce que dit une notification
 

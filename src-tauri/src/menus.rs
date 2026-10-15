@@ -18,12 +18,14 @@ pub const APP_MENU_ID: &str = "escouade-app-menu";
 #[derive(Debug, PartialEq, Eq)]
 pub struct TrayLabels {
     pub show: String,
+    pub reload: String,
     pub quit: String,
 }
 
 pub fn tray_labels(lang: Lang) -> TrayLabels {
     TrayLabels {
         show: tr_in!(lang, "Afficher", "Show"),
+        reload: tr_in!(lang, "Recharger l’interface", "Reload the interface"),
         quit: tr_in!(lang, "Quitter", "Quit"),
     }
 }
@@ -43,12 +45,15 @@ pub fn tray_tooltip(lang: Lang, waiting: usize) -> String {
     }
 }
 
-/// The tray icon's menu: « Afficher » and « Quitter », which its `on_menu_event` handles by id.
+/// The tray icon's menu: « Afficher », « Recharger l’interface » (the way back should the window
+/// be stuck on a page that is not the app's) and « Quitter », which its `on_menu_event` handles by
+/// id.
 pub fn tray_menu<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Menu<R>> {
     let labels = tray_labels(lang);
     let show = MenuItem::with_id(app, "show", labels.show, true, None::<&str>)?;
+    let reload = MenuItem::with_id(app, "reload", labels.reload, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
-    Menu::with_items(app, &[&show, &quit])
+    Menu::with_items(app, &[&show, &reload, &quit])
 }
 
 /// The entries of macOS's app menu, written as macOS writes them in each language (its own apps'
@@ -209,12 +214,19 @@ mod tests {
 
     #[test]
     fn the_tray_menu_and_tooltip_are_written_in_the_language_of_the_interface() {
-        let labels = |l: TrayLabels| (l.show, l.quit);
+        let labels = |l: TrayLabels| (l.show, l.reload, l.quit);
         assert_eq!(
             labels(tray_labels(Fr)),
-            ("Afficher".into(), "Quitter".into())
+            (
+                "Afficher".into(),
+                "Recharger l’interface".into(),
+                "Quitter".into()
+            )
         );
-        assert_eq!(labels(tray_labels(En)), ("Show".into(), "Quit".into()));
+        assert_eq!(
+            labels(tray_labels(En)),
+            ("Show".into(), "Reload the interface".into(), "Quit".into())
+        );
         for lang in [Fr, En] {
             assert_eq!(tray_tooltip(lang, 0), "Escouade");
         }
@@ -222,6 +234,31 @@ mod tests {
         assert_eq!(tray_tooltip(Fr, 3), "Escouade — 3 agents en attente");
         assert_eq!(tray_tooltip(En, 1), "Escouade — 1 agent waiting");
         assert_eq!(tray_tooltip(En, 3), "Escouade — 3 agents waiting");
+    }
+
+    // Made and read off the main thread on the other systems only, like the app menu below.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn the_tray_menu_holds_show_then_reload_then_quit_the_ids_its_handler_reads() {
+        let app = tauri::test::mock_app();
+        let menu = tray_menu(app.handle(), En).unwrap();
+        let entries: Vec<(String, String)> = menu
+            .items()
+            .unwrap()
+            .iter()
+            .map(|item| {
+                let item = item.as_menuitem().expect("an entry of the app's own");
+                (item.id().as_ref().to_string(), item.text().unwrap())
+            })
+            .collect();
+        assert_eq!(
+            entries,
+            [
+                ("show".to_string(), "Show".to_string()),
+                ("reload".to_string(), "Reload the interface".to_string()),
+                ("quit".to_string(), "Quit".to_string()),
+            ]
+        );
     }
 
     #[test]

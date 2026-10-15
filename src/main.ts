@@ -2,6 +2,7 @@ import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
 import { guardFileDrops } from './lib/attachments';
+import { guardLinks } from './lib/links';
 
 // The app is a desktop window: keep the browser's own context menu out of the way,
 // except in text fields where copy/paste matters.
@@ -12,5 +13,8 @@ window.addEventListener('contextmenu', (e) => {
 
 // Files are dropped on the composer only: anywhere else the WebView would open them.
 guardFileDrops(window);
+
+// A link never takes the window away from the app: the ones that go outside open in the browser.
+guardLinks(document);
 
 mount(App, { target: document.getElementById('app')! });

@@ -2,7 +2,6 @@
 
 import DOMPurify from 'dompurify';
 import { Marked, type Tokens } from 'marked';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { locale, t } from './i18n';
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -154,24 +153,15 @@ export async function highlightWithin(root: HTMLElement) {
   }
 }
 
-/** Delegated click handling for rendered markdown: copy buttons and external links. */
+/** Delegated click handling for rendered markdown: the copy buttons of its code blocks. Its links are `guardLinks`' (links.ts). */
 export function handleMarkdownClick(e: MouseEvent) {
-  const target = e.target as HTMLElement;
-  const copy = target.closest('.copy-btn');
-  if (copy) {
-    const code = copy.closest('pre')?.querySelector('code');
-    if (code) {
-      navigator.clipboard.writeText(code.textContent ?? '');
-      copy.textContent = t('conv.markdown.copied');
-      setTimeout(() => (copy.textContent = t('common.copy')), 1200);
-    }
-    e.preventDefault();
-    return;
+  const copy = (e.target as HTMLElement).closest('.copy-btn');
+  if (!copy) return;
+  const code = copy.closest('pre')?.querySelector('code');
+  if (code) {
+    navigator.clipboard.writeText(code.textContent ?? '');
+    copy.textContent = t('conv.markdown.copied');
+    setTimeout(() => (copy.textContent = t('common.copy')), 1200);
   }
-  const a = target.closest('a');
-  if (a?.getAttribute('href')) {
-    e.preventDefault();
-    const href = a.getAttribute('href')!;
-    if (/^(https?:|mailto:)/i.test(href)) openUrl(href).catch(() => {});
-  }
+  e.preventDefault();
 }

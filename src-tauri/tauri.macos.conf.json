@@ -4,6 +4,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Escouade",
         "width": 1440,
         "height": 900,

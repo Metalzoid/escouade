@@ -44,7 +44,7 @@ When the window isn’t in the foreground, Escouade’s button flashes in the Wi
 
 ### The notification area
 
-Escouade keeps an icon in the notification area (the menu bar on macOS). An amber badge sits in its corner as long as at least one agent is waiting for an answer, and the tooltip gives the count (“Escouade — 2 agents waiting”). A click on the icon shows the window; its menu offers “Show” and “Quit”. Closing the window only hides it: the agents go on, and they notify you as usual (see [agents](managing-agents#closing-the-window-quitting-and-restarting)).
+Escouade keeps an icon in the notification area (the menu bar on macOS). An amber badge sits in its corner as long as at least one agent is waiting for an answer, and the tooltip gives the count (“Escouade — 2 agents waiting”). A click on the icon shows the window; its menu offers “Show”, “Reload the interface” and “Quit”. “Reload the interface” brings the window back to Escouade’s interface if it is ever stuck or blank, and asks you first if unsaved files remain in the editor. Closing the window only hides it: the agents go on, and they notify you as usual (see [agents](managing-agents#closing-the-window-quitting-and-restarting)).
 
 ## What a notification says
 

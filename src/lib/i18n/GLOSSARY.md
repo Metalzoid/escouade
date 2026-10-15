@@ -134,7 +134,8 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Système (Français) | System (French) | la langue du système, nommée dans celle de l’interface |
 | Comme l’interface | Same as the interface | |
 | Français, English | Français, English | une langue proposée est écrite dans elle-même (`LANG_NAMES`) |
-| Afficher / Quitter | Show / Quit | menu de l’icône de la barre des tâches |
+| Afficher / Recharger l’interface / Quitter | Show / Reload the interface / Quit | menu de l’icône de la barre des tâches |
+| Recharger / Annuler | Reload / Cancel | les deux boutons du dialogue natif qui demande avant de recharger l’interface, quand des fichiers de l’éditeur ne sont pas enregistrés |
 | agent en attente | agent waiting | infobulle de l’icône |
 | À propos d’Escouade, Masquer Escouade, Masquer les autres, Tout afficher, Quitter Escouade | About Escouade, Hide Escouade, Hide Others, Show All, Quit Escouade | menu de l’app sous macOS : les mots et les majuscules de macOS |
 | Édition : Annuler, Rétablir, Couper, Copier, Coller, Tout sélectionner | Edit: Undo, Redo, Cut, Copy, Paste, Select All | idem |

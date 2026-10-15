@@ -6,10 +6,10 @@ import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { MAX_TOTAL, base64, clipboardImage, imageType, sizeLabel } from './attachments';
 import { t } from './i18n';
 import { api } from './ipc';
+import { openOutside, terminalLinks } from './links';
 import { IS_MAC } from './platform';
 import { isAppShortcut } from './shortcuts';
 import { app } from './state.svelte';
@@ -91,6 +91,8 @@ function createXTerm(readOnly: boolean): XTerm {
     cursorInactiveStyle: readOnly ? 'none' : 'outline',
     disableStdin: readOnly,
     allowProposedApi: true,
+    // The hyperlinks Claude Code writes (OSC 8) open in the system's browser, not through xterm.js's confirm() and window.open().
+    linkHandler: terminalLinks,
     scrollback: 10000,
     theme: terminalTheme(readOnly),
     // Rows added by a resize stay blank at the bottom, as in the pseudo-console, which repaints
@@ -106,7 +108,7 @@ function createXTerm(readOnly: boolean): XTerm {
   term.loadAddon(search);
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = '11';
-  term.loadAddon(new WebLinksAddon((_e, uri) => openUrl(uri).catch(() => {})));
+  term.loadAddon(new WebLinksAddon((_e, uri) => openOutside(uri)));
   term.open(host);
   try {
     const webgl = new WebglAddon();

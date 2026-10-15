@@ -1,4 +1,9 @@
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { describe, expect, it, vi } from 'vitest';
+
+// The system's browser is never started: what it was asked to open is looked at.
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async () => {}) }));
+
 import { setLang } from './i18n';
 import { handleMarkdownClick, renderMarkdown } from './markdown';
 
@@ -46,6 +51,18 @@ describe('renderMarkdown', () => {
 
   it('marks links as noopener', () => {
     expect(dom('[doc](https://example.com)').querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+});
+
+describe('handleMarkdownClick', () => {
+  it('leaves the links to guardLinks: it neither opens nor stops a click on one, or the link would open twice', () => {
+    vi.mocked(openUrl).mockClear();
+    const preventDefault = vi.fn();
+    for (const md of ['[doc](https://example.com)', '[vide]()', '[ancre](#x)']) {
+      handleMarkdownClick({ target: dom(md).querySelector('a'), preventDefault } as unknown as MouseEvent);
+    }
+    expect(openUrl).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 });
 

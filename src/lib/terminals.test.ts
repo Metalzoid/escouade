@@ -1,4 +1,5 @@
 import { createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import type { ILinkHandler } from '@xterm/xterm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeBackend, resetApp } from '../test/ipc';
 
@@ -7,8 +8,11 @@ const pasted = vi.hoisted(() => [] as string[]);
 const keyHandlers = vi.hoisted(() => [] as ((e: KeyboardEvent) => boolean)[]);
 // Whether the program in the terminal asked for bracketed pastes (Claude Code does as it starts).
 const modes = vi.hoisted(() => ({ bracketedPasteMode: true }));
+// What each terminal was built with, and what its web links addon does with a link it found.
+const termOptions = vi.hoisted(() => [] as { linkHandler?: ILinkHandler }[]);
+const webLinks = vi.hoisted(() => [] as ((e: MouseEvent, uri: string) => void)[]);
 
-// xterm.js draws on a canvas: stood in for, only the spawn, the keys and what is pasted are looked at.
+// xterm.js draws on a canvas: stood in for, only the spawn, the keys, the links and what is pasted are looked at.
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
     cols = 100;
@@ -16,6 +20,9 @@ vi.mock('@xterm/xterm', () => ({
     options = {};
     modes = modes;
     unicode = { activeVersion: '' };
+    constructor(options: { linkHandler?: ILinkHandler }) {
+      termOptions.push(options);
+    }
     loadAddon() {}
     open() {}
     attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean) {
@@ -39,7 +46,13 @@ vi.mock('@xterm/addon-fit', () => ({
 }));
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {} }));
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class {} }));
-vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: class {} }));
+vi.mock('@xterm/addon-web-links', () => ({
+  WebLinksAddon: class {
+    constructor(handler: (e: MouseEvent, uri: string) => void) {
+      webLinks.push(handler);
+    }
+  },
+}));
 vi.mock('@xterm/addon-webgl', () => ({
   WebglAddon: class {
     onContextLoss() {}
@@ -305,6 +318,61 @@ describe('Ctrl+V in a terminal', () => {
     const handler = await keys(true);
     expect(press(handler, { ctrlKey: true })).toBe(true);
     expect(press(handler, { metaKey: true })).toBe(false);
+  });
+});
+
+describe.each([
+  ['a shell’s terminal', () => openTerminal('p1', 'pwsh', 'pwsh-1')],
+  ['Claude Code’s interface', () => openAgentTerminal('a1')],
+])('the links of %s', (_name, open) => {
+  const info = { id: 'tl-1', projectId: 'p1', name: 'term', shell: 'pwsh' };
+  const click = () => new MouseEvent('click');
+
+  /** A terminal opened; the links it was built to open. */
+  async function opened() {
+    resetApp();
+    const backend = fakeBackend({ term_spawn: () => info, agent_terminal: () => info });
+    await open();
+    const activate = (uri: string) => termOptions.at(-1)!.linkHandler!.activate(click(), uri, {} as never);
+    return { backend, activate, urls: () => backend.called('plugin:opener|open_url').map((c) => c.args.url) };
+  }
+
+  it('open in the system’s browser: the hyperlinks Claude Code writes (OSC 8) and the addresses printed as text', async () => {
+    const { activate, urls } = await opened();
+    activate('https://example.com/pr/1');
+    webLinks.at(-1)!(click(), 'http://localhost:4111/connexion');
+    await vi.waitFor(() => expect(urls()).toEqual(['https://example.com/pr/1', 'http://localhost:4111/connexion']));
+  });
+
+  // Defence in depth: xterm.js only offers http(s) OSC 8 links (no `allowNonHttpProtocols`), so it never gets here.
+  it('would open a mail address too, should xterm.js offer one', async () => {
+    const { activate, urls } = await opened();
+    activate('mailto:jean@example.com');
+    await vi.waitFor(() => expect(urls()).toEqual(['mailto:jean@example.com']));
+  });
+
+  it('leave a file or a script alone: nothing is opened', async () => {
+    const { activate, urls } = await opened();
+    activate('file:///C:/Users/Jean/notes.txt');
+    activate('javascript:alert(1)');
+    webLinks.at(-1)!(click(), 'file:///C:/x');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(urls()).toEqual([]);
+  });
+
+  it('never ask xterm.js’s confirm() nor open a window of their own, which neither WebView2 nor a native dialog can honor', async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    const open = vi.spyOn(window, 'open');
+    const { activate, urls } = await opened();
+    activate('https://example.com/pr/1');
+    await vi.waitFor(() => expect(urls()).toHaveLength(1));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('only offer the web’s addresses as hyperlinks: xterm.js leaves the others as text', async () => {
+    await opened();
+    expect(termOptions.at(-1)!.linkHandler!.allowNonHttpProtocols).toBeFalsy();
   });
 });
 
