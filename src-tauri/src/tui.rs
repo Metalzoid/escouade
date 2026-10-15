@@ -17,7 +17,7 @@ use crate::agent::{Effects, TuiRun};
 use crate::core::Core;
 use crate::model::*;
 use crate::pty::TermInfo;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
@@ -189,6 +189,52 @@ fn no_proxy(env: &mut Vec<(String, String)>) {
             Some((_, v)) if !v.trim().is_empty() => *v = format!("{v},{LOOPBACK}"),
             Some((_, v)) => *v = LOOPBACK.into(),
             None => env.push((key.into(), LOOPBACK.into())),
+        }
+    }
+}
+
+/// How long an image pasted in an interface is kept. Claude Code reads the file as it is pasted
+/// and keeps the image in its transcript (base64), which a resume sends again without the file
+/// (seen on 2.1.300); but it tells the model the file's path (« [Image: source: …] »), which the
+/// model may open in the turns that follow.
+const PASTES_KEPT: Duration = Duration::from_secs(24 * 3600);
+
+/// The most a pasted image may weigh, as all the files of a message in the composer (`MAX_TOTAL`).
+const MAX_PASTE: usize = 18 << 20;
+
+/// The types of the images Claude Code reads.
+const IMAGE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/// The extension Claude Code knows an image by, from its first bytes; None for anything but the
+/// images it reads.
+fn image_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        Some("png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("jpg")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("gif")
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        Some("webp")
+    } else {
+        None
+    }
+}
+
+/// Removes the pasted images older than `PASTES_KEPT` from `dir`.
+pub(crate) fn clear_pastes(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let aged = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > PASTES_KEPT);
+        if aged {
+            let _ = std::fs::remove_file(entry.path());
         }
     }
 }
@@ -451,6 +497,7 @@ impl<R: Runtime> Core<R> {
                 gen,
                 transcript: transcript.0,
                 offset: transcript.1,
+                program,
             });
             rt.tui_since = since;
         }
@@ -459,6 +506,85 @@ impl<R: Runtime> Core<R> {
         let (c, agent) = (self.clone(), id.to_string());
         tauri::async_runtime::spawn(async move { c.read_loop(&agent, gen).await });
         Ok(info)
+    }
+
+    /// An image pasted in the agent's interface (base64 `data`), which reads the clipboard's only
+    /// on a key of its own: written to a file, whose path the window types there. Claude Code takes
+    /// a pasted path to an image for the image, as a file dropped on a terminal. The path is the
+    /// one its `claude` reads (in WSL, the Linux one).
+    pub fn paste_image(&self, id: &str, media_type: &str, data: &str) -> Result<String> {
+        use base64::Engine;
+        let program = {
+            let h = self.agent(id)?;
+            let rt = h.lock();
+            match &rt.tui {
+                Some(t) => t.program.clone(),
+                None if rt.meta.terminal => bail!(tr!(
+                    "Claude Code s’est arrêté : relance-le pour y coller une image.",
+                    "Claude Code stopped: restart it to paste an image into it."
+                )),
+                None => bail!(tr!(
+                    "L’agent n’est pas en vue Claude Code.",
+                    "The agent is not in the Claude Code view."
+                )),
+            }
+        };
+        if !IMAGE_TYPES.contains(&media_type) {
+            bail!(tr!(
+                "Claude Code ne lit pas les images {media_type}",
+                "Claude Code does not read {media_type} images",
+                media_type = media_type
+            ));
+        }
+        let too_big = || {
+            anyhow!(tr!(
+                "L’image dépasse 18 Mo : Claude Code ne la recevra pas.",
+                "The image is over 18 MB: Claude Code will not get it."
+            ))
+        };
+        // Measured before it is decoded.
+        if data.len() > MAX_PASTE.div_ceil(3) * 4 {
+            return Err(too_big());
+        }
+        let bytes = base64::engine::general_purpose::STANDARD.decode(data)?;
+        if bytes.len() > MAX_PASTE {
+            return Err(too_big());
+        }
+        // What it holds, whatever its type says (a file copied under a wrong name).
+        let Some(extension) = image_extension(&bytes) else {
+            bail!(tr!(
+                "Ce n’est pas une image PNG, JPEG, GIF ou WebP : Claude Code ne la lit pas.",
+                "This is no PNG, JPEG, GIF or WebP image: Claude Code does not read it."
+            ));
+        };
+        let dir = self.pastes_dir();
+        std::fs::create_dir_all(&dir)?;
+        clear_pastes(&dir);
+        // Named after its agent, whose deletion takes it away.
+        let file = dir.join(format!(
+            "{id}-{}.{extension}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::write(&file, bytes).with_context(|| file.display().to_string())?;
+        Ok(program.file_path(&file))
+    }
+
+    /// Where the images pasted in the interfaces are kept.
+    pub(crate) fn pastes_dir(&self) -> PathBuf {
+        self.data.root().join("tui").join("pastes")
+    }
+
+    /// Removes the images pasted in the interface of the agent `id`, which is deleted.
+    pub(crate) fn forget_pastes(&self, id: &str) {
+        let Ok(entries) = std::fs::read_dir(self.pastes_dir()) else {
+            return;
+        };
+        let prefix = format!("{id}-");
+        for entry in entries.flatten() {
+            if entry.file_name().to_string_lossy().starts_with(&prefix) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
     }
 
     /// Reads the transcript of the agent's interface `gen` as it is written, until it stops.

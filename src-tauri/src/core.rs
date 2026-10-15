@@ -1522,6 +1522,8 @@ impl<R: Runtime> Core<R> {
             clock_ahead: std::sync::atomic::AtomicI64::new(0),
         });
         core.usage.lock().set_today(&core.stats.today_by_account());
+        // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
+        crate::tui::clear_pastes(&core.pastes_dir());
         (core, rx)
     }
 
@@ -4231,6 +4233,7 @@ impl<R: Runtime> Core<R> {
         // Its log goes with it.
         self.stop_setup(id).await;
         let _ = std::fs::remove_file(self.data.setup_log(id));
+        self.forget_pastes(id);
         {
             let mut ui = self.ui.write();
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
@@ -4666,16 +4669,23 @@ impl<R: Runtime> Core<R> {
                 if let Some(p) = rt.proc.take() {
                     p.kill();
                 }
+                // Its Claude Code interface is no terminal of the project's (killed below).
+                if let Some(t) = rt.tui.take() {
+                    self.pty.kill(&t.term_id);
+                }
                 rt.conv.delete_file();
                 worktree = rt.meta.worktree.clone();
             }
             self.mcp.forget_agent(&aid);
+            self.hooks.revoke(&aid);
             self.spawn_locks.lock().remove(&aid);
-            // The setup of its worktree stops, with what it started; its log goes.
+            // The setup of its worktree stops, with what it started; its log goes, and the
+            // images pasted in its interface.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();
             }
             let _ = std::fs::remove_file(self.data.setup_log(&aid));
+            self.forget_pastes(&aid);
             // Its test launches are the project's terminals too (killed below all the same):
             // none is kept for it. isola's services of its worktree stop too.
             self.stop_test_runs(&aid);

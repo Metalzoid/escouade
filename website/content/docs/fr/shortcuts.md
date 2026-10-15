@@ -127,6 +127,7 @@ Dans les résultats de « Rechercher dans les fichiers », `Entrée` dans le c
 | `Ctrl+V` | Coller. | Terminal, sous Windows et Linux |
 | `Ctrl+Maj+C` | Copier la sélection. | Terminal, sous Windows et Linux |
 | `⌘C` / `⌘V` | Copier / coller. | Terminal, sous macOS |
+| `Ctrl+V` | Va au shell ; dans la [vue Claude Code](claude-code-view), c’est la touche de Claude Code pour lire l’image du presse-papiers. | Terminal, sous macOS |
 | `Maj+PageHaut`, `Maj+PageBas`, `Maj+Début`, `Maj+Fin` | Faire défiler le journal. | Journal d’une commande de lancement (lecture seule) |
 
 Le journal d’une commande de lancement est en lecture seule : hors la copie et le défilement, toutes ses touches vont à l’app, dont `Ctrl+K` et `Ctrl+P`.

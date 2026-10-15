@@ -49,7 +49,7 @@ Il y a trois façons de joindre un fichier : le coller (`Ctrl+V`, par exemple un
 
 Les fichiers d’un même message ne dépassent pas 18 Mo en tout. Un fichier refusé (format inconnu, trop gros, binaire) est nommé dans un message rouge, et les autres sont joints quand même. Dans la conversation, le message affiche « 2 images » et le nom des fichiers.
 
-Les fichiers joints n’accompagnent pas une réponse à une question ou à une autorisation : ils restent prêts pour ton prochain message. Dans la vue Claude Code, le champ de saisie d’Escouade n’est pas affiché : on colle le fichier dans le terminal.
+Les fichiers joints n’accompagnent pas une réponse à une question ou à une autorisation : ils restent prêts pour ton prochain message. Dans la vue Claude Code, le champ de saisie d’Escouade n’est pas affiché : seule une image (une capture d’écran, par exemple) s’y joint, collée dans le terminal ; voir [la vue Claude Code](claude-code-view).
 
 ### Mentionner un fichier avec @
 

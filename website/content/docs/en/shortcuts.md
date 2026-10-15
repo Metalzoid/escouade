@@ -127,6 +127,7 @@ In the results of “Search in files”, `Enter` in the field runs the search, `
 | `Ctrl+V` | Paste. | Terminal, on Windows and Linux |
 | `Ctrl+Shift+C` | Copy the selection. | Terminal, on Windows and Linux |
 | `⌘C` / `⌘V` | Copy / paste. | Terminal, on macOS |
+| `Ctrl+V` | Goes to the shell; in the [Claude Code view](claude-code-view), it is Claude Code’s key to read the clipboard’s image. | Terminal, on macOS |
 | `Shift+PageUp`, `Shift+PageDown`, `Shift+Home`, `Shift+End` | Scroll the log. | Log of a launch command (read-only) |
 
 The log of a launch command is read-only: apart from copying and scrolling, all its keys go to the app, `Ctrl+K` and `Ctrl+P` included.

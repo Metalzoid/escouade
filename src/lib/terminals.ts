@@ -7,9 +7,12 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { MAX_TOTAL, base64, clipboardImage, imageType, sizeLabel } from './attachments';
+import { t } from './i18n';
 import { api } from './ipc';
 import { IS_MAC } from './platform';
 import { isAppShortcut } from './shortcuts';
+import { app } from './state.svelte';
 import type { TermInfo } from './types';
 
 export interface XTerm {
@@ -130,7 +133,8 @@ function createXTerm(readOnly: boolean): XTerm {
       term.clearSelection();
       return false;
     }
-    if (e.ctrlKey && e.key.toLowerCase() === 'v') return false;
+    // Not on macOS, where Cmd+V pastes: Ctrl+V is Claude Code's key to read the clipboard's image.
+    if (!IS_MAC && e.ctrlKey && e.key.toLowerCase() === 'v') return false;
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'c') {
       if (term.hasSelection()) navigator.clipboard.writeText(term.getSelection());
       return false;
@@ -165,8 +169,71 @@ export function openAccountLogin(accountId: string): Promise<TermInfo> {
 }
 
 /** Claude Code's interface for the agent (« Vue Claude Code »): its session resumed in a terminal. */
-export function openAgentTerminal(agentId: string): Promise<TermInfo> {
-  return interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData));
+export async function openAgentTerminal(agentId: string): Promise<TermInfo> {
+  const info = await interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData));
+  pasteImages(xterms.get(info.id)!, agentId);
+  return info;
+}
+
+/**
+ * What a paste in Claude Code's interface carries: text, which xterm.js types (also beside an image:
+ * the cells of a spreadsheet, but not a mere line break some applications add to one); images
+ * without text (a screenshot, image files copied); or, the WebView giving neither text nor file,
+ * maybe an image only the system's clipboard holds (WebKitGTK leaves it out).
+ */
+export type Pasted = { kind: 'text'; text: string } | { kind: 'image'; files: File[] } | { kind: 'clipboard' };
+
+export function pastedContent(data: { getData(type: string): string; files: Iterable<File> } | null): Pasted {
+  const text = data?.getData('text/plain') ?? '';
+  const all = [...(data?.files ?? [])];
+  const files = all.filter((f) => imageType(f));
+  if (text.trim() || (text && !files.length)) return { kind: 'text', text };
+  if (files.length) return { kind: 'image', files };
+  return all.length ? { kind: 'text', text } : { kind: 'clipboard' };
+}
+
+/**
+ * Claude Code reads the clipboard's image on a key of its own (Alt+V under Windows, Ctrl+V
+ * elsewhere), never on the terminal's paste: a pasted image is written to a file of the agent's,
+ * and its path pasted, which Claude Code takes for the image (« [Image #1] ») as it does a file
+ * dropped on a terminal. Text goes on to xterm.js, unless an image pasted before it is still being
+ * written: it then waits its turn.
+ */
+function pasteImages(x: XTerm, agentId: string) {
+  let queue = Promise.resolve();
+  let waiting = 0;
+  // Caught on its way down, before xterm.js's own listeners.
+  x.host.addEventListener(
+    'paste',
+    (e) => {
+      const pasted = pastedContent(e.clipboardData);
+      if (pasted.kind === 'text' && !waiting) return;
+      e.preventDefault();
+      e.stopPropagation();
+      waiting++;
+      queue = queue
+        .then(() => paste(x.term, agentId, pasted))
+        .catch((err) => app.toast(err instanceof Error ? err.message : String(err), 'error'))
+        .finally(() => waiting--);
+    },
+    true,
+  );
+}
+
+async function paste(term: Terminal, agentId: string, pasted: Pasted) {
+  if (pasted.kind === 'text') return term.paste(pasted.text);
+  const files = pasted.kind === 'image' ? pasted.files : [await clipboardImage()].filter((f) => f !== null);
+  // No image after all: the empty paste xterm.js would have made.
+  if (!files.length) return term.paste('');
+  // One paste a path: Claude Code reads two paths pasted at once only when neither has a space.
+  for (const f of files) {
+    // Refused before it is read, as the backend would after.
+    if (f.size > MAX_TOTAL) {
+      app.toast(t('conv.terminal.imageTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }), 'error');
+      continue;
+    }
+    term.paste(await api.pasteImage(agentId, imageType(f)!, await base64(f)));
+  }
 }
 
 /** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */

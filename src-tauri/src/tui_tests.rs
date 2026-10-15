@@ -308,3 +308,140 @@ async fn a_hook_without_the_token_of_an_interface_is_refused() {
     assert!(call(None).contains("401"));
     assert!(call(Some("not-a-token")).contains("401"));
 }
+
+/// The first bytes of an image of each format Claude Code reads.
+const PNG: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+const JPEG: [u8; 4] = [0xff, 0xd8, 0xff, 0xe0];
+const GIF: &[u8] = b"GIF89a";
+const WEBP: &[u8] = b"RIFF\x24\0\0\0WEBPVP8 ";
+
+fn b64(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_image_pasted_in_the_interface_is_written_to_a_file_whose_path_is_typed_there() {
+    let h = harness("tui-paste");
+    let id = agent_in_tui(&h).await;
+    let pastes = h.dir.join("data").join("tui").join("pastes");
+    // Claude Code keeps the image in its transcript and resumes without the file: it serves the
+    // paste, then the model, told its path, in the turns that follow. Kept a day: older ones go as
+    // the next one comes.
+    std::fs::create_dir_all(&pastes).unwrap();
+    let aged = |name: &str, hours: u64| {
+        let f = pastes.join(name);
+        std::fs::write(&f, b"old").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&f)
+            .unwrap()
+            .set_modified(
+                std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600),
+            )
+            .unwrap();
+        f
+    };
+    let (old, recent) = (aged("old.png", 25), aged("recent.png", 23));
+
+    let path = h.core.paste_image(&id, "image/png", &b64(&PNG)).unwrap();
+    let file = std::path::Path::new(&path);
+    assert_eq!(file.parent(), Some(pastes.as_path()));
+    assert_eq!(file.extension().unwrap(), "png");
+    assert_eq!(std::fs::read(file).unwrap(), PNG);
+    assert!(!old.exists());
+    assert!(recent.exists());
+
+    // Each paste its own file, named after what it holds (a file copied under a wrong name).
+    for (head, extension) in [(&JPEG[..], "jpg"), (GIF, "gif"), (WEBP, "webp")] {
+        let other = h.core.paste_image(&id, "image/png", &b64(head)).unwrap();
+        assert!(other.ends_with(&format!(".{extension}")), "{other}");
+        assert_ne!(other, path);
+    }
+    let written = std::fs::read_dir(&pastes).unwrap().count();
+
+    // Refused, and nothing written: a type Claude Code does not read, content that is no image of
+    // those (whatever its type says), more than 18 MB (all the files of a message in the composer).
+    for refused in ["application/pdf", "image/svg+xml"] {
+        assert!(
+            h.core.paste_image(&id, refused, &b64(&PNG)).is_err(),
+            "{refused}"
+        );
+    }
+    let e = h
+        .core
+        .paste_image(&id, "image/png", &b64(b"%PDF-1.7"))
+        .unwrap_err();
+    assert!(e.to_string().contains("PNG, JPEG, GIF"), "{e}");
+    assert!(h
+        .core
+        .paste_image(&id, "image/png", "pas du base64")
+        .is_err());
+    let mut big = PNG.to_vec();
+    big.resize((18 << 20) + 1, 0);
+    let e = h
+        .core
+        .paste_image(&id, "image/png", &b64(&big))
+        .unwrap_err();
+    assert!(e.to_string().contains("18 Mo"), "{e}");
+    assert_eq!(std::fs::read_dir(&pastes).unwrap().count(), written);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_image_is_pasted_only_where_claude_codes_interface_runs() {
+    use base64::Engine;
+    let h = harness("tui-paste-none");
+    let (p, _) = h.project(false).await;
+    let id = agent_on(&h, &p, "principal").await.id;
+    let data = base64::engine::general_purpose::STANDARD.encode([1u8]);
+    let e = h.core.paste_image(&id, "image/png", &data).unwrap_err();
+    assert!(e.to_string().contains("vue Claude Code"), "{e}");
+    // In the view, its interface stopped (« Claude Code s’est arrêté », « Relancer »).
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let e = h.core.paste_image(&id, "image/png", &data).unwrap_err();
+    assert!(e.to_string().contains("relance"), "{e}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_images_pasted_go_with_their_agent_and_old_ones_at_the_next_start() {
+    let h = harness("tui-paste-gone");
+    let id = agent_in_tui(&h).await;
+    let mine = h.core.paste_image(&id, "image/png", &b64(&PNG)).unwrap();
+    let pastes = h.dir.join("data").join("tui").join("pastes");
+    let other = pastes.join("autre-4f2a.png");
+    std::fs::write(&other, b"png").unwrap();
+    let old = pastes.join("autre-ancienne.png");
+    std::fs::write(&old, b"png").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(25 * 3600))
+        .unwrap();
+
+    h.core.delete_agent(&id, false).await.unwrap();
+    assert!(!std::path::Path::new(&mine).exists());
+    assert!(other.exists());
+
+    // Nobody pastes any more: the next start clears what is older than a day.
+    let app = tauri::test::mock_app();
+    let (_reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
+    assert!(!old.exists());
+    assert!(other.exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_the_project_stops_its_agents_interfaces_and_clears_their_pasted_images() {
+    let h = harness("tui-paste-project");
+    let id = agent_in_tui(&h).await;
+    let project = h.agent(&id).project_id;
+    let mine = h.core.paste_image(&id, "image/png", &b64(&PNG)).unwrap();
+    assert!(h.core.pty.list().iter().any(|t| t.shell == "claude"));
+
+    h.core.remove_project(&project).await.unwrap();
+    assert!(!std::path::Path::new(&mine).exists());
+    assert!(
+        !h.core.pty.list().iter().any(|t| t.shell == "claude"),
+        "Claude Code's interface still runs"
+    );
+}

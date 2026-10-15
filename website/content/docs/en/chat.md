@@ -49,7 +49,7 @@ There are three ways to attach a file: paste it (`Ctrl+V`, for example a copied 
 
 The files of one message don’t exceed 18 MB in all. A rejected file (unknown format, too big, binary) is named in a red message, and the others are attached anyway. In the conversation, the message shows “2 images” and the names of the files.
 
-Attached files don’t go with an answer to a question or a permission: they stay ready for your next message. In the Claude Code view, Escouade’s message field isn’t shown: paste the file into the terminal.
+Attached files don’t go with an answer to a question or a permission: they stay ready for your next message. In the Claude Code view, Escouade’s message field isn’t shown: only an image (a screenshot, for instance) can be attached there, pasted into the terminal; see [the Claude Code view](claude-code-view).
 
 ### Mentioning a file with @
 

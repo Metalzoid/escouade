@@ -32,6 +32,7 @@ export default defineZone('conv', {
     exited: 'Claude Code stopped.',
     restart: 'Restart',
     failed: 'Claude Code didn’t start: {error}',
+    imageTooBig: '{name} is over {max}: Claude Code won’t get it.',
   },
 
   loadError: 'Couldn’t load the conversation: {error}',

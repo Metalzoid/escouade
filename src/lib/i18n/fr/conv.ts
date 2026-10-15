@@ -35,6 +35,7 @@ export default {
     exited: 'Claude Code s’est arrêté.',
     restart: 'Relancer',
     failed: 'Claude Code n’a pas démarré : {error}',
+    imageTooBig: '{name} dépasse {max} : Claude Code ne la recevra pas.',
   },
 
   loadError: 'Impossible de charger la conversation : {error}',
