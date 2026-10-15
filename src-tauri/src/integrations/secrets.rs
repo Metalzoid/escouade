@@ -365,8 +365,8 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     Ok(())
 }
 
-/// The keychain's entry of the MCP server's token for Claude outside Escouade (« Claude peut
-/// piloter Escouade »), beside the integrations' ones.
+/// The keychain's entry of the MCP server's token for Claude outside Escouade (« Claude et les
+/// agents peuvent piloter Escouade »), beside the integrations' ones.
 pub(crate) const MCP_ENTRY: &str = "mcp";
 
 /// The MCP server's token for Claude outside Escouade: the one left in `mcp-token.json` when the

@@ -9,7 +9,7 @@ import { setLang } from '../../lib/i18n';
 import { mcp } from '../../lib/mcp.svelte';
 import { app } from '../../lib/state.svelte';
 import type { Account, McpActivityEntry, McpDeclaration, McpStatus } from '../../lib/types';
-import { fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { agent, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import McpSection from './McpSection.svelte';
 
@@ -53,7 +53,7 @@ const backend = (over: Handlers = {}) =>
     ...over,
   });
 
-const switchEl = () => screen.getByRole('switch', { name: 'Claude peut piloter Escouade' });
+const switchEl = () => screen.getByRole('switch', { name: 'Claude et les agents peuvent piloter Escouade' });
 
 describe('McpSection', () => {
   beforeEach(() => {
@@ -70,7 +70,7 @@ describe('McpSection', () => {
     expect(switchEl()).toHaveAttribute('aria-checked', 'false');
     expect(
       screen.getByText(
-        'Claude Code (dans un terminal, un autre outil ou un agent d’Escouade) lit tes projets, agents et tickets, et peut créer des tickets ou lancer des agents.',
+        'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -101,6 +101,36 @@ describe('McpSection', () => {
     mcp.take({ type: 'mcpDeclared', declared: [ok('principal'), ok('pro')] });
     expect(await screen.findByText('Déclaré dans Claude · compte Principal, compte Pro')).toBeInTheDocument();
     expect(screen.queryByText(/Déclaration dans Claude…/)).not.toBeInTheDocument();
+  });
+
+  it('says how many agents already running get the tools at their next start, and where to restart them', async () => {
+    app.settings.mcpEnabled = true;
+    mcp.declared = [ok('principal')];
+    backend({ mcp_status: () => RUNNING, mcp_declare_status: () => [ok('principal')] });
+    app.agents = { a1: agent({ id: 'a1', escouadeNext: true }), a2: agent({ id: 'a2', escouadeNext: false }) };
+    render(McpSection);
+    expect(
+      await screen.findByText(
+        '1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation.',
+      ),
+    ).toBeInTheDocument();
+    app.agents.a2 = agent({ id: 'a2', escouadeNext: true });
+    expect(
+      await screen.findByText(
+        '2 agents déjà lancés auront les outils au prochain démarrage de leur process : « Relancer » sur leur conversation.',
+      ),
+    ).toBeInTheDocument();
+    // All restarted: nothing left to say.
+    app.agents = {};
+    await waitFor(() => expect(screen.queryByText(/« Relancer » sur/)).not.toBeInTheDocument());
+    setLang('en');
+    app.agents = { a1: agent({ id: 'a1', escouadeNext: true }), a2: agent({ id: 'a2', escouadeNext: true }) };
+    expect(
+      await screen.findByText(
+        '2 agents already running get the tools the next time their process starts: “Restart” on their conversation.',
+      ),
+    ).toBeInTheDocument();
+    setLang('fr');
   });
 
   it('turns off at once, and no longer says what it declared', async () => {
@@ -248,7 +278,12 @@ describe('McpSection', () => {
     render(McpSection);
     expect(await screen.findByText('Declared in Claude · Main account')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Not declared for the Pro account: locked');
-    expect(screen.getByRole('switch', { name: 'Claude can drive Escouade' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Claude and the agents can drive Escouade' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota. An agent already running gets the tools the next time its process starts.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument();
     expect(screen.getByText('Run it by hand in PowerShell:')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Escouade in Claude' })).toBeInTheDocument();

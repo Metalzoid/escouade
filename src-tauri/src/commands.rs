@@ -378,6 +378,13 @@ pub fn warm_agent(core: CoreState, id: String) {
     core.warm(&id);
 }
 
+/// « Relancer » (« Outils d'Escouade au prochain démarrage »): the agent's process, at rest,
+/// started again on the same session.
+#[tauri::command]
+pub async fn restart_agent_process(core: CoreState<'_>, id: String) -> Res<()> {
+    core.restart_process(&id).await.map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn get_conversation(core: CoreState, id: String) -> Res<Vec<Value>> {
     // Buffered deltas are already in the snapshot: send them before it, not after.
@@ -1483,7 +1490,7 @@ pub async fn integration_resync(core: CoreState<'_>, ticket_id: String) -> Res<(
     core.integration_resync(&ticket_id).await.map_err(err)
 }
 
-/// The MCP server (« Claude peut piloter Escouade »): running or not, its port, why it failed.
+/// The MCP server (« Claude et les agents peuvent piloter Escouade »): running or not, its port, why it failed.
 // Off the main thread: a start waiting for its port is no reason for the window to wait.
 #[tauri::command(async)]
 pub fn mcp_status(core: CoreState) -> crate::mcp::McpStatus {
@@ -1502,7 +1509,7 @@ pub fn mcp_clear_activity(core: CoreState) {
     core.mcp.activity.clear();
 }
 
-/// « Claude peut piloter Escouade » turned on or off: saved at once, not through the settings
+/// « Claude et les agents peuvent piloter Escouade » turned on or off: saved at once, not through the settings
 /// modal's draft (it writes into the Claude Code config of each account, which « Annuler » could
 /// not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
 #[tauri::command(async)]

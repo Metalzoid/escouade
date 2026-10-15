@@ -1,10 +1,11 @@
 import fs from 'node:fs';
-import { addProject, expect, test, type App } from './fixture';
+import { addProject, expect, send, test, type App } from './fixture';
 
 // Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
 // and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
 
-const SWITCH = 'Claude peut piloter Escouade';
+// The one switch (ESC-91): Claude Code outside Escouade and every agent of Escouade.
+const SWITCH = 'Claude et les agents peuvent piloter Escouade';
 
 /** What the fake `claude mcp add` wrote of the server in Principal's .claude.json, if it did. */
 function declared(app: App): { url: string; token: string } | null {
@@ -118,7 +119,7 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   await expect.poll(() => declared(app)).toBeNull();
   const removes = app.launches().filter((l) => l.argv[0] === 'mcp' && l.argv[1] === 'remove');
   expect(removes.map((l) => l.argv.slice(1))).toEqual([['remove', 'escouade', '--scope', 'user']]);
-  // The server is stopped with it (no project lets its agents use it): the old token opens nothing.
+  // The server is stopped with it: the old token opens nothing.
   await expect(async () => {
     const res = await fetch(before.url, { method: 'POST', headers: { authorization: `Bearer ${before.token}` }, body: '{}' }).catch(
       () => null,
@@ -131,4 +132,88 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
   const after = declared(app)!;
   expect(after.token).not.toBe(before.token);
+});
+
+/** The launches of an agent's process (a stream), apart from `claude mcp …` and the one-shot calls (naming…). */
+const streams = (app: App) => app.launches().filter((l) => l.argv.includes('--input-format'));
+const optionValue = (argv: string[], name: string) => argv[argv.indexOf(name) + 1];
+
+test('the one switch reaches agents already running: their conversation says so, and « Relancer » resumes the session with the tools', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  await send(page, 'Bonjour');
+  await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+  // Started with the switch off: Escouade's tools refused, and its server kept out of it (else an entry of the user's
+  // config would still give it the server's instructions).
+  const first = streams(app).at(-1)!;
+  expect(first.argv).toContain('--disallowedTools');
+  expect(first.argv).not.toContain('--mcp-config');
+  expect(JSON.parse(fs.readFileSync(optionValue(first.argv, '--settings'), 'utf8'))).toEqual({
+    deniedMcpServers: [{ serverName: 'escouade' }],
+  });
+  const banner = page.getByRole('region', { name: 'Outils d’Escouade au prochain démarrage' });
+  await expect(banner).toBeHidden();
+
+  // On: the settings count the agent already running, which gets the tools at its next start.
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await dialog.getByRole('tab', { name: 'Claude Code' }).click();
+  await dialog.getByRole('switch', { name: SWITCH }).click();
+  await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+  await expect(
+    dialog.getByText('1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation.'),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Fermer' }).click();
+
+  // Its conversation says so; « Relancer » starts its process again on its session, with the server as itself.
+  await expect(banner).toBeVisible();
+  const before = streams(app).length;
+  await banner.getByRole('button', { name: 'Relancer' }).click();
+  await expect(banner).toBeHidden();
+  await expect.poll(() => streams(app).length).toBe(before + 1);
+  const restarted = streams(app).at(-1)!;
+  // The session of its first process, where « Bonjour » went (the fake names a new one after its process id).
+  expect(first.argv.some((a) => a.startsWith('--resume='))).toBe(false);
+  expect(restarted.argv).toContain(`--resume=sess-${first.pid}`);
+  expect(restarted.argv).toContain('--mcp-config');
+  expect(restarted.argv).not.toContain('--disallowedTools');
+  expect(restarted.argv).not.toContain('--settings');
+  // Nothing of the conversation is lost, and it goes on.
+  await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+  await send(page, 'Encore');
+  await expect(page.getByText('Bonjour, tu as dit : Encore')).toBeVisible();
+});
+
+test.describe('the switch saved on, the app starting', () => {
+  test.use({ preStart: { run: () => ({ mcpEnabled: true }) } });
+
+  test('a new agent of a project reaches the server as itself, with nothing to allow in the project', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await expect.poll(() => streams(app).length).toBeGreaterThan(0);
+    const launch = streams(app).at(-1)!;
+    expect(launch.argv).not.toContain('--disallowedTools');
+    const entry = JSON.parse(fs.readFileSync(optionValue(launch.argv, '--mcp-config'), 'utf8')).mcpServers.escouade;
+    const agent = { url: entry.url, token: String(entry.headers.Authorization).replace(/^Bearer /, '') };
+    // Its own token, not the one of Claude outside Escouade, and the server's tools with it.
+    await expect.poll(() => declared(app)?.token ?? null).not.toBeNull();
+    expect(agent.token).not.toBe(declared(app)!.token);
+    const init = await rpc(agent, 1, 'initialize', {
+      protocolVersion: '2025-11-25',
+      capabilities: {},
+      clientInfo: { name: 'e2e', version: '1.0.0' },
+    });
+    expect(init.status).toBe(200);
+    await rpc(agent, null, 'notifications/initialized', {});
+    const tools = await rpc(agent, 2, 'tools/list', {});
+    expect(tools.json.result.tools.map((t: { name: string }) => t.name)).toContain('create_ticket');
+    // And the project's settings have no switch of their own any more.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await expect(dialog.getByRole('switch', { name: 'Un worktree par agent' })).toBeVisible();
+    await expect(dialog.getByRole('switch', { name: 'Les agents peuvent utiliser Escouade' })).toHaveCount(0);
+  });
 });

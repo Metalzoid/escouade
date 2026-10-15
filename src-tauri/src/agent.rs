@@ -183,6 +183,12 @@ pub struct AgentRt {
     /// « continue »), until its entry is read from the transcript: no task of the user's, it
     /// never names the agent (not saved).
     pub(crate) unprompted: Option<String>,
+    /// Its live process (or interface) was started with Escouade's server kept out of it
+    /// (`AgentAccess::Denied`).
+    pub(crate) without_escouade: bool,
+    /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
+    /// which a start now would give (`Core::mark_escouade_next`, ESC-91).
+    pub(crate) escouade_next: bool,
 }
 
 /// Claude Code's interface running for an agent (`tui`).
@@ -325,7 +331,17 @@ impl AgentRt {
             tui_since: None,
             naming_asked: false,
             unprompted: None,
+            without_escouade: false,
+            escouade_next: false,
         }
+    }
+
+    /// A process (or an interface) of the agent started, given Escouade's server or not; `grants`:
+    /// a start now would give it (read after the access was decided: a switch turned on in
+    /// between, whose `Core::mark_escouade_next` found no process yet, is not missed).
+    pub(crate) fn started_with_escouade(&mut self, given: bool, grants: bool) {
+        self.without_escouade = !given;
+        self.escouade_next = !given && grants;
     }
 
     /// `prompt`, read from the transcript, is the message the app typed by itself (`unprompted`):
@@ -364,6 +380,7 @@ impl AgentRt {
             meta: self.meta.clone(),
             active_since: self.active_since,
             alive: self.proc.is_some() || self.tui.is_some(),
+            escouade_next: self.escouade_next && (self.proc.is_some() || self.tui.is_some()),
             terminal_id: self.tui.as_ref().map(|t| t.term_id.clone()),
             pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),
             requests: self.pending.iter().map(|p| p.view.clone()).collect(),

@@ -706,7 +706,7 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) import_lock: tokio::sync::Mutex<()>,
     /// The searches through the conversations the window started (Ctrl+K).
     searches: convsearch::Searches,
-    /// The MCP server (« Claude peut piloter Escouade »), running while `sync_mcp` wants it.
+    /// The MCP server (« Claude et les agents peuvent piloter Escouade »), running while `sync_mcp` wants it.
     pub(crate) mcp: crate::mcp::McpServer<R>,
     /// The server the hooks of the agents' Claude Code interfaces call (`tui`).
     pub(crate) hooks: crate::tui::Hooks,
@@ -1721,9 +1721,9 @@ impl<R: Runtime> Core<R> {
             self.telemetry.track(self.started_event());
         }
         if mcp_was_enabled && !mcp_enabled {
-            // « Claude peut piloter Escouade » turned off: the token changes at once, and its entry
-            // leaves every account (`declare_now`, on its own task).
-            self.mcp.turned_off();
+            // « Claude et les agents peuvent piloter Escouade » turned off: the token changes at once, and its entry
+            // leaves every account (`declare_now`, on its own task); the agents lose it at once.
+            self.mcp_turned_off();
         }
         let lang = self.lang();
         if lang != before {
@@ -1762,7 +1762,7 @@ impl<R: Runtime> Core<R> {
         }
         // Claude Code may be found now, or no agent waits for its quota any more: the board goes on.
         self.schedule();
-        // « Claude peut piloter Escouade » may have changed.
+        // « Claude et les agents peuvent piloter Escouade » may have changed.
         self.sync_mcp();
         Ok(())
     }
@@ -2376,7 +2376,7 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (mut opts, gen, project_id) = {
+        let (mut opts, gen) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let opts = SpawnOpts {
@@ -2385,7 +2385,7 @@ impl<R: Runtime> Core<R> {
                 args: claude_args(&rt.meta),
                 env: [settings.agent_env(), accounts::launch_env(&account)].concat(),
             };
-            (opts, rt.gen, rt.meta.project_id.clone())
+            (opts, rt.gen)
         };
         if !Path::new(&opts.cwd).is_dir() {
             bail!(tr!(
@@ -2395,8 +2395,17 @@ impl<R: Runtime> Core<R> {
             ));
         }
         self.ready_for_wsl(&opts.program, h);
-        // Escouade's MCP server, as this agent (a token of its own) or refused to it.
-        let access = self.agent_access(id, &project_id);
+        // Escouade's MCP server, as this agent (a token of its own) or kept out of it.
+        let access = self.agent_access(id);
+        if let Some(refusal) = access.refusal() {
+            match self.mcp_refusal_file(&refusal) {
+                Ok(file) => opts
+                    .args
+                    .extend(["--settings".into(), file.to_string_lossy().into_owned()]),
+                // Its tools refused all the same (`args`).
+                Err(e) => log::warn!("agent {id}: Escouade's server not kept out: {e:#}"),
+            }
+        }
         opts.args.extend(access.args());
         // Given back when this process ends, unless a newer one of the agent has its own.
         let token = access.token().map(str::to_string);
@@ -2436,7 +2445,18 @@ impl<R: Runtime> Core<R> {
                 return Err(e);
             }
         };
-        h.lock().attach(proc.clone());
+        {
+            let mut rt = h.lock();
+            rt.attach(proc.clone());
+            // Read under its lock: a `mark_escouade_next` (or a switch turned off) that comes after
+            // sees the process, and one that came before is read here: a token forgotten meanwhile
+            // gives nothing (no lock of the settings or the server is held while an agent's is
+            // taken).
+            let given = token
+                .as_deref()
+                .is_some_and(|t| self.mcp.caller(t).is_some());
+            rt.started_with_escouade(given, self.escouade_granted());
+        }
         // The app began to quit while it started: the stop of the processes missed this one.
         if self.quitting.load(Ordering::Acquire) {
             if let Some(p) = h.lock().proc.take() {
@@ -2516,6 +2536,52 @@ impl<R: Runtime> Core<R> {
                 log::warn!("warm-up failed: {e:#}");
             }
         });
+    }
+
+    /// « Relancer »: the agent's process, at rest, stopped (its input closed, killed if it does
+    /// not end) and started again on the same session (`--resume`): nothing of its conversation is
+    /// lost, and the new process has what a start gives now, Escouade's server among it once
+    /// « Claude et les agents peuvent piloter Escouade » was turned on after it started (ESC-91).
+    /// Refused while it works, waits for an answer, has its worktree set up or runs a subagent or
+    /// a workflow in the background (what it waits for, or does, would be lost), and once archived.
+    pub async fn restart_process(self: &Arc<Self>, id: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        {
+            // Its process is not started again meanwhile (a message, a warm-up wait for the lock).
+            let lock = self.spawn_lock(id);
+            let _guard = lock.lock().await;
+            let stopped = {
+                let mut rt = h.lock();
+                if rt.meta.terminal {
+                    bail!(tr!(
+                        "L’agent est en vue Claude Code : relance son interface depuis son terminal.",
+                        "The agent is in the Claude Code view: restart its interface from its terminal."
+                    ));
+                }
+                if rt.meta.archived {
+                    bail!(tr!("L’agent est archivé.", "The agent is archived."));
+                }
+                let background = rt.meta.plan.as_ref().is_some_and(|p| p.runs_something());
+                if rt.meta.status.is_active() || rt.setup.is_some() || background {
+                    bail!(tr!(
+                        "L’agent travaille encore : relance son process quand il aura fini.",
+                        "The agent is still working: restart its process once it is done."
+                    ));
+                }
+                rt.detach()
+            };
+            if let Some(p) = stopped {
+                self.emit_agent(&h);
+                if !accounts::ended(&p).await {
+                    bail!(tr!(
+                        "Le process de l’agent ne s’arrête pas.",
+                        "The agent’s process won’t stop."
+                    ));
+                }
+            }
+        }
+        self.ensure_process(id).await?;
+        Ok(())
     }
 
     // ---------- remote control ----------
@@ -4550,7 +4616,6 @@ impl<R: Runtime> Core<R> {
             worktree_teardown: Vec::new(),
             integrations: ProjectIntegrations::default(),
             commit_mode: CommitMode::default(),
-            agents_use_escouade: false,
             account: String::new(),
             worktree_dir: String::new(),
             agent_branch_prefix: crate::model::default_agent_branch_prefix(),
@@ -4614,7 +4679,6 @@ impl<R: Runtime> Core<R> {
         cur.worktree_setup = p.worktree_setup;
         cur.worktree_teardown = p.worktree_teardown;
         cur.commit_mode = p.commit_mode;
-        cur.agents_use_escouade = p.agents_use_escouade;
         cur.account = account;
         let dir_changed = cur.worktree_dir != worktree_dir;
         cur.worktree_dir = worktree_dir;
@@ -4631,8 +4695,6 @@ impl<R: Runtime> Core<R> {
         if dir_changed {
             self.watch_project(&updated);
         }
-        // « Les agents peuvent utiliser Escouade » may have changed.
-        self.sync_mcp();
         // The account its tickets go to may have changed, and so what holds them back.
         if account_changed {
             self.schedule();
@@ -4717,8 +4779,6 @@ impl<R: Runtime> Core<R> {
         self.update_tray();
         // Its agents are gone: one of them may have held the board waiting for its quota.
         self.schedule();
-        // It may have been the last whose agents use Escouade.
-        self.sync_mcp();
         Ok(())
     }
 

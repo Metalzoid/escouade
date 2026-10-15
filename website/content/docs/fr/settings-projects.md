@@ -1,6 +1,6 @@
 # Réglages : Projets
 
-L’onglet « Projets » règle un projet à la fois : son nom et sa couleur, ses worktrees, la façon dont ses commits sont rédigés, ses commandes de préparation, de démontage et de lancement, et l’accès de ses agents à Escouade.
+L’onglet « Projets » règle un projet à la fois : son nom et sa couleur, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
 
 ## Choisir le projet
 
@@ -59,14 +59,6 @@ Ce choix concerne les boutons « Commit… » et « Commit tout… » du pan
 
 - « Rédigé par l’agent » : l’agent est invité à commiter ses modifications.
 - « Direct, avec un message proposé » : Escouade propose un message, tu le relis et tu commites toi-même.
-
-## Serveur MCP
-
-| Réglage | Effet | Par défaut |
-|---|---|---|
-| « Les agents peuvent utiliser Escouade » | Les agents du projet lisent les tickets et les agents, et peuvent créer des tickets ou lancer d’autres agents, ce qui dépense du quota. Chaque agent reçoit un jeton à lui. S’applique au prochain démarrage de son processus. | Désactivé |
-
-Le [serveur MCP](mcp) tourne dès qu’un projet laisse ses agents l’utiliser, même quand « Claude peut piloter Escouade » est éteint dans l’onglet [« Claude Code »](settings-claude-code).
 
 ## Worktrees
 

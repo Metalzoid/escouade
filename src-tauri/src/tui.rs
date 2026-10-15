@@ -15,6 +15,7 @@
 use crate::accounts;
 use crate::agent::{Effects, TuiRun};
 use crate::core::Core;
+use crate::mcp::AgentAccess;
 use crate::model::*;
 use crate::pty::TermInfo;
 use anyhow::{anyhow, bail, Context, Result};
@@ -83,11 +84,19 @@ impl Hooks {
     fn agent_of(&self, token: &str) -> Option<String> {
         self.tokens.lock().get(token).cloned()
     }
+
+    /// The agent has an interface's token.
+    #[cfg(test)]
+    pub(crate) fn holds(&self, agent_id: &str) -> bool {
+        self.tokens.lock().values().any(|a| a == agent_id)
+    }
 }
 
 /// The settings an interface is started with (`--settings <file>`): its hooks, each an HTTP call
-/// to `port` with the token of its environment.
-pub fn hook_settings(port: u16) -> Value {
+/// to `port` with the token of its environment, and, Escouade's tools refused to it (`access`),
+/// the server itself kept out (`AgentAccess::refusal`: Claude Code reads the last `--settings`
+/// only, so both are in this one).
+pub fn tui_settings(port: u16, access: &AgentAccess) -> Value {
     let hook = json!([{ "hooks": [{
         "type": "http",
         "url": format!("http://127.0.0.1:{port}{PATH}"),
@@ -99,7 +108,11 @@ pub fn hook_settings(port: u16) -> Value {
         .iter()
         .map(|e| (e.to_string(), hook.clone()))
         .collect();
-    json!({ "hooks": hooks })
+    let mut settings = json!({ "hooks": hooks });
+    if let Some(Value::Object(refusal)) = access.refusal() {
+        settings.as_object_mut().unwrap().extend(refusal);
+    }
+    settings
 }
 
 /// The arguments of an agent's interface, as its stream's are (`claude_args`) less the stream's
@@ -382,13 +395,9 @@ impl<R: Runtime> Core<R> {
         let dir = self.data.root().join("tui");
         std::fs::create_dir_all(&dir)?;
         let settings_file = dir.join(format!("{id}.json"));
-        std::fs::write(
-            &settings_file,
-            serde_json::to_vec_pretty(&hook_settings(port))?,
-        )?;
         let config_dir = accounts::config_dir(&account, &settings);
         let started = now_ms();
-        let (args, cwd, project_id, name, gen, transcript, since) = {
+        let (args, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();
             // A session of its own from the start: its transcript is known before any hook.
             let new_session = rt
@@ -423,7 +432,6 @@ impl<R: Runtime> Core<R> {
             (
                 args,
                 rt.meta.cwd.clone(),
-                rt.meta.project_id.clone(),
                 rt.meta.name.clone(),
                 rt.gen,
                 (transcript, offset),
@@ -439,8 +447,18 @@ impl<R: Runtime> Core<R> {
         }
         self.ready_for_wsl(&program, &h);
         let mut args = args;
-        let access = self.agent_access(id, &project_id);
+        let access = self.agent_access(id);
         args.extend(access.args());
+        // Its hooks, and Escouade's server kept out of it when its tools are refused.
+        let written = serde_json::to_vec_pretty(&tui_settings(port, &access))
+            .map_err(anyhow::Error::from)
+            .and_then(|b| Ok(std::fs::write(&settings_file, b)?));
+        if let Err(e) = written {
+            if let Some(t) = access.token() {
+                self.mcp.release_agent(id, t);
+            }
+            return Err(e);
+        }
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         env.push((TOKEN_VAR.into(), token));
@@ -500,6 +518,9 @@ impl<R: Runtime> Core<R> {
                 program,
             });
             rt.tui_since = since;
+            // Under its lock, as a process's start does it (`start_process_of`).
+            let given = access.token().is_some_and(|t| self.mcp.caller(t).is_some());
+            rt.started_with_escouade(given, self.escouade_granted());
         }
         self.emit_agent(&h);
         self.request_save();
@@ -755,15 +776,23 @@ impl<R: Runtime> Core<R> {
             .is_ok_and(|h| h.lock().tui.as_ref().is_some_and(|t| t.gen == gen))
         {
             self.read_transcript(id);
-            self.hooks.revoke(id);
-            let _ = self.with_agent(id, |rt, fx| {
-                if rt.tui.as_ref().is_some_and(|t| t.gen == gen) {
-                    rt.stop_tui(fx);
-                    fx.save = true;
-                }
-                Ok(())
-            });
+            self.tui_ended(id, gen);
         }
+    }
+
+    /// The interface `gen` of the agent is over: its hooks' token is refused and the agent's run of
+    /// it ends, only if, under the agent's lock, it is still the one running. A newer one, which
+    /// takes its place under that lock before it is given a token, keeps its own (« Relancer » kills
+    /// a live interface just before the next one starts, and the old one's exit may come after).
+    pub(crate) fn tui_ended(self: &Arc<Self>, id: &str, gen: u64) {
+        let _ = self.with_agent(id, |rt, fx| {
+            if rt.tui.as_ref().is_some_and(|t| t.gen == gen) {
+                self.hooks.revoke(id);
+                rt.stop_tui(fx);
+                fx.save = true;
+            }
+            Ok(())
+        });
     }
 
     /// A message for an agent in the Claude Code view: typed in its interface, as pasted text
@@ -954,7 +983,11 @@ mod tests {
 
     #[test]
     fn the_hooks_call_the_server_with_the_token_of_the_environment() {
-        let s = hook_settings(4321);
+        let granted = AgentAccess::Granted {
+            config: PathBuf::from("/data/mcp/a1.json"),
+            token: "t".into(),
+        };
+        let s = tui_settings(4321, &granted);
         let h = &s["hooks"]["PermissionRequest"][0]["hooks"][0];
         assert_eq!(h["type"], "http");
         assert_eq!(h["url"], "http://127.0.0.1:4321/hook");
@@ -963,6 +996,19 @@ mod tests {
         for e in EVENTS {
             assert!(s["hooks"][e].is_array(), "{e}");
         }
+        assert!(s.get("deniedMcpServers").is_none(), "{s}");
+    }
+
+    #[test]
+    fn an_interface_refused_escouades_tools_is_kept_from_its_server_by_the_same_settings() {
+        // Claude Code reads the last `--settings` only: the refusal goes into the hooks' file.
+        let s = tui_settings(4321, &AgentAccess::Denied);
+        assert!(s["hooks"]["PermissionRequest"].is_array(), "{s}");
+        assert_eq!(
+            s["deniedMcpServers"],
+            json!([{ "serverName": "escouade" }]),
+            "{s}"
+        );
     }
 
     #[test]

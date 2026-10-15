@@ -1,5 +1,5 @@
-//! Escouade's server declared in Claude Code, account by account (« Claude peut piloter
-//! Escouade »): `claude mcp add --scope user --transport http escouade <url> --header
+//! Escouade's server declared in Claude Code, account by account (« Claude et les agents peuvent
+//! piloter Escouade »): `claude mcp add --scope user --transport http escouade <url> --header
 //! "Authorization: Bearer <token>"`, run as the account runs Claude Code (its `claude`, its
 //! `CLAUDE_CONFIG_DIR`), so that the entry lands in that account's `.claude.json`.
 //!
@@ -357,7 +357,7 @@ pub struct Declaration {
     pub command: String,
 }
 
-// The declaration in each account, kept in step with the settings: « Claude peut piloter Escouade »
+// The declaration in each account, kept in step with the settings: « Claude et les agents peuvent piloter Escouade »
 // turned on or off, an account added, switched on or off, the server on another port.
 impl<R: Runtime> Core<R> {
     /// The app's `CLAUDE_CONFIG_DIR` and home folder as the account's `claude` goes by them
@@ -467,15 +467,15 @@ impl<R: Runtime> Core<R> {
         let status = self.mcp.status();
         if !settings.mcp_enabled || !status.running {
             bail!(tr!(
-                "Le serveur MCP ne tourne pas : active « Claude peut piloter Escouade ».",
-                "The MCP server is not running: turn on “Claude can drive Escouade”."
+                "Le serveur MCP ne tourne pas : active « Claude et les agents peuvent piloter Escouade ».",
+                "The MCP server is not running: turn on “Claude and the agents can drive Escouade”."
             ));
         }
         let token = self.mcp.external_token()?;
         Ok(self.manual_command(&settings, account, &wanted(status.port, &token)))
     }
 
-    /// « Claude peut piloter Escouade » turned on or off: saved like any setting, which starts or
+    /// « Claude et les agents peuvent piloter Escouade » turned on or off: saved like any setting, which starts or
     /// stops the server and declares it in the accounts (or takes it out of them). One change of
     /// the settings at a time, with those of the Claude accounts.
     pub fn set_mcp_enabled(self: &Arc<Self>, enabled: bool) -> Result<()> {

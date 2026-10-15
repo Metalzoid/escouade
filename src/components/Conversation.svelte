@@ -402,6 +402,32 @@
     return () => ro.disconnect();
   });
 
+  /** « Relancer » of « Outils d’Escouade au prochain démarrage » under way, for this agent. */
+  let restarting = $state<string | null>(null);
+  /**
+   * At work: a turn, a question, the setup of its worktree, a subagent or a workflow going on in the background. Its
+   * process is restarted once it is done (what it waits for, or does, would be lost), as the backend refuses it.
+   */
+  const working = $derived(
+    agent.status === 'running' ||
+      agent.status === 'waiting' ||
+      !!agent.setup ||
+      !!agent.plan?.agents.some((a) => a.status === 'running') ||
+      !!agent.plan?.workflows.some((w) => w.status === 'running'),
+  );
+
+  /** Its process started again on its session (ESC-91); in the Claude Code view, its interface (`AgentTerminal`). */
+  async function restartProcess() {
+    if (agent.terminal) {
+      app.relaunched[agent.id] = (app.relaunched[agent.id] ?? 0) + 1;
+      return;
+    }
+    const id = agent.id;
+    restarting = id;
+    await app.run(api.restartAgentProcess(id));
+    if (restarting === id) restarting = null;
+  }
+
   function rename() {
     app.modal = {
       kind: 'rename',
@@ -425,6 +451,19 @@
 </script>
 
 <svelte:window onpointerup={() => (dragging = false)} onpointercancel={() => (dragging = false)} />
+
+<!-- « Outils d’Escouade au prochain démarrage »: its process started before Claude and the agents could drive Escouade. -->
+{#snippet nextStart()}
+  {#if agent.escouadeNext && !agent.archived}
+    <div class="banner next" class:top={agent.terminal} role="region" aria-label={t('conv.escouadeNext.title')}>
+      <div class="what">
+        <strong>{t('conv.escouadeNext.title')}</strong>
+        <span>{t('conv.escouadeNext.text')}{working ? ` ${t('conv.escouadeNext.busy')}` : ''}</span>
+      </div>
+      <button class="btn" disabled={working || restarting === agent.id} onclick={restartProcess}>{t('conv.escouadeNext.restart')}</button>
+    </div>
+  {/if}
+{/snippet}
 
 <!-- `.conv` is where the keys answering a waiting request apply (answersHere, in shortcuts.ts). -->
 <main class="conv">
@@ -548,6 +587,7 @@
   <PlanBanner {agent} />
 
   {#if agent.terminal && !agent.archived}
+    {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
     <!-- Focusable for the keyboard to go on reading once the last of the older items are drawn (showOlder). -->
@@ -672,6 +712,7 @@
       {#if agent.status === 'error'}
         <div class="banner err">{t('conv.stopped')}</div>
       {/if}
+      {@render nextStart()}
       <Composer {agent} />
     {/if}
   {/if}
@@ -1004,5 +1045,25 @@
   }
   .banner.err {
     border-color: color-mix(in oklch, var(--del) 50%, transparent);
+  }
+  .banner.next {
+    border-color: color-mix(in oklch, var(--accent) 45%, transparent);
+  }
+  /* Above the terminal of the Claude Code view rather than above the composer. */
+  .banner.top {
+    margin-top: 10px;
+  }
+  .next .what {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .next strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .next .btn {
+    flex-shrink: 0;
   }
 </style>

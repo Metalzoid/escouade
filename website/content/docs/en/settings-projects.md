@@ -1,6 +1,6 @@
 # Settings: Projects
 
-The “Projects” tab sets one project at a time: its name and color, its worktrees, how its commits are written, its setup, teardown, and launch commands, and its agents’ access to Escouade.
+The “Projects” tab sets one project at a time: its name and color, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
 
 ## Choosing the project
 
@@ -59,14 +59,6 @@ This choice concerns the “Commit…” and “Commit all…” buttons of the 
 
 - “Written by the agent”: the agent is asked to commit its changes.
 - “Direct, with a suggested message”: Escouade suggests a message, you review it, and you commit yourself.
-
-## MCP server
-
-| Setting | Effect | Default |
-|---|---|---|
-| “Agents can use Escouade” | The project’s agents read the tickets and the agents, and can create tickets or start other agents, which uses quota. Each agent gets a token of its own. Applies the next time its process starts. | Off |
-
-The [MCP server](mcp) runs as soon as a project lets its agents use it, even when “Claude can drive Escouade” is off in the [“Claude Code”](settings-claude-code) tab.
 
 ## Worktrees
 

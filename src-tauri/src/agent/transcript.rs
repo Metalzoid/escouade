@@ -247,7 +247,7 @@ impl AgentRt {
         self.on_result(&result, fx);
     }
 
-    /// One of the hooks its Claude Code interface calls (`tui::hook_settings`).
+    /// One of the hooks its Claude Code interface calls (`tui::tui_settings`).
     pub fn on_hook(&mut self, h: &Value, fx: &mut Effects) -> HookOutcome {
         let mut out = HookOutcome::default();
         if let Some(sid) = h["session_id"].as_str() {

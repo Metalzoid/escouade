@@ -387,6 +387,16 @@ impl PlanState {
                 .all(|w| w.status != RunStatus::Running)
     }
 
+    /// A subagent or a workflow is running: in the background, it goes on after the turn, in
+    /// the process (which a restart would kill).
+    pub fn runs_something(&self) -> bool {
+        self.agents.iter().any(|a| a.status == RunStatus::Running)
+            || self
+                .workflows
+                .iter()
+                .any(|w| w.status == RunStatus::Running)
+    }
+
     /// Forgets everything (a new conversation, a new plan).
     pub fn reset(&mut self) -> Change {
         let had = !self.is_empty() || self.title.is_some() || self.plan_file.is_some();

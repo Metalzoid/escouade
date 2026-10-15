@@ -196,6 +196,8 @@ class AppState {
   shells = $state<ShellInfo[]>([]);
   terminals = $state<TermInfo[]>([]);
   exitedTerms = $state<Record<string, number | null>>({});
+  /** How many times the agent's interface was asked to start again from outside its view (« Outils d’Escouade au prochain démarrage »), by agent. */
+  relaunched = $state<Record<string, number>>({});
   /** Terminals the window killed itself, whose exit is still to come: nobody reads it. */
   private droppedTerms = new Set<string>();
   /**

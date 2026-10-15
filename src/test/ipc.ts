@@ -87,7 +87,6 @@ export function project(over: Partial<Project> = {}): Project {
     integrations: { links: [], comments: ['review', 'done'] },
     commitMode: 'agent',
     account: '',
-    agentsUseEscouade: false,
     worktreeDir: '',
     agentBranchPrefix: 'escouade/',
     ticketBranchPrefix: 'ticket/',
@@ -121,6 +120,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     prompts: 0,
     activeSince: null,
     alive: true,
+    escouadeNext: false,
     pending: [],
     requests: [],
     contextTokens: 0,
@@ -258,6 +258,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.board = {};
   app.boardIssues = {};
   app.setupOutput = {};
+  app.relaunched = {};
   app.autopilotPause = null;
   app.claudePathFound = true;
   app.projectPauses = {};

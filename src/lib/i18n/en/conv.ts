@@ -35,6 +35,13 @@ export default defineZone('conv', {
     imageTooBig: '{name} is over {max}: Claude Code won’t get it.',
   },
 
+  escouadeNext: {
+    title: 'Escouade’s tools at the next start',
+    text: 'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays; a command running in the background stops.',
+    busy: 'It can be restarted once it is done with what it is doing.',
+    restart: 'Restart',
+  },
+
   loadError: 'Couldn’t load the conversation: {error}',
   empty: {
     title: 'Agent ready',

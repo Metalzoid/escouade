@@ -69,4 +69,30 @@ describe('the agent in Claude Code’s interface', () => {
     expect(terms.disposed).toEqual(['t1']);
     expect(screen.queryByText('Claude Code s’est arrêté.')).toBeNull();
   });
+
+  it('starts it again when first asked from elsewhere, the count not there before', async () => {
+    const a = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend();
+    render(AgentTerminal, { agent: a });
+    await waitFor(() => expect(terms.mounted).toContain('t1'));
+    app.relaunched[a.id] = 1;
+    await waitFor(() => expect(terms.mounted).toContain('t2'));
+    expect(terms.disposed).toEqual(['t1']);
+  });
+
+  it('starts it again when asked from elsewhere (« Outils d’Escouade au prochain démarrage »), never at its first showing', async () => {
+    const a = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    // Asked before this view showed it: not asked of this one.
+    app.relaunched[a.id] = 1;
+    fakeBackend();
+    render(AgentTerminal, { agent: a });
+    await waitFor(() => expect(terms.mounted).toContain('t1'));
+    expect(terms.opened).toEqual([a.id]);
+    app.relaunched[a.id] = 2;
+    await waitFor(() => expect(terms.mounted).toContain('t2'));
+    expect(terms.disposed).toEqual(['t1']);
+    expect(terms.opened).toEqual([a.id, a.id]);
+  });
 });

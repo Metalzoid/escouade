@@ -22,10 +22,11 @@ export interface App {
   root: string;
   /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
   claudeJson: string;
-  /** Launches of the fake CLI: argv, cwd, the proxy, the Claude Code folder (`CLAUDE_CONFIG_DIR`) and the task list variable it received (null when unset). */
+  /** Launches of the fake CLI: argv, cwd, its process id (a new session of it is `sess-<pid>`), the proxy, the Claude Code folder (`CLAUDE_CONFIG_DIR`) and the task list variable it received (null when unset). */
   launches: () => {
     argv: string[];
     cwd: string;
+    pid: number;
     proxy: string | null;
     configDir: string | null;
     todoTools: string | null;

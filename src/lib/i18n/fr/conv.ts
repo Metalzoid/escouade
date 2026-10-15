@@ -38,6 +38,15 @@ export default {
     imageTooBig: '{name} dépasse {max} : Claude Code ne la recevra pas.',
   },
 
+  /** An agent whose process started without Escouade’s tools, which its next start gives (ESC-91). */
+  escouadeNext: {
+    title: 'Outils d’Escouade au prochain démarrage',
+    text: 'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste ; une commande lancée en arrière-plan s’arrête.',
+    /** A turn, a question, the setup of its worktree, a subagent or a workflow in the background. */
+    busy: 'Il pourra être relancé quand il aura fini ce qu’il fait.',
+    restart: 'Relancer',
+  },
+
   loadError: 'Impossible de charger la conversation : {error}',
   empty: {
     title: 'Agent prêt',

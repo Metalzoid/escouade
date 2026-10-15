@@ -8,20 +8,22 @@ MCP (Model Context Protocol) is the protocol through which Claude Code calls too
 
 - **Claude in a terminal**: you run `claude` wherever you like and talk to it about Escouade (“list the tickets to review in the api project”, “create a ticket to limit login attempts, then start it”).
 - **Another tool** that speaks MCP can connect the same way (see [Token and network](#token-and-network)).
-- **An Escouade agent**, when its project allows it (see [Escouade’s agents and the server](#escouade-s-agents-and-the-server)).
+- **An Escouade agent**, of any project, with a token of its own (see [Escouade’s agents and the server](#escouade-s-agents-and-the-server)).
 
 The server runs on your machine alone. It only serves to read and to give orders; it accepts no permission on your behalf, runs no command, merges nothing, and deletes nothing.
 
-## Turning on “Claude can drive Escouade”
+## Turning on “Claude and the agents can drive Escouade”
 
-1. Open Settings › Claude Code. The “Escouade in Claude” group has the “Claude can drive Escouade” switch.
+One switch gives the server to Claude outside Escouade and to the Escouade agents of every project.
+
+1. Open Settings › Claude Code. The “Escouade in Claude” group has the “Claude and the agents can drive Escouade” switch.
 2. Turn it on. It is saved at once, without “Save”: the declaration writes into the Claude Code config of each account, which “Cancel” could not undo.
 
 Escouade then starts the server and declares it in Claude Code for each active account, with the command `claude mcp add --scope user --transport http escouade <address> --header "Authorization: Bearer <token>"`, run the way the account runs Claude Code (its executable, its configuration folder). The entry lands in the account’s `.claude.json` (`~/.claude.json` for “Main”). The tab says “Declared in Claude · Main account, Pro account”.
 
 - An entry that is already up to date is left as it is. A different one (another port, another token) is replaced. An account added or reactivated later receives the declaration.
 - If it fails for an account, the tab says so (“Not declared for the Pro account: …”) and shows the command to run by hand (“Run it by hand in PowerShell:”), written for PowerShell on Windows and for `sh` elsewhere. The token is masked on screen; “Copy the command” copies the real one.
-- Turning the switch off changes the token at once, then removes the entry from every account. Deleting an account removes its own.
+- Turning the switch off changes the token at once, then removes the entry from every account. The agents already running lose the tools at once too (their tokens are forgotten): turned on again, the switch gives them back the next time their process starts (“Restart”). Deleting an account removes its own.
 - If the server does not start, the tab says so (“The server did not start: …”).
 
 Claude Code knows the server as `escouade`: its tools are called `mcp__escouade__<tool>` (for example `mcp__escouade__list_tickets`).
@@ -87,13 +89,17 @@ A permission request for an Escouade tool names it in plain words (“Escouade �
 
 ## Escouade’s agents and the server
 
-The “MCP server” group in a project’s settings (Settings › Projects) has the “Agents can use Escouade” switch, off by default.
+The “Claude and the agents can drive Escouade” switch also serves Escouade’s agents, those of every project: there is nothing to allow in a project’s settings.
 
-- On, the project’s agents receive the server with a token each. They read the tickets and the agents, and can create tickets or start other agents, which uses quota. The setting applies the next time their process starts.
-- Off, the project refuses all of Escouade’s tools to its agents, even when “Claude can drive Escouade” is on: otherwise an agent would inherit the entry in your Claude Code config and pass for Claude outside Escouade.
-- This setting takes tools away from agents and protects your quota, it is not a partition: an agent that can use them only acts in its own project, but reads the others.
+- **On**, each agent receives the server when its process starts, with a token of its own: it acts in its own name, never as Claude outside Escouade. It reads the tickets and the agents, and can create tickets or start other agents, which uses quota.
+- **Off**, the agents already running lose the tools at once, and Escouade keeps its server away from every agent that starts, even when an `escouade` entry is left in your Claude Code config: its tools are refused, and the server itself is not loaded (Escouade starts the agent with Claude Code’s `deniedMcpServers` setting). The agent therefore gets neither the tools nor the server’s instructions.
+- **An agent already running** when you turn the switch on keeps a process without the tools. Its conversation shows “Escouade’s tools at the next start” with “Restart”: its process stops and the next one resumes the same session: the conversation stays, a command running in the background stops. The button waits until it is done with what it is doing (its turn, your answer, the setup of its worktree, a subagent or a workflow in the background). In the Claude Code view, “Restart” starts its interface again. Settings › Claude Code says how many agents are in that case.
+- It is not a partition: an agent only acts in its own project, but reads the others.
 
-The server runs as soon as either setting asks for it: “Claude can drive Escouade”, or a project whose agents can use it. It stops with the app.
+The server runs while the switch is on, and stops with the app.
+
+> [!NOTE]
+> Up to 1.7, each project had its own “Agents can use Escouade” switch (Settings › Projects › MCP server). It is gone: a project that had it on while “Claude can drive Escouade” was off no longer gives the server to its agents until you turn “Claude and the agents can drive Escouade” on.
 
 In a conversation, a call to an Escouade tool carries the label “Escouade · ” followed by its name (“Escouade · Read a ticket”, “Escouade · Report progress”).
 
@@ -113,7 +119,7 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 ## Token and network
 
 - The server only listens on `127.0.0.1`, on a free port between 47000 and 47999, chosen at the first start and then kept (it only changes when its own is taken, and the declaration is then redone in every account).
-- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in Claude Code’s config (`~/.claude.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops.
+- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in Claude Code’s config (`~/.claude.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
 - A request sent by a web page (`Origin` header) or addressed to a name other than `127.0.0.1` or `localhost` is refused, even with a token: a site you visit cannot call the server.
 - Another MCP client connects to `http://127.0.0.1:<port>/mcp` with the same header. The address and the token can be read in the account’s `.claude.json`, in the `escouade` entry, or in the command the tab offers when the declaration fails.
 
@@ -121,4 +127,4 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 
 - [The autopilot](autopilot): the rules the tools take over.
 - [The Kanban](board): the tickets the tools create and move.
-- [Claude Code settings](settings-claude-code) and [Project settings](settings-projects): where the switches are.
+- [Claude Code settings](settings-claude-code): where the switch is.

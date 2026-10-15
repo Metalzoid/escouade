@@ -4,8 +4,13 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ## [Non publié]
 
+### Ajouts
+
+- « Outils d'Escouade au prochain démarrage » : un agent déjà lancé quand tu allumes « Claude et les agents peuvent piloter Escouade » le dit dans sa conversation, avec « Relancer ». Son process redémarre et reprend la même session, conversation comprise ; une commande lancée en arrière-plan s'arrête. Le bouton attend qu'il ait fini ce qu'il fait (son tour, ta réponse, la préparation de son worktree, un sous-agent en arrière-plan) ; en vue Claude Code, c'est son interface qui redémarre. Sous l'interrupteur, Réglages › Claude Code dit combien d'agents sont dans ce cas.
+
 ### Modifications
 
+- Un seul interrupteur pour le serveur MCP : « Claude peut piloter Escouade » devient « Claude et les agents peuvent piloter Escouade », et donne aussi le serveur à chaque agent d'Escouade, de tous les projets, avec un jeton à lui. L'interrupteur « Les agents peuvent utiliser Escouade » des réglages d'un projet disparaît. Un projet qui l'avait allumé alors que « Claude peut piloter Escouade » était éteint ne donne plus les outils à ses agents : allume l'interrupteur de Réglages › Claude Code pour les leur rendre. À l'inverse, si « Claude peut piloter Escouade » était déjà allumé, les agents de tous les projets reçoivent les outils au prochain démarrage de leur process. Éteint, l'interrupteur retire les outils tout de suite aux agents déjà lancés.
 - Les statistiques d'usage ne se disent plus anonymes : leur identifiant tiré au hasard les rend pseudonymes au sens du RGPD. La fenêtre du premier lancement dit « sans rien qui t'identifie » et qu'elles sont gardées 25 mois ; le réglage s'appelle « Statistiques d'usage ». « Non merci » et « Partager les statistiques » ont le même aspect : refuser n'est pas moins visible qu'accepter. La page [Confidentialité](https://escouade.dev/privacy/) donne la base légale (ton consentement), tes droits et comment les exercer, la réclamation auprès de la CNIL, l'hébergeur et les journaux du serveur.
 
 ### Corrections
@@ -13,6 +18,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 - Avec beaucoup de projets ouverts, leurs onglets défilent dans la barre du haut au lieu d'être coupés : à la molette, au pavé tactile ou par la barre de défilement fine qui paraît au survol. Le « + » qui ajoute un projet reste toujours visible, et l'onglet du projet choisi (clic, notification, raccourci clavier, vue d'ensemble) revient de lui-même dans la barre. Un fondu au bord dit qu'il y a des onglets cachés de ce côté ; il clignote dans la couleur de l'alerte quand l'un d'eux attend qu'on le regarde. Un onglet glissé près d'un bord fait défiler la barre pour être déposé parmi les onglets cachés.
 - Dans la vue Claude Code, une image collée (`Ctrl+V`, `Cmd+V` sous macOS), par exemple une capture d'écran, arrive à Claude Code : elle apparaît dans son champ comme « [Image #1] ». Plusieurs images copiées ensemble arrivent chacune à leur tour. Avant, le collage d'une image ne faisait rien : le terminal collait un texte vide. Du texte collé arrive comme avant, même quand le presse-papiers tient aussi une image (des cellules d'un tableur). Une image de plus de 18 Mo est refusée, avec un message qui le dit. Sous macOS, `Ctrl+V` arrive maintenant à Claude Code, dont c'est la touche pour lire l'image du presse-papiers.
 - Sous macOS et Linux, la connexion à un compte Claude ne referme plus le navigateur qu'elle a ouvert, qu'elle se termine ou que tu fermes son terminal. Claude Code et ce qu'il a lancé sans fenêtre sont toujours arrêtés.
+- Les agents n'avaient pas les outils d'Escouade alors que « Claude peut piloter Escouade » était allumé : sa description les promettait aux agents, mais seul l'interrupteur de chaque projet les leur donnait. Un agent sans les outils recevait en plus les instructions du serveur (« Escouade runs Claude Code agents… ») et croyait à une panne : il ne charge plus le serveur du tout.
 
 ## [1.7.6] — 2026-10-13
 

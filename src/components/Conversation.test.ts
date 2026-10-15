@@ -1668,3 +1668,81 @@ describe('« Vue Claude Code »', () => {
     expect(screen.queryByRole('button', { name: 'Vue Claude Code' })).toBeNull();
   });
 });
+
+describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
+  const banner = () => screen.queryByRole('region', { name: 'Outils d’Escouade au prochain démarrage' });
+
+  it('says nothing while the agent’s process has what a start would give it', () => {
+    setLang('fr');
+    const a = agent({ id: 'en0', status: 'done', escouadeNext: false });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(banner()).toBeNull();
+  });
+
+  it('says an agent at rest gets Escouade’s tools at its next start, and restarts its process on its session', async () => {
+    setLang('fr');
+    const a = agent({ id: 'en1', status: 'done', escouadeNext: true });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [], restart_agent_process: () => null });
+    render(Conversation, { agent: a, project: project() });
+    const region = banner()!;
+    expect(region).not.toBeNull();
+    expect(region).toHaveTextContent(
+      'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste ; une commande lancée en arrière-plan s’arrête.',
+    );
+    await userEvent.click(within(region).getByRole('button', { name: 'Relancer' }));
+    expect(b.called('restart_agent_process').map((c) => c.args)).toEqual([{ id: 'en1' }]);
+  });
+
+  it('waits for the end of what it does before it can be restarted: its turn, or a subagent in the background', () => {
+    setLang('fr');
+    const running = agent({ id: 'en2', status: 'running', escouadeNext: true });
+    const background = agent({
+      id: 'en5',
+      status: 'done',
+      escouadeNext: true,
+      plan: {
+        source: null,
+        tasks: [],
+        launched: 1,
+        workflows: [],
+        agents: [{ id: 'c1', title: 'Relire', status: 'running', background: true, tools: 0, startedAt: 1 } as never],
+      },
+    });
+    for (const a of [running, background]) {
+      resetApp({ projects: [project()], agents: [a] });
+      fakeBackend({ get_conversation: () => [] });
+      const { unmount } = render(Conversation, { agent: a, project: project() });
+      expect(within(banner()!).getByRole('button', { name: 'Relancer' })).toBeDisabled();
+      expect(banner()).toHaveTextContent('Il pourra être relancé quand il aura fini ce qu’il fait.');
+      unmount();
+    }
+  });
+
+  it('in the Claude Code view, starts its interface again (its session resumed)', async () => {
+    setLang('fr');
+    const a = agent({ id: 'en3', status: 'done', terminal: true, escouadeNext: true });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.click(within(banner()!).getByRole('button', { name: 'Relancer' }));
+    expect(b.called('restart_agent_process')).toHaveLength(0);
+    expect(app.relaunched[a.id]).toBe(1);
+  });
+
+  it('is written in English when the interface is', () => {
+    setLang('en');
+    const a = agent({ id: 'en4', status: 'done', escouadeNext: true });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    const region = screen.getByRole('region', { name: 'Escouade’s tools at the next start' });
+    expect(region).toHaveTextContent(
+      'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays; a command running in the background stops.',
+    );
+    expect(within(region).getByRole('button', { name: 'Restart' })).toBeEnabled();
+    setLang('fr');
+  });
+});

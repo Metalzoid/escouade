@@ -223,6 +223,85 @@ async fn in_the_claude_code_view_a_skill_with_arguments_names_the_agent_from_the
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_interface_refused_escouades_tools_is_started_without_its_server() {
+    // « Claude et les agents peuvent piloter Escouade » off: the interface's tools of Escouade are
+    // refused, and the server itself denied in the one settings file it is given (its hooks'),
+    // else an entry of the user's config would still give it the server's instructions (ESC-91).
+    let h = harness("tui-escouade-refused");
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let launch = h
+        .launch_log(&cwd)
+        .into_iter()
+        .rfind(|l| !l["argv"].to_string().contains("stream-json"))
+        .expect("the interface's launch");
+    let argv: Vec<String> = launch["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a.as_str().map(str::to_string))
+        .collect();
+    assert!(
+        argv.windows(2)
+            .any(|w| w == ["--disallowedTools", "mcp__escouade"]),
+        "{argv:?}"
+    );
+    let settings: Vec<&String> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--settings")
+        .map(|w| &w[1])
+        .collect();
+    assert_eq!(settings.len(), 1, "{argv:?}");
+    let s: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(settings[0]).unwrap()).unwrap();
+    assert!(s["hooks"]["PermissionRequest"].is_array(), "{s}");
+    assert_eq!(
+        s["deniedMcpServers"],
+        serde_json::json!([{ "serverName": "escouade" }])
+    );
+    // Turned on: the interface says it gets Escouade at its next start.
+    let next = |h: &Harness| h.core.agent(&id).unwrap().lock().view().escouade_next;
+    assert!(!next(&h));
+    h.core.set_mcp_enabled(true).unwrap();
+    assert!(next(&h));
+    h.core.mcp.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_killed_and_replaced_by_relancer_leaves_the_new_one_its_hooks_token() {
+    let h = harness("tui-relaunch-hooks");
+    let id = agent_in_tui(&h).await;
+    let run = |h: &Harness| {
+        let agent = h.core.agent(&id).unwrap();
+        let rt = agent.lock();
+        let t = rt.tui.as_ref().expect("an interface");
+        (t.gen, t.term_id.clone())
+    };
+    let (old_gen, old_term) = run(&h);
+    assert!(h.core.hooks.holds(&id));
+    // « Relancer » in the Claude Code view: the window kills the interface, then opens another one,
+    // which takes its place and gets a token of its own.
+    h.core.pty.kill(&old_term);
+    let info = h
+        .core
+        .open_agent_terminal(&id, (100, 30), |_| {})
+        .await
+        .unwrap();
+    let (new_gen, new_term) = run(&h);
+    assert_eq!(new_term, info.id);
+    assert!(new_gen > old_gen);
+    assert!(h.core.hooks.holds(&id));
+    // The old interface's end, however late it comes: the new one keeps its token and its run.
+    h.core.tui_ended(&id, old_gen);
+    assert!(h.core.hooks.holds(&id));
+    assert_eq!(run(&h).0, new_gen);
+    // Its own end does take them.
+    h.core.tui_ended(&id, new_gen);
+    assert!(!h.core.hooks.holds(&id));
+    assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn back_in_escouades_view_the_stream_resumes_the_same_session() {
     let h = harness("tui-back");
     let id = agent_in_tui(&h).await;

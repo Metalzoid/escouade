@@ -1,5 +1,5 @@
-//! The MCP server (« Claude peut piloter Escouade »): Claude Code, in a terminal, another tool or
-//! an agent of Escouade, reads the projects, agents and tickets and acts on them through the
+//! The MCP server (« Claude et les agents peuvent piloter Escouade »): Claude Code, in a terminal,
+//! another tool or an agent of Escouade, reads the projects, agents and tickets and acts on them through the
 //! tools of `tools`. On HTTP, on 127.0.0.1 only (`http`: hyper, guards of its own, then the
 //! official SDK `rmcp`), each request with a bearer token: the one for Claude outside Escouade
 //! (in the keychain, written into Claude Code's config) or an agent's (`grant_agent`: in memory,
@@ -86,9 +86,8 @@ const ALL_TOOLS: &str = "mcp__escouade";
 #[derive(Clone, PartialEq, Eq)]
 pub enum AgentAccess {
     /// Its tools are refused to it, those of an entry of the user's config of Claude Code included
-    /// (the agent would inherit it, and act as Claude outside Escouade, out of the rule of its own
-    /// project only): its project does not let its agents use Escouade, or it does and the server
-    /// is not running (nothing to reach), or no token could be given.
+    /// (the agent would inherit it, and act as Claude outside Escouade): the switch is off, or it
+    /// is on and the server is not running (nothing to reach), or no token could be given.
     Denied,
     /// The server, as the agent itself: `config` (`--mcp-config`) names it with `token`, the
     /// agent's own, valid until the process stops (`McpServer::release_agent`).
@@ -105,6 +104,19 @@ impl AgentAccess {
             AgentAccess::Granted { config, .. } => {
                 vec!["--mcp-config".into(), config.to_string_lossy().into_owned()]
             }
+        }
+    }
+
+    /// Refused, the settings that keep the server itself out of the process (`--settings`): its
+    /// tools refused alone, Claude Code still connects an entry of that name of the user's config,
+    /// and the agent reads the server's instructions with none of its tools (ESC-91, tried on
+    /// Claude Code 2.1.300: `deniedMcpServers` leaves the server unconnected, never asked).
+    pub fn refusal(&self) -> Option<serde_json::Value> {
+        match self {
+            AgentAccess::Denied => Some(serde_json::json!({
+                "deniedMcpServers": [{ "serverName": install::NAME }],
+            })),
+            AgentAccess::Granted { .. } => None,
         }
     }
 
@@ -182,14 +194,15 @@ pub struct McpServer<R: Runtime> {
     error: Mutex<Option<String>>,
     tokens: Tokens,
     /// One write or removal of an agent's config at a time, with its token: a process that ends
-    /// never removes the file the agent's next process is about to read (`release_agent`).
+    /// never removes the file the agent's next process is about to read (`release_agent`). The
+    /// refusal file too (`Core::mcp_refusal_file`).
     agent_files: Mutex<()>,
     /// One `create_agent` at a time, from counting the project's agents at work to sending the new
     /// one its message: two calls at once do not both find a place free.
     acting: tokio::sync::Mutex<()>,
     /// One declaration in Claude Code at a time (`Core::declare_now`).
     declaring: tokio::sync::Mutex<()>,
-    /// « Claude peut piloter Escouade » was turned off since the last declaration run: that run
+    /// « Claude et les agents peuvent piloter Escouade » was turned off since the last declaration run: that run
     /// takes the entry out of every account (the token was changed when it was turned off,
     /// `turned_off`).
     withdraw: AtomicBool,
@@ -326,18 +339,25 @@ impl<R: Runtime> McpServer<R> {
         }
     }
 
-    /// « Claude peut piloter Escouade » was turned off: the token changes now, in the save itself
+    /// « Claude et les agents peuvent piloter Escouade » was turned off: the token changes now, in the save itself
     /// (the old one opens nothing from this instant, though the app quits before any run, or a
-    /// command of it hangs), and the next declaration run takes the entry out of every account.
+    /// command of it hangs), the agents' tokens are forgotten with their files (the agents already
+    /// running lose the tools at once: turned on again, they get them back by a restart only), and
+    /// the next declaration run takes the entry out of every account.
     pub(crate) fn turned_off(&self) {
         if let Err(e) = self.renew_external_token() {
             log::error!("mcp: token not changed: {e:#}");
+        }
+        {
+            let _files = self.agent_files.lock();
+            self.tokens.agents.write().clear();
+            self.remove_agent_configs();
         }
         self.withdraw.store(true, Ordering::Release);
     }
 
     /// Where the server stands in each active account's Claude Code, as the last declaration left
-    /// it (none while « Claude peut piloter Escouade » is off).
+    /// it (none while « Claude et les agents peuvent piloter Escouade » is off).
     pub fn declared(&self) -> Vec<install::Declaration> {
         self.declared.lock().clone()
     }
@@ -477,10 +497,15 @@ impl<R: Runtime> McpServer<R> {
     /// Every agent's config file goes: the app starts or quits, and the tokens they hold (in
     /// memory only) are none the server knows any more.
     pub fn clear_agent_configs(&self) {
+        let _files = self.agent_files.lock();
+        self.remove_agent_configs();
+    }
+
+    /// `agent_files` held: the folder of the agents' configs goes.
+    fn remove_agent_configs(&self) {
         let Some(core) = self.core.upgrade() else {
             return;
         };
-        let _files = self.agent_files.lock();
         let dir = core.data.mcp_agents();
         match std::fs::remove_dir_all(&dir) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
@@ -519,7 +544,7 @@ fn new_token() -> String {
 }
 
 /// How long the port saved for the server is waited for, when something holds it: a server that
-/// stops and starts again at once (a setting, the project's switch) finds its old listener not
+/// stops and starts again at once (a setting turned off and on) finds its old listener not
 /// quite gone, and must not move to another port (it would be declared again in every account of
 /// Claude Code).
 const BIND_RETRY: Duration = Duration::from_secs(3);
@@ -589,12 +614,11 @@ fn bind_within(
 }
 
 impl<R: Runtime> Core<R> {
-    /// The MCP server is wanted: « Claude peut piloter Escouade », or a project whose agents may
-    /// use Escouade.
+    /// The MCP server is wanted: « Claude et les agents peuvent piloter Escouade », the one switch
+    /// that gives it to Claude outside Escouade and to the agents of every project (ESC-91: a
+    /// project no longer lets its agents use it on its own).
     pub fn mcp_wanted(&self) -> bool {
-        // One lock at a time.
-        let enabled = self.settings.read().mcp_enabled;
-        enabled || self.projects.read().iter().any(|p| p.agents_use_escouade)
+        self.settings.read().mcp_enabled
     }
 
     /// Starts or stops the MCP server as the settings want it (never once the app quits), then
@@ -602,7 +626,26 @@ impl<R: Runtime> Core<R> {
     /// one now is declared again everywhere).
     pub fn sync_mcp(&self) {
         self.sync_server();
+        self.mark_escouade_next();
         self.declare_in_claude();
+    }
+
+    /// Each agent whose process (or interface) runs without Escouade's server is told whether a
+    /// start now would give it (« Outils d'Escouade au prochain démarrage »): the switch or the
+    /// server changed. Its process is never restarted by itself, it may be at work.
+    fn mark_escouade_next(&self) {
+        let grants = self.escouade_granted();
+        let agents: Vec<crate::agent::AgentHandle> = self.agents.read().values().cloned().collect();
+        for h in agents {
+            let changed = {
+                let mut rt = h.lock();
+                let next = grants && rt.without_escouade && (rt.proc.is_some() || rt.tui.is_some());
+                std::mem::replace(&mut rt.escouade_next, next) != next
+            };
+            if changed {
+                self.emit_agent(&h);
+            }
+        }
     }
 
     /// The server started or stopped as the settings want it. A port chosen in place of the one
@@ -632,20 +675,34 @@ impl<R: Runtime> Core<R> {
         self.sync_mcp();
     }
 
+    /// « Claude et les agents peuvent piloter Escouade » turned off: the token of Claude outside
+    /// Escouade and the agents' are refused at once (`McpServer::turned_off`), and every agent
+    /// whose process (or interface) runs is now without Escouade's server: turned on again, it is
+    /// told it gets it at its next start (`mark_escouade_next`).
+    pub(crate) fn mcp_turned_off(&self) {
+        self.mcp.turned_off();
+        let agents: Vec<crate::agent::AgentHandle> = self.agents.read().values().cloned().collect();
+        for h in agents {
+            let mut rt = h.lock();
+            if rt.proc.is_some() || rt.tui.is_some() {
+                rt.without_escouade = true;
+            }
+        }
+    }
+
+    /// A start now would give an agent Escouade's server: the switch on, the server running.
+    pub(crate) fn escouade_granted(&self) -> bool {
+        self.mcp_wanted() && self.mcp.status().running
+    }
+
     /// What the agent's next process is started with of Escouade (`AgentAccess`):
-    /// - its project not letting its agents use Escouade, its tools refused, those of an entry of
-    ///   that name in the user's config of Claude Code included, the server running or not (the
-    ///   entry may be declared while it is stopped: it was while Claude drove Escouade);
-    /// - letting them, with the server not running, the same (none to reach, and an entry of the
-    ///   user's would be inherited as Claude outside Escouade's);
-    /// - letting them, the server as the agent itself.
-    pub(crate) fn agent_access(&self, agent_id: &str, project_id: &str) -> AgentAccess {
-        let allowed = self
-            .projects
-            .read()
-            .iter()
-            .any(|p| p.id == project_id && p.agents_use_escouade);
-        if !allowed {
+    /// - the switch off, its tools refused, those of an entry of that name in the user's config of
+    ///   Claude Code included (its removal may have failed, or the user wrote it);
+    /// - on, with the server not running, the same (none to reach, and an entry of the user's
+    ///   would be inherited as Claude outside Escouade's);
+    /// - on, the server as the agent itself, whatever its project (ESC-91).
+    pub(crate) fn agent_access(&self, agent_id: &str) -> AgentAccess {
+        if !self.mcp_wanted() {
             return AgentAccess::Denied;
         }
         let status = self.mcp.status();
@@ -661,6 +718,21 @@ impl<R: Runtime> Core<R> {
                 AgentAccess::Denied
             }
         }
+    }
+
+    /// The file of `refusal` (`AgentAccess::refusal`), for a process's `--settings`: the same for
+    /// every agent, written when it is not there as it should be (never while a `claude` starting
+    /// reads it, once it is).
+    pub(crate) fn mcp_refusal_file(&self, refusal: &serde_json::Value) -> Result<PathBuf> {
+        let file = self.data.mcp_refusal_file();
+        let bytes = serde_json::to_vec_pretty(refusal)?;
+        // One check and write at a time: two starts at once would share the same temporary file.
+        let _files = self.mcp.agent_files.lock();
+        if std::fs::read(&file).ok().as_deref() != Some(bytes.as_slice()) {
+            paths::write_atomic(&file, &bytes)
+                .with_context(|| format!("{} not written", file.display()))?;
+        }
+        Ok(file)
     }
 
     /// Saves `port` as the MCP server's.

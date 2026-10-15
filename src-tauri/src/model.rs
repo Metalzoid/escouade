@@ -54,7 +54,7 @@ pub struct Settings {
     /// "Langue des textes rédigés par Claude": "ui" (the interface's), "fr" or "en". Many teams
     /// commit in English with an interface in French.
     pub claude_language: String,
-    /// « Claude peut piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
+    /// « Claude et les agents peuvent piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
     pub mcp_enabled: bool,
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
@@ -300,10 +300,6 @@ pub struct Project {
     /// "Commit": who writes the commits of the files panel's « Commit… » and « Commit tout… ».
     #[serde(default)]
     pub commit_mode: CommitMode,
-    /// « Les agents peuvent utiliser Escouade »: its agents get the MCP server, each with a token
-    /// of its own. The server runs while a project lets them (`Core::mcp_wanted`).
-    #[serde(default)]
-    pub agents_use_escouade: bool,
     /// « Compte préféré »: the Claude account its new agents and its tickets go to (an
     /// `Account`'s id); empty is « Automatique » (`accounts::pick`).
     #[serde(default)]
@@ -873,6 +869,10 @@ pub struct AgentView {
     pub meta: AgentMeta,
     pub active_since: Option<i64>,
     pub alive: bool,
+    /// « Outils d'Escouade au prochain démarrage »: its live process has none of Escouade's tools,
+    /// which its next one gets (« Claude et les agents peuvent piloter Escouade » was turned on
+    /// since it started).
+    pub escouade_next: bool,
     /// Ids of the question/permission items awaiting an answer, in the order they were asked.
     pub pending: Vec<String>,
     /// The same requests summed up, in the same order: what « Vue d'ensemble » shows of them

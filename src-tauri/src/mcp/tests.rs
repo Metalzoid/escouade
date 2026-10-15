@@ -1000,7 +1000,7 @@ async fn a_port_taken_at_the_start_gives_another_free_one_saved_and_told() {
 }
 
 #[tokio::test]
-async fn the_server_runs_while_claude_may_drive_escouade_or_a_project_lets_its_agents() {
+async fn the_server_runs_while_claude_may_drive_escouade() {
     let h = harness("mcp-lifecycle");
     // The settings of before: off, no port yet.
     h.core.sync_mcp();
@@ -1038,35 +1038,23 @@ async fn the_server_runs_while_claude_may_drive_escouade_or_a_project_lets_its_a
             error: None
         }
     );
-    // A project whose agents may use Escouade: it runs, on its port, until none does.
+    // A project saved from the window starts nothing: the switch alone wants the server (a
+    // project no longer lets its agents use Escouade on its own, ESC-91).
     let (p, _) = h.project(false).await;
-    assert!(!p.agents_use_escouade);
-    h.core
-        .update_project(Project {
-            agents_use_escouade: true,
-            ..p.clone()
-        })
-        .unwrap();
+    h.core.update_project(p.clone()).unwrap();
+    assert!(!h.core.mcp_wanted());
+    assert!(!h.core.mcp.status().running);
+    // On again: on its port, whatever the projects; the last one closed leaves it running.
+    let on = Settings {
+        mcp_enabled: true,
+        ..h.core.settings.read().clone()
+    };
+    h.core.save_settings(on).unwrap();
     assert!(h.core.mcp.status().running);
     assert_eq!(h.core.mcp.status().port, port);
-    assert!(h.core.project(&p.id).unwrap().agents_use_escouade);
-    h.core
-        .update_project(Project {
-            agents_use_escouade: false,
-            ..p.clone()
-        })
-        .unwrap();
-    assert!(!h.core.mcp.status().running);
-    // Removed while it lets them: the server stops with it.
-    h.core
-        .update_project(Project {
-            agents_use_escouade: true,
-            ..p.clone()
-        })
-        .unwrap();
-    assert!(h.core.mcp.status().running);
     h.core.remove_project(&p.id).await.unwrap();
-    assert!(!h.core.mcp.status().running);
+    assert!(h.core.mcp.status().running);
+    h.core.mcp.stop();
 }
 
 #[tokio::test]
@@ -1085,31 +1073,32 @@ async fn settings_and_projects_saved_before_the_mcp_server_leave_it_off() {
         (&v["mcpEnabled"], &v["mcpPort"]),
         (&json!(true), &json!(47123))
     );
-    let p: Project = serde_json::from_value(
-        json!({ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }),
-    )
+    // A project of 1.7 that let its agents use Escouade (« Les agents peuvent utiliser
+    // Escouade », gone with ESC-91): read without a word, and saved without it.
+    let p: Project = serde_json::from_value(json!({
+        "id": "p1", "name": "demo", "path": "C:/demo", "color": "red", "agentsUseEscouade": true
+    }))
     .unwrap();
-    assert!(!p.agents_use_escouade);
-    assert_eq!(
-        serde_json::to_value(Project {
-            agents_use_escouade: true,
-            ..p
-        })
-        .unwrap()["agentsUseEscouade"],
-        json!(true)
-    );
-    // A data folder of 1.6, its project in it: the core loads it with the server off.
+    assert!(serde_json::to_value(&p)
+        .unwrap()
+        .get("agentsUseEscouade")
+        .is_none());
+    // A data folder of 1.6, its project in it, and one of 1.7 that let its agents use Escouade:
+    // the core loads them with the server off (the switch of the app alone wants it now).
     let data = DataDir::new(test_dir("mcp-old-settings"));
     data.ensure().unwrap();
     std::fs::write(data.settings_file(), r#"{ "sound": false }"#).unwrap();
     std::fs::write(
         data.state_file(),
-        r#"{ "projects": [{ "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" }] }"#,
+        r#"{ "projects": [
+            { "id": "p1", "name": "demo", "path": "C:/demo", "color": "red" },
+            { "id": "p2", "name": "site", "path": "C:/site", "color": "red", "agentsUseEscouade": true }
+        ] }"#,
     )
     .unwrap();
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data);
-    assert_eq!(core.projects.read().len(), 1);
+    assert_eq!(core.projects.read().len(), 2);
     assert!(!core.mcp_wanted());
     core.sync_mcp();
     assert_eq!(

@@ -108,11 +108,11 @@ The field is a number of minutes; 0 means never, and an empty field counts as 0.
 
 This group lets Claude Code, in a terminal, in another tool, or in an Escouade agent, read your projects, agents, and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
 
-### Claude can drive Escouade
+### Claude and the agents can drive Escouade
 
-The switch is off by default. It saves right away, without going through “Save”: turning it on declares the server in the Claude Code config of each active account, which a “Cancel” could not undo. Turning it off changes the token and removes the server from each account.
+The switch is off by default. It gives the server to Claude Code outside Escouade (a terminal, another tool) and to every Escouade agent, of every project, with a token of its own: there is nothing to allow in a project’s settings. It saves right away, without going through “Save”: turning it on declares the server in the Claude Code config of each active account, which a “Cancel” could not undo. Turning it off changes the token, removes the server from each account and keeps it away from the agents: those already running lose the tools at once.
 
-As long as a project lets its agents use Escouade (the “Agents can use Escouade” setting in the [“Projects”](settings-projects) tab), the server runs even with the switch off.
+An agent already running gets the tools the next time its process starts: its conversation then shows “Escouade’s tools at the next start” with “Restart”, which resumes its session in a new process, and a line under the switch says how many agents are in that case (“1 agent already running gets the tools the next time its process starts: “Restart” on its conversation.”). See [Escouade’s agents and the server](mcp#escouade-s-agents-and-the-server).
 
 With the switch on, a line below it says where the declaration stands:
 

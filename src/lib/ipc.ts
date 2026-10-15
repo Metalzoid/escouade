@@ -60,7 +60,7 @@ export const api = {
   /** The MCP server's activity log, oldest first (the last 200). */
   mcpActivity: () => invoke<McpActivityEntry[]>('mcp_activity'),
   mcpClearActivity: () => invoke<void>('mcp_clear_activity'),
-  /** « Claude peut piloter Escouade »: saved at once; the declaration in each account follows (`mcpDeclared`). */
+  /** « Claude et les agents peuvent piloter Escouade »: saved at once; the declaration in each account follows (`mcpDeclared`). */
   mcpSetEnabled: (enabled: boolean) => invoke<void>('mcp_set_enabled', { enabled }),
   /** Where the server stands in each active account's Claude Code (the command to run by hand has its token hidden). */
   mcpDeclareStatus: () => invoke<McpDeclaration[]>('mcp_declare_status'),
@@ -101,6 +101,8 @@ export const api = {
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
+  /** « Relancer »: the agent's process, at rest, started again on the same session (« Outils d'Escouade au prochain démarrage »). */
+  restartAgentProcess: (id: string) => invoke<void>('restart_agent_process', { id }),
   getConversation: (id: string) => invoke<ConvItem[]>('get_conversation', { id }),
   /** Searches the conversations of a project's agents (all projects' with null), archived agents included or not. */
   searchConversations: (query: string, projectId: string | null, archived: boolean) =>

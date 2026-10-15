@@ -842,18 +842,24 @@ const KILL_GRACE: Duration = Duration::from_secs(5);
 /// within `STOP_GRACE`) and gone. A session is never copied before: the process may write it as
 /// it ends, and the account it goes to would resume a session another still writes.
 async fn stop_and_wait(p: &Arc<ClaudeProcess>) -> Result<()> {
-    p.close_input();
-    if p.wait_exit(STOP_GRACE).await {
-        return Ok(());
-    }
-    p.kill();
-    if p.wait_exit(KILL_GRACE).await {
+    if ended(p).await {
         return Ok(());
     }
     bail!(tr!(
         "Le process de l’agent ne s’arrête pas : la session n’a pas été copiée.",
         "The agent’s process won’t stop: the session wasn’t copied."
     ))
+}
+
+/// The process stopped (its input closed, killed if it does not end within `STOP_GRACE`): whether
+/// it is gone.
+pub(crate) async fn ended(p: &Arc<ClaudeProcess>) -> bool {
+    p.close_input();
+    if p.wait_exit(STOP_GRACE).await {
+        return true;
+    }
+    p.kill();
+    p.wait_exit(KILL_GRACE).await
 }
 
 /// Refused: an account named as another one.
@@ -867,8 +873,8 @@ fn name_taken(name: &str) -> anyhow::Error {
 // The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
 // quotas settled again), one at a time (`claude_accounts_lock`).
 impl<R: Runtime> Core<R> {
-    /// The settings the window saves, but for the accounts and for « Claude peut piloter
-    /// Escouade »: those are the backend's, which their tabs change on their own (the window's copy
+    /// The settings the window saves, but for the accounts and for « Claude et les agents peuvent
+    /// piloter Escouade »: those are the backend's, which their tabs change on their own (the window's copy
     /// may be older).
     pub fn save_window_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         let _one = self.claude_accounts_lock.lock();

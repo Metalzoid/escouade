@@ -1,25 +1,25 @@
 import type { Tree } from '../types';
 
-// The MCP server: what a project lets its agents do with it, and how its tools read in the conversation.
+// The MCP server: its switch, what it was asked, and how its tools read in the conversation.
 export default {
-  project: {
-    group: 'Serveur MCP',
-    agentsUse: 'Les agents peuvent utiliser Escouade',
-    agentsUseDesc:
-      'Ils lisent les tickets et les agents, et peuvent créer des tickets ou lancer d’autres agents, ce qui dépense du quota. S’applique au prochain démarrage de leur process.',
-  },
   // The « Claude Code » tab of the settings: the server declared in Claude Code, and what it was asked.
   section: {
     title: 'Escouade dans Claude',
-    enable: 'Claude peut piloter Escouade',
+    /** The one switch (ESC-91): Claude Code outside Escouade and every agent of Escouade, each with a token of its own. */
+    enable: 'Claude et les agents peuvent piloter Escouade',
     enableDesc:
-      'Claude Code (dans un terminal, un autre outil ou un agent d’Escouade) lit tes projets, agents et tickets, et peut créer des tickets ou lancer des agents.',
+      'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
     /** `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
     declared: 'Déclaré dans Claude · {accounts}',
     account: 'compte {name}',
     working: 'Déclaration dans Claude…',
     notDeclared: 'Pas déclaré pour le compte {name} : {error}',
     serverFailed: 'Le serveur n’a pas démarré : {error}',
+    /** The agents whose process started before the switch was on (« Outils d’Escouade au prochain démarrage » on their conversation). */
+    nextStart: {
+      one: '{count} agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation.',
+      other: '{count} agents déjà lancés auront les outils au prochain démarrage de leur process : « Relancer » sur leur conversation.',
+    },
     /** `{shell}`: the shell the command is written for, PowerShell or sh. */
     command: 'À lancer à la main dans {shell} :',
     copy: 'Copier la commande',

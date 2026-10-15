@@ -87,6 +87,16 @@
     term = null;
     asked += 1;
   }
+
+  // « Relancer » of « Outils d’Escouade au prochain démarrage », asked from the conversation's banner: a new interface on
+  // the same session. What was asked before this view showed it is not asked of it.
+  let relaunched = untrack(() => app.relaunched[agent.id] ?? 0);
+  $effect(() => {
+    const n = app.relaunched[agent.id] ?? 0;
+    if (n === relaunched) return;
+    relaunched = n;
+    untrack(restart);
+  });
 </script>
 
 <div class="tui">

@@ -108,11 +108,11 @@ Le champ est un nombre de minutes ; 0 veut dire jamais, et un champ vide vaut 0.
 
 Ce groupe laisse Claude Code, dans un terminal, dans un autre outil ou dans un agent d’Escouade, lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
 
-### Claude peut piloter Escouade
+### Claude et les agents peuvent piloter Escouade
 
-L’interrupteur est désactivé par défaut. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer déclare le serveur dans la config de Claude Code de chaque compte actif, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton et retire le serveur de chaque compte.
+L’interrupteur est désactivé par défaut. Il donne le serveur à Claude Code hors d’Escouade (un terminal, un autre outil) et à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer déclare le serveur dans la config de Claude Code de chaque compte actif, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire le serveur de chaque compte et l’écarte des agents : ceux déjà lancés perdent les outils tout de suite.
 
-Tant qu’un projet laisse ses agents utiliser Escouade (réglage « Les agents peuvent utiliser Escouade » dans l’onglet [« Projets »](settings-projects)), le serveur tourne même interrupteur éteint.
+Un agent déjà lancé reçoit les outils au prochain démarrage de son processus : sa conversation affiche alors « Outils d’Escouade au prochain démarrage » avec « Relancer », qui reprend sa session dans un nouveau processus, et une ligne sous l’interrupteur dit combien d’agents sont dans ce cas (« 1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation. »). Voir [Les agents d’Escouade et le serveur](mcp#les-agents-d-escouade-et-le-serveur).
 
 Interrupteur allumé, une ligne dessous dit où en est la déclaration :
 

@@ -317,6 +317,12 @@ impl DataDir {
         self.mcp_agents().join(format!("{agent_id}.json"))
     }
 
+    /// The settings an agent refused Escouade's tools is started with (`--settings`): Escouade's
+    /// server kept out of it, whatever config declares it (`AgentAccess::refusal`).
+    pub fn mcp_refusal_file(&self) -> PathBuf {
+        self.0.join("mcp-refused.json")
+    }
+
     /// The syncs of imported tickets not through yet (`integrations::sync::SyncQueue`).
     pub fn sync_queue_file(&self) -> PathBuf {
         self.0.join("sync-queue.json")

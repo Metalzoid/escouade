@@ -267,6 +267,7 @@ pub fn run() {
             commands::remove_project,
             commands::create_agent,
             commands::warm_agent,
+            commands::restart_agent_process,
             commands::get_conversation,
             commands::search_conversations,
             commands::send_message,

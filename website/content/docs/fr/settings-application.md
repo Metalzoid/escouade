@@ -35,7 +35,7 @@ Les changements se font dans un brouillon : rien ne s’applique avant « Enreg
 
 ### Ce qui s’enregistre tout de suite
 
-Deux endroits n’attendent pas le bouton, parce qu’un « Annuler » ne pourrait pas défaire ce qu’ils écrivent sur le disque : l’onglet « Comptes Claude », où chaque changement part au moment où tu le fais, et l’interrupteur « Claude peut piloter Escouade » de l’onglet « Claude Code ».
+Deux endroits n’attendent pas le bouton, parce qu’un « Annuler » ne pourrait pas défaire ce qu’ils écrivent sur le disque : l’onglet « Comptes Claude », où chaque changement part au moment où tu le fais, et l’interrupteur « Claude et les agents peuvent piloter Escouade » de l’onglet « Claude Code ».
 
 ## L’onglet « Application »
 

@@ -7,7 +7,8 @@
 // unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
-// Every launch appends {argv, cwd, proxy, tls, configDir, todoTools} (its HTTPS_PROXY,
+// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools} (its process id, which names a
+// new session of it `sess-<pid>`, its HTTPS_PROXY,
 // NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR and CLAUDE_CODE_ENABLE_TODO_TOOLS, null when unset) to $FAKE_CLAUDE_LOG, by
 // default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
@@ -72,6 +73,7 @@ fs.appendFileSync(
   JSON.stringify({
     argv,
     cwd: process.cwd(),
+    pid: process.pid,
     proxy: process.env.HTTPS_PROXY ?? null,
     tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
     configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
@@ -95,7 +97,7 @@ const limited = () => configDir !== null && fs.existsSync(path.join(configDir, '
 const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
 
 // `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
-// Claude account (« Claude peut piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
+// Claude account (« Claude et les agents peuvent piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
 // of <CLAUDE_CONFIG_DIR>/.claude.json (an account's own folder, or the app's when it has one), else of
 // <FAKE_CLAUDE_HOME>/.claude.json (Principal, whose real file is ~/.claude.json). It refuses to run with
 // neither variable set: it never touches the real home. Like Claude Code: `add` of a name already there
@@ -271,7 +273,8 @@ if (argv[0] === 'mcp') {
     const named = `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
     process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
   });
-} else if (argv.includes('--settings')) {
+} else if (argv.includes('--settings') && !argv.includes('stream-json')) {
+  // A stream has settings too when Escouade's server is kept out of it (`deniedMcpServers`).
   tuiSession();
 } else {
   startSession();

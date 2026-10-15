@@ -40,7 +40,7 @@ export interface Settings {
   claudeLanguage: 'ui' | Lang;
   /** The Claude accounts, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
-  /** « Claude peut piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
+  /** « Claude et les agents peuvent piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
@@ -254,8 +254,6 @@ export interface Project {
   commitMode: CommitMode;
   /** « Compte préféré »: the Claude account its new agents and tickets go to (an `Account`'s id); empty is « Automatique ». */
   account: string;
-  /** « Les agents peuvent utiliser Escouade »: its agents' next processes get Escouade's MCP server, as themselves. */
-  agentsUseEscouade: boolean;
   /** « Dossier des worktrees »: where its new worktrees go, from its folder or absolute; empty is `.claude/worktrees`. */
   worktreeDir: string;
   /** « Préfixe des branches des agents »: a new agent's branch is `<prefix><name>`. */
@@ -507,6 +505,8 @@ export interface Agent {
   prompts: number;
   activeSince: number | null;
   alive: boolean;
+  /** « Outils d’Escouade au prochain démarrage »: its live process has none of Escouade’s tools, which its next one gets (ESC-91). */
+  escouadeNext: boolean;
   /** Ids of the question and permission items waiting for an answer, in the order they were asked. */
   pending: string[];
   /** The same requests summed up, in the same order: what « Vue d’ensemble » shows without the conversation. */

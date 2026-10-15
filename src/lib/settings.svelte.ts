@@ -82,7 +82,6 @@ type ProjectFields = Pick<
   | 'worktreeTeardown'
   | 'commitMode'
   | 'account'
-  | 'agentsUseEscouade'
   | 'worktreeDir'
   | 'agentBranchPrefix'
   | 'ticketBranchPrefix'
@@ -104,8 +103,6 @@ export interface ProjectDraft {
   commitMode: CommitMode;
   /** « Compte préféré »: the Claude account its agents and tickets go to; empty is « Automatique ». */
   account: string;
-  /** « Les agents peuvent utiliser Escouade ». */
-  agentsUseEscouade: boolean;
   /** « Dossier des worktrees », as typed: empty is `.claude/worktrees`. */
   worktreeDir: string;
   /** « Préfixe des branches des agents ». */
@@ -128,7 +125,6 @@ function draftOf(p: Project): ProjectDraft {
     worktreeTeardown,
     commitMode,
     account,
-    agentsUseEscouade,
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
@@ -145,7 +141,6 @@ function draftOf(p: Project): ProjectDraft {
     worktreeTeardown,
     commitMode,
     account,
-    agentsUseEscouade,
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
@@ -192,7 +187,6 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeTeardown: stepsOf(d.worktreeTeardown),
     commitMode: d.commitMode,
     account: d.account,
-    agentsUseEscouade: d.agentsUseEscouade,
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),
     ticketBranchPrefix: d.ticketBranchPrefix.trim(),

@@ -1,23 +1,21 @@
 import { defineZone } from '../types';
 
-// The MCP server: what a project lets its agents do with it, and how its tools read in the conversation.
+// The MCP server: its switch, what it was asked, and how its tools read in the conversation.
 export default defineZone('mcp', {
-  project: {
-    group: 'MCP server',
-    agentsUse: 'Agents can use Escouade',
-    agentsUseDesc:
-      'They read the tickets and the agents, and can create tickets or start other agents, which uses quota. Applies the next time their process starts.',
-  },
   section: {
     title: 'Escouade in Claude',
-    enable: 'Claude can drive Escouade',
+    enable: 'Claude and the agents can drive Escouade',
     enableDesc:
-      'Claude Code (in a terminal, another tool or an Escouade agent) reads your projects, agents and tickets, and can create tickets or start agents.',
+      'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota. An agent already running gets the tools the next time its process starts.',
     declared: 'Declared in Claude · {accounts}',
     account: '{name} account',
     working: 'Declaring in Claude…',
     notDeclared: 'Not declared for the {name} account: {error}',
     serverFailed: 'The server did not start: {error}',
+    nextStart: {
+      one: '{count} agent already running gets the tools the next time its process starts: “Restart” on its conversation.',
+      other: '{count} agents already running get the tools the next time their process starts: “Restart” on their conversation.',
+    },
     command: 'Run it by hand in {shell}:',
     copy: 'Copy the command',
     copied: 'Command copied',

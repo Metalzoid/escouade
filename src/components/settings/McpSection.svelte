@@ -40,6 +40,8 @@
 
   const declared = $derived(mcp.declared.filter((d) => d.ok));
   const failed = $derived(mcp.declared.filter((d) => !d.ok));
+  /** The agents already running whose next start gives them the tools (ESC-91). */
+  const nextStart = $derived(Object.values(app.agents).filter((a) => a.escouadeNext).length);
   /** The most recent first. */
   const calls = $derived([...mcp.activity].reverse());
 
@@ -84,6 +86,9 @@
             <div><button class="btn" onclick={() => copy(d.account)}>{t('mcp.section.copy')}</button></div>
           </div>
         {/each}
+      {/if}
+      {#if nextStart}
+        <p class="muted">{t('mcp.section.nextStart', { count: nextStart })}</p>
       {/if}
     </div>
   {/if}
