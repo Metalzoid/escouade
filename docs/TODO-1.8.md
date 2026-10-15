@@ -5,7 +5,7 @@ Deux chantiers :
 - GitHub, GitLab, Bitbucket et Gitea comme hébergeurs de code, pour suivre les PR, leur CI et les déploiements (chapitre 2).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'ordre de ce fichier :
-- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90, ESC-91 et ESC-92 : « Aussi pour la 1.8 » ;
+- ESC-11 à ESC-21, puis ESC-86, ESC-87, ESC-89, ESC-90, ESC-91, ESC-92 et ESC-93 : « Aussi pour la 1.8 » ;
 - ESC-22 à ESC-25 : essais du point 0 ;
 - ESC-26 à ESC-36, puis ESC-88 : refonte multi-moteurs ;
 - ESC-37 à ESC-52 : les moteurs, leurs vues terminal, docs et essai réel ;
@@ -89,6 +89,11 @@ Aussi pour la 1.8 :
   - Par `revealItemInDir` du plugin opener, déjà présent : il manque la permission `opener:allow-reveal-item-in-dir`.
   - Sur le vide : le dossier racine de la source (projet ou worktree de l'agent).
   - À essayer avec un projet WSL et un worktree supprimé (refusé avec sa raison).
+- [ ] **Remote control pour tous les agents, au global ou par projet** (demandé le 2026-10-15, ESC-93). Aujourd'hui, il s'allume agent par agent au clic droit, et chaque nouvel agent repart sans.
+  - Un réglage global (Réglages › Claude Code) et un par projet (Réglages › Projets), qui valent pour les agents existants (non archivés) et nouveaux de leur périmètre ; éteints, ils le retirent à ceux qui le tenaient d'eux, pas à ceux allumés à la main.
+  - Jamais deux interrupteurs qui se contredisent (leçon d'ESC-91) : le global allumé montre celui du projet allumé et grisé, avec la raison ; la carte de l'agent dit d'où lui vient son remote control.
+  - Mêmes noms « projet · agent » et même session après un redémarrage ; vue Claude Code comprise ; l'événement de statistiques dit d'où il vient.
+  - À choisir avec l'utilisateur : un agent mis à part quand le réglage est allumé ; les agents des tickets compris ou non ; le coût des process gardés lancés (un par agent en remote control).
 - [ ] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89) : le rouvrir dans le même dossier le retrouve.
   - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
   - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
