@@ -153,10 +153,22 @@
     return running ? t('bgtasks.emptyRunning') : t('bgtasks.emptyDone');
   });
 
+  // Where the reader is, measured before the new output is drawn: one who went up in it just before (whose scroll event has
+  // not come yet) is not brought back to the end by it.
+  let atEndBefore = true;
+  $effect.pre(() => {
+    void text;
+    atEndBefore = !log || log.scrollHeight - log.scrollTop - log.clientHeight < AT_END;
+  });
   $effect(() => {
     void text;
-    if (log && stick) log.scrollTop = log.scrollHeight;
+    if (log && stick && atEndBefore) log.scrollTop = log.scrollHeight;
   });
+  /** « Suivre la fin »: to the end now, and following it from there. */
+  function followEnd() {
+    stick = true;
+    if (log) log.scrollTop = log.scrollHeight;
+  }
   function onScroll() {
     if (log) stick = log.scrollHeight - log.scrollTop - log.clientHeight < AT_END;
   }
@@ -296,7 +308,7 @@
               onscroll={onScroll}>{text}</pre>
             {#if placeholder}<p class="ph">{placeholder}</p>{/if}
             {#if !stick}
-              <button class="follow" data-task-follow onclick={() => (stick = true)}>{t('bgtasks.follow')}</button>
+              <button class="follow" data-task-follow onclick={followEnd}>{t('bgtasks.follow')}</button>
             {/if}
           </div>
         {:else}
