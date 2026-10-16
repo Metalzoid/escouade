@@ -63,6 +63,9 @@ jobs:
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
         shell: bash
+        # As in the environment of an agent of Escouade: the tests must not depend on it.
+        env:
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
         run: |
           set +e
           cargo nextest run --profile ci 2>&1 | tee nextest.log
@@ -168,6 +171,9 @@ jobs:
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
         shell: bash
+        # As in the environment of an agent of Escouade: the tests must not depend on it.
+        env:
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
         run: |
           set +e
           cargo nextest run --profile ci 2>&1 | tee nextest.log
@@ -232,6 +238,9 @@ jobs:
       - name: Rust tests (unit + integration with the fake claude CLI)
         working-directory: src-tauri
         shell: bash
+        # As in the environment of an agent of Escouade: the tests must not depend on it.
+        env:
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
         run: |
           set +e
           cargo nextest run --profile ci --test-threads 3 2>&1 | tee nextest.log
