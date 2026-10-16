@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -821,6 +821,59 @@ describe('SettingsModal', () => {
     expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
     await userEvent.click(tab('Kanban'));
     expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+  });
+
+  describe('the projects closed with their history', () => {
+    const OLD = {
+      id: 'c1',
+      name: 'ancien',
+      color: 'oklch(0.72 0.12 300)',
+      path: 'C:\code\ancien',
+      worktreePerAgent: false,
+      agents: 3,
+      tickets: 5,
+      lastActivity: new Date(2026, 9, 14, 18, 0).getTime(),
+      closedAt: new Date(2026, 9, 15, 9, 0).getTime(),
+      size: 5 * 1024,
+    };
+
+    it('lists them under the settings of the project, in the Projets tab', async () => {
+      const backend = fakeBackend({ closed_projects: () => [OLD] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+      await screen.findByRole('heading', { name: 'Projets fermés' });
+      expect(group('Projets fermés').getByText('ancien')).toBeInTheDocument();
+      expect(backend.called('closed_projects')).toHaveLength(1);
+      const headings = within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent);
+      expect(headings.at(-2)).toBe('Zone sensible');
+      expect(headings.at(-1)).toBe('Projets fermés');
+      // Another tab of the project does not carry them.
+      await userEvent.click(tab('Kanban'));
+      expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
+    });
+
+    it('lists them when no project is open, under what says so', async () => {
+      resetApp({ projects: [] });
+      fakeBackend({ closed_projects: () => [OLD] });
+      render(SettingsModal, { tab: 'projects' });
+      expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+      await screen.findByRole('heading', { name: 'Projets fermés' });
+      expect(group('Projets fermés').getByText('ancien')).toBeInTheDocument();
+      expect(group('Projets fermés').getByRole('button', { name: "Effacer l'historique…" })).toBeInTheDocument();
+      // The other tabs of a project still have nothing to show.
+      await userEvent.click(tab('Kanban'));
+      expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
+    });
+
+    it('shows no group when none was closed', async () => {
+      const backend = fakeBackend({ closed_projects: () => [] });
+      render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+      await waitFor(() => expect(backend.called('closed_projects')).toHaveLength(1));
+      await new Promise((r) => setTimeout(r));
+      expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
+    });
   });
 
   it('checks for an update on demand', async () => {

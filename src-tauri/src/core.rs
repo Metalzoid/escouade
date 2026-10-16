@@ -4,6 +4,7 @@ use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
+use crate::closed;
 use crate::conv;
 use crate::convsearch;
 use crate::fsedit;
@@ -647,6 +648,15 @@ pub struct Core<R: Runtime = Wry> {
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// The projects being closed (`remove_project`): a second closing of one has nothing to do,
+    /// and no validation of their tickets starts.
+    pub(crate) closing: Mutex<HashSet<String>>,
+    /// The histories of the closed projects as the folder holds them (`closed::ClosedEntry`):
+    /// read when the app starts, kept up to date by what the app writes and erases.
+    pub(crate) closed_index: closed::ClosedIndex,
+    /// The ids of the histories whose file could not be removed once the state held the truth
+    /// (`PersistedState::leftover_histories`).
+    pub(crate) leftover_histories: Mutex<Vec<String>>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -757,6 +767,16 @@ pub struct Core<R: Runtime = Wry> {
     /// it).
     #[cfg(test)]
     pub(crate) clock_ahead: std::sync::atomic::AtomicI64,
+}
+
+/// The ids of those of `agents` that Remote Control keeps reachable: on, and not archived.
+pub(crate) fn remote_agent_ids<'a>(agents: impl Iterator<Item = &'a AgentHandle>) -> Vec<String> {
+    agents
+        .filter_map(|h| {
+            let rt = h.lock();
+            (rt.meta.remote_control && !rt.meta.archived).then(|| rt.meta.id.clone())
+        })
+        .collect()
 }
 
 /// The least time between two looks at the files of an agent's plan (`planfiles`).
@@ -1239,7 +1259,7 @@ pub(crate) fn commit_proposal_prompt(
 }
 
 /// The block of a ticket whose validation the app's stop cut, set as the app starts again.
-fn approval_interrupted(lang: i18n::Lang) -> String {
+pub(crate) fn approval_interrupted(lang: i18n::Lang) -> String {
     tr_in!(lang, "Validation interrompue", "Approval interrupted")
 }
 
@@ -1401,7 +1421,23 @@ impl<R: Runtime> Core<R> {
         log::info!("languages: {lang:?}");
         // Principal named in them, the first time.
         accounts::normalize(&mut settings);
-        let state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
+        let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
+        // The histories whose file could not be removed at the last run are not read: removed, if
+        // they can be now.
+        let mut leftover = std::mem::take(&mut state.leftover_histories);
+        closed::retry_leftovers(&data, &mut leftover);
+        // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
+        // what the app needs of it from now on.
+        let closed::Scan { entries, histories } = closed::scan(&data, &leftover);
+        // A closing the last stop cut may have been saved with some of its project's agents and
+        // tickets only: they come back from the history it wrote first (forgotten once saved).
+        let recovered = closed::recover_open(
+            histories,
+            &state.projects,
+            &mut state.agents,
+            &mut state.tickets,
+        );
+        let closed_index = entries.into_iter().map(|e| (e.id.clone(), e)).collect();
         // Read before the agents are made: a turn does not survive a restart (they come back done).
         let cut_turns: Vec<String> = state
             .agents
@@ -1481,6 +1517,9 @@ impl<R: Runtime> Core<R> {
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
             spawn_locks: Mutex::default(),
+            closing: Mutex::default(),
+            closed_index: Mutex::new(closed_index),
+            leftover_histories: Mutex::new(leftover),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -1542,6 +1581,7 @@ impl<R: Runtime> Core<R> {
         core.usage.lock().set_today(&core.stats.today_by_account());
         // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
         crate::tui::clear_pastes(&core.pastes_dir());
+        core.settle_recovered(&recovered);
         (core, rx)
     }
 
@@ -1662,6 +1702,7 @@ impl<R: Runtime> Core<R> {
         let tickets = self.tickets.read().clone();
         let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
+        let leftover_histories = self.leftover_histories.lock().clone();
         PersistedState {
             projects,
             agents,
@@ -1669,18 +1710,21 @@ impl<R: Runtime> Core<R> {
             models,
             tickets,
             pause,
+            leftover_histories,
         }
     }
 
-    pub fn save_now(&self) {
+    /// The state saved; the error is for the caller that must lose nothing when it fails.
+    pub(crate) fn save_state(&self) -> Result<()> {
         let state = self.snapshot();
-        match serde_json::to_vec_pretty(&state) {
-            Ok(bytes) => {
-                if let Err(e) = paths::write_atomic(&self.data.state_file(), &bytes) {
-                    log::error!("cannot save state: {e}");
-                }
-            }
-            Err(e) => log::error!("cannot serialize state: {e}"),
+        let bytes = serde_json::to_vec_pretty(&state).context("cannot serialize state")?;
+        paths::write_atomic(&self.data.state_file(), &bytes).context("cannot save state")?;
+        Ok(())
+    }
+
+    pub fn save_now(&self) {
+        if let Err(e) = self.save_state() {
+            log::error!("{e:#}");
         }
     }
 
@@ -2693,15 +2737,12 @@ impl<R: Runtime> Core<R> {
 
     /// Starts the Remote Control agents with the app, so they are reachable from claude.ai.
     pub fn start_remote_agents(self: &Arc<Self>) {
-        let ids: Vec<String> = self
-            .agents
-            .read()
-            .values()
-            .filter_map(|h| {
-                let rt = h.lock();
-                (rt.meta.remote_control && !rt.meta.archived).then(|| rt.meta.id.clone())
-            })
-            .collect();
+        let ids = remote_agent_ids(self.agents.read().values());
+        self.start_remote(ids);
+    }
+
+    /// Starts the agents `ids` (Remote Control ones), each on its own task.
+    pub(crate) fn start_remote(self: &Arc<Self>, ids: Vec<String>) {
         for id in ids {
             let c = self.clone();
             tauri::async_runtime::spawn(async move {
@@ -3217,6 +3258,9 @@ impl<R: Runtime> Core<R> {
             .values()
             .filter_map(|h| h.lock().meta.port_base)
             .collect();
+        // The agents of a closed project hold theirs for when it comes back (read after the
+        // agents: one being closed is in the one or the other).
+        taken.extend(self.closed_ports());
         taken.extend(reserved.iter().copied());
         let base = board::allocate_ports(&taken, testlaunch::port_free)?;
         reserved.push(base);
@@ -4634,6 +4678,9 @@ impl<R: Runtime> Core<R> {
 
     // ---------- projects ----------
 
+    /// Adds the folder as a project (`add_project`), whichever history it brings back: the way the
+    /// tests add one (the window's command is told whether the project is a new one).
+    #[cfg(test)]
     pub async fn create_project(
         self: &Arc<Self>,
         path: &str,
@@ -4641,7 +4688,37 @@ impl<R: Runtime> Core<R> {
         color: &str,
         worktree_per_agent: bool,
         first_agent: Option<String>,
+        restore: bool,
     ) -> Result<Project> {
+        let added = self
+            .add_project(
+                path,
+                name,
+                color,
+                worktree_per_agent,
+                first_agent,
+                restore,
+                None,
+            )
+            .await?;
+        Ok(added.0)
+    }
+
+    /// Adds the folder as a project. With `restore`, the history of a project closed in this folder
+    /// comes back with it, same id (`closed`): the one `history_id` names if it is one of this
+    /// folder, else the latest closed; else, or when there is none, it is a new project. True
+    /// when a history came back (the project is not a new one).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn add_project(
+        self: &Arc<Self>,
+        path: &str,
+        name: &str,
+        color: &str,
+        worktree_per_agent: bool,
+        first_agent: Option<String>,
+        restore: bool,
+        history_id: Option<String>,
+    ) -> Result<(Project, bool)> {
         let path = path.trim().trim_end_matches(['\\', '/']).to_string();
         if !Path::new(&path).is_dir() {
             bail!(tr!(
@@ -4649,10 +4726,31 @@ impl<R: Runtime> Core<R> {
                 "The folder {path} doesn’t exist"
             ));
         }
+        // The history a project closed in this folder kept comes back with it, same id. Looked for
+        // before the awaits below (the memory answers at once, the disk is asked only for another
+        // spelling of the folder): the window asking twice is told of the project the first asking
+        // brings back, whichever way the two interleave.
+        let entry = if restore {
+            self.closed_entry_for(&path, history_id.as_deref()).await
+        } else {
+            None
+        };
+        // Its file is read off the runtime's threads. Gone by now, if the first asking made the
+        // project and settled the file already: the open project answers below.
+        let closed = match &entry {
+            Some(entry) => {
+                let (data, id) = (self.data.clone(), entry.id.clone());
+                tokio::task::spawn_blocking(move || closed::read_history(&data, &id))
+                    .await
+                    .ok()
+                    .flatten()
+            }
+            None => None,
+        };
         if git::toplevel(&path).await.is_none() {
             git::init_repo(&path).await.context("git init")?;
         }
-        let project = Project {
+        let fresh = Project {
             id: new_id(),
             name: if name.trim().is_empty() {
                 Path::new(&path)
@@ -4662,7 +4760,7 @@ impl<R: Runtime> Core<R> {
             } else {
                 name.trim().to_string()
             },
-            path,
+            path: path.clone(),
             color: color.to_string(),
             worktree_per_agent,
             created_at: now_ms(),
@@ -4678,14 +4776,70 @@ impl<R: Runtime> Core<R> {
             agent_branch_prefix: crate::model::default_agent_branch_prefix(),
             ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
         };
-        self.projects.write().push(project.clone());
+        let accounts: Vec<String> = self
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .map(|a| a.id.clone())
+            .collect();
+        let (project, back) = {
+            let mut projects = self.projects.write();
+            // The history's project is open by now (the window asked twice): it is the answer,
+            // not a blank project beside it.
+            let open = entry
+                .as_ref()
+                .and_then(|e| projects.iter().find(|p| p.id == e.id));
+            if let Some(open) = open {
+                return Ok((open.clone(), true));
+            }
+            let project = match &closed {
+                Some(c) => c.reopened(&path, name, color, worktree_per_agent, &accounts),
+                None => fresh,
+            };
+            projects.push(project.clone());
+            (project, closed)
+        };
+        let reopened = back.is_some();
+        let ticket_ids: Vec<String> = back
+            .iter()
+            .flat_map(|c| c.tickets.iter().map(|t| t.id.clone()))
+            .collect();
+        let remote = match back {
+            Some(closed) => self.give_back(closed, &project),
+            None => Vec::new(),
+        };
         {
             let mut ui = self.ui.write();
             ui.active_project = Some(project.id.clone());
             ui.view = "project".into();
         }
-        self.request_save();
+        if reopened {
+            // Saved before its file goes, and only if it is: a stop in between, or a state that
+            // cannot be written, loses nothing (the file is ignored while its project is open,
+            // and gives back what the state lacks at the next start).
+            self.note_leftover(&project.id);
+            match self.save_state() {
+                Ok(()) => self.settle_history_file(&project.id),
+                Err(e) => {
+                    log::error!("history of project {} kept: {e:#}", project.id);
+                    self.closed_index.lock().remove(&project.id);
+                    self.request_save();
+                }
+            }
+        } else {
+            self.request_save();
+        }
         self.watch_project(&project);
+        if reopened {
+            // Its tickets may start, its agents are counted, its Remote Control ones are
+            // reachable again as they are when the app starts.
+            self.schedule();
+            self.update_tray();
+            self.start_remote(remote);
+            // The syncs its tickets left waiting while it was closed go again.
+            self.retry_syncs_of(&ticket_ids);
+        }
         // The project is made whatever becomes of its first agent: told (no account serves a new
         // project, say), never an error that would have the window ask, and make it, again.
         if let Some(model) = first_agent {
@@ -4696,7 +4850,7 @@ impl<R: Runtime> Core<R> {
                 });
             }
         }
-        Ok(project)
+        Ok((project, reopened))
     }
 
     pub fn update_project(self: &Arc<Self>, p: Project) -> Result<()> {
@@ -4766,15 +4920,58 @@ impl<R: Runtime> Core<R> {
         self.request_save();
     }
 
-    pub async fn remove_project(self: &Arc<Self>, id: &str) -> Result<()> {
-        // No account stays kept to a project that is gone (the window could not untick it).
-        self.forget_project_in_accounts(id);
+    /// Closes the project: its agents, terminals and launches stop, and it leaves the app. Its
+    /// history (settings, agents, conversations, tickets, the accounts it was reserved to) is kept
+    /// for the next project added in its folder (`closed`), unless `erase`: nothing of it stays.
+    pub async fn remove_project(self: &Arc<Self>, id: &str, erase: bool) -> Result<()> {
+        // One closing at a time: a second one would find the project half gone and write its
+        // history again with what is left of it.
+        let Some(_closing) = closed::Closing::start(&self.closing, id) else {
+            return Ok(());
+        };
+        // A validation under way (its tests, its merge) is not cut half way: the closing waits
+        // for its end. Looked for once the project is being closed, which no validation starts on
+        // (`Refusal::ProjectClosing`): one that began before is seen, one that begins is refused.
+        let approving = self
+            .tickets
+            .read()
+            .iter()
+            .find(|t| t.project_id == id && t.step.is_some())
+            .map(|t| t.key.clone());
+        if let Some(key) = approving {
+            return Err(closed::approval_under_way(self.lang().ui, &key));
+        }
+        let project = self.project(id).ok();
+        let selected = self.ui.read().selected_agent.get(id).cloned();
+        // Its history written before anything stops, as it is now, and again once all stopped
+        // (below): an app stopped in between, its state saved without the project, still has it.
+        // Nowhere to write it: the project stays open.
+        if let (false, Some(p)) = (erase, &project) {
+            let agents = self
+                .project_agents(id)
+                .iter()
+                .map(|h| h.lock().meta.clone())
+                .collect();
+            let tickets = self
+                .tickets
+                .read()
+                .iter()
+                .filter(|t| t.project_id == id)
+                .cloned()
+                .collect();
+            let first = self.write_history(p.clone(), agents, tickets, selected.clone());
+            if let Err(e) = first {
+                log::error!("history of project {id} not written, not closed: {e:#}");
+                return Err(closed::history_refused(&e));
+            }
+        }
         let agents: Vec<String> = self
             .project_agents(id)
             .iter()
             .map(|h| h.lock().meta.id.clone())
             .collect();
-        for aid in agents {
+        let mut kept: Vec<AgentMeta> = Vec::new();
+        for aid in agents.iter().cloned() {
             // Wait for an in-flight start (a warm-up), as the deletion of an agent does: it would
             // otherwise start a process, with a token, for an agent that is gone.
             let lock = self.spawn_lock(&aid);
@@ -4785,25 +4982,38 @@ impl<R: Runtime> Core<R> {
             if let Some(h) = removed {
                 let mut rt = h.lock();
                 rt.gen += 1;
+                let mut at_work = rt.meta.status.is_active() || rt.waiting_views().next().is_some();
                 if let Some(p) = rt.proc.take() {
                     p.kill();
+                    at_work = true;
                 }
                 // Its Claude Code interface is no terminal of the project's (killed below).
                 if let Some(t) = rt.tui.take() {
                     self.pty.kill(&t.term_id);
+                    at_work = true;
                 }
-                rt.conv.delete_file();
+                // What its turn left open is closed in the conversation the history keeps (its
+                // process' exit, made stale above, no longer does it): a question or a permission
+                // cancelled, a tool interrupted, a text no longer streaming. Only for an agent
+                // that could have a turn open: finding out reads its whole log.
+                if !erase && at_work {
+                    let mut fx = Effects::default();
+                    rt.clear_pending(&mut fx);
+                    rt.close_open_items(&mut fx);
+                }
+                // Its log is let go of; the history keeps it, or erases it below.
+                rt.conv.close_log();
                 worktree = rt.meta.worktree.clone();
+                kept.push(rt.meta.clone());
             }
             self.mcp.forget_agent(&aid);
             self.hooks.revoke(&aid);
             self.spawn_locks.lock().remove(&aid);
-            // The setup of its worktree stops, with what it started; its log goes, and the
-            // images pasted in its interface.
+            // The setup of its worktree stops, with what it started (its log stays with the
+            // history), and the images pasted in its interface go.
             if let Some(s) = self.setups.lock().remove(&aid) {
                 s.task.abort();
             }
-            let _ = std::fs::remove_file(self.data.setup_log(&aid));
             self.forget_pastes(&aid);
             // Its test launches are the project's terminals too (killed below all the same):
             // none is kept for it. isola's services of its worktree stop too.
@@ -4818,11 +5028,34 @@ impl<R: Runtime> Core<R> {
         }
         self.pty.kill_project(id);
         self.git.unwatch(id);
-        self.projects.write().retain(|p| p.id != id);
+        // The project as it is now, out of the list in one go: a ticket created or a setting
+        // changed while the closing waited for a start above is in it, not in the copy read first.
+        let latest = {
+            let mut projects = self.projects.write();
+            let at = projects.iter().position(|p| p.id == id);
+            at.map(|at| projects.remove(at))
+        };
+        // No account stays kept to a project that is gone for good (the window could not untick
+        // it): once it is out, so that an app stopped before still has it reserved where it is
+        // open. One whose history is kept stays in their lists, until that is erased.
+        if erase {
+            self.forget_project_in_accounts(id);
+        }
         // After the project is out: `ticket_create` checks the project under the projects' read
         // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped
         // here, and none is added after.
-        self.drop_project_tickets(id);
+        let tickets = self.drop_project_tickets(id);
+        if erase {
+            // Nothing of it stays, not even a history a stop left half way (see `closed_list`).
+            let tickets: Vec<String> = tickets.iter().map(|t| t.id.clone()).collect();
+            self.erase_history_files(&agents, &tickets);
+            if !self.forget_closed_file(id) {
+                // Not listed again, tried again at the next start.
+                self.note_leftover(id);
+            }
+        } else if let Some(project) = latest.or(project) {
+            self.keep_history(project, kept, tickets, selected);
+        }
         // Read before taking the ui lock: never hold ui while waiting on projects.
         let fallback = self.projects.read().first().map(|p| p.id.clone());
         {

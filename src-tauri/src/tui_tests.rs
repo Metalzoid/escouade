@@ -517,7 +517,7 @@ async fn removing_the_project_stops_its_agents_interfaces_and_clears_their_paste
     let mine = h.core.paste_image(&id, "image/png", &b64(&PNG)).unwrap();
     assert!(h.core.pty.list().iter().any(|t| t.shell == "claude"));
 
-    h.core.remove_project(&project).await.unwrap();
+    h.core.remove_project(&project, false).await.unwrap();
     assert!(!std::path::Path::new(&mine).exists());
     assert!(
         !h.core.pty.list().iter().any(|t| t.shell == "claude"),

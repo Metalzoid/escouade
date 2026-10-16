@@ -449,3 +449,18 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | En attente de ta réponse | Waiting for your answer | une tâche bloquée : l’agent a posé une question ou demande une autorisation |
 | après 03, 05 | after 03, 05 | les rangs des tâches qu’une tâche à faire attend |
 | étapes (d’une tâche) | steps | « 2/3 étapes » → “2/3 steps” : les cases cochées du plan |
+
+## H — historique des projets fermés (ESC-89)
+
+| Français | Anglais | Note |
+|---|---|---|
+| projet fermé | closed project | un projet retiré de l’app dont l’historique est gardé |
+| historique (d’un projet) | history | ses conversations, ses tickets et ses réglages ; « Historique » (onglet de l’éditeur) reste History |
+| Historique retrouvé | History found | la fenêtre d’ajout, quand le dossier est celui d’un projet fermé |
+| Partir d’un projet vierge | Start from a blank project | l’historique reste là, le projet est un nouveau |
+| Rouvrir le projet | Reopen project | le bouton de la fenêtre d’ajout quand l’historique revient |
+| Effacer l’historique | Erase history | pour de bon ; « Supprimer » reste pour un fichier, un agent, un ticket |
+| dernière activité | last activity | |
+| Rouvrir | Reopen | la ligne d’un projet fermé (Réglages › Projets) : ouvre la fenêtre d’ajout sur son dossier et sur cet historique-là |
+| Historique illisible | Unreadable history | un fichier de projet fermé que l’app ne sait pas lire : seul « Effacer » (“Erase”) est proposé |
+| {nom} (fermé) | {name} (closed) | un projet fermé auquel un compte reste réservé (Réglages › Comptes Claude) |

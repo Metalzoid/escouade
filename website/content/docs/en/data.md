@@ -12,13 +12,14 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `state.json` | The projects, the agents (with the ID of their Claude Code session), the Kanban tickets, the autopilot’s pause, and the interface state. |
 | `integrations.json` | The Jira, Trello, GitHub, and Linear accounts, without their tokens (see [Tokens](#tokens)). |
 | `sync-queue.json` | The syncs with those services that are waiting to be retried. |
-| `tickets/<ticket>/` | The images pasted or dropped in a ticket’s window, one per file: `state.json` only has their names. The folder only exists when the ticket has some; deleted with the ticket. |
-| `conversations/<agent>.jsonl` | The log of each conversation, named after the agent’s ID, one operation (an item added or corrected) per line. Deleted with the agent. |
+| `tickets/<ticket>/` | The images pasted or dropped in a ticket’s window, one per file: `state.json` only has their names. The folder only exists when the ticket has some; deleted with the ticket, or when the history of its closed project is erased. |
+| `conversations/<agent>.jsonl` | The log of each conversation, named after the agent’s ID, one operation (an item added or corrected) per line. Deleted with the agent; those of a closed project stay with its history. |
+| `closed-projects/<project>.json` | The history of a closed project, named after the project’s ID: the whole project (settings, Kanban, integrations, commands), its agents (archived ones included), its tickets, the agent on display, and the closing date. Its conversations stay in `conversations/`, its tickets’ images in `tickets/`, its statistics in `stats.db`. The file goes away when the project is reopened or its history is erased (see [Closed projects](settings-projects#closed-projects)). |
 | `claude/<account>/` | The Claude Code configuration folder of each account added in Settings › Claude accounts: its sign-in and its conversations. Main has none; it uses your own Claude Code’s folder. |
 | `mcp-token.json` | The MCP server’s token for Claude outside Escouade, only when the system keychain refuses it (always on Linux). |
 | `mcp/<agent>.json` | The MCP configuration of an Escouade agent, with its token. Deleted when its process stops, and each time the app starts and quits. |
 | `tui/<agent>.json` | The hook settings that an agent’s Claude Code view passes to Claude Code. The token isn’t in it: it goes through an environment variable. |
-| `logs/<agent>-setup.log` | The full output of the last setup of an agent’s worktree. Deleted with the agent. |
+| `logs/<agent>-setup.log` | The full output of the last setup of an agent’s worktree. Deleted with the agent; that of a closed project stays with its history. |
 | `update.json` | The update being installed, noted for the next start and then deleted. |
 | `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
 | `telemetry-id` | The random id of this install, for the usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
@@ -100,7 +101,8 @@ Quit Escouade first, then:
 |---|---|
 | Get the default settings back | Delete `settings.json`. |
 | Erase the statistics | Delete `stats.db`. |
-| Start over with no project, agent, or ticket | Delete `state.json`, and `conversations/` so the logs don’t stay behind. |
+| Start over with no project, agent, or ticket | Delete `state.json`, and `conversations/` so the logs don’t stay behind. Also delete `closed-projects/` to forget the closed projects. |
+| Erase the history of a closed project | In Settings › Projects, “Closed projects”, “Erase history…”: it deletes its file in `closed-projects/` and the logs of its agents. Deleting the file by hand would leave its logs in `conversations/`. |
 | Erase everything | Delete the `~/.escouade/` folder. The sign-ins of the accounts added under `claude/` go with it. |
 | Remove the integration tokens | Disconnect each service in Settings › Integrations. |
 

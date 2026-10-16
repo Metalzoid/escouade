@@ -10,6 +10,7 @@ import type {
   BranchInfo,
   CheckedUpdate,
   ClaudeLocated,
+  ClosedProject,
   CommitScope,
   Container,
   ConvItem,
@@ -117,12 +118,29 @@ export const api = {
     output.onmessage = onData;
     return invoke<TermInfo>('account_login', { id, cols, rows, output });
   },
-  inspectFolder: (path: string) => invoke<FolderInfo>('inspect_folder', { path }),
-  createProject: (a: { path: string; name: string; color: string; worktreePerAgent: boolean; firstAgent: string | null }) =>
-    invoke<Project>('create_project', a),
+  /** `historyId`: the history of the folder to say (a closed project's, from « Rouvrir »), else its latest closed project's. */
+  inspectFolder: (path: string, historyId?: string) => invoke<FolderInfo>('inspect_folder', historyId ? { path, historyId } : { path }),
+  /**
+   * `restore`: the folder of a closed project gets its history (same id, agents, tickets) back; else a project of its
+   * own. `historyId`: which of the folder's histories comes back (the latest closed by default).
+   */
+  createProject: (a: {
+    path: string;
+    name: string;
+    color: string;
+    worktreePerAgent: boolean;
+    firstAgent: string | null;
+    restore: boolean;
+    historyId?: string;
+  }) => invoke<Project>('create_project', a),
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
-  removeProject: (id: string) => invoke<void>('remove_project', { id }),
+  /** `erase`: its history goes too (conversations, tickets, settings); else it is kept as a closed project. */
+  removeProject: (id: string, erase: boolean) => invoke<void>('remove_project', { id, erase }),
+  /** The projects closed with their history kept, the latest closed first. */
+  closedProjects: () => invoke<ClosedProject[]>('closed_projects'),
+  /** The history of a closed project, erased for good (an entry the app cannot read: its one file). */
+  eraseClosedProject: (id: string) => invoke<void>('erase_closed_project', { id }),
   createAgent: (projectId: string, model: string | null = null) => invoke<Agent>('create_agent', { projectId, model }),
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model }),

@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { accountName, agentsOn, backToAccounts, PRINCIPAL, projectsWithoutAccount } from '../../lib/accounts';
   import { fList, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
-  import type { Account, AccountStatus } from '../../lib/types';
+  import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
   import Group from './Group.svelte';
   import { tip } from '../../lib/tip';
 
@@ -23,6 +24,13 @@
         })
       : '',
   );
+  /** The projects closed with their history kept, read when the tab opens: an account stays reserved to them until it is erased. */
+  let closed = $state<ClosedProject[]>([]);
+  onMount(async () => {
+    closed = await api.closedProjects().catch(() => []);
+  });
+  /** The closed projects the account is reserved to (a file the app cannot read has no name to show). */
+  const closedReserved = (a: Account) => closed.filter((c) => !c.unreadable && (a.projects ?? []).includes(c.id));
   /** Each account's sign-in, as last read. */
   let statuses = $state<Record<string, AccountStatus>>({});
   /** Why an account was not removed, by account. */
@@ -127,6 +135,8 @@
       {@const status = statuses[a.id]}
       {@const late = expired(a.id)}
       {@const last = a.active && activeCount === 1}
+      {@const reserved = a.projects ?? []}
+      {@const closedOnes = closedReserved(a)}
       <li class="acct" aria-label={name}>
         <div class="line">
           <input
@@ -187,14 +197,20 @@
             <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
           {/if}
         </div>
-        {#if app.projects.length}
-          {@const reserved = a.projects ?? []}
+        {#if app.projects.length || closedOnes.length}
           <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
             <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
             {#each app.projects as p (p.id)}
               <label class="chip">
                 <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
                 {p.name}
+              </label>
+            {/each}
+            <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
+            {#each closedOnes as c (c.id)}
+              <label class="chip">
+                <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
+                {t('accounts.tab.closedProject', { name: c.name })}
               </label>
             {/each}
             {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}

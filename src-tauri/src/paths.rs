@@ -332,6 +332,18 @@ impl DataDir {
         self.0.join("conversations")
     }
 
+    /// The projects closed with their history kept, one file each (`closed::ClosedProject`).
+    pub fn closed_projects(&self) -> PathBuf {
+        self.0.join("closed-projects")
+    }
+
+    /// The file of the closed project `id`. An id is a name of its own (`new_id`): one that is not
+    /// (a hand-edited file) never names a file outside the folder.
+    pub fn closed_project_file(&self, id: &str) -> PathBuf {
+        let name = if is_plain_id(id) { id } else { "_" };
+        self.closed_projects().join(format!("{name}.json"))
+    }
+
     /// The tickets' files, a folder each: the images pasted in their form.
     pub fn tickets(&self) -> PathBuf {
         self.0.join("tickets")
@@ -388,6 +400,94 @@ impl DataDir {
     pub fn ensure(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(self.conversations())
     }
+}
+
+/// Whether `id` is a name of its own, as `new_id` makes them: letters, digits, `-` and `_`.
+pub fn is_plain_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// What the spellings of one folder's path share (`same_folder`): separators, a trailing one,
+/// the `\\?\` form Windows gives back, the case under Windows, the two names of a WSL share.
+pub fn folder_key(path: &str) -> String {
+    folder_key_in(path, cfg!(windows))
+}
+
+/// `folder_key` for Windows (`windows`) or for the other systems, whichever this one is.
+pub(crate) fn folder_key_in(path: &str, windows: bool) -> String {
+    let path = path.trim();
+    // The extended forms are the plain ones.
+    let path = match path.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => path.strip_prefix(r"\\?\").unwrap_or(path).to_string(),
+    };
+    // Windows takes `\` for a separator, the other systems for a letter of a name.
+    let slashed = if windows {
+        path.replace('\\', "/")
+    } else {
+        path
+    };
+    // Repeated and trailing separators are one and none; only a UNC path's leading two stay.
+    let leading = match slashed.len() - slashed.trim_start_matches('/').len() {
+        0 => "",
+        2 => "//",
+        _ => "/",
+    };
+    let body: Vec<&str> = slashed.split('/').filter(|part| !part.is_empty()).collect();
+    let key = format!("{leading}{}", body.join("/"));
+    // Both hosts reach the same distribution, which Linux names with a case that counts: only the
+    // distribution's name is read without it.
+    if let Some((distro, rest)) = crate::wsl::share_path(&key) {
+        let rest = rest.trim_end_matches('/');
+        return format!("//wsl.localhost/{}{rest}", distro.to_lowercase());
+    }
+    if windows {
+        key.to_lowercase()
+    } else {
+        key
+    }
+}
+
+/// The first of `items` whose folder (`folder_of`) is the folder `path`: the same key. Failing
+/// that, the same one once the disk has spelled both (short names, links), but for the local
+/// folders only: asking the disk about one on a share that is down, or in a WSL distribution that
+/// is not started, can block for long, and this is asked at each key typed.
+pub fn find_folder<'a, T>(
+    items: &'a [T],
+    path: &str,
+    folder_of: impl Fn(&T) -> &str,
+) -> Option<&'a T> {
+    let key = folder_key(path);
+    if let Some(found) = items.iter().find(|i| folder_key(folder_of(i)) == key) {
+        return Some(found);
+    }
+    // The folder typed is spelt once; one that is not there, or not local, ends the search.
+    if !is_local_key(&key) {
+        return None;
+    }
+    let spelt = |path: &str| {
+        let canonical = std::fs::canonicalize(path.trim()).ok()?;
+        Some(folder_key(&canonical.to_string_lossy()))
+    };
+    let typed = spelt(path)?;
+    items
+        .iter()
+        .filter(|i| is_local_key(&folder_key(folder_of(i))))
+        .find(|i| spelt(folder_of(i)).is_some_and(|key| key == typed))
+}
+
+/// Whether the paths `a` and `b` name one folder (`find_folder` of one).
+pub fn same_folder(a: &str, b: &str) -> bool {
+    find_folder(&[b], a, |p| *p).is_some()
+}
+
+/// Whether a folder (by its `folder_key`) is on this machine's own disks: not on a share (`//…`),
+/// WSL's included.
+fn is_local_key(key: &str) -> bool {
+    !key.starts_with("//")
 }
 
 /// Writes a file atomically (temp file + rename) so a crash never leaves a truncated file.
@@ -1139,5 +1239,112 @@ mod tests {
             assert!(!p.exists(), "{}", p.display());
         }
         assert!(current.exists() && other.exists());
+    }
+
+    #[test]
+    fn the_spellings_of_a_windows_folder_share_one_key() {
+        let key = |p: &str| folder_key_in(p, true);
+        for spelling in [
+            r"C:\Code\App",
+            "c:/code/app",
+            r"C:\Code\App\",
+            "C:/CODE/app//",
+            r"  c:\code\\app  ",
+            r"\\?\C:\Code\App",
+        ] {
+            assert_eq!(key(spelling), "c:/code/app", "{spelling}");
+        }
+        assert_eq!(key(r"\\?\UNC\Server\Share\App"), "//server/share/app");
+        assert_eq!(key(r"\\Server\Share\App\"), "//server/share/app");
+        assert_ne!(key(r"C:\code\app"), key(r"C:\code\app2"));
+        assert_ne!(key(r"C:\code\app"), key(r"D:\code\app"));
+    }
+
+    #[test]
+    fn elsewhere_the_case_and_the_backslashes_of_a_name_are_kept() {
+        let key = |p: &str| folder_key_in(p, false);
+        assert_eq!(key("/home/me/App/"), "/home/me/App");
+        assert_eq!(key("/home//me/App"), "/home/me/App");
+        assert_ne!(key("/home/me/app"), key("/home/me/App"));
+        // A backslash is a letter of a name there, not a separator.
+        assert_eq!(key(r"/home/me/a\b"), r"/home/me/a\b");
+        assert_ne!(key(r"/home/me/a\b"), key("/home/me/a/b"));
+        assert_eq!(key("/"), "/");
+        // The extended form is still the plain one.
+        assert_eq!(key(r"\\?\C:\x"), r"C:\x");
+    }
+
+    #[test]
+    fn the_two_names_of_a_wsl_share_are_one_folder_and_linux_keeps_its_case() {
+        let key = |p: &str| folder_key_in(p, true);
+        let app = "//wsl.localhost/ubuntu/home/Me/App";
+        for spelling in [
+            r"\\wsl$\Ubuntu\home\Me\App",
+            r"\\wsl.localhost\ubuntu\home\Me\App\",
+            r"\\WSL.LOCALHOST\UBUNTU\home\Me\App",
+            r"\\?\UNC\wsl.localhost\Ubuntu\home\Me\App",
+            "//wsl$/Ubuntu/home/Me/App",
+        ] {
+            assert_eq!(key(spelling), app, "{spelling}");
+        }
+        // Linux tells `Me` from `me`, and one distribution from another.
+        assert_ne!(key(r"\\wsl$\Ubuntu\home\me\app"), app);
+        assert_ne!(key(r"\\wsl$\Debian\home\Me\App"), app);
+        assert_eq!(key(r"\\wsl$\Ubuntu"), "//wsl.localhost/ubuntu");
+        assert_eq!(key(r"\\wsl$\Ubuntu\"), "//wsl.localhost/ubuntu");
+        // Written with slashes, it is the same on any system.
+        assert_eq!(folder_key_in("//wsl$/Ubuntu/home/Me/App", false), app);
+    }
+
+    #[test]
+    fn this_systems_key_is_its_own() {
+        assert_eq!(
+            folder_key(r"C:\Code\App"),
+            folder_key_in(r"C:\Code\App", cfg!(windows))
+        );
+    }
+
+    #[test]
+    fn two_spellings_of_one_folder_are_one_and_two_folders_are_two() {
+        let dir = test_dir("paths-same-folder");
+        let app = dir.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let s = app.to_string_lossy().to_string();
+        assert!(same_folder(&s, &s));
+        assert!(same_folder(
+            &s,
+            &format!("{s}{}", std::path::MAIN_SEPARATOR)
+        ));
+        assert!(same_folder(&s, &s.replace('\\', "/")));
+        assert!(same_folder(&format!(" {s} "), &s));
+        if cfg!(windows) {
+            assert!(same_folder(&s, &s.to_uppercase()));
+        }
+        assert!(!same_folder(&s, &dir.to_string_lossy()));
+        // A link leads to the same folder, as a short name (8.3) does: the disk spells both.
+        let link = dir.join("link");
+        if make_dir_link(&app, &link) {
+            assert!(same_folder(&s, &link.to_string_lossy()));
+        }
+        // Folders that are not there are told apart by their keys alone.
+        let (x, y) = (dir.join("x"), dir.join("y"));
+        assert!(!same_folder(&x.to_string_lossy(), &y.to_string_lossy()));
+        assert!(same_folder(&x.to_string_lossy(), &x.to_string_lossy()));
+    }
+
+    #[test]
+    fn a_closed_projects_file_is_in_its_folder_whatever_its_id() {
+        let d = DataDir::new(PathBuf::from("data"));
+        assert_eq!(
+            d.closed_project_file("3f2a9c01b7de"),
+            d.closed_projects().join("3f2a9c01b7de.json")
+        );
+        for id in ["", "..", "../x", "a/b", r"a\b", "C:x", "a.b"] {
+            let file = d.closed_project_file(id);
+            assert_eq!(file.parent().unwrap(), d.closed_projects(), "{id}");
+            assert_eq!(file.file_name().unwrap(), "_.json", "{id}");
+        }
+        assert!(is_plain_id("a1-B_2"));
+        assert!(!is_plain_id("") && !is_plain_id("a.b") && !is_plain_id("a b"));
     }
 }

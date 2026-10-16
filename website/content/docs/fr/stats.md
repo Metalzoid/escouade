@@ -53,7 +53,9 @@ Sous le graphique, la période est découpée de plusieurs façons.
 
 ### Par projet et par modèle
 
-Deux listes côte à côte, classées par tokens. Chaque ligne a un nom (la couleur du projet devant son nom), une barre proportionnelle à la ligne la plus lourde, les tokens et le coût. Un projet fermé depuis apparaît comme « Projet fermé ».
+Deux listes côte à côte, classées par tokens. Chaque ligne a un nom (la couleur du projet devant son nom), une barre proportionnelle à la ligne la plus lourde, les tokens et le coût. Tant que son historique n’a pas été rouvert, un projet fermé depuis apparaît comme « Projet fermé ».
+
+Les chiffres d’un projet fermé sont gardés avec les autres. Ajoute de nouveau le projet dans son dossier (voir [Projets fermés](settings-projects#projets-fermes)) : il retrouve le même identifiant, donc son nom, ses agents et tous ses chiffres. Avec « Partir d’un projet vierge », le projet neuf repart de zéro et l’ancien reste « Projet fermé ».
 
 ### Par compte
 

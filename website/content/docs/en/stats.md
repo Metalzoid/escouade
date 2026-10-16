@@ -53,7 +53,9 @@ Under the chart, the period is cut up in several ways.
 
 ### By project and by model
 
-Two lists side by side, ranked by tokens. Each line has a name (the project’s color in front of its name), a bar proportional to the heaviest line, the tokens and the cost. A project closed since shows as “Closed project”.
+Two lists side by side, ranked by tokens. Each line has a name (the project’s color in front of its name), a bar proportional to the heaviest line, the tokens and the cost. Until its history is reopened, a project closed since shows as “Closed project”.
+
+A closed project’s figures are kept with the others. Add the project again in its folder (see [Closed projects](settings-projects#closed-projects)): it gets the same ID back, so its name, its agents, and all its figures. With “Start from a blank project”, the new project starts from zero and the old one stays “Closed project”.
 
 ### By account
 

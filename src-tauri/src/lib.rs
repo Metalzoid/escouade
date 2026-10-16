@@ -8,6 +8,9 @@ mod board;
 mod branches_tests;
 mod claude;
 mod clipboard;
+mod closed;
+#[cfg(test)]
+mod closed_tests;
 mod commands;
 mod conv;
 mod convsearch;
@@ -298,6 +301,8 @@ pub fn run() {
             commands::update_project,
             commands::reorder_projects,
             commands::remove_project,
+            commands::closed_projects,
+            commands::erase_closed_project,
             commands::create_agent,
             commands::warm_agent,
             commands::restart_agent_process,

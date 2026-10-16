@@ -115,9 +115,42 @@ La croix à droite supprime la commande, et « + Ajouter une commande » en aj
 
 | Réglage | Effet |
 |---|---|
-| « Fermer le projet » | Le bouton « Fermer le projet… » demande confirmation, puis retire le projet et ses agents de l’app, conversations comprises. Les fichiers et les worktrees sur le disque ne sont pas touchés. |
+| « Fermer le projet » | Le bouton « Fermer le projet… » demande confirmation, puis retire le projet de l’app : ses agents, ses terminaux et ses lancements s’arrêtent. Son historique (conversations, tickets, réglages) est gardé : ajouter un projet dans le même dossier le retrouve (voir [Projets fermés](#projets-fermes)). Les fichiers et les worktrees sur le disque ne sont pas touchés. |
+
+La fenêtre de confirmation a une case « Effacer aussi son historique (conversations, tickets, réglages) », décochée par défaut. Cochée, rien n’est gardé : les conversations, les tickets et les réglages du projet sont effacés pour de bon, et le même dossier, ajouté de nouveau, repart de zéro.
 
 Fermer le projet agit tout de suite, sans attendre « Enregistrer », et ramène aux réglages avec le brouillon tel qu’il était.
+
+Fermer est refusé tant que la validation d’un ticket du projet tourne : « La validation du ticket DEM-3 est en cours : attends sa fin pour fermer le projet. » Attends qu’elle se termine, puis ferme le projet.
+
+## Projets fermés
+
+Tant qu’aucun projet n’a été fermé en gardant son historique, ce groupe n’existe pas. Ensuite, « Projets fermés » liste ces projets, du plus récemment fermé au plus ancien, sous la note « Leur historique est gardé : ajouter un projet dans leur dossier le retrouve. ». Chaque ligne donne la couleur du projet, son nom, son dossier, la place que son historique prend sur le disque et sa dernière activité (« dernière activité le … »), avec deux boutons : « Rouvrir » et « Effacer l’historique… ».
+
+« Rouvrir » ouvre la fenêtre « Nouveau projet » déjà sur le dossier de ce projet, lu tout de suite, avec l’historique retrouvé. C’est celui de cette ligne qui revient, même quand plusieurs projets fermés se trouvaient dans le même dossier (sans « Rouvrir », c’est le plus récemment fermé). Si tu changes le chemin dans la fenêtre, cet historique est abandonné : le nouveau dossier a le sien, ou n’en a pas. « Annuler » ferme la fenêtre, sans rien rouvrir ni effacer.
+
+Un fichier que l’app ne sait pas lire (abîmé, ou renommé à la main) apparaît quand même dans la liste, sous « Historique illisible », avec son nom de fichier (`….json`) et sa taille. Il n’a pas de « Rouvrir » : seul « Effacer » est proposé. Après confirmation (« Ce fichier, que l’application ne peut pas lire, est effacé pour de bon. Les autres historiques, les fichiers et les worktrees sur le disque ne sont pas touchés. »), il supprime ce fichier, lui seul.
+
+Sans passer par la liste, ajoute simplement le projet de nouveau (le bouton `+` à droite des onglets), dans le même dossier. Peu importe comment tu écris le chemin : majuscules ou minuscules (sous Windows), `/` ou `\`, séparateur final, nom court, partage WSL… c’est reconnu comme le même dossier. La fenêtre « Nouveau projet » dit alors ce qu’elle a trouvé, par exemple « Historique retrouvé : 12 agents, 34 tickets, dernière activité le 14 octobre 2026 », reprend le nom, la couleur et « Un worktree git par agent » du projet fermé, et son bouton devient « Rouvrir le projet ».
+
+Le projet revient tel qu’il était :
+
+- ses réglages, son Kanban et ses commandes ;
+- ses agents, avec leurs conversations. Aucun process ne tourne encore : ils repartent à ton prochain message, comme après un redémarrage d’Escouade. Un agent dont le worktree a disparu entre-temps est traité de la même façon ;
+- ses tickets. Un ticket qui était « En cours » à la fermeture revient bloqué, avec la raison « Projet fermé pendant le ticket » : « Reprendre » le relance ;
+- ce qui attendait dans la file de synchronisation avec Jira, Trello, GitHub Issues ou Linear : la file de ses tickets est gardée pendant la fermeture et repart à la réouverture (elle est oubliée si l’historique est effacé) ;
+- ses [statistiques](stats), qui retrouvent son nom.
+
+Les comptes qui lui étaient réservés (« Réservé aux projets ») n’ont pas bougé pendant la fermeture : voir [les comptes Claude](accounts#reserve-aux-projets). Le « Compte préféré » du projet repasse sur « Automatique » si son compte n’existe plus.
+
+Rouvrir n’est pas créer un projet : la fenêtre ne propose pas de premier agent, puisque ceux du projet reviennent.
+
+L’interrupteur « Partir d’un projet vierge » (« L’historique reste dans Réglages › Projets, où l’effacer. ») crée à la place un projet neuf dans ce dossier, sans les agents ni les tickets d’avant. L’ancien historique reste dans « Projets fermés » : rien n’est effacé sans que tu le demandes.
+
+« Effacer l’historique… » demande confirmation (« Ses conversations, ses tickets et ses réglages sont effacés pour de bon. Les fichiers et les worktrees sur le disque ne sont pas touchés. »), puis supprime les conversations, les tickets et les réglages gardés de ce projet. Le même dossier, ajouté ensuite, n’a plus d’historique à retrouver.
+
+> [!NOTE]
+> Un projet fermé avant cette version a déjà perdu son historique : il n’y a rien à retrouver pour lui.
 
 ## Les autres réglages d’un projet
 

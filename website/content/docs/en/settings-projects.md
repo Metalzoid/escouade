@@ -115,9 +115,42 @@ The cross on the right deletes the command, and “+ Add a command” adds one. 
 
 | Setting | Effect |
 |---|---|
-| “Close the project” | The “Close the project…” button asks for confirmation, then removes the project and its agents from the app, conversations included. The files and worktrees on disk are not touched. |
+| “Close the project” | The “Close the project…” button asks for confirmation, then removes the project from the app: its agents, terminals, and launches stop. Its history (conversations, tickets, settings) is kept: adding a project in the same folder brings it back (see [Closed projects](#closed-projects)). The files and worktrees on disk are not touched. |
+
+The confirmation window has a box “Also erase its history (conversations, tickets, settings)”, unticked by default. Ticked, nothing is kept: the project’s conversations, tickets, and settings are erased for good, and the same folder, added again, starts from scratch.
 
 Closing the project acts right away, without waiting for “Save”, and takes you back to the settings with the draft as it was.
+
+Closing is refused while an approval of one of the project’s tickets is running (“The ticket DEM-3 is being approved: wait for the end of its approval to close the project.”). Once it has finished, close the project.
+
+## Closed projects
+
+Until a project has been closed with its history kept, this group doesn’t exist. After that, “Closed projects” lists those projects, from the most recently closed to the oldest, under the note “Their history is kept: adding a project in their folder brings it back.”. Each line gives the project’s color, its name, its folder, the space its history takes on disk, and its last activity (“last activity on …”), with two buttons: “Reopen” and “Erase history…”.
+
+“Reopen” opens the “New project” window already on that project’s folder, read right away, with the history found. The history of that line is the one that comes back, even when several closed projects were in the same folder (without “Reopen”, it is the most recently closed one). If you change the path in the window, that history is dropped: the new folder has its own, or none. “Cancel” closes the window without reopening or erasing anything.
+
+A file the app can’t read (damaged, or renamed by hand) still appears in the list, under “Unreadable history”, with its file name (`….json`) and its size. It has no “Reopen”: only “Erase” is offered. After confirmation (“This file, which the app cannot read, is erased for good. The other histories, and the files and worktrees on disk, are not touched.”), it deletes that file, and only that file.
+
+Without going through the list, simply add the project again (the `+` button to the right of the tabs), in the same folder. It doesn’t matter how you write the path: upper or lower case (on Windows), `/` or `\`, a trailing separator, a short name, a WSL share… all are recognized as the same folder. The “New project” window then says what it found, for example “History found: 12 agents, 34 tickets, last activity on Oct 14, 2026”, fills in the closed project’s name, color, and “One git worktree per agent”, and its button becomes “Reopen project”.
+
+The project comes back as it was:
+
+- its settings, its Kanban, and its commands;
+- its agents, with their conversations. No process runs yet: they pick up again at your next message, as after a restart of Escouade. An agent whose worktree has disappeared in the meantime is treated the same way;
+- its tickets. A ticket that was “In progress” when you closed the project comes back blocked, with the reason “Project closed during the ticket”: “Resume” restarts it;
+- what was waiting in the sync queue with Jira, Trello, GitHub Issues, or Linear: the queue of its tickets is kept while it is closed and goes out again when it is reopened (it is forgotten if the history is erased);
+- its [statistics](stats), which get its name back.
+
+The accounts that were reserved to it (“Reserved to projects”) didn’t move while it was closed: see [the Claude accounts](accounts#reserved-to-projects). The project’s “Preferred account” goes back to “Automatic” if its account no longer exists.
+
+Reopening is not creating a project: the window doesn’t offer a first agent, since the project’s own come back.
+
+The “Start from a blank project” switch (“The history stays in Settings › Projects, where you can erase it.”) creates a new project in that folder instead, without the earlier agents and tickets. The old history stays under “Closed projects”: nothing is erased unless you ask.
+
+“Erase history…” asks for confirmation (“Its conversations, tickets, and settings are erased for good. The files and worktrees on disk are not touched.”), then deletes the kept conversations, tickets, and settings of that project. The same folder, added afterwards, has no history to find.
+
+> [!NOTE]
+> A project closed before this version has already lost its history: there is nothing to get back for it.
 
 ## The project’s other settings
 

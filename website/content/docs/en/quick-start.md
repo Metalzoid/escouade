@@ -20,6 +20,8 @@ A project is a folder of code. On the welcome screen, click “+ Add a project�
 
 Click “Create project” (the button stays grayed out until the folder exists). The project opens in a new tab, with its first agent if you asked for one.
 
+If the folder is the one of a project you closed, the window adds a notice, for example “History found: 1 agent, 3 tickets, last activity on Oct 14, 2026”, and its button becomes “Reopen project”: the project comes back with its history (agents, conversations, tickets, settings). The “Start from a blank project” switch creates a new one instead. See [Settings: Projects](settings-projects#closed-projects).
+
 > [!NOTE]
 > If the folder is not inside a git repository, Escouade runs `git init` to create one: without git, there would be no diff and no commit to review.
 

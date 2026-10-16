@@ -103,7 +103,9 @@ export default {
   project: {
     closeTitle: 'Fermer « {name} » ?',
     closeBody:
-      "Le projet et ses agents sont retirés de l'application (conversations comprises). Les fichiers et les worktrees sur le disque ne sont pas touchés.",
+      "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
     closeConfirm: 'Fermer le projet',
+    /** The box of the question, unchecked: closing keeps the history unless it is checked. */
+    closeErase: 'Effacer aussi son historique (conversations, tickets, réglages)',
   },
 } as const satisfies Tree;

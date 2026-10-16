@@ -9,8 +9,8 @@ import { closeTerminal } from './term-actions';
 import type { Project } from './types';
 
 /**
- * Asks before closing the project: it leaves the app with its agents, its files stay on the disk.
- * `back`: where to go once it is closed or not (no modal by default).
+ * Asks before closing the project: it leaves the app with its agents, its history is kept (unless the box is checked)
+ * and its files stay on the disk. `back`: where to go once it is closed or not (no modal by default).
  */
 export function askCloseProject(p: Project, back?: () => void) {
   app.modal = {
@@ -20,20 +20,22 @@ export function askCloseProject(p: Project, back?: () => void) {
     body: t('nav.project.closeBody') + lossNotice(buffers.unsavedIn(p.id)),
     confirm: t('nav.project.closeConfirm'),
     danger: true,
+    // Erasing is never the default: the history is what reopening the folder brings back.
+    option: { label: t('nav.project.closeErase'), value: false },
     onCancel: back,
-    onConfirm: async () => {
-      await closeProject(p);
+    onConfirm: async (erase) => {
+      await closeProject(p, erase);
       back?.();
     },
   };
 }
 
-async function closeProject(p: Project) {
+async function closeProject(p: Project, erase: boolean) {
   // The backend kills its launch commands and its agents' test launches: not crashes.
   const runs = [...p.runCommands.map((c) => c.id), ...testLaunchIds(p.id)];
   const undo = expectStops(runs);
   // Only forget the project once the backend removed it.
-  const removed = await app.run(api.removeProject(p.id).then(() => true));
+  const removed = await app.run(api.removeProject(p.id, erase).then(() => true));
   if (!removed) return undo();
   forgetLaunches(runs);
   for (const term of app.terminals.filter((x) => x.projectId === p.id)) closeTerminal(term.id);

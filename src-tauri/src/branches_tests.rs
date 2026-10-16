@@ -443,6 +443,7 @@ async fn an_agent_at_work_in_the_folder_through_another_project_holds_off_a_swit
             "oklch(0.72 0.12 48)",
             false,
             None,
+            true,
         )
         .await
         .unwrap();

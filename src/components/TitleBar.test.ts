@@ -95,7 +95,7 @@ describe('TitleBar', () => {
     const backend = fakeBackend();
     render(TitleBar);
     await closeProjectFromMenu('studio-web');
-    expect(backend.called('remove_project')[0].args).toEqual({ id: 'p2' });
+    expect(backend.called('remove_project')[0].args).toEqual({ id: 'p2', erase: false });
     expect(app.projects.map((p) => p.id)).toEqual(['p1']);
   });
 

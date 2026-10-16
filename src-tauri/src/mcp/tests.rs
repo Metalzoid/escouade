@@ -1093,7 +1093,7 @@ async fn the_server_runs_while_claude_may_drive_escouade() {
     h.core.save_settings(on).unwrap();
     assert!(h.core.mcp.status().running);
     assert_eq!(h.core.mcp.status().port, port);
-    h.core.remove_project(&p.id).await.unwrap();
+    h.core.remove_project(&p.id, false).await.unwrap();
     assert!(h.core.mcp.status().running);
     h.core.mcp.stop();
 }

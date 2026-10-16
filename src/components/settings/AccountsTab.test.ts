@@ -7,7 +7,7 @@ vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }
 
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import type { Account, AccountStatus } from '../../lib/types';
+import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
 import { agent, fakeBackend, project, resetApp, SETTINGS } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
@@ -220,6 +220,109 @@ describe('AccountsTab', () => {
     // (Rendered here by itself, the tab is still there.)
     await userEvent.click(await within(row('Pro')).findByRole('button', { name: 'Se connecter…' }));
     expect(app.modal).toEqual({ kind: 'account', accountId: 'pro' });
+  });
+
+  describe('and the projects closed with their history kept', () => {
+    /** A closed project, as `closed_projects` lists it (or an entry it cannot read, with `unreadable`). */
+    const closed = (id: string, name: string, over: Partial<ClosedProject> = {}): ClosedProject => ({
+      id,
+      name,
+      color: 'oklch(0.72 0.12 300)',
+      path: `C:\\code\\${name}`,
+      worktreePerAgent: false,
+      agents: 1,
+      tickets: 1,
+      lastActivity: 1,
+      closedAt: 1,
+      size: 1024,
+      unreadable: false,
+      ...over,
+    });
+    const checkboxes = (name: string) => within(row(name)).queryAllByRole('checkbox');
+
+    beforeEach(() => {
+      app.projects = [project({ id: 'p1', name: 'demo' })];
+    });
+
+    it('keeps one an account is reserved to in its list, ticked and marked closed, and unticks it like any other', async () => {
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1', 'c1'] }];
+      const b = backend({
+        closed_projects: () => [closed('c1', 'ancien'), closed('c2', 'vieux')],
+        account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
+      });
+      render(SettingsModal, { tab: 'accounts' });
+      const old = await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
+      expect(old).toBeChecked();
+      expect(within(row('Pro')).getByRole('checkbox', { name: 'demo' })).toBeChecked();
+      // Only the closed projects an account is reserved to: not every closed project, and not on the other accounts.
+      expect(within(row('Pro')).queryByRole('checkbox', { name: 'vieux (fermé)' })).not.toBeInTheDocument();
+      expect(within(row('Principal')).queryByRole('checkbox', { name: 'ancien (fermé)' })).not.toBeInTheDocument();
+      expect(b.called('closed_projects')).toHaveLength(1);
+      // The same save as for a project that is open, the closed one gone from the list.
+      await userEvent.click(old);
+      expect(b.called('account_update')[0].args.account).toEqual({ ...PRO, projects: ['p1'] });
+      await waitFor(() => expect(within(row('Pro')).queryByRole('checkbox', { name: 'ancien (fermé)' })).not.toBeInTheDocument());
+    });
+
+    it('shows the list of an account reserved to a closed project alone, though no project is open', async () => {
+      app.projects = [];
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
+      backend({ closed_projects: () => [closed('c1', 'ancien')] });
+      render(SettingsModal, { tab: 'accounts' });
+      expect(await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' })).toBeChecked();
+      expect(within(row('Pro')).getByRole('group', { name: 'Réservé aux projets' })).toBeInTheDocument();
+      expect(within(row('Pro')).queryByText(/Tous les projets/)).not.toBeInTheDocument();
+      // Principal has nothing to be reserved to: no list, as before.
+      expect(within(row('Principal')).queryByRole('group', { name: 'Réservé aux projets' })).not.toBeInTheDocument();
+    });
+
+    it('says « Tous les projets » only when nothing at all is reserved, a closed project included', async () => {
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
+      backend({ closed_projects: () => [closed('c1', 'ancien')] });
+      render(SettingsModal, { tab: 'accounts' });
+      await within(row('Pro')).findByRole('checkbox', { name: 'ancien (fermé)' });
+      expect(within(row('Pro')).queryByText(/Tous les projets/)).not.toBeInTheDocument();
+      expect(within(row('Principal')).getByText('· Tous les projets')).toBeInTheDocument();
+      // Unticked, the last one: the account is open to every project again.
+      app.settings.accounts = [PRINCIPAL, PRO];
+      await waitFor(() => expect(within(row('Pro')).getByText('· Tous les projets')).toBeInTheDocument());
+    });
+
+    it('shows nothing of a project it has no name for: gone from both lists, or a file the app cannot read', async () => {
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1', 'gone', 'bad'] }];
+      const b = backend({ closed_projects: () => [closed('bad', '', { unreadable: true, path: '', color: '' })] });
+      render(SettingsModal, { tab: 'accounts' });
+      await waitFor(() => expect(b.called('closed_projects')).toHaveLength(1));
+      await new Promise((r) => setTimeout(r));
+      expect(
+        within(row('Pro'))
+          .getAllByRole('checkbox')
+          .map((c) => c.closest('label')?.textContent?.trim()),
+      ).toEqual(['demo']);
+      expect(checkboxes('Pro')).toHaveLength(1);
+    });
+
+    it('is the same list as before when the closed projects cannot be read', async () => {
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1', 'c1'] }];
+      backend({
+        closed_projects: () => {
+          throw new Error('disque illisible');
+        },
+      });
+      render(SettingsModal, { tab: 'accounts' });
+      expect(await within(row('Pro')).findByRole('checkbox', { name: 'demo' })).toBeChecked();
+      await new Promise((r) => setTimeout(r));
+      expect(checkboxes('Pro')).toHaveLength(1);
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['c1'] }];
+      backend({ closed_projects: () => [closed('c1', 'ancien')] });
+      render(SettingsModal, { tab: 'accounts' });
+      expect(await within(row('Pro')).findByRole('checkbox', { name: 'ancien (closed)' })).toBeChecked();
+    });
   });
 
   it('reads in English, Principal by its English name until it is renamed', async () => {

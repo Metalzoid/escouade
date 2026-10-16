@@ -1,6 +1,7 @@
 //! Tauri commands invoked by the frontend.
 
 use crate::accounts::{AccountStatus, ShareMode};
+use crate::closed::ClosedProjectInfo;
 use crate::core::{Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
 use crate::i18n::{self, Lang};
@@ -24,11 +25,20 @@ use tauri::State;
 type Res<T> = Result<T, String>;
 
 /// A command's result, counted in the usage statistics when it went well (`telemetry`).
-fn counted<T>(core: &Core, event: Event, r: Res<T>) -> Res<T> {
+fn counted<T, R: tauri::Runtime>(core: &Core<R>, event: Event, r: Res<T>) -> Res<T> {
     if r.is_ok() {
         core.telemetry.track(event);
     }
     r
+}
+
+/// The project a folder was added as, counted as created unless a closed project's history came
+/// back with it (`Core::add_project`): that one is not new.
+fn project_added<R: tauri::Runtime>(core: &Core<R>, r: Res<(Project, bool)>) -> Res<Project> {
+    match r {
+        Ok((project, false)) => counted(core, Event::ProjectCreated, Ok(project)),
+        other => other.map(|(project, _)| project),
+    }
 }
 type CoreState<'a> = State<'a, Arc<Core>>;
 
@@ -289,26 +299,38 @@ pub struct FolderInfo {
     branch: String,
     dirty: u32,
     name: String,
+    /// The project closed in this folder, whose history adding a project there gives back.
+    history: Option<ClosedProjectInfo>,
 }
 
+/// Always `Ok`: an async command that borrows the state must return a `Result`. `history_id`: the
+/// closed project of this folder the window means to bring back, if it has several.
 #[tauri::command]
-pub async fn inspect_folder(path: String) -> FolderInfo {
+pub async fn inspect_folder(
+    core: CoreState<'_>,
+    path: String,
+    history_id: Option<String>,
+) -> Res<FolderInfo> {
     let p = std::path::Path::new(path.trim());
     let name = p
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     if !p.is_dir() {
-        return FolderInfo {
+        return Ok(FolderInfo {
             exists: false,
             is_repo: false,
             branch: String::new(),
             dirty: 0,
             name,
-        };
+            history: None,
+        });
     }
     let path = path.trim().to_string();
-    match crate::git::toplevel(&path).await {
+    let history = core
+        .closed_project_info_for(&path, history_id.as_deref())
+        .await;
+    Ok(match crate::git::toplevel(&path).await {
         Some(_) => {
             let st = crate::git::status(&path).await.unwrap_or_default();
             FolderInfo {
@@ -317,6 +339,7 @@ pub async fn inspect_folder(path: String) -> FolderInfo {
                 branch: st.branch,
                 dirty: st.entries.len() as u32,
                 name,
+                history,
             }
         }
         None => FolderInfo {
@@ -325,11 +348,17 @@ pub async fn inspect_folder(path: String) -> FolderInfo {
             branch: String::new(),
             dirty: 0,
             name,
+            history,
         },
-    }
+    })
 }
 
+/// `restore`: the history of a project closed in this folder comes back with it (the default);
+/// false starts a project of its own, the history staying among the closed projects.
+/// `history_id`: which of the folder's histories comes back, when it has several (else the latest
+/// closed).
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn create_project(
     core: CoreState<'_>,
     path: String,
@@ -337,12 +366,22 @@ pub async fn create_project(
     color: String,
     worktree_per_agent: bool,
     first_agent: Option<String>,
+    restore: Option<bool>,
+    history_id: Option<String>,
 ) -> Res<Project> {
     let r = core
-        .create_project(&path, &name, &color, worktree_per_agent, first_agent)
+        .add_project(
+            &path,
+            &name,
+            &color,
+            worktree_per_agent,
+            first_agent,
+            restore.unwrap_or(true),
+            history_id,
+        )
         .await
         .map_err(err);
-    counted(&core, Event::ProjectCreated, r)
+    project_added(&core, r)
 }
 
 #[tauri::command(async)]
@@ -355,9 +394,29 @@ pub fn reorder_projects(core: CoreState, ids: Vec<String>) {
     core.reorder_projects(&ids);
 }
 
+/// `erase`: its history goes too; by default it is kept (`closed_projects`).
 #[tauri::command]
-pub async fn remove_project(core: CoreState<'_>, id: String) -> Res<()> {
-    core.remove_project(&id).await.map_err(err)
+pub async fn remove_project(core: CoreState<'_>, id: String, erase: Option<bool>) -> Res<()> {
+    core.remove_project(&id, erase.unwrap_or(false))
+        .await
+        .map_err(err)
+}
+
+/// The projects closed with their history kept, the latest closed first.
+#[tauri::command(async)]
+pub fn closed_projects(core: CoreState) -> Vec<ClosedProjectInfo> {
+    core.closed_projects()
+}
+
+/// « Effacer l'historique » of a closed project (the file of an unreadable one alone), away from
+/// the async workers: it reads the history and removes its logs.
+#[tauri::command]
+pub async fn erase_closed_project(core: CoreState<'_>, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    tokio::task::spawn_blocking(move || core.erase_closed_project(&id))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -1616,5 +1675,63 @@ mod tests {
         use crate::i18n::Lang::{En, Fr};
         assert_eq!(shell_not_found(En, "zsh"), "shell “zsh” not found");
         assert_eq!(shell_not_found(Fr, "zsh"), "shell « zsh » introuvable");
+    }
+
+    #[tokio::test]
+    async fn adding_a_folder_is_counted_as_a_project_created_unless_a_history_came_back() {
+        let h = crate::core_tests::harness("commands-project-counted");
+        h.core.set_telemetry(true).unwrap();
+        let created = || {
+            h.core
+                .telemetry
+                .pending()
+                .iter()
+                .filter(|e| e["eventName"] == "project_created")
+                .count()
+        };
+        let (p, r) = h.project(false).await;
+        assert_eq!(created(), 0, "the core itself counts nothing");
+
+        // A new project is counted; so is the next one.
+        assert!(project_added(&h.core, Ok((p.clone(), false))).is_ok());
+        assert_eq!(created(), 1);
+        assert!(project_added(&h.core, Ok((p.clone(), false))).is_ok());
+        assert_eq!(created(), 2);
+        // One that was refused is not, and neither is a history that came back.
+        assert!(project_added(&h.core, Err("non".into())).is_err());
+        assert!(project_added(&h.core, Ok((p.clone(), true))).is_ok());
+        assert_eq!(created(), 2);
+
+        // What the core says of a real adding: a blank project, then the same folder closed and
+        // added again.
+        let (_, back) = h
+            .core
+            .add_project(
+                &r.to_string_lossy(),
+                "",
+                "oklch(0.7 0.1 20)",
+                false,
+                None,
+                false,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(!back);
+        h.core.remove_project(&p.id, false).await.unwrap();
+        let (again, back) = h
+            .core
+            .add_project(
+                &r.to_string_lossy(),
+                "",
+                "oklch(0.7 0.1 20)",
+                false,
+                None,
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(back && again.id == p.id);
     }
 }

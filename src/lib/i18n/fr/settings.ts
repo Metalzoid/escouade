@@ -243,8 +243,31 @@ export default {
     danger: 'Zone sensible',
     close: 'Fermer le projet',
     closeDesc:
-      "Le projet et ses agents sont retirés de l'application, conversations comprises. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
+      "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
     closeButton: 'Fermer le projet…',
+  },
+
+  // The projects closed with their history kept (under the « Projets » tab).
+  closed: {
+    title: 'Projets fermés',
+    note: 'Leur historique est gardé : ajouter un projet dans leur dossier le retrouve.',
+    /** `{size}`: what the history takes on the disk; `{date}`: its last activity. */
+    detail: '{size} · dernière activité le {date}',
+    erase: "Effacer l'historique…",
+    eraseTitle: "Effacer l'historique de « {name} » ?",
+    eraseBody:
+      'Ses conversations, ses tickets et ses réglages sont effacés pour de bon. Les fichiers et les worktrees sur le disque ne sont pas touchés.',
+    eraseConfirm: "Effacer l'historique",
+    /** Ouvre la fenêtre d'ajout sur le dossier du projet fermé et sur cet historique-là. */
+    reopen: 'Rouvrir',
+    /** Un fichier de projet fermé que l'application ne sait pas lire : il ne peut qu'être effacé, lui seul. */
+    unreadable: 'Historique illisible',
+    eraseFile: 'Effacer',
+    /** `{file}` : le nom du fichier (`abc123.json`). */
+    eraseFileTitle: 'Effacer le fichier « {file} » ?',
+    eraseFileBody:
+      "Ce fichier, que l'application ne peut pas lire, est effacé pour de bon. Les autres historiques, les fichiers et les worktrees sur le disque ne sont pas touchés.",
+    eraseFileConfirm: 'Effacer le fichier',
   },
 
   // The commands run in a project's worktrees (their setup, their teardown), in order.

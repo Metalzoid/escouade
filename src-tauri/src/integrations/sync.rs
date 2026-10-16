@@ -323,6 +323,8 @@ pub(crate) enum SyncJob {
     Due,
     /// Try again every operation left waiting (the app starts).
     All,
+    /// Try again the operations of these tickets (their closed project came back).
+    Tickets(Vec<String>),
     /// "Resynchroniser": try again a ticket's operations at once, and say how it went.
     Resync(String, tokio::sync::oneshot::Sender<Result<()>>),
 }
@@ -784,6 +786,22 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The operations of these tickets left waiting go again now (their closed project came back,
+    /// the service may be back as well); those set aside stay so.
+    pub(crate) fn retry_syncs_of(&self, ticket_ids: &[String]) {
+        let waiting: Vec<String> = {
+            let queue = self.pending_syncs.lock();
+            ticket_ids
+                .iter()
+                .filter(|id| queue.nth(id, 0).is_some())
+                .cloned()
+                .collect()
+        };
+        if !waiting.is_empty() {
+            self.sync_job(SyncJob::Tickets(waiting));
+        }
+    }
+
     /// "Resynchroniser": the ticket's operations not through yet go again at once, those set
     /// aside included; with none left (a ⚠ an earlier version left), its external one is given
     /// its column's state again. Err: why one still fails (its ticket says so too).
@@ -858,6 +876,11 @@ impl<R: Runtime> Core<R> {
                     let _ = self.run_ticket_syncs(&id, false).await;
                 }
             }
+            SyncJob::Tickets(ids) => {
+                for id in ids {
+                    let _ = self.run_ticket_syncs(&id, false).await;
+                }
+            }
             SyncJob::Resync(id, reply) => {
                 let _ = reply.send(self.resync(&id).await);
             }
@@ -920,6 +943,11 @@ impl<R: Runtime> Core<R> {
     /// else that of an operation still set aside, else goes. Err: the last failure.
     async fn run_ticket_syncs(self: &Arc<Self>, ticket_id: &str, set_aside: bool) -> Result<()> {
         let Ok(ticket) = self.ticket(ticket_id) else {
+            // Its project is closed with its history kept: the card comes back with it, and its
+            // operations wait for that (neither tried nor forgotten).
+            if self.in_closed_history(ticket_id) {
+                return Ok(());
+            }
             // Its card is gone: nothing left to show them on, nor to try them again from.
             self.pending_syncs.lock().forget(ticket_id);
             self.save_pending_syncs();
@@ -1025,6 +1053,18 @@ impl<R: Runtime> Core<R> {
                 Ok(())
             });
         }
+    }
+
+    /// The operations of these tickets go: their history is erased, nothing is left to show them
+    /// on, nor to try them again from.
+    pub(crate) fn forget_ticket_syncs(&self, ticket_ids: &[String]) {
+        {
+            let mut queue = self.pending_syncs.lock();
+            for id in ticket_ids {
+                queue.forget(id);
+            }
+        }
+        self.save_pending_syncs();
     }
 
     fn save_pending_syncs(&self) {

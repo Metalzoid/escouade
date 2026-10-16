@@ -1009,6 +1009,10 @@ pub struct PersistedState {
     pub tickets: Vec<Ticket>,
     /// The autopilot's pause as the app stopped: the next start holds the tickets back the same.
     pub pause: SavedPause,
+    /// The closed projects' histories (by project id) the state holds the truth of, whose file
+    /// could not be removed: given back to their project, or erased. The next start tries again
+    /// to remove them, and never reads them (`closed::scan`).
+    pub leftover_histories: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

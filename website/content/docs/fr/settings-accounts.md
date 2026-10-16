@@ -26,7 +26,7 @@ Chaque compte a son bloc dans la liste.
 | « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de l’onglet « Claude Code » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
 | « Se connecter… » ou « Se reconnecter… » | Ouvre la connexion du compte. | — |
 | « Supprimer » | Retire le compte de la liste (absent pour Principal). | — |
-| « Réservé aux projets » | Une case par projet ouvert : le compte ne sert que les projets cochés. | Aucune case cochée : « Tous les projets » |
+| « Réservé aux projets » | Une case par projet ouvert, plus une case cochée, marquée « (fermé) », pour chaque projet fermé auquel le compte reste réservé : le compte ne sert que les projets cochés. | Aucune case cochée : « Tous les projets » |
 
 ### Nom et état
 
@@ -51,6 +51,8 @@ Pour Principal, le dossier est celui de Claude Code lui-même (`~/.claude`, ou c
 ### Réservé aux projets
 
 Les cases servent à garder un compte à ces projets seuls (ceux d’un client, par exemple) : les autres projets n’y partent jamais. Sans case cochée, le compte sert tous les projets, ce que la rangée dit par « Tous les projets ». Principal peut être réservé comme les autres.
+
+Un projet fermé en gardant son historique reste réservé au compte : il apparaît dans la rangée, coché et marqué « (fermé) », par exemple « Client (fermé) ». Décoche-le pour le retirer de la liste du compte ; il en sort aussi tout seul quand son historique est effacé. Tant qu’il est coché, un compte réservé à ce seul projet ne sert aucun projet ouvert, et « Tous les projets » ne s’affiche pas. La rangée apparaît même s’il n’y a aucun projet ouvert, du moment que le compte est réservé à un projet fermé.
 
 Si aucun compte actif ne sert un projet (tous sont réservés à d’autres, ou désactivés), une ligne sous la liste nomme le projet et dit que ses agents et ses tickets ne démarrent pas.
 

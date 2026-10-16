@@ -20,6 +20,8 @@ Un projet est un dossier de code. Sur l’écran d’accueil, clique sur « + A
 
 Clique sur « Créer le projet » (le bouton reste grisé tant que le dossier n’existe pas). Le projet s’ouvre dans un nouvel onglet, avec son premier agent si tu l’as demandé.
 
+Si le dossier est celui d’un projet que tu as fermé, la fenêtre ajoute un encart, par exemple « Historique retrouvé : 1 agent, 3 tickets, dernière activité le 14 octobre 2026 », et son bouton devient « Rouvrir le projet » : le projet revient avec son historique (agents, conversations, tickets, réglages). L’interrupteur « Partir d’un projet vierge » en crée un neuf à la place. Voir [Réglages : Projets](settings-projects#projets-fermes).
+
 > [!NOTE]
 > Si le dossier n’est pas dans un dépôt git, Escouade lance `git init` pour en créer un : sans git, il n’y aurait ni diff ni commit à relire.
 

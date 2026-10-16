@@ -105,6 +105,52 @@ describe('test launch commands', () => {
   });
 });
 
+describe('project commands', () => {
+  it('adds a project with or without the history of its folder, and closes it keeping that history or not', async () => {
+    const backend = fakeBackend({ create_project: () => project() });
+    const a = { path: 'C:\code\demo-api', name: 'demo-api', color: 'red', worktreePerAgent: false, firstAgent: null };
+    await api.createProject({ ...a, restore: true });
+    await api.createProject({ ...a, restore: false });
+    await api.removeProject('p1', false);
+    await api.removeProject('p1', true);
+    expect(backend.calls).toEqual([
+      { cmd: 'create_project', args: { ...a, restore: true } },
+      { cmd: 'create_project', args: { ...a, restore: false } },
+      { cmd: 'remove_project', args: { id: 'p1', erase: false } },
+      { cmd: 'remove_project', args: { id: 'p1', erase: true } },
+    ]);
+  });
+
+  it('names the history to look at, and to reopen, only when the window was opened on one', async () => {
+    const backend = fakeBackend({ inspect_folder: () => null, create_project: () => project() });
+    const a = { path: 'C:\\code\\demo-api', name: 'demo-api', color: 'red', worktreePerAgent: false, firstAgent: null, restore: true };
+    await api.inspectFolder('C:\\code\\demo-api');
+    await api.inspectFolder('C:\\code\\demo-api', 'p7');
+    await api.createProject(a);
+    await api.createProject({ ...a, historyId: 'p7' });
+    expect(backend.calls).toEqual([
+      { cmd: 'inspect_folder', args: { path: 'C:\\code\\demo-api' } },
+      { cmd: 'inspect_folder', args: { path: 'C:\\code\\demo-api', historyId: 'p7' } },
+      { cmd: 'create_project', args: a },
+      { cmd: 'create_project', args: { ...a, historyId: 'p7' } },
+    ]);
+    // Not a key left empty: the backend reads no history id as « the latest of the folder ».
+    expect(Object.keys(backend.calls[0].args)).toEqual(['path']);
+    expect(Object.keys(backend.calls[2].args)).not.toContain('historyId');
+  });
+
+  it('lists the closed projects and erases the history of one', async () => {
+    const closed = { id: 'p9', name: 'old', color: 'red', path: 'C:\code\old', worktreePerAgent: false, agents: 2, tickets: 3 };
+    const backend = fakeBackend({ closed_projects: () => [closed] });
+    expect(await api.closedProjects()).toEqual([closed]);
+    await api.eraseClosedProject('p9');
+    expect(backend.calls).toEqual([
+      { cmd: 'closed_projects', args: {} },
+      { cmd: 'erase_closed_project', args: { id: 'p9' } },
+    ]);
+  });
+});
+
 describe('terminal writes and reports', () => {
   it('gives the number the backend gave a write', async () => {
     const backend = fakeBackend({ term_write: () => 41 });

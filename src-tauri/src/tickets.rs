@@ -72,6 +72,9 @@ pub enum Refusal {
     NotInReview,
     /// A second « Valider » (or « Renvoyer », « L'agent résout ») while the first runs.
     ApprovingAlready,
+    /// No validation starts on a project that is being closed: closing waits for none, and cuts
+    /// what it finds under way.
+    ProjectClosing,
     NoAgent,
     AgentWithoutWorktree,
 }
@@ -128,6 +131,11 @@ impl Refusal {
                 lang,
                 "La validation de ce ticket est déjà en cours.",
                 "This ticket is already being approved."
+            ),
+            Refusal::ProjectClosing => tr_in!(
+                lang,
+                "Le projet de ce ticket est en cours de fermeture : la validation ne peut pas démarrer.",
+                "This ticket’s project is being closed: the approval can’t start."
             ),
             Refusal::NoAgent => tr_in!(lang, "Ce ticket n'a pas d'agent.", "This ticket has no agent."),
             Refusal::AgentWithoutWorktree => tr_in!(
@@ -805,26 +813,27 @@ impl<R: Runtime> Core<R> {
         git::branches(&p.path).await
     }
 
-    /// The project is closed: its tickets go with it, and what its board said.
-    pub(crate) fn drop_project_tickets(&self, project_id: &str) {
+    /// The project is closed: its tickets leave the board, and what its board said. They are
+    /// given back, for its history to keep (no file of theirs goes here: `erase_history_files`).
+    pub(crate) fn drop_project_tickets(&self, project_id: &str) -> Vec<Ticket> {
         self.board_issues.lock().remove(project_id);
-        let gone: Vec<String> = {
+        let gone: Vec<Ticket> = {
             let mut tickets = self.tickets.write();
-            let ids = tickets
+            let gone = tickets
                 .iter()
                 .filter(|t| t.project_id == project_id)
-                .map(|t| t.id.clone())
+                .cloned()
                 .collect();
             tickets.retain(|t| t.project_id != project_id);
-            ids
+            gone
         };
-        for id in gone {
-            ticketimages::remove(&self.data.ticket_dir(&id));
+        for t in &gone {
             self.hub.emit(UiEvent::TicketRemoved {
-                id,
+                id: t.id.clone(),
                 project_id: project_id.to_string(),
             });
         }
+        gone
     }
 
     // ---------- scheduler ----------
@@ -1895,6 +1904,11 @@ impl<R: Runtime> Core<R> {
             if t.step.is_some() {
                 bail!(Refusal::ApprovingAlready);
             }
+            // Under the tickets' lock, as the closing looks for a validation under way: one of
+            // the two sees the other.
+            if self.is_closing(&t.project_id) {
+                bail!(Refusal::ProjectClosing);
+            }
             t.blocked = None;
             t.conflict = false;
             t.step = Some(tr!("Validation…", "Approving…"));
@@ -2442,6 +2456,9 @@ impl<R: Runtime> Core<R> {
             }
             if t.step.is_some() {
                 bail!(Refusal::ApprovingAlready);
+            }
+            if self.is_closing(&t.project_id) {
+                bail!(Refusal::ProjectClosing);
             }
             t.step = Some("Merge…".into());
             Ok(t.agent_id.clone())

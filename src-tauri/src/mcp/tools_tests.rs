@@ -39,6 +39,7 @@ pub(super) async fn other_project(h: &Harness, name: &str) -> Project {
             "oklch(0.7 0.1 200)",
             false,
             None,
+            true,
         )
         .await
         .unwrap();

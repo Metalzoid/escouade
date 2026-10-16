@@ -14,6 +14,7 @@ import {
   fNum,
   fPct,
   fSince,
+  fSize,
   fTime,
   fTok,
   fUsd,
@@ -196,6 +197,24 @@ describe('fBytes with decimals', () => {
     expect(fBytes(1.26 * MB, 1)).toBe('1,3 Mo');
     expect(fBytes(1023 * MB, 1)).toBe('1023 Mo');
     expect(fBytes(1.26 * 1024 * MB, 1)).toBe('1,3 Go');
+  });
+});
+
+describe('fSize', () => {
+  const KB = 1024;
+  const MB = KB * KB;
+  it('says kilobytes under a megabyte, megabytes to a decimal, then gigabytes', () => {
+    expect([0, 300, 12 * KB, 12 * KB + 1, 1023 * KB].map(fSize)).toEqual(['0 Ko', '1 Ko', '12 Ko', '13 Ko', '1023 Ko']);
+    expect([MB, 3.26 * MB, 1023 * MB, 2 * 1024 * MB].map(fSize)).toEqual(['1 Mo', '3,3 Mo', '1023 Mo', '2 Go']);
+  });
+
+  it('never says 1024 Ko', () => {
+    expect(fSize(MB - 1)).toBe('1 Mo');
+  });
+
+  it('writes KB and MB in English', () => {
+    setLang('en');
+    expect([12 * KB, 3.26 * MB].map(fSize)).toEqual(['12 KB', '3.3 MB']);
   });
 });
 

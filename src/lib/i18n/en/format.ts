@@ -11,7 +11,7 @@ export default defineZone('format', {
   ago: { now: 'just now', minutes: '{n} min ago', hours: '{n} h ago', yesterday: 'yesterday', days: '{n} days ago' },
   /** To follow “for”. */
   since: { underMinute: '< 1 min', minutes: '{n} min', hours: '{n} h', days: { one: '{count} day', other: '{count} days' } },
-  bytes: { megabytes: '{n} MB', gigabytes: '{n} GB' },
+  bytes: { kilobytes: '{n} KB', megabytes: '{n} MB', gigabytes: '{n} GB' },
   when: { today: 'at {time}', day: 'on {date} at {time}' },
   dateTime: '{date} at {time}',
   keys: { shift: 'Shift', enter: 'Enter', escape: 'Esc' },

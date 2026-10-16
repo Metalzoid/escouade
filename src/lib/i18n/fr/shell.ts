@@ -30,6 +30,15 @@ export default {
     worktreeDesc: 'Isole le travail de chaque agent et permet de voir ses fichiers modifiés séparément',
     create: 'Créer le projet',
     creating: 'Création…',
+    /** The folder was a project, closed with its history kept: adding it brings the history back. */
+    history: {
+      /** `{agents}`, `{tickets}`: the counts, each with its noun; `{date}`: its last activity. */
+      found: 'Historique retrouvé : {agents}, {tickets}, dernière activité le {date}',
+      fresh: "Partir d'un projet vierge",
+      freshDesc: "L'historique reste dans Réglages › Projets, où l'effacer.",
+      reopen: 'Rouvrir le projet',
+      reopening: 'Réouverture…',
+    },
     /** What is known of the folder chosen. */
     git: {
       choose: 'Choisis le dossier du projet',

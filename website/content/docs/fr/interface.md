@@ -50,7 +50,7 @@ L’infobulle d’un onglet donne aussi le chemin du dossier du projet.
 | « Activer le worktree par agent » ou « Désactiver le worktree par agent » | Bascule l’option pour les nouveaux agents du projet. Voir les [worktrees](worktrees). |
 | « Réglages du projet… » | Ouvre les réglages, onglet Projets, sur ce projet. |
 | « Ouvrir le dossier » | Ouvre le dossier du projet dans le gestionnaire de fichiers du système. |
-| « Fermer le projet… » | Retire le projet et ses agents de l’application, conversations comprises, après confirmation. Les fichiers et les worktrees sur le disque ne sont pas touchés. |
+| « Fermer le projet… » | Retire le projet de l’application après confirmation : ses agents, ses terminaux et ses lancements s’arrêtent. Son historique (conversations, tickets, réglages) est gardé, et ajouter un projet dans le même dossier le retrouve ; une case de la confirmation permet de l’effacer aussi. Les fichiers et les worktrees sur le disque ne sont pas touchés. Voir [Réglages : Projets](settings-projects#projets-fermes). |
 
 ### Les boutons de la barre
 

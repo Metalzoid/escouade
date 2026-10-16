@@ -391,7 +391,7 @@ pub fn on_share(path: &Path) -> bool {
 
 /// The distribution and the Linux path (`/` for its root) of a path to the WSL share written with
 /// `/` (`//wsl.localhost/<distro>/…`, `//wsl$/<distro>/…`); None for any other.
-fn share_path(slashed: &str) -> Option<(&str, String)> {
+pub(crate) fn share_path(slashed: &str) -> Option<(&str, String)> {
     let (host, rest) = slashed.strip_prefix("//")?.split_once('/')?;
     if !(host.eq_ignore_ascii_case("wsl.localhost") || host.eq_ignore_ascii_case("wsl$")) {
         return None;

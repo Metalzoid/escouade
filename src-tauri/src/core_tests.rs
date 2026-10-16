@@ -70,7 +70,7 @@ pub(crate) fn ignore(dir: &Path, pattern: &str) {
 }
 
 /// A git repository with one commit.
-fn repo(dir: &Path) -> PathBuf {
+pub(crate) fn repo(dir: &Path) -> PathBuf {
     let r = dir.join("repo");
     std::fs::create_dir_all(r.join("src")).unwrap();
     git(&r, &["init", "-q", "-b", "main"]);
@@ -133,6 +133,7 @@ impl Harness {
                 "oklch(0.72 0.12 48)",
                 worktrees,
                 None,
+                true,
             )
             .await
             .unwrap();
@@ -3057,6 +3058,7 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
             "oklch(0.72 0.12 300)",
             false,
             Some("sonnet".into()),
+            true,
         )
         .await
         .unwrap();
@@ -3084,24 +3086,39 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
 }
 
 #[tokio::test]
-async fn a_project_removed_leaves_the_reservations() {
+async fn a_project_removed_leaves_the_reservations_only_when_its_history_goes_with_it() {
     let h = harness("reserved-removed");
     let (p, _) = h.project(false).await;
-    let r = repo(&h.dir.join("b"));
-    let q = h
-        .core
-        .create_project(
-            &r.to_string_lossy(),
-            "client",
-            "oklch(0.72 0.12 300)",
-            false,
-            None,
-        )
-        .await
-        .unwrap();
-    keep_principal_to(&h, &[&p.id, &q.id]);
-    h.core.remove_project(&q.id).await.unwrap();
-    assert_eq!(h.core.settings.read().accounts[0].projects, [p.id.as_str()]);
+    let new_project = |name: &str, dir: &str| {
+        let r = repo(&h.dir.join(dir));
+        let (core, name) = (h.core.clone(), name.to_string());
+        async move {
+            core.create_project(
+                &r.to_string_lossy(),
+                &name,
+                "oklch(0.72 0.12 300)",
+                false,
+                None,
+                true,
+            )
+            .await
+            .unwrap()
+        }
+    };
+    let q = new_project("client", "b").await;
+    let s = new_project("autre", "c").await;
+    keep_principal_to(&h, &[&p.id, &q.id, &s.id]);
+    let reserved = || h.core.settings.read().accounts[0].projects.clone();
+
+    // Closed, its history is kept, and so is its place in « Réservé aux projets ».
+    h.core.remove_project(&q.id, false).await.unwrap();
+    assert_eq!(reserved(), [p.id.as_str(), q.id.as_str(), s.id.as_str()]);
+    // Closed with its history erased, nothing of it stays.
+    h.core.remove_project(&s.id, true).await.unwrap();
+    assert_eq!(reserved(), [p.id.as_str(), q.id.as_str()]);
+    // The history erased later: its place goes then.
+    h.core.erase_closed_project(&q.id).unwrap();
+    assert_eq!(reserved(), [p.id.as_str()]);
 }
 
 #[tokio::test]
@@ -3931,6 +3948,7 @@ async fn the_editor_and_terminals_take_no_agent_of_another_project() {
             "oklch(0.72 0.12 48)",
             false,
             None,
+            true,
         )
         .await
         .unwrap();
@@ -4014,6 +4032,7 @@ async fn the_editor_tree_of_a_project_in_a_subfolder_shows_the_files_copied_from
             "oklch(0.72 0.12 48)",
             true,
             None,
+            true,
         )
         .await
         .unwrap();
@@ -4047,6 +4066,7 @@ async fn the_editor_keeps_the_folders_and_worktrees_of_every_project_of_the_repo
                 "oklch(0.72 0.12 48)",
                 true,
                 None,
+                true,
             )
             .await
             .unwrap();
@@ -4837,7 +4857,7 @@ async fn closing_a_project_stops_its_worktrees_setups_and_isolas_services() {
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     let dir = PathBuf::from(a.meta.worktree.clone().unwrap().path);
     tokio::time::sleep(Duration::from_millis(800)).await;
-    h.core.remove_project(&p.id).await.unwrap();
+    h.core.remove_project(&p.id, true).await.unwrap();
     h.wait("isola down", |_| {
         crate::isola::tests::calls(&dir).last().map(String::as_str) == Some("down")
     })

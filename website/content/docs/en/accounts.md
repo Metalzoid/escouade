@@ -147,7 +147,11 @@ If no active account serves a project (because every account is reserved to othe
 
 To fix it, tick the project on an active account, or untick all the boxes of one account so that it serves every project again.
 
-“Close the project” (the danger zone of the project’s settings) removes the project from every account’s list. An account that was reserved to that project alone then serves every project.
+“Close the project” (the danger zone of the project’s settings) keeps the project’s history, and the project stays in the “Reserved to projects” list of the accounts it was reserved to: it only leaves when its history is erased (the “Also erase its history” box when closing, or “Erase history…” under “Closed projects”).
+
+An account that was reserved to that project alone therefore serves no open project while the project is closed. If it was your only active account, nothing starts for the other projects, and the “Claude accounts” tab says so under the list, as above.
+
+That tab shows the closed project in the account’s “Reserved to projects” row, ticked and marked “(closed)”, for example “Client (closed)”. Untick it to free the account: with nothing ticked, it serves every project again. When you reopen the project (see [Closed projects](settings-projects#closed-projects)), its reservations are still there: there is nothing to redo. If you erase the history, when closing or later under “Closed projects”, the project leaves every account’s list. The project’s “Preferred account”, for its part, goes back to “Automatic” on reopening if its account no longer exists.
 
 ## Resume an agent stopped by the usage limit
 

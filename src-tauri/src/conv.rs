@@ -169,6 +169,18 @@ impl Conv {
         self.writer = None;
         let _ = std::fs::remove_file(self.path());
     }
+
+    /// Lets go of the log's file, which stays: its agent leaves with its project's history.
+    pub fn close_log(&mut self) {
+        self.writer = None;
+    }
+
+    /// Whether the log was read (tests only: reading it is what a closing must not do for
+    /// nothing).
+    #[cfg(test)]
+    pub(crate) fn is_loaded(&self) -> bool {
+        self.loaded
+    }
 }
 
 /// The log of an agent's conversation in the conversations' folder `dir`.

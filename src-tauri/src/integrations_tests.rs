@@ -1484,6 +1484,125 @@ async fn a_kind_of_sync_a_later_version_left_waiting_does_not_cost_the_others_th
     assert!(!file.with_extension("broken.json").exists());
 }
 
+/// The Trello project of `trello_board` closed with its history kept, and its card c1 moved to
+/// « En cours » while the service refuses: the card's sync waits for its next try.
+async fn closed_with_a_sync_waiting(h: &Harness, server: &FakeServer) -> (Project, Ticket) {
+    let p = h.trello_board(server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(trace(server), ["PUT /cards/c1 l2"]);
+    assert_eq!(h.core.pending_syncs.lock().ops.len(), 1);
+    (p, t)
+}
+
+#[tokio::test]
+async fn the_syncs_of_a_closed_projects_tickets_wait_for_it_to_come_back_and_go_then() {
+    let h = harness("ig-closed-wait");
+    let server = FakeServer::start().await;
+    let (p, t) = closed_with_a_sync_waiting(&h, &server).await;
+
+    h.core.remove_project(&p.id, false).await.unwrap();
+
+    // The ticket is not on the board: its operation is neither tried nor forgotten, whether its
+    // time has come or the app starts.
+    h.retry_after(2 * 3_600_000).await;
+    h.core.retry_all_syncs();
+    h.wait_synced().await;
+    assert_eq!(h.core.pending_syncs.lock().ops.len(), 1);
+    assert_eq!(trace(&server).len(), 1);
+    let kept = std::fs::read_to_string(h.core.data.sync_queue_file()).unwrap();
+    assert!(kept.contains("\"id\": \"c1\""), "{kept}");
+
+    // Back, it goes at once, whatever its wait.
+    server.on("PUT", "/cards/c1", 200, json!({}));
+    h.core
+        .create_project(&p.path, "", "oklch(0.72 0.12 48)", false, None, true)
+        .await
+        .unwrap();
+    h.wait_synced().await;
+    assert_eq!(trace(&server), ["PUT /cards/c1 l2", "PUT /cards/c1 l2"]);
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(h.sync_error(&t.id), None);
+}
+
+#[tokio::test]
+async fn the_syncs_of_a_closed_projects_tickets_are_not_forgotten_when_the_app_starts() {
+    let h = harness("ig-closed-start");
+    let server = FakeServer::start().await;
+    let (p, _) = closed_with_a_sync_waiting(&h, &server).await;
+    h.core.remove_project(&p.id, false).await.unwrap();
+    h.core.save_now();
+
+    // The app stops and starts: the histories are read again, and every operation left waiting
+    // goes again, but the closed project's ticket is on no board.
+    let app = mock_app();
+    let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+    *again.bases.write() = h.core.bases.read().clone();
+    assert_eq!(again.pending_syncs.lock().ops.len(), 1);
+    again.retry_all_syncs();
+    for _ in 0..750 {
+        if again.syncs_queued.load(Ordering::SeqCst) == 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(again.pending_syncs.lock().ops.len(), 1);
+    assert_eq!(trace(&server).len(), 1);
+}
+
+#[tokio::test]
+async fn closing_a_project_with_its_history_erased_forgets_the_syncs_of_its_tickets() {
+    let h = harness("ig-closed-erase-close");
+    let server = FakeServer::start().await;
+    let (p, _) = closed_with_a_sync_waiting(&h, &server).await;
+
+    h.core.remove_project(&p.id, true).await.unwrap();
+
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(h.core.data.sync_queue_file()).unwrap(),
+        "[]"
+    );
+}
+
+#[tokio::test]
+async fn erasing_a_closed_projects_history_forgets_the_syncs_of_its_tickets() {
+    let h = harness("ig-closed-erase-history");
+    let server = FakeServer::start().await;
+    let (p, _) = closed_with_a_sync_waiting(&h, &server).await;
+    h.core.remove_project(&p.id, false).await.unwrap();
+    assert_eq!(h.core.pending_syncs.lock().ops.len(), 1);
+
+    h.core.erase_closed_project(&p.id).unwrap();
+
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(h.core.data.sync_queue_file()).unwrap(),
+        "[]"
+    );
+}
+
+#[tokio::test]
+async fn a_ticket_deleted_from_an_open_project_still_has_its_syncs_forgotten() {
+    let h = harness("ig-deleted-forgotten");
+    let server = FakeServer::start().await;
+    let p = h.trello_board(&server, &[]).await;
+    let t = h.import_card(&p.id, "c1").await;
+    server.on("PUT", "/cards/c1", 500, Value::Null);
+    h.move_to(&t.id, Column::Doing);
+    h.wait_synced().await;
+    assert_eq!(h.core.pending_syncs.lock().ops.len(), 1);
+    h.core.ticket_delete(&t.id).await.unwrap();
+
+    // Gone from the board and from no history: its card has nothing to be told from.
+    h.retry_after(2 * 3_600_000).await;
+
+    assert!(h.core.pending_syncs.lock().ops.is_empty());
+    assert_eq!(trace(&server).len(), 1);
+}
+
 #[tokio::test]
 async fn a_failed_transition_gives_way_to_the_next_one() {
     let h = harness("ig-retry-stale");

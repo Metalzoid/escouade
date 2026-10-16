@@ -219,8 +219,25 @@ export default defineZone('settings', {
     danger: 'Danger zone',
     close: 'Close the project',
     closeDesc:
-      'The project and its agents are removed from the app, conversations included. The files and worktrees on disk are not touched.',
+      'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
     closeButton: 'Close the project…',
+  },
+
+  closed: {
+    title: 'Closed projects',
+    note: 'Their history is kept: adding a project in their folder brings it back.',
+    detail: '{size} · last activity on {date}',
+    erase: 'Erase history…',
+    eraseTitle: 'Erase the history of “{name}”?',
+    eraseBody: 'Its conversations, tickets, and settings are erased for good. The files and worktrees on disk are not touched.',
+    eraseConfirm: 'Erase history',
+    reopen: 'Reopen',
+    unreadable: 'Unreadable history',
+    eraseFile: 'Erase',
+    eraseFileTitle: 'Erase the file “{file}”?',
+    eraseFileBody:
+      'This file, which the app cannot read, is erased for good. The other histories, and the files and worktrees on disk, are not touched.',
+    eraseFileConfirm: 'Erase the file',
   },
 
   steps: {

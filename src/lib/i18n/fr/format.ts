@@ -12,7 +12,7 @@ export default {
   ago: { now: 'à l’instant', minutes: 'il y a {n} min', hours: 'il y a {n} h', yesterday: 'hier', days: 'il y a {n} j' },
   /** To follow « depuis ». A plural for English (« 1 day », « 3 days »): the same « j » here. */
   since: { underMinute: '< 1 min', minutes: '{n} min', hours: '{n} h', days: { one: '{count} j', other: '{count} j' } },
-  bytes: { megabytes: '{n} Mo', gigabytes: '{n} Go' },
+  bytes: { kilobytes: '{n} Ko', megabytes: '{n} Mo', gigabytes: '{n} Go' },
   when: { today: 'à {time}', day: 'le {date} à {time}' },
   dateTime: '{date} à {time}',
   /** The keys of a shortcut, as written on the keyboard of the language. */

@@ -12,13 +12,14 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `state.json` | Les projets, les agents (avec l’identifiant de leur session Claude Code), les tickets du Kanban, la pause du pilote auto et l’état de l’interface. |
 | `integrations.json` | Les comptes Jira, Trello, GitHub et Linear, sans leurs jetons (voir [Les jetons](#les-jetons)). |
 | `sync-queue.json` | Les synchronisations avec ces services qui attendent d’être retentées. |
-| `tickets/<ticket>/` | Les images collées ou glissées dans la fenêtre d’un ticket, une par fichier : `state.json` n’a que leurs noms. Le dossier n’existe que si le ticket en a ; effacé avec le ticket. |
-| `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent. |
+| `tickets/<ticket>/` | Les images collées ou glissées dans la fenêtre d’un ticket, une par fichier : `state.json` n’a que leurs noms. Le dossier n’existe que si le ticket en a ; effacé avec le ticket, ou quand l’historique de son projet fermé est effacé. |
+| `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent ; ceux d’un projet fermé restent avec son historique. |
+| `closed-projects/<projet>.json` | L’historique d’un projet fermé, nommé d’après l’identifiant du projet : le projet entier (réglages, Kanban, intégrations, commandes), ses agents (archivés compris), ses tickets, l’agent affiché et la date de fermeture. Ses conversations restent dans `conversations/`, les images de ses tickets dans `tickets/`, ses statistiques dans `stats.db`. Le fichier disparaît quand le projet est rouvert ou que son historique est effacé (voir [Projets fermés](settings-projects#projets-fermes)). |
 | `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes Claude : sa connexion et ses conversations. Principal n’en a pas, il utilise celui de ton propre Claude Code. |
 | `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (toujours sous Linux). |
 | `mcp/<agent>.json` | La configuration MCP d’un agent d’Escouade, avec son jeton. Effacée quand son processus s’arrête, et à chaque démarrage et arrêt de l’app. |
 | `tui/<agent>.json` | Les réglages de hooks que la vue Claude Code d’un agent passe à Claude Code. Le jeton n’y est pas : il passe par une variable d’environnement. |
-| `logs/<agent>-setup.log` | La sortie complète de la dernière préparation du worktree d’un agent. Effacé avec l’agent. |
+| `logs/<agent>-setup.log` | La sortie complète de la dernière préparation du worktree d’un agent. Effacé avec l’agent ; celui d’un projet fermé reste avec son historique. |
 | `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
@@ -100,7 +101,8 @@ Quitte Escouade d’abord, puis :
 |---|---|
 | Retrouver les réglages par défaut | Supprime `settings.json`. |
 | Effacer les statistiques | Supprime `stats.db`. |
-| Repartir sans projet, agent ni ticket | Supprime `state.json`, et `conversations/` pour ne pas garder les journaux. |
+| Repartir sans projet, agent ni ticket | Supprime `state.json`, et `conversations/` pour ne pas garder les journaux. Supprime aussi `closed-projects/` pour oublier les projets fermés. |
+| Effacer l’historique d’un projet fermé | Dans Réglages › Projets, « Projets fermés », « Effacer l’historique… » : il supprime son fichier de `closed-projects/` et les journaux de ses agents. Supprimer le fichier à la main laisserait ses journaux dans `conversations/`. |
 | Tout effacer | Supprime le dossier `~/.escouade/`. Les connexions des comptes ajoutés dans `claude/` partent avec lui. |
 | Retirer les jetons des intégrations | Déconnecte chaque service dans Réglages › Intégrations. |
 

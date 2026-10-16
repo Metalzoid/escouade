@@ -87,11 +87,31 @@ describe('ProjectTab', () => {
     expect(backend.called('update_project')).toHaveLength(0);
   });
 
+  it('says in the sensitive zone that closing the project keeps its history, and offers to erase it with the question', async () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(
+      screen.getByText(
+        "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      option: { label: 'Effacer aussi son historique (conversations, tickets, réglages)', value: false },
+    });
+  });
+
   it('says it in English', () => {
     setLang('en');
     fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     expect(screen.getByRole('heading', { name: 'Identity' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'MCP server' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Agents can use Escouade' })).not.toBeInTheDocument();
   });

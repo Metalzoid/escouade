@@ -635,7 +635,7 @@ impl AgentRt {
 
     /// Closes what a turn left open: partial text is kept (and persisted, deltas being
     /// memory-only), tools that never returned are marked interrupted.
-    fn close_open_items(&mut self, fx: &mut Effects) {
+    pub(crate) fn close_open_items(&mut self, fx: &mut Effects) {
         for (id, text) in self.conv.open_items() {
             let patch = match text {
                 Some(text) => json!({ "text": text, "streaming": false }),

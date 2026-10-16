@@ -41,7 +41,11 @@ import type {
 } from './types';
 
 export type Modal =
-  | { kind: 'newProject' }
+  /**
+   * The window that adds a project, on `path` when it opens on one (read at once). `historyId`: of the folder's closed
+   * projects, the one « Rouvrir » was clicked on; it holds only while the path typed is `path`.
+   */
+  | { kind: 'newProject'; path?: string; historyId?: string }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
   /**

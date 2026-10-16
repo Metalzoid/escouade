@@ -26,7 +26,7 @@ Each account has its own block in the list.
 | “Executable” | This account’s `claude`. Blank, it is the one in the “Claude Code” tab (the field says “The one in the settings”). Saved when you leave the field. | Blank |
 | “Sign in…” or “Sign in again…” | Opens the account’s sign-in. | — |
 | “Remove” | Takes the account off the list (absent for Main). | — |
-| “Reserved to projects” | One checkbox per open project: the account only serves the projects ticked. | None ticked: “Every project” |
+| “Reserved to projects” | One checkbox per open project, plus a ticked one, marked “(closed)”, for each closed project the account is still reserved to: the account only serves the projects ticked. | None ticked: “Every project” |
 
 ### Name and state
 
@@ -51,6 +51,8 @@ For Main, the folder is Claude Code’s own (`~/.claude`, or the one `CLAUDE_CON
 ### Reserved to projects
 
 The checkboxes keep an account to those projects alone (a client’s projects, say): other projects never start on it. With nothing ticked, the account serves every project, which the row says as “Every project”. Main can be reserved like any other.
+
+A project closed with its history kept stays reserved to the account: it appears in the row, ticked and marked “(closed)”, for example “Client (closed)”. Untick it to remove it from the account’s list; it also leaves by itself when its history is erased. While it is ticked, an account reserved to that project alone serves no open project, and “Every project” isn’t shown. The row appears even when no project is open, as long as the account is reserved to a closed project.
 
 If no active account serves a project (all are reserved to others, or switched off), a line under the list names the project and says its agents and tickets won’t start.
 

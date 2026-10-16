@@ -30,6 +30,13 @@ export default defineZone('shell', {
     worktreeDesc: 'Keeps each agent’s work apart and shows its changed files separately',
     create: 'Create project',
     creating: 'Creating…',
+    history: {
+      found: 'History found: {agents}, {tickets}, last activity on {date}',
+      fresh: 'Start from a blank project',
+      freshDesc: 'The history stays in Settings › Projects, where you can erase it.',
+      reopen: 'Reopen project',
+      reopening: 'Reopening…',
+    },
     /** What is known of the folder chosen. */
     git: {
       choose: 'Choose the project folder',

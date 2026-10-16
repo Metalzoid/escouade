@@ -23,6 +23,8 @@ export default {
     add: 'Ajouter un compte…',
     reserved: 'Réservé aux projets',
     reservedAll: 'Tous les projets',
+    /** Un projet fermé (son historique est gardé) auquel le compte reste réservé : coché, jusqu'à ce qu'on le décoche ou que l'historique soit effacé. */
+    closedProject: '{name} (fermé)',
     /** `{names}` : les projets, chacun entre guillemets (`quoted`) et énumérés comme dans une phrase. */
     noAccount: {
       one: 'Aucun compte actif ne sert {names} : ses agents et ses tickets ne démarrent pas.',

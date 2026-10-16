@@ -1242,6 +1242,30 @@ export interface FolderInfo {
   branch: string;
   dirty: number;
   name: string;
+  /** The closed project this folder was (its history, kept), if it was one. */
+  history: ClosedProject | null;
+}
+
+/** A project closed with its history kept: what adding its folder again brings back. */
+export interface ClosedProject {
+  id: string;
+  name: string;
+  color: string;
+  path: string;
+  worktreePerAgent: boolean;
+  /** Its agents, the archived ones left out. */
+  agents: number;
+  tickets: number;
+  /** The latest of its agents' and tickets' dates (ms), else when it was closed. */
+  lastActivity: number;
+  closedAt: number;
+  /** What its history takes on the disk (bytes): its file, its conversations and its setup logs. */
+  size: number;
+  /**
+   * A file of the closed projects the app cannot read: `id` is its name without `.json`, the name, the color and
+   * the folder are empty, `size` is the file's alone and the dates are its last change. It can only be erased.
+   */
+  unreadable: boolean;
 }
 
 export interface SlashCommand {

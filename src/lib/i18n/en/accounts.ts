@@ -21,6 +21,7 @@ export default defineZone('accounts', {
     add: 'Add an account…',
     reserved: 'Reserved to projects',
     reservedAll: 'Every project',
+    closedProject: '{name} (closed)',
     /** `{names}`: the projects, each quoted (`quoted`) and listed as a sentence does. */
     noAccount: {
       one: 'No active account serves {names}: its agents and tickets won’t start.',

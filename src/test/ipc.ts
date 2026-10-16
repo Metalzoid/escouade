@@ -16,6 +16,9 @@ export interface Call {
   args: Record<string, any>;
 }
 
+/** What a command answers when a test gives it no handler: nothing (null), except the lists the window reads on its own. */
+const ANSWERS: Record<string, unknown> = { closed_projects: [] };
+
 export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {}) {
   const calls: Call[] = [];
   mockWindows('main');
@@ -23,7 +26,7 @@ export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {
     (cmd, args) => {
       calls.push({ cmd, args: (args ?? {}) as Record<string, any> });
       const h = handlers[cmd];
-      return h ? h(args) : null;
+      return h ? h(args) : (ANSWERS[cmd] ?? null);
     },
     { shouldMockEvents: true },
   );

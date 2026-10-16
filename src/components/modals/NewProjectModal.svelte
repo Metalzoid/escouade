@@ -1,5 +1,6 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
+  import { fDate } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { modelOptions } from '../../lib/models';
@@ -8,32 +9,66 @@
   import type { FolderInfo } from '../../lib/types';
   import Modal from './Modal.svelte';
 
+  // Opened by « Rouvrir » on a closed project, the window starts from its folder, and from that history of it.
+  const from = app.modal?.kind === 'newProject' ? app.modal : null;
+  const startPath = from?.path?.trim() ?? '';
+  /** The history asked for holds for the folder it was asked for: another path typed, it is forgotten. */
+  const historyFor = (p: string) => (p === startPath ? from?.historyId : undefined);
+
   const used = new Set(app.projects.map((p) => p.color));
-  let path = $state('');
+  let path = $state(startPath);
   let name = $state('');
   let nameTouched = false;
-  let color = $state(PROJECT_COLORS.find((c) => !used.has(c)) ?? PROJECT_COLORS[0]);
+  const freeColor = PROJECT_COLORS.find((c) => !used.has(c)) ?? PROJECT_COLORS[0];
+  let color = $state(freeColor);
+  let colorTouched = false;
   let firstAgent = $state(true);
   let model = $state(app.settings.defaultModel || 'sonnet');
   let worktree = $state(false);
+  let worktreeTouched = false;
   let info = $state<FolderInfo | null>(null);
+  /** The folder `info` was read for: until the one typed is, nothing is created or reopened with another's history. */
+  let infoPath = $state('');
+  /** « Partir d'un projet vierge »: the folder's history stays where it is, the project is a new one. */
+  let fresh = $state(false);
   let busy = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** Until the first look at the path: a folder the window opened on is read at once, a typed one after a pause. */
+  let opening = true;
 
   $effect(() => {
     const p = path.trim();
+    const now = opening;
+    opening = false;
     clearTimeout(timer);
     if (!p) {
       info = null;
       return;
     }
-    timer = setTimeout(async () => {
-      const i = await api.inspectFolder(p).catch(() => null);
+    const read = async () => {
+      const i = await api.inspectFolder(p, historyFor(p)).catch(() => null);
       if (path.trim() !== p) return;
+      // Another folder, another choice.
+      if (i?.history?.id !== info?.history?.id) fresh = false;
       info = i;
-      if (i && !nameTouched) name = i.name;
-    }, 200);
+      infoPath = p;
+      if (i) prefill();
+    };
+    if (now) void read();
+    else timer = setTimeout(read, 200);
   });
+
+  const history = $derived(info?.history ?? null);
+  /** The folder gets its history back (same project, same agents and tickets): it is reopened, not created. */
+  const restoring = $derived(!!history && !fresh);
+
+  /** What the window starts from: the history's name, color and worktrees when it comes back, else the usual ones. Not what the user chose. */
+  function prefill() {
+    const h = restoring ? history : null;
+    if (!nameTouched) name = h?.name ?? info?.name ?? name;
+    if (!colorTouched) color = h?.color ?? freeColor;
+    if (!worktreeTouched) worktree = h?.worktreePerAgent ?? false;
+  }
 
   const gitLine = $derived(
     !info
@@ -56,10 +91,21 @@
   }
 
   async function create() {
-    if (!info?.exists || busy) return;
+    if (!info?.exists || busy || infoPath !== path.trim()) return;
     busy = true;
+    const historyId = historyFor(path.trim());
     const p = await app.run(
-      api.createProject({ path: path.trim(), name: name.trim(), color, worktreePerAgent: worktree, firstAgent: firstAgent ? model : null }),
+      api.createProject({
+        path: path.trim(),
+        name: name.trim(),
+        color,
+        worktreePerAgent: worktree,
+        // A project coming back has its agents: none is asked for.
+        firstAgent: !restoring && firstAgent ? model : null,
+        restore: restoring,
+        // Nothing sent for a folder that was not asked for with a history.
+        ...(historyId ? { historyId } : {}),
+      }),
     );
     busy = false;
     if (!p) return;
@@ -85,6 +131,34 @@
     </div>
     <span class="git mono" style:color={gitLine.color}><span class="d" style:background={gitLine.color}></span>{gitLine.text}</span>
   </div>
+  {#if history}
+    <div class="history">
+      <p class="found">
+        {t('shell.newProject.history.found', {
+          agents: t('common.count.agents', { count: history.agents }),
+          tickets: t('common.count.tickets', { count: history.tickets }),
+          date: fDate(history.lastActivity),
+        })}
+      </p>
+      <div class="toggle">
+        <div class="tx">
+          <span class="tt">{t('shell.newProject.history.fresh')}</span>
+          <span class="ts">{t('shell.newProject.history.freshDesc')}</span>
+        </div>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked={fresh}
+          class:on={fresh}
+          aria-label={t('shell.newProject.history.fresh')}
+          onclick={() => {
+            fresh = !fresh;
+            prefill();
+          }}
+        ></button>
+      </div>
+    </div>
+  {/if}
   <div class="two">
     <div class="grp">
       <span class="lab">{t('common.name')}</span>
@@ -107,34 +181,39 @@
           aria-pressed={color === c}
           style:background={c}
           style:box-shadow={color === c ? '0 0 0 2px var(--panel), 0 0 0 4px var(--text)' : 'none'}
-          onclick={() => (color = c)}
+          onclick={() => {
+            color = c;
+            colorTouched = true;
+          }}
         ></button>
       {/each}
     </div>
   </div>
   <div class="hr"></div>
   <div class="grp" style="gap:14px">
-    <div class="toggle">
-      <div class="tx">
-        <span class="tt">{t('shell.newProject.firstAgent')}</span>
-        <span class="ts">{t('shell.newProject.firstAgentDesc')}</span>
+    {#if !restoring}
+      <div class="toggle">
+        <div class="tx">
+          <span class="tt">{t('shell.newProject.firstAgent')}</span>
+          <span class="ts">{t('shell.newProject.firstAgentDesc')}</span>
+        </div>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked={firstAgent}
+          class:on={firstAgent}
+          aria-label={t('shell.newProject.firstAgent')}
+          onclick={() => (firstAgent = !firstAgent)}
+        ></button>
       </div>
-      <button
-        class="switch"
-        role="switch"
-        aria-checked={firstAgent}
-        class:on={firstAgent}
-        aria-label={t('shell.newProject.firstAgent')}
-        onclick={() => (firstAgent = !firstAgent)}
-      ></button>
-    </div>
-    {#if firstAgent}
-      <div class="models">
-        <span class="ts">{t('common.model')}</span>
-        {#each modelOptions(app.models) as m (m.value)}
-          <button class="mbtn mono" class:on={model === m.value} onclick={() => (model = m.value)}>{m.label}</button>
-        {/each}
-      </div>
+      {#if firstAgent}
+        <div class="models">
+          <span class="ts">{t('common.model')}</span>
+          {#each modelOptions(app.models) as m (m.value)}
+            <button class="mbtn mono" class:on={model === m.value} onclick={() => (model = m.value)}>{m.label}</button>
+          {/each}
+        </div>
+      {/if}
     {/if}
     <div class="toggle">
       <div class="tx">
@@ -147,14 +226,21 @@
         aria-checked={worktree}
         class:on={worktree}
         aria-label={t('shell.newProject.worktree')}
-        onclick={() => (worktree = !worktree)}
+        onclick={() => {
+          worktree = !worktree;
+          worktreeTouched = true;
+        }}
       ></button>
     </div>
   </div>
   {#snippet footer()}
     <button class="btn ghost" onclick={() => (app.modal = null)}>{t('common.cancel')}</button>
-    <button class="btn primary" style:background={color} disabled={!info?.exists || busy} onclick={create}>
-      {busy ? t('shell.newProject.creating') : t('shell.newProject.create')}
+    <button class="btn primary" style:background={color} disabled={!info?.exists || busy || infoPath !== path.trim()} onclick={create}>
+      {#if restoring}
+        {busy ? t('shell.newProject.history.reopening') : t('shell.newProject.history.reopen')}
+      {:else}
+        {busy ? t('shell.newProject.creating') : t('shell.newProject.create')}
+      {/if}
     </button>
   {/snippet}
 </Modal>
@@ -185,6 +271,21 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
+  }
+  .history {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line2);
+    border-left: 2px solid var(--accent);
+    border-radius: var(--r-sm);
+    background: var(--elev);
+  }
+  .found {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.5;
   }
   .two {
     display: grid;

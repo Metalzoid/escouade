@@ -297,7 +297,7 @@ async fn an_agents_token_and_file_go_at_once_when_it_is_deleted_or_its_project_c
     assert!(!ca.exists());
     assert!(!admitted(port, &ta).await);
     assert!(admitted(port, &tb).await);
-    h.core.remove_project(&p.id).await.unwrap();
+    h.core.remove_project(&p.id, false).await.unwrap();
     assert!(!cb.exists());
     assert!(!admitted(port, &tb).await);
     h.core.mcp.stop();
@@ -347,7 +347,7 @@ async fn a_project_closed_while_an_agents_process_starts_leaves_neither_that_pro
     tokio::time::sleep(Duration::from_millis(300)).await;
     let closing = tokio::spawn({
         let (core, pid) = (h.core.clone(), p.id.clone());
-        async move { core.remove_project(&pid).await }
+        async move { core.remove_project(&pid, false).await }
     });
     tokio::time::sleep(Duration::from_millis(300)).await;
     // The close waits for the start, as the deletion of an agent does: the agent is still there.

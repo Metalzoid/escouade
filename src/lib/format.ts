@@ -164,6 +164,12 @@ export function fBytes(n: number, decimals = 0): string {
   return t('format.bytes.gigabytes', { n: fNum(n / (1024 * MB), Math.max(1, decimals)) });
 }
 
+/** What a few files take on the disk: "12 Ko" under a megabyte (never "1024 Ko"), else as `fBytes` with a decimal. */
+export function fSize(n: number): string {
+  const kb = Math.ceil(n / 1024);
+  return kb < 1024 ? t('format.bytes.kilobytes', { n: kb }) : fBytes(n, 1);
+}
+
 const lists = new Map<string, Intl.ListFormat>();
 
 /** Items joined as a sentence does: « a, b et c », « a, b, and c ». */

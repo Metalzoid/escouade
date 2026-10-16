@@ -956,32 +956,71 @@ async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
 }
 
 #[tokio::test]
-async fn closing_a_project_drops_its_tickets() {
+async fn closing_a_project_keeps_its_tickets_and_their_images_until_its_history_is_erased() {
     let h = harness("tk-close");
-    let (p, _) = h.project(false).await;
+    let (p, r) = h.project(false).await;
     h.set_board(&p.id, |s| s.autopilot = false);
-    let t = h
-        .core
-        .ticket_create(
-            &p.id,
-            TicketDraft {
-                images: Some(vec![new_image("capture.png", "image/png", PNG)]),
-                ..draft("Un", &[], 5)
-            },
-        )
-        .await
-        .unwrap();
+    let with_image = || TicketDraft {
+        images: Some(vec![new_image("capture.png", "image/png", PNG)]),
+        ..draft("Un", &[], 5)
+    };
+    let t = h.core.ticket_create(&p.id, with_image()).await.unwrap();
     let dir = h.core.data.ticket_dir(&t.id);
     assert!(dir.exists());
-    h.core.remove_project(&p.id).await.unwrap();
+    h.core.remove_project(&p.id, false).await.unwrap();
     assert!(h.core.ticket(&t.id).is_err());
-    // Its images with it.
-    assert!(!dir.exists());
     assert!(h
         .events
         .lock()
         .iter()
         .any(|e| e["type"] == "ticketRemoved" && e["id"] == t.id.as_str()));
+    // They leave the board, not the history of the closed project: their images stay with it.
+    let closed = h.core.closed_projects();
+    assert_eq!((closed.len(), closed[0].tickets), (1, 1));
+    assert!(dir.exists());
+    // Its size on the disk counts them.
+    let file = std::fs::metadata(h.core.data.closed_project_file(&p.id))
+        .unwrap()
+        .len();
+    assert!(
+        closed[0].size >= file + PNG.len() as u64,
+        "{} < {file} + {}",
+        closed[0].size,
+        PNG.len()
+    );
+
+    // Its folder added again: the ticket is back, its images readable as before.
+    let back = h
+        .core
+        .create_project(&r.to_string_lossy(), "", "", false, None, true)
+        .await
+        .unwrap();
+    assert_eq!(back.id, p.id);
+    let shown = h.core.ticket_images(&t.id).unwrap();
+    assert_eq!(
+        shown
+            .iter()
+            .map(|i| (i.name.as_str(), i.media_type.as_str(), i.data.clone()))
+            .collect::<Vec<_>>(),
+        [("capture.png", "image/png", b64(PNG))]
+    );
+
+    // Closed with its history erased: the images go with it.
+    h.core.remove_project(&p.id, true).await.unwrap();
+    assert!(!dir.exists());
+
+    // Erased once closed (« Effacer l'historique »): the same.
+    let q = h
+        .core
+        .create_project(&r.to_string_lossy(), "", "", false, None, true)
+        .await
+        .unwrap();
+    let u = h.core.ticket_create(&q.id, with_image()).await.unwrap();
+    let dir = h.core.data.ticket_dir(&u.id);
+    h.core.remove_project(&q.id, false).await.unwrap();
+    assert!(dir.exists());
+    h.core.erase_closed_project(&q.id).unwrap();
+    assert!(!dir.exists());
 }
 
 #[tokio::test]
@@ -3092,6 +3131,7 @@ async fn a_board_on_a_new_repository_waits_for_its_first_commit_then_starts() {
             "oklch(0.72 0.12 48)",
             false,
             None,
+            true,
         )
         .await
         .unwrap();
@@ -5704,7 +5744,7 @@ async fn closing_a_project_forgets_its_agents_test_launches() {
     if !test_run(&h, &a, "tk-run-close") {
         return;
     }
-    h.core.remove_project(&p.id).await.unwrap();
+    h.core.remove_project(&p.id, false).await.unwrap();
     assert!(!term_running(&h, "tk-run-close"));
     assert!(!tracks_runs_of(&h, &a.id));
 }

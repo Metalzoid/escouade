@@ -91,7 +91,8 @@ export default defineZone('nav', {
   project: {
     closeTitle: 'Close “{name}”?',
     closeBody:
-      'The project and its agents are removed from the app (conversations included). The files and worktrees on disk are not touched.',
+      'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
     closeConfirm: 'Close the project',
+    closeErase: 'Also erase its history (conversations, tickets, settings)',
   },
 });

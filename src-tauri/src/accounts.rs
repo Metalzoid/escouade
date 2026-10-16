@@ -896,8 +896,9 @@ impl<R: Runtime> Core<R> {
         Ok((out, accounts))
     }
 
-    /// The project `id` taken out of every account's « Réservé aux projets » (it is gone). An
-    /// account kept to it alone then serves every project, as one kept to none does.
+    /// The project `id` taken out of every account's « Réservé aux projets » (it is gone, its
+    /// history too: a project closed with its history kept stays in them). An account kept to it
+    /// alone then serves every project, as one kept to none does.
     pub(crate) fn forget_project_in_accounts(self: &Arc<Self>, id: &str) {
         let kept = |s: &Settings| {
             s.accounts

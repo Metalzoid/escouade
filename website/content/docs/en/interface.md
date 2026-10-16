@@ -50,7 +50,7 @@ A tab’s tooltip also gives the path of the project’s folder.
 | “Turn on a worktree per agent” or “Turn off a worktree per agent” | Switches the option for the project’s new agents. See [worktrees](worktrees). |
 | “Project settings…” | Opens the settings, Projects tab, on this project. |
 | “Open the folder” | Opens the project’s folder in the system’s file manager. |
-| “Close the project…” | Removes the project and its agents from the application, conversations included, after a confirmation. The files and the worktrees on disk are not touched. |
+| “Close the project…” | Removes the project from the application after a confirmation: its agents, terminals, and launches stop. Its history (conversations, tickets, settings) is kept, and adding a project in the same folder brings it back; a box in the confirmation lets you erase it too. The files and the worktrees on disk are not touched. See [Settings: Projects](settings-projects#closed-projects). |
 
 ### The bar’s buttons
 

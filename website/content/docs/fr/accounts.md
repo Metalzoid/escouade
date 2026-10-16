@@ -147,7 +147,11 @@ Si aucun compte actif ne sert un projet (par exemple parce que chaque compte est
 
 Pour y remédier, coche le projet sur un compte actif, ou décoche toutes les cases d’un compte pour qu’il serve de nouveau tous les projets.
 
-« Fermer le projet » (zone sensible des réglages du projet) retire le projet de la liste de tous les comptes. Un compte qui n’était réservé qu’à ce projet sert alors tous les projets.
+« Fermer le projet » (zone sensible des réglages du projet) garde l’historique du projet, et le projet reste dans la liste « Réservé aux projets » des comptes qui lui étaient réservés : il n’en sort que lorsque son historique est effacé (la case « Effacer aussi son historique » à la fermeture, ou « Effacer l’historique… » dans « Projets fermés »).
+
+Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet ouvert tant que le projet est fermé. Si c’était ton seul compte actif, plus rien ne démarre pour les autres projets, et l’onglet « Comptes Claude » le dit sous la liste, comme plus haut.
+
+Cet onglet montre le projet fermé dans la ligne « Réservé aux projets » du compte, coché et marqué « (fermé) », par exemple « Client (fermé) ». Décoche-le pour libérer le compte : sans case cochée, il sert de nouveau tous les projets. Quand tu rouvres le projet (voir [Projets fermés](settings-projects#projets-fermes)), ses réservations sont toujours là : il n’y a rien à refaire. Si tu effaces l’historique, à la fermeture ou plus tard dans « Projets fermés », le projet sort de la liste de chaque compte. Le « Compte préféré » du projet, lui, repasse sur « Automatique » à la réouverture si son compte n’existe plus.
 
 ## Reprendre un agent arrêté par la limite d’usage
 
