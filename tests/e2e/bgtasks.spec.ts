@@ -474,8 +474,9 @@ test('the output follows its end until the reader goes up in it, and « Suivre l
 
   await side.row('Ticker').click();
   await expect(view).toBeVisible();
-  // Five lines a second: the log fills its area, and shows the end of what is written.
-  await expect.poll(() => task.log.evaluate((el) => el.scrollHeight > el.clientHeight), { timeout: 30_000 }).toBe(true);
+  // Five lines a second: the log fills its area, and shows the end of what is written. It overflows by far more than the
+  // 24 px the view counts as its end: its top must not be « at the end » too, else no button comes (seen on a CI runner).
+  await expect.poll(() => task.log.evaluate((el) => el.scrollHeight - el.clientHeight > 200), { timeout: 40_000 }).toBe(true);
   await expect.poll(() => atEnd(task.log)).toBe(true);
   await expect(view.locator('[data-task-follow]')).toHaveCount(0);
 
