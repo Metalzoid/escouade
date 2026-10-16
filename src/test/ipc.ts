@@ -294,6 +294,8 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.subDrafts = {};
   app.subFocus = { from: null, back: null };
   app.subsOpen = {};
+  app.taskView = {};
+  app.bgOpen = {};
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.diffSplit = false;

@@ -13,6 +13,7 @@
   import { modelLabel } from '../lib/models';
   import { planView } from '../lib/plan';
   import { sidebarSubs, type SubRow } from '../lib/subagents';
+  import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
   import { estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
@@ -48,6 +49,10 @@
   /** How many subagents a list shows before it asks to unroll the others: it never scrolls by itself, inside the list of the agents. */
   const RUNNING_SHOWN = 5;
   const FINISHED_SHOWN = 10;
+  /** The same for the background tasks of an agent (ESC-14): their finished ones unfolded, and their lists unrolled. */
+  let bgFinishedOpen = $state<Record<string, boolean>>({});
+  let bgRunningAll = $state<Record<string, boolean>>({});
+  let bgFinishedAll = $state<Record<string, boolean>>({});
   let renameValue = $state('');
 
   const git = $derived(app.git[project.id]);
@@ -289,10 +294,37 @@
 {/snippet}
 
 <!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
-{#snippet moreRows(all: boolean, label: string, onclick: () => void)}
+{#snippet moreRows(all: boolean, label: string, onclick: () => void, less: string = t('subagents.lessList'))}
   <li>
     <button class="more-toggle" aria-expanded={all} {onclick}>
-      <span class="chev" aria-hidden="true">{all ? '▾' : '▸'}</span>{all ? t('subagents.lessList') : label}
+      <span class="chev" aria-hidden="true">{all ? '▾' : '▸'}</span>{all ? less : label}
+    </button>
+  </li>
+{/snippet}
+
+<!-- A background task (or a workflow) of the agent `a` under its card: a click opens its view in place of the agent's conversation (ESC-14). -->
+{#snippet bgItem(a: Agent, r: BgRow)}
+  {@const on = app.taskView[a.id] === r.id && a.id === selectedAgentId && !otherView}
+  {@const ms = bgDuration(r, app.now)}
+  <li>
+    <button
+      class="sub"
+      class:on
+      aria-current={on ? 'page' : undefined}
+      data-bg-row={r.id}
+      data-kind={r.kind}
+      data-status={r.status}
+      use:tip={{ text: rowTitle(r), cut: true }}
+      onclick={() => app.openTask(a.id, r.id)}
+    >
+      <span class="sdot {r.status}" aria-hidden="true"></span>
+      <span class="stext">
+        <span class="sline">
+          <span class="stitle">{rowTitle(r)}</span>
+          {#if ms !== null}<span class="sdur mono">{fDur(ms)}</span>{/if}
+        </span>
+        <span class="sdoing">{rowLine(r)}</span>
+      </span>
     </button>
   </li>
 {/snippet}
@@ -341,6 +373,7 @@
       {@const s = spent(a)}
       {@const tag = ticketTag(app.ticketOf(a.id))}
       {@const plan = planView(a)?.mini}
+      {@const inBg = bgCount(a.plan)}
       {@const remote = remoteStateOf(a)}
       <div
         class="card"
@@ -371,6 +404,17 @@
             />
           {:else}
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
+          {/if}
+          {#if inBg > 0}
+            <!-- What runs in the background for the agent: the list is under the card. -->
+            <span
+              class="bgchip"
+              role="img"
+              aria-label={t('bgtasks.chipLabel', { count: inBg })}
+              use:tip={{ text: t('bgtasks.chipLabel', { count: inBg }), aria: false }}
+              data-bg-chip
+              data-count={inBg}>{t('bgtasks.chip', { count: inBg })}</span
+            >
           {/if}
           {#if remote}
             <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
@@ -482,6 +526,61 @@
                           finishedAll[a.id] ?? false,
                           t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
                           () => (finishedAll[a.id] = !finishedAll[a.id]),
+                        )}
+                      {/if}
+                    </ul>
+                  {/if}
+                </li>
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+      {@const bg = sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })}
+      {#if bg}
+        <!-- Under the card too, after the subagents: the tasks Claude Code runs in the background, unfolded while one runs. -->
+        {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
+        {@const doneOpen = bgFinishedOpen[a.id] ?? false}
+        <div class="subs bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
+          <button class="subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
+            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <span class="lbl">{t('bgtasks.title')}</span>
+            {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
+            {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
+          </button>
+          {#if open}
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each bg.running as r (r.id)}
+                {@render bgItem(a, r)}
+              {/each}
+              {#if bg.runningTotal > BG_RUNNING_SHOWN}
+                {@render moreRows(
+                  bgRunningAll[a.id] ?? false,
+                  t('bgtasks.moreRunning', { count: bg.runningTotal - BG_RUNNING_SHOWN }),
+                  () => (bgRunningAll[a.id] = !bgRunningAll[a.id]),
+                  t('bgtasks.lessList'),
+                )}
+              {/if}
+              {#if bg.finishedTotal}
+                <li class="finished">
+                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
+                    <span class="chev" aria-hidden="true">{doneOpen ? '▾' : '▸'}</span>{t('bgtasks.finishedToggle', {
+                      count: bg.finishedTotal,
+                    })}
+                  </button>
+                  {#if doneOpen}
+                    <!-- svelte-ignore a11y_no_redundant_roles -->
+                    <ul class="sub-list done" role="list">
+                      {#each bg.finished as r (r.id)}
+                        {@render bgItem(a, r)}
+                      {/each}
+                      {#if bg.finishedTotal > BG_FINISHED_SHOWN}
+                        {@render moreRows(
+                          bgFinishedAll[a.id] ?? false,
+                          t('bgtasks.moreFinished', { count: bg.finishedTotal - BG_FINISHED_SHOWN }),
+                          () => (bgFinishedAll[a.id] = !bgFinishedAll[a.id]),
+                          t('bgtasks.lessList'),
                         )}
                       {/if}
                     </ul>
@@ -1007,6 +1106,25 @@
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* A background task's time, live while it runs: beside its title. */
+  .sdur {
+    flex: none;
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+  /* What runs in the background for an agent, on its card: it gives way to the name when the room is short. */
+  .bgchip {
+    flex: none;
+    height: 16px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--ok) 14%, transparent);
+    color: var(--ok);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    line-height: 16px;
     white-space: nowrap;
   }
   .ticket-tag {

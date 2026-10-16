@@ -1337,12 +1337,13 @@ fn the_plan_reaches_the_window_in_its_own_shape() {
             "launched": 1,
             "workflows": [{ "id": "w1", "name": "review", "title": "Revue", "status": "running",
                 "tools": 0, "tokens": 0, "startedAt": 60 }],
+            "bgTasks": [],
         })
     );
     // Nothing yet: the window gets a plan with nothing in it, source null.
     assert_eq!(
         serde_json::to_value(PlanState::default()).unwrap(),
-        json!({ "source": null, "tasks": [], "agents": [], "launched": 0, "workflows": [] })
+        json!({ "source": null, "tasks": [], "agents": [], "launched": 0, "workflows": [], "bgTasks": [] })
     );
 }
 
@@ -1692,6 +1693,7 @@ fn a_plan_of_the_files_goes_to_the_window_with_its_steps() {
             "agents": [],
             "launched": 0,
             "workflows": [],
+            "bgTasks": [],
         })
     );
     let back: PlanState = serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
@@ -1919,4 +1921,1113 @@ fn a_subagent_stopped_by_stop_task_ends_stopped_as_a_real_claude_code_tells_it()
         (a.tools, a.tokens, a.ended_at),
         (3, Some(27_068), Some(9_000))
     );
+}
+
+// ---------- tasks in the background: commands, monitors, remote agents, teammates (ESC-14) ----------
+
+/// The call of a command the main thread runs in the background.
+fn bash(p: &mut PlanState, id: &str, command: &str, description: &str) -> Change {
+    tool(
+        p,
+        id,
+        "Bash",
+        json!({ "command": command, "description": description, "run_in_background": true }),
+    )
+}
+
+fn bg<'a>(p: &'a PlanState, id: &str) -> &'a BgTask {
+    p.bg_tasks
+        .iter()
+        .find(|t| t.id == id)
+        .expect("a background task")
+}
+
+fn bg_ids(p: &PlanState) -> Vec<&str> {
+    p.bg_tasks.iter().map(|t| t.id.as_str()).collect()
+}
+
+/// The `task_started` of a command (`local_bash`); `background` is `is_backgrounded` when it is said.
+fn bg_started(task: &str, call: &str, description: &str, background: Option<bool>) -> Value {
+    let mut f = json!({ "type": "system", "subtype": "task_started", "task_id": task,
+        "run_id": format!("r-{task}"), "tool_use_id": call, "description": description,
+        "task_type": "local_bash" });
+    if let Some(b) = background {
+        f["is_backgrounded"] = json!(b);
+    }
+    f
+}
+
+/// `background_tasks_changed`: the tasks alive, each `(task id, task type, description)`.
+fn level(tasks: &[(&str, &str, &str)]) -> Value {
+    let tasks: Vec<Value> = tasks
+        .iter()
+        .map(|(id, kind, d)| json!({ "task_id": id, "run_id": format!("r-{id}"), "task_type": kind, "description": d }))
+        .collect();
+    json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": tasks })
+}
+
+fn bg_notified(task: &str, call: &str, status: Option<&str>, summary: &str, file: &str) -> Value {
+    let mut f = json!({ "type": "system", "subtype": "task_notification", "task_id": task,
+        "tool_use_id": call, "output_file": file, "summary": summary });
+    if let Some(s) = status {
+        f["status"] = json!(s);
+    }
+    f
+}
+
+/// The text of the result of a command sent to the background (measured on Claude Code 2.1.301).
+fn launched_text(task: &str) -> String {
+    format!("Command running in background with ID: {task}. Output is being written to: /tmp/claude/s1/tasks/{task}.output. You will be notified when it completes. To check interim output, use Read.")
+}
+
+fn background_id(task: &str) -> Value {
+    json!({ "stdout": "", "stderr": "", "interrupted": false, "backgroundTaskId": task })
+}
+
+#[test]
+fn a_command_in_the_background_runs_from_its_level_to_its_notification() {
+    // The frames of a real Claude Code 2.1.301 (docs/PROTOCOL.md), in their order.
+    let mut p = PlanState::default();
+    let command = "for i in 1 2 3; do echo tick $i; sleep 2; done";
+    // Its call says the command; nothing of it is shown yet.
+    assert_eq!(bash(&mut p, "c1", command, "Ticker"), Change::None);
+    assert!(p.is_empty());
+    // The level comes first: the row opens with what it says.
+    assert_eq!(
+        sys(&mut p, level(&[("b1", "local_bash", "Ticker")])),
+        Change::Saved
+    );
+    let t = bg(&p, "b1");
+    assert_eq!(
+        (t.kind, t.title.as_str(), t.status, t.command.as_deref()),
+        (BgKind::Command, "Ticker", RunStatus::Running, None)
+    );
+    // Then its task: the command comes from the call, and the row is not opened twice.
+    let start = bg_started("b1", "c1", "Ticker", Some(true));
+    assert_eq!(p.on_system(&start, 2_000), Change::Saved);
+    assert_eq!(p.bg_tasks.len(), 1);
+    let t = bg(&p, "b1");
+    assert_eq!(t.command.as_deref(), Some(command));
+    assert_eq!(t.call.as_deref(), Some("c1"));
+    assert_eq!((t.started_at, t.parent.as_deref()), (T0, None));
+    assert_eq!(p.on_system(&start, 3_000), Change::None);
+    // Its result tells where the output is written.
+    let tur = background_id("b1");
+    assert_eq!(
+        p.on_tool_result("c1", false, &launched_text("b1"), &tur, T0),
+        Change::Saved
+    );
+    assert_eq!(
+        bg(&p, "b1").output_file.as_deref(),
+        Some("/tmp/claude/s1/tasks/b1.output")
+    );
+    assert_eq!(p.bg_tasks.len(), 1);
+    // Neither a subagent nor a workflow.
+    assert!(p.agents.is_empty() && p.workflows.is_empty() && p.launched == 0);
+    // Its end: the task, then its notification with its words and its file.
+    let end = updated("b1", json!({ "status": "completed", "end_time": 5 }));
+    assert_eq!(p.on_system(&end, 9_000), Change::Saved);
+    let t = bg(&p, "b1");
+    assert_eq!(
+        (t.status, t.ended_at, t.summary.as_deref()),
+        (RunStatus::Done, Some(9_000), None)
+    );
+    let words = "Background command \"Ticker\" completed (exit code 0)";
+    let note = bg_notified(
+        "b1",
+        "c1",
+        Some("completed"),
+        words,
+        "/tmp/claude/s1/tasks/b1.output",
+    );
+    assert_eq!(sys(&mut p, note.clone()), Change::Saved);
+    let t = bg(&p, "b1");
+    assert_eq!((t.status, t.ended_at), (RunStatus::Done, Some(9_000)));
+    assert_eq!(t.summary.as_deref(), Some(words));
+    // The level that follows has not got it: nothing changes. The same notification again neither.
+    assert_eq!(sys(&mut p, level(&[])), Change::None);
+    assert_eq!(sys(&mut p, note), Change::None);
+    assert_eq!(p.bg_tasks.len(), 1);
+}
+
+#[test]
+fn a_command_ends_as_its_task_or_its_notification_says() {
+    for (patch, note, becomes) in [
+        ("completed", "completed", RunStatus::Done),
+        ("failed", "failed", RunStatus::Failed),
+        ("killed", "stopped", RunStatus::Stopped),
+    ] {
+        // The task first, then the notification.
+        let mut p = PlanState::default();
+        sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+        assert_eq!(
+            sys(&mut p, updated("b1", json!({ "status": patch }))),
+            Change::Saved
+        );
+        assert_eq!(bg(&p, "b1").status, becomes, "{patch}");
+        sys(
+            &mut p,
+            bg_notified("b1", "c1", Some(note), "Job", "/x/b1.output"),
+        );
+        assert_eq!(bg(&p, "b1").status, becomes, "{note}");
+        assert_eq!(bg(&p, "b1").output_file.as_deref(), Some("/x/b1.output"));
+        // The notification alone ends it too (its file, when it has none, is not kept).
+        let mut q = PlanState::default();
+        sys(&mut q, bg_started("b1", "c1", "Job", Some(true)));
+        assert_eq!(
+            sys(&mut q, bg_notified("b1", "c1", Some(note), "Job", "")),
+            Change::Saved
+        );
+        let t = bg(&q, "b1");
+        assert_eq!(
+            (t.status, t.ended_at, t.output_file.as_deref()),
+            (becomes, Some(T0), None)
+        );
+        assert_eq!(t.summary.as_deref(), Some("Job"));
+    }
+    // `killed` in a notification stops it too.
+    let mut p = PlanState::default();
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    sys(&mut p, bg_notified("b1", "c1", Some("killed"), "Job", ""));
+    assert_eq!(bg(&p, "b1").status, RunStatus::Stopped);
+    // A row that ended never opens again: not by a word, not by its task said again.
+    sys(&mut p, updated("b1", json!({ "status": "failed" })));
+    sys(
+        &mut p,
+        bg_notified("b1", "c1", Some("completed"), "Job", ""),
+    );
+    assert_eq!(bg(&p, "b1").status, RunStatus::Stopped);
+    assert_eq!(
+        sys(&mut p, bg_started("b1", "c1", "Job", Some(true))),
+        Change::None
+    );
+    assert_eq!(bg(&p, "b1").status, RunStatus::Stopped);
+    assert_eq!(
+        p.on_tool_result("c1", false, "ok", &background_id("b1"), T0),
+        Change::None
+    );
+    assert_eq!(bg(&p, "b1").status, RunStatus::Stopped);
+}
+
+#[test]
+fn a_monitor_is_told_from_a_command_by_the_tool_that_called_it() {
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "m1",
+        "Monitor",
+        json!({ "command": "tail -f app.log", "description": "Watch log", "timeout_ms": 60000 }),
+    );
+    bash(&mut p, "c1", "sleep 5", "Sleeper");
+    // Both are `local_bash` tasks, and the level cannot tell them apart.
+    sys(
+        &mut p,
+        level(&[
+            ("w1", "local_bash", "Watch log"),
+            ("b1", "local_bash", "Sleeper"),
+        ]),
+    );
+    assert_eq!(bg(&p, "w1").kind, BgKind::Command);
+    sys(&mut p, bg_started("w1", "m1", "Watch log", Some(true)));
+    sys(&mut p, bg_started("b1", "c1", "Sleeper", Some(true)));
+    assert_eq!(bg(&p, "w1").kind, BgKind::Monitor);
+    assert_eq!(bg(&p, "w1").command.as_deref(), Some("tail -f app.log"));
+    assert_eq!(bg(&p, "b1").kind, BgKind::Command);
+    // The Monitor of an MCP server is a monitor without any call.
+    let mcp = json!({ "subtype": "task_started", "task_id": "mm", "tool_use_id": "tm",
+        "description": "Feed", "task_type": "monitor_mcp" });
+    assert_eq!(sys(&mut p, mcp), Change::Saved);
+    assert_eq!(bg(&p, "mm").kind, BgKind::Monitor);
+    assert_eq!(bg(&p, "mm").status, RunStatus::Running);
+}
+
+#[test]
+fn an_event_of_a_monitor_replayed_without_a_status_does_not_end_it() {
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "m1",
+        "Monitor",
+        json!({ "command": "tail -f x", "description": "Watch" }),
+    );
+    sys(&mut p, bg_started("w1", "m1", "Watch", Some(true)));
+    let event = json!({ "type": "system", "subtype": "task_notification", "task_id": "w1",
+        "tool_use_id": "m1", "summary": "Monitor event: \"watch 1\"", "output_file": "/x/w1.output" });
+    assert_eq!(sys(&mut p, event.clone()), Change::None);
+    for status in ["", "running", "event"] {
+        let mut f = event.clone();
+        f["status"] = json!(status);
+        assert_eq!(sys(&mut p, f), Change::None, "{status:?}");
+    }
+    let t = bg(&p, "w1");
+    assert_eq!(
+        (t.status, t.summary.as_deref(), t.output_file.as_deref()),
+        (RunStatus::Running, None, None)
+    );
+    // Its end does.
+    let end = bg_notified(
+        "w1",
+        "m1",
+        Some("completed"),
+        "Monitor \"Watch\" stream ended",
+        "/x/w1.output",
+    );
+    assert_eq!(sys(&mut p, end), Change::Saved);
+    let t = bg(&p, "w1");
+    assert_eq!(t.status, RunStatus::Done);
+    assert_eq!(t.summary.as_deref(), Some("Monitor \"Watch\" stream ended"));
+}
+
+#[test]
+fn a_command_in_the_foreground_is_listed_once_it_goes_to_the_background() {
+    let mut p = PlanState::default();
+    let command = "for i in 1 2; do echo fg $i; sleep 2; done";
+    tool(
+        &mut p,
+        "c1",
+        "Bash",
+        json!({ "command": command, "description": "Foreground loop" }),
+    );
+    // In the foreground, its task is not listed.
+    let start = bg_started("b2", "c1", "Foreground loop", Some(false));
+    assert_eq!(p.on_system(&start, 5_000), Change::None);
+    assert!(p.is_empty());
+    // Sent to the background: the row opens, from when it started.
+    let flip = updated("b2", json!({ "is_backgrounded": true }));
+    assert_eq!(sys(&mut p, flip.clone()), Change::Saved);
+    let t = bg(&p, "b2");
+    assert_eq!(
+        (t.kind, t.title.as_str(), t.status, t.started_at),
+        (
+            BgKind::Command,
+            "Foreground loop",
+            RunStatus::Running,
+            5_000
+        )
+    );
+    assert_eq!(
+        (t.command.as_deref(), t.call.as_deref()),
+        (Some(command), Some("c1"))
+    );
+    // The result that says so completes it: one row.
+    let text = "Command was manually backgrounded by user with ID: b2. Output is being written to: /t/tasks/b2.output. If it is still running after 30m, it will be killed.";
+    let tur = json!({ "backgroundTaskId": "b2", "backgroundedByUser": true });
+    assert_eq!(p.on_tool_result("c1", false, text, &tur, T0), Change::Saved);
+    assert_eq!(p.bg_tasks.len(), 1);
+    assert_eq!(
+        bg(&p, "b2").output_file.as_deref(),
+        Some("/t/tasks/b2.output")
+    );
+    // The update said again changes nothing, and the end is its notification's.
+    assert_eq!(sys(&mut p, flip), Change::None);
+    sys(
+        &mut p,
+        bg_notified(
+            "b2",
+            "c1",
+            Some("completed"),
+            "Background command \"Foreground loop\" completed (exit code 0)",
+            "/t/tasks/b2.output",
+        ),
+    );
+    assert_eq!(bg(&p, "b2").status, RunStatus::Done);
+}
+
+#[test]
+fn the_level_that_lists_a_command_sent_to_the_background_opens_its_row_from_when_it_started() {
+    // The order of a real Claude Code: the task in the foreground, the level that has it, then the update.
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "c1",
+        "Bash",
+        json!({ "command": "sleep 9", "description": "Loop" }),
+    );
+    p.on_system(&bg_started("b2", "c1", "Loop", Some(false)), 5_000);
+    assert!(p.is_empty());
+    assert_eq!(
+        sys(&mut p, level(&[("b2", "local_bash", "Loop")])),
+        Change::Saved
+    );
+    let t = bg(&p, "b2");
+    assert_eq!(
+        (t.started_at, t.command.as_deref(), t.call.as_deref()),
+        (5_000, Some("sleep 9"), Some("c1"))
+    );
+    assert_eq!(
+        sys(&mut p, updated("b2", json!({ "is_backgrounded": true }))),
+        Change::None
+    );
+    assert_eq!(p.bg_tasks.len(), 1);
+}
+
+#[test]
+fn a_command_that_ends_in_the_foreground_is_never_listed() {
+    let ends = [
+        updated("b2", json!({ "status": "completed" })),
+        updated("b2", json!({ "status": "failed" })),
+        updated("b2", json!({ "status": "killed" })),
+        bg_notified("b2", "c1", Some("completed"), "Loop", ""),
+    ];
+    for end in ends {
+        let mut p = PlanState::default();
+        sys(&mut p, bg_started("b2", "c1", "Loop", Some(false)));
+        assert_eq!(sys(&mut p, end), Change::None);
+        assert!(p.is_empty());
+        // It is over: sent to the background after that, it lists nothing.
+        assert_eq!(
+            sys(&mut p, updated("b2", json!({ "is_backgrounded": true }))),
+            Change::None
+        );
+        assert!(p.is_empty());
+    }
+    // `local_bash` without any word on it is in the foreground.
+    let mut p = PlanState::default();
+    assert_eq!(
+        sys(&mut p, bg_started("b3", "c3", "Loop", None)),
+        Change::None
+    );
+    assert!(p.is_empty());
+}
+
+#[test]
+fn a_command_of_a_subagent_is_listed_only_when_it_runs_in_the_background() {
+    let mut p = PlanState::default();
+    let mut fg = bg_started("s1", "k1", "Sleep 20", Some(false));
+    fg["owned_by_subagent"] = json!(true);
+    fg["parent_task_id"] = json!("sa1");
+    assert_eq!(sys(&mut p, fg), Change::None);
+    assert!(p.is_empty());
+    let mut back = bg_started("s2", "k2", "Serve", Some(true));
+    back["owned_by_subagent"] = json!(true);
+    back["parent_task_id"] = json!("sa1");
+    assert_eq!(sys(&mut p, back), Change::Saved);
+    assert_eq!(bg(&p, "s2").parent.as_deref(), Some("sa1"));
+    assert_eq!(p.bg_tasks.len(), 1);
+    assert!(p.agents.is_empty() && p.launched == 0);
+}
+
+#[test]
+fn remote_agents_teammates_and_the_monitors_of_mcp_are_background_tasks_too() {
+    for (task_type, kind) in [
+        ("remote_agent", BgKind::Remote),
+        ("in_process_teammate", BgKind::Teammate),
+        ("monitor_mcp", BgKind::Monitor),
+    ] {
+        let mut p = PlanState::default();
+        let f = json!({ "subtype": "task_started", "task_id": "t1", "tool_use_id": "tt",
+            "description": "Revue distante", "task_type": task_type });
+        // Without a word on the background, they are in it.
+        assert_eq!(p.on_system(&f, 7), Change::Saved, "{task_type}");
+        let t = bg(&p, "t1");
+        assert_eq!(
+            (t.kind, t.title.as_str(), t.status, t.started_at),
+            (kind, "Revue distante", RunStatus::Running, 7)
+        );
+        assert_eq!(t.command, None);
+        // They end with their notification.
+        sys(
+            &mut p,
+            bg_notified("t1", "tt", Some("completed"), "Done", ""),
+        );
+        assert_eq!(bg(&p, "t1").status, RunStatus::Done);
+        // Said to be in the foreground, they are not listed.
+        let mut q = PlanState::default();
+        let mut g = f.clone();
+        g["is_backgrounded"] = json!(false);
+        assert_eq!(sys(&mut q, g), Change::None, "{task_type}");
+        assert!(q.is_empty());
+    }
+}
+
+#[test]
+fn the_tasks_claude_code_runs_on_its_own_account_or_of_a_kind_nobody_knows_are_not_listed() {
+    let mut p = PlanState::default();
+    for (key, value) in [("ambient", json!(true)), ("skip_transcript", json!(true))] {
+        let mut f = bg_started("x1", "tx", "Quiet", Some(true));
+        f[key] = value;
+        assert_eq!(sys(&mut p, f), Change::None, "{key}");
+    }
+    for task_type in ["dream", "local_whatever"] {
+        let mut f = bg_started("x2", "tx", "Odd", Some(true));
+        f["task_type"] = json!(task_type);
+        assert_eq!(sys(&mut p, f), Change::None, "{task_type}");
+    }
+    let mut no_id = bg_started("x3", "tx", "No id", Some(true));
+    no_id["task_id"] = json!("");
+    assert_eq!(sys(&mut p, no_id), Change::None);
+    assert!(p.is_empty());
+}
+
+#[test]
+fn the_level_opens_the_background_tasks_it_lists_and_no_other() {
+    let mut p = PlanState::default();
+    let f = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [
+        { "task_id": "b1", "run_id": "r1", "task_type": "local_bash", "description": "Ticker" },
+        { "task_id": "sa", "run_id": "r2", "task_type": "local_agent", "subagent_type": "Explore", "description": "Helper" },
+        { "task_id": "wf", "task_type": "local_workflow", "description": "Flow" },
+        { "task_id": "am", "task_type": "local_bash", "description": "Ambient", "ambient": true },
+        { "task_id": "dr", "task_type": "dream", "description": "Dream" },
+        { "task_id": "rm", "task_type": "remote_agent", "description": "Remote job" },
+        { "task_id": "tm", "task_type": "in_process_teammate", "description": "Mate", "parent_task_id": "lead" },
+        { "task_id": "mm", "task_type": "monitor_mcp", "description": "Feed", "awaited": true },
+        { "task_type": "local_bash", "description": "No id" },
+    ]});
+    assert_eq!(sys(&mut p, f.clone()), Change::Saved);
+    assert_eq!(bg_ids(&p), ["b1", "rm", "tm", "mm"]);
+    let kinds: Vec<_> = p.bg_tasks.iter().map(|t| t.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            BgKind::Command,
+            BgKind::Remote,
+            BgKind::Teammate,
+            BgKind::Monitor
+        ]
+    );
+    assert_eq!(bg(&p, "tm").parent.as_deref(), Some("lead"));
+    assert_eq!(bg(&p, "rm").title, "Remote job");
+    assert!(p
+        .bg_tasks
+        .iter()
+        .all(|t| t.status == RunStatus::Running && t.command.is_none()));
+    // Not the subagents nor the workflows, whose rows come from elsewhere.
+    assert!(p.agents.is_empty() && p.workflows.is_empty() && p.launched == 0);
+    // The same level again says nothing new.
+    assert_eq!(sys(&mut p, f), Change::None);
+    // A level with no task, or none at all, on a plan with no row: nothing.
+    assert_eq!(sys(&mut PlanState::default(), level(&[])), Change::None);
+    assert_eq!(
+        sys(
+            &mut PlanState::default(),
+            json!({ "subtype": "background_tasks_changed" })
+        ),
+        Change::None
+    );
+}
+
+#[test]
+fn a_task_the_level_no_longer_has_is_over_whatever_a_lost_notification_said() {
+    let mut p = PlanState::default();
+    sys(
+        &mut p,
+        level(&[("b1", "local_bash", "A"), ("b2", "local_bash", "B")]),
+    );
+    assert_eq!(
+        p.on_system(&level(&[("b2", "local_bash", "B")]), 9_000),
+        Change::Saved
+    );
+    let t = bg(&p, "b1");
+    assert_eq!(
+        (t.status, t.ended_at, t.summary.as_deref()),
+        (RunStatus::Done, Some(9_000), None)
+    );
+    assert_eq!(bg(&p, "b2").status, RunStatus::Running);
+    // What ended is not ended again, and the level that has it back does not open it again.
+    assert_eq!(p.on_system(&level(&[]), 10_000), Change::Saved);
+    assert_eq!(bg(&p, "b1").ended_at, Some(9_000));
+    assert_eq!(bg(&p, "b2").ended_at, Some(10_000));
+    assert_eq!(
+        sys(&mut p, level(&[("b1", "local_bash", "A")])),
+        Change::None
+    );
+    assert_eq!(bg(&p, "b1").status, RunStatus::Done);
+    // The subagents and the workflows have rows of their own, which a level does not end.
+    launch(
+        &mut p,
+        "a1",
+        json!({ "description": "Aide", "prompt": "", "run_in_background": true }),
+    );
+    sys(
+        &mut p,
+        json!({ "subtype": "task_started", "task_id": "w1", "tool_use_id": "tw",
+        "description": "Flow", "task_type": "local_workflow" }),
+    );
+    sys(&mut p, level(&[]));
+    assert_eq!(row(&p, "a1").status, RunStatus::Running);
+    assert_eq!(p.workflows[0].status, RunStatus::Running);
+}
+
+#[test]
+fn the_title_of_a_task_comes_from_its_task_then_its_call_then_its_command() {
+    let mut p = PlanState::default();
+    bash(&mut p, "c1", "echo one\necho two", "Call words");
+    // The task's own description first.
+    sys(&mut p, bg_started("b1", "c1", "Task words", Some(true)));
+    assert_eq!(bg(&p, "b1").title, "Task words");
+    // Then the call's.
+    bash(&mut p, "c2", "echo hi", "Call words");
+    sys(&mut p, bg_started("b2", "c2", "", Some(true)));
+    assert_eq!(bg(&p, "b2").title, "Call words");
+    // Then the first line of the command; else the task's id.
+    tool(
+        &mut p,
+        "c3",
+        "Bash",
+        json!({ "command": "  \n echo   three\nmore" }),
+    );
+    sys(&mut p, bg_started("b3", "c3", "", Some(true)));
+    assert_eq!(bg(&p, "b3").title, "echo three");
+    sys(&mut p, bg_started("b4", "nobody", "", Some(true)));
+    assert_eq!(bg(&p, "b4").title, "b4");
+    // A long description is cut as every title is; an update changes it.
+    sys(&mut p, bg_started("b5", "c5", &"x".repeat(500), Some(true)));
+    assert_eq!(bg(&p, "b5").title.chars().count(), 160);
+    assert_eq!(
+        sys(&mut p, updated("b5", json!({ "description": "Renamed" }))),
+        Change::Saved
+    );
+    assert_eq!(bg(&p, "b5").title, "Renamed");
+    assert_eq!(
+        sys(&mut p, updated("b5", json!({ "description": "Renamed" }))),
+        Change::None
+    );
+}
+
+#[test]
+fn the_command_is_kept_as_the_tool_received_it_up_to_2000_characters() {
+    let mut p = PlanState::default();
+    let command = format!("echo \"é\\n\"  \t{}", "x".repeat(10));
+    tool(
+        &mut p,
+        "c1",
+        "Bash",
+        json!({ "command": command, "description": "Raw" }),
+    );
+    sys(&mut p, bg_started("b1", "c1", "Raw", Some(true)));
+    assert_eq!(bg(&p, "b1").command.as_deref(), Some(command.as_str()));
+    // 2000 characters whole; beyond, cut with an ellipsis that counts in the 2000.
+    for (len, cut) in [(2_000, false), (2_001, true), (6_000, true)] {
+        let long = "é".repeat(len);
+        let call = format!("l{len}");
+        tool(
+            &mut p,
+            &call,
+            "PowerShell",
+            json!({ "command": long, "description": "Long" }),
+        );
+        sys(
+            &mut p,
+            bg_started(&format!("t{len}"), &call, "Long", Some(true)),
+        );
+        let kept = bg(&p, &format!("t{len}")).command.clone().unwrap();
+        assert_eq!(kept.chars().count(), if cut { 2_000 } else { len }, "{len}");
+        assert_eq!(kept.ends_with('…'), cut, "{len}");
+    }
+    // No command, or an empty one, is none.
+    tool(
+        &mut p,
+        "e1",
+        "Bash",
+        json!({ "command": "", "description": "Empty" }),
+    );
+    sys(&mut p, bg_started("b9", "e1", "Empty", Some(true)));
+    assert_eq!(bg(&p, "b9").command, None);
+}
+
+#[test]
+fn the_calls_of_commands_are_remembered_64_at_most_whoever_makes_them() {
+    let mut p = PlanState::default();
+    // Commands and monitors, of the main thread or a subagent's; no other tool.
+    assert_eq!(
+        p.on_tool_use(Some("a1"), "k1", "Bash", &json!({ "command": "ls" }), T0),
+        Change::None
+    );
+    tool(&mut p, "k2", "PowerShell", json!({ "command": "dir" }));
+    tool(&mut p, "k3", "Monitor", json!({ "command": "tail" }));
+    tool(&mut p, "k4", "Read", json!({ "file_path": "a" }));
+    assert_eq!(p.memory.calls_len(), 3);
+    // A call that comes twice is one.
+    tool(&mut p, "k2", "PowerShell", json!({ "command": "dir" }));
+    assert_eq!(p.memory.calls_len(), 3);
+    assert!(p.is_empty());
+    // The first of 70 is forgotten, the last is not.
+    for i in 0..70 {
+        bash(&mut p, &format!("c{i}"), &format!("echo {i}"), "Job");
+    }
+    assert_eq!(p.memory.calls_len(), 64);
+    sys(&mut p, bg_started("b0", "c0", "Job", Some(true)));
+    sys(&mut p, bg_started("b69", "c69", "Job", Some(true)));
+    assert_eq!(bg(&p, "b0").command, None);
+    assert_eq!(bg(&p, "b69").command.as_deref(), Some("echo 69"));
+    // A copy of the plan shares what it remembers and is equal to it; a plan that starts again does not.
+    let q = p.clone();
+    assert!(p.memory.same_ring(&q.memory));
+    assert_eq!(p, q);
+    let mut r = p.clone();
+    r.reset();
+    assert_eq!(r.memory.calls_len(), 0);
+    assert!(!r.memory.same_ring(&p.memory));
+}
+
+#[test]
+fn in_the_claude_code_view_the_result_of_the_call_opens_the_task_and_the_replayed_notification_ends_it(
+) {
+    let mut p = PlanState::default();
+    bash(&mut p, "c1", "npm run dev", "Dev server");
+    let file = r"C:\Users\Jean Dupont\AppData\Local\Temp\claude\proj\sess\tasks\b9.output";
+    let text = format!("Command running in background with ID: b9. Output is being written to: {file}. You will be notified when it completes.");
+    assert_eq!(
+        p.on_tool_result("c1", false, &text, &background_id("b9"), 4_000),
+        Change::Saved
+    );
+    let t = bg(&p, "b9");
+    assert_eq!(
+        (
+            t.kind,
+            t.title.as_str(),
+            t.command.as_deref(),
+            t.call.as_deref()
+        ),
+        (
+            BgKind::Command,
+            "Dev server",
+            Some("npm run dev"),
+            Some("c1")
+        )
+    );
+    assert_eq!(
+        (t.status, t.started_at, t.output_file.as_deref()),
+        (RunStatus::Running, 4_000, Some(file))
+    );
+    // The same result again opens no second row.
+    assert_eq!(
+        p.on_tool_result("c1", false, &text, &background_id("b9"), 4_100),
+        Change::None
+    );
+    assert_eq!(p.bg_tasks.len(), 1);
+    // A monitor says its task as `taskId`.
+    tool(
+        &mut p,
+        "m1",
+        "Monitor",
+        json!({ "command": "tail -f x", "description": "Watch", "timeout_ms": 1000 }),
+    );
+    let tur = json!({ "taskId": "w1", "timeoutMs": 1000, "persistent": false });
+    let started = "Monitor started (task w1, expires in 1m unless the source ends first).";
+    assert_eq!(
+        p.on_tool_result("m1", false, started, &tur, 5_000),
+        Change::Saved
+    );
+    let t = bg(&p, "w1");
+    assert_eq!(
+        (t.kind, t.title.as_str(), t.command.as_deref()),
+        (BgKind::Monitor, "Watch", Some("tail -f x"))
+    );
+    assert_eq!((t.started_at, t.output_file.as_deref()), (5_000, None));
+    // `taskId` of any other call is no task; nor is a result with no id, or one that failed.
+    bash(&mut p, "c2", "ls", "List");
+    assert_eq!(
+        p.on_tool_result("c2", false, "ok", &json!({ "taskId": "zzz" }), T0),
+        Change::None
+    );
+    assert_eq!(
+        p.on_tool_result("c2", false, "ok", &Value::Null, T0),
+        Change::None
+    );
+    assert_eq!(
+        p.on_tool_result("c2", true, "boom", &background_id("e1"), T0),
+        Change::None
+    );
+    assert_eq!(p.bg_tasks.len(), 2);
+    // The notification Claude Code replays to Claude ends the row (here, a command stopped).
+    let note = bg_notified("b9", "c1", Some("killed"), "Dev server", file);
+    assert_eq!(p.on_system(&note, 6_000), Change::Saved);
+    let t = bg(&p, "b9");
+    assert_eq!((t.status, t.ended_at), (RunStatus::Stopped, Some(6_000)));
+}
+
+#[test]
+fn the_output_file_of_a_result_is_kept_only_when_it_is_named_after_its_task() {
+    let launched = |path: &str| {
+        format!("Command running in background with ID: b1. Output is being written to: {path}. You will be notified when it completes.")
+    };
+    for (text, kept) in [
+        (launched("/t/tasks/b1.output"), Some("/t/tasks/b1.output")),
+        (
+            r"Output is being written to: C:\t u\tasks\b1.output".to_string(),
+            Some(r"C:\t u\tasks\b1.output"),
+        ),
+        (
+            "Output is being written to: /t/tasks/b1.output".to_string(),
+            Some("/t/tasks/b1.output"),
+        ),
+        (launched("/t/tasks/other.output"), None),
+        (launched("/t/tasks/b1.output.txt"), None),
+        (launched("/t/tasks/xb1.output"), None),
+        (launched("/t/tasks/b1.output/../../etc/b1x.output"), None),
+        (launched("/t/tasks/b1.output/sub"), None),
+        (
+            "Output is being written to: \n/t/tasks/b1.output".to_string(),
+            None,
+        ),
+        ("it was written to /t/tasks/b1.output".to_string(), None),
+        (launched(""), None),
+    ] {
+        let mut p = PlanState::default();
+        bash(&mut p, "c1", "ls", "List");
+        p.on_tool_result("c1", false, &text, &background_id("b1"), T0);
+        assert_eq!(bg(&p, "b1").output_file.as_deref(), kept, "{text:?}");
+    }
+    // A text that names a file and no task opens nothing.
+    let mut p = PlanState::default();
+    assert_eq!(
+        p.on_tool_result(
+            "c1",
+            false,
+            &launched("/t/tasks/b1.output"),
+            &Value::Null,
+            T0
+        ),
+        Change::None
+    );
+    assert!(p.is_empty());
+    // The file of a row that has one is not replaced by a result.
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    sys(&mut p, bg_notified("b1", "c1", None, "", ""));
+    p.on_tool_result(
+        "c1",
+        false,
+        &launched("/t/tasks/b1.output"),
+        &background_id("b1"),
+        T0,
+    );
+    assert_eq!(
+        bg(&p, "b1").output_file.as_deref(),
+        Some("/t/tasks/b1.output")
+    );
+    p.on_tool_result(
+        "c1",
+        false,
+        &launched("/u/tasks/b1.output"),
+        &background_id("b1"),
+        T0,
+    );
+    assert_eq!(
+        bg(&p, "b1").output_file.as_deref(),
+        Some("/t/tasks/b1.output")
+    );
+}
+
+#[test]
+fn the_output_file_of_a_notification_is_never_one_of_another_machine() {
+    // The file will be read: a path to a share, a verbatim path or a device would make Windows
+    // reach the network, with the user's credentials.
+    for (file, kept) in [
+        (r"\\nonexistent.invalid\share\tasks\b1.output", None),
+        ("//nonexistent.invalid/share/tasks/b1.output", None),
+        (r"\/nonexistent.invalid/share/tasks/b1.output", None),
+        (r"/\nonexistent.invalid\share\tasks\b1.output", None),
+        (r"\\?\UNC\nonexistent.invalid\share\tasks\b1.output", None),
+        (r"\\?\C:\Users\x\tasks\b1.output", None),
+        (r"\\.\pipe\tasks\b1.output", None),
+        // Its own machine: kept.
+        (
+            r"C:\Users\x\Temp\claude\s1\tasks\b1.output",
+            Some(r"C:\Users\x\Temp\claude\s1\tasks\b1.output"),
+        ),
+        (
+            "C:/Users/x/Temp/claude/s1/tasks/b1.output",
+            Some("C:/Users/x/Temp/claude/s1/tasks/b1.output"),
+        ),
+        (
+            "/tmp/claude/s1/tasks/b1.output",
+            Some("/tmp/claude/s1/tasks/b1.output"),
+        ),
+    ] {
+        let mut p = PlanState::default();
+        sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+        let note = bg_notified("b1", "c1", Some("completed"), "Job done", file);
+        // The task ends all the same, with its words: only the file is left out.
+        assert_eq!(sys(&mut p, note), Change::Saved, "{file}");
+        let t = bg(&p, "b1");
+        assert_eq!(
+            (t.status, t.summary.as_deref(), t.output_file.as_deref()),
+            (RunStatus::Done, Some("Job done"), kept),
+            "{file}"
+        );
+    }
+    // A refused path does not replace the file a row has, and a good one comes after it.
+    let mut p = PlanState::default();
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    let unc = r"\\nonexistent.invalid\share\tasks\b1.output";
+    sys(
+        &mut p,
+        bg_notified("b1", "c1", Some("completed"), "Job", unc),
+    );
+    assert_eq!(bg(&p, "b1").output_file, None);
+    sys(
+        &mut p,
+        bg_notified("b1", "c1", Some("completed"), "Job", "/t/tasks/b1.output"),
+    );
+    assert_eq!(
+        bg(&p, "b1").output_file.as_deref(),
+        Some("/t/tasks/b1.output")
+    );
+    sys(
+        &mut p,
+        bg_notified("b1", "c1", Some("completed"), "Job", unc),
+    );
+    assert_eq!(
+        bg(&p, "b1").output_file.as_deref(),
+        Some("/t/tasks/b1.output")
+    );
+}
+
+#[test]
+fn the_output_file_a_result_tells_is_never_one_of_another_machine() {
+    let launched = |path: &str| {
+        format!("Command running in background with ID: b1. Output is being written to: {path}. You will be notified when it completes.")
+    };
+    for (path, kept) in [
+        (r"\\nonexistent.invalid\share\tasks\b1.output", None),
+        ("//nonexistent.invalid/share/tasks/b1.output", None),
+        (r"\\?\UNC\nonexistent.invalid\share\tasks\b1.output", None),
+        (r"\\?\C:\Users\x\tasks\b1.output", None),
+        (r"\\.\pipe\tasks\b1.output", None),
+        (
+            r"C:\Users\x\Temp\claude\s1\tasks\b1.output",
+            Some(r"C:\Users\x\Temp\claude\s1\tasks\b1.output"),
+        ),
+        (
+            "/tmp/claude/s1/tasks/b1.output",
+            Some("/tmp/claude/s1/tasks/b1.output"),
+        ),
+    ] {
+        // A command that opens its row by its result, and one whose row is already open.
+        for opened in [false, true] {
+            let mut p = PlanState::default();
+            bash(&mut p, "c1", "ls", "List");
+            if opened {
+                sys(&mut p, bg_started("b1", "c1", "List", Some(true)));
+            }
+            p.on_tool_result("c1", false, &launched(path), &background_id("b1"), T0);
+            assert_eq!(
+                bg(&p, "b1").output_file.as_deref(),
+                kept,
+                "{path} (row opened first: {opened})"
+            );
+        }
+    }
+    // The text of a monitor, no differently.
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "m1",
+        "Monitor",
+        json!({ "command": "tail -f x", "description": "Watch" }),
+    );
+    let text = r"Monitor started (task w1). Output is being written to: \\nonexistent.invalid\share\tasks\w1.output";
+    let tur = json!({ "taskId": "w1", "timeoutMs": 1000, "persistent": false });
+    p.on_tool_result("m1", false, text, &tur, T0);
+    assert_eq!(bg(&p, "w1").output_file, None);
+}
+
+#[test]
+fn the_ten_latest_ended_tasks_are_kept_and_all_that_run_up_to_forty() {
+    let mut p = PlanState::default();
+    for i in 0..3 {
+        sys(
+            &mut p,
+            bg_started(&format!("r{i}"), "c", "Runs", Some(true)),
+        );
+    }
+    for i in 0..13 {
+        let id = format!("f{i}");
+        sys(&mut p, bg_started(&id, "c", "Ends", Some(true)));
+        p.on_system(&updated(&id, json!({ "status": "completed" })), 100 + i);
+    }
+    // The three that run first, then the ten latest ended; the oldest ended went first.
+    let ids: Vec<String> = bg_ids(&p).iter().map(|s| s.to_string()).collect();
+    let mut want: Vec<String> = ["r0", "r1", "r2"].iter().map(|s| s.to_string()).collect();
+    want.extend((3..13).map(|i| format!("f{i}")));
+    assert_eq!(ids, want);
+    // The one that ended last is kept, whenever it started.
+    let mut q = PlanState::default();
+    for i in 0..12 {
+        sys(&mut q, bg_started(&format!("t{i}"), "c", "T", Some(true)));
+    }
+    for i in (0..12).rev() {
+        q.on_system(
+            &updated(&format!("t{i}"), json!({ "status": "completed" })),
+            100 + (11 - i),
+        );
+    }
+    assert!(q.bg_tasks.iter().any(|t| t.id == "t0"));
+    assert!(!q.bg_tasks.iter().any(|t| t.id == "t11"));
+    assert_eq!(q.bg_tasks.len(), 10);
+    // Forty running at most; the oldest goes, and an ended row goes before any that runs.
+    let mut r = PlanState::default();
+    for i in 0..45 {
+        sys(
+            &mut r,
+            bg_started(&format!("b{i}"), "c", "Runs", Some(true)),
+        );
+    }
+    assert_eq!(r.bg_tasks.len(), 40);
+    assert_eq!(
+        (r.bg_tasks[0].id.as_str(), r.bg_tasks[39].id.as_str()),
+        ("b5", "b44")
+    );
+    r.on_system(&updated("b20", json!({ "status": "completed" })), 9_000);
+    sys(&mut r, bg_started("b45", "c", "Runs", Some(true)));
+    assert_eq!(r.bg_tasks.len(), 40);
+    assert!(!r.bg_tasks.iter().any(|t| t.id == "b20"));
+    assert_eq!(r.bg_tasks[0].id, "b5");
+    assert!(r.bg_tasks.iter().all(|t| t.status == RunStatus::Running));
+}
+
+#[test]
+fn a_process_gone_interrupts_what_ran_and_the_end_of_a_turn_forgets_only_the_foreground() {
+    let mut p = PlanState::default();
+    sys(&mut p, bg_started("b1", "c1", "Back", Some(true)));
+    sys(&mut p, bg_started("b2", "c2", "Front", Some(false)));
+    // The turn ends: the one in the foreground is gone with it, the other goes on.
+    assert_eq!(p.memory.foreground_len(), 1);
+    assert_eq!(p.end_turn(9_000), Change::None);
+    assert_eq!(p.memory.foreground_len(), 0);
+    assert_eq!(bg(&p, "b1").status, RunStatus::Running);
+    assert_eq!(
+        sys(&mut p, updated("b2", json!({ "is_backgrounded": true }))),
+        Change::None
+    );
+    assert_eq!(p.bg_tasks.len(), 1);
+    // The process is gone: it is interrupted, and so is nothing twice.
+    sys(&mut p, bg_started("b3", "c3", "Front", Some(false)));
+    sys(&mut p, bg_started("b4", "c4", "Done", Some(true)));
+    sys(&mut p, updated("b4", json!({ "status": "completed" })));
+    assert_eq!(p.close_running(9_500), Change::Saved);
+    let t = bg(&p, "b1");
+    assert_eq!(
+        (t.status, t.ended_at),
+        (RunStatus::Interrupted, Some(9_500))
+    );
+    assert_eq!(bg(&p, "b4").status, RunStatus::Done);
+    assert_eq!(p.close_running(9_600), Change::None);
+    assert_eq!(bg(&p, "b1").ended_at, Some(9_500));
+    // And the foreground one with it.
+    assert_eq!(p.memory.foreground_len(), 0);
+    assert_eq!(
+        sys(&mut p, updated("b3", json!({ "is_backgrounded": true }))),
+        Change::None
+    );
+    // Starting again forgets all.
+    assert_eq!(p.reset(), Change::Saved);
+    assert!(p.bg_tasks.is_empty() && p.is_empty());
+    assert_eq!(p.reset(), Change::None);
+}
+
+#[test]
+fn a_running_background_task_is_something_running_and_keeps_the_plan_unfinished() {
+    let mut p = PlanState::default();
+    assert!(p.is_empty() && p.is_finished() && !p.runs_something());
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    assert!(!p.is_empty() && !p.is_finished() && p.runs_something());
+    p.on_system(&updated("b1", json!({ "status": "completed" })), 9_000);
+    // Over, it is still shown until the plan starts again.
+    assert!(!p.is_empty() && p.is_finished() && !p.runs_something());
+    // A command in the foreground is not something that runs on.
+    let mut q = PlanState::default();
+    sys(&mut q, bg_started("b2", "c2", "Job", Some(false)));
+    assert!(q.is_empty() && q.is_finished() && !q.runs_something());
+}
+
+#[test]
+fn what_runs_in_the_background_is_counted_by_row_subagents_workflows_and_tasks_alike() {
+    let mut p = PlanState::default();
+    assert_eq!(p.running_count(), 0);
+    // A command and a monitor.
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    sys(&mut p, bg_started("b2", "c2", "Job 2", Some(true)));
+    assert_eq!(p.running_count(), 2);
+    // A subagent and a workflow (rows of their own).
+    p.agents.push(SubAgent::default());
+    p.workflows.push(WorkflowRun::default());
+    assert_eq!(p.running_count(), 4);
+    assert!(p.runs_something());
+    // What is over is not counted, whatever way it ended.
+    p.on_system(&updated("b1", json!({ "status": "completed" })), 9_000);
+    p.agents.push(SubAgent {
+        status: RunStatus::Stopped,
+        ..Default::default()
+    });
+    p.workflows.push(WorkflowRun {
+        status: RunStatus::Interrupted,
+        ..Default::default()
+    });
+    assert_eq!(p.running_count(), 3);
+    p.on_system(&updated("b2", json!({ "status": "failed" })), 9_100);
+    p.agents[0].status = RunStatus::Done;
+    p.workflows[0].status = RunStatus::Failed;
+    assert_eq!(p.running_count(), 0);
+    assert!(!p.runs_something());
+    // The tasks of the foreground are not in the plan.
+    let mut q = PlanState::default();
+    sys(&mut q, bg_started("b3", "c3", "Job", Some(false)));
+    assert_eq!(q.running_count(), 0);
+}
+
+#[test]
+fn the_window_is_told_the_background_tasks_and_a_saved_plan_without_them_is_read_back() {
+    let mut p = PlanState::default();
+    tool(
+        &mut p,
+        "m1",
+        "Monitor",
+        json!({ "command": "tail -f x", "description": "Watch" }),
+    );
+    sys(&mut p, bg_started("w1", "m1", "Watch", Some(true)));
+    let mut owned = bg_started("b1", "c1", "Ticker", Some(true));
+    owned["parent_task_id"] = json!("sa1");
+    bash(&mut p, "c1", "echo hi", "Ticker");
+    p.on_system(&owned, 60);
+    p.on_tool_result("c1", false, &launched_text("b1"), &background_id("b1"), 61);
+    p.on_system(&updated("b1", json!({ "status": "failed" })), 70);
+    sys(
+        &mut p,
+        bg_notified(
+            "b1",
+            "c1",
+            Some("failed"),
+            "Background command \"Ticker\" failed with exit code 3",
+            "",
+        ),
+    );
+    let sent = serde_json::to_value(&p).unwrap();
+    assert_eq!(
+        sent["bgTasks"],
+        json!([
+            { "id": "w1", "kind": "monitor", "title": "Watch", "command": "tail -f x", "status": "running",
+              "startedAt": T0, "call": "m1" },
+            { "id": "b1", "kind": "command", "title": "Ticker", "command": "echo hi", "status": "failed",
+              "startedAt": 60, "endedAt": 70, "summary": "Background command \"Ticker\" failed with exit code 3",
+              "call": "c1", "parent": "sa1", "outputFile": "/tmp/claude/s1/tasks/b1.output" },
+        ])
+    );
+    // What the plan remembers of the calls and of the foreground is not part of what is said or saved.
+    let keys: Vec<&String> = sent.as_object().unwrap().keys().collect();
+    assert!(
+        !keys
+            .iter()
+            .any(|k| k.contains("call") || k.contains("memory") || k.contains("fg")),
+        "{keys:?}"
+    );
+    // The kinds in words, lowercase.
+    for (kind, word) in [
+        (BgKind::Command, "command"),
+        (BgKind::Monitor, "monitor"),
+        (BgKind::Remote, "remote"),
+        (BgKind::Teammate, "teammate"),
+    ] {
+        assert_eq!(serde_json::to_value(kind).unwrap(), json!(word));
+    }
+    // Read back, as saved.
+    let back: PlanState = serde_json::from_value(sent.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&back).unwrap(), sent);
+    assert_eq!(back.memory.calls_len(), 0);
+    // Written by a version that had none: none.
+    let old: PlanState =
+        serde_json::from_value(json!({ "tasks": [{ "id": "1", "title": "A" }] })).unwrap();
+    assert!(old.bg_tasks.is_empty());
+    assert_eq!(BgKind::default(), BgKind::Command);
 }

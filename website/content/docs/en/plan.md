@@ -1,6 +1,6 @@
 # Plan progress
 
-When an agent follows a task list or works with subagents, Escouade shows where it stands in a “Plan” banner above the conversation, on its card, and in the list of its subagents. This page explains where the list comes from, what the banner shows, and how to read a subagent.
+When an agent follows a task list or works with subagents, Escouade shows where it stands in a “Plan” banner above the conversation, on its card, and in the list of its subagents. This page explains where the list comes from, what the banner shows, how to read a subagent, and how to follow background tasks.
 
 ## When the banner appears
 
@@ -58,7 +58,7 @@ What a subagent says and does is read in its own conversation (see below), and i
 
 ## The card’s line
 
-In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line, but its subagents have their group under the card (see below).
+In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line, but its subagents have their group under the card (see below). While background tasks run, a “N in background” chip is added next to its name (see [background tasks](#background-tasks)).
 
 ## Subagents in the sidebar
 
@@ -114,6 +114,61 @@ A finished subagent’s conversation can still be read. Escouade keeps each suba
 
 Its conversation can therefore be read after Escouade restarts, and even when the sidebar no longer has its line (beyond 30 subagents, or once the plan has started over): the ↗ button on the line of its call, in the agent’s conversation, still opens it. A subagent that was running when Escouade closed is shown as “Interrupted”.
 
+## Background tasks
+
+Claude Code can start tasks in the background for an agent: a command (the `Bash` tool with `run_in_background`), a monitor (the `Monitor` tool, which follows a command’s output and alerts the agent at each line), a workflow, a remote agent, or a teammate. Subagents have their own list (see above) and aren’t background tasks. Escouade lists these tasks under the agent’s card, opens the detail of each, and shows the output of a command or a monitor live. They don’t open the “Plan” banner: it only deals with the tasks of the list and with subagents.
+
+### In the sidebar
+
+Under the card of an agent that has background tasks, after the subagents group, a “Background tasks” group lists them, built like it. A click on its title unfolds or folds it. By default it’s unfolded while a task runs and folded otherwise; your choice is kept until you close Escouade.
+
+Unfolded, the group first shows the tasks that are running, in the order they were started: five, then “N more running” unrolls the rest. Each line gives a state dot, the task’s title, its duration (which runs while it does), its type (“Background command”, “Monitor”, “Workflow”, “Remote agent”, or “Teammate”) and, while it runs, its command line or the workflow’s phase. Below, “N finished tasks” unfolds the ones that have finished, from the last to finish to the first, each with its state (Done, Failed, Stopped, or Interrupted) and, for a command, its exit code (“Failed (code 3)”): ten at most, then “N more”.
+
+On the agent’s card, next to its name, a “2 in background” chip counts the tasks that are running: commands, monitors, workflows, remote agents, and teammates, not subagents. It goes away when nothing runs any more.
+
+A command started in the foreground, which the agent waits for, isn’t in the list: it joins it the moment Claude Code sends it to the background, with its start time.
+
+### A task’s view
+
+A click on a task opens its view in place of the agent’s conversation. One view at a time: a subagent’s conversation opened before gives way. At the top, a breadcrumb “agent › task” tells you where you are; a click on the agent’s name, or `Esc`, takes you back to its conversation, and the focus returns to where you clicked. A click on the agent’s card in the sidebar brings you back too. `Esc` does nothing while a field holds text you typed: a draft isn’t lost to a key. Next to the breadcrumb, the task’s state, and “Stop” while it runs.
+
+Below:
+
+- **Its sheet**: its type, its duration (which runs while it does), the exit code of a finished command and, when a subagent started it, “Launched by” followed by its name. A workflow adds its current phase, its tools, and its tokens.
+- **Its command**, folded when it’s long (“Show the whole command”). A task with no command shows its description instead.
+- **Its summary**, once finished: Claude Code’s last word on it (for example `Background command "Ticker" completed (exit code 0)`). For a stopped task it’s only its description, already said: Escouade doesn’t repeat it.
+- **Its output**, described below.
+
+Titles, commands, phases, summaries, and outputs are the words of the agent and of Claude Code, as they are: Escouade doesn’t translate them. If the task disappears from the agent’s list (the plan has started over), the view closes.
+
+### Live output
+
+A command’s or a monitor’s output is read live, read-only, as in a terminal but without its colors or escape codes. Escouade reads it again every 1.5 seconds while the task runs and the window is visible, then one last time when it finishes; each read replaces what is displayed. The view follows the end while you’re there; if you scroll up, the “Follow the end” button takes you back down.
+
+What you read is the **end** of the output: 8 KiB at most while the task runs, up to 256 KiB once it has finished, so that the first error of a failed build stays readable. When the start is missing, the view says “Start cut off: only the end of the output is shown.” The output of a running task comes from Claude Code itself while the agent’s process runs; a finished task is read first from the output file Claude Code keeps for it, and the view then says “read from the output file”. That file is also used when there is no process any more (process stopped, Escouade reopened, [the Claude Code view](claude-code-view#background-tasks)). Escouade only reads the task’s own file (`<task>.output`, in a `tasks` folder), never another, and never a file on another machine: a network path (`\\server\share`) is ignored and nothing is opened. With neither a process nor a file, the view says “No output available: the output file cannot be found.”
+
+A workflow, a remote agent, and a teammate don’t write to an output of their own: the view says so (“No output to follow for this type of task.”).
+
+### Stopping a task
+
+“Stop”, at the top right, stops this task alone: the agent goes on. Claude Code then tells the agent about the stop, which costs it a turn like the others (tokens, cost). The button is offered for any task that runs. It has been tried on a command; a monitor, a workflow, a remote agent, or a teammate is stopped by the same request, but that hasn’t been tried on a real stream.
+
+### What stays after the end
+
+The ten latest finished tasks stay in the list, with their command and their summary, until the plan starts over (a new Claude session, or your first message once everything is finished: as long as a background task runs, the plan isn’t finished). The list is kept when you close Escouade. A task that was running at that moment, or when the agent’s process stops, is shown as “Interrupted”: a command started in the background stops with the process. The end of an agent’s turn doesn’t end a background task.
+
+An agent that has a background task running isn’t stopped as idle (see [idle processes](managing-agents#idle-processes)), and the “Restart” button is disabled while it runs: a command or a dev server doesn’t end by itself, so waiting is no use. Stop its background tasks first, from their view (“Stop”). Escouade’s automatic restart for an update waits for them too (see [updates](updates#restart-automatically)). In the agent’s conversation, the end of a task stays a discreet “Background task completed” line (see [the conversation](chat#subagents-background-tasks-and-other-sessions)): it doesn’t open the task’s view.
+
+### In the Claude Code view
+
+Background tasks are listed too when the agent is in [the Claude Code view](claude-code-view#background-tasks), with their view, but without “Stop”: the view says “This task is stopped from Claude Code’s own interface.” Escouade reads a task’s start in the result of the tool that Claude Code writes in its transcript, and its end in the notification it replays there: the start time is therefore not exact to the second. The output is read from the output file.
+
+### Limits
+
+- Background tasks aren’t in the [overview](overview).
+- A command that a subagent starts in the foreground isn’t listed; one it starts in the background is, with “Launched by”.
+- Monitors of MCP, remote agents, and teammates are supported from Claude Code’s schemas; Escouade has never seen any on a real stream.
+
 ## When the plan goes away
 
-When all the tasks are done and nothing is running, the banner stays displayed (“7/7 tasks”) until your next message: that message starts a new plan, and the banner starts over from zero with whatever the agent lists next. The banner also works when the agent runs in [the Claude Code view](claude-code-view).
+When all the tasks are done and nothing is running (no subagent, no background task), the banner stays displayed (“7/7 tasks”) until your next message: that message starts a new plan, and the banner starts over from zero with whatever the agent lists next. The banner also works when the agent runs in [the Claude Code view](claude-code-view).

@@ -8,7 +8,7 @@ use crate::i18n::{self, Lang};
 use crate::model::*;
 use crate::notify;
 use crate::paths::relative_slash;
-use crate::plan::{Change, PlanState, RunStatus};
+use crate::plan::{BgMemory, Change, PlanState, RunStatus};
 use crate::planfiles::{self, FileList};
 use crate::pricing::{self, Usage};
 use anyhow::{anyhow, bail, Result};
@@ -168,6 +168,10 @@ pub struct AgentRt {
     /// they were hands nothing over, so this is what its plan is named and titled from again when
     /// the agent's own list changes.
     plan_list: Option<FileList>,
+    /// What the plan remembers of the calls of commands and of the tasks in the foreground (not
+    /// saved), kept here while the agent has no plan to hold it: a plan with nothing to show is not
+    /// kept, and the command a task starts with is told by a call before it.
+    plan_memory: BgMemory,
     /// The assistant's text of the running turn (main thread), for the board's report.
     turn_text: String,
     /// The latest text of the running turn's main thread that no tool followed: its final reply,
@@ -430,6 +434,7 @@ impl AgentRt {
             plan_removals: HashSet::new(),
             plan_since: now_ms(),
             plan_list: None,
+            plan_memory: BgMemory::default(),
             turn_text: String::new(),
             final_text: String::new(),
             setup: None,
@@ -546,8 +551,13 @@ impl AgentRt {
     /// something, and tells what changed: a detail goes to the window, the rest is saved too.
     fn plan_apply(&mut self, fx: &mut Effects, f: impl FnOnce(&mut PlanState) -> Change) {
         let before = ended_runs(self.meta.plan.as_ref());
-        let mut plan = self.meta.plan.take().unwrap_or_default();
+        let mut plan = self
+            .meta
+            .plan
+            .take()
+            .unwrap_or_else(|| PlanState::with_memory(self.plan_memory.clone()));
         let change = f(&mut plan);
+        self.plan_memory = plan.memory.clone();
         if !plan.is_empty() {
             self.meta.plan = Some(plan);
         }
@@ -647,10 +657,20 @@ impl AgentRt {
     /// ends (`completed`, `failed`, `stopped` or `killed`). Its words are no report (the real
     /// frame, in the stream, has the report beside them; a replay's `summary` often only says where
     /// the report went), and a row that ended already stays as it was.
+    ///
+    /// The event of a monitor is replayed the same way, with no `<status>`: it ends nothing, so
+    /// nothing is applied. The `summary` and the `output-file` of a command or a monitor that ended
+    /// are kept on its row (`BgTask`); a subagent's row keeps neither.
     fn end_replayed_task(&mut self, text: &str, fx: &mut Effects) {
+        if tag(text, "status").is_none() {
+            return;
+        }
+        let summary = tag(text, "summary").map(unescape_tag);
+        let file = tag(text, "output-file").map(unescape_tag);
         let frame = json!({
             "type": "system", "subtype": "task_notification", "task_id": tag(text, "task-id"),
             "tool_use_id": tag(text, "tool-use-id"), "status": tag(text, "status"),
+            "summary": summary, "output_file": file,
         });
         self.plan_apply(fx, |plan| plan.on_system(&frame, now_ms()));
     }
@@ -1205,7 +1225,11 @@ impl AgentRt {
         // The tasks of the plan (the rows of events below are about the same frames).
         if matches!(
             subtype,
-            "task_started" | "task_updated" | "task_notification" | "task_progress"
+            "task_started"
+                | "task_updated"
+                | "task_notification"
+                | "task_progress"
+                | "background_tasks_changed"
         ) {
             self.plan_apply(fx, |plan| plan.on_system(f, now_ms()));
         }
@@ -2055,6 +2079,17 @@ fn tag<'a>(text: &'a str, name: &str) -> Option<&'a str> {
     let (_, rest) = text.split_once(&format!("<{name}>"))?;
     let (inner, _) = rest.split_once(&format!("</{name}>"))?;
     Some(inner.trim()).filter(|s| !s.is_empty())
+}
+
+/// The text of a tag of a notification as it was written: Claude Code escapes `&`, `<` and `>`
+/// (and the quotes) in what it puts between the tags.
+fn unescape_tag(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 /// The line an older Claude Code, and the fake `claude`, give as the `summary` of a subagent's
@@ -4999,6 +5034,273 @@ npm test")
             .as_str()
             .unwrap()
             .starts_with("First use the Write tool"));
+    }
+
+    /// What Claude Code 2.1.301 wrote on stdout in two real runs (2026-10-16, ESC-14, docs/PROTOCOL.md):
+    /// a `Bash` command, a `Monitor` and a subagent in the background (one command stopped, with its
+    /// own foreground command inside the subagent), then a command run in the background and another
+    /// sent there from the foreground.
+    const REAL_BG: &str = include_str!("../../tests/fixtures/real-run-background-tasks.jsonl");
+    const REAL_FLIP: &str = include_str!("../../tests/fixtures/real-run-foreground-flip.jsonl");
+
+    fn bg_task(p: &PlanState, title: &str) -> crate::plan::BgTask {
+        p.bg_tasks
+            .iter()
+            .find(|t| t.title == title)
+            .unwrap_or_else(|| panic!("no task titled {title}: {:?}", p.bg_tasks))
+            .clone()
+    }
+
+    #[test]
+    fn the_frames_of_a_real_run_with_commands_a_monitor_and_a_subagent_list_the_background_tasks() {
+        use crate::plan::BgKind;
+        let mut a = rt();
+        let all = replay(&mut a, REAL_BG);
+        let p = plan(&a);
+        // The three tasks the agent launched, in order; neither the subagent nor its own command.
+        let titles: Vec<_> = p.bg_tasks.iter().map(|t| t.title.as_str()).collect();
+        assert_eq!(titles, ["Ticker", "Sleeper", "Watch loop output"]);
+        assert_eq!(p.agents.len(), 1);
+        assert_eq!(p.agents[0].status, RunStatus::Done);
+        assert!(p.bg_tasks.iter().all(|t| t.parent.is_none()));
+        let ticker = bg_task(&p, "Ticker");
+        assert_eq!(
+            (ticker.kind, ticker.status),
+            (BgKind::Command, RunStatus::Done)
+        );
+        assert_eq!(ticker.id, "b695j2b8o");
+        assert!(ticker
+            .summary
+            .as_deref()
+            .is_some_and(|s| s.contains("completed (exit code 0)")));
+        assert!(ticker
+            .command
+            .as_deref()
+            .is_some_and(|c| c.starts_with("for i in $(seq 1 10)")));
+        assert_eq!(
+            ticker.call.as_deref(),
+            Some("toolu_01CNQVecQtd4JU2VZKXGEP4h")
+        );
+        assert!(ticker
+            .output_file
+            .as_deref()
+            .is_some_and(|f| f.ends_with("tasks\\b695j2b8o.output")));
+        // Stopped by the agent: its notification says only its description.
+        let sleeper = bg_task(&p, "Sleeper");
+        assert_eq!(
+            (sleeper.kind, sleeper.status),
+            (BgKind::Command, RunStatus::Stopped)
+        );
+        assert_eq!(sleeper.summary.as_deref(), Some("Sleeper"));
+        assert_eq!(sleeper.command.as_deref(), Some("sleep 300"));
+        assert!(sleeper
+            .output_file
+            .as_deref()
+            .is_some_and(|f| f.ends_with("tasks\\bd0kd12fp.output")));
+        // A `Monitor` is a `local_bash` task: only its call tells it.
+        let watch = bg_task(&p, "Watch loop output");
+        assert_eq!(
+            (watch.kind, watch.status),
+            (BgKind::Monitor, RunStatus::Done)
+        );
+        assert_eq!(watch.id, "bpy7gazpv");
+        assert_eq!(
+            watch.summary.as_deref(),
+            Some("Monitor \"Watch loop output\" stream ended")
+        );
+        assert!(watch
+            .command
+            .as_deref()
+            .is_some_and(|c| c.starts_with("for i in $(seq 1 6)")));
+        assert!(watch
+            .output_file
+            .as_deref()
+            .is_some_and(|f| f.ends_with("tasks\\bpy7gazpv.output")));
+        assert!(p.bg_tasks.iter().all(|t| t.ended_at.is_some()));
+        assert!(all.save && all.agent_changed);
+        // Partway: a command and a subagent run, the monitor and the stopped one are not yet.
+        let lines: Vec<&str> = REAL_BG.lines().collect();
+        let mut b = rt();
+        replay(&mut b, &lines[..26].join("\n"));
+        let p = plan(&b);
+        assert_eq!(p.bg_tasks.len(), 3);
+        assert!(p.bg_tasks.iter().all(|t| t.status == RunStatus::Running));
+        assert!(p.runs_something());
+        // Its process gone, they are interrupted, with the subagent.
+        b.detach();
+        assert!(plan(&b)
+            .bg_tasks
+            .iter()
+            .all(|t| t.status == RunStatus::Interrupted));
+    }
+
+    #[test]
+    fn the_frames_of_a_real_run_where_a_foreground_command_goes_to_the_background_list_it_from_then(
+    ) {
+        use crate::plan::BgKind;
+        let lines: Vec<&str> = REAL_FLIP.lines().collect();
+        // In the foreground (its `task_started`, no level that has it): only the other is listed.
+        let mut a = rt();
+        replay(&mut a, &lines[..=10].join("\n"));
+        let p = plan(&a);
+        assert_eq!(p.bg_tasks.len(), 1);
+        assert_eq!(p.bg_tasks[0].title, "Loud");
+        // Sent to the background: listed, running, with the file its result tells.
+        replay(&mut a, &lines[11..=13].join("\n"));
+        let p = plan(&a);
+        let titles: Vec<_> = p.bg_tasks.iter().map(|t| t.title.as_str()).collect();
+        assert_eq!(titles, ["Loud", "Foreground loop"]);
+        let flipped = bg_task(&p, "Foreground loop");
+        assert_eq!(
+            (flipped.kind, flipped.status),
+            (BgKind::Command, RunStatus::Running)
+        );
+        assert!(flipped
+            .output_file
+            .as_deref()
+            .is_some_and(|f| f.ends_with("tasks\\bj6es8xxy.output")));
+        // Both end, with their words.
+        replay(&mut a, &lines[14..].join("\n"));
+        let p = plan(&a);
+        assert_eq!(p.bg_tasks.len(), 2);
+        for (title, id) in [("Loud", "bdv6oe7xp"), ("Foreground loop", "bj6es8xxy")] {
+            let t = bg_task(&p, title);
+            assert_eq!((t.id.as_str(), t.status), (id, RunStatus::Done), "{title}");
+            assert!(t
+                .summary
+                .as_deref()
+                .is_some_and(|s| s.contains("(exit code 0)")));
+            assert!(t
+                .output_file
+                .as_deref()
+                .is_some_and(|f| f.ends_with(&format!("tasks\\{id}.output"))));
+            assert!(t.ended_at.is_some());
+        }
+        assert_eq!(
+            bg_task(&p, "Foreground loop").command.as_deref(),
+            Some("for i in $(seq 1 12); do echo fg $i; sleep 2; done; echo fgdone")
+        );
+        assert!(p.agents.is_empty() && p.launched == 0);
+    }
+
+    #[test]
+    fn a_plan_with_nothing_to_show_still_remembers_the_command_a_task_starts_with() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "c1",
+            "Bash",
+            json!({"command":"npm run dev","description":"Dev server","run_in_background":true}),
+        );
+        // A call is no change: no plan yet.
+        assert!(a.view().meta.plan.is_none());
+        system(
+            &mut a,
+            json!({"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"c1",
+                "description":"Dev server","is_backgrounded":true,"task_type":"local_bash"}),
+        );
+        let t = plan(&a).bg_tasks[0].clone();
+        assert_eq!(
+            (t.title.as_str(), t.command.as_deref()),
+            ("Dev server", Some("npm run dev"))
+        );
+        // A level alone makes a row too, and a plan that was reset starts remembering again.
+        let mut b = rt();
+        system(
+            &mut b,
+            json!({"type":"system","subtype":"background_tasks_changed","tasks":[
+                {"task_id":"b2","task_type":"local_bash","description":"Watch"}]}),
+        );
+        assert_eq!(plan(&b).bg_tasks[0].id, "b2");
+        session(&mut b, "s2");
+        assert!(b.view().meta.plan.is_none());
+        call(
+            &mut b,
+            None,
+            "c2",
+            "Bash",
+            json!({"command":"ls","description":"List"}),
+        );
+        system(
+            &mut b,
+            json!({"type":"system","subtype":"task_started","task_id":"b3","tool_use_id":"c2",
+                "is_backgrounded":true,"task_type":"local_bash"}),
+        );
+        assert_eq!(plan(&b).bg_tasks[0].command.as_deref(), Some("ls"));
+    }
+
+    #[test]
+    fn in_the_claude_code_view_a_command_starts_with_its_result_and_ends_with_its_replayed_notification(
+    ) {
+        let mut a = rt();
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &json!({"type":"assistant","uuid":"e1","message":{"id":"m1","content":[{"type":"tool_use","id":"c1","name":"Bash",
+                "input":{"command":"npm run dev","description":"Dev server","run_in_background":true}}]}}),
+            &mut fx,
+        );
+        assert!(a.view().meta.plan.is_none());
+        let file = "C:\\Users\\dev\\AppData\\Local\\Temp\\claude\\p\\s\\tasks\\b9.output";
+        a.on_transcript(
+            &json!({"type":"user","uuid":"e2","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"c1",
+                "content":format!("Command running in background with ID: b9. Output is being written to: {file}. You will be notified when it completes.")}]},
+                "toolUseResult":{"stdout":"","stderr":"","backgroundTaskId":"b9"}}),
+            &mut fx,
+        );
+        let t = plan(&a).bg_tasks[0].clone();
+        assert_eq!(
+            (
+                t.id.as_str(),
+                t.title.as_str(),
+                t.status,
+                t.command.as_deref()
+            ),
+            ("b9", "Dev server", RunStatus::Running, Some("npm run dev"))
+        );
+        assert_eq!(t.output_file.as_deref(), Some(file));
+        // The events of a monitor are replayed without a status: nothing ends.
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &json!({"type":"user","uuid":"n0","origin":{"kind":"task-notification"},
+                "message":{"role":"user","content":"<task-notification><task-id>b9</task-id><summary>Monitor event: \"watch 1\"</summary><event>watch 1</event></task-notification>"}}),
+            &mut fx,
+        );
+        assert_eq!(plan(&a).bg_tasks[0].status, RunStatus::Running);
+        assert!(plan(&a).bg_tasks[0].summary.is_none());
+        assert_eq!(a.conv.get("n0").unwrap()["source"], "task");
+        // Its end is the notification, with its words (escaped as Claude Code writes them) and its file.
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &json!({"type":"user","uuid":"n1","origin":{"kind":"task-notification"},
+                "message":{"role":"user","content":format!("<task-notification>\n<task-id>b9</task-id>\n<tool-use-id>c1</tool-use-id>\n<output-file>{file}</output-file>\n<status>failed</status>\n<summary>Background command \"a &amp;&amp; b\" failed with exit code 3</summary>\n</task-notification>")}}),
+            &mut fx,
+        );
+        let t = plan(&a).bg_tasks[0].clone();
+        assert_eq!(t.status, RunStatus::Failed);
+        assert_eq!(
+            t.summary.as_deref(),
+            Some("Background command \"a && b\" failed with exit code 3")
+        );
+        assert_eq!(t.output_file.as_deref(), Some(file));
+        assert!(t.ended_at.is_some() && fx.save && fx.agent_changed);
+    }
+
+    #[test]
+    fn a_background_task_does_not_end_with_its_turn_but_with_its_process() {
+        let mut a = rt();
+        system(
+            &mut a,
+            json!({"type":"system","subtype":"task_started","task_id":"b1","tool_use_id":"c1",
+                "description":"Serve","is_backgrounded":true,"task_type":"local_bash"}),
+        );
+        assert!(plan(&a).runs_something() && !plan(&a).is_finished());
+        // The turn that ends does not end it; the process that dies does.
+        turn_ends(&mut a);
+        assert_eq!(plan(&a).bg_tasks[0].status, RunStatus::Running);
+        a.detach();
+        assert_eq!(plan(&a).bg_tasks[0].status, RunStatus::Interrupted);
+        assert!(plan(&a).is_finished());
     }
 
     #[test]

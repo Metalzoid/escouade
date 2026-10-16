@@ -43,6 +43,7 @@ import type {
   StatesView,
   StatsView,
   SubagentRead,
+  TaskOutput,
   TermInfo,
   TestRecipe,
   Ticket,
@@ -159,6 +160,10 @@ export const api = {
   interrupt: (id: string) => invoke<void>('interrupt', { id }),
   /** « Arrêter » on a subagent of the agent `id` (`call`: the call that launched it), by Claude Code's `stop_task`. */
   stopSubagent: (id: string, call: string) => invoke<void>('stop_subagent', { id, call }),
+  /** « Arrêter » on a background task of the agent `id` (`task`: a `BgTask` id or a `WorkflowRun` id), by Claude Code's `stop_task`. Refused when it does not run, in the Claude Code view, or with no process. */
+  stopBgTask: (id: string, task: string) => invoke<void>('stop_bg_task', { id, task }),
+  /** The end of the output of a background task of the agent `id` (8 KiB at most while it runs, 256 KiB once it ended): the running process's, else its output file's. */
+  bgTaskOutput: (id: string, task: string) => invoke<TaskOutput>('task_output', { id, task }),
   /** The conversation of a subagent in the Claude Code view, read from the transcript Claude Code keeps of it (read-only; no items while there is none). `cursor` is the one the read before gave: null back when its files did not change since. */
   subagentTranscript: (id: string, call: string, cursor: TranscriptCursor | null = null) =>
     invoke<SubagentRead | null>('subagent_transcript', { id, call, cursor }),

@@ -1480,6 +1480,749 @@ async fn arreter_stops_a_subagent_by_stop_task_on_its_task_and_its_request_is_an
     );
 }
 
+// ---------- tasks in the background (ESC-14): the fake claude's "commande de fond" ----------
+
+impl Harness {
+    pub(crate) fn bg_tasks(&self, id: &str) -> Vec<crate::plan::BgTask> {
+        self.agent(id).plan.map(|p| p.bg_tasks).unwrap_or_default()
+    }
+
+    /// The row of the task titled `title`, once the plan has it (and its file, if `with_file`).
+    pub(crate) async fn bg_task(
+        &self,
+        id: &str,
+        title: &str,
+        with_file: bool,
+    ) -> crate::plan::BgTask {
+        self.wait("the task listed", |h| {
+            h.bg_tasks(id)
+                .iter()
+                .any(|t| t.title == title && (!with_file || t.output_file.is_some()))
+        })
+        .await;
+        self.bg_tasks(id)
+            .into_iter()
+            .find(|t| t.title == title)
+            .unwrap()
+    }
+
+    pub(crate) async fn bg_task_status(
+        &self,
+        id: &str,
+        task: &str,
+        status: crate::plan::RunStatus,
+    ) {
+        self.wait("the task's status", |h| {
+            h.bg_tasks(id)
+                .iter()
+                .any(|t| t.id == task && t.status == status)
+        })
+        .await;
+    }
+}
+
+/// A plan row of a task nothing launched, with the file its output would be in.
+fn bg_row(id: &str, file: Option<&Path>) -> crate::plan::BgTask {
+    crate::plan::BgTask {
+        id: id.into(),
+        title: id.into(),
+        output_file: file.map(|f| f.to_string_lossy().to_string()),
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn stop_bg_task_stops_a_command_by_stop_task_and_its_row_ends_with_the_frames() {
+    use crate::plan::{BgKind, RunStatus};
+    let h = harness("esc14-stop-command");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", true).await;
+    assert_eq!(
+        (row.kind, row.status),
+        (BgKind::Command, RunStatus::Running)
+    );
+    assert_eq!(
+        row.command.as_deref(),
+        Some("for i in $(seq 1 10); do echo tick $i; sleep 2; done")
+    );
+    assert!(row
+        .output_file
+        .as_deref()
+        .is_some_and(|f| f.ends_with(&format!("{}.output", row.id))));
+    // A task the agent does not have, or that is not a task of the plan: nothing is sent.
+    let refused = |e: anyhow::Error| e.to_string();
+    assert_eq!(
+        refused(h.core.stop_bg_task(&id, "nobody").await.unwrap_err()),
+        "Cette tâche de fond n’est pas connue de l’agent."
+    );
+    h.core.stop_bg_task(&id, &row.id).await.unwrap();
+    let stops: Vec<_> = h
+        .fake_log(&r, "control")
+        .into_iter()
+        .filter(|c| c["subtype"] == "stop_task")
+        .collect();
+    assert_eq!(stops.len(), 1);
+    assert_eq!(stops[0]["task_id"], row.id.as_str());
+    // Its end is the frames': the row was not touched by the command.
+    h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+    // The notification follows the task's update: its words are the description.
+    h.wait("its notification", |h| {
+        h.bg_tasks(&id)
+            .iter()
+            .any(|t| t.id == row.id && t.summary.is_some())
+    })
+    .await;
+    let row = h.bg_task(&id, "Ticker", true).await;
+    assert_eq!(row.summary.as_deref(), Some("Ticker"));
+    assert!(row.ended_at.is_some());
+    // Over: refused, and nothing more is sent.
+    assert_eq!(
+        refused(h.core.stop_bg_task(&id, &row.id).await.unwrap_err()),
+        "Cette tâche de fond ne tourne plus."
+    );
+    assert_eq!(
+        h.fake_log(&r, "control")
+            .iter()
+            .filter(|c| c["subtype"] == "stop_task")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn stop_bg_task_is_refused_in_the_claude_code_view_without_a_process_and_for_what_is_over() {
+    use crate::plan::{RunStatus, WorkflowRun};
+    let h = harness("esc14-stop-refused");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", true).await;
+    let refused = |e: anyhow::Error| e.to_string();
+    let stops = |h: &Harness| {
+        h.fake_log(&r, "control")
+            .iter()
+            .filter(|c| c["subtype"] == "stop_task")
+            .count()
+    };
+    // In the Claude Code view the interface stops it.
+    let agent = h.core.agent(&id).unwrap();
+    agent.lock().tui = Some(crate::agent::TuiRun::quiet(false));
+    assert_eq!(
+        refused(h.core.stop_bg_task(&id, &row.id).await.unwrap_err()),
+        "En vue Claude Code, une tâche de fond s’arrête depuis son interface."
+    );
+    agent.lock().tui = None;
+    // With no process there is nobody to ask.
+    let live = agent.lock().proc.take();
+    assert_eq!(
+        refused(h.core.stop_bg_task(&id, &row.id).await.unwrap_err()),
+        "Le processus de l’agent ne tourne pas."
+    );
+    agent.lock().proc = live;
+    assert_eq!(stops(&h), 0);
+    // A workflow of the plan can be stopped too (it is a task of Claude Code's): the request goes,
+    // and Claude Code's refusal of a task it does not run is the answer.
+    agent
+        .lock()
+        .meta
+        .plan
+        .as_mut()
+        .unwrap()
+        .workflows
+        .push(WorkflowRun {
+            id: "wf1".into(),
+            status: RunStatus::Running,
+            ..Default::default()
+        });
+    let error = format!("{:#}", h.core.stop_bg_task(&id, "wf1").await.unwrap_err());
+    assert!(error.contains("No task found with ID: wf1"), "{error}");
+    assert_eq!(stops(&h), 1);
+    // One that is over is not asked for again; nor is a workflow that is.
+    agent.lock().meta.plan.as_mut().unwrap().workflows[0].status = RunStatus::Done;
+    assert_eq!(
+        refused(h.core.stop_bg_task(&id, "wf1").await.unwrap_err()),
+        "Cette tâche de fond ne tourne plus."
+    );
+    assert_eq!(stops(&h), 1);
+}
+
+#[tokio::test]
+async fn a_command_that_ends_by_itself_ends_its_row_and_its_output_is_its_file_with_its_exit_line()
+{
+    use crate::plan::{BgKind, RunStatus};
+    for (message, title, kind, words) in [
+        (
+            "commande de fond 1s",
+            "Ticker",
+            BgKind::Command,
+            "Background command \"Ticker\" completed (exit code 0)",
+        ),
+        (
+            "surveillance de fond 1s",
+            "Watch loop output",
+            BgKind::Monitor,
+            "Monitor \"Watch loop output\" stream ended",
+        ),
+    ] {
+        let h = harness(&format!("esc14-ends-{}", title.replace(' ', "-")));
+        let (p, _) = h.project(false).await;
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        h.core
+            .send_message(&id, message.into(), vec![])
+            .await
+            .unwrap();
+        let row = h.bg_task(&id, title, true).await;
+        assert_eq!(row.kind, kind, "{message}");
+        // Its task ends first, its notification (and its words) right after.
+        h.wait("its words", |h| {
+            h.bg_tasks(&id)
+                .iter()
+                .any(|t| t.id == row.id && t.summary.is_some())
+        })
+        .await;
+        h.bg_task_status(&id, &row.id, RunStatus::Done).await;
+        let row = h.bg_task(&id, title, true).await;
+        assert_eq!(row.summary.as_deref(), Some(words), "{message}");
+        assert!(row.ended_at.is_some());
+        // It is over, and the process still has it: its output is read from the file, which keeps
+        // all of it (a failed build's first error), whole, with the line that says how it ended.
+        let out = h.core.bg_task_output(&id, &row.id).await.unwrap();
+        assert_eq!(out.source, "file", "{message}");
+        assert!(!out.truncated);
+        assert_eq!(out.total_bytes as usize, out.output.len());
+        assert!(
+            out.output.ends_with("\n[exited with code 0]\n"),
+            "{:?}",
+            out.output
+        );
+        assert!(out.output.contains("1\n"), "{:?}", out.output);
+        // The file gone (a cleaned temporary folder), the process, which lives, has it still: the
+        // end of it, the same words.
+        std::fs::remove_file(row.output_file.as_deref().unwrap()).unwrap();
+        let again = h.core.bg_task_output(&id, &row.id).await.unwrap();
+        assert_eq!(again.source, "process", "{message}");
+        assert_eq!(again.output, out.output, "{message}");
+    }
+}
+
+#[tokio::test]
+async fn bg_task_output_reads_the_process_while_it_lives_then_the_file() {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-output");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", true).await;
+    // It grows: a line every ~200 ms.
+    h.wait("some ticks", |_| {
+        std::fs::read_to_string(row.output_file.as_deref().unwrap())
+            .is_ok_and(|s| s.contains("tick 3"))
+    })
+    .await;
+    let live = h.core.bg_task_output(&id, &row.id).await.unwrap();
+    assert_eq!(live.source, "process");
+    assert!(live.output.starts_with("tick 1\n"), "{:?}", live.output);
+    assert!(!live.truncated && live.total_bytes as usize == live.output.len());
+    // The file is the whole output, written as it goes; the process's is its end.
+    let file = row.output_file.clone().unwrap();
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .starts_with(&live.output));
+    // The process gone, the file is what is left (its end, as the process's was).
+    let gone = h.core.agent(&id).unwrap().lock().detach();
+    assert!(crate::accounts::ended(&gone.unwrap()).await);
+    assert_eq!(h.bg_tasks(&id)[0].status, RunStatus::Interrupted);
+    let after = h.core.bg_task_output(&id, &row.id).await.unwrap();
+    assert_eq!(after.source, "file");
+    let whole = std::fs::read_to_string(&file).unwrap();
+    assert_eq!(after.output, whole);
+    assert_eq!(after.total_bytes as usize, whole.len());
+    assert!(after.output.starts_with(&live.output) && !after.truncated);
+}
+
+#[tokio::test]
+async fn bg_task_output_falls_back_on_the_file_when_claude_code_does_not_know_the_task_and_never_reads_any_other(
+) {
+    use crate::plan::{BgKind, BgTask};
+    let h = harness("esc14-output-file");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A process that lives, to be asked: the fake does not know the tasks of this plan.
+    h.turn(&id, "bonjour").await;
+    let dir = h.dir.join("tasks");
+    std::fs::create_dir_all(&dir).unwrap();
+    let agent = h.core.agent(&id).unwrap();
+    let put = |rows: Vec<BgTask>| {
+        agent.lock().meta.plan = Some(crate::plan::PlanState {
+            bg_tasks: rows,
+            ..Default::default()
+        });
+    };
+    let output = |task: &str| {
+        let (c, id, task) = (h.core.clone(), id.clone(), task.to_string());
+        async move { c.bg_task_output(&id, &task).await }
+    };
+    // The file of the task: its name is `<task>.output`.
+    std::fs::write(dir.join("ghost.output"), "from the file\n").unwrap();
+    put(vec![bg_row("ghost", Some(&dir.join("ghost.output")))]);
+    let out = output("ghost").await.unwrap();
+    assert_eq!(
+        (
+            out.source.as_str(),
+            out.output.as_str(),
+            out.total_bytes,
+            out.truncated
+        ),
+        ("file", "from the file\n", 14, false)
+    );
+    // Not the task's file: not read, whatever it holds (the process does not know it either).
+    std::fs::write(dir.join("secret.txt"), "never").unwrap();
+    std::fs::write(dir.join("other.output"), "never").unwrap();
+    // Named after the task, but not in a folder named `tasks`.
+    std::fs::write(h.dir.join("ghost.output"), "never").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub").join("ghost.output"), "never").unwrap();
+    for (file, why) in [
+        (dir.join("secret.txt"), "another name"),
+        (dir.join("other.output"), "another task's file"),
+        (dir.join("ghost.output.txt"), "a longer name"),
+        (dir.join("missing").join("ghost.output"), "no such file"),
+        (h.dir.join("ghost.output"), "not in a tasks folder"),
+        (
+            dir.join("sub").join("ghost.output"),
+            "in a folder below tasks",
+        ),
+    ] {
+        put(vec![bg_row("ghost", Some(&file))]);
+        let out = output("ghost").await.unwrap();
+        assert_eq!(
+            (out.source.as_str(), out.output.as_str(), out.total_bytes),
+            ("none", "", 0),
+            "{why}"
+        );
+    }
+    // A folder with that name is no file.
+    std::fs::create_dir_all(dir.join("dir1.output")).unwrap();
+    put(vec![bg_row("dir1", Some(&dir.join("dir1.output")))]);
+    assert_eq!(output("dir1").await.unwrap().source, "none");
+    // No file said at all.
+    put(vec![bg_row("ghost", None)]);
+    assert_eq!(output("ghost").await.unwrap().source, "none");
+    // A task of another kind (a remote agent, a teammate) has no output to read, even with a file.
+    let mut remote = bg_row("ghost", Some(&dir.join("ghost.output")));
+    remote.kind = BgKind::Remote;
+    put(vec![remote]);
+    let out = output("ghost").await.unwrap();
+    assert_eq!((out.source.as_str(), out.output.as_str()), ("none", ""));
+    // A task the plan does not have is refused.
+    put(vec![]);
+    assert_eq!(
+        output("ghost").await.unwrap_err().to_string(),
+        "Cette tâche de fond n’est pas connue de l’agent."
+    );
+    // A link is not followed.
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(dir.join("secret.txt"), dir.join("lnk.output")).unwrap();
+        put(vec![bg_row("lnk", Some(&dir.join("lnk.output")))]);
+        assert_eq!(output("lnk").await.unwrap().source, "none");
+    }
+}
+
+#[tokio::test]
+async fn bg_task_output_of_a_task_that_runs_is_the_end_of_its_file_8_kib_at_most_cut_at_a_character(
+) {
+    let h = harness("esc14-output-big");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let agent = h.core.agent(&id).unwrap();
+    let dir = h.dir.join("tasks");
+    std::fs::create_dir_all(&dir).unwrap();
+    let put = |file: &Path| {
+        agent.lock().meta.plan = Some(crate::plan::PlanState {
+            bg_tasks: vec![bg_row("big", Some(file))],
+            ..Default::default()
+        });
+    };
+    // 40 001 bytes: the last 8 192 start inside a two-byte character, which is left out.
+    let file = dir.join("big.output");
+    std::fs::write(&file, format!("{}x", "é".repeat(20_000))).unwrap();
+    put(&file);
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.source.as_str(), out.total_bytes, out.truncated),
+        ("file", 40_001, true)
+    );
+    assert_eq!(out.output.len(), 8_191);
+    assert!(out.output.starts_with('é') && out.output.ends_with("éx"));
+    assert!(!out.output.contains('\u{FFFD}'));
+    // A file of exactly 8 KiB is whole.
+    std::fs::write(&file, "y".repeat(8_192)).unwrap();
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.output.len(), out.total_bytes, out.truncated),
+        (8_192, 8_192, false)
+    );
+    // A byte over, and the first is not in it.
+    std::fs::write(&file, format!("z{}", "y".repeat(8_192))).unwrap();
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.output.len(), out.total_bytes, out.truncated),
+        (8_192, 8_193, true)
+    );
+    assert!(!out.output.contains('z'));
+    // Bytes that are no text are read lossily, never an error.
+    std::fs::write(&file, [b'a', 0xFF, 0xFE, b'b']).unwrap();
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(out.output, "a\u{FFFD}\u{FFFD}b");
+}
+
+/// A row of a task with the status `status` and the file its output is in.
+fn bg_row_as(id: &str, file: Option<&Path>, status: crate::plan::RunStatus) -> crate::plan::BgTask {
+    crate::plan::BgTask {
+        status,
+        ..bg_row(id, file)
+    }
+}
+
+#[tokio::test]
+async fn bg_task_output_of_a_task_that_is_over_is_its_file_up_to_256_kib_cut_at_a_character() {
+    use crate::plan::RunStatus;
+    use crate::taskout::{MAX_FINISHED_OUTPUT, MAX_OUTPUT};
+    let h = harness("esc14-output-over");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A process that lives and does not know these tasks: only the file can tell.
+    h.turn(&id, "bonjour").await;
+    let agent = h.core.agent(&id).unwrap();
+    let dir = h.dir.join("tasks");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("big.output");
+    let put = |status: RunStatus| {
+        agent.lock().meta.plan = Some(crate::plan::PlanState {
+            bg_tasks: vec![bg_row_as("big", Some(&file), status)],
+            ..Default::default()
+        });
+    };
+
+    // 100 KiB, whole, with the first error of the build at its start, whatever way it ended.
+    let hundred = format!("FIRST ERROR\n{}", "y".repeat(100 * 1024 - 12));
+    assert_eq!(hundred.len(), 100 * 1024);
+    std::fs::write(&file, &hundred).unwrap();
+    for status in [
+        RunStatus::Done,
+        RunStatus::Failed,
+        RunStatus::Stopped,
+        RunStatus::Interrupted,
+    ] {
+        put(status);
+        let out = h.core.bg_task_output(&id, "big").await.unwrap();
+        assert_eq!(
+            (out.source.as_str(), out.total_bytes, out.truncated),
+            ("file", 100 * 1024, false),
+            "{status:?}"
+        );
+        assert_eq!(out.output, hundred, "{status:?}");
+    }
+
+    // 300 KiB of characters of two and three bytes: the last 256 KiB, from a whole character.
+    let long: String = "é€".repeat(61_440);
+    assert_eq!(long.len(), 300 * 1024);
+    std::fs::write(&file, &long).unwrap();
+    put(RunStatus::Failed);
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.source.as_str(), out.total_bytes, out.truncated),
+        ("file", 300 * 1024, true)
+    );
+    // 262 144 bytes, less the character the cut falls in (3 bytes at most).
+    assert!(
+        out.output.len() <= MAX_FINISHED_OUTPUT,
+        "{}",
+        out.output.len()
+    );
+    assert!(
+        out.output.len() > MAX_FINISHED_OUTPUT - 3,
+        "{}",
+        out.output.len()
+    );
+    assert!(out.output.starts_with(['é', '€']));
+    assert!(!out.output.contains('\u{FFFD}'));
+    assert!(long.ends_with(&out.output));
+    // Exactly 256 KiB is whole; a byte over, and the first one is not in it.
+    std::fs::write(&file, "y".repeat(MAX_FINISHED_OUTPUT)).unwrap();
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.output.len(), out.total_bytes, out.truncated),
+        (MAX_FINISHED_OUTPUT, MAX_FINISHED_OUTPUT as u64, false)
+    );
+    std::fs::write(&file, format!("z{}", "y".repeat(MAX_FINISHED_OUTPUT))).unwrap();
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(
+        (out.output.len(), out.total_bytes, out.truncated),
+        (MAX_FINISHED_OUTPUT, MAX_FINISHED_OUTPUT as u64 + 1, true)
+    );
+    assert!(!out.output.contains('z'));
+
+    // The same 300 KiB while the task runs: 8 KiB, whether the process (which does not answer
+    // for it) lives or not.
+    std::fs::write(&file, &long).unwrap();
+    put(RunStatus::Running);
+    let check = |out: &crate::taskout::TaskOutput, what: &str| {
+        assert_eq!(
+            (out.source.as_str(), out.total_bytes, out.truncated),
+            ("file", 300 * 1024, true),
+            "{what}"
+        );
+        assert!(
+            out.output.len() <= MAX_OUTPUT,
+            "{what}: {}",
+            out.output.len()
+        );
+        assert!(
+            out.output.len() > MAX_OUTPUT - 3,
+            "{what}: {}",
+            out.output.len()
+        );
+        assert!(long.ends_with(&out.output) && !out.output.contains('\u{FFFD}'));
+    };
+    check(
+        &h.core.bg_task_output(&id, "big").await.unwrap(),
+        "a process that does not know the task",
+    );
+    let live = agent.lock().proc.take();
+    check(
+        &h.core.bg_task_output(&id, "big").await.unwrap(),
+        "no process",
+    );
+    // And over, with no process either: the file, as far back.
+    put(RunStatus::Done);
+    let out = h.core.bg_task_output(&id, "big").await.unwrap();
+    assert_eq!(out.source, "file");
+    assert!(out.output.len() > MAX_FINISHED_OUTPUT - 3 && out.truncated);
+    // Over, and nothing to read it from: nothing.
+    std::fs::remove_file(&file).unwrap();
+    assert_eq!(
+        h.core.bg_task_output(&id, "big").await.unwrap(),
+        crate::taskout::TaskOutput::none()
+    );
+    agent.lock().proc = live;
+    assert_eq!(
+        h.core.bg_task_output(&id, "big").await.unwrap(),
+        crate::taskout::TaskOutput::none(),
+        "the process does not know the task either"
+    );
+}
+
+#[tokio::test]
+async fn bg_task_output_of_a_task_that_is_over_falls_back_on_the_process_when_its_file_is_unreadable(
+) {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-output-over-process");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", true).await;
+    h.core.stop_bg_task(&id, &row.id).await.unwrap();
+    h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+    let agent = h.core.agent(&id).unwrap();
+    let file = row.output_file.clone().unwrap();
+    let output = || h.core.bg_task_output(&id, &row.id);
+    // Over, with its file: the file, to its last line.
+    let out = output().await.unwrap();
+    assert_eq!(out.source, "file");
+    assert!(out.output.ends_with("\n[killed]\n"), "{:?}", out.output);
+    let whole = out.output.clone();
+    // Its file refused (a share of another machine), or not told, or gone: the process has it.
+    let set = |file: Option<&str>| {
+        agent.lock().meta.plan.as_mut().unwrap().bg_tasks[0].output_file = file.map(str::to_string);
+    };
+    for (told, why) in [
+        (
+            Some(r"\\nonexistent.invalid\share\tasks\x.output".to_string()),
+            "a share",
+        ),
+        (None, "no file told"),
+        (
+            Some(file.replace(&format!("{}.output", row.id), "gone.output")),
+            "another name",
+        ),
+    ] {
+        set(told.as_deref());
+        let out = output().await.unwrap();
+        assert_eq!(out.source, "process", "{why}");
+        assert_eq!(out.output, whole, "{why}");
+    }
+    // The file back: the file again.
+    set(Some(&file));
+    assert_eq!(output().await.unwrap().source, "file");
+    // Its file gone, and no process to ask: nothing.
+    std::fs::remove_file(&file).unwrap();
+    let live = agent.lock().proc.take();
+    assert_eq!(output().await.unwrap(), crate::taskout::TaskOutput::none());
+    agent.lock().proc = live;
+    assert_eq!(output().await.unwrap().source, "process");
+}
+
+#[tokio::test]
+async fn bg_task_output_never_reads_a_file_of_another_machine() {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-output-unc");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    // A process that lives and knows none of these tasks.
+    h.turn(&id, "bonjour").await;
+    let agent = h.core.agent(&id).unwrap();
+    let put = |file: &str, status: RunStatus| {
+        let mut row = bg_row_as("b1", None, status);
+        row.output_file = Some(file.to_string());
+        agent.lock().meta.plan = Some(crate::plan::PlanState {
+            bg_tasks: vec![row],
+            ..Default::default()
+        });
+    };
+    // A host that does not exist: a system that would look for it waits for its answer. The paths
+    // are refused as the frames said them, without touching the disk, the network or the process
+    // when it has no answer: nothing to wait for.
+    let refused = [
+        r"\\nonexistent.invalid\share\tasks\b1.output",
+        "//nonexistent.invalid/share/tasks/b1.output",
+        r"\/nonexistent.invalid/share/tasks/b1.output",
+        r"\\?\UNC\nonexistent.invalid\share\tasks\b1.output",
+        r"\\?\C:\nonexistent\tasks\b1.output",
+        r"\\.\pipe\tasks\b1.output",
+    ];
+    for status in [RunStatus::Running, RunStatus::Done] {
+        for file in refused {
+            put(file, status);
+            let out = h.core.bg_task_output(&id, "b1").await.unwrap();
+            assert_eq!(
+                out,
+                crate::taskout::TaskOutput::none(),
+                "{file} ({status:?})"
+            );
+        }
+    }
+    // A real file of this machine, told in a form that is refused: were it read, it would be
+    // found (a verbatim path on Windows, a path with two slashes elsewhere), and a host that does
+    // not exist would not tell. Told plainly, it is read.
+    let dir = h.dir.join("tasks");
+    std::fs::create_dir_all(&dir).unwrap();
+    let real = dir.join("b1.output").to_string_lossy().to_string();
+    std::fs::write(&real, "local\n").unwrap();
+    let doubled = if cfg!(windows) {
+        format!(r"\\?\{real}")
+    } else {
+        format!("/{real}")
+    };
+    for status in [RunStatus::Running, RunStatus::Done] {
+        put(&real, status);
+        let out = h.core.bg_task_output(&id, "b1").await.unwrap();
+        assert_eq!(
+            (out.source.as_str(), out.output.as_str()),
+            ("file", "local\n")
+        );
+        put(&doubled, status);
+        let out = h.core.bg_task_output(&id, "b1").await.unwrap();
+        assert_eq!(
+            out,
+            crate::taskout::TaskOutput::none(),
+            "{doubled} ({status:?})"
+        );
+    }
+    // With nothing to ask either: at once.
+    let live = agent.lock().proc.take();
+    let started = std::time::Instant::now();
+    for status in [RunStatus::Running, RunStatus::Done] {
+        for file in refused {
+            put(file, status);
+            let out = h.core.bg_task_output(&id, "b1").await.unwrap();
+            assert_eq!(out.source, "none", "{file} ({status:?})");
+        }
+    }
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "read {:?}",
+        started.elapsed()
+    );
+    agent.lock().proc = live;
+}
+
+#[tokio::test]
+async fn a_command_sent_to_the_background_from_the_foreground_is_listed_then_and_can_be_stopped() {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-foreground-flip");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande premier plan 60s".into(), vec![])
+        .await
+        .unwrap();
+    // The agent waits for it: the turn goes on, nothing is listed.
+    h.wait("the command's call", |h| {
+        h.items(&id)
+            .iter()
+            .any(|i| i["kind"] == "tool" && i["name"] == "Bash")
+    })
+    .await;
+    assert!(h.bg_tasks(&id).is_empty());
+    let call = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["name"] == "Bash")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Sent to the background, as Ctrl+B does (the control request of the same name).
+    let proc = h.core.agent(&id).unwrap().lock().proc.clone().unwrap();
+    proc.control(
+        json!({"subtype": "background_tasks", "tool_use_id": call}),
+        Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+    let row = h.bg_task(&id, "Foreground loop", true).await;
+    assert_eq!(row.status, RunStatus::Running);
+    assert_eq!(row.call.as_deref(), Some(call.as_str()));
+    assert!(row.command.as_deref().is_some_and(|c| c.contains("fg")));
+    h.core.stop_bg_task(&id, &row.id).await.unwrap();
+    h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+}
+
+#[tokio::test]
+async fn a_background_command_keeps_a_restart_of_the_agent_from_killing_it() {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-restart-refused");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", true).await;
+    h.wait("the turn over", |h| !h.agent(&id).status.is_active())
+        .await;
+    let refused = h.core.restart_process(&id).await.unwrap_err();
+    assert!(refused.to_string().contains("travaille"), "{refused:#}");
+    h.core.stop_bg_task(&id, &row.id).await.unwrap();
+    h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+}
+
 #[tokio::test]
 async fn a_message_to_a_subagent_goes_to_its_agent_which_is_asked_to_pass_it_on() {
     let h = harness("esc13-message-subagent");
@@ -2000,6 +2743,40 @@ async fn stopping_a_warmed_agent_that_never_ran_a_turn_is_silent() {
         "{:?}",
         h.error_notices(&id)
     );
+}
+
+#[tokio::test]
+async fn an_agent_with_a_command_running_in_the_background_is_not_idle_stopped() {
+    use crate::plan::RunStatus;
+    let h = harness("esc14-idle-background");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "commande de fond 60s".into(), vec![])
+        .await
+        .unwrap();
+    let row = h.bg_task(&id, "Ticker", false).await;
+    assert_eq!(row.status, RunStatus::Running);
+    // The turn is over, the command is not: it lives in the agent's process.
+    h.wait("its turn over", |h| {
+        h.agent(&id).status == AgentStatus::Done
+    })
+    .await;
+    h.core.agent(&id).unwrap().lock().meta.last_activity = 0;
+    h.core.stop_idle_processes();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert!(h.alive(&id), "a command in the background is not idle");
+
+    // Once it is over, nothing is left to keep the process for.
+    h.core.stop_bg_task(&id, &row.id).await.unwrap();
+    h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+    // (Claude Code opens a turn to tell the agent: the stop waits for it to be over.)
+    h.wait("idle stop", |h| {
+        h.core.agent(&id).unwrap().lock().meta.last_activity = 0;
+        h.core.stop_idle_processes();
+        !h.alive(&id)
+    })
+    .await;
 }
 
 #[tokio::test]

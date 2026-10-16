@@ -2,6 +2,7 @@
 // whole of it here, so that a zone left out fails to compile too.
 import { defineCatalog } from '../types';
 import accounts from './accounts';
+import bgtasks from './bgtasks';
 import board from './board';
 import boardSettings from './boardSettings';
 import branches from './branches';
@@ -43,4 +44,5 @@ export const en = defineCatalog({
   branches,
   plan,
   subagents,
+  bgtasks,
 });

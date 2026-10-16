@@ -408,7 +408,7 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | le pilote auto est en pause jusqu’à 14:30 | the autopilot is paused until 14:30 | refus d’un outil du serveur MCP : « 2026-10-12 14:30 » un autre jour (une heure ou une date, pas une durée) |
 | le maximum de tickets en parallèle / d’agents qui travaillent en même temps | the most tickets in parallel / agents working at once | réglage « En parallèle » → “In parallel” |
 | Claude et les agents peuvent piloter Escouade | Claude and the agents can drive Escouade | l’interrupteur du groupe « Escouade dans Claude » → “Escouade in Claude” (onglet « Claude Code ») : Claude hors d’Escouade et les agents d’Escouade (« Claude peut piloter Escouade » → “Claude can drive Escouade” jusqu’à la 1.7) |
-| Outils d’Escouade au prochain démarrage | Escouade’s tools at the next start | bandeau d’un agent dont le process a démarré sans les outils d’Escouade ; « Relancer » → “Restart” ; « 2 agents déjà lancés auront les outils au prochain démarrage de leur process » → “2 agents already running get the tools the next time their process starts” |
+| Outils d’Escouade au prochain démarrage | Escouade’s tools at the next start | bandeau d’un agent dont le process a démarré sans les outils d’Escouade ; « Relancer » → “Restart” (grisé tant que l’agent travaille ou qu’une tâche de fond tourne : la phrase dit alors qu’il pourra être relancé à la fin de ce qu’il fait, ou qu’il faut d’abord arrêter ses tâches de fond depuis leur vue, « Arrêter » → “Stop”) ; « 2 agents déjà lancés auront les outils au prochain démarrage de leur process » → “2 agents already running get the tools the next time their process starts” |
 | Déclaré dans Claude · compte Principal, compte Pro | Declared in Claude · Main account, Pro account | l’état du serveur MCP dans la config de Claude Code de chaque compte actif ; « Pas déclaré pour le compte Pro : … » → “Not declared for the Pro account: …” |
 | Activité MCP | MCP activity | le journal des appels au serveur ; résultat « Fait / Refusé / Erreur » → “Done / Refused / Error” |
 | Créé par <auteur> via Escouade | Created by <author> through Escouade | dernière ligne de la description d’un ticket créé ou découpé par le serveur MCP |
@@ -484,3 +484,31 @@ La liste sous la carte d’un agent et la conversation de chaque sous-agent (`su
 | Ouvrir sa conversation | Open its conversation | le bouton au-dessus d’une demande d’un sous-agent, et le bouton ↗ de la ligne de son appel (« Ouvrir la conversation du sous-agent … » → “Open the conversation of the subagent …”) |
 | Ouvrir la conversation d’un sous-agent | Open the conversation of a subagent | le bouton de la pile de points du bandeau « Plan » quand plusieurs sous-agents tournent (il ouvre un menu pour choisir lequel) ; avec un seul, il porte le nom de ce sous-agent (« Ouvrir la conversation du sous-agent … ») |
 | Demande du sous-agent « nom » | Request of the subagent “name” | la ligne au-dessus d’une question ou d’une autorisation qu’un sous-agent a posée |
+
+## B — tâches de fond (ESC-14)
+
+La liste sous la carte d’un agent, la puce de sa carte et la vue de chaque tâche que Claude Code lance en arrière-plan (`bgtasks`). Les titres, commandes, phases, résumés et la sortie des tâches sont les mots de l’agent et de Claude Code : jamais traduits. « tâche de fond » (“background task”) est déjà dans la section L8 ; elle désigne ici toute tâche de la liste : commande, surveillance, workflow, agent distant, coéquipier (les sous-agents ont leur propre liste, voir S).
+
+| Français | Anglais | Note |
+|---|---|---|
+| Tâches de fond de <agent> | Background tasks of <agent> | le groupe sous la carte d’un agent, après ses sous-agents : « Tâches de fond de agent-2 » → “Background tasks of agent-2” (son nom pour un lecteur d’écran ; le titre visible est « Tâches de fond » → “Background tasks”) |
+| N en fond | N in background | la puce de la carte d’un agent qui a des tâches en cours ; en entier pour un lecteur d’écran : « 2 tâches de fond en cours » → “2 background tasks running” |
+| N en cours / N finies | N running / N finished | les comptes du groupe ; « 3 tâches finies » → “3 finished tasks” (« finies », au féminin, comme les tâches) |
+| N autres en cours / N de plus / Réduire | N more running / N more / Show fewer | ce qui reste d’une liste de tâches (5 en cours, 10 finies), et le bouton qui la replie |
+| Commande en fond | Background command | une commande lancée en arrière-plan (`Bash` avec `run_in_background`) |
+| Surveillance | Monitor | l’outil `Monitor` de Claude Code, qui suit une sortie et prévient l’agent |
+| Workflow | Workflow | un workflow de Claude Code (même mot dans les deux langues) |
+| Agent distant | Remote agent | une tâche confiée à un agent qui tourne ailleurs |
+| Coéquipier | Teammate | un coéquipier du même process |
+| En cours / Terminée / En échec / Arrêtée / Interrompue | Running / Done / Failed / Stopped / Interrupted | l’état d’une tâche, au féminin (« Interrompue » : le process qui la faisait tourner n’est plus là) ; ce sont les mêmes états que ceux d’un sous-agent, accordés avec « tâche » |
+| code 3 | code 3 | le code de sortie d’une commande, après son état : « En échec (code 3) » → “Failed (code 3)” ; « Code de sortie » → “Exit code” |
+| Lancée par <sous-agent> | Launched by <subagent> | le sous-agent à qui appartient la tâche, si la liste du plan le connaît encore |
+| Phase en cours | Current phase | la phase et l’agent d’un workflow qui tourne |
+| Commande / Description | Command / Description | le bloc de la vue d’une tâche : sa ligne de commande, ou à défaut la description que l’outil lui a donnée ; « Voir toute la commande » → “Show the whole command” |
+| Résumé | Summary | le dernier mot de Claude Code sur une tâche finie |
+| Sortie | Output | ce que la commande ou la surveillance écrit : la fin, suivie en direct, en lecture seule |
+| Suivre la fin | Follow the end | le bouton qui ramène la sortie à sa fin quand le lecteur est remonté dedans |
+| Début tronqué : seule la fin de la sortie est montrée | Start cut off: only the end of the output is shown | la sortie lue est la fin de la sortie (8 Kio au plus pendant que la tâche tourne, 256 Kio une fois finie) : aucune taille n’est dite |
+| lue dans le fichier de sortie | read from the output file | la source de la sortie quand le process n’est plus là, ou en vue Claude Code |
+| Pas de sortie à suivre pour ce type de tâche | No output to follow for this type of task | un workflow, un agent distant ou un coéquipier n’écrivent pas dans une sortie à eux |
+| Arrêter (une tâche) | Stop | arrête cette tâche seule (`stop_task`) ; l’infobulle dit que Claude Code l’annonce ensuite à l’agent, ce qui lui coûte un tour ; absent en vue Claude Code, où la tâche s’arrête « depuis l’interface de Claude Code » (“from Claude Code’s own interface”) |

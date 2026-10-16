@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -1460,5 +1460,191 @@ describe('the window’s own messages in English', () => {
     app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt: 1 };
     emit({ type: 'terminalExit', id: 't1', code: 3 });
     expect(app.toasts.at(-1)).toMatchObject({ text: '“Front” stopped with an error (code 3)', kind: 'error' });
+  });
+});
+
+describe('the view of a background task (ESC-14)', () => {
+  const planOf = (...ids: string[]) =>
+    ({
+      source: null,
+      tasks: [],
+      agents: [{ id: 's1', title: 'Chercher', status: 'running', background: true, tools: 0, startedAt: 1, taskId: 'ta' }],
+      launched: 1,
+      workflows: [],
+      bgTasks: ids.map((id) => ({ id, kind: 'command', title: id, status: 'running', startedAt: 1 })),
+    }) as never;
+
+  it('fills the place of the agent’s conversation, and selecting the agent gives it back', async () => {
+    await start({ agents: [agent({ plan: planOf('b1') }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })] });
+    app.openTask('a1', 'b1');
+    expect(app.taskView.a1).toBe('b1');
+    expect(app.agent?.id).toBe('a1');
+    app.selectAgent('a1');
+    expect(app.taskView.a1).toBeNull();
+  });
+
+  it('selects the agent it belongs to', async () => {
+    await start({ agents: [agent({ plan: planOf('b1') }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })] });
+    app.selectAgent('a2');
+    app.openTask('a1', 'b1');
+    expect(app.agent?.id).toBe('a1');
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+  });
+
+  it('opens nothing for an agent that does not exist', async () => {
+    await start();
+    app.openTask('nope', 'b1');
+    expect(app.taskView.nope).toBeUndefined();
+  });
+
+  it('is exclusive with the conversation of a subagent, whichever is opened last', async () => {
+    await start({ agents: [agent({ plan: planOf('b1') })] });
+    app.openSubagent('a1', 's1');
+    expect(app.subView.a1).toBe('s1');
+    app.openTask('a1', 'b1');
+    expect(app.taskView.a1).toBe('b1');
+    expect(app.subView.a1).toBeNull();
+    app.openSubagent('a1', 's1');
+    expect(app.subView.a1).toBe('s1');
+    expect(app.taskView.a1).toBeNull();
+  });
+
+  it('goes from one task to another, and leaves with closeTask', async () => {
+    await start({ agents: [agent({ plan: planOf('b1', 'b2') })] });
+    app.openTask('a1', 'b1');
+    app.openTask('a1', 'b2');
+    expect(app.taskView.a1).toBe('b2');
+    app.closeTask('a1');
+    expect(app.taskView.a1).toBeNull();
+  });
+
+  it('puts the focus back where the first view was opened from, once, whichever view it went through', async () => {
+    await start({ agents: [agent({ plan: planOf('b1', 'b2') })] });
+    const opener = Object.assign(document.createElement('button'), { className: 'opener' });
+    document.body.append(opener);
+    opener.focus();
+    app.openTask('a1', 'b1');
+    expect(app.subFocus.from?.el).toBe(opener);
+    // A subagent opened from the task’s view or the sidebar does not take the place of the first opener.
+    const other = Object.assign(document.createElement('button'), { className: 'opener' });
+    document.body.append(other);
+    other.focus();
+    app.openSubagent('a1', 's1');
+    expect(app.subFocus.from?.el).toBe(opener);
+    app.openTask('a1', 'b2');
+    expect(app.subFocus.from?.el).toBe(opener);
+    app.closeTask('a1');
+    expect(app.takeFocusBack('a1')?.el).toBe(opener);
+    expect(app.takeFocusBack('a1')).toBeNull();
+    document.querySelectorAll('.opener').forEach((e) => e.remove());
+  });
+
+  it('moves no focus when the agent was chosen again', async () => {
+    await start({ agents: [agent({ plan: planOf('b1') })] });
+    app.openTask('a1', 'b1');
+    app.selectAgent('a1');
+    expect(app.takeFocusBack('a1')).toBeNull();
+  });
+
+  it('closes when the task is no longer in the plan the agent is sent with', async () => {
+    const { emit } = await start({ agents: [agent({ plan: planOf('b1', 'b2') })] });
+    app.openTask('a1', 'b1');
+    emit({ type: 'agent', agent: agent({ plan: planOf('b1') }) });
+    expect(app.taskView.a1).toBe('b1');
+    // A new session: its plan starts again.
+    emit({ type: 'agent', agent: agent({ plan: planOf('b2') }) });
+    expect(app.taskView.a1).toBeNull();
+  });
+
+  it('closes when the agent has no plan any more, and leaves the others’ views alone', async () => {
+    const { emit } = await start({
+      agents: [agent({ plan: planOf('b1') }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: planOf('b1') })],
+    });
+    app.openTask('a1', 'b1');
+    app.openTask('a2', 'b1');
+    emit({ type: 'agent', agent: agent({ plan: undefined }) });
+    expect(app.taskView.a1).toBeNull();
+    expect(app.taskView.a2).toBe('b1');
+  });
+
+  it('finds a workflow in the plan as well as a task', async () => {
+    const { emit } = await start({ agents: [agent({ plan: planOf() })] });
+    const withFlow = {
+      ...(planOf() as object),
+      workflows: [{ id: 'w1', title: 'Revue', status: 'running', tools: 0, tokens: 0, startedAt: 1 }],
+    };
+    app.openTask('a1', 'w1');
+    emit({ type: 'agent', agent: agent({ plan: withFlow as never }) });
+    expect(app.taskView.a1).toBe('w1');
+  });
+
+  describe('the memory of where the focus goes back to', () => {
+    const buttons: HTMLElement[] = [];
+    /** A button that has the focus now, as the opener of a view. */
+    const focused = (className: string) => {
+      const el = Object.assign(document.createElement('button'), { className });
+      document.body.append(el);
+      buttons.push(el);
+      el.focus();
+      return el;
+    };
+    // The views of the tests before are not open any more.
+    beforeEach(() => resetApp());
+    afterEach(() => buttons.splice(0).forEach((e) => e.remove()));
+    const two = () => ({
+      agents: [agent({ plan: planOf('b1') }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: planOf('b1') })],
+    });
+
+    it('is not emptied by the task that went from another agent’s plan, whose view is not on screen', async () => {
+      const { emit } = await start(two());
+      // The task of a2 is open, then the one of a1, which is on screen now (selecting it dropped the memory of a2).
+      app.openTask('a2', 'b1');
+      const opener = focused('opener-a1');
+      app.openTask('a1', 'b1');
+      expect(app.subFocus.from).toMatchObject({ agentId: 'a1', el: opener });
+      // a2 starts a new session: its task is gone, and its view closes, out of sight.
+      emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: planOf('b2') }) });
+      expect(app.taskView.a2).toBeNull();
+      expect(app.taskView.a1).toBe('b1');
+      expect(app.subFocus.from).toMatchObject({ agentId: 'a1', el: opener });
+      expect(app.subFocus.back).toBeNull();
+      // a1's view goes back to the opener, as it always did.
+      app.closeTask('a1');
+      expect(app.takeFocusBack('a1')?.el).toBe(opener);
+    });
+
+    it('is not emptied by the end of the conversation of another agent’s subagent either', async () => {
+      await start(two());
+      app.openSubagent('a2', 's1');
+      const opener = focused('opener-a1');
+      app.openTask('a1', 'b1');
+      app.closeSubagent('a2');
+      expect(app.subView.a2).toBeNull();
+      expect(app.subFocus.from).toMatchObject({ agentId: 'a1', el: opener });
+    });
+
+    it('keeps the focus to give back to the agent whose view was left, when its task is gone', async () => {
+      const { emit } = await start(two());
+      const opener = focused('opener-a1');
+      app.openTask('a1', 'b1');
+      expect(app.subFocus.from).toMatchObject({ agentId: 'a1', el: opener });
+      // Its task is gone from its plan: the view closes, and the focus goes back to where it was opened from, once.
+      emit({ type: 'agent', agent: agent({ plan: planOf('b2') }) });
+      expect(app.taskView.a1).toBeNull();
+      expect(app.subFocus.from).toBeNull();
+      expect(app.subFocus.back).toMatchObject({ agentId: 'a1', el: opener });
+      expect(app.takeFocusBack('a1')?.el).toBe(opener);
+      expect(app.takeFocusBack('a1')).toBeNull();
+    });
+
+    it('is emptied when the view that is left was the one the memory is of', async () => {
+      await start(two());
+      focused('opener-a1');
+      app.openTask('a1', 'b1');
+      app.closeTask('a1');
+      // Closed again with nothing to give back: the memory is dropped, not kept for later.
+      app.closeTask('a1');
+      expect(app.subFocus).toEqual({ from: null, back: null });
+    });
   });
 });

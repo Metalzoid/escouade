@@ -1,6 +1,7 @@
 // The French catalog, source of the keys: `t` accepts its paths, the English catalog must have the same.
 // A zone belongs to one part of the interface (one task at a time writes it); `common` and `format` are shared.
 import accounts from './accounts';
+import bgtasks from './bgtasks';
 import board from './board';
 import boardSettings from './boardSettings';
 import branches from './branches';
@@ -42,6 +43,7 @@ export const fr = {
   branches,
   plan,
   subagents,
+  bgtasks,
 } as const;
 
 export type Catalog = typeof fr;

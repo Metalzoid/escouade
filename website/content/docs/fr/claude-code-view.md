@@ -29,6 +29,7 @@ Grâce à cela, un agent en vue Claude Code garde :
 - **la recherche** (`Ctrl+K`, voir [suivre ses agents](overview#rechercher-dans-les-conversations)) ;
 - **le bandeau « Plan »** (voir [l’avancée d’un plan](plan)) ;
 - **ses sous-agents** : leur liste dans la barre latérale et, en lecture seule, leur conversation (voir [plus bas](#les-sous-agents)) ;
+- **ses tâches de fond** : leur liste dans la barre latérale et leur vue, sans « Arrêter » (voir [plus bas](#les-taches-de-fond)) ;
 - **ses statistiques et son coût** (voir [les statistiques](stats)). L’interface ne donne pas le coût de chaque tour : Escouade l’estime d’après les tarifs publics.
 
 Quand l’agent attend une réponse, c’est dans le terminal que tu la donnes : la [vue d’ensemble](overview) le rappelle (« Attend ta réponse dans l’interface de Claude Code ») et son bouton « Répondre » ouvre l’agent.
@@ -40,6 +41,12 @@ Les sous-agents d’un agent en vue Claude Code sont listés comme ailleurs, sou
 Cette conversation est en **lecture seule**. Escouade la lit dans le transcript que Claude Code tient pour ce sous-agent, à côté de celui de l’agent : elle est lue à l’ouverture de la vue, relue toutes les 2 secondes tant que le sous-agent tourne, puis une dernière fois quand il finit. La vue le dit en haut (« Lecture seule : son transcript, tel que Claude Code l’écrit. On agit sur ce sous-agent dans l’interface de Claude Code. »). Il n’y a ni « Arrêter » ni « Lui écrire » : pour arrêter un sous-agent ou lui écrire, passe par l’interface de Claude Code, dans le terminal. Si Escouade ne trouve pas ce transcript (Claude Code ne l’a pas encore écrit, ou le range ailleurs), la vue dit « Pas encore de message de ce sous-agent. »
 
 Dans cette vue, aucun signal ne dit à Escouade qu’un sous-agent en arrière-plan a fini. Escouade le déduit de ce que Claude Code rejoue à l’agent dans son transcript : le rapport que le sous-agent lui rend, ou la notification de sa fin. Tant que ce message n’est pas arrivé, la ligne du sous-agent reste « En cours ». Son rapport est celui qu’il a rendu à l’agent.
+
+## Les tâches de fond
+
+Les tâches que Claude Code lance en arrière-plan pour un agent en vue Claude Code (commandes, surveillances…) sont listées comme ailleurs, sous sa carte dans la barre latérale, avec la puce « N en fond » sur la carte (voir [les tâches de fond](plan#les-taches-de-fond)). Un clic sur l’une d’elles ouvre sa vue à la place du terminal ; le fil d’Ariane, ou `Échap`, ramène à l’agent.
+
+Dans cette vue, aucun signal ne les annonce à Escouade. Elle lit le début d’une tâche dans le résultat de l’outil que Claude Code écrit dans le transcript de l’agent, avec la commande de l’appel, et sa fin dans la notification qu’il y rejoue. Tant que cette notification n’est pas arrivée, la ligne de la tâche reste « En cours », et l’heure de départ n’est pas exacte à la seconde. Il n’y a pas de « Arrêter » : la vue dit « Cette tâche s’arrête depuis l’interface de Claude Code. », et tu arrêtes la tâche dans le terminal. La sortie se lit dans le fichier de sortie que Claude Code écrit pour la tâche (la vue dit « lue dans le fichier de sortie »), puisqu’aucune requête ne peut la demander à Claude Code.
 
 ## Écrire à un agent dans cette vue
 

@@ -1599,6 +1599,7 @@ describe('Conversation plan banner', () => {
     agents: [],
     launched: 0,
     workflows: [],
+    bgTasks: [],
     ...over,
   });
 
@@ -1792,35 +1793,132 @@ describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
     const region = banner()!;
     expect(region).not.toBeNull();
     expect(region).toHaveTextContent(
-      'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste ; une commande lancée en arrière-plan s’arrête.',
+      'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
     );
+    // At rest with nothing in the background, nothing stops it: neither phrase of the wait is there.
+    expect(region).not.toHaveTextContent('Il pourra être relancé');
+    expect(region).not.toHaveTextContent('tâches de fond');
     await userEvent.click(within(region).getByRole('button', { name: 'Relancer' }));
     expect(b.called('restart_agent_process').map((c) => c.args)).toEqual([{ id: 'en1' }]);
   });
 
-  it('waits for the end of what it does before it can be restarted: its turn, or a subagent in the background', () => {
+  const BUSY = 'Il pourra être relancé quand il aura fini ce qu’il fait.';
+  const STOP_FIRST =
+    'Il a encore des tâches de fond (commande, surveillance, sous-agent, workflow) : le relancer les arrêterait. Une commande ou un serveur de dev ne finit pas seul : arrête-la d’abord, depuis sa vue (« Arrêter »), ou attends qu’elle ait fini.';
+  const bgTask = (over: Record<string, unknown> = {}) =>
+    ({ id: 'bg1', kind: 'command', title: 'Serveur de dev', status: 'running', startedAt: 1, ...over }) as never;
+  const planWith = (over: Record<string, unknown>) =>
+    ({ source: null, tasks: [], launched: 0, agents: [], workflows: [], bgTasks: [], ...over }) as never;
+  const sub = (over: Record<string, unknown> = {}) =>
+    ({ id: 'c1', title: 'Relire', status: 'running', background: true, tools: 0, startedAt: 1, ...over }) as never;
+  const flow = (over: Record<string, unknown> = {}) =>
+    ({ id: 'w1', name: 'review', title: 'Revue', status: 'running', tools: 0, tokens: 0, startedAt: 1, ...over }) as never;
+
+  /** Draws the conversation of `a` and gives its button, and the backend that answers a restart. */
+  function drawn(a: ReturnType<typeof agent>) {
+    resetApp({ projects: [project()], agents: [a] });
+    const backend = fakeBackend({ get_conversation: () => [], restart_agent_process: () => null });
+    const view = render(Conversation, { agent: a, project: project() });
+    return { ...view, backend, button: () => within(banner()!).getByRole('button', { name: 'Relancer' }) };
+  }
+
+  it('waits for the end of its turn before it can be restarted, or of its worktree’s setup', () => {
     setLang('fr');
-    const running = agent({ id: 'en2', status: 'running', escouadeNext: true });
-    const background = agent({
-      id: 'en5',
-      status: 'done',
-      escouadeNext: true,
-      plan: {
-        source: null,
-        tasks: [],
-        launched: 1,
-        workflows: [],
-        agents: [{ id: 'c1', title: 'Relire', status: 'running', background: true, tools: 0, startedAt: 1 } as never],
-      },
-    });
-    for (const a of [running, background]) {
-      resetApp({ projects: [project()], agents: [a] });
-      fakeBackend({ get_conversation: () => [] });
-      const { unmount } = render(Conversation, { agent: a, project: project() });
-      expect(within(banner()!).getByRole('button', { name: 'Relancer' })).toBeDisabled();
-      expect(banner()).toHaveTextContent('Il pourra être relancé quand il aura fini ce qu’il fait.');
+    for (const over of [
+      { status: 'running' as const },
+      { status: 'waiting' as const },
+      { status: 'idle' as const, setup: '1/2 · npm ci' },
+    ]) {
+      const { button, unmount } = drawn(agent({ id: 'en2', escouadeNext: true, ...over }));
+      expect(button()).toBeDisabled();
+      expect(banner()).toHaveTextContent(BUSY);
+      expect(banner()).not.toHaveTextContent('tâches de fond');
       unmount();
     }
+  });
+
+  it('keeps the wait for its turn when a task runs in the background as well: the turn ends first', () => {
+    setLang('fr');
+    const { button } = drawn(agent({ id: 'en6', status: 'running', escouadeNext: true, plan: planWith({ bgTasks: [bgTask()] }) }));
+    expect(button()).toBeDisabled();
+    expect(banner()).toHaveTextContent(BUSY);
+    expect(banner()).not.toHaveTextContent(STOP_FIRST);
+  });
+
+  it('refuses a restart while a task runs in the background, and says to stop it first (a dev server never ends by itself)', async () => {
+    setLang('fr');
+    const a = agent({ id: 'en7', status: 'done', escouadeNext: true, plan: planWith({ bgTasks: [bgTask()] }) });
+    const { button, backend } = drawn(a);
+    expect(button()).toBeDisabled();
+    expect(banner()).toHaveTextContent(STOP_FIRST);
+    expect(banner()).not.toHaveTextContent(BUSY);
+    await userEvent.click(button());
+    expect(backend.called('restart_agent_process')).toHaveLength(0);
+  });
+
+  it('counts a monitor or a remote agent among the tasks, as the backend does', () => {
+    setLang('fr');
+    for (const kind of ['monitor', 'remote', 'teammate']) {
+      const { button, unmount } = drawn(
+        agent({ id: 'en8', status: 'done', escouadeNext: true, plan: planWith({ bgTasks: [bgTask({ kind })] }) }),
+      );
+      expect(button()).toBeDisabled();
+      expect(banner()).toHaveTextContent(STOP_FIRST);
+      unmount();
+    }
+  });
+
+  it('can be restarted again once that task is over (finished, failed or stopped)', async () => {
+    setLang('fr');
+    const a = agent({
+      id: 'en9',
+      status: 'done',
+      escouadeNext: true,
+      plan: planWith({ bgTasks: [bgTask()] }),
+    });
+    const { button, rerender } = drawn(a);
+    expect(button()).toBeDisabled();
+    for (const status of ['done', 'failed', 'stopped', 'interrupted'] as const) {
+      await rerender({ agent: { ...a, plan: planWith({ bgTasks: [bgTask({ status, endedAt: 5 })] }) }, project: project() });
+      expect(button()).toBeEnabled();
+      expect(banner()).not.toHaveTextContent(STOP_FIRST);
+      expect(banner()).not.toHaveTextContent(BUSY);
+    }
+  });
+
+  it('refuses a restart while a workflow or a subagent runs alone in the background, with the same words', () => {
+    setLang('fr');
+    for (const plan of [planWith({ workflows: [flow()] }), planWith({ agents: [sub()], launched: 1 })]) {
+      const { button, unmount } = drawn(agent({ id: 'en5', status: 'done', escouadeNext: true, plan }));
+      expect(button()).toBeDisabled();
+      expect(banner()).toHaveTextContent(STOP_FIRST);
+      expect(banner()).not.toHaveTextContent(BUSY);
+      unmount();
+    }
+  });
+
+  it('is not held back by a subagent or a workflow that is over', () => {
+    setLang('fr');
+    const plan = planWith({
+      agents: [sub({ status: 'done' })],
+      workflows: [flow({ status: 'failed' })],
+      launched: 1,
+    });
+    const { button } = drawn(agent({ id: 'en10', status: 'done', escouadeNext: true, plan }));
+    expect(button()).toBeEnabled();
+  });
+
+  it('is not held back by a plan from an older backend, which has no list of tasks', () => {
+    setLang('fr');
+    const { button } = drawn(
+      agent({
+        id: 'en11',
+        status: 'done',
+        escouadeNext: true,
+        plan: { source: null, tasks: [], launched: 0, agents: [], workflows: [] } as never,
+      }),
+    );
+    expect(button()).toBeEnabled();
   });
 
   it('in the Claude Code view, starts its interface again (its session resumed)', async () => {
@@ -1865,10 +1963,29 @@ describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
     render(Conversation, { agent: a, project: project() });
     const region = screen.getByRole('region', { name: 'Escouade’s tools at the next start' });
     expect(region).toHaveTextContent(
-      'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays; a command running in the background stops.',
+      'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays.',
     );
     expect(within(region).getByRole('button', { name: 'Restart' })).toBeEnabled();
     setLang('fr');
+  });
+
+  it('is written in English when a task runs in the background, and when a turn does', () => {
+    setLang('en');
+    try {
+      const { unmount } = drawn(agent({ id: 'en12', status: 'done', escouadeNext: true, plan: planWith({ bgTasks: [bgTask()] }) }));
+      const region = screen.getByRole('region', { name: 'Escouade’s tools at the next start' });
+      expect(within(region).getByRole('button', { name: 'Restart' })).toBeDisabled();
+      expect(region).toHaveTextContent(
+        'It still has background tasks (command, monitor, subagent, workflow): restarting it would stop them. A command or a dev server doesn’t end by itself: stop it first, from its view (“Stop”), or wait until it has finished.',
+      );
+      unmount();
+      drawn(agent({ id: 'en13', status: 'running', escouadeNext: true }));
+      expect(screen.getByRole('region', { name: 'Escouade’s tools at the next start' })).toHaveTextContent(
+        'It can be restarted once it is done with what it is doing.',
+      );
+    } finally {
+      setLang('fr');
+    }
   });
 });
 
@@ -1976,6 +2093,7 @@ describe('Conversation and the subagents of its agent', () => {
         agents: subs,
         launched: subs.length,
         workflows: [],
+        bgTasks: [],
       });
       const ANY = 'Ouvrir la conversation d’un sous-agent';
       const withPlan = (id: string, ...subs: ReturnType<typeof running>[]) => {

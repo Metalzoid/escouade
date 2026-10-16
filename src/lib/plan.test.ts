@@ -24,6 +24,7 @@ const plan = (tasks: PlanTask[], over: Partial<PlanState> = {}): PlanState => ({
   agents: [],
   launched: 0,
   workflows: [],
+  bgTasks: [],
   ...over,
 });
 const view = (tasks: PlanTask[], over: Partial<PlanState> = {}, a: Partial<Agent> = {}) => {

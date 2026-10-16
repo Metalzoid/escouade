@@ -415,6 +415,53 @@ describe('App layout', () => {
     expect(screen.getByRole('main')).toBeInTheDocument();
   });
 
+  describe('a background task’s view', () => {
+    const planWithTask = () =>
+      ({
+        source: null,
+        tasks: [],
+        agents: [{ id: 'c1', title: 'Chercher', status: 'running', background: true, tools: 0, startedAt: 1, taskId: 't1' }],
+        launched: 1,
+        workflows: [],
+        bgTasks: [{ id: 'b1', kind: 'command', title: 'Ticker', command: 'node ticker.js', status: 'running', startedAt: 1 }],
+      }) as never;
+
+    it('shows in place of its agent’s conversation, and the agent’s again from its breadcrumb', async () => {
+      start('', { agents: [agent({ plan: planWithTask() })] });
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      app.openTask('a1', 'b1');
+      const crumbs = await screen.findByRole('navigation', { name: 'Fil d’Ariane' });
+      expect(crumbs).toHaveTextContent(/refacto-auth\s*›\s*Ticker/);
+      expect(screen.getAllByRole('main')).toHaveLength(1);
+      await userEvent.click(within(crumbs).getByRole('button', { name: 'refacto-auth' }));
+      await expect.poll(() => screen.queryByRole('navigation', { name: 'Fil d’Ariane' })).toBeNull();
+      expect(screen.getByRole('main')).toBeInTheDocument();
+    });
+
+    it('is never at the same time as a subagent’s conversation: the last one opened is the one shown', async () => {
+      start('', { agents: [agent({ plan: planWithTask() })] });
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      app.openTask('a1', 'b1');
+      expect(await screen.findByRole('group', { name: 'Ticker' })).toBeInTheDocument();
+      app.openSubagent('a1', 'c1');
+      await expect.poll(() => screen.queryByRole('group', { name: 'Ticker' })).toBeNull();
+      expect(screen.getByRole('navigation', { name: 'Fil d’Ariane' })).toHaveTextContent(/refacto-auth\s*›\s*Chercher/);
+      app.openTask('a1', 'b1');
+      expect(await screen.findByRole('group', { name: 'Ticker' })).toBeInTheDocument();
+      expect(screen.getAllByRole('main')).toHaveLength(1);
+      expect(screen.getByRole('navigation', { name: 'Fil d’Ariane' })).toHaveTextContent(/refacto-auth\s*›\s*Ticker/);
+    });
+
+    it('goes when the agent is selected again, as a subagent’s does', async () => {
+      start('', { agents: [agent({ plan: planWithTask() })] });
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      app.openTask('a1', 'b1');
+      expect(await screen.findByRole('group', { name: 'Ticker' })).toBeInTheDocument();
+      app.selectAgent('a1');
+      await expect.poll(() => screen.queryByRole('group', { name: 'Ticker' })).toBeNull();
+    });
+  });
+
   it('opens the board settings from the board header', async () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();

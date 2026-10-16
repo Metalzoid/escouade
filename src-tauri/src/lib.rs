@@ -47,6 +47,7 @@ mod search;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
+mod taskout;
 mod telemetry;
 mod testlaunch;
 mod ticketimages;
@@ -312,6 +313,8 @@ pub fn run() {
             commands::clipboard_image,
             commands::interrupt,
             commands::stop_subagent,
+            commands::stop_bg_task,
+            commands::task_output,
             commands::subagent_transcript,
             commands::message_subagent,
             commands::answer_question,

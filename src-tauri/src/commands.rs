@@ -527,6 +527,24 @@ pub async fn stop_subagent(core: CoreState<'_>, id: String, call: String) -> Res
     core.stop_subagent(&id, &call).await.map_err(err)
 }
 
+/// « Arrêter » on a task Claude Code runs in the background for the agent `id` (a command, a
+/// monitor, a remote agent, a teammate: a `BgTask` of its plan; or a workflow): `stop_task`.
+#[tauri::command]
+pub async fn stop_bg_task(core: CoreState<'_>, id: String, task: String) -> Res<()> {
+    core.stop_bg_task(&id, &task).await.map_err(err)
+}
+
+/// The end of the output of a background task of the agent `id`: 8 KiB at most while it runs (its
+/// process's, else its output file's), up to 256 KiB of its output file once it is over.
+#[tauri::command]
+pub async fn task_output(
+    core: CoreState<'_>,
+    id: String,
+    task: String,
+) -> Res<crate::taskout::TaskOutput> {
+    core.bg_task_output(&id, &task).await.map_err(err)
+}
+
 /// The conversation of a subagent of the agent `id` in the Claude Code view (`call` launched it),
 /// read from its transcript: a file read, off the async workers. `cursor` is the one the read
 /// before gave: null back when its files did not change since.
@@ -1727,6 +1745,24 @@ mod tests {
         use crate::i18n::Lang::{En, Fr};
         assert_eq!(shell_not_found(En, "zsh"), "shell “zsh” not found");
         assert_eq!(shell_not_found(Fr, "zsh"), "shell « zsh » introuvable");
+    }
+
+    #[test]
+    fn the_commands_of_the_background_tasks_are_in_the_handler_the_window_calls() {
+        // A command that is written and not listed there is never reachable from the window.
+        let lib = include_str!("lib.rs");
+        let handler = lib
+            .split_once("generate_handler![")
+            .and_then(|(_, rest)| rest.split_once("])"))
+            .map(|(list, _)| list)
+            .expect("the handler list");
+        for name in ["stop_bg_task", "task_output"] {
+            assert_eq!(
+                handler.matches(&format!("commands::{name},")).count(),
+                1,
+                "{name}"
+            );
+        }
     }
 
     #[tokio::test]

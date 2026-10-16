@@ -52,6 +52,9 @@
 // own thread asks a permission (`can_use_tool` with its `agent_id`, request "req_subperm"); "sous-agent long" then runs
 // until a `stop_task` of its task ("fakelong-agent", logged to <log>.control.jsonl), "sous-agent fini" hands back its
 // report (`handback_report`) once the permission is answered.
+// "commande de fond 20s", "surveillance de fond 20s" and "commande premier plan 20s" run a command, a `Monitor` and a
+// command that goes to the background from the foreground, as Claude Code 2.1.301 does (ESC-14): see bgRun (the output
+// grows by a line every 200 ms, answers `get_task_output`, ends by itself after that long or by a `stop_task`).
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
 // launch… Ports reserved: <base>”), any agent answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
@@ -1331,10 +1334,226 @@ function startSession() {
     result();
   }
 
+  // ---------- "commande de fond", "surveillance de fond", "commande premier plan" ----------
+
+  // Tasks Claude Code runs for the agent, as 2.1.301 does it (measured, docs/PROTOCOL.md, ESC-14). "commande de fond 20s"
+  // runs a `Bash` command in the background ("Ticker": a line « tick N » every 200 ms for 20 s, 6 by default); in the
+  // order of a real run: its call, `background_tasks_changed` (the level, first), `task_started` (`local_bash`), the
+  // result (`backgroundTaskId`, « Output is being written to: <file> »), the end of the turn. It ends by itself
+  // (`task_updated`, `task_notification` with its words, the level, then a turn of Claude Code's own) or by a `stop_task`
+  // (killed, stopped, the level, the answer `{}`, a turn). "surveillance de fond" is a `Monitor` ("Watch loop output",
+  // lines « watch N », `taskId` in its result: also a `local_bash` task) and "commande premier plan" a command that
+  // runs in the foreground (`is_backgrounded: false`, no level, the turn waits) until the `background_tasks` request
+  // of its call sends it to the background (the level, `task_updated`, its result « manually backgrounded »). The
+  // output file (<log>.tasks/tasks/<task>.output) is written as the output grows, and `get_task_output` answers its end,
+  // 8 KiB at most, for a task running or over; for any other id, the error Claude Code gives.
+  const bgTasks = new Map();
+  let bgCount = 0;
+  const bgDir = () => path.join(`${logFile.replace(/\.jsonl$/, '')}.tasks`, 'tasks');
+  const sysOut = (o) => out({ type: 'system', session_id: sessionId, ...o });
+
+  // The level: every task in the background now (the subagent of "sous-agent long" too).
+  function bgLevel() {
+    const tasks = [...bgTasks.values()]
+      .filter((t) => t.background && !t.ended)
+      .map((t) => ({ task_id: t.id, run_id: `r-${t.id}`, task_type: 'local_bash', description: t.description }));
+    if (longAgent)
+      tasks.push({
+        task_id: longAgent.task,
+        run_id: `r-${longAgent.task}`,
+        task_type: 'local_agent',
+        subagent_type: 'Explore',
+        description: longAgent.description,
+      });
+    sysOut({ subtype: 'background_tasks_changed', tasks });
+  }
+
+  function bgAppend(t, text) {
+    t.content += text;
+    fs.appendFileSync(t.file, text);
+  }
+
+  function bgRun(kind, text) {
+    const monitor = kind === 'monitor';
+    const foreground = kind === 'foreground';
+    const n = ++bgCount;
+    const id = `${monitor ? 'fakemon' : foreground ? 'fakefg' : 'fakebg'}${n}`;
+    const call = `toolu_bg${n}_${++msg}`;
+    const description = monitor ? 'Watch loop output' : foreground ? 'Foreground loop' : 'Ticker';
+    const input = monitor
+      ? { command: 'for i in $(seq 1 6); do echo watch $i; sleep 3; done', description, timeout_ms: 60000 }
+      : foreground
+        ? { command: 'for i in $(seq 1 12); do echo fg $i; sleep 2; done; echo fgdone', description }
+        : { command: 'for i in $(seq 1 10); do echo tick $i; sleep 2; done', description, run_in_background: true };
+    const seconds = Number(/(\d+)s/.exec(text)?.[1] ?? 6);
+    fs.mkdirSync(bgDir(), { recursive: true });
+    const t = {
+      id,
+      call,
+      description,
+      monitor,
+      background: !foreground,
+      ended: false,
+      file: path.join(bgDir(), `${id}.output`),
+      content: '',
+      lines: 0,
+      word: monitor ? 'watch' : foreground ? 'fg' : 'tick',
+      until: Date.now() + seconds * 1000,
+    };
+    fs.writeFileSync(t.file, '');
+    bgTasks.set(id, t);
+    assistant({ type: 'tool_use', id: call, name: monitor ? 'Monitor' : 'Bash', input });
+    // The level comes before the task.
+    if (t.background) bgLevel();
+    sysOut({
+      subtype: 'task_started',
+      task_id: id,
+      run_id: `r-${id}`,
+      tool_use_id: call,
+      description,
+      is_backgrounded: t.background,
+      task_type: 'local_bash',
+    });
+    t.timer = setInterval(() => {
+      bgAppend(t, `${t.word} ${++t.lines}\n`);
+      if (Date.now() >= t.until) bgEnds(t);
+    }, 200);
+    if (foreground) return;
+    if (monitor) {
+      toolResult(
+        call,
+        `Monitor started (task ${id}, expires in 1m unless the source ends first; you get one notice at expiry — re-arm if you still need the watch). You will be notified on each event.`,
+        {
+          tool_use_result: { taskId: id, timeoutMs: 60000, persistent: false },
+        },
+      );
+    } else {
+      toolResult(
+        call,
+        `Command running in background with ID: ${id}. Output is being written to: ${t.file}. You will be notified when it completes. To check interim output, use Read.`,
+        {
+          tool_use_result: { stdout: '', stderr: '', interrupted: false, isImage: false, noOutputExpected: false, backgroundTaskId: id },
+        },
+      );
+    }
+    streamText('Lancé en arrière-plan.');
+    result();
+  }
+
+  // A command or a monitor ends by itself, with the exit code 0.
+  function bgEnds(t) {
+    if (t.ended) return;
+    clearInterval(t.timer);
+    t.ended = true;
+    bgAppend(t, '\n[exited with code 0]\n');
+    sysOut({ subtype: 'task_updated', task_id: t.id, run_id: `r-${t.id}`, patch: { status: 'completed', end_time: Date.now() } });
+    if (!t.background) {
+      // In the foreground: the agent was waiting for it, its result goes on with the turn.
+      sysOut({
+        subtype: 'task_notification',
+        task_id: t.id,
+        run_id: `r-${t.id}`,
+        tool_use_id: t.call,
+        status: 'completed',
+        output_file: '',
+        summary: t.description,
+      });
+      toolResult(t.call, t.content, { tool_use_result: { stdout: t.content, stderr: '', interrupted: false } });
+      streamText('La commande est finie.');
+      return result();
+    }
+    sysOut({
+      subtype: 'task_notification',
+      task_id: t.id,
+      run_id: `r-${t.id}`,
+      tool_use_id: t.call,
+      status: 'completed',
+      output_file: t.file,
+      summary: t.monitor ? `Monitor "${t.description}" stream ended` : `Background command "${t.description}" completed (exit code 0)`,
+      uuid: `bgend-${t.id}`,
+    });
+    bgLevel();
+    // Claude Code opens a turn of its own about it.
+    out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    streamText('La tâche de fond est finie.');
+    result();
+  }
+
+  // `stop_task` on a command or a monitor running in the background, as Claude Code 2.1.301 answers it (measured): the
+  // task killed, its notification « stopped » (its words are its description), the level, the answer, a turn of its own.
+  function bgStop(id, taskId) {
+    const t = bgTasks.get(taskId);
+    if (!t || t.ended || !t.background) return false;
+    clearInterval(t.timer);
+    t.ended = true;
+    bgAppend(t, '\n[killed]\n');
+    sysOut({ subtype: 'task_updated', task_id: t.id, run_id: `r-${t.id}`, patch: { status: 'killed', end_time: Date.now() } });
+    sysOut({
+      subtype: 'task_notification',
+      task_id: t.id,
+      run_id: `r-${t.id}`,
+      tool_use_id: t.call,
+      status: 'stopped',
+      output_file: t.file,
+      summary: t.description,
+      uuid: `bgstop-${t.id}`,
+    });
+    bgLevel();
+    ok(id);
+    out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    streamText('La tâche de fond a été arrêtée.');
+    result();
+    return true;
+  }
+
+  // `get_task_output`: the end of the output, 8 KiB at most, of a command or a monitor, running or over.
+  function bgOutput(id, taskId) {
+    const t = bgTasks.get(taskId);
+    if (!t) {
+      return out({
+        type: 'control_response',
+        response: {
+          subtype: 'error',
+          request_id: id,
+          error: 'get_task_output: no shell or Monitor task with that task_id in this session',
+        },
+      });
+    }
+    const bytes = Buffer.from(t.content, 'utf8');
+    const tail = bytes.length > 8192 ? bytes.subarray(bytes.length - 8192) : bytes;
+    ok(id, { output: tail.toString('utf8'), total_bytes: bytes.length, truncated: bytes.length > 8192 });
+  }
+
+  // `background_tasks { tool_use_id }` (what Ctrl+B does): the command of that call, in the foreground, goes to the
+  // background: the level that has it, `task_updated` (`is_backgrounded`), its result, and the turn ends.
+  function bgSend(id, call) {
+    const t = [...bgTasks.values()].find((x) => x.call === call && !x.background && !x.ended);
+    if (!t) {
+      return out({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: id, error: `No foreground task for the tool call ${call}` },
+      });
+    }
+    t.background = true;
+    bgLevel();
+    sysOut({ subtype: 'task_updated', task_id: t.id, run_id: `r-${t.id}`, patch: { is_backgrounded: true } });
+    toolResult(
+      t.call,
+      `Command was manually backgrounded by user with ID: ${t.id}. Output is being written to: ${t.file}. If it is still running after 30m in the background, it will be killed.`,
+      {
+        tool_use_result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: t.id, backgroundedByUser: true },
+      },
+    );
+    ok(id);
+    streamText('FINISHED');
+    result();
+  }
+
   // `stop_task`, as Claude Code 2.1.300 answers it (measured): the task killed and its notification « stopped », then
   // the answer, then the end of the subagent's thread; Claude Code opens a turn of its own about it. A task it does not
   // run is an error. A permission the subagent still waits for is cancelled first (measured on 2.1.300 too).
   function stopTask(id, task) {
+    if (bgStop(id, task)) return;
     if (!longAgent || longAgent.task !== task) {
       return out({ type: 'control_response', response: { subtype: 'error', request_id: id, error: `No task found with ID: ${task}` } });
     }
@@ -1447,6 +1666,15 @@ function startSession() {
       });
       return;
     }
+    // A command, a monitor in the background, a command that goes there from the foreground (see bgRun).
+    const bgKind = /commande de fond|background command/.test(text)
+      ? 'command'
+      : /surveillance de fond|background monitor/.test(text)
+        ? 'monitor'
+        : /commande premier plan|foreground command/.test(text)
+          ? 'foreground'
+          : null;
+    if (bgKind) return bgRun(bgKind, text);
     if (text.includes('tâche de fond')) {
       // A command left running in the background: it ends once the turn is over, and Claude Code
       // only tells it with a system frame before starting a turn by itself.
@@ -1669,6 +1897,12 @@ function startSession() {
           clearTimeout(slowTimer);
           clearInterval(floodTimer);
           planCut = true;
+          // A command in the foreground is stopped with the turn; the ones in the background go on.
+          for (const t of bgTasks.values())
+            if (!t.background && !t.ended) {
+              clearInterval(t.timer);
+              t.ended = true;
+            }
           if (sys.includes('[fin-d-abord]')) {
             // The app reads the turn's end before the interrupt's answer reaches its caller.
             result({ isError: true, subtype: 'error_during_execution' });
@@ -1685,6 +1919,12 @@ function startSession() {
         case 'stop_task':
           fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
           return stopTask(m.request_id, r.task_id);
+        case 'get_task_output':
+          fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
+          return bgOutput(m.request_id, r.task_id);
+        case 'background_tasks':
+          fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
+          return bgSend(m.request_id, r.tool_use_id);
         default:
           return ok(m.request_id);
       }

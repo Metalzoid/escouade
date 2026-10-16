@@ -19,6 +19,7 @@
   import QuickOpen from './components/QuickOpen.svelte';
   import SidePanel from './components/SidePanel.svelte';
   import SubagentView from './components/SubagentView.svelte';
+  import TaskView from './components/TaskView.svelte';
   import AccountModal from './components/modals/AccountModal.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
@@ -107,10 +108,14 @@
         <TerminalView term={app.term} {project} />
       {:else if app.agent}
         {#key app.agent.id}
-          <!-- One of its subagents' conversation, in place of its own (ESC-13). -->
+          <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
           {#if app.subView[app.agent.id]}
             {#key app.subView[app.agent.id]}
               <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
+            {/key}
+          {:else if app.taskView[app.agent.id]}
+            {#key app.taskView[app.agent.id]}
+              <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
             {/key}
           {:else}
             <Conversation agent={app.agent} {project} />

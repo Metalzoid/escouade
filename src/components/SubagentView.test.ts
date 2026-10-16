@@ -21,7 +21,14 @@ const row = (over: Partial<SubAgent> = {}): SubAgent => ({
   taskId: 'task-1',
   ...over,
 });
-const planOf = (agents: SubAgent[]): PlanState => ({ source: null, tasks: [], agents, launched: agents.length, workflows: [] });
+const planOf = (agents: SubAgent[]): PlanState => ({
+  source: null,
+  tasks: [],
+  agents,
+  launched: agents.length,
+  workflows: [],
+  bgTasks: [],
+});
 const call = (id: string, over: Partial<ToolItem> = {}): ToolItem => ({
   kind: 'tool',
   id,

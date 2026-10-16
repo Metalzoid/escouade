@@ -36,6 +36,7 @@ const planOf = (tasks: PlanTask[], over: Partial<PlanState> = {}): PlanState => 
   agents: [],
   launched: 0,
   workflows: [],
+  bgTasks: [],
   ...over,
 });
 const agentOf = (tasks: PlanTask[], over: Partial<Agent> = {}, plan: Partial<PlanState> = {}) =>

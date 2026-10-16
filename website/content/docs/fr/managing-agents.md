@@ -161,7 +161,7 @@ Au redémarrage, chaque agent retrouve sa conversation, et aucun processus Claud
 
 ### Les processus inactifs
 
-Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Claude Code : « Arrêter les processus Claude inactifs après (minutes) » ; `0` désactive l’arrêt. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent dont le remote control est activé. La prochaine action sur l’agent relance son processus sur sa session.
+Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Claude Code : « Arrêter les processus Claude inactifs après (minutes) » ; `0` désactive l’arrêt. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent dont le remote control est activé, ni un agent qui a encore en arrière-plan une commande, une surveillance, un sous-agent ou un workflow (ils vivent dans son processus, que l’arrêt tuerait). La prochaine action sur l’agent relance son processus sur sa session.
 
 ### Si un agent s’arrête
 

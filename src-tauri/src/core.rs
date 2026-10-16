@@ -22,6 +22,7 @@ use crate::planfiles;
 use crate::pty::{PtyManager, ShellInfo};
 use crate::resources;
 use crate::stats::{AgentLabel, Labels, Stats, StatsView, TicketLabel};
+use crate::taskout::TaskOutput;
 use crate::telemetry::{Event, Telemetry};
 use crate::testlaunch;
 use crate::usage;
@@ -937,6 +938,14 @@ fn read_settings(path: &Path) -> Settings {
         settings.claude_language = "ui".into();
     }
     settings
+}
+
+/// Said for a background task the agent's plan does not have.
+fn unknown_bg_task() -> String {
+    tr!(
+        "Cette tâche de fond n’est pas connue de l’agent.",
+        "The agent has no such background task."
+    )
 }
 
 /// What the agent is told for a message to its subagent `title` (its task `task`, the `agentId`
@@ -2720,8 +2729,9 @@ impl<R: Runtime> Core<R> {
     /// not end) and started again on the same session (`--resume`): nothing of its conversation is
     /// lost, and the new process has what a start gives now, Escouade's server among it once
     /// « Claude et les agents peuvent piloter Escouade » was turned on after it started (ESC-91).
-    /// Refused while it works, waits for an answer, has its worktree set up or runs a subagent or
-    /// a workflow in the background (what it waits for, or does, would be lost), and once archived.
+    /// Refused while it works, waits for an answer, has its worktree set up or runs a subagent, a
+    /// workflow or a command in the background (what it waits for, or does, would be lost), and
+    /// once archived.
     pub async fn restart_process(self: &Arc<Self>, id: &str) -> Result<()> {
         let h = self.agent(id)?;
         {
@@ -3348,10 +3358,13 @@ impl<R: Runtime> Core<R> {
         for h in agents {
             let stopped = {
                 let mut rt = h.lock();
-                // A Remote Control agent must stay reachable from claude.ai.
+                // A Remote Control agent must stay reachable from claude.ai. One with a command, a
+                // monitor, a subagent or a workflow running in the background is not idle: they
+                // live in its process, which stopping would kill.
                 let idle = rt.proc.is_some()
                     && !rt.meta.remote_control
                     && !rt.meta.status.is_active()
+                    && !rt.meta.plan.as_ref().is_some_and(|p| p.runs_something())
                     && rt.meta.last_activity < limit;
                 if idle {
                     rt.detach()
@@ -3700,6 +3713,169 @@ impl<R: Runtime> Core<R> {
             "Claude Code did not stop the subagent"
         ))?;
         Ok(())
+    }
+
+    /// « Arrêter » on a task Claude Code runs in the background for the agent `id`: a command, a
+    /// monitor, a remote agent, a teammate (a `BgTask` of its plan) or a workflow, `task` being its
+    /// id. Claude Code's `stop_task` on it (docs/PROTOCOL.md): its end comes with the frames that
+    /// follow (the task killed, its notification « stopped »), as any end, and the plan is not
+    /// touched here. Refused for a task the plan does not have, one that does not run, or, with no
+    /// process to ask, or in the Claude Code view (its interface does it).
+    pub async fn stop_bg_task(self: &Arc<Self>, id: &str, task: &str) -> Result<()> {
+        use crate::plan::RunStatus;
+        let h = self.agent(id)?;
+        let proc = {
+            let rt = h.lock();
+            let status = rt.meta.plan.as_ref().and_then(|p| {
+                let row = p.bg_tasks.iter().find(|t| t.id == task).map(|t| t.status);
+                row.or_else(|| p.workflows.iter().find(|w| w.id == task).map(|w| w.status))
+            });
+            match status {
+                None => bail!(unknown_bg_task()),
+                Some(RunStatus::Running) => {}
+                Some(_) => bail!(tr!(
+                    "Cette tâche de fond ne tourne plus.",
+                    "This background task is no longer running."
+                )),
+            }
+            if rt.tui.is_some() {
+                bail!(tr!(
+                    "En vue Claude Code, une tâche de fond s’arrête depuis son interface.",
+                    "In the Claude Code view, a background task is stopped from its interface."
+                ));
+            }
+            rt.proc.clone()
+        };
+        let Some(p) = proc else {
+            bail!(tr!(
+                "Le processus de l’agent ne tourne pas.",
+                "The agent’s process is not running."
+            ));
+        };
+        p.control(
+            json!({ "subtype": "stop_task", "task_id": task }),
+            Duration::from_secs(15),
+        )
+        .await
+        .context(tr!(
+            "Claude Code n’a pas arrêté la tâche",
+            "Claude Code did not stop the task"
+        ))?;
+        Ok(())
+    }
+
+    /// The end of the output of the command or monitor `task` of the agent `id`, running or over.
+    /// Two sources, in the order that serves the window best (docs/PROTOCOL.md):
+    ///
+    /// - a task that runs: its process first, asked without a turn of the model
+    ///   (`get_task_output`: 8 KiB, the end), else, or when Claude Code does not answer, the end of
+    ///   the file Claude Code writes the whole output to (`<task>.output`, 8 KiB too);
+    /// - a task that is over (done, failed, stopped, interrupted): the file first, as far back as
+    ///   256 KiB (`MAX_FINISHED_OUTPUT`: the first error of a failed build is not in the last 8 KiB),
+    ///   else, if it is absent, unreadable or refused and the process lives, the process (8 KiB).
+    ///
+    /// Never any other file than the task's own (`taskout`), and none of another machine: the path
+    /// as the frames said it must pass `safe_origin` (a share, a verbatim path or a device are not
+    /// read, nothing of the system is touched for them), before it is converted for a `claude`
+    /// under WSL. No lock of the agent is held while the process answers or the file is read. A
+    /// task that is neither a command nor a monitor has no output to read (`source` `none`); one
+    /// the plan does not have is refused.
+    pub async fn bg_task_output(self: &Arc<Self>, id: &str, task: &str) -> Result<TaskOutput> {
+        use crate::plan::{BgKind, RunStatus};
+        use crate::taskout::{safe_origin, MAX_FINISHED_OUTPUT, MAX_OUTPUT};
+        let h = self.agent(id)?;
+        let (proc, file, account, over) = {
+            let rt = h.lock();
+            let row = rt
+                .meta
+                .plan
+                .as_ref()
+                .and_then(|p| p.bg_tasks.iter().find(|t| t.id == task));
+            let Some(row) = row else {
+                bail!(unknown_bg_task());
+            };
+            if !matches!(row.kind, BgKind::Command | BgKind::Monitor) {
+                return Ok(TaskOutput::none());
+            }
+            // The Claude Code view has no process to ask: its files are all there is.
+            let proc = rt.proc.clone().filter(|p| rt.tui.is_none() && p.is_alive());
+            // The path as the frames said it, asked before anything is done with it.
+            let file = row.output_file.clone().filter(|f| safe_origin(f));
+            (
+                proc,
+                file,
+                rt.meta.account.clone(),
+                row.status != RunStatus::Running,
+            )
+        };
+        if !over {
+            if let Some(out) = Self::output_of_process(proc.as_deref(), task).await {
+                return Ok(out);
+            }
+            return self.output_of_file(file, task, &account, MAX_OUTPUT).await;
+        }
+        let from_file = self
+            .output_of_file(file, task, &account, MAX_FINISHED_OUTPUT)
+            .await?;
+        if from_file.source != "none" {
+            return Ok(from_file);
+        }
+        Ok(Self::output_of_process(proc.as_deref(), task)
+            .await
+            .unwrap_or(from_file))
+    }
+
+    /// What the process of the agent answers to `get_task_output` for `task`: none without a
+    /// process, when Claude Code does not know the task (any more, or never) or answers something
+    /// else.
+    async fn output_of_process(proc: Option<&ClaudeProcess>, task: &str) -> Option<TaskOutput> {
+        let asked = proc?
+            .control(
+                json!({ "subtype": "get_task_output", "task_id": task }),
+                Duration::from_secs(10),
+            )
+            .await;
+        match asked {
+            Ok(answer) => TaskOutput::from_process(&answer),
+            Err(e) => {
+                log::debug!("get_task_output {task}: {e:#}");
+                None
+            }
+        }
+    }
+
+    /// The end of `file`, `max` bytes at most, off the runtime's threads; `source` `none` when
+    /// there is no file or it is not the task's.
+    async fn output_of_file(
+        &self,
+        file: Option<String>,
+        task: &str,
+        account: &str,
+        max: usize,
+    ) -> Result<TaskOutput> {
+        let Some(file) = file else {
+            return Ok(TaskOutput::none());
+        };
+        let settings = self.settings.read().clone();
+        let (task, account) = (task.to_string(), account.to_string());
+        tauri::async_runtime::spawn_blocking(move || {
+            // A `claude` of WSL tells its files by their Linux path: our own conversion of a path
+            // already accepted, to a share of ours (`\\wsl.localhost\…`), which `from_file` is
+            // given as it is.
+            let wsl = (cfg!(windows) && file.starts_with('/'))
+                .then(|| {
+                    let account = accounts::get(&settings, &account);
+                    accounts::program(&account, &settings).and_then(|p| p.wsl().cloned())
+                })
+                .flatten();
+            let path = match wsl {
+                Some(wsl) => wsl.windows_path(&file),
+                None => PathBuf::from(&file),
+            };
+            TaskOutput::from_file(&path, &task, max)
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))
     }
 
     /// The conversation of the subagent `call` launched, in the Claude Code view, where the stream

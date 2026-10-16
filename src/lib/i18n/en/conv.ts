@@ -42,8 +42,10 @@ export default defineZone('conv', {
 
   escouadeNext: {
     title: 'Escouade’s tools at the next start',
-    text: 'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays; a command running in the background stops.',
+    text: 'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays.',
     busy: 'It can be restarted once it is done with what it is doing.',
+    busyBackground:
+      'It still has background tasks (command, monitor, subagent, workflow): restarting it would stop them. A command or a dev server doesn’t end by itself: stop it first, from its view (“Stop”), or wait until it has finished.',
     restart: 'Restart',
   },
 

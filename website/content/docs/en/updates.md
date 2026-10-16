@@ -29,6 +29,7 @@ The “Install updates automatically” setting (Settings › About, on by defau
 The app is at rest when none of this is true:
 
 - An agent is working or waiting for your answer (a question or a permission).
+- An agent has a subagent, a workflow or a background task (a command, a monitor…) running: a restart would stop them with its process.
 - A worktree is being set up.
 - A ticket is being approved (merge, pull request, push), or other work is under way outside an agent’s turn, for example a ticket starting or a merge you asked for by hand.
 - A launch command or a step of a test launch is running, or a test launch is being prepared.

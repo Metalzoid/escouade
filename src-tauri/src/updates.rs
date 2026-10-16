@@ -394,6 +394,9 @@ pub struct Snapshot {
     /// Work under way outside of a turn (`Core::working`): a ticket being started, a validation
     /// being cleaned up, a message being delivered, a merge asked for by hand.
     pub works: usize,
+    /// Subagents, workflows, commands and monitors running in the background of the agents that
+    /// have a process (not archived ones): rows, not agents.
+    pub background: usize,
     /// Launch commands and steps of test launches still running.
     pub launches: usize,
     /// Since an integrated terminal's last input or output, in ms (`i64::MAX` without one).
@@ -418,6 +421,7 @@ pub enum Busy {
     Setup,
     Validation,
     Work,
+    Background,
     Launch,
     Terminal,
     Testing,
@@ -435,6 +439,9 @@ pub fn busy(s: &Snapshot) -> Option<Busy> {
         (s.setups > 0, Busy::Setup),
         (s.validations > 0, Busy::Validation),
         (s.works > 0, Busy::Work),
+        // A command, a monitor, a subagent or a workflow running in the background lives in the
+        // agent's process: a restart would kill it (a long build, a watcher), turn over or not.
+        (s.background > 0, Busy::Background),
         // A dev server, a watcher, a test launch's step: running, whatever they print.
         (s.launches > 0, Busy::Launch),
         // An idle terminal does not count: one used lately may be running something.
@@ -932,6 +939,10 @@ pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snap
         }
         if rt.setup.is_some() {
             s.setups += 1;
+        }
+        // What runs in the background lives in the process: with none, it is gone already.
+        if rt.proc.is_some() {
+            s.background += rt.meta.plan.as_ref().map_or(0, |p| p.running_count());
         }
     }
     s.validations = core
@@ -1543,6 +1554,7 @@ mod tests {
             (with(|s| s.setups = 1), Busy::Setup),
             (with(|s| s.validations = 1), Busy::Validation),
             (with(|s| s.works = 1), Busy::Work),
+            (with(|s| s.background = 1), Busy::Background),
             (with(|s| s.launches = 1), Busy::Launch),
             (with(|s| s.terminal_quiet = AWAY - 1), Busy::Terminal),
             (with(|s| s.testing = true), Busy::Testing),
@@ -2788,6 +2800,7 @@ mod tests {
                 setups: 1,
                 validations: 1,
                 works: 1,
+                background: 0,
                 launches: 0,
                 // No terminal open.
                 terminal_quiet: i64::MAX,
@@ -2801,6 +2814,91 @@ mod tests {
         );
         drop(working);
         assert_eq!(snapshot(&h.core, &u, 61_000).works, 0);
+    }
+
+    /// The rest of the app, for `snapshot`: no window, no one at the keyboard.
+    fn background_of(h: &crate::core_tests::Harness) -> (usize, Option<Busy>) {
+        let u = Updates::default();
+        let s = snapshot(&h.core, &u, now_ms());
+        (s.background, busy(&s))
+    }
+
+    #[tokio::test]
+    async fn a_command_running_in_the_background_holds_off_a_restart_until_it_is_over() {
+        use crate::plan::{RunStatus, SubAgent, WorkflowRun};
+        let h = harness("upd-snapshot-background");
+        let (p, _) = h.project(false).await;
+        let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+        assert_eq!(background_of(&h).0, 0);
+        h.core
+            .send_message(&id, "commande de fond 60s".into(), vec![])
+            .await
+            .unwrap();
+        let row = h.bg_task(&id, "Ticker", false).await;
+        // The turn is over, the command is not: it lives in the agent's process, and it is all
+        // that keeps the app from being at rest.
+        h.wait("only the command left", |h| {
+            background_of(h) == (1, Some(Busy::Background))
+        })
+        .await;
+        let turns = |h: &crate::core_tests::Harness| {
+            h.items(&id).iter().filter(|i| i["kind"] == "turn").count()
+        };
+        let before = turns(&h);
+        let agent = h.core.agent(&id).unwrap();
+
+        // What runs counts one by one: a subagent and a workflow in the background too; what
+        // is over, not.
+        {
+            let mut rt = agent.lock();
+            let plan = rt.meta.plan.as_mut().unwrap();
+            plan.agents.push(SubAgent::default());
+            plan.agents.push(SubAgent {
+                status: RunStatus::Done,
+                ..Default::default()
+            });
+            plan.workflows.push(WorkflowRun::default());
+            plan.workflows.push(WorkflowRun {
+                status: RunStatus::Failed,
+                ..Default::default()
+            });
+            plan.bg_tasks.push(crate::plan::BgTask {
+                id: "ended".into(),
+                status: RunStatus::Stopped,
+                ..Default::default()
+            });
+        }
+        assert_eq!(background_of(&h), (3, Some(Busy::Background)));
+        {
+            let mut rt = agent.lock();
+            let plan = rt.meta.plan.as_mut().unwrap();
+            plan.agents.clear();
+            plan.workflows.clear();
+            plan.bg_tasks.retain(|t| t.id != "ended");
+        }
+        assert_eq!(background_of(&h), (1, Some(Busy::Background)));
+
+        // An archived agent counts for nothing, and one with no process neither: what ran in it
+        // is gone with it.
+        agent.lock().meta.archived = true;
+        assert_eq!(background_of(&h), (0, None));
+        agent.lock().meta.archived = false;
+        assert_eq!(background_of(&h), (1, Some(Busy::Background)));
+        let live = agent.lock().proc.take();
+        assert_eq!(background_of(&h), (0, None));
+        agent.lock().proc = live;
+        assert_eq!(background_of(&h), (1, Some(Busy::Background)));
+
+        // Stopped, it counts no more. Claude Code opens a turn to tell the agent: that is a turn,
+        // not the command, and the app is at rest once it is over.
+        h.core.stop_bg_task(&id, &row.id).await.unwrap();
+        h.bg_task_status(&id, &row.id, RunStatus::Stopped).await;
+        assert_eq!(background_of(&h).0, 0);
+        h.wait("its turn over", |h| {
+            turns(h) > before && !h.agent(&id).status.is_active()
+        })
+        .await;
+        assert_eq!(background_of(&h), (0, None));
     }
 
     #[tokio::test]

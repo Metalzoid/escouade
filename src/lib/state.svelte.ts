@@ -9,6 +9,7 @@ import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
+import { bgRow } from './bgtasks';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
 import { mcp } from './mcp.svelte';
@@ -263,6 +264,14 @@ class AppState {
   subFocus: { from: SubFocus | null; back: SubFocus | null } = { from: null, back: null };
   /** The list of an agent's subagents under its card, unfolded or folded by the reader, by agent (absent: unfolded while one runs). */
   subsOpen = $state<Record<string, boolean>>({});
+  /**
+   * The background task whose view fills the main area in place of its agent's conversation, by agent: Claude Code's id of
+   * the task (ESC-14). Absent or null: the agent's own conversation. Kept for the session; never at the same time as
+   * `subView` (opening one closes the other), and they share the memory of where the focus goes back to (`subFocus`).
+   */
+  taskView = $state<Record<string, string | null>>({});
+  /** The list of an agent's background tasks under its card, unfolded or folded by the reader, by agent (absent: unfolded while one runs). */
+  bgOpen = $state<Record<string, boolean>>({});
   modal = $state<Modal | null>(null);
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());
@@ -516,6 +525,9 @@ class AppState {
         const prev = this.agents[e.agent.id];
         const newRecipe = prev && JSON.stringify(prev.recipe ?? null) !== JSON.stringify(e.agent.recipe ?? null);
         this.agents[e.agent.id] = e.agent;
+        // The task it shows is gone from its plan (a new session starts it again): the view has nothing to show.
+        const shown = this.taskView[e.agent.id];
+        if (shown && !bgRow(e.agent.plan, shown)) this.closeTask(e.agent.id);
         this.noteAttention(prev, e.agent);
         if (newRecipe) this.runHooks(this.recipeHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
@@ -757,16 +769,7 @@ class AppState {
    * Opened from the agent's own conversation, the element that has the focus now is where it goes back to.
    */
   openSubagent(agentId: string, call: string) {
-    const nested = !!this.subView[agentId];
-    const active = document.activeElement;
-    const from = nested
-      ? this.subFocus.from
-      : {
-          agentId,
-          call,
-          el: active instanceof HTMLElement && active !== document.body ? active : null,
-          opener: active instanceof HTMLElement ? (active.dataset.openFrom ?? null) : null,
-        };
+    const from = this.focusFrom(agentId, call);
     this.selectAgent(agentId);
     if (this.agents[agentId]) {
       this.subView[agentId] = call;
@@ -774,11 +777,56 @@ class AppState {
     }
   }
 
+  /**
+   * Where the focus goes back to once the view opened on `call` is left: the element that has it now when no view of the
+   * agent was open (the conversation is where it comes from), else the one remembered, whichever view it was.
+   */
+  private focusFrom(agentId: string, call: string): SubFocus | null {
+    if (this.subView[agentId] || this.taskView[agentId]) return this.subFocus.from;
+    const active = document.activeElement;
+    return {
+      agentId,
+      call,
+      el: active instanceof HTMLElement && active !== document.body ? active : null,
+      opener: active instanceof HTMLElement ? (active.dataset.openFrom ?? null) : null,
+    };
+  }
+
   /** Back to the agent's own conversation, where the focus goes back to (`takeFocusBack`). */
   closeSubagent(agentId: string) {
     this.subView[agentId] = null;
-    const { from } = this.subFocus;
-    this.subFocus = { from: null, back: from?.agentId === agentId ? from : null };
+    this.leaveView(agentId);
+  }
+
+  /**
+   * A view of `agentId` is left. The memory of the focus is one for the whole window: it is touched only when it is that
+   * agent's (`from`: it goes to `back`; `back` left behind is dropped). A view closed out of sight (the task of an agent in the
+   * background is gone from its plan) leaves the memory of the view that is on screen as it is.
+   */
+  private leaveView(agentId: string) {
+    const { from, back } = this.subFocus;
+    const mine = from?.agentId === agentId;
+    if (!mine && back?.agentId !== agentId) return;
+    this.subFocus = { from: mine ? null : from, back: mine ? from : null };
+  }
+
+  /**
+   * Opens the view of the background task `task` (a task of Claude Code, or a workflow) of the agent `agentId` in place of
+   * the agent's conversation (and selects the agent), closing the conversation of a subagent if one was open.
+   */
+  openTask(agentId: string, task: string) {
+    const from = this.focusFrom(agentId, task);
+    this.selectAgent(agentId);
+    if (this.agents[agentId]) {
+      this.taskView[agentId] = task;
+      this.subFocus.from = from;
+    }
+  }
+
+  /** Back to the agent's own conversation, where the focus goes back to (`takeFocusBack`). */
+  closeTask(agentId: string) {
+    this.taskView[agentId] = null;
+    this.leaveView(agentId);
   }
 
   /** Where the focus goes back to, once, when the conversation of `agentId` is drawn again after `closeSubagent`. */
@@ -794,6 +842,7 @@ class AppState {
     const a = this.agents[id];
     if (!a) return;
     if (this.subView[id]) this.subView[id] = null;
+    if (this.taskView[id]) this.taskView[id] = null;
     this.subFocus = { from: null, back: null };
     if (this.ui.activeProject !== a.projectId) this.ui.activeProject = a.projectId;
     this.ui.view = 'project';

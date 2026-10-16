@@ -1,0 +1,70 @@
+import { defineZone } from '../types';
+
+// The tasks Claude Code runs in the background for an agent (ESC-14): commands, monitors, workflows, remote agents,
+// teammates. Their list under the card of the agent in the sidebar, the chip on the card, and each one's view with its
+// output followed live. Their titles, commands, phases, summaries and output are the agent’s and Claude Code’s own words:
+// shown as they come, never translated.
+export default defineZone('bgtasks', {
+  title: 'Background tasks',
+  toggle: 'Background tasks of {name}',
+  runningCount: { one: '{count} running', other: '{count} running' },
+  finishedCount: { one: '{count} finished', other: '{count} finished' },
+  finishedToggle: { one: '{count} finished task', other: '{count} finished tasks' },
+  moreRunning: { one: '{count} more running', other: '{count} more running' },
+  moreFinished: { one: '{count} more', other: '{count} more' },
+  lessList: 'Show fewer',
+  chip: { one: '{count} in background', other: '{count} in background' },
+  chipLabel: { one: '{count} background task running', other: '{count} background tasks running' },
+
+  kind: {
+    command: 'Background command',
+    monitor: 'Monitor',
+    workflow: 'Workflow',
+    remote: 'Remote agent',
+    teammate: 'Teammate',
+  },
+  status: {
+    running: 'Running',
+    done: 'Done',
+    failed: 'Failed',
+    stopped: 'Stopped',
+    interrupted: 'Interrupted',
+  },
+  exitShort: 'code {code}',
+
+  crumbs: 'Breadcrumb',
+  back: 'Back to the conversation of {name}',
+  facts: {
+    kind: 'Type',
+    status: 'State',
+    duration: 'Duration',
+    exit: 'Exit code',
+    by: 'Launched by',
+    phase: 'Current phase',
+    tools: 'Tools',
+    tokens: 'Tokens',
+  },
+  command: 'Command',
+  description: 'Description',
+  commandMore: 'Show the whole command',
+  commandLess: 'Shorten the command',
+  summary: 'Summary',
+  gone: 'This task is no longer in the agent’s list.',
+
+  output: 'Output',
+  outputLabel: 'Output of {name}, read-only',
+  follow: 'Follow the end',
+  reading: 'Reading the output…',
+  emptyRunning: 'Nothing has been written yet.',
+  emptyDone: 'This task wrote nothing.',
+  noOutputType: 'No output to follow for this type of task.',
+  noOutputFile: 'No output available: the output file cannot be found.',
+  truncated: 'Start cut off: only the end of the output is shown.',
+  fromFile: 'read from the output file',
+  readError: 'The output could not be read: {error}',
+  readRetry: 'It will try again on the next read.',
+
+  stop: 'Stop',
+  stopHint: 'Stop this task. Claude Code then tells the agent, which costs it a turn.',
+  stopInTerminal: 'This task is stopped from Claude Code’s own interface.',
+});

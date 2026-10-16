@@ -721,6 +721,45 @@ export interface WorkflowRun {
   endedAt?: number;
 }
 
+/**
+ * What a background task is: `command` = a Bash call run in the background, `monitor` = the Monitor tool, `remote` = a
+ * remote agent, `teammate` = an in-process teammate. (A workflow is a `WorkflowRun`; a subagent has its own row.)
+ */
+export type BgKind = 'command' | 'monitor' | 'remote' | 'teammate';
+
+/** A task Claude Code runs in the background for an agent (ESC-14). */
+export interface BgTask {
+  /** Claude Code's id of the task. */
+  id: string;
+  kind: BgKind;
+  /** The tool's description ("Ticker"). */
+  title: string;
+  /** The command line, 2000 characters at most; absent when unknown. */
+  command?: string;
+  status: RunStatus;
+  /** In ms (epoch). */
+  startedAt: number;
+  endedAt?: number;
+  /** Claude Code's last words on it: 'Background command "Ticker" completed (exit code 0)', 'Monitor "Watch" stream ended'; for one stopped, only its description. */
+  summary?: string;
+  /** The id of the tool call that launched it. */
+  call?: string;
+  /** The task id of the subagent that owns it, when one does. */
+  parent?: string;
+  outputFile?: string;
+}
+
+/** The end of the output of a background task (`task_output`): 8 KiB at most while it runs, 256 KiB at most once it ended. */
+export interface TaskOutput {
+  output: string;
+  /** The size of the whole output, in bytes. */
+  totalBytes: number;
+  /** The start of the output is missing. */
+  truncated: boolean;
+  /** Where it was read: the running process, its output file (the process is gone, or the Claude Code view), or nowhere (a workflow, a remote agent, no file). */
+  source: 'process' | 'file' | 'none';
+}
+
 /** How far an agent is through a plan: its task list, its subagents, its workflows. */
 export interface PlanState {
   source: PlanSource | null;
@@ -736,6 +775,8 @@ export interface PlanState {
   launched: number;
   /** At most 10. */
   workflows: WorkflowRun[];
+  /** The tasks running in the background (commands, monitors, remote agents, teammates), then the 10 latest ended: 40 at most. */
+  bgTasks: BgTask[];
 }
 
 /** A choice of Claude Code's model picker: an alias or a full id, and the model it stands for. */

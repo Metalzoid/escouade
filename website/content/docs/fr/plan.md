@@ -1,6 +1,6 @@
 # L’avancée d’un plan
 
-Quand un agent suit une liste de tâches ou travaille avec des sous-agents, Escouade montre où il en est dans un bandeau « Plan » au-dessus de la conversation, sur sa carte et dans la liste de ses sous-agents. Cette page explique d’où vient la liste, ce que le bandeau affiche et comment lire un sous-agent.
+Quand un agent suit une liste de tâches ou travaille avec des sous-agents, Escouade montre où il en est dans un bandeau « Plan » au-dessus de la conversation, sur sa carte et dans la liste de ses sous-agents. Cette page explique d’où vient la liste, ce que le bandeau affiche, les sous-agents et les tâches de fond.
 
 ## Quand le bandeau apparaît
 
@@ -58,7 +58,7 @@ Ce qu’un sous-agent dit et fait se lit dans sa propre conversation (voir plus 
 
 ## La ligne de la carte
 
-Dans la barre latérale, la carte d’un agent qui a des tâches affiche une barre fine et « Plan 2/7 » (ou « Plan 2/7 · 3 sous-agents » quand des sous-agents tournent). Elle permet de suivre plusieurs agents d’un coup d’œil, sans ouvrir leur conversation. Un agent qui n’a que des sous-agents, sans tâches, n’a pas cette ligne, mais ses sous-agents ont leur groupe sous la carte (voir plus bas).
+Dans la barre latérale, la carte d’un agent qui a des tâches affiche une barre fine et « Plan 2/7 » (ou « Plan 2/7 · 3 sous-agents » quand des sous-agents tournent). Elle permet de suivre plusieurs agents d’un coup d’œil, sans ouvrir leur conversation. Un agent qui n’a que des sous-agents, sans tâches, n’a pas cette ligne, mais ses sous-agents ont leur groupe sous la carte (voir plus bas). Tant que des tâches de fond tournent, une puce « N en fond » s’ajoute à côté de son nom (voir [les tâches de fond](#les-taches-de-fond)).
 
 ## Les sous-agents dans la barre latérale
 
@@ -114,6 +114,61 @@ La conversation d’un sous-agent fini se lit encore. Escouade garde avec la con
 
 Sa conversation se lit donc après un redémarrage d’Escouade, et même quand la barre n’a plus sa ligne (au-delà de 30 sous-agents, ou quand le plan est reparti de zéro) : le bouton ↗ de la ligne de son appel, dans la conversation de l’agent, l’ouvre toujours. Un sous-agent qui tournait quand Escouade s’est fermé est dit « Interrompu ».
 
+## Les tâches de fond
+
+Claude Code peut lancer des tâches en arrière-plan pour un agent : une commande (l’outil `Bash` avec `run_in_background`), une surveillance (l’outil `Monitor`, qui suit la sortie d’une commande et prévient l’agent à chaque ligne), un workflow, un agent distant ou un coéquipier. Les sous-agents ont leur liste (voir plus haut) et ne sont pas des tâches de fond. Escouade liste ces tâches sous la carte de l’agent, ouvre le détail de chacune et montre en direct la sortie d’une commande ou d’une surveillance. Elles n’ouvrent pas le bandeau « Plan » : il ne s’occupe que des tâches de la liste et des sous-agents.
+
+### Dans la barre latérale
+
+Sous la carte d’un agent qui a des tâches de fond, après le groupe des sous-agents, un groupe « Tâches de fond » les liste, construit comme lui. Un clic sur son titre le déplie ou le replie. Par défaut il est déplié tant qu’une tâche tourne et replié sinon ; ton choix est gardé jusqu’à ce que tu fermes Escouade.
+
+Déplié, le groupe montre d’abord les tâches qui tournent, dans l’ordre où elles ont été lancées : cinq, puis « N autres en cours » déroule les suivantes. Chaque ligne donne un point d’état, le titre de la tâche, sa durée (qui court tant qu’elle tourne), son type (« Commande en fond », « Surveillance », « Workflow », « Agent distant » ou « Coéquipier ») et, tant qu’elle tourne, sa ligne de commande ou la phase du workflow. Dessous, « N tâches finies » déplie celles qui ont fini, de la dernière finie à la première, chacune avec son état (Terminée, En échec, Arrêtée ou Interrompue) et, pour une commande, son code de sortie (« En échec (code 3) ») : dix au plus, puis « N de plus ».
+
+Sur la carte de l’agent, à côté de son nom, une puce « 2 en fond » compte les tâches qui tournent : commandes, surveillances, workflows, agents distants et coéquipiers, pas les sous-agents. Elle disparaît quand plus rien ne tourne.
+
+Une commande lancée au premier plan, que l’agent attend, ne figure pas dans la liste : elle y entre au moment où Claude Code l’envoie en arrière-plan, avec l’heure de son départ.
+
+### La vue d’une tâche
+
+Un clic sur une tâche ouvre sa vue à la place de la conversation de l’agent. Une seule vue à la fois : celle d’un sous-agent ouverte avant cède la place. En haut, un fil d’Ariane « agent › tâche » dit où tu es ; un clic sur le nom de l’agent, ou `Échap`, te ramène à sa conversation, et le focus retourne là où tu avais cliqué. Un clic sur la carte de l’agent dans la barre latérale y ramène aussi. `Échap` ne fait rien tant qu’un champ contient du texte que tu as tapé : un brouillon ne se perd pas pour une touche. À côté du fil d’Ariane, l’état de la tâche, et « Arrêter » tant qu’elle tourne.
+
+Dessous :
+
+- **Sa fiche** : son type, sa durée (qui court tant qu’elle tourne), le code de sortie d’une commande finie et, quand c’est un sous-agent qui l’a lancée, « Lancée par » suivi de son nom. Un workflow ajoute sa phase en cours, ses outils et ses tokens.
+- **Sa commande**, pliée quand elle est longue (« Voir toute la commande »). Une tâche sans commande montre à la place sa description.
+- **Son résumé**, une fois finie : le dernier mot de Claude Code sur elle (par exemple `Background command "Ticker" completed (exit code 0)`). Pour une tâche arrêtée, ce n’est que sa description, déjà dite : Escouade ne la répète pas.
+- **Sa sortie**, décrite ci-dessous.
+
+Les titres, les commandes, les phases, les résumés et les sorties sont les mots de l’agent et de Claude Code, tels quels : Escouade ne les traduit pas. Si la tâche disparaît de la liste de l’agent (le plan est reparti de zéro), la vue se ferme.
+
+### La sortie en direct
+
+La sortie d’une commande ou d’une surveillance se lit en direct, en lecture seule, comme dans un terminal, mais sans ses couleurs ni ses codes d’échappement. Escouade la relit toutes les 1,5 seconde tant que la tâche tourne et que la fenêtre est visible, puis une dernière fois quand elle finit ; chaque lecture remplace ce qui est affiché. La vue suit la fin tant que tu y es ; si tu remontes, le bouton « Suivre la fin » te ramène en bas.
+
+Ce que tu lis est la **fin** de la sortie : 8 Kio au plus tant que la tâche tourne, jusqu’à 256 Kio une fois qu’elle a fini, pour que la première erreur d’un build raté reste lisible. Quand le début manque, la vue dit « Début tronqué : seule la fin de la sortie est montrée. » La sortie d’une tâche qui tourne vient de Claude Code lui-même tant que le processus de l’agent tourne ; une tâche finie se lit d’abord dans le fichier de sortie que Claude Code garde pour elle, et la vue dit alors « lue dans le fichier de sortie ». Ce fichier sert aussi quand il n’y a plus de processus (processus arrêté, Escouade rouverte, [vue Claude Code](claude-code-view#les-taches-de-fond)). Escouade ne lit que le fichier de la tâche (`<tâche>.output`, dans un dossier `tasks`), jamais un autre, et jamais un fichier d’une autre machine : un chemin réseau (`\\serveur\partage`) est ignoré et rien n’est ouvert. Quand il n’y a ni processus ni fichier, la vue dit « Aucune sortie disponible : le fichier de sortie est introuvable. »
+
+Un workflow, un agent distant et un coéquipier n’écrivent pas dans une sortie à eux : la vue le dit (« Pas de sortie à suivre pour ce type de tâche. »).
+
+### Arrêter une tâche
+
+« Arrêter », en haut à droite, arrête cette tâche seule : l’agent continue. Claude Code annonce ensuite l’arrêt à l’agent, ce qui lui coûte un tour comme les autres (tokens, coût). Le bouton est proposé pour toute tâche qui tourne. Essayé sur une commande ; une surveillance, un workflow, un agent distant ou un coéquipier s’arrêtent par la même requête, mais cela n’a pas été essayé sur un vrai flux.
+
+### Ce qui reste après la fin
+
+Les dix dernières tâches finies restent dans la liste, avec leur commande et leur résumé, tant que le plan ne repart pas de zéro (une nouvelle session Claude, ou ton premier message une fois que tout est fini : tant qu’une tâche de fond tourne, le plan n’est pas fini). La liste est gardée quand tu fermes Escouade. Une tâche qui tournait à ce moment-là, ou quand le processus de l’agent s’arrête, est dite « Interrompue » : une commande lancée en arrière-plan s’arrête avec le processus. La fin d’un tour de l’agent, elle, ne finit pas une tâche de fond.
+
+Un agent qui a une tâche de fond en cours n’est pas arrêté comme inactif (voir [les processus inactifs](managing-agents#les-processus-inactifs)), et le bouton « Relancer » est grisé tant qu’elle tourne : une commande ou un serveur de dev ne finit pas seul, alors attendre ne sert à rien. Arrête d’abord ses tâches de fond, depuis leur vue (« Arrêter »). Le redémarrage automatique d’Escouade pour une mise à jour les attend aussi (voir [les mises à jour](updates#redemarrer-automatiquement)). Dans la conversation de l’agent, la fin d’une tâche reste une ligne discrète « Tâche de fond terminée » (voir [la conversation](chat#sous-agents-taches-de-fond-et-autres-sessions)) : elle n’ouvre pas la vue de la tâche.
+
+### Dans la vue Claude Code
+
+Les tâches de fond sont listées aussi quand l’agent est dans [la vue Claude Code](claude-code-view#les-taches-de-fond), avec leur vue, mais sans « Arrêter » : la vue dit « Cette tâche s’arrête depuis l’interface de Claude Code. ». Escouade y lit le début d’une tâche dans le résultat de l’outil que Claude Code écrit dans son transcript, et sa fin dans la notification qu’il y rejoue : l’heure de départ n’est donc pas exacte à la seconde. La sortie se lit dans le fichier de sortie.
+
+### Limites
+
+- Les tâches de fond ne sont pas dans la [vue d’ensemble](overview).
+- Une commande qu’un sous-agent lance au premier plan n’est pas listée ; celle qu’il lance en arrière-plan l’est, avec « Lancée par ».
+- Les surveillances MCP, les agents distants et les coéquipiers sont pris en charge d’après les schémas de Claude Code ; Escouade n’en a jamais vu sur un vrai flux.
+
 ## Quand le plan disparaît
 
-Quand toutes les tâches sont faites et que plus rien ne tourne, le bandeau reste affiché (« 7/7 tâches ») jusqu’à ton prochain message : ce message commence un nouveau plan, et le bandeau repart de zéro avec ce que l’agent liste ensuite. Le bandeau marche aussi quand l’agent tourne dans [la vue Claude Code](claude-code-view).
+Quand toutes les tâches sont faites et que plus rien ne tourne (ni sous-agent, ni tâche de fond), le bandeau reste affiché (« 7/7 tâches ») jusqu’à ton prochain message : ce message commence un nouveau plan, et le bandeau repart de zéro avec ce que l’agent liste ensuite. Le bandeau marche aussi quand l’agent tourne dans [la vue Claude Code](claude-code-view).

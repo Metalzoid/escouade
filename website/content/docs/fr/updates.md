@@ -29,6 +29,7 @@ Le réglage « Installer les mises à jour automatiquement » (Réglages › �
 L’app est au repos quand rien de ceci n’est vrai :
 
 - Un agent travaille ou attend ta réponse (une question ou une autorisation).
+- Un agent a en arrière-plan un sous-agent, un workflow ou une tâche de fond (une commande, une surveillance…) qui tourne : un redémarrage les arrêterait avec son processus.
 - Un worktree est en préparation.
 - Un ticket est en cours de validation (merge, pull request, push), ou un autre travail est en cours hors d’un tour d’agent, par exemple un ticket qui démarre ou une fusion demandée à la main.
 - Une commande de lancement ou une étape d’un lancement de test tourne, ou un lancement de test est en préparation.

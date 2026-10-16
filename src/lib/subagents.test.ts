@@ -13,7 +13,14 @@ const sub = (id: string, over: Partial<SubAgent> = {}): SubAgent => ({
   startedAt: 1_000,
   ...over,
 });
-const planOf = (agents: SubAgent[]): PlanState => ({ source: null, tasks: [], agents, launched: agents.length, workflows: [] });
+const planOf = (agents: SubAgent[]): PlanState => ({
+  source: null,
+  tasks: [],
+  agents,
+  launched: agents.length,
+  workflows: [],
+  bgTasks: [],
+});
 const call = (id: string, over: Partial<ToolItem> = {}): ToolItem => ({
   kind: 'tool',
   id,

@@ -6,6 +6,7 @@
   import { api } from '../lib/ipc';
   import { canSwitchView, switchView } from '../lib/agent-actions';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
+  import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
   import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
@@ -436,17 +437,20 @@
 
   /** « Relancer » of « Outils d’Escouade au prochain démarrage » under way, for this agent. */
   let restarting = $state<string | null>(null);
+  /** A turn, a question or the setup of its worktree is under way: it ends by itself. */
+  const atWork = $derived(agent.status === 'running' || agent.status === 'waiting' || !!agent.setup);
   /**
-   * At work: a turn, a question, the setup of its worktree, a subagent or a workflow going on in the background. Its
-   * process is restarted once it is done (what it waits for, or does, would be lost), as the backend refuses it.
+   * Something goes on in the background, past the turn: a subagent, a workflow, a task of Claude Code (a command, a
+   * monitor, a remote agent, a teammate). A command or a dev server does not end by itself.
    */
-  const working = $derived(
-    agent.status === 'running' ||
-      agent.status === 'waiting' ||
-      !!agent.setup ||
-      !!agent.plan?.agents.some((a) => a.status === 'running') ||
-      !!agent.plan?.workflows.some((w) => w.status === 'running'),
-  );
+  const inBackground = $derived(!!agent.plan?.agents.some((a) => a.status === 'running') || bgCount(agent.plan) > 0);
+  /**
+   * At work, or with something going on in the background. Its process is restarted once none of that is left (what it
+   * waits for, or does, would be lost), as the backend refuses it: the very rows `PlanState::runs_something` counts.
+   */
+  const working = $derived(atWork || inBackground);
+  /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
+  const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 
   /** Its process started again on its session (ESC-91); in the Claude Code view, its interface (`AgentTerminal`). */
   async function restartProcess() {
@@ -490,7 +494,7 @@
     <div class="banner next" class:top={agent.terminal} role="region" aria-label={t('conv.escouadeNext.title')}>
       <div class="what">
         <strong>{t('conv.escouadeNext.title')}</strong>
-        <span>{t('conv.escouadeNext.text')}{working ? ` ${t('conv.escouadeNext.busy')}` : ''}</span>
+        <span>{t('conv.escouadeNext.text')}{waits ? ` ${waits}` : ''}</span>
       </div>
       <button class="btn" disabled={working || restarting === agent.id} onclick={restartProcess}>{t('conv.escouadeNext.restart')}</button>
     </div>

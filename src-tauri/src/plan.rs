@@ -1,11 +1,13 @@
 //! What an agent is getting through, worked out from its stream: the task list Claude Code keeps
 //! (`TodoWrite`, or `TaskCreate` / `TaskUpdate`), the subagents it launches, the workflows it
-//! runs. One reducer, here, fed by `agent.rs` frame by frame; the window only shows the result
+//! runs, the commands, monitors and other tasks it leaves running in the background. One
+//! reducer, here, fed by `agent.rs` frame by frame; the window only shows the result
 //! (`AgentMeta::plan`), it never works it out again. The forms of the frames are in
 //! docs/PROTOCOL.md (« Avancée : ce que le flux dit »).
 
 use crate::mcp::visible_line;
 use crate::planfiles::FileList;
+use crate::taskout::safe_origin;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -145,6 +147,53 @@ pub struct WorkflowRun {
     pub ended_at: Option<i64>,
 }
 
+/// What a task Claude Code runs in the background is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum BgKind {
+    /// A command (`Bash`, `PowerShell`) run in the background.
+    #[default]
+    Command,
+    /// The `Monitor` tool: a command whose output lines are events for the agent.
+    Monitor,
+    /// An agent running remotely.
+    Remote,
+    /// An in-process teammate.
+    Teammate,
+}
+
+/// A task Claude Code runs in the background for the agent, other than a subagent or a workflow
+/// (they have rows of their own): a command, a monitor, a remote agent, a teammate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct BgTask {
+    /// Claude Code's id of the task (what `stop_task` and `get_task_output` name).
+    pub id: String,
+    pub kind: BgKind,
+    /// What the tool said it was for (« Ticker »), not the command.
+    pub title: String,
+    /// The command line as the tool received it, `MAX_COMMAND` characters at most.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    pub status: RunStatus,
+    pub started_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<i64>,
+    /// Claude Code's last words on it (« Background command "Ticker" completed (exit code 0) »);
+    /// for one stopped, only its description.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// The id of the call that launched it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub call: Option<String>,
+    /// The task of the subagent that owns it, when one does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Where Claude Code writes its output (`<task>.output`), once a frame said it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_file: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PlanState {
@@ -158,9 +207,16 @@ pub struct PlanState {
     /// Every subagent launched since the plan was last reset, those whose row went included.
     pub launched: u32,
     pub workflows: Vec<WorkflowRun>,
+    /// The tasks running in the background (commands, monitors, remote agents, teammates), then
+    /// the latest ended: `MAX_BG` at most.
+    pub bg_tasks: Vec<BgTask>,
     /// The latest calls looked at: a frame that comes twice counts once.
     #[serde(skip)]
     pub(crate) seen: Seen,
+    /// What the frames of background tasks need of the ones before: the calls of commands, and the
+    /// commands that run in the foreground.
+    #[serde(skip)]
+    pub(crate) memory: BgMemory,
 }
 
 /// How many calls `Seen` remembers: a frame that comes twice comes close to itself.
@@ -209,6 +265,150 @@ impl Seen {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
+/// How many calls of commands `BgMemory` remembers.
+const MAX_CALLS: usize = 64;
+/// How many commands in the foreground `BgMemory` remembers.
+const MAX_FOREGROUND: usize = 32;
+
+/// A call of a command or of a monitor: what its task's frames do not say (a task's description
+/// is the tool's, not the command; the tool tells apart a monitor from a command).
+#[derive(Debug, Clone, Default)]
+struct Call {
+    id: String,
+    tool: String,
+    command: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct BgRings {
+    calls: VecDeque<Call>,
+    /// Tasks seen starting in the foreground, until they end, go to the background, or the turn
+    /// ends: not rows (nothing shows them), but one that goes to the background keeps its start.
+    foreground: VecDeque<BgTask>,
+}
+
+/// What the plan remembers of the calls and tasks it does not show. Like `Seen`: not part of what
+/// the plan says (two plans are equal whatever they remember), not copied with it (the window's
+/// view copies the plan at each frame; the copies share the lists), and not saved.
+#[derive(Clone, Default)]
+pub(crate) struct BgMemory(Arc<Mutex<BgRings>>);
+
+impl std::fmt::Debug for BgMemory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rings = self.0.lock();
+        write!(
+            f,
+            "BgMemory({} calls, {} foreground)",
+            rings.calls.len(),
+            rings.foreground.len()
+        )
+    }
+}
+
+impl PartialEq for BgMemory {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl BgMemory {
+    /// A call of `Bash`, `PowerShell` or `Monitor` (any thread): its command and description, kept
+    /// until its task says it started. A call met again replaces itself.
+    fn remember_call(&self, id: &str, name: &str, input: &Value) {
+        if !matches!(name, "Bash" | "PowerShell" | "Monitor") {
+            return;
+        }
+        let call = Call {
+            id: id.to_string(),
+            tool: name.to_string(),
+            command: command_text(&input["command"]),
+            description: words(&input["description"]),
+        };
+        let mut rings = self.0.lock();
+        if let Some(known) = rings.calls.iter_mut().find(|c| c.id == id) {
+            *known = call;
+            return;
+        }
+        if rings.calls.len() >= MAX_CALLS {
+            rings.calls.pop_front();
+        }
+        rings.calls.push_back(call);
+    }
+
+    fn call(&self, id: &str) -> Option<Call> {
+        if id.is_empty() {
+            return None;
+        }
+        self.0.lock().calls.iter().find(|c| c.id == id).cloned()
+    }
+
+    /// A task that started in the foreground.
+    fn keep_foreground(&self, task: BgTask) {
+        let mut rings = self.0.lock();
+        rings.foreground.retain(|t| t.id != task.id);
+        if rings.foreground.len() >= MAX_FOREGROUND {
+            rings.foreground.pop_front();
+        }
+        rings.foreground.push_back(task);
+    }
+
+    /// The foreground task `id`, forgotten: it ended, or it goes to the background.
+    fn take_foreground(&self, id: &str) -> Option<BgTask> {
+        let mut rings = self.0.lock();
+        let at = rings.foreground.iter().position(|t| t.id == id)?;
+        rings.foreground.remove(at)
+    }
+
+    fn in_foreground(&self, id: &str) -> bool {
+        self.0.lock().foreground.iter().any(|t| t.id == id)
+    }
+
+    fn set_foreground_title(&self, id: &str, title: &str) {
+        if let Some(t) = self.0.lock().foreground.iter_mut().find(|t| t.id == id) {
+            t.title = title.to_string();
+        }
+    }
+
+    fn clear_foreground(&self) {
+        self.0.lock().foreground.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn calls_len(&self) -> usize {
+        self.0.lock().calls.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn foreground_len(&self) -> usize {
+        self.0.lock().foreground.len()
+    }
+
+    /// Both are the same lists (tests: a copy of a plan does not copy them).
+    #[cfg(test)]
+    pub(crate) fn same_ring(&self, other: &BgMemory) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+/// The longest command a background task keeps, in characters, the ellipsis included.
+pub const MAX_COMMAND: usize = 2000;
+/// The most background tasks a plan keeps ended: the latest.
+pub const MAX_BG_FINISHED: usize = 10;
+/// The most background tasks a plan keeps: all those running, then the latest ended.
+pub const MAX_BG: usize = 40;
+
+/// The command of a call as the tool received it, cut to `MAX_COMMAND` characters with an
+/// ellipsis; None when there is none.
+fn command_text(v: &Value) -> Option<String> {
+    let text = v.as_str().filter(|c| !c.trim().is_empty())?;
+    if text.chars().count() <= MAX_COMMAND {
+        return Some(text.to_string());
+    }
+    let cut: String = text.chars().take(MAX_COMMAND - 1).collect();
+    Some(format!("{cut}…"))
+}
+
 /// The most tasks one lists as the ones it waits for.
 const MAX_BLOCKERS: usize = 20;
 
@@ -358,6 +558,80 @@ fn end_workflow(run: &mut WorkflowRun, status: RunStatus, at: i64) -> bool {
     true
 }
 
+fn end_bg(task: &mut BgTask, status: RunStatus, at: i64) -> bool {
+    if task.status != RunStatus::Running {
+        return false;
+    }
+    task.status = status;
+    task.ended_at = Some(at);
+    true
+}
+
+/// How a background task ended, as its notification says; None for anything else (a monitor's
+/// event, replayed, has no status: the task goes on).
+fn bg_ending(status: Option<&str>) -> Option<RunStatus> {
+    match status? {
+        "completed" => Some(RunStatus::Done),
+        "failed" => Some(RunStatus::Failed),
+        "stopped" | "killed" => Some(RunStatus::Stopped),
+        _ => None,
+    }
+}
+
+/// What a task of `task_type` is, among those kept as background tasks; `tool` is the tool of the
+/// call that launched it, when known (a monitor is a `local_bash` task, only its tool tells).
+fn bg_kind(task_type: &str, tool: Option<&str>) -> Option<BgKind> {
+    match task_type {
+        "local_bash" if tool == Some("Monitor") => Some(BgKind::Monitor),
+        "local_bash" => Some(BgKind::Command),
+        "monitor_mcp" => Some(BgKind::Monitor),
+        "remote_agent" => Some(BgKind::Remote),
+        "in_process_teammate" => Some(BgKind::Teammate),
+        _ => None,
+    }
+}
+
+/// The first line of `text` that says something, as a title.
+fn first_line(text: &str) -> String {
+    text.lines()
+        .map(clean)
+        .find(|l| !l.is_empty())
+        .unwrap_or_default()
+}
+
+/// The longest file path a result is believed to name.
+const MAX_PATH: usize = 1000;
+
+/// The file a result says a task's output is written to: « Output is being written to: <path> »,
+/// when the file is named after the task (`<task>.output`), the path ending there (at the end of
+/// the text, at a space, or at a full stop that ends the sentence). Never another file name: the
+/// file will be read. Nor a path to another machine (`safe_origin`: a share, a verbatim path, a
+/// device), which Windows would open over the network.
+fn output_path(text: &str, task: &str) -> Option<String> {
+    const MARK: &str = "Output is being written to:";
+    let line = text[text.find(MARK)? + MARK.len()..].lines().next()?;
+    let line = line.trim_start();
+    let name = format!("{task}.output");
+    let mut from = 0;
+    while let Some(found) = line[from..].find(&name) {
+        let start = from + found;
+        let end = start + name.len();
+        from = end;
+        let after = &line[end..];
+        let boundary = after.is_empty()
+            || after.starts_with(char::is_whitespace)
+            || after
+                .strip_prefix('.')
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace));
+        let named = line[..start].ends_with(['/', '\\']);
+        if boundary && named {
+            let path = &line[..end];
+            return (path.len() <= MAX_PATH && safe_origin(path)).then(|| path.to_string());
+        }
+    }
+    None
+}
+
 /// The totals Claude Code gives of a subagent's work replace the count made on the way. Kept
 /// without a word: each progress frame would send the window the whole agent, and they go out
 /// with the next change of what it shows (what the subagent does, which changes with each tool it
@@ -377,7 +651,17 @@ impl PlanState {
         self.tasks.is_empty()
             && self.agents.is_empty()
             && self.workflows.is_empty()
+            && self.bg_tasks.is_empty()
             && self.launched == 0
+    }
+
+    /// A plan with nothing in it, that goes on with what another remembered of the calls and of the
+    /// foreground tasks (the agent keeps those while it has no plan to hold them).
+    pub(crate) fn with_memory(memory: BgMemory) -> Self {
+        Self {
+            memory,
+            ..Self::default()
+        }
     }
 
     /// Nothing left to do nor to wait for: every task done (or none), nothing running.
@@ -388,16 +672,23 @@ impl PlanState {
                 .workflows
                 .iter()
                 .all(|w| w.status != RunStatus::Running)
+            && self.bg_tasks.iter().all(|t| t.status != RunStatus::Running)
     }
 
-    /// A subagent or a workflow is running: in the background, it goes on after the turn, in
-    /// the process (which a restart would kill).
+    /// A subagent, a workflow or a command is running: in the background, it goes on after the
+    /// turn, in the process (which a restart would kill).
     pub fn runs_something(&self) -> bool {
-        self.agents.iter().any(|a| a.status == RunStatus::Running)
-            || self
-                .workflows
-                .iter()
-                .any(|w| w.status == RunStatus::Running)
+        self.running_count() > 0
+    }
+
+    /// How many subagents, workflows and background tasks (commands, monitors…) run: the rows
+    /// that a restart of the agent's process would kill, counted (`runs_something` is whether
+    /// there are any).
+    pub fn running_count(&self) -> usize {
+        let running = |status: RunStatus| status == RunStatus::Running;
+        self.agents.iter().filter(|a| running(a.status)).count()
+            + self.workflows.iter().filter(|w| running(w.status)).count()
+            + self.bg_tasks.iter().filter(|t| running(t.status)).count()
     }
 
     /// Forgets everything (a new conversation, a new plan).
@@ -539,12 +830,19 @@ impl PlanState {
                 change = Change::Saved;
             }
         }
+        for task in &mut self.bg_tasks {
+            if end_bg(task, RunStatus::Interrupted, now) {
+                change = Change::Saved;
+            }
+        }
+        self.memory.clear_foreground();
         change
     }
 
-    /// A turn ended: a subagent in the foreground cannot be running any more (it was stopped).
-    /// One in the background goes on, and so does a workflow.
+    /// A turn ended: a subagent in the foreground cannot be running any more (it was stopped), nor
+    /// a command. One in the background goes on, and so does a workflow.
     pub fn end_turn(&mut self, now: i64) -> Change {
+        self.memory.clear_foreground();
         self.end_agents(now, |a| !a.background)
     }
 
@@ -573,6 +871,9 @@ impl PlanState {
         input: &Value,
         now: i64,
     ) -> Change {
+        // The command (and the tool) of a task that starts later, from any thread: remembered
+        // before anything can return, and not a change.
+        self.memory.remember_call(id, name, input);
         let agent_call = matches!(name, "Task" | "Agent");
         // Only the main thread keeps the task list.
         let list_call =
@@ -622,6 +923,19 @@ impl PlanState {
 
     /// The result of a tool call: `text` its text, `tool_use_result` the frame's structured one.
     pub fn on_tool_result(
+        &mut self,
+        tool_use_id: &str,
+        is_error: bool,
+        text: &str,
+        tool_use_result: &Value,
+        now: i64,
+    ) -> Change {
+        self.bg_result(tool_use_id, is_error, text, tool_use_result, now)
+            .and(self.call_result(tool_use_id, is_error, text, tool_use_result, now))
+    }
+
+    /// What the result of a call is to the task list and to the subagents.
+    fn call_result(
         &mut self,
         tool_use_id: &str,
         is_error: bool,
@@ -696,6 +1010,7 @@ impl PlanState {
             "task_updated" => self.task_updated(f, now),
             "task_notification" => self.task_notification(f, now),
             "task_progress" => self.task_progress(f),
+            "background_tasks_changed" => self.bg_level(f, now),
             _ => Change::None,
         }
     }
@@ -982,7 +1297,8 @@ impl PlanState {
         match f["task_type"].as_str() {
             Some("local_agent") => self.agent_started(task, f, now),
             Some("local_workflow") => self.workflow_started(task, f, now),
-            _ => Change::None,
+            Some(other) => self.bg_started(task, other, f, now),
+            None => Change::None,
         }
     }
 
@@ -1079,17 +1395,13 @@ impl PlanState {
             }
             return change;
         }
-        let run = self.workflows.iter_mut().find(|w| w.id == task);
-        match (status, run) {
-            (Some(status), Some(run)) => {
-                if end_workflow(run, status, now) {
-                    Change::Saved
-                } else {
-                    Change::None
-                }
-            }
-            _ => Change::None,
+        if let Some(run) = self.workflows.iter_mut().find(|w| w.id == task) {
+            return match status {
+                Some(status) if end_workflow(run, status, now) => Change::Saved,
+                _ => Change::None,
+            };
         }
+        self.bg_updated(task, patch, status, now)
     }
 
     fn task_notification(&mut self, f: &Value, now: i64) -> Change {
@@ -1132,7 +1444,7 @@ impl PlanState {
                     Change::None
                 }
             }
-            None => Change::None,
+            None => self.bg_notified(task, f, now),
         }
     }
 
@@ -1181,6 +1493,332 @@ impl PlanState {
             }
             None => Change::None,
         }
+    }
+}
+
+// ---------- tasks in the background ----------
+
+impl PlanState {
+    /// Fills in what a call says of the task (`call`, `command`, and `parent`), where the row has
+    /// not got it yet; true when something was added.
+    fn complete_bg(row: &mut BgTask, call_id: Option<&str>, call: Option<&Call>) -> bool {
+        let mut changed = false;
+        if row.call.is_none() {
+            if let Some(id) = call_id.filter(|c| !c.is_empty()) {
+                row.call = Some(id.to_string());
+                changed = true;
+            }
+        }
+        if row.command.is_none() {
+            if let Some(command) = call.and_then(|c| c.command.clone()) {
+                row.command = Some(command);
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// The title of a task: its own description, else the one its call gave the tool, else the first
+    /// line of its command, else its id.
+    fn bg_title(description: &Value, call: Option<&Call>, task: &str) -> String {
+        words(description)
+            .or_else(|| call.and_then(|c| c.description.clone()))
+            .or_else(|| {
+                call.and_then(|c| c.command.as_deref())
+                    .map(first_line)
+                    .filter(|l| !l.is_empty())
+            })
+            .unwrap_or_else(|| clean(task))
+    }
+
+    /// The finished rows beyond `MAX_BG_FINISHED` go (the one that ended longest ago first), then
+    /// the rows beyond `MAX_BG` (a finished one before any that runs, else the oldest).
+    fn trim_bg(&mut self) {
+        let oldest_finished = |rows: &[BgTask]| {
+            rows.iter()
+                .enumerate()
+                .filter(|(_, t)| t.status != RunStatus::Running)
+                .min_by_key(|(_, t)| t.ended_at.unwrap_or(t.started_at))
+                .map(|(i, _)| i)
+        };
+        while self
+            .bg_tasks
+            .iter()
+            .filter(|t| t.status != RunStatus::Running)
+            .count()
+            > MAX_BG_FINISHED
+        {
+            let Some(at) = oldest_finished(&self.bg_tasks) else {
+                break;
+            };
+            self.bg_tasks.remove(at);
+        }
+        while self.bg_tasks.len() > MAX_BG {
+            let at = oldest_finished(&self.bg_tasks).unwrap_or(0);
+            self.bg_tasks.remove(at);
+        }
+    }
+
+    /// The `task_started` of a task of `task_type`, which may be one of those kept here. In the
+    /// foreground (`is_backgrounded` false, or none for a command), it is not listed, only
+    /// remembered, for it may be sent to the background (`task_updated`).
+    fn bg_started(&mut self, task: &str, task_type: &str, f: &Value, now: i64) -> Change {
+        let call_id = f["tool_use_id"].as_str().filter(|c| !c.is_empty());
+        let call = call_id.and_then(|c| self.memory.call(c));
+        let Some(kind) = bg_kind(task_type, call.as_ref().map(|c| c.tool.as_str())) else {
+            return Change::None;
+        };
+        let parent = f["parent_task_id"]
+            .as_str()
+            .filter(|p| !p.is_empty())
+            .map(str::to_string);
+        // A command is in the background only if it says so; the others are, unless they say not.
+        let background = match task_type {
+            "local_bash" => f["is_backgrounded"] == true,
+            _ => f["is_backgrounded"] != false,
+        };
+        let title = Self::bg_title(&f["description"], call.as_ref(), task);
+        if let Some(row) = self.bg_tasks.iter_mut().find(|t| t.id == task) {
+            // Opened by the level that comes before the task, or by the result of its call.
+            let mut changed = Self::complete_bg(row, call_id, call.as_ref());
+            // The level took a monitor for a command; the call of its task knows better.
+            if row.kind == BgKind::Command && kind == BgKind::Monitor {
+                row.kind = kind;
+                changed = true;
+            }
+            if row.parent.is_none() && parent.is_some() {
+                row.parent = parent;
+                changed = true;
+            }
+            if row.title.is_empty() {
+                row.title = title;
+                changed = true;
+            }
+            return if changed { Change::Saved } else { Change::None };
+        }
+        let row = BgTask {
+            id: task.to_string(),
+            kind,
+            title,
+            command: call.as_ref().and_then(|c| c.command.clone()),
+            status: RunStatus::Running,
+            started_at: now,
+            call: call_id.map(str::to_string),
+            parent,
+            ..BgTask::default()
+        };
+        if !background {
+            self.memory.keep_foreground(row);
+            return Change::None;
+        }
+        self.bg_tasks.push(row);
+        self.trim_bg();
+        Change::Saved
+    }
+
+    /// A task of the foreground goes to the background: its row opens, from when it started.
+    fn promote_bg(&mut self, task: &str) -> bool {
+        let Some(row) = self.memory.take_foreground(task) else {
+            return false;
+        };
+        self.bg_tasks.push(row);
+        self.trim_bg();
+        true
+    }
+
+    /// The `task_updated` of a task that is neither a subagent nor a workflow: sent to the
+    /// background, renamed, ended. A task of the foreground that ends is forgotten without a word.
+    fn bg_updated(
+        &mut self,
+        task: &str,
+        patch: &Value,
+        status: Option<RunStatus>,
+        now: i64,
+    ) -> Change {
+        if self.memory.in_foreground(task) {
+            if patch["is_backgrounded"] == true {
+                // Its description may have changed before.
+                if let Some(title) = words(&patch["description"]) {
+                    self.memory.set_foreground_title(task, &title);
+                }
+                return if self.promote_bg(task) {
+                    Change::Saved
+                } else {
+                    Change::None
+                };
+            }
+            if status.is_some() {
+                self.memory.take_foreground(task);
+            } else if let Some(title) = words(&patch["description"]) {
+                self.memory.set_foreground_title(task, &title);
+            }
+            return Change::None;
+        }
+        let Some(row) = self.bg_tasks.iter_mut().find(|t| t.id == task) else {
+            return Change::None;
+        };
+        let mut change = Change::None;
+        if let Some(title) = words(&patch["description"]).filter(|t| *t != row.title) {
+            row.title = title;
+            change = Change::Saved;
+        }
+        if status.is_some_and(|s| end_bg(row, s, now)) {
+            change = Change::Saved;
+        }
+        if change == Change::Saved {
+            self.trim_bg();
+        }
+        change
+    }
+
+    /// The `task_notification` of a task that is neither a subagent nor a workflow. It ends the row
+    /// only by a status that ends a task (the events of a monitor, replayed, have none: they end
+    /// nothing), and tells its words and its file. One of the foreground is forgotten.
+    fn bg_notified(&mut self, task: &str, f: &Value, now: i64) -> Change {
+        if task.is_empty() {
+            return Change::None;
+        }
+        let ending = bg_ending(f["status"].as_str());
+        if self.memory.in_foreground(task) {
+            if ending.is_some() {
+                self.memory.take_foreground(task);
+            }
+            return Change::None;
+        }
+        let (Some(ending), Some(row)) = (ending, self.bg_tasks.iter_mut().find(|t| t.id == task))
+        else {
+            return Change::None;
+        };
+        let mut changed = end_bg(row, ending, now);
+        if let Some(summary) = words(&f["summary"]).filter(|s| row.summary.as_ref() != Some(s)) {
+            row.summary = Some(summary);
+            changed = true;
+        }
+        // The file will be read: never one of another machine (`safe_origin`), as the frame says it.
+        let file = f["output_file"]
+            .as_str()
+            .filter(|p| !p.is_empty() && safe_origin(p));
+        if let Some(file) = file.filter(|p| row.output_file.as_deref() != Some(*p)) {
+            row.output_file = Some(file.to_string());
+            changed = true;
+        }
+        if changed {
+            self.trim_bg();
+            Change::Saved
+        } else {
+            Change::None
+        }
+    }
+
+    /// `background_tasks_changed`: the tasks Claude Code runs in the background now, all of them
+    /// (a level, not an edge). A task of a kept kind that no row has opens one; a running row the
+    /// level has not got any more is over, whatever lost notification should have said.
+    fn bg_level(&mut self, f: &Value, now: i64) -> Change {
+        let Some(tasks) = f["tasks"].as_array() else {
+            return Change::None;
+        };
+        let mut change = Change::None;
+        let mut alive: Vec<&str> = Vec::new();
+        for entry in tasks {
+            let Some(task) = entry["task_id"].as_str().filter(|t| !t.is_empty()) else {
+                continue;
+            };
+            alive.push(task);
+            let Some(task_type) = entry["task_type"].as_str() else {
+                continue;
+            };
+            if entry["ambient"] == true || self.bg_tasks.iter().any(|t| t.id == task) {
+                continue;
+            }
+            // Listed as in the background: a task of the foreground sent there, before its update.
+            if self.promote_bg(task) {
+                change = Change::Saved;
+                continue;
+            }
+            // The level cannot tell a monitor from a command: its task does (`bg_started`).
+            let Some(kind) = bg_kind(task_type, None) else {
+                continue;
+            };
+            self.bg_tasks.push(BgTask {
+                id: task.to_string(),
+                kind,
+                title: Self::bg_title(&entry["description"], None, task),
+                status: RunStatus::Running,
+                started_at: now,
+                parent: entry["parent_task_id"]
+                    .as_str()
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_string),
+                ..BgTask::default()
+            });
+            self.trim_bg();
+            change = Change::Saved;
+        }
+        for row in &mut self.bg_tasks {
+            if !alive.contains(&row.id.as_str()) && end_bg(row, RunStatus::Done, now) {
+                change = Change::Saved;
+            }
+        }
+        change
+    }
+
+    /// The result of a call, for the tasks it started: a command sent to the background says its
+    /// task (`backgroundTaskId`), a monitor too (`taskId`, for a call of `Monitor` only). This is
+    /// all the start of a task there is in the Claude Code view, which has no `system` frames. The
+    /// text tells the file the output is written to, when it is the task's own (`output_path`).
+    fn bg_result(
+        &mut self,
+        call_id: &str,
+        is_error: bool,
+        text: &str,
+        tur: &Value,
+        now: i64,
+    ) -> Change {
+        if is_error {
+            return Change::None;
+        }
+        let call = self.memory.call(call_id);
+        let monitor = call.as_ref().is_some_and(|c| c.tool == "Monitor");
+        let task = tur["backgroundTaskId"]
+            .as_str()
+            .or_else(|| monitor.then(|| tur["taskId"].as_str()).flatten())
+            .filter(|t| !t.is_empty());
+        let Some(task) = task else {
+            return Change::None;
+        };
+        let file = output_path(text, task);
+        if let Some(row) = self.bg_tasks.iter_mut().find(|t| t.id == task) {
+            let mut changed = Self::complete_bg(row, Some(call_id), call.as_ref());
+            if row.output_file.is_none() && file.is_some() {
+                row.output_file = file;
+                changed = true;
+            }
+            return if changed { Change::Saved } else { Change::None };
+        }
+        // A command of the foreground that goes to the background by its result alone.
+        if !self.promote_bg(task) {
+            let kind = if monitor {
+                BgKind::Monitor
+            } else {
+                BgKind::Command
+            };
+            self.bg_tasks.push(BgTask {
+                id: task.to_string(),
+                kind,
+                title: Self::bg_title(&Value::Null, call.as_ref(), task),
+                status: RunStatus::Running,
+                started_at: now,
+                ..BgTask::default()
+            });
+        }
+        if let Some(row) = self.bg_tasks.iter_mut().find(|t| t.id == task) {
+            Self::complete_bg(row, Some(call_id), call.as_ref());
+            if row.output_file.is_none() {
+                row.output_file = file;
+            }
+        }
+        self.trim_bg();
+        Change::Saved
     }
 }
 

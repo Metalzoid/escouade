@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
@@ -1780,6 +1780,372 @@ describe('Sidebar subagents of an agent', () => {
       expect(more).toHaveTextContent('Show fewer');
       await userEvent.click(screen.getByRole('button', { name: '11 finished subagents' }));
       expect(within(group('Subagents of refacto-auth')).getByRole('button', { name: '1 more' })).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Sidebar background tasks of an agent', () => {
+  const bg = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    kind: 'command',
+    title: `tâche ${id}`,
+    status: 'running',
+    startedAt: 1_000,
+    ...over,
+  });
+  const flow = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    title: `workflow ${id}`,
+    status: 'running',
+    tools: 0,
+    tokens: 0,
+    startedAt: 1_000,
+    ...over,
+  });
+  const sub = (id: string) => ({ id, title: `sous-agent ${id}`, status: 'running', background: true, tools: 0, startedAt: 1 });
+  const withBg = (bgTasks: unknown[], workflows: unknown[] = [], agents: unknown[] = []) =>
+    ({ source: null, tasks: [], agents, launched: agents.length, workflows, bgTasks }) as never;
+  const group = (name = 'Tâches de fond de refacto-auth') => screen.getByRole('group', { name });
+  const fold = () => within(group()).getByRole('button', { name: /^Tâches de fond/ });
+  /** The rows of tasks (not the buttons that fold and unroll). */
+  const bgRows = () => [...group().querySelectorAll<HTMLElement>('[data-bg-row]')];
+
+  it('unfolds under the card those running, with what they are, how long they run and what they do, then how many finished', async () => {
+    resetApp({
+      agents: [
+        agent({
+          plan: withBg(
+            [
+              bg('b1', { title: 'Ticker', command: 'node ticker.js', startedAt: 1_000 }),
+              bg('b2', { kind: 'monitor', title: 'Watch', startedAt: 20_000 }),
+              bg('b3', { title: 'Vieux', status: 'done', endedAt: 5_000, summary: 'Background command "Vieux" completed (exit code 0)' }),
+            ],
+            [flow('w1', { now: 'Phase 1 : lecteur A', startedAt: 30_000 })],
+          ),
+        }),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }),
+      ],
+    });
+    app.now = 61_000;
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    // Under the card, not in it.
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(card).not.toContainElement(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'true');
+    expect(fold()).toHaveTextContent('Tâches de fond 3 en cours 1 finie');
+    const list = within(group()).getByRole('list');
+    const ticker = within(list).getByRole('button', { name: /Ticker/ });
+    expect(ticker).toHaveTextContent('Ticker');
+    expect(ticker).toHaveTextContent('1m 00s');
+    expect(ticker).toHaveTextContent('Commande en fond · node ticker.js');
+    expect(within(list).getByRole('button', { name: /Watch/ })).toHaveTextContent('Surveillance');
+    expect(within(list).getByRole('button', { name: /workflow w1/ })).toHaveTextContent('Workflow · Phase 1 : lecteur A');
+    // In the order they were launched in.
+    expect(bgRows().map((r) => r.dataset.bgRow)).toEqual(['b1', 'b2', 'w1']);
+    // The finished ones are counted, folded.
+    expect(within(list).queryByRole('button', { name: /Vieux/ })).not.toBeInTheDocument();
+    const finished = within(list).getByRole('button', { name: '1 tâche finie' });
+    expect(finished).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(finished);
+    expect(finished).toHaveAttribute('aria-expanded', 'true');
+    expect(within(list).getByRole('button', { name: /Vieux/ })).toHaveTextContent('Commande en fond · Terminée (code 0)');
+    // An agent without a task has no fold.
+    expect(screen.queryByRole('group', { name: 'Tâches de fond de tests-e2e' })).not.toBeInTheDocument();
+  });
+
+  it('counts the duration of those running live, and stops at the end of those finished', () => {
+    resetApp({ agents: [agent({ plan: withBg([bg('b1'), bg('b2', { status: 'done', startedAt: 1_000, endedAt: 31_000 })]) })] });
+    app.now = 61_000;
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const row = screen.getByRole('button', { name: /tâche b1/ });
+    expect(row).toHaveTextContent('1m 00s');
+    app.now = 121_000;
+    return waitFor(() => expect(row).toHaveTextContent('2m 00s'));
+  });
+
+  it('tells a failure apart by its color, and a stop or an interruption', async () => {
+    resetApp({
+      agents: [
+        agent({
+          plan: withBg([
+            bg('b1', { status: 'failed', endedAt: 5 }),
+            bg('b2', { status: 'stopped', endedAt: 4 }),
+            bg('b3', { status: 'interrupted', endedAt: 3 }),
+            bg('b4', { status: 'done', endedAt: 2 }),
+          ]),
+        }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await userEvent.click(fold());
+    await userEvent.click(screen.getByRole('button', { name: '4 tâches finies' }));
+    expect(bgRows().map((r) => [r.dataset.bgRow, r.querySelector('.sdot')?.className])).toEqual([
+      ['b1', expect.stringContaining('failed')],
+      ['b2', expect.stringContaining('stopped')],
+      ['b3', expect.stringContaining('interrupted')],
+      ['b4', expect.stringContaining('done')],
+    ]);
+    expect(screen.getByRole('button', { name: /tâche b1/ })).toHaveTextContent('En échec');
+  });
+
+  it('is folded when none runs, and the chevron unfolds it', async () => {
+    resetApp({
+      agents: [agent({ plan: withBg([bg('b1', { status: 'stopped', endedAt: 3 }), bg('b2', { status: 'done', endedAt: 4 })]) })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+    expect(fold()).toHaveTextContent('2 finies');
+    expect(fold()).not.toHaveTextContent('en cours');
+    expect(within(group()).queryByRole('list')).not.toBeInTheDocument();
+    await userEvent.click(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'true');
+    expect(app.bgOpen.a1).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: '2 tâches finies' }));
+    expect(screen.getByRole('button', { name: /tâche b1/ })).toHaveTextContent('Arrêtée');
+    expect(screen.getByRole('button', { name: /tâche b2/ })).toHaveTextContent('Terminée');
+    // Folded again by the reader, it stays so.
+    await userEvent.click(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('unfolds by itself when a task starts, unless the reader folded the list', async () => {
+    resetApp({ agents: [agent({ plan: withBg([bg('b1', { status: 'done', endedAt: 3 })]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+    app.agents.a1.plan = withBg([bg('b1', { status: 'done', endedAt: 3 }), bg('b2')]);
+    await waitFor(() => expect(fold()).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.click(fold());
+    app.agents.a1.plan = withBg([bg('b1', { status: 'done', endedAt: 3 }), bg('b2'), bg('b3')]);
+    await Promise.resolve();
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens a task’s view in place of the agent’s conversation, and says which is open', async () => {
+    resetApp({ agents: [agent({ plan: withBg([bg('b1', { title: 'Ticker' })]) }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })] });
+    app.ui.selectedAgent = { p1: 'a2' };
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const row = screen.getByRole('button', { name: /Ticker/ });
+    expect(row).not.toHaveAttribute('aria-current');
+    await userEvent.click(row);
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+    expect(app.taskView.a1).toBe('b1');
+    expect(row).toHaveAttribute('aria-current', 'page');
+    // The card of the agent goes back to its own conversation.
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(app.taskView.a1).toBeNull();
+    expect(row).not.toHaveAttribute('aria-current');
+  });
+
+  it('opens a workflow the same way, by its id', async () => {
+    resetApp({ agents: [agent({ plan: withBg([], [flow('w1')]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await userEvent.click(screen.getByRole('button', { name: /workflow w1/ }));
+    expect(app.taskView.a1).toBe('w1');
+  });
+
+  it('leaves the subagents’ own list alone, and the two views exclude each other', async () => {
+    resetApp({ agents: [agent({ plan: withBg([bg('b1', { title: 'Ticker' })], [], [sub('s1')]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const subs = screen.getByRole('group', { name: 'Sous-agents de refacto-auth' });
+    expect(within(subs).getByRole('button', { name: /sous-agent s1/ })).toBeInTheDocument();
+    expect(within(subs).queryByRole('button', { name: /Ticker/ })).not.toBeInTheDocument();
+    expect(within(group()).queryByRole('button', { name: /sous-agent s1/ })).not.toBeInTheDocument();
+    await userEvent.click(within(group()).getByRole('button', { name: /Ticker/ }));
+    expect(app.taskView.a1).toBe('b1');
+    await userEvent.click(within(subs).getByRole('button', { name: /sous-agent s1/ }));
+    expect(app.subView.a1).toBe('s1');
+    expect(app.taskView.a1).toBeNull();
+    expect(within(group()).getByRole('button', { name: /Ticker/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('comes after the subagents under the card', () => {
+    resetApp({ agents: [agent({ plan: withBg([bg('b1')], [], [sub('s1')]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const subs = screen.getByRole('group', { name: 'Sous-agents de refacto-auth' });
+    expect(subs.compareDocumentPosition(group()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('speaks English', async () => {
+    setLang('en');
+    resetApp({
+      agents: [agent({ plan: withBg([bg('b1', { kind: 'monitor', title: 'Watch' }), bg('b2', { status: 'failed', endedAt: 2 })]) })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const toggle = within(screen.getByRole('group', { name: 'Background tasks of refacto-auth' })).getByRole('button', {
+      name: /^Background tasks/,
+    });
+    expect(toggle).toHaveTextContent('Background tasks 1 running 1 finished');
+    expect(screen.getByRole('button', { name: /Watch/ })).toHaveTextContent('Monitor');
+    await userEvent.click(screen.getByRole('button', { name: '1 finished task' }));
+    expect(screen.getByRole('button', { name: /tâche b2/ })).toHaveTextContent('Background command · Failed');
+  });
+
+  describe('on the agent’s card', () => {
+    const chip = (card: HTMLElement) => card.querySelector<HTMLElement>('[data-bg-chip]');
+    const cardOf = (name: RegExp) => screen.getByRole('button', { name });
+
+    it('says how many run in the background, in full for a screen reader', () => {
+      resetApp({
+        agents: [agent({ plan: withBg([bg('b1'), bg('b2', { kind: 'monitor' })]) }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = cardOf(/refacto-auth/);
+      const c = within(card).getByRole('img', { name: '2 tâches de fond en cours' });
+      expect(c).toBe(chip(card));
+      expect(c).toHaveTextContent('2 en fond');
+      expect(c).toHaveAttribute('data-count', '2');
+      // The card is the same button, and says it.
+      expect(card).toHaveAccessibleName(/2 tâches de fond en cours/);
+      // Another agent, none.
+      expect(chip(cardOf(/tests-e2e/))).toBeNull();
+    });
+
+    it('says one in the singular, and nothing at zero', async () => {
+      resetApp({ agents: [agent({ plan: withBg([bg('b1')]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = cardOf(/refacto-auth/);
+      expect(within(card).getByRole('img', { name: '1 tâche de fond en cours' })).toHaveTextContent('1 en fond');
+      app.agents.a1.plan = withBg([bg('b1', { status: 'done', endedAt: 5 })]);
+      await waitFor(() => expect(chip(card)).toBeNull());
+    });
+
+    it('counts the workflows running, not the subagents, nor those finished', () => {
+      resetApp({
+        agents: [
+          agent({
+            plan: withBg(
+              [bg('b1'), bg('b2', { status: 'failed', endedAt: 2 })],
+              [flow('w1'), flow('w2', { status: 'done', endedAt: 3 })],
+              [sub('s1'), sub('s2')],
+            ),
+          }),
+        ],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(chip(cardOf(/refacto-auth/))).toHaveTextContent('2 en fond');
+    });
+
+    it('is not there for an agent with subagents only', () => {
+      resetApp({ agents: [agent({ plan: withBg([], [], [sub('s1')]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(chip(cardOf(/refacto-auth/))).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Tâches de fond de refacto-auth' })).not.toBeInTheDocument();
+    });
+
+    it('has its full text for a tooltip, and speaks English', () => {
+      setLang('en');
+      resetApp({ agents: [agent({ plan: withBg([bg('b1'), bg('b2')]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const c = chip(cardOf(/refacto-auth/))!;
+      expect(c).toHaveTextContent('2 in background');
+      expect(c).toHaveAccessibleName('2 background tasks running');
+      expect(c).toHaveAttribute('data-tip', '2 background tasks running');
+    });
+  });
+
+  describe('when there are many', () => {
+    const many = (count: number, over: Record<string, unknown> = {}, from = 1) =>
+      Array.from({ length: count }, (_, i) =>
+        bg(`b${from + i}`, { ...over, startedAt: 1_000 + from + i, ...(over.status ? { endedAt: 100_000 - i } : {}) }),
+      );
+    const unrollFinished = () => userEvent.click(screen.getByRole('button', { name: /tâches? finies?$/ }));
+
+    it('shows five of those running, then a button for the others that unrolls them', async () => {
+      resetApp({ agents: [agent({ plan: withBg(many(12)) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(fold()).toHaveTextContent('12 en cours');
+      expect(bgRows().map((r) => r.dataset.bgRow)).toEqual(['b1', 'b2', 'b3', 'b4', 'b5']);
+      const more = within(group()).getByRole('button', { name: '7 autres en cours' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      // The button comes after the rows it hides.
+      expect(more.compareDocumentPosition(bgRows()[4]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+      await userEvent.click(more);
+      expect(bgRows()).toHaveLength(12);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      expect(more).toHaveTextContent('Réduire');
+      expect(more).toHaveFocus();
+      await userEvent.click(more);
+      expect(bgRows()).toHaveLength(5);
+      expect(more).toHaveTextContent('7 autres en cours');
+    });
+
+    it('has no button for five running, and says one other in the singular for six', () => {
+      resetApp({ agents: [agent({ plan: withBg(many(5)) })] });
+      fakeBackend();
+      const { unmount } = render(Sidebar, { project: project() });
+      expect(bgRows()).toHaveLength(5);
+      expect(within(group()).queryByRole('button', { name: /autres? en cours/ })).not.toBeInTheDocument();
+      unmount();
+      resetApp({ agents: [agent({ plan: withBg(many(6)) })] });
+      render(Sidebar, { project: project() });
+      expect(bgRows()).toHaveLength(5);
+      expect(within(group()).getByRole('button', { name: '1 autre en cours' })).toBeInTheDocument();
+    });
+
+    it('shows ten of those finished once unfolded, then a button for the rest that unrolls them', async () => {
+      resetApp({ agents: [agent({ plan: withBg(many(15, { status: 'done' })) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(fold());
+      await unrollFinished();
+      // The latest ended first.
+      expect(bgRows()).toHaveLength(10);
+      expect(bgRows()[0].dataset.bgRow).toBe('b1');
+      const more = within(group()).getByRole('button', { name: '5 de plus' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      await userEvent.click(more);
+      expect(bgRows()).toHaveLength(15);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      await userEvent.click(more);
+      expect(bgRows()).toHaveLength(10);
+    });
+
+    it('caps the running and the finished lists on their own, and the list of one agent only', async () => {
+      resetApp({
+        agents: [
+          agent({ plan: withBg([...many(8), ...many(12, { status: 'done' }, 100)]) }),
+          agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: withBg(many(8, {}, 50)) }),
+        ],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await unrollFinished();
+      expect(bgRows()).toHaveLength(15);
+      expect(within(group()).getByRole('button', { name: '3 autres en cours' })).toBeInTheDocument();
+      expect(within(group()).getByRole('button', { name: '2 de plus' })).toBeInTheDocument();
+      await userEvent.click(within(group()).getByRole('button', { name: '2 de plus' }));
+      expect(bgRows()).toHaveLength(17);
+      const other = screen.getByRole('group', { name: 'Tâches de fond de tests-e2e' });
+      expect(other.querySelectorAll('[data-bg-row]')).toHaveLength(5);
+      expect(within(other).getByRole('button', { name: '3 autres en cours' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('speaks English', async () => {
+      setLang('en');
+      resetApp({ agents: [agent({ plan: withBg([...many(7), ...many(11, { status: 'done' }, 100)]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const more = within(group('Background tasks of refacto-auth')).getByRole('button', { name: '2 more running' });
+      await userEvent.click(more);
+      expect(more).toHaveTextContent('Show fewer');
+      await userEvent.click(screen.getByRole('button', { name: '11 finished tasks' }));
+      expect(within(group('Background tasks of refacto-auth')).getByRole('button', { name: '1 more' })).toBeInTheDocument();
     });
   });
 });

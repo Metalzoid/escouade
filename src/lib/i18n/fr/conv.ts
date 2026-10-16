@@ -48,9 +48,15 @@ export default {
   /** An agent whose process started without Escouade’s tools, which its next start gives (ESC-91). */
   escouadeNext: {
     title: 'Outils d’Escouade au prochain démarrage',
-    text: 'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste ; une commande lancée en arrière-plan s’arrête.',
-    /** A turn, a question, the setup of its worktree, a subagent or a workflow in the background. */
+    text: 'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
+    /** A turn, a question or the setup of its worktree under way: it ends by itself. */
     busy: 'Il pourra être relancé quand il aura fini ce qu’il fait.',
+    /**
+     * Nothing of that, but something runs in the background (a command, a monitor, a subagent, a workflow): restarting it
+     * would stop it, so « Relancer » is refused, and a command or a dev server does not end by itself.
+     */
+    busyBackground:
+      'Il a encore des tâches de fond (commande, surveillance, sous-agent, workflow) : le relancer les arrêterait. Une commande ou un serveur de dev ne finit pas seul : arrête-la d’abord, depuis sa vue (« Arrêter »), ou attends qu’elle ait fini.',
     restart: 'Relancer',
   },
 
