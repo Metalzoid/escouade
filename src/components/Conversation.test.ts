@@ -16,6 +16,7 @@ vi.mock('../lib/terminals', () => ({
   // « Vue Claude Code »: its interface, not drawn in jsdom.
   openAgentTerminal: async () => ({ id: 't1', projectId: '', name: 'x', shell: 'claude' }),
   getXTerm: () => undefined,
+  roomOf: () => null,
   mountTerminal() {},
   disposeTerminal() {},
   // The terminal of the header, in the agent’s worktree: only what is asked of the backend is looked at.

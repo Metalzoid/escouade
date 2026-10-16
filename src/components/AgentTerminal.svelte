@@ -1,18 +1,19 @@
 <script lang="ts" module>
-  import { disposeTerminal, getXTerm, openAgentTerminal } from '../lib/terminals';
+  import { disposeTerminal, getXTerm, openAgentTerminal, type Room } from '../lib/terminals';
 
   /** The interface being started, by agent: a view shown twice (classic, then split) starts it once. */
   const starting = new Map<string, Promise<string>>();
 
   /**
    * The terminal of the agent's Claude Code interface: the one it has when the window holds it, else a new one (the
-   * backend stops the one it had, which this window cannot show: a reload lost its output).
+   * backend stops the one it had, which this window cannot show: a reload lost its output), started at the size of `room`,
+   * where it is about to be shown.
    */
-  export function agentTerminal(agentId: string, current: string | null): Promise<string> {
+  export function agentTerminal(agentId: string, current: string | null, room?: Room | null): Promise<string> {
     if (current && getXTerm(current)) return Promise.resolve(current);
     let p = starting.get(agentId);
     if (!p) {
-      p = openAgentTerminal(agentId)
+      p = openAgentTerminal(agentId, room)
         .then((info) => {
           // The one before, if this window still held it, is gone.
           if (current && current !== info.id) disposeTerminal(current);
@@ -28,7 +29,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { t } from '../lib/i18n';
-  import { mountTerminal } from '../lib/terminals';
+  import { mountTerminal, roomOf } from '../lib/terminals';
   import { app } from '../lib/state.svelte';
   import type { Agent } from '../lib/types';
 
@@ -49,9 +50,12 @@
     const id = agent.id;
     void asked;
     const current = untrack(() => agent.terminalId);
+    // Its interface starts at the size of its box: Claude Code draws on the rows of its pseudo-console, so one started at some
+    // other size stays drawn on fewer rows than the box has until the resize reaches it (a busy window, a message that fails).
+    const room = untrack(() => (box ? roomOf(box) : null));
     error = null;
     let gone = false;
-    agentTerminal(id, current)
+    agentTerminal(id, current, room)
       .then((tid) => {
         if (!gone) term = tid;
       })

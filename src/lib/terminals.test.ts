@@ -8,12 +8,21 @@ const pasted = vi.hoisted(() => [] as string[]);
 const keyHandlers = vi.hoisted(() => [] as ((e: KeyboardEvent) => boolean)[]);
 // Whether the program in the terminal asked for bracketed pastes (Claude Code does as it starts).
 const modes = vi.hoisted(() => ({ bracketedPasteMode: true }));
-// The xterm.js instances made, with what they were given to type back (`onData`) and to draw (`write`).
+// The xterm.js instances made, with what they were given to type back (`onData`) and to draw (`write`), and who listens to
+// their size (`onResize`: `resize` is xterm.js changing it, which tells them).
 interface FakeTerm {
+  cols: number;
+  rows: number;
+  /** What `open` made in the host, where the fit addon looks for the size of the place. */
+  element?: HTMLElement;
   dataHandlers: ((d: string) => void)[];
+  resizeHandlers: ((size: { cols: number; rows: number }) => void)[];
   writes: { data: Uint8Array; done?: () => void }[];
+  resize(cols: number, rows: number): void;
 }
 const terms = vi.hoisted(() => [] as FakeTerm[]);
+// The size of the host (its inline style) each time a terminal was fitted.
+const fits = vi.hoisted(() => [] as { width: string; height: string }[]);
 // The WebGL addon: `fail` is why loading it throws (none: it loads), `losses` its context loss listeners.
 const gl = vi.hoisted(() => ({ fail: null as string | null, losses: [] as (() => void)[], disposed: 0 }));
 // What each terminal was built with, and what its web links addon does with a link it found.
@@ -28,7 +37,9 @@ vi.mock('@xterm/xterm', () => ({
     options = {};
     modes = modes;
     unicode = { activeVersion: '' };
+    element?: HTMLElement;
     dataHandlers: ((d: string) => void)[] = [];
+    resizeHandlers: ((size: { cols: number; rows: number }) => void)[] = [];
     writes: { data: Uint8Array; done?: () => void }[] = [];
     constructor(options: { linkHandler?: ILinkHandler }) {
       terms.push(this);
@@ -37,7 +48,18 @@ vi.mock('@xterm/xterm', () => ({
     loadAddon(addon: { activate?: (term: unknown) => void }) {
       addon.activate?.(this);
     }
-    open() {}
+    open(host: HTMLElement) {
+      // As xterm.js: its element in the host, which is what the fit addon measures.
+      this.element = document.createElement('div');
+      host.appendChild(this.element);
+    }
+    resize(cols: number, rows: number) {
+      // As xterm.js: a size it already has is no change.
+      if (cols === this.cols && rows === this.rows) return;
+      this.cols = cols;
+      this.rows = rows;
+      for (const handler of this.resizeHandlers) handler({ cols, rows });
+    }
     write(data: Uint8Array, done?: () => void) {
       this.writes.push({ data, done });
     }
@@ -50,16 +72,31 @@ vi.mock('@xterm/xterm', () => ({
     onData(handler: (d: string) => void) {
       this.dataHandlers.push(handler);
     }
-    onResize() {}
+    onResize(handler: (size: { cols: number; rows: number }) => void) {
+      this.resizeHandlers.push(handler);
+    }
     paste(text: string) {
       pasted.push(text);
     }
     dispose() {}
   },
 }));
+// The fit addon sizes the terminal to its host as the real one does, with a character cell of 8 x 20 px: a host in pixels gives
+// `width / 8` columns and `height / 20` rows, one that fills its box (100 %) leaves the size as it is.
 vi.mock('@xterm/addon-fit', () => ({
   FitAddon: class {
-    fit() {}
+    term?: FakeTerm;
+    activate(term: FakeTerm) {
+      this.term = term;
+    }
+    fit() {
+      const term = this.term!;
+      const { width, height } = term.element!.parentElement!.style;
+      fits.push({ width, height });
+      if (width.endsWith('px') && height.endsWith('px')) {
+        term.resize(Math.floor(parseFloat(width) / 8), Math.floor(parseFloat(height) / 20));
+      }
+    }
   },
 }));
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {} }));
@@ -86,10 +123,11 @@ vi.mock('@xterm/addon-webgl', () => ({
 }));
 
 import { app } from './state.svelte';
-import { getXTerm, openAgentTerminal, openTerminal, pastedContent } from './terminals';
+import { getXTerm, openAccountLogin, openAgentTerminal, openTerminal, pastedContent, roomOf } from './terminals';
 
 beforeEach(() => {
   terms.length = 0;
+  fits.length = 0;
   gl.fail = null;
   gl.losses.length = 0;
   gl.disposed = 0;
@@ -426,6 +464,345 @@ describe('opening a terminal', () => {
   it('passes on the backend’s refusal of a place', async () => {
     fakeBackend({ term_spawn: () => Promise.reject('chemin hors du dossier : ..') });
     await expect(openTerminal('p1', 'pwsh', 'pwsh · ..', { subdir: '..' })).rejects.toBe('chemin hors du dossier : ..');
+  });
+});
+
+describe('the room of an element', () => {
+  /** An element jsdom gives the size of a laid out one: `client` its width and height, `padding` its padding (CSS). */
+  function laidOut(client: { width: number; height: number }, padding?: string) {
+    const el = document.createElement('div');
+    if (padding) el.style.padding = padding;
+    Object.defineProperty(el, 'clientWidth', { value: client.width });
+    Object.defineProperty(el, 'clientHeight', { value: client.height });
+    return el;
+  }
+
+  it('is what the element holds, its padding left out', () => {
+    expect(roomOf(laidOut({ width: 1140, height: 944 }, '8px 4px 4px 12px'))).toEqual({ width: 1124, height: 932 });
+  });
+
+  it('is the whole of an element without padding', () => {
+    expect(roomOf(laidOut({ width: 800, height: 600 }))).toEqual({ width: 800, height: 600 });
+  });
+
+  it('is none for an element without width or height: not laid out yet, or hidden', () => {
+    expect(roomOf(laidOut({ width: 0, height: 600 }))).toBeNull();
+    expect(roomOf(laidOut({ width: 800, height: 0 }))).toBeNull();
+    expect(roomOf(laidOut({ width: 0, height: 0 }))).toBeNull();
+  });
+
+  it('is none for an element its padding fills', () => {
+    expect(roomOf(laidOut({ width: 16, height: 600 }, '8px 4px 4px 12px'))).toBeNull();
+    expect(roomOf(laidOut({ width: 800, height: 12 }, '8px 4px 4px 12px'))).toBeNull();
+    expect(roomOf(laidOut({ width: 10, height: 10 }, '8px 4px 4px 12px'))).toBeNull();
+  });
+});
+
+describe('the size of the pseudo-console of Claude Code’s interface', () => {
+  const info = { id: 'tui-1', projectId: 'p1', name: 'agent', shell: 'claude' };
+  // The size of the place it is shown in; with a cell of 8 x 20 px, 140 columns and 46 rows.
+  const ROOM = { width: 1124, height: 932 };
+
+  /** The channels of the terminals spawned, which the backend writes the output to. */
+  const outputs: { onmessage: (d: ArrayBuffer) => void }[] = [];
+  /** The sizes the backend was told that have not been answered yet: each is answered by the test (`held`). */
+  const resizes: { resolve: () => void; reject: (why: string) => void }[] = [];
+  let held = false;
+
+  beforeEach(() => {
+    outputs.length = 0;
+    resizes.length = 0;
+    held = false;
+    resetApp();
+  });
+
+  /** A backend that starts every terminal as `info`, and answers a size at once, or when the test says (`held`). */
+  const backend = () =>
+    fakeBackend({
+      agent_terminal: ({ output }) => (outputs.push(output), info),
+      term_spawn: ({ output }) => (outputs.push(output), info),
+      account_login: ({ output }) => (outputs.push(output), info),
+      term_resize: () => (held ? new Promise<void>((resolve, reject) => resizes.push({ resolve, reject })) : undefined),
+    });
+  const told = (b: ReturnType<typeof backend>) => b.called('term_resize').map((c) => c.args);
+  /** The output the program writes: any chunk of it makes the terminal look at its size again. */
+  const output = () => outputs.at(-1)!.onmessage(new ArrayBuffer(4));
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+
+  it('is that of the room it will be shown in: the program starts at the size it will have, not at the parking lot’s', async () => {
+    const b = backend();
+    await openAgentTerminal('a1', ROOM);
+    expect(b.called('agent_terminal')[0].args).toMatchObject({ id: 'a1', cols: 140, rows: 46 });
+  });
+
+  it('is the default one without a room, or with none known', async () => {
+    const b = backend();
+    await openAgentTerminal('a1');
+    await openAgentTerminal('a2', null);
+    expect(b.called('agent_terminal').map((c) => c.args)).toMatchObject([
+      { id: 'a1', cols: 100, rows: 30 },
+      { id: 'a2', cols: 100, rows: 30 },
+    ]);
+  });
+
+  it('is told to no one by the start itself: the size the program started at is the size it has', async () => {
+    const b = backend();
+    await openAgentTerminal('a1', ROOM);
+    await settle();
+    expect(told(b)).toEqual([]);
+  });
+
+  it('is fitted on a host the size of the room, which then fills its box again', async () => {
+    backend();
+    await openAgentTerminal('a1', ROOM);
+    // Fitted once, while the host had the room’s size in pixels…
+    expect(fits).toEqual([{ width: '1124px', height: '932px' }]);
+    // …and given back to the box it is shown in: whatever size that is from now on, it fills it.
+    const { host } = getXTerm('tui-1')!;
+    expect(host.style.width).toBe('100%');
+    expect(host.style.height).toBe('100%');
+    expect(host.style.cssText).not.toContain('px');
+  });
+
+  it('is fitted on a host that fills the parking lot when there is no room', async () => {
+    backend();
+    await openAgentTerminal('a1');
+    expect(fits).toEqual([{ width: '100%', height: '100%' }]);
+  });
+
+  describe('is told to the backend, once it has started', () => {
+    it('when xterm.js changes its size: with the id of the terminal and the new columns and rows', async () => {
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      terms.at(-1)!.resize(120, 40);
+      await waitFor(() => expect(told(b)).toEqual([{ id: 'tui-1', cols: 120, rows: 40 }]));
+    });
+
+    it('for each change, back to the size it started at included, and for none of the sizes it already told', async () => {
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      term.resize(120, 40);
+      await waitFor(() => expect(told(b)).toHaveLength(1));
+      await settle();
+      term.resize(140, 46);
+      await waitFor(() => expect(told(b)).toHaveLength(2));
+      await settle();
+      output();
+      await settle();
+      expect(told(b)).toEqual([
+        { id: 'tui-1', cols: 120, rows: 40 },
+        { id: 'tui-1', cols: 140, rows: 46 },
+      ]);
+    });
+
+    it('not when the size xterm.js tells is the one the program has (a fit that changes nothing, a size told twice)', async () => {
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      // The host fills its box, as it does once shown: fitted again, nothing changes.
+      getXTerm('tui-1')!.fit.fit();
+      term.resize(140, 46);
+      for (const handler of term.resizeHandlers) handler({ cols: 140, rows: 46 });
+      output();
+      await settle();
+      expect(told(b)).toEqual([]);
+    });
+
+    it('one at a time and in order: the sizes that come while one is on its way wait for it, and only the last of them goes', async () => {
+      held = true;
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      term.resize(120, 40);
+      term.resize(110, 35);
+      term.resize(90, 25);
+      await settle();
+      expect(told(b)).toEqual([{ id: 'tui-1', cols: 120, rows: 40 }]);
+      // The first is taken: the next goes, with the size xterm.js has now, not with the one that came second.
+      resizes[0].resolve();
+      await waitFor(() => expect(told(b)).toHaveLength(2));
+      expect(told(b)[1]).toEqual({ id: 'tui-1', cols: 90, rows: 25 });
+      // That one is on its way, and nothing waits behind it.
+      await settle();
+      resizes[1].resolve();
+      await settle();
+      expect(told(b)).toHaveLength(2);
+    });
+
+    it('and the size it came back to while another was on its way is told, though it is the one it started at', async () => {
+      held = true;
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      term.resize(120, 40);
+      term.resize(140, 46);
+      resizes[0].resolve();
+      await waitFor(() => expect(told(b)).toHaveLength(2));
+      expect(told(b)[1]).toEqual({ id: 'tui-1', cols: 140, rows: 46 });
+    });
+
+    it('but not the sizes xterm.js went through, once it is back to the one on its way', async () => {
+      held = true;
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      term.resize(120, 40);
+      term.resize(110, 35);
+      term.resize(120, 40);
+      resizes[0].resolve();
+      await settle();
+      expect(told(b)).toEqual([{ id: 'tui-1', cols: 120, rows: 40 }]);
+    });
+
+    describe('when the backend did not take it', () => {
+      // The waits are those of the code (500 ms between two tries): the clock is the test's.
+      beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }));
+      afterEach(() => vi.useRealTimers());
+
+      it('again after a short while, and not before', async () => {
+        held = true;
+        const b = backend();
+        await openAgentTerminal('a1', ROOM);
+        terms.at(-1)!.resize(120, 40);
+        expect(told(b)).toHaveLength(1);
+        resizes[0].reject('terminal introuvable');
+        await vi.advanceTimersByTimeAsync(499);
+        expect(told(b)).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(told(b)).toHaveLength(2);
+        expect(told(b)[1]).toEqual(told(b)[0]);
+        // Taken this time: it is not told again.
+        resizes[1].resolve();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(told(b)).toHaveLength(2);
+      });
+
+      it('never two at once: the wait starts when the answer comes, not before', async () => {
+        held = true;
+        const b = backend();
+        await openAgentTerminal('a1', ROOM);
+        terms.at(-1)!.resize(120, 40);
+        // No answer yet: nothing else goes, however long it takes.
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(told(b)).toHaveLength(1);
+      });
+
+      it('a few times at most, then no more until the size changes again (a terminal that is gone refuses for good)', async () => {
+        held = true;
+        const b = backend();
+        await openAgentTerminal('a1', ROOM);
+        terms.at(-1)!.resize(120, 40);
+        // The first try, then five more.
+        for (let i = 0; i < 6; i++) {
+          expect(told(b)).toHaveLength(i + 1);
+          resizes[i].reject('refusé');
+          await vi.advanceTimersByTimeAsync(500);
+        }
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(told(b)).toHaveLength(6);
+        // A new size is told at once, as any: the backend may take it.
+        terms.at(-1)!.resize(100, 31);
+        expect(told(b)).toHaveLength(7);
+        expect(told(b)[6]).toEqual({ id: 'tui-1', cols: 100, rows: 31 });
+      });
+
+      it('and the count starts again once it took one', async () => {
+        held = true;
+        const b = backend();
+        await openAgentTerminal('a1', ROOM);
+        const term = terms.at(-1)!;
+        term.resize(120, 40);
+        // Four refusals, then it takes it…
+        for (let i = 0; i < 4; i++) {
+          resizes[i].reject('refusé');
+          await vi.advanceTimersByTimeAsync(500);
+        }
+        resizes[4].resolve();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(told(b)).toHaveLength(5);
+        // …so the next size has its tries again: six sends in all, instead of the two that were left.
+        term.resize(100, 31);
+        for (let i = 5; i < 11; i++) {
+          expect(told(b)).toHaveLength(i + 1);
+          resizes[i].reject('refusé');
+          await vi.advanceTimersByTimeAsync(500);
+        }
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(told(b)).toHaveLength(11);
+      });
+    });
+
+    it('again at the next change of size, with the size it has then, when the backend did not take the one before', async () => {
+      held = true;
+      const b = backend();
+      await openAgentTerminal('a1', ROOM);
+      const term = terms.at(-1)!;
+      term.resize(120, 40);
+      resizes[0].reject('refusé');
+      await settle();
+      term.resize(100, 31);
+      await waitFor(() => expect(told(b)).toHaveLength(2));
+      expect(told(b)[1]).toEqual({ id: 'tui-1', cols: 100, rows: 31 });
+    });
+
+    it('a size xterm.js took while the program was starting, as soon as it has started', async () => {
+      let started: () => void = () => {};
+      const b = fakeBackend({
+        agent_terminal: ({ output }) => {
+          outputs.push(output);
+          return new Promise((resolve) => (started = () => resolve(info)));
+        },
+        term_resize: () => undefined,
+      });
+      const opening = openAgentTerminal('a1', ROOM);
+      await waitFor(() => expect(b.called('agent_terminal')).toHaveLength(1));
+      expect(b.called('agent_terminal')[0].args).toMatchObject({ cols: 140, rows: 46 });
+      // The window changed under it before the backend answered: there is no id to tell it with yet.
+      terms.at(-1)!.resize(120, 40);
+      await settle();
+      expect(told(b)).toEqual([]);
+      started();
+      await opening;
+      await waitFor(() => expect(told(b)).toEqual([{ id: 'tui-1', cols: 120, rows: 40 }]));
+    });
+  });
+
+  describe('of the other terminals', () => {
+    it.each([
+      ['a shell’s terminal', () => openTerminal('p1', 'pwsh', 'pwsh-1'), 'term_spawn'],
+      ['an account’s sign-in', () => openAccountLogin('principal'), 'account_login'],
+    ])('is not changed for %s: it starts at the default size, fitted to the parking lot', async (_name, open, command) => {
+      const b = backend();
+      await open();
+      expect(b.called(command)[0].args).toMatchObject({ cols: 100, rows: 30 });
+      expect(fits).toEqual([{ width: '100%', height: '100%' }]);
+      await settle();
+      expect(told(b)).toEqual([]);
+    });
+
+    it.each([
+      ['a shell’s terminal', () => openTerminal('p1', 'pwsh', 'pwsh-1')],
+      ['an account’s sign-in', () => openAccountLogin('principal')],
+    ])('keeps for %s the size it tells the backend: one at a time, and again after a short while when refused', async (_name, open) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        held = true;
+        const b = backend();
+        await open();
+        const term = terms.at(-1)!;
+        term.resize(120, 40);
+        term.resize(90, 25);
+        expect(told(b)).toEqual([{ id: 'tui-1', cols: 120, rows: 40 }]);
+        resizes[0].reject('refusé');
+        await vi.advanceTimersByTimeAsync(500);
+        expect(told(b)).toHaveLength(2);
+        // The size xterm.js has by then, not the one that was refused.
+        expect(told(b)[1]).toEqual({ id: 'tui-1', cols: 90, rows: 25 });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

@@ -339,6 +339,17 @@ function tuiSession() {
   // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC). Pastes come bracketed
   // (ESC[200~ … ESC[201~), as Claude Code asks for them.
   process.stdout.write('\x1b[?2004hfake-claude-tui\r\n');
+  // The size of its terminal, as Claude Code's interface reads it to draw (ink: process.stdout.rows): each one it had is added
+  // to <dir>/fake-tui-size.jsonl. Read from the console itself, not from the 'resize' event, which a pseudo-console may not send.
+  let size = '';
+  const reportSize = () => {
+    const [cols, rows] = process.stdout.getWindowSize?.() ?? [process.stdout.columns, process.stdout.rows];
+    if (`${cols}x${rows}` === size) return;
+    size = `${cols}x${rows}`;
+    fs.appendFileSync(path.join(configDir, 'fake-tui-size.jsonl'), JSON.stringify({ cols, rows }) + '\n');
+  };
+  reportSize();
+  setInterval(reportSize, 50).unref();
   write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
   const turn = async (prompt) => {
     if (prompt === '/exit') process.exit(0);

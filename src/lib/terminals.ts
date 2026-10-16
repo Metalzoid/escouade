@@ -49,6 +49,21 @@ function parkingLot(): HTMLDivElement {
   return parking;
 }
 
+/** The size, in pixels, of the place a terminal is about to be shown in. */
+export interface Room {
+  width: number;
+  height: number;
+}
+
+/** What `el` has to draw in (its padding left out), or null when it has no size yet (not laid out, or hidden). */
+export function roomOf(el: HTMLElement): Room | null {
+  const style = getComputedStyle(el);
+  const px = (v: string) => parseFloat(v) || 0;
+  const width = el.clientWidth - px(style.paddingLeft) - px(style.paddingRight);
+  const height = el.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
 /** Resolves any CSS color (oklch, color-mix, var()) to #rrggbb through a 1px canvas. */
 export function resolveColor(css: string): string {
   const probe = document.createElement('div');
@@ -127,8 +142,12 @@ function reportRenderer(x: XTerm) {
   if (x.id) api.termReport(x.id, { kind: 'renderer', ...x.renderer }).catch(() => {});
 }
 
-/** A parked xterm.js instance; a read-only one takes no input (launch command logs). */
-function createXTerm(readOnly: boolean): XTerm {
+/**
+ * A parked xterm.js instance; a read-only one takes no input (launch command logs). With `room`, the size of the place it
+ * will be shown in, it is fitted to that place from the start, rather than to the parking lot's: the program it runs in a
+ * pseudo-console is started at that size, never at one a message of resize has to correct.
+ */
+function createXTerm(readOnly: boolean, room?: Room | null): XTerm {
   const term = new Terminal({
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 12.5,
@@ -146,7 +165,8 @@ function createXTerm(readOnly: boolean): XTerm {
     windowsPty: { backend: 'conpty' },
   });
   const host = document.createElement('div');
-  host.style.cssText = 'width:100%;height:100%;';
+  const filling = 'width:100%;height:100%;';
+  host.style.cssText = room ? `width:${room.width}px;height:${room.height}px;` : filling;
   parkingLot().appendChild(host);
   const fit = new FitAddon();
   const search = new SearchAddon();
@@ -171,6 +191,8 @@ function createXTerm(readOnly: boolean): XTerm {
     x.renderer = { renderer: 'dom', detail: e instanceof Error ? e.message : String(e) };
   }
   fit.fit();
+  // Whatever place it is shown in from now on, it fills it.
+  host.style.cssText = filling;
   // The user's paste, noted on its way down, before xterm.js's own listeners get it.
   host.addEventListener('paste', () => (x.pasteAt = performance.now()), true);
   const keyToTerminal = (e: KeyboardEvent): boolean => {
@@ -230,9 +252,12 @@ export function openAccountLogin(accountId: string): Promise<TermInfo> {
   return interactive((cols, rows, onData) => api.accountLogin(accountId, cols, rows, onData));
 }
 
-/** Claude Code's interface for the agent (« Vue Claude Code »): its session resumed in a terminal. */
-export async function openAgentTerminal(agentId: string): Promise<TermInfo> {
-  const info = await interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData));
+/**
+ * Claude Code's interface for the agent (« Vue Claude Code »): its session resumed in a terminal. Its full-screen interface
+ * draws on the rows of its pseudo-console and nowhere else, so it starts at the size of `room`, where it will be shown.
+ */
+export async function openAgentTerminal(agentId: string, room?: Room | null): Promise<TermInfo> {
+  const info = await interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData), room);
   pasteImages(xterms.get(info.id)!, agentId);
   return info;
 }
@@ -330,10 +355,51 @@ function userInput(x: XTerm, at: number): InputKind | null {
   return null;
 }
 
-/** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */
-async function interactive(spawn: (cols: number, rows: number, onData: (d: ArrayBuffer) => void) => Promise<TermInfo>): Promise<TermInfo> {
-  const x = createXTerm(false);
+/** How long after the backend refused a size it is told again (ms), and how many times at most. */
+const RESIZE_RETRY_AFTER = 500;
+const RESIZE_RETRIES = 5;
+
+/**
+ * An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it (that of `room`,
+ * when it is known where it will be shown).
+ */
+async function interactive(
+  spawn: (cols: number, rows: number, onData: (d: ArrayBuffer) => void) => Promise<TermInfo>,
+  room?: Room | null,
+): Promise<TermInfo> {
+  const x = createXTerm(false, room);
   const { term } = x;
+  // The size the pseudo-console has: the one the program started at, then the last one the backend took. A program that draws
+  // on its rows (Claude Code's interface) never shows more than that, whatever xterm.js shows. The sizes are told in order and
+  // one at a time (the one that comes while another is on its way goes next), and one the backend did not take is told again
+  // soon, a few times, rather than left to a program that draws on fewer rows than the window shows.
+  const pty = { cols: term.cols, rows: term.rows };
+  let telling = false;
+  let refused = 0;
+  let again: ReturnType<typeof setTimeout> | undefined;
+  const tell = () => {
+    if (telling || !x.id) return;
+    const { cols, rows } = term;
+    if (cols === pty.cols && rows === pty.rows) return;
+    telling = true;
+    api.termResize(x.id, cols, rows).then(
+      () => {
+        pty.cols = cols;
+        pty.rows = rows;
+        refused = 0;
+        telling = false;
+        tell();
+      },
+      () => {
+        telling = false;
+        // A terminal that is gone refuses for good: not for ever.
+        if (++refused <= RESIZE_RETRIES) {
+          clearTimeout(again);
+          again = setTimeout(tell, RESIZE_RETRY_AFTER);
+        }
+      },
+    );
+  };
   // Made before the spawn, whose output can come in before its answer: what is told waits for the id.
   const watch = echoWatch({
     now: () => performance.now(),
@@ -368,7 +434,9 @@ async function interactive(spawn: (cols: number, rows: number, onData: (d: Array
     seq.catch(() => {});
     if (kind) watch.sent({ data: d, kind, seq });
   });
-  term.onResize(({ cols, rows }) => api.termResize(info.id, cols, rows).catch(() => {}));
+  term.onResize(tell);
+  // Resized while the spawn was on its way (before it could be told).
+  tell();
   xterms.set(info.id, x);
   return info;
 }
