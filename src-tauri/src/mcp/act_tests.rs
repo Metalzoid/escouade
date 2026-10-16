@@ -2316,9 +2316,12 @@ async fn a_ticket_is_approved_in_the_background_merged_and_its_merge_commit_kept
         std::fs::read_to_string(r.join("dem-1.txt")).unwrap(),
         "Boucle 1\n"
     );
-    // Cleaned up: its agent archived, its worktree gone.
-    assert!(h.agent(&agent).archived);
-    assert!(!wt.exists());
+    // Cleaned up: its agent archived, its worktree gone. The ticket is done before its cleanup ends
+    // (`Core::approve_run`), which goes on in the background: waited for, not looked at once.
+    h.wait("its agent archived and its worktree removed", |h| {
+        h.agent(&agent).archived && !wt.exists()
+    })
+    .await;
     assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
         && e["ticket"]["id"] == t.id.as_str()
         && e["ticket"]["column"] == "done"));
@@ -2387,7 +2390,10 @@ async fn a_ticket_whose_branch_was_merged_already_is_closed_without_merging_agai
     assert_eq!(git(&r, &["rev-parse", "refs/heads/main"]), head);
     assert_eq!(git(&r, &["rev-list", "--count", "main"]), commits);
     assert_eq!(done.outcome_commit, None);
-    assert!(h.agent(done.agent_id.as_deref().unwrap()).archived);
+    // Its agent is archived once the ticket is done, by the approval that goes on in the background.
+    let agent = done.agent_id.clone().unwrap();
+    h.wait("its agent archived", |h| h.agent(&agent).archived)
+        .await;
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
