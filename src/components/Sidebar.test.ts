@@ -929,7 +929,6 @@ describe('Sidebar terminal entry', () => {
   });
 });
 
-
 describe('Sidebar, a launch command in the worktree of an agent (ESC-19)', () => {
   const WT = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a2', branch: 'escouade/a2', baseBranch: 'main' };
   const FRONT = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: 'web' };

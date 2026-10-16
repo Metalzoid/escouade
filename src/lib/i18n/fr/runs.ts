@@ -38,7 +38,7 @@ export default {
     anyway: 'Lancer quand même',
     /** « Tout lancer » while some of them run in a worktree: `{list}`, their terminals' names, each as `item`. */
     titleSome: 'Des commandes tournent déjà ailleurs',
-    bodySome: "Déjà en cours : {list}. Lancées aussi dans le projet, elles risquent de se disputer les mêmes ports.",
+    bodySome: 'Déjà en cours : {list}. Lancées aussi dans le projet, elles risquent de se disputer les mêmes ports.',
     item: '« {name} »',
     stopOthers: 'Les arrêter et tout lancer',
   },

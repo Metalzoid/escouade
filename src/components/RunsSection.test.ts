@@ -167,9 +167,12 @@ describe('RunsSection', () => {
   });
 });
 
-
 describe('RunsSection, a launch command in a worktree', () => {
-  const W = agent({ id: 'a1', name: 'refacto-auth', worktree: { path: 'C:/p/.claude/worktrees/refacto-auth', branch: 'refacto-auth', baseBranch: 'main' } });
+  const W = agent({
+    id: 'a1',
+    name: 'refacto-auth',
+    worktree: { path: 'C:/p/.claude/worktrees/refacto-auth', branch: 'refacto-auth', baseBranch: 'main' },
+  });
   const PLAIN = agent({ id: 'a2', name: 'sans-worktree' });
   const OLD = agent({ id: 'a3', name: 'archivé', archived: true, worktree: { path: 'C:/p/wt/old', branch: 'old', baseBranch: 'main' } });
 

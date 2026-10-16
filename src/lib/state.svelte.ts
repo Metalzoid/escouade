@@ -358,7 +358,11 @@ class AppState {
     if (!p) return null;
     const id = this.selectedLaunch[p.id];
     if (!id) return null;
-    return p.runCommands.find((c) => c.id === id) ?? worktreeCommand(id, p, this.agents) ?? testCommand(id, this.agents, this.shells[0]?.id ?? '');
+    return (
+      p.runCommands.find((c) => c.id === id) ??
+      worktreeCommand(id, p, this.agents) ??
+      testCommand(id, this.agents, this.shells[0]?.id ?? '')
+    );
   });
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */

@@ -669,7 +669,11 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await expect.poll(() => fs.existsSync(path.join(app.repo, 'src', 'serveur.txt')), { timeout: 30_000 }).toBe(true);
 
   // A folder the worktree lacks: refused, with why.
-  await page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Docs$/ }) }).getByRole('button', { name: 'Lancer' }).click();
+  await page
+    .locator('.run')
+    .filter({ has: page.locator('.name', { hasText: /^Docs$/ }) })
+    .getByRole('button', { name: 'Lancer' })
+    .click();
   await page.getByRole('menuitem', { name: `Dans le worktree de ${agentName}` }).click();
   await expect(page.getByText(`Le dossier « docs » de « Docs » n'existe pas dans le worktree de « ${agentName} »`)).toBeVisible();
   await expect(page.locator('.run', { hasText: `Docs · ${agentName}` })).toHaveCount(0);

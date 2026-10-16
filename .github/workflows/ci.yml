@@ -65,7 +65,7 @@ jobs:
         shell: bash
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
-          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: |
           set +e
           cargo nextest run --profile ci 2>&1 | tee nextest.log
@@ -105,6 +105,8 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
+          # As in the environment of an agent of Escouade: the tests must not depend on it.
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: npx playwright test
 
       # The traces of the tests that failed, or that ran again (there is none when all passed first time).
@@ -173,7 +175,7 @@ jobs:
         shell: bash
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
-          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: |
           set +e
           cargo nextest run --profile ci 2>&1 | tee nextest.log
@@ -240,7 +242,7 @@ jobs:
         shell: bash
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
-          CLAUDE_CODE_ENABLE_TODO_TOOLS: "1"
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: |
           set +e
           cargo nextest run --profile ci --test-threads 3 2>&1 | tee nextest.log
