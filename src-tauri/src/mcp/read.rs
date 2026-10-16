@@ -3,6 +3,7 @@
 //! by its last message (cut) and the files it edited. The requests that wait for an answer
 //! (`requests`) are the agents' own, as their cards in the conversation have them.
 
+use super::images::{self, ImageView};
 use super::resolve;
 use super::tools::ToolError;
 use super::Caller;
@@ -288,9 +289,9 @@ pub(crate) struct TicketView {
     after: Vec<String>,
     /// The features in place so far, as its agent last listed them.
     progress: Vec<String>,
-    /// How many images are attached to it, pasted in its window; its agent gets them with its
-    /// first message.
-    images: usize,
+    /// Its images, in its order: pasted in its window or attached by the tools; its agent gets
+    /// them with its first message, and `get_ticket_image` gives one back.
+    images: Vec<ImageView>,
     /// The model and effort of its agent alone (`start_ticket` gave them); left out when it has
     /// none of its own, the board's being its agent's.
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -356,7 +357,8 @@ struct External {
 
 /// `t` as `get_ticket` answers it. Reads the tickets (the keys of those it comes after) and its
 /// agent: never call it with the tickets' lock held (a write one would deadlock, a read one too
-/// behind a writer waiting for it), nor with that agent's.
+/// behind a writer waiting for it), nor with that agent's. It also looks at the size of each
+/// image's file (20 at most).
 pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView {
     let keys = ticket_keys(core);
     let keys: HashMap<&str, &str> = keys
@@ -395,7 +397,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         column: t.column,
         after: after_keys(t, &keys),
         progress: t.progress.clone(),
-        images: t.images.len(),
+        images: images::listed(&core.data.ticket_dir(&t.id), &t.images),
         model: t.model.clone(),
         effort: t.effort.clone(),
         external: t.external.as_ref().map(|e| External {
@@ -518,7 +520,7 @@ pub(super) async fn board<R: Runtime>(core: &Core<R>, project: &str) -> Result<S
 }
 
 /// The ticket the calling agent works on. Claude outside Escouade has none.
-fn own_ticket<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<Ticket, ToolError> {
+pub(super) fn own_ticket<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<Ticket, ToolError> {
     let Caller::Agent(id) = caller else {
         return Err(ToolError::Refused(tr!(
             "Donne la clé ou l’id du ticket : seul un agent d’Escouade lit le sien sans le nommer.",

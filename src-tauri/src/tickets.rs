@@ -217,6 +217,15 @@ pub(crate) fn comment_missing() -> anyhow::Error {
     anyhow!(tr!("Dis ce qui ne va pas.", "Say what’s wrong."))
 }
 
+/// The refusal of an edit to a ticket that has started: also said by the tools, before they read
+/// the files of the images they were given.
+pub(crate) fn only_todo_is_edited() -> anyhow::Error {
+    anyhow!(tr!(
+        "Seul un ticket « À faire » se modifie.",
+        "Only a ticket in “To do” can be edited."
+    ))
+}
+
 /// The notification of a ticket that reached « À tester », or got blocked (`blocked`, why).
 pub(crate) fn ticket_alert(lang: Lang, key: &str, ready: bool, blocked: &str) -> String {
     if ready {
@@ -521,10 +530,7 @@ impl<R: Runtime> Core<R> {
                     .find(|t| t.id == id)
                     .ok_or_else(ticket_not_found)?;
                 if me.column != Column::Todo {
-                    bail!(tr!(
-                        "Seul un ticket « À faire » se modifie.",
-                        "Only a ticket in “To do” can be edited."
-                    ));
+                    return Err(only_todo_is_edited());
                 }
                 let after = board::after_of(all, &me.project_id, id, &d.after);
                 match board::cycle_refusal(i18n::ui(), all, id, &after) {

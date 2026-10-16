@@ -25,6 +25,11 @@ use tokio::sync::{watch, Semaphore};
 /// How long a connection open when the server stops may finish the request it is answering.
 const DRAIN: Duration = Duration::from_secs(5);
 
+/// The most a request may weigh, in bytes (rmcp refuses 4 MiB by default). A ticket takes up to
+/// 18 MB of images, which a tool is given in base64 (a third more): 24 MB, and the other arguments
+/// are text.
+pub(super) const MAX_BODY: usize = 32 * 1024 * 1024;
+
 /// What the clients may take of the server: a local program, the token unknown to it, could
 /// otherwise hold it with connections that never end their request.
 #[derive(Debug, Clone)]
@@ -118,6 +123,7 @@ impl<R: Runtime> Gate<R> {
             .with_json_response(true)
             .with_sse_keep_alive(None)
             .with_allowed_hosts([format!("127.0.0.1:{port}"), format!("localhost:{port}")])
+            .with_max_request_body_bytes(MAX_BODY)
             .enforce_origin_validation();
         let mcp = StreamableHttpService::new(
             move || Ok(Tools::new(router.clone())),

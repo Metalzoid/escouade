@@ -34,6 +34,7 @@ export default defineZone('mcp', {
     listAgents: 'List the agents',
     listTickets: 'List the tickets',
     getTicket: 'Read a ticket',
+    getTicketImage: 'Read a ticket image',
     getUsage: 'Read the quota',
     getBoard: 'Read the Kanban settings',
     setBoard: 'Set the Kanban',

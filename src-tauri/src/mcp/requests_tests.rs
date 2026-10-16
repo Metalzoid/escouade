@@ -1102,7 +1102,8 @@ async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or
     );
     assert_eq!(last_entry(&h).3, "refused");
     nothing_changed(&h);
-    // A decision that is none: the error lists the two choices, never « always ».
+    // A decision that is none: the router’s refusal, which does not repeat what was given and sends
+    // back to the schema, where the two choices are listed, never « always ».
     let bad = refused(
         &c,
         "answer_permission",
@@ -1110,7 +1111,7 @@ async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or
     )
     .await;
     assert!(
-        bad.contains("allow") && bad.contains("deny") && !bad.contains("always"),
+        bad.contains("schéma") && !bad.contains("peut-être") && !bad.contains("always"),
         "{bad}"
     );
     nothing_changed(&h);

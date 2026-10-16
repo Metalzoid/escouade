@@ -15,6 +15,8 @@
 //! }
 //! ```
 //!
+//! `get_ticket_image` answers more than a text (an image block, then a text): `ToolCtx::reply_blocks`.
+//!
 //! A call the router refuses before its tool (unknown, arguments that do not fit the schema) is
 //! logged by `call_tool`. What a tool's arguments name is found by `resolve`; what the reading
 //! ones answer is built by `read` (`wait_ticket`, which waits for a change, by `wait`), and what
@@ -32,6 +34,7 @@
 
 use super::act;
 use super::activity::{self, Outcome};
+use super::images;
 use super::read;
 use super::wait;
 use super::Caller;
@@ -105,7 +108,22 @@ impl<R: Runtime> ToolCtx<R> {
         summary: &str,
         result: Result<String, ToolError>,
     ) -> CallToolResult {
-        self.answer(tool, summary, result.map(|text| (text, Outcome::Ok)))
+        self.answer(
+            tool,
+            summary,
+            result.map(|text| (vec![ContentBlock::text(text)], Outcome::Ok)),
+        )
+    }
+
+    /// `reply`, for a tool whose answer is more than a text (`get_ticket_image`: an image, then a
+    /// text). The log has the call as for the others, summary and outcome: never the blocks.
+    pub fn reply_blocks(
+        &self,
+        tool: &str,
+        summary: &str,
+        result: Result<Vec<ContentBlock>, ToolError>,
+    ) -> CallToolResult {
+        self.answer(tool, summary, result.map(|blocks| (blocks, Outcome::Ok)))
     }
 
     /// `reply`, for a tool that also says what it changed: `Ok` is the text the model reads and,
@@ -120,22 +138,20 @@ impl<R: Runtime> ToolCtx<R> {
         self.answer(
             tool,
             summary,
-            result.map(|(text, changed)| (text, Outcome::Changed(changed))),
+            result
+                .map(|(text, changed)| (vec![ContentBlock::text(text)], Outcome::Changed(changed))),
         )
     }
 
-    /// The answer, and the log's entry: `Ok` is the text and how the log says it ended.
+    /// The answer, and the log's entry: `Ok` is the blocks and how the log says it ended.
     fn answer(
         &self,
         tool: &str,
         summary: &str,
-        result: Result<(String, Outcome), ToolError>,
+        result: Result<(Vec<ContentBlock>, Outcome), ToolError>,
     ) -> CallToolResult {
         let (outcome, answer) = match result {
-            Ok((text, outcome)) => (
-                outcome,
-                CallToolResult::success(vec![ContentBlock::text(text)]),
-            ),
+            Ok((blocks, outcome)) => (outcome, CallToolResult::success(blocks)),
             Err(ToolError::Refused(m)) => (
                 Outcome::Refused(m.clone()),
                 CallToolResult::error(vec![ContentBlock::text(m)]),
@@ -260,6 +276,22 @@ pub struct GetTicketArgs {
         description = "The ticket: its key (like ATL-12, in any case) or its id. An agent of Escouade may leave it out to read its own ticket."
     )]
     pub ticket: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetTicketImageArgs {
+    #[schemars(
+        description = "The ticket: its key (like ATL-12, in any case) or its id. An agent of Escouade may leave it out to read an image of its own ticket."
+    )]
+    pub ticket: Option<String>,
+    #[schemars(
+        description = "The image's file, as get_ticket gives it. Give this or index, not both."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "The image's rank in the list get_ticket gives, from 0. Give this or file, not both."
+    )]
+    pub index: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -412,9 +444,49 @@ pub struct CreateTicketArgs {
         description = "The tickets of the same project this one comes after, by key (like ATL-12, in any case) or id: it starts once all are done. Leave it out for none."
     )]
     pub after: Option<Vec<String>>,
+    #[schemars(
+        description = "Images to attach (screenshots, mock-ups; 20 at most, 5 MB each and 18 MB in all: PNG, JPEG, GIF or WebP, read from their content), which the ticket's agent gets with its first message. Leave them out for none."
+    )]
+    pub images: Option<Vec<ImageArg>>,
+}
+
+/// An image to attach to a ticket, as `create_ticket`, `update_ticket` and the like take it.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct ImageArg {
+    #[schemars(
+        description = "Its name (100 characters at most; only what follows the last slash is kept). Required with data; with path it is the file's name by default."
+    )]
+    pub name: Option<String>,
+    #[schemars(
+        description = "Its media type, as an indication only: the image's type is the one its content has (PNG, JPEG, GIF or WebP)."
+    )]
+    pub media_type: Option<String>,
+    #[schemars(description = "Its content in base64. Give this or path, not both.")]
+    pub data: Option<String>,
+    #[schemars(
+        description = "The full path of an image file on this computer (5 MB at most). An agent of Escouade can only give a file of its working folder (a safeguard of the server, not a security boundary). Give this or data, not both."
+    )]
+    pub path: Option<String>,
+}
+
+/// An image of a ticket, as the tools that name one take it.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct ImageRef {
+    #[schemars(
+        description = "The image's file, as get_ticket gives it. Give this or index, not both."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "The image's rank in the list get_ticket gives, from 0. Give this or file, not both."
+    )]
+    pub index: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateTicketArgs {
     #[schemars(description = "The ticket: its key (like ATL-12, in any case) or its id.")]
     pub ticket: String,
@@ -434,6 +506,14 @@ pub struct UpdateTicketArgs {
         description = "The tickets of the same project it now comes after, by key or id, replacing all the current ones (an empty list takes them all away). Leave it out to keep the current ones."
     )]
     pub after: Option<Vec<String>>,
+    #[schemars(
+        description = "Images to attach, added after the ones the ticket has (same form and limits as create_ticket's images: 20 images in all at most). Leave it out to add none."
+    )]
+    pub add_images: Option<Vec<ImageArg>>,
+    #[schemars(
+        description = "Images of the ticket to take away, each named by its file or its rank in the list get_ticket gives. The images you do not name stay. Leave it out to take none away."
+    )]
+    pub remove_images: Option<Vec<ImageRef>>,
 }
 
 /// Where `move_ticket` puts a ticket.
@@ -721,6 +801,10 @@ pub struct SubTicket {
         description = "Its acceptance criteria, one per item. Leave them out for two default ones."
     )]
     pub criteria: Option<Vec<String>>,
+    #[schemars(
+        description = "The images of your ticket this one gets a copy of, each named by its file or its rank in the list get_ticket gives. Leave it out for all of them, give an empty list for none."
+    )]
+    pub images: Option<Vec<ImageRef>>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -777,7 +861,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, the model and the effort of its agent when start_ticket gave it its own (left out otherwise), the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none), and where it stands in the board's flow: its agent (id, name, status, and how many requests wait for an answer; null before it starts), its branch and its worktree, those of its agent (null before it starts; kept once the ticket is done, when the worktree may be gone), why it is blocked (blocked) and whether that is a merge conflict (conflict), the validation step running (step: Validation… or Approving…, Tests…, Commit…, Merge…, Push…) and, once it is approved, its outcome (text, the pull request's url, and the commit it made on the target branch). An agent of Escouade may leave out the ticket to read its own.",
+        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, its images (images: for each its index, from 0, its file, name, mediaType and size in bytes, null when its file is gone; get_ticket_image reads one), the model and the effort of its agent when start_ticket gave it its own (left out otherwise), the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none), and where it stands in the board's flow: its agent (id, name, status, and how many requests wait for an answer; null before it starts), its branch and its worktree, those of its agent (null before it starts; kept once the ticket is done, when the worktree may be gone), why it is blocked (blocked) and whether that is a merge conflict (conflict), the validation step running (step: Validation… or Approving…, Tests…, Commit…, Merge…, Push…) and, once it is approved, its outcome (text, the pull request's url, and the commit it made on the target branch). An agent of Escouade may leave out the ticket to read its own.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_ticket(
@@ -788,6 +872,25 @@ impl<R: Runtime> Tools<R> {
         let result = read::ticket(&ctx.core, &ctx.caller, args.ticket.as_deref());
         let asked = summary(&[("ticket", args.ticket.as_deref())]);
         ctx.reply("get_ticket", &asked, result)
+    }
+
+    #[tool(
+        description = "Read an image of a ticket: answers the image itself (an image block), then a text with the ticket's key and the image's index, file, name, mediaType and size in bytes. Name the image by its file or by its index, from 0, in the list get_ticket gives (images): one of the two. An agent of Escouade may leave out the ticket to read an image of its own, and can only read the images of the tickets of its own project (get_ticket stays open to all). Fails when the image's file is gone.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_ticket_image(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<GetTicketImageArgs>,
+    ) -> CallToolResult {
+        let index = args.index.map(|i| i.to_string());
+        let asked = summary(&[
+            ("ticket", args.ticket.as_deref()),
+            ("file", args.file.as_deref()),
+            ("index", index.as_deref()),
+        ]);
+        let result = images::fetch(&ctx.core, &ctx.caller, args).await;
+        ctx.reply_blocks("get_ticket_image", &asked, result)
     }
 
     #[tool(
@@ -867,7 +970,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. Answers the ticket as get_ticket does.",
+        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. You may attach images (screenshots, mock-ups) with images, each given by its content in base64 (data, with a name) or by the full path of a file on this computer (path; an agent of Escouade can only give a file of its working folder): PNG, JPEG, GIF or WebP, read from their content, 5 MB each, 18 MB in all, 20 at most. The ticket's agent gets them with its first message. An image that is refused refuses the whole call, and nothing is created. Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -880,17 +983,20 @@ impl<R: Runtime> Tools<R> {
         Parameters(args): Parameters<CreateTicketArgs>,
     ) -> CallToolResult {
         let after = args.after.as_ref().map(|a| a.join(", "));
+        // How many, never what: no content, no path.
+        let images = args.images.as_ref().map(|i| i.len().to_string());
         let asked = summary(&[
             ("project", Some(&args.project)),
             ("title", Some(&args.title)),
             ("after", after.as_deref()),
+            ("images", images.as_deref()),
         ]);
         let result = act::create_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("create_ticket", &asked, result)
     }
 
     #[tool(
-        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. When you change the title, the description or the criteria, the description ends with a line saying who edited the ticket, in the place of the one that said who created it. Answers the ticket as get_ticket does.",
+        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. When you change the title, the description or the criteria, the description ends with a line saying who edited the ticket, in the place of the one that said who created it. You can attach images with addImages (same form and limits as create_ticket's images, counting the ones the ticket keeps) and take some away with removeImages (each named by its file or its index, from 0, as get_ticket lists them): the images you do not name stay, and images alone leave the title, the description and the criteria as they are (no line saying who edited the ticket). Nothing changes when an image is refused. Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -903,12 +1009,16 @@ impl<R: Runtime> Tools<R> {
         Parameters(args): Parameters<UpdateTicketArgs>,
     ) -> CallToolResult {
         let after = args.after.as_ref().map(|a| a.join(", "));
+        let added = args.add_images.as_ref().map(|i| i.len().to_string());
+        let removed = args.remove_images.as_ref().map(|i| i.len().to_string());
         let asked = summary(&[
             ("ticket", Some(&args.ticket)),
             ("title", args.title.as_deref()),
             ("after", after.as_deref()),
+            ("addImages", added.as_deref()),
+            ("removeImages", removed.as_deref()),
         ]);
-        let result = act::update_ticket(&ctx.core, &ctx.caller, args);
+        let result = act::update_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("update_ticket", &asked, result)
     }
 
@@ -1239,7 +1349,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Only for Escouade's own agents (refused to any other client, and to an agent without a ticket). Split the work that remains of your ticket into new To do tickets (10 at most per call), made after it: with chain true (the default) each comes after the one before it, the first after yours; with chain false all come after yours alone and may run in parallel. They start once the tickets they come after are done. Each ends with a line saying who made it. Answers the keys of the tickets made.",
+        description = "Only for Escouade's own agents (refused to any other client, and to an agent without a ticket). Split the work that remains of your ticket into new To do tickets (10 at most per call), made after it: with chain true (the default) each comes after the one before it, the first after yours; with chain false all come after yours alone and may run in parallel. They start once the tickets they come after are done. Each ends with a line saying who made it. Each also gets its own copies of the images of your ticket: all of them by default, or those you name in its images (by file or index, from 0, as get_ticket lists them), none with an empty list; a reference that fits no image of your ticket, or that names one whose file is gone, refuses the whole call. When the images are left out (images not given), one whose file is gone is skipped, not copied. Answers the keys of the tickets made; when an image was skipped, an object with those keys (tickets) and one sentence for each image skipped (skipped).",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1257,7 +1367,16 @@ impl<R: Runtime> Tools<R> {
             .map(|t| t.title.as_str())
             .collect::<Vec<_>>()
             .join(" | ");
-        let asked = summary(&[("tickets", Some(&titles))]);
+        // How many images were named in all; nothing when no ticket said anything of them.
+        let images = args.tickets.iter().any(|t| t.images.is_some()).then(|| {
+            let named: usize = args
+                .tickets
+                .iter()
+                .map(|t| t.images.as_ref().map_or(0, Vec::len))
+                .sum();
+            named.to_string()
+        });
+        let asked = summary(&[("tickets", Some(&titles)), ("images", images.as_deref())]);
         let result = act::split_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("split_ticket", &asked, result)
     }
@@ -1299,14 +1418,33 @@ impl<R: Runtime> ServerHandler for Tools<R> {
         let Some(ctx) = ctx.filter(|c| !c.logged.load(Ordering::Acquire)) else {
             return answer;
         };
-        let why = match &answer {
-            Err(e) => e.message.to_string(),
+        // What the router says repeats the client’s own values (serde quotes them): neither the log
+        // nor the reply keeps one. The tool’s name is the client’s too, and is cut short.
+        let (answer, why) = match answer {
+            Err(e) => {
+                let said = activity::clip(before_any_value(&e.message));
+                (Err(ErrorData::new(e.code, said.clone(), None)), said)
+            }
             // Arguments that do not fit: rmcp answers an error result the model reads.
-            Ok(CallToolResponse::Complete(r)) => serde_json::to_value(r)
-                .ok()
-                .and_then(|v| v["content"][0]["text"].as_str().map(str::to_string))
-                .unwrap_or_default(),
-            Ok(_) => String::new(),
+            Ok(CallToolResponse::Complete(r)) => {
+                let text = serde_json::to_value(&r)
+                    .ok()
+                    .and_then(|v| v["content"][0]["text"].as_str().map(str::to_string))
+                    .unwrap_or_default();
+                // The reason is cut ahead of the value, a fixed sentence says what to do.
+                let reason: String = before_any_value(&text).chars().take(200).collect();
+                let reply = tr!(
+                    "{reason}. Relis le schéma d’entrée de l’outil, puis refais l’appel.",
+                    "{reason}. Read the tool’s input schema again, then call it again."
+                );
+                let blocks = vec![ContentBlock::text(activity::clip(&reply))];
+                let why = tr!(
+                    "les arguments ne correspondent pas au schéma de l’outil",
+                    "the arguments do not match the tool’s schema"
+                );
+                (Ok(CallToolResult::error(blocks).into()), why)
+            }
+            other => (other, String::new()),
         };
         let message = tr!(
             "Appel refusé par le serveur : {why}",
@@ -1315,10 +1453,18 @@ impl<R: Runtime> ServerHandler for Tools<R> {
         activity::record(
             &ctx.core,
             Some(&ctx.caller),
-            &tool,
+            &activity::clip(&tool),
             "",
             Outcome::Error(message),
         );
         answer
     }
+}
+
+/// `message` up to the first value of the client’s that it quotes: serde puts them in double
+/// quotes or backticks (`invalid type: string "…"`, `unknown variant `x``), and one may be a path, or
+/// the 32 MB of an image’s content.
+fn before_any_value(message: &str) -> &str {
+    let end = message.find(['"', '`']).unwrap_or(message.len());
+    message[..end].trim_end_matches([' ', ':'])
 }

@@ -41,6 +41,7 @@ export default {
     listAgents: 'Lister les agents',
     listTickets: 'Lister les tickets',
     getTicket: 'Lire un ticket',
+    getTicketImage: 'Lire une image d’un ticket',
     getUsage: 'Lire le quota',
     getBoard: 'Lire les réglages du Kanban',
     setBoard: 'Régler le Kanban',

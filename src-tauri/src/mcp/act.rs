@@ -39,6 +39,7 @@
 //! `split_ticket` are for the agents of Escouade alone.
 
 use super::activity;
+use super::images;
 use super::read::{
     answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys, TicketView,
 };
@@ -60,7 +61,9 @@ use crate::git;
 use crate::i18n;
 use crate::model::{BoardSettings, Column, PauseReason, Project, Ticket, PROGRESS_LINE_MAX};
 use crate::telemetry::Event;
-use crate::tickets::{comment_missing, ticket_agent_options, title_missing, Refusal, TicketDraft};
+use crate::tickets::{
+    comment_missing, only_todo_is_edited, ticket_agent_options, title_missing, Refusal, TicketDraft,
+};
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
@@ -96,7 +99,7 @@ fn agent_only(caller: &Caller) -> Result<&str, ToolError> {
 
 /// An agent of Escouade acts on its own project alone (it may read the others); Claude outside
 /// Escouade acts on any.
-fn own_project_only<R: Runtime>(
+pub(super) fn own_project_only<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     project_id: &str,
@@ -440,7 +443,11 @@ pub(super) async fn create_ticket<R: Runtime>(
         after: after_ids(core, &project, a.after.as_deref().unwrap_or_default())?,
         // Its own branch: the tools do not name an existing one.
         branch: String::new(),
-        images: None,
+        // Last: files named by a path are read only once the rest is checked.
+        images: match a.images {
+            Some(list) => Some(images::drafts(core, caller, list, 0).await?),
+            None => None,
+        },
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -449,18 +456,30 @@ pub(super) async fn create_ticket<R: Runtime>(
     json(&ticket_view(core, &made))
 }
 
-/// `update_ticket`: the fields given replace the ticket's; the others stay.
-pub(super) fn update_ticket<R: Runtime>(
+/// `update_ticket`: the fields given replace the ticket's; the others stay. Its images are added to
+/// (`addImages`) or taken from (`removeImages`), the ones not named kept.
+pub(super) async fn update_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
     a: UpdateTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
-    if a.title.is_none() && a.description.is_none() && a.criteria.is_none() && a.after.is_none() {
+    // An empty list is none given.
+    let (add, remove) = (
+        a.add_images.unwrap_or_default(),
+        a.remove_images.unwrap_or_default(),
+    );
+    if a.title.is_none()
+        && a.description.is_none()
+        && a.criteria.is_none()
+        && a.after.is_none()
+        && add.is_empty()
+        && remove.is_empty()
+    {
         return Err(ToolError::Failed(tr!(
-            "Rien à modifier : donne au moins un des champs title, description, criteria ou after.",
-            "Nothing to change: give at least one of the fields title, description, criteria or after."
+            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages ou removeImages.",
+            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages or removeImages."
         )));
     }
     let project = project_of(core, &t.project_id)?;
@@ -474,7 +493,7 @@ pub(super) fn update_ticket<R: Runtime>(
         None if edited => without_origin(&t.description).to_string(),
         None => t.description.clone(),
     };
-    let draft = TicketDraft {
+    let mut draft = TicketDraft {
         title: match &a.title {
             Some(new) => title(new)?,
             None => t.title.clone(),
@@ -496,10 +515,23 @@ pub(super) fn update_ticket<R: Runtime>(
         },
         // Not the tools' to change: the ticket keeps the branch the window gave it.
         branch: t.branch.clone(),
-        // Nor its images.
+        // Its images stay as they are unless a list is built below.
         images: None,
     };
-    let updated = core.ticket_update(&t.id, draft).map_err(refusal)?;
+    if !add.is_empty() || !remove.is_empty() {
+        // The core refuses a ticket that has started too, but only once the files are read: said
+        // first, as the core says it, before a file or a reference is looked at.
+        if t.column != Column::Todo {
+            return Err(refusal(only_todo_is_edited()));
+        }
+        draft.images = Some(images::amended(core, caller, &t, add, &remove).await?);
+    }
+    // It writes and removes the images' files: off the async workers, as the window's command does.
+    let (c, id) = (core.clone(), t.id.clone());
+    let updated = tokio::task::spawn_blocking(move || c.ticket_update(&id, draft))
+        .await
+        .map_err(|e| failure(e.into()))?
+        .map_err(refusal)?;
     json(&ticket_view(core, &updated))
 }
 
@@ -1744,8 +1776,21 @@ fn sub_draft<R: Runtime>(
     })
 }
 
+/// `e` as the `n`th ticket of `split_ticket`'s list.
+fn of_list(n: usize, e: ToolError) -> ToolError {
+    match e {
+        ToolError::Failed(why) | ToolError::Refused(why) => ToolError::Failed(tr!(
+            "Ticket {n} de la liste : {why}",
+            "Ticket {n} of the list: {why}"
+        )),
+    }
+}
+
 /// `split_ticket`: tickets « À faire » after the calling agent's own, one after the other (`chain`,
-/// the default) or all after it alone; answers their keys.
+/// the default) or all after it alone; answers their keys. Each gets copies of the images of the
+/// agent's ticket it asked for, all of them by default: by default an image whose file is gone is
+/// left out and said (the answer is then the keys with a note for each), while one that is named
+/// and cannot be copied fails the call.
 pub(super) async fn split_ticket<R: Runtime>(
     core: &Arc<Core<R>>,
     caller: &Caller,
@@ -1779,30 +1824,34 @@ pub(super) async fn split_ticket<R: Runtime>(
             "{SPLIT_MAX} tickets at most per call ({count} given)."
         )));
     }
-    // All checked before any is made.
+    // All checked before any is made: their words, the images of the ticket they take, and those
+    // images' files, which are read once.
     let mut drafts = Vec::with_capacity(count);
+    let mut picks = Vec::with_capacity(count);
     for (i, sub) in a.tickets.iter().enumerate() {
         let n = i + 1;
-        drafts.push(
-            sub_draft(core, caller, sub, Vec::new()).map_err(|e| match e {
-                ToolError::Failed(why) | ToolError::Refused(why) => ToolError::Failed(tr!(
-                    "Ticket {n} de la liste : {why}",
-                    "Ticket {n} of the list: {why}"
-                )),
-            })?,
-        );
+        drafts.push(sub_draft(core, caller, sub, Vec::new()).map_err(|e| of_list(n, e))?);
+        picks.push(images::chosen(&own.images, sub.images.as_deref()).map_err(|e| of_list(n, e))?);
     }
+    let handed = images::hand_down(core, &own, &picks)
+        .await
+        .map_err(|(i, e)| of_list(i + 1, e))?;
     let chain = a.chain.unwrap_or(true);
     let mut previous = own.id.clone();
     let mut made: Vec<String> = Vec::with_capacity(count);
-    for mut draft in drafts {
+    // The images taken by default whose files are gone, said one by one.
+    let mut skipped: Vec<String> = Vec::new();
+    for (mut draft, pick) in drafts.into_iter().zip(&picks) {
         draft.after = vec![if chain {
             previous.clone()
         } else {
             own.id.clone()
         }];
+        // Copies of its own: the core writes files in its folder.
+        draft.images = Some(handed.copies(pick)).filter(|copies| !copies.is_empty());
         match core.ticket_create(&own.project_id, draft).await {
             Ok(t) => {
+                skipped.extend(handed.left_out(&own, pick, &t.key));
                 previous = t.id;
                 made.push(t.key);
             }
@@ -1815,5 +1864,10 @@ pub(super) async fn split_ticket<R: Runtime>(
             }
         }
     }
-    json(&made)
+    // The keys alone when every image went; what was left out is said beside them otherwise.
+    if skipped.is_empty() {
+        json(&made)
+    } else {
+        json(&json!({ "tickets": made, "skipped": skipped }))
+    }
 }

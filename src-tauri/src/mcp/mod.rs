@@ -13,6 +13,9 @@ pub(crate) mod activity;
 #[cfg(test)]
 mod agents_tests;
 mod http;
+mod images;
+#[cfg(test)]
+mod images_tests;
 pub(crate) mod install;
 #[cfg(test)]
 mod install_tests;

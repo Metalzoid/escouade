@@ -275,7 +275,7 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "column": "todo",
             "after": [],
             "progress": [],
-            "images": 0,
+            "images": [],
             "external": null,
             "agent": null,
             "branch": null,
@@ -379,7 +379,7 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
 }
 
 #[tokio::test]
-async fn a_ticket_says_how_many_images_it_has() {
+async fn a_ticket_lists_its_images() {
     use crate::tickets::DraftImage;
     use base64::Engine;
     let h = harness("mcp-act-ticket-images");
@@ -405,7 +405,13 @@ async fn a_ticket_says_how_many_images_it_has() {
     let plain = made(&h, &p, "Sans image").await;
     let c = external(&h).await;
     let got = read(&c, "get_ticket", json!({ "ticket": t.key })).await;
-    assert_eq!(got["images"], 2, "{got}");
+    let names: Vec<&str> = got["images"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["a.png", "b.png"], "{got}");
     // The tools that change a ticket answer with it as it is, images kept.
     let updated = read(
         &c,
@@ -413,9 +419,9 @@ async fn a_ticket_says_how_many_images_it_has() {
         json!({ "ticket": t.key, "title": "Avec deux images" }),
     )
     .await;
-    assert_eq!(updated["images"], 2, "{updated}");
+    assert_eq!(updated["images"], got["images"], "{updated}");
     let none = read(&c, "get_ticket", json!({ "ticket": plain.key })).await;
-    assert_eq!(none["images"], 0, "{none}");
+    assert_eq!(none["images"], json!([]), "{none}");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

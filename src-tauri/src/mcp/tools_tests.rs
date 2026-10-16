@@ -166,6 +166,36 @@ pub(super) fn keys(rows: &Value) -> Vec<String> {
         .collect()
 }
 
+/// A junction (a link to a folder that needs no privilege) at `link` to `target`. It goes when it
+/// is dropped, and only it: `remove_dir_all` through it would empty the target.
+#[cfg(windows)]
+pub(super) struct Junction(std::path::PathBuf);
+
+#[cfg(windows)]
+pub(super) fn junction(link: &std::path::Path, target: &std::path::Path) -> Junction {
+    let made = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(link)
+        .arg(target)
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "mklink: {}{}",
+        String::from_utf8_lossy(&made.stdout),
+        String::from_utf8_lossy(&made.stderr)
+    );
+    Junction(link.to_path_buf())
+}
+
+#[cfg(windows)]
+impl Drop for Junction {
+    fn drop(&mut self) {
+        // `RemoveDirectory` on a junction takes the link, not what it leads to.
+        let _ = std::fs::remove_dir(&self.0);
+    }
+}
+
 #[tokio::test]
 async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     let h = harness("mcp-read-tools");
@@ -198,6 +228,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "list_agents",
         "list_requests",
         "get_ticket",
+        "get_ticket_image",
         "get_usage",
     ] {
         assert!(
@@ -211,6 +242,7 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "list_requests",
         "list_tickets",
         "get_ticket",
+        "get_ticket_image",
         "get_agent_summary",
         "wait_ticket",
         "get_board",
@@ -446,20 +478,22 @@ async fn the_tickets_of_a_project_are_listed_in_the_kanban_order() {
             "ok"
         )
     );
-    // A column that is none of the four: an error the model reads, in the log too.
+    // A column that is none of the four: an error the model reads, in the log too, neither of which
+    // repeats the value it gave.
     let said = refused(
         &c,
         "list_tickets",
         json!({ "project": "demo", "column": "later" }),
     )
     .await;
-    assert!(said.contains("later"), "{said}");
+    assert!(!said.contains("later") && said.contains("schéma"), "{said}");
     let e = h.core.mcp.activity.entries().pop().unwrap();
     assert_eq!((e.tool.as_str(), e.outcome), ("list_tickets", "error"));
-    assert!(
-        e.message
-            .as_deref()
-            .is_some_and(|m| m.starts_with("Appel refusé par le serveur : ") && m.contains("later")),
+    assert_eq!(
+        e.message.as_deref(),
+        Some(
+            "Appel refusé par le serveur : les arguments ne correspondent pas au schéma de l’outil"
+        ),
         "{e:?}"
     );
     // Logged once only.
@@ -528,7 +562,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
         "column": "doing",
         "after": ["DEM-1"],
         "progress": ["Fichier écrit"],
-        "images": 0,
+        "images": [],
         "external": {
             "service": "jira",
             "key": "ATL-12",
@@ -1607,14 +1641,17 @@ async fn a_wait_asked_for_nothing_too_much_an_unknown_ticket_or_a_since_that_is_
             "since n’est pas un curseur rendu par wait_ticket : redonne-le tel qu’il t’a été donné, ou laisse-le de côté."
         );
     }
-    // A timeout that is no number is the router's refusal, which says what it expected.
+    // A timeout that is no number is the router's refusal, which does not repeat what was given.
     let said = refused(
         &c,
         "wait_ticket",
         json!({ "tickets": ["DEM-1"], "timeout": "long" }),
     )
     .await;
-    assert!(said.contains("\"long\"") && said.contains("u64"), "{said}");
+    assert!(
+        said.contains("invalid type") && said.contains("schéma") && !said.contains("long"),
+        "{said}"
+    );
     let e = h.core.mcp.activity.entries().pop().unwrap();
     assert_eq!((e.tool.as_str(), e.outcome), ("wait_ticket", "error"));
     c.cancel().await.unwrap();

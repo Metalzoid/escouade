@@ -13,13 +13,13 @@ use std::path::Path;
 
 /// The most images a ticket takes: its first message holds them all, and the API refuses a request
 /// past about 100 blocks; « Reprendre » sends that message again, so the ticket would stay blocked.
-const MAX_IMAGES: usize = 20;
+pub(crate) const MAX_IMAGES: usize = 20;
 
 /// Whether `file` is a simple file name, an extension included (`3f2a9c01b7de.png`): ASCII letters,
 /// digits, `-` and `_`, and one dot with something on both sides. The file of a ticket's image
 /// comes from the saved state, which may be edited by hand: any other name (a way up, a path,
 /// another drive) is never read nor removed, whatever it points to.
-fn plain_name(file: &str) -> bool {
+pub(crate) fn plain_name(file: &str) -> bool {
     let word = |s: &str| {
         !s.is_empty()
             && s.chars()
@@ -98,6 +98,9 @@ fn check_in(
             let size = own.and_then(|o| std::fs::metadata(dir.join(&o.file)).ok());
             if let (Some(own), Some(size)) = (own, size) {
                 total += size.len() as usize;
+                if total > MAX_TOTAL {
+                    bail!(too_much(lang));
+                }
                 out.push(Checked::Kept(own.clone()));
             }
             continue;
@@ -105,6 +108,11 @@ fn check_in(
         // Refused on its length before it is decoded: a huge text costs memory and time for nothing.
         if image.data.len() > 4 * MAX_IMAGE.div_ceil(3) {
             bail!(too_big(lang, &image.name));
+        }
+        // The total too, as soon as an image takes it past the limit and before it is decoded: what
+        // follows is neither decoded nor looked at.
+        if total + decoded_len(&image.data) > MAX_TOTAL {
+            bail!(too_much(lang));
         }
         let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&image.data) else {
             bail!(tr_in!(
@@ -126,24 +134,37 @@ fn check_in(
             bail!(too_big(lang, &image.name));
         }
         total += bytes.len();
+        if total > MAX_TOTAL {
+            bail!(too_much(lang));
+        }
         out.push(Checked::New {
             name: image.name.clone(),
             media_type,
             bytes,
         });
     }
-    if total > MAX_TOTAL {
-        bail!(tr_in!(
-            lang,
-            "Les images d’un ticket sont limitées à {max} en tout.",
-            "A ticket’s images are limited to {max} in total.",
-            max = size_label(lang, MAX_TOTAL)
-        ));
-    }
     Ok(out)
 }
 
-fn too_big(lang: i18n::Lang, name: &str) -> String {
+/// How many bytes the base64 text `data` decodes to, said from its length alone: three for each
+/// four characters, less one or two for the `=` that end it.
+pub(crate) fn decoded_len(data: &str) -> usize {
+    let padding = data.bytes().rev().take_while(|b| *b == b'=').count().min(2);
+    (data.len() / 4 * 3).saturating_sub(padding)
+}
+
+/// The refusal of a list of images that weighs more than 18 MB, for the core and for whatever
+/// refuses one before it reads the files.
+pub(crate) fn too_much(lang: i18n::Lang) -> String {
+    tr_in!(
+        lang,
+        "Les images d’un ticket sont limitées à {max} en tout.",
+        "A ticket’s images are limited to {max} in total.",
+        max = size_label(lang, MAX_TOTAL)
+    )
+}
+
+pub(crate) fn too_big(lang: i18n::Lang, name: &str) -> String {
     tr_in!(
         lang,
         "{name} dépasse {max}",
@@ -534,6 +555,91 @@ mod tests {
         let biggest = pasted("max.png", "image/png", &png_of(MAX_IMAGE));
         assert!(biggest.data.len() <= 4 * MAX_IMAGE.div_ceil(3));
         assert!(check_in(Fr, &dir, &[], &[biggest]).is_ok());
+    }
+
+    const TOTAL_REFUSED: &str = "Les images d’un ticket sont limitées à 18 Mo en tout.";
+
+    #[test]
+    fn the_total_is_refused_in_the_loop_before_the_next_image_is_looked_at() {
+        let dir = test_dir("ticket-images-total-loop");
+        let five = pasted("cinq.png", "image/png", &png_of(5 * MB));
+        // Three images of 5 MB make 15, the fourth takes it past 18; the fifth is no base64 at all,
+        // which is what would be said had it been decoded.
+        let junk = DraftImage {
+            data: "pas du base64 !".into(),
+            ..pasted("abime.png", "image/png", b"")
+        };
+        let mut list = vec![five.clone(), five.clone(), five.clone(), five.clone(), junk];
+        assert_eq!(refusal_of(&dir, &[], &list), TOTAL_REFUSED);
+        // Said from the length of the text, before it is decoded: this one would not decode.
+        let long_junk = DraftImage {
+            data: "!".repeat(4 * MAX_IMAGE.div_ceil(3)),
+            ..pasted("long.png", "image/png", b"")
+        };
+        list.truncate(3);
+        list.push(long_junk);
+        assert_eq!(refusal_of(&dir, &[], &list), TOTAL_REFUSED);
+        // The ones a ticket keeps count first, then the new ones.
+        let t = dir.join("t1");
+        std::fs::create_dir_all(&t).unwrap();
+        let had: Vec<TicketImage> = (0..3)
+            .map(|i| TicketImage {
+                name: format!("{i}.png"),
+                media_type: "image/png".into(),
+                file: format!("k{i}.png"),
+            })
+            .collect();
+        for i in &had {
+            std::fs::write(t.join(&i.file), png_of(5 * MB)).unwrap();
+        }
+        let keeps = || -> Vec<DraftImage> {
+            had.iter()
+                .map(|i| DraftImage {
+                    file: i.file.clone(),
+                    ..Default::default()
+                })
+                .collect()
+        };
+        let mut form = keeps();
+        form.push(five.clone());
+        assert_eq!(refusal_of(&t, &had, &form), TOTAL_REFUSED);
+        // 5 + 5 + 4 kept and 4 new make 18, which is taken; a byte more is not.
+        std::fs::write(t.join("k2.png"), png_of(4 * MB)).unwrap();
+        form.truncate(3);
+        form.push(pasted("quatre.png", "image/png", &png_of(4 * MB)));
+        assert_eq!(check_in(Fr, &t, &had, &form).ok().unwrap().len(), 4);
+        form[3] = pasted("quatre.png", "image/png", &png_of(4 * MB + 1));
+        assert_eq!(refusal_of(&t, &had, &form), TOTAL_REFUSED);
+    }
+
+    #[test]
+    fn the_total_of_exactly_eighteen_megabytes_is_still_taken() {
+        let dir = test_dir("ticket-images-total-exact");
+        let mut list: Vec<DraftImage> = (0..3)
+            .map(|i| pasted(&format!("{i}.png"), "image/png", &png_of(5 * MB)))
+            .collect();
+        list.push(pasted("trois.png", "image/png", &png_of(3 * MB)));
+        assert_eq!(check_in(Fr, &dir, &[], &list).ok().unwrap().len(), 4);
+        // One byte more is not.
+        list[3] = pasted("trois.png", "image/png", &png_of(3 * MB + 1));
+        assert_eq!(refusal_of(&dir, &[], &list), TOTAL_REFUSED);
+    }
+
+    #[test]
+    fn a_content_weighs_what_its_base64_says_before_it_is_decoded() {
+        assert_eq!(decoded_len(""), 0);
+        assert_eq!(decoded_len("QQ=="), 1);
+        assert_eq!(decoded_len("QUI="), 2);
+        assert_eq!(decoded_len("QUJD"), 3);
+        assert_eq!(decoded_len("QUJDREVG"), 6);
+        // Too short to hold a byte: no underflow.
+        assert_eq!(decoded_len("QQ"), 0);
+        assert_eq!(decoded_len("="), 0);
+        // The same as the content has once decoded.
+        for size in [0, 1, 2, 3, 4, 100, 5 * MB] {
+            let text = base64::engine::general_purpose::STANDARD.encode(vec![9; size]);
+            assert_eq!(decoded_len(&text), size, "{size}");
+        }
     }
 
     #[test]
