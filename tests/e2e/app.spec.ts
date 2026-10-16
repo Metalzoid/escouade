@@ -548,10 +548,10 @@ test('in the Claude Code view, a pasted image goes to Claude Code as a file, and
 
   await paste({ text: ' que vois-tu ?' });
   await field.press('Enter');
-  // The prompt Claude Code got, in its transcript.
+  // The prompt Claude Code got, in its transcript (none while its folder is not made yet: `expect.poll` stops at a throw).
+  const projects = path.join(app.root, 'claude', 'projects');
   const prompts = () =>
-    fs
-      .readdirSync(path.join(app.root, 'claude', 'projects'), { recursive: true, encoding: 'utf8' })
+    (fs.existsSync(projects) ? fs.readdirSync(projects, { recursive: true, encoding: 'utf8' }) : [])
       .filter((f) => f.endsWith('.jsonl'))
       .flatMap((f) =>
         fs
