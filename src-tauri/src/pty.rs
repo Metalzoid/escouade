@@ -7,12 +7,13 @@ use crate::model::{now_ms, Settings};
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
-use serde::Serialize;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::{mpsc, Arc};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,11 +32,22 @@ pub struct TermInfo {
     pub shell: String,
 }
 
+/// What a terminal holds, shared (`Arc`) so that the map of terminals is locked for a lookup and
+/// nothing else: what waits on a terminal (a resize) holds its own lock, never the map's.
 struct Term {
     info: TermInfo,
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
-    killer: Box<dyn ChildKiller + Send + Sync>,
+    /// Locked for a resize. Taken (`close_console`) by whoever ends the terminal, `kill` or the
+    /// thread waiting for its program: dropping it closes the pseudo-console, and that is theirs to
+    /// do, not the business of whichever thread holds the last `Arc<Term>` (a reader answering a
+    /// cursor query, the window's main thread in a write).
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    /// The terminal's input, written by its own thread (`run_input`): a program that reads
+    /// nothing makes that thread wait, not the caller of `write`.
+    input: mpsc::Sender<Input>,
+    /// Bytes queued and not written yet: `write` refuses what would take them past `MAX_PENDING`.
+    pending: Arc<AtomicUsize>,
+    /// Locked to kill.
+    killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     /// The terminal's whole process tree, including what it starts outside its console: killed
     /// when the terminal goes (all of it, or what shows no window: see `Started::spare_windows`).
     job: Option<Job>,
@@ -47,6 +59,270 @@ struct Term {
     detached_survive: bool,
     /// When it last had input or output (ms).
     io_at: Arc<AtomicI64>,
+    /// Its last writes and when they were queued, written and answered.
+    writes: Arc<WriteLog>,
+    /// When the log last got a slow echo of the window (ms), `i64::MIN` for never.
+    slow_echo_at: AtomicI64,
+}
+
+/// A write waiting for the input thread.
+struct Input {
+    data: Vec<u8>,
+    /// Its number in the terminal's `WriteLog`.
+    seq: u64,
+    /// When `PtyManager::write` was called, and when it had queued this (µs).
+    called_us: i64,
+    queued_us: i64,
+    /// Told (once) when the input thread has written this, for `write_and_wait`. Dropped without a
+    /// word when the terminal's input ends first.
+    ack: Option<mpsc::Sender<()>>,
+}
+
+/// `ESCOUADE_TERM_TRACE` set: each write to a terminal, and the first output after it, go to the
+/// log with their times (µs since the epoch), to measure a keystroke's way (docs/SPEC.md, *Terminaux*).
+fn tracing() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("ESCOUADE_TERM_TRACE").is_some())
+}
+
+fn now_us() -> i64 {
+    chrono::Utc::now().timestamp_micros()
+}
+
+/// How many writes a terminal remembers (`WriteLog`).
+const RECENT_WRITES: usize = 64;
+
+/// One write to a terminal and the times (µs since the epoch) of its way: queued by `write`,
+/// started and done by the input thread, and first answered by the program.
+#[derive(Debug, Clone, PartialEq)]
+struct WriteRecord {
+    /// Its number among the terminal's writes, to find it again once the ring has moved on.
+    seq: u64,
+    bytes: usize,
+    queued_us: i64,
+    /// The input thread begins to write it: its echo cannot come before.
+    started_us: Option<i64>,
+    written_us: Option<i64>,
+    /// The first output read after the write began.
+    first_output_us: Option<i64>,
+}
+
+/// How many reads of a terminal's output it remembers (`WriteLog`).
+const RECENT_READS: usize = 512;
+
+/// One `read` of a terminal's output. Each read becomes exactly one message to the window, of the
+/// same bytes and in the same order: the window's count of the bytes it received, since the
+/// terminal opened, is the `end` of the read its last message was.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct OutputRead {
+    /// The bytes read since the terminal opened, this read's included.
+    end: u64,
+    /// When it was read (µs since the epoch).
+    at_us: i64,
+}
+
+#[derive(Default)]
+struct WriteLogState {
+    next: u64,
+    recent: VecDeque<WriteRecord>,
+    /// The output bytes read since the terminal opened.
+    read_bytes: u64,
+    /// The last reads, oldest first: their `end`s only grow.
+    reads: VecDeque<OutputRead>,
+}
+
+/// The last writes to a terminal and the last reads of its output, always on: a slow echo the
+/// window reports is looked up here to say where the time went. Its lock is only ever held for a
+/// few assignments.
+#[derive(Default)]
+struct WriteLog {
+    state: Mutex<WriteLogState>,
+}
+
+impl WriteLogState {
+    /// The record of write number `seq`, if the ring still holds it (it holds consecutive ones).
+    fn get_mut(&mut self, seq: u64) -> Option<&mut WriteRecord> {
+        let first = self.recent.front()?.seq;
+        self.recent
+            .get_mut(usize::try_from(seq.checked_sub(first)?).ok()?)
+    }
+}
+
+impl WriteLog {
+    /// A write of `bytes` queued at `at`; returns its number.
+    fn queued(&self, bytes: usize, at: i64) -> u64 {
+        let mut state = self.state.lock();
+        let seq = state.next;
+        state.next += 1;
+        if state.recent.len() == RECENT_WRITES {
+            state.recent.pop_front();
+        }
+        state.recent.push_back(WriteRecord {
+            seq,
+            bytes,
+            queued_us: at,
+            started_us: None,
+            written_us: None,
+            first_output_us: None,
+        });
+        seq
+    }
+
+    fn update(&self, seqs: impl IntoIterator<Item = u64>, set: impl Fn(&mut WriteRecord)) {
+        let mut state = self.state.lock();
+        for seq in seqs {
+            if let Some(record) = state.get_mut(seq) {
+                set(record);
+            }
+        }
+    }
+
+    /// The input thread begins to write these, at `at`.
+    fn started(&self, seqs: impl IntoIterator<Item = u64>, at: i64) {
+        self.update(seqs, |r| r.started_us = Some(at));
+    }
+
+    /// These are written (and flushed), at `at`.
+    fn written(&self, seqs: impl IntoIterator<Item = u64>, at: i64) {
+        self.update(seqs, |r| r.written_us = Some(at));
+    }
+
+    /// A read of `bytes` of output, at `at`. It is the first output of the writes that began
+    /// before it and had none: not one read before (it is only reported now), and a write counts
+    /// as soon as it began, not when its call returns: the echo may be read first. It also
+    /// becomes the read that the window's count of bytes received will name (`read_ending_at`).
+    fn output(&self, at: i64, bytes: usize) {
+        let mut state = self.state.lock();
+        for r in state.recent.iter_mut() {
+            if r.first_output_us.is_none() && r.started_us.is_some_and(|started| started <= at) {
+                r.first_output_us = Some(at);
+            }
+        }
+        // Nothing read, nothing for the window to count (and two reads must never share an end).
+        if bytes > 0 {
+            state.read_bytes += bytes as u64;
+            let end = state.read_bytes;
+            if state.reads.len() == RECENT_READS {
+                state.reads.pop_front();
+            }
+            state.reads.push_back(OutputRead { end, at_us: at });
+        }
+    }
+
+    /// The read after which `end` bytes of output had been read since the terminal opened, if it
+    /// is among the last ones: a count that ends no read (or one that left the ring) finds none.
+    fn read_ending_at(&self, end: u64) -> Option<OutputRead> {
+        let state = self.state.lock();
+        let i = state.reads.binary_search_by_key(&end, |r| r.end).ok()?;
+        state.reads.get(i).copied()
+    }
+
+    /// The write number `seq` (the one `PtyManager::write` returned), if the ring still holds it.
+    fn get(&self, seq: u64) -> Option<WriteRecord> {
+        self.state.lock().get_mut(seq).map(|r| r.clone())
+    }
+
+    #[cfg(test)]
+    fn all(&self) -> Vec<WriteRecord> {
+        self.state.lock().recent.iter().cloned().collect()
+    }
+}
+
+/// What the window measured of a terminal (src/lib/terminals.ts), for the log (app.log).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TermReport {
+    /// What xterm.js draws with: "webgl" or "dom"; `detail`: the GPU's name as WebGL gives it,
+    /// or why WebGL is not used (no WebGL 2, context lost).
+    Renderer {
+        renderer: String,
+        detail: Option<String>,
+    },
+    /// The echo of the write number `seq` took longer than the window's threshold to show:
+    /// `sent_to_received` is how long after the write left the window its echo came in,
+    /// `received_to_painted` how long after that it was painted (ms, measured on the window's own
+    /// clock, so durations only: never compared with the backend's). `sent_to_acked` is how long
+    /// after the write left the window the backend's answer to it came back (ms, the same).
+    /// `output_end` is the count of output bytes the window had received, since the terminal
+    /// opened, up to and including the chunk with the echo: the backend finds the read of that
+    /// chunk by its place in the stream, not by comparing clocks (`WriteLog::read_ending_at`).
+    SlowEcho {
+        seq: u64,
+        bytes: usize,
+        sent_to_received: f64,
+        received_to_painted: f64,
+        #[serde(default)]
+        sent_to_acked: Option<f64>,
+        #[serde(default)]
+        output_end: Option<u64>,
+    },
+}
+
+/// The log line for a slow echo of `who`, with where the time went when the backend remembers the
+/// write. `echo_read_us` is when the backend read the chunk with the echo, if it found it
+/// (`output_end`): the first output after a write is often not the echo (ConPTY hides the cursor
+/// first, the letter comes in a later chunk), so with the echo's own read the line can tell which
+/// side the time went to. The window's durations and the backend's times are two clocks: only the
+/// backend's own differences, and the window's own, are ever subtracted from each other.
+fn slow_echo_line(
+    who: &str,
+    bytes: usize,
+    sent_to_received: f64,
+    received_to_painted: f64,
+    sent_to_acked: Option<f64>,
+    write: Option<&WriteRecord>,
+    echo_read_us: Option<i64>,
+) -> String {
+    // No negative step, whatever the rounding of the two sides.
+    let ms = |ms: f64| ms.max(0.0).round() as i64;
+    let between = |from: i64, to: i64| ms((to - from) as f64 / 1000.0);
+    let in_window = format!(
+        "in the window {} ms after the write left it",
+        ms(sent_to_received)
+    );
+    let painted = format!("painted {} ms later", ms(received_to_painted));
+    let steps = match write {
+        None => format!("backend times unknown, {in_window}, {painted}"),
+        Some(w) => {
+            let written = match w.written_us {
+                Some(done) => format!(
+                    "written {} ms after the backend got it",
+                    between(w.queued_us, done)
+                ),
+                None => "not written yet".to_string(),
+            };
+            match (w.written_us, w.first_output_us) {
+                (Some(done), Some(output)) => {
+                    // The echo's own read when it is known, else the first output stands for it.
+                    let (echo, seen_at) = match echo_read_us {
+                        Some(at) => (format!("the echo {} ms after", between(done, at)), at),
+                        None => ("the echo not identified".to_string(), output),
+                    };
+                    let answer = sent_to_acked
+                        .map(|a| format!(" (answer to the write {} ms)", ms(a)))
+                        .unwrap_or_default();
+                    format!(
+                        "{written}, first output {} ms after, {echo}, to and from the window {} \
+                         ms{answer}, {painted}",
+                        between(done, output),
+                        ms(sent_to_received - (seen_at - w.queued_us) as f64 / 1000.0),
+                    )
+                }
+                (_, output) => {
+                    let output = if output.is_some() { "seen" } else { "not seen" };
+                    format!("{written}, first output {output}, {in_window}, {painted}")
+                }
+            }
+        }
+    };
+    format!(
+        "{who}: echo of a {bytes}-byte write shown after {} ms: {steps}",
+        ms(sent_to_received + received_to_painted)
+    )
 }
 
 /// What runs in the terminals, as an automatic restart for an update goes.
@@ -60,7 +336,7 @@ pub struct Activity {
 
 #[derive(Default, Clone)]
 pub struct PtyManager {
-    terms: Arc<Mutex<HashMap<String, Term>>>,
+    terms: Arc<Mutex<HashMap<String, Arc<Term>>>>,
 }
 
 /// What a terminal starts.
@@ -280,6 +556,14 @@ fn closed(lang: Lang) -> anyhow::Error {
     anyhow!(tr_in!(lang, "terminal fermé", "terminal closed"))
 }
 
+fn not_reading(lang: Lang) -> anyhow::Error {
+    anyhow!(tr_in!(
+        lang,
+        "le terminal ne lit plus son entrée",
+        "the terminal no longer reads its input"
+    ))
+}
+
 /// Working folder of a launch command: the project's, or one of its folders.
 pub fn run_cwd(project: &str, sub: &str) -> Result<String> {
     let sub = sub.trim();
@@ -428,6 +712,204 @@ impl CursorQuery {
         let keep = seen.len().min(Self::QUERY.len() - 1);
         self.tail = seen.split_off(seen.len() - keep);
         found
+    }
+}
+
+/// Starts the thread writing to a terminal's input what `write` queues; returns the queue, and
+/// the count of the bytes in it.
+fn spawn_input(
+    id: &str,
+    writer: Box<dyn Write + Send>,
+    writes: Arc<WriteLog>,
+    written_at: Arc<AtomicI64>,
+) -> std::io::Result<(mpsc::Sender<Input>, Arc<AtomicUsize>)> {
+    let (input, queue) = mpsc::channel();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let id = id.to_string();
+    let count = pending.clone();
+    std::thread::Builder::new()
+        .name("pty-input".into())
+        .spawn(move || run_input(&id, writer, &queue, &writes, &written_at, &count))?;
+    Ok((input, pending))
+}
+
+const ESCAPE: u8 = 0x1b;
+
+/// What a terminal's input may hold before it is written: past this, a program that reads nothing
+/// (and pastes, and xterm.js's own answers piling up) would grow the app's memory without end.
+const MAX_PENDING: usize = 32 * 1024 * 1024;
+
+/// What the input thread joins in one write, at most: a bigger write alone stays whole.
+const MAX_WRITE: usize = 256 * 1024;
+
+/// Splits what the queue holds into the writes to make, in order: what is there goes in one write
+/// of `MAX_WRITE` bytes at most (a bigger one alone stays whole), except a lone Escape, which goes
+/// in a write of its own. Joined to what follows it, it would be read as Alt plus the next key
+/// (ConPTY, then the program), when the key it is is Escape.
+fn writes_to_make(items: Vec<Input>) -> Vec<Vec<Input>> {
+    let mut calls: Vec<Vec<Input>> = Vec::new();
+    // Whether the last call takes more: not after a lone Escape.
+    let mut open = false;
+    let mut size = 0;
+    for item in items {
+        let alone = item.data == [ESCAPE];
+        let len = item.data.len();
+        match calls.last_mut() {
+            Some(call) if open && !alone && size + len <= MAX_WRITE => {
+                size += len;
+                call.push(item);
+            }
+            _ => {
+                size = len;
+                calls.push(vec![item]);
+            }
+        }
+        open = !alone;
+    }
+    calls
+}
+
+/// Writes the queue to a terminal's input, in order, what is already there in one write (but for
+/// a lone Escape: see `writes_to_make`). This thread is the only one to wait for the program to
+/// read: a full input (a program that reads nothing, a busy console) holds back its terminal
+/// alone. Ends with the queue, when the terminal is dropped, or with the pipe, when the program is
+/// gone (the next `write` says the terminal is closed).
+fn run_input(
+    id: &str,
+    mut writer: Box<dyn Write + Send>,
+    queue: &mpsc::Receiver<Input>,
+    writes: &WriteLog,
+    written_at: &AtomicI64,
+    pending: &AtomicUsize,
+) {
+    while let Ok(first) = queue.recv() {
+        let mut batch = vec![first];
+        batch.extend(queue.try_iter());
+        for call in writes_to_make(batch) {
+            let started = now_us();
+            writes.started(call.iter().map(|w| w.seq), started);
+            if tracing() {
+                // Before the write: its echo may be read before the write returns.
+                written_at.store(started, Ordering::Release);
+            }
+            let joined: Vec<u8>;
+            let data: &[u8] = match call.as_slice() {
+                [only] => &only.data,
+                _ => {
+                    joined = call.iter().flat_map(|w| w.data.iter().copied()).collect();
+                    &joined
+                }
+            };
+            let result = writer.write_all(data).and_then(|()| writer.flush());
+            let done = now_us();
+            writes.written(call.iter().map(|w| w.seq), done);
+            if tracing() {
+                for w in &call {
+                    log::info!(
+                        "term-trace write id={id} bytes={} called={} locked={} done={done}",
+                        w.data.len(),
+                        w.called_us,
+                        w.queued_us
+                    );
+                }
+            }
+            if let Err(e) = result {
+                // The acks go unanswered, with the writes: the callers waiting for them are told.
+                // Said in the log (its kind, never what was typed): the terminal stays open, and
+                // takes no more input.
+                log::warn!(
+                    "terminal {id}: its input can no longer be written ({:?}): it takes no more keys",
+                    e.kind()
+                );
+                return;
+            }
+            pending.fetch_sub(data.len(), Ordering::AcqRel);
+            for ack in call.into_iter().filter_map(|w| w.ack) {
+                let _ = ack.send(());
+            }
+        }
+    }
+}
+
+/// What the window says, as one line of the log: no control character (a line break would forge
+/// a line of its own), `max` characters at most.
+fn one_line(text: &str, max: usize) -> String {
+    text.chars().filter(|c| !c.is_control()).take(max).collect()
+}
+
+/// A slow echo of the window is logged once per this long, per terminal (ms).
+const SLOW_ECHO_EVERY_MS: i64 = 5_000;
+
+impl Term {
+    /// What the log says of what the window `report`s at `now` (ms), if anything.
+    fn report_line(&self, report: TermReport, now: i64) -> Option<(log::Level, String)> {
+        let who = format!("terminal {} ({})", self.info.id, self.info.shell);
+        match report {
+            TermReport::Renderer { renderer, detail } => {
+                let renderer = one_line(&renderer, 20);
+                let detail = detail
+                    .map(|d| one_line(&d, 200))
+                    .filter(|d| !d.is_empty())
+                    .map(|d| format!(" ({d})"))
+                    .unwrap_or_default();
+                Some((
+                    log::Level::Info,
+                    format!("{who}: renderer {renderer}{detail}"),
+                ))
+            }
+            TermReport::SlowEcho {
+                seq,
+                bytes,
+                sent_to_received,
+                received_to_painted,
+                sent_to_acked,
+                output_end,
+            } => {
+                // The window limits them too: a guard against a loop there filling the log. One
+                // atomic step, as several reports run at once: only one of them takes the slot.
+                self.slow_echo_at
+                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |last| {
+                        (now.saturating_sub(last) >= SLOW_ECHO_EVERY_MS).then_some(now)
+                    })
+                    .ok()?;
+                let write = self.writes.get(seq);
+                let echo_read = output_end.and_then(|end| self.writes.read_ending_at(end));
+                let line = slow_echo_line(
+                    &who,
+                    bytes,
+                    sent_to_received,
+                    received_to_painted,
+                    sent_to_acked,
+                    write.as_ref(),
+                    echo_read.map(|r| r.at_us),
+                );
+                Some((log::Level::Warn, line))
+            }
+        }
+    }
+
+    /// Resizes the pseudo-console; refused once it is closed.
+    fn resize(&self, cols: u16, rows: u16) -> Result<()> {
+        let master = self.master.lock();
+        let master = master.as_ref().ok_or_else(|| closed(i18n::ui()))?;
+        master
+            .resize(PtySize {
+                rows: rows.max(2),
+                cols: cols.max(10),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    /// Closes the pseudo-console, if it still is: the end of the terminal (`kill`, or the end of
+    /// its program) does it, itself and outside the map's lock. Closing it may wait for the
+    /// console to be done with its output, which only the terminal's reader thread takes: that
+    /// thread must never be the one to close it (by dropping the last `Arc<Term>` it holds in a
+    /// `write`), nor must the window's main thread.
+    fn close_console(&self) {
+        let master = self.master.lock().take();
+        drop(master);
     }
 }
 
@@ -624,7 +1106,7 @@ impl PtyManager {
             .map_err(|e| anyhow!("{e}"))
             .with_context(|| tr!("lancement du shell", "starting the shell"))?;
         drop(pair.slave);
-        let killer = child.clone_killer();
+        let mut killer = child.clone_killer();
         let job = started.job.then(|| Job::for_pty(child.as_ref())).flatten();
         if let (Some(job), true) = (&job, started.spare_windows) {
             job.release();
@@ -633,21 +1115,36 @@ impl PtyManager {
         let writer = pair.master.take_writer().map_err(|e| anyhow!("{e}"))?;
         let id = info.id.clone();
         let io_at = Arc::new(AtomicI64::new(now_ms()));
+        // With `ESCOUADE_TERM_TRACE`: when the input thread began its last write (µs), until output
+        // follows.
+        let written_at = Arc::new(AtomicI64::new(0));
+        let writes = Arc::new(WriteLog::default());
+        let (input, pending) = spawn_input(&id, writer, writes.clone(), written_at.clone())
+            .map_err(|e| {
+                // Nobody could write to it: it would only wait for an input.
+                let _ = killer.kill();
+                anyhow!("{e}")
+            })
+            .with_context(|| tr!("lancement du shell", "starting the shell"))?;
         self.terms.lock().insert(
             id.clone(),
-            Term {
+            Arc::new(Term {
                 info,
-                master: pair.master,
-                writer,
-                killer,
+                master: Mutex::new(Some(pair.master)),
+                input,
+                pending,
+                killer: Mutex::new(killer),
                 job,
                 launch: started.launch,
                 spare_windows: started.spare_windows,
                 detached_survive: started.detached_survive,
                 io_at: io_at.clone(),
-            },
+                writes: writes.clone(),
+                slow_echo_at: AtomicI64::new(i64::MIN),
+            }),
         );
 
+        let trace_id = id.clone();
         std::thread::spawn(move || {
             let mut buf = vec![0u8; 32 * 1024];
             loop {
@@ -655,7 +1152,17 @@ impl PtyManager {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
                         io_at.store(now_ms(), Ordering::Release);
-                        on_data(buf[..n].to_vec())
+                        let read = now_us();
+                        // One message of these `n` bytes for the window, then the read in the
+                        // log, whose bytes the window counts too (`TermReport::SlowEcho`).
+                        on_data(buf[..n].to_vec());
+                        writes.output(read, n);
+                        if tracing() && written_at.swap(0, Ordering::AcqRel) != 0 {
+                            log::info!(
+                                "term-trace read id={trace_id} bytes={n} at={read} sent={}",
+                                now_us()
+                            );
+                        }
                     }
                 }
             }
@@ -664,20 +1171,19 @@ impl PtyManager {
         let terms = self.terms.clone();
         std::thread::spawn(move || {
             let code = child.wait().ok().map(|s| s.exit_code());
-            // Dropping the master closes the pseudo-console, which ends the reader thread (and the
-            // job, what the command left running). Outside the lock: see kill. A term that is not
-            // there was closed by `kill`, which ended the tree.
+            // A term that is not there was closed by `kill`, which ended the tree.
             let term = terms.lock().remove(&id);
-            // A shell that ends by itself leaves what its user detached; a program that ends
-            // takes what it started, but what shows a window (the Job, released, kills nothing).
-            if let Some(Term {
-                job: Some(job),
-                spare_windows: true,
-                detached_survive: false,
-                ..
-            }) = &term
-            {
-                job.terminate_windowless();
+            if let Some(t) = &term {
+                // A shell that ends by itself leaves what its user detached; a program that ends
+                // takes what it started, but what shows a window (the Job, released, kills
+                // nothing).
+                if let (Some(job), true, false) = (&t.job, t.spare_windows, t.detached_survive) {
+                    job.terminate_windowless();
+                }
+                // Closes the pseudo-console, which ends the reader thread (and the job, what the
+                // command left running). Here, outside the map's lock, and not by whichever
+                // thread drops the last `Arc<Term>`: see `Term::close_console`.
+                t.close_console();
             }
             drop(term);
             on_exit(code);
@@ -685,35 +1191,94 @@ impl PtyManager {
         Ok(())
     }
 
-    pub fn write(&self, id: &str, data: &[u8]) -> Result<()> {
-        let mut terms = self.terms.lock();
-        let t = terms.get_mut(id).ok_or_else(|| closed(i18n::ui()))?;
-        t.io_at.store(now_ms(), Ordering::Release);
-        t.writer.write_all(data)?;
-        t.writer.flush()?;
-        Ok(())
+    /// Queues `data` for the terminal's input. Never waits on I/O: the terminal's input thread
+    /// writes it, in the order of the calls, whenever the program reads. Returns the write's
+    /// number in the terminal's log of writes, which the window sends back with the report of a
+    /// slow echo (`TermReport::SlowEcho`).
+    pub fn write(&self, id: &str, data: &[u8]) -> Result<u64> {
+        self.queue(id, data, None)
+    }
+
+    /// Queues `data` like `write`, then waits until the input thread has written it, for at most
+    /// `timeout`: for what has to be really written before the next step (a paste, then its
+    /// Enter, which the queue would otherwise merge into one write). It is best effort: after the
+    /// timeout (a program that does not read) the data stays queued and this returns all the
+    /// same. An error is a terminal that is closed.
+    pub fn write_and_wait(&self, id: &str, data: &[u8], timeout: Duration) -> Result<u64> {
+        let (ack, written) = mpsc::channel();
+        let seq = self.queue(id, data, Some(ack))?;
+        match written.recv_timeout(timeout) {
+            Ok(()) => Ok(seq),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                log::debug!("terminal {id}: write {seq} not written after {timeout:?}");
+                Ok(seq)
+            }
+            // The input thread ended without writing it: the program is gone.
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(closed(i18n::ui())),
+        }
+    }
+
+    fn queue(&self, id: &str, data: &[u8], ack: Option<mpsc::Sender<()>>) -> Result<u64> {
+        let called_us = now_us();
+        // The map is locked for the lookup alone.
+        let term = self.term(id)?;
+        // Room for it in the queue, taken in one step: writes come from several threads.
+        let room = term
+            .pending
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |queued| {
+                (queued + data.len() <= MAX_PENDING).then_some(queued + data.len())
+            });
+        if room.is_err() {
+            return Err(not_reading(i18n::ui()));
+        }
+        term.io_at.store(now_ms(), Ordering::Release);
+        let queued_us = now_us();
+        let seq = term.writes.queued(data.len(), queued_us);
+        let sent = term.input.send(Input {
+            data: data.to_vec(),
+            seq,
+            called_us,
+            queued_us,
+            ack,
+        });
+        if sent.is_err() {
+            // Its thread ended: the program is gone.
+            term.pending.fetch_sub(data.len(), Ordering::AcqRel);
+            return Err(closed(i18n::ui()));
+        }
+        Ok(seq)
+    }
+
+    /// The terminal `id`, with the map released: what waits on a terminal waits for its own lock.
+    fn term(&self, id: &str) -> Result<Arc<Term>> {
+        self.terms
+            .lock()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| closed(i18n::ui()))
     }
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<()> {
-        let terms = self.terms.lock();
-        let t = terms.get(id).ok_or_else(|| closed(i18n::ui()))?;
-        t.master
-            .resize(PtySize {
-                rows: rows.max(2),
-                cols: cols.max(10),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| anyhow!("{e}"))
+        self.term(id)?.resize(cols, rows)
+    }
+
+    /// What the window measured of terminal `id`, in the log. Nothing for a terminal that is gone.
+    pub fn report(&self, id: &str, report: TermReport) {
+        let Ok(term) = self.term(id) else {
+            return;
+        };
+        if let Some((level, line)) = term.report_line(report, now_ms()) {
+            log::log!(level, "{line}");
+        }
     }
 
     pub fn kill(&self, id: &str) {
-        // Dropped outside the lock: closing the pseudo-console may wait for its reader, which
-        // takes the lock to answer a cursor position query.
+        // The map is released first: closing the pseudo-console may wait for its reader, which
+        // looks the terminal up to answer a cursor position query.
         let term = self.terms.lock().remove(id);
-        if let Some(mut t) = term {
-            // The whole tree at once: the pseudo-console, closed when the term is dropped, would
-            // take its time to end what is attached to it, and not end the rest.
+        if let Some(t) = term {
+            // The whole tree at once: the pseudo-console, closed just after, would take its time
+            // to end what is attached to it, and not end the rest.
             if let Some(job) = &t.job {
                 if t.spare_windows {
                     job.terminate_windowless();
@@ -721,7 +1286,10 @@ impl PtyManager {
                     job.terminate();
                 }
             }
-            let _ = t.killer.kill();
+            let _ = t.killer.lock().kill();
+            // Closed here, not by whichever thread drops the last `Arc<Term>` (see
+            // `Term::close_console`).
+            t.close_console();
         }
     }
 
@@ -986,6 +1554,52 @@ mod tests {
             "t4",
             "Start-Process ping -ArgumentList '-n','60','127.0.0.1' -WindowStyle Hidden",
         );
+    }
+
+    #[test]
+    fn sixty_keys_written_back_to_back_reach_the_shell_in_order() {
+        let _one = one_shell_at_a_time();
+        let Some((pty, out)) = open_pwsh("t7") else {
+            return;
+        };
+        // One write per key, as the window sends them: the input thread merges what it finds
+        // queued, whatever the way it is cut.
+        let digits: String = "0123456789".chars().cycle().take(53).collect();
+        let typed = "echo x";
+        for key in typed.chars().chain(digits.chars()) {
+            pty.write("t7", key.to_string().as_bytes()).unwrap();
+        }
+        pty.write("t7", b"\r").unwrap();
+        let start = Instant::now();
+        while !out.lock().contains(&format!("x{digits}")) {
+            assert!(
+                start.elapsed() < Duration::from_secs(60),
+                "keys out of order or lost: {}",
+                out.lock()
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        // The 60 writes, and their echo, are in the terminal's recent writes (after the answer to
+        // the cursor position query `open_pwsh` gives).
+        let term = pty.term("t7").unwrap();
+        let start = Instant::now();
+        loop {
+            let recent = term.writes.all();
+            let keys = &recent[recent.len() - 60..];
+            if keys
+                .iter()
+                .all(|w| w.written_us.is_some() && w.first_output_us.is_some())
+            {
+                assert_eq!(keys.iter().filter(|w| w.bytes == 1).count(), 60);
+                break;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "writes not marked: {keys:?}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        pty.kill("t7");
     }
 
     /// Types `command`, which detaches a ping, then `exit`: the ping must run on after the shell
@@ -2138,6 +2752,112 @@ mod windows_powershell_tests {
         }
         pty.kill("wps");
     }
+
+    /// The window counts the bytes of the messages it gets; the log of a real terminal must have
+    /// a read ending at each of those counts, for the echo the window names to be found.
+    #[test]
+    fn the_count_of_bytes_the_window_received_names_a_read_of_a_real_terminal() {
+        let _one = one_shell_at_a_time();
+        let root = std::env::var_os("SystemRoot").map(PathBuf::from);
+        let roots = ShellRoots {
+            path: vec![],
+            program_files: None,
+            local_app_data: None,
+            system_root: root,
+        };
+        let Some(shell) = detect_shells_in(&roots, &Settings::default())
+            .into_iter()
+            .find(|s| s.id == "powershell")
+        else {
+            eprintln!("Windows PowerShell not found: skipped");
+            return;
+        };
+        let pty = PtyManager::default();
+        // What the window keeps: each message's text, and the bytes received once it was in.
+        let received: Arc<Mutex<Vec<(u64, String)>>> = Arc::default();
+        let (sink, answer) = (received.clone(), pty.clone());
+        let info = TermInfo {
+            id: "wps-count".into(),
+            project_id: "p".into(),
+            name: "powershell-1".into(),
+            shell: shell.id.clone(),
+        };
+        let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        let query = Mutex::new(CursorQuery::default());
+        pty.spawn(
+            info,
+            &shell,
+            "",
+            &cwd,
+            (120, 30),
+            vec![],
+            move |b| {
+                if query.lock().feed(&b) {
+                    let _ = answer.write("wps-count", b"\x1b[1;1R");
+                }
+                let mut got = sink.lock();
+                let end = got.last().map_or(0, |m| m.0) + b.len() as u64;
+                got.push((end, String::from_utf8_lossy(&b).into_owned()));
+            },
+            |_| {},
+        )
+        .unwrap();
+        let seen = |text: &str| received.lock().iter().any(|m| m.1.contains(text));
+        let start = Instant::now();
+        let mut seq = None;
+        while !seen("ccm-ok-42") {
+            if seq.is_none() && seen("PS ") {
+                seq = Some(
+                    pty.write("wps-count", b"Write-Output ('ccm-ok-' + 42)\r")
+                        .unwrap(),
+                );
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(90),
+                "no output: {:?}",
+                received.lock()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let term = pty.term("wps-count").unwrap();
+        let ends: Vec<u64> = received.lock().iter().map(|m| m.0).collect();
+        // The reader logs a read just after sending it: wait for the last one.
+        let last = *ends.last().unwrap();
+        let waiting = Instant::now();
+        while term.writes.read_ending_at(last).is_none() {
+            assert!(
+                waiting.elapsed() < Duration::from_secs(10),
+                "the last read is not logged"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Every count of the window is the end of one read (the log keeps the last 512, as many
+        // messages as it checks).
+        for end in ends.iter().rev().take(RECENT_READS) {
+            assert!(
+                term.writes.read_ending_at(*end).is_some(),
+                "no read ends at {end} bytes, among the messages {ends:?}"
+            );
+        }
+        // The line for the window's count at the message with the command's output.
+        let output_end = received
+            .lock()
+            .iter()
+            .find(|m| m.1.contains("ccm-ok-42"))
+            .map(|m| m.0)
+            .unwrap();
+        let report: TermReport = serde_json::from_str(&format!(
+            r#"{{"kind":"slowEcho","seq":{},"bytes":30,"sentToReceived":500,"receivedToPainted":10,"outputEnd":{output_end}}}"#,
+            seq.unwrap()
+        ))
+        .unwrap();
+        let (_, line) = term.report_line(report, 10_000).unwrap();
+        assert!(
+            line.contains(", the echo ") && !line.contains("not identified"),
+            "{line}"
+        );
+        pty.kill("wps-count");
+    }
 }
 
 #[cfg(test)]
@@ -2298,5 +3018,1290 @@ mod activity_tests {
         assert_eq!(pty.activity().launches, 0);
         pty.kill("act-shell");
         assert_eq!(pty.activity(), Activity::default());
+    }
+}
+
+#[cfg(test)]
+mod write_log_tests {
+    use super::*;
+
+    fn record(bytes: usize, queued_us: i64) -> WriteRecord {
+        WriteRecord {
+            seq: 0,
+            bytes,
+            queued_us,
+            started_us: None,
+            written_us: None,
+            first_output_us: None,
+        }
+    }
+
+    #[test]
+    fn a_write_then_output_marks_the_first_output_of_the_write() {
+        let log = WriteLog::default();
+        let seq = log.queued(3, 1_000);
+        log.started([seq], 1_100);
+        log.written([seq], 1_200);
+        log.output(1_500, 4);
+        log.output(1_900, 4);
+        assert_eq!(
+            log.all(),
+            [WriteRecord {
+                seq,
+                bytes: 3,
+                queued_us: 1_000,
+                started_us: Some(1_100),
+                written_us: Some(1_200),
+                first_output_us: Some(1_500),
+            }]
+        );
+    }
+
+    #[test]
+    fn output_before_a_write_is_not_its_echo() {
+        let log = WriteLog::default();
+        log.output(900, 4);
+        // Queued, but the input thread has not begun to write it.
+        let queued = log.queued(1, 1_000);
+        log.output(1_050, 4);
+        let started = log.queued(1, 1_060);
+        log.started([started], 1_100);
+        // Read before the write began, but reported after: not its echo either.
+        log.output(1_090, 4);
+        let all = log.all();
+        assert_eq!(all[0].seq, queued);
+        assert_eq!(all[0].first_output_us, None);
+        assert_eq!(all[1].first_output_us, None);
+        log.output(1_300, 4);
+        assert_eq!(log.all()[1].first_output_us, Some(1_300));
+    }
+
+    #[test]
+    fn the_echo_read_before_the_write_returns_still_counts() {
+        // The program echoes as soon as the bytes are in its pipe: the reader may get it before
+        // the input thread is done with the write call.
+        let log = WriteLog::default();
+        let seq = log.queued(1, 1_000);
+        log.started([seq], 1_100);
+        log.output(1_150, 4);
+        log.written([seq], 1_200);
+        let r = &log.all()[0];
+        assert_eq!(
+            (r.written_us, r.first_output_us),
+            (Some(1_200), Some(1_150))
+        );
+    }
+
+    #[test]
+    fn the_last_64_writes_are_kept_and_found_again_by_their_number() {
+        let log = WriteLog::default();
+        let seqs: Vec<u64> = (0..100).map(|i| log.queued(1, i * 10)).collect();
+        assert_eq!(log.all().len(), RECENT_WRITES);
+        assert_eq!(log.all()[0].seq, seqs[100 - RECENT_WRITES]);
+        // One that left the ring is ignored, the others are marked.
+        log.written(seqs.iter().copied(), 5_000);
+        let all = log.all();
+        assert!(all.iter().all(|r| r.written_us == Some(5_000)));
+        assert_eq!(all.last().unwrap().seq, seqs[99]);
+    }
+
+    #[test]
+    fn a_report_finds_its_write_by_number() {
+        let log = WriteLog::default();
+        let seqs: Vec<u64> = (0..3)
+            .map(|i| log.queued(i + 1, 1_000 * i as i64))
+            .collect();
+        for (i, seq) in seqs.iter().enumerate() {
+            let found = log.get(*seq).unwrap();
+            assert_eq!((found.seq, found.bytes), (*seq, i + 1));
+        }
+        assert_eq!(log.get(seqs[2] + 1), None);
+        assert_eq!(WriteLog::default().get(0), None);
+    }
+
+    #[test]
+    fn a_write_that_left_the_ring_is_not_found_by_its_number() {
+        let log = WriteLog::default();
+        let seqs: Vec<u64> = (0..RECENT_WRITES as u64 + 10)
+            .map(|_| log.queued(1, 0))
+            .collect();
+        assert_eq!(log.get(seqs[0]), None);
+        assert_eq!(log.get(seqs[9]), None);
+        assert_eq!(log.get(seqs[10]).unwrap().seq, seqs[10]);
+        assert_eq!(
+            log.get(*seqs.last().unwrap()).unwrap().seq,
+            seqs[seqs.len() - 1]
+        );
+    }
+
+    #[test]
+    fn each_read_is_found_again_by_the_bytes_read_up_to_and_including_it() {
+        let log = WriteLog::default();
+        // Reads of 5, 3 and 10 bytes: what the window has received after each of its messages.
+        log.output(100, 5);
+        log.output(200, 3);
+        log.output(300, 10);
+        let at = |end| log.read_ending_at(end).map(|r| r.at_us);
+        assert_eq!(at(5), Some(100));
+        assert_eq!(at(8), Some(200));
+        assert_eq!(at(18), Some(300));
+        assert_eq!(
+            log.read_ending_at(8),
+            Some(OutputRead { end: 8, at_us: 200 })
+        );
+    }
+
+    #[test]
+    fn a_count_that_is_not_the_end_of_a_read_finds_none() {
+        let log = WriteLog::default();
+        assert_eq!(log.read_ending_at(0), None);
+        assert_eq!(log.read_ending_at(5), None);
+        log.output(100, 5);
+        log.output(200, 3);
+        // Nothing yet, in the middle of a read, between two, past the last.
+        for end in [0, 1, 4, 6, 7, 9, 18, u64::MAX] {
+            assert_eq!(log.read_ending_at(end), None, "{end}");
+        }
+    }
+
+    #[test]
+    fn the_last_512_reads_are_kept_and_the_count_goes_on_past_them() {
+        let log = WriteLog::default();
+        let total = RECENT_READS + 10;
+        for i in 1..=total {
+            log.output(i as i64 * 10, 2);
+        }
+        // Read number 1 to 10 left the ring; number 11 is the oldest it holds.
+        assert_eq!(log.read_ending_at(2), None);
+        assert_eq!(log.read_ending_at(20), None);
+        assert_eq!(log.read_ending_at(22).map(|r| r.at_us), Some(110));
+        // The count never restarted: the last read ends at all the bytes read since the start.
+        let last = log.read_ending_at(2 * total as u64).unwrap();
+        assert_eq!(last.at_us, total as i64 * 10);
+        assert_eq!(log.state.lock().reads.len(), RECENT_READS);
+    }
+
+    #[test]
+    fn a_read_of_no_bytes_leaves_no_read_to_find() {
+        let log = WriteLog::default();
+        log.output(100, 4);
+        log.output(150, 0);
+        log.output(200, 4);
+        assert_eq!(log.read_ending_at(4).map(|r| r.at_us), Some(100));
+        assert_eq!(log.read_ending_at(8).map(|r| r.at_us), Some(200));
+        assert_eq!(log.state.lock().reads.len(), 2);
+    }
+
+    #[test]
+    fn reads_and_writes_are_logged_apart() {
+        // A write does not move the count of output, nor a read the numbers of the writes.
+        let log = WriteLog::default();
+        log.output(100, 7);
+        let seq = log.queued(3, 150);
+        log.output(200, 7);
+        assert_eq!(seq, 0);
+        assert_eq!(log.read_ending_at(14).map(|r| r.at_us), Some(200));
+        assert_eq!(log.all().len(), 1);
+    }
+
+    fn full(queued: i64, written: i64, output: i64) -> WriteRecord {
+        WriteRecord {
+            started_us: Some(queued),
+            written_us: Some(written),
+            first_output_us: Some(output),
+            ..record(1, queued)
+        }
+    }
+
+    #[test]
+    fn a_slow_echo_is_split_into_the_steps_of_its_way() {
+        // Written 2 ms after the backend got it, the echo read 1490 ms after; it was in the window
+        // 1498 ms after the write left it, so 6 ms went to and from the window; then 22 ms to
+        // paint.
+        let w = full(500_000, 502_000, 503_000);
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            None,
+            Some(&w),
+            Some(1_992_000),
+        );
+        assert_eq!(
+            line,
+            "terminal t1 (pwsh): echo of a 1-byte write shown after 1520 ms: written 2 ms after \
+             the backend got it, first output 1 ms after, the echo 1490 ms after, to and from the \
+             window 6 ms, painted 22 ms later"
+        );
+    }
+
+    #[test]
+    fn the_echo_is_dated_by_its_own_read_not_by_the_first_output_that_was_only_the_cursor() {
+        // ConPTY hides the cursor 1 ms after the write; the letter is drawn 1490 ms after. The
+        // window got the letter 1498 ms after the write left it: the way to and from it is 6 ms,
+        // not the 1497 ms the first output would blame on it.
+        let w = full(500_000, 502_000, 503_000);
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            None,
+            Some(&w),
+            Some(1_992_000),
+        );
+        assert!(
+            line.contains(
+                "first output 1 ms after, the echo 1490 ms after, to and from the window 6 ms,"
+            ),
+            "{line}"
+        );
+        // The same write, its echo not identified: the first output stands for it, as before.
+        let line = slow_echo_line("terminal t1 (pwsh)", 1, 1498.0, 22.0, None, Some(&w), None);
+        assert_eq!(
+            line,
+            "terminal t1 (pwsh): echo of a 1-byte write shown after 1520 ms: written 2 ms after \
+             the backend got it, first output 1 ms after, the echo not identified, to and from \
+             the window 1495 ms, painted 22 ms later"
+        );
+    }
+
+    #[test]
+    fn the_answer_to_the_write_is_told_when_the_window_gave_it() {
+        let w = full(500_000, 502_000, 503_000);
+        let identified = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            Some(8.4),
+            Some(&w),
+            Some(1_992_000),
+        );
+        assert_eq!(
+            identified,
+            "terminal t1 (pwsh): echo of a 1-byte write shown after 1520 ms: written 2 ms after \
+             the backend got it, first output 1 ms after, the echo 1490 ms after, to and from the \
+             window 6 ms (answer to the write 8 ms), painted 22 ms later"
+        );
+        // Not identified: the answer is still told.
+        let unknown = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            Some(0.4),
+            Some(&w),
+            None,
+        );
+        assert!(
+            unknown.contains(
+                "the echo not identified, to and from the window 1495 ms (answer to the write 0 \
+                 ms), painted 22 ms later"
+            ),
+            "{unknown}"
+        );
+        // A negative answer (two clocks of the window's own rounding) is never shown as such.
+        let rounded = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            Some(-0.2),
+            Some(&w),
+            Some(1_992_000),
+        );
+        assert!(rounded.contains("(answer to the write 0 ms)"), "{rounded}");
+    }
+
+    #[test]
+    fn an_echo_read_before_the_write_returned_is_not_a_negative_step() {
+        // The program echoed as soon as its pipe had the bytes: the reader got the echo before
+        // the input thread was done with the write call.
+        let w = full(500_000, 502_000, 501_000);
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1000.0,
+            20.0,
+            None,
+            Some(&w),
+            Some(501_500),
+        );
+        assert!(!line.contains(" -"), "{line}");
+        assert!(
+            line.contains(
+                "first output 0 ms after, the echo 0 ms after, to and from the window 999 ms,"
+            ),
+            "{line}"
+        );
+    }
+
+    #[test]
+    fn an_echo_read_changes_nothing_when_the_write_is_not_fully_known() {
+        // Not written yet, or the first output never seen: the variants of before, the echo read
+        // (a stray one, for such a record) is ignored.
+        let mut w = full(500_000, 0, 0);
+        w.written_us = None;
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            Some(5.0),
+            Some(&w),
+            Some(900_000),
+        );
+        assert!(line.contains("not written yet, first output seen, in the window 1498 ms after the write left it, painted 22 ms later"), "{line}");
+        let mut w = full(500_000, 503_000, 0);
+        w.first_output_us = None;
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1498.0,
+            22.0,
+            Some(5.0),
+            Some(&w),
+            Some(900_000),
+        );
+        assert!(line.contains("first output not seen, in the window 1498 ms after the write left it, painted 22 ms later"), "{line}");
+        assert!(!line.contains("the echo"), "{line}");
+    }
+
+    #[test]
+    fn a_slow_echo_of_a_write_the_backend_forgot_says_its_times_are_unknown() {
+        // Whatever the window said of the echo's read and the answer.
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            12,
+            1498.5,
+            21.5,
+            Some(3.0),
+            None,
+            Some(1_000_000),
+        );
+        assert_eq!(
+            line,
+            "terminal t1 (pwsh): echo of a 12-byte write shown after 1520 ms: backend times \
+             unknown, in the window 1499 ms after the write left it, painted 22 ms later"
+        );
+    }
+
+    #[test]
+    fn a_slow_echo_whose_first_output_was_not_seen_says_what_is_known() {
+        let mut w = full(500_000, 503_000, 0);
+        w.first_output_us = None;
+        let line = slow_echo_line("terminal t1 (pwsh)", 1, 1498.0, 22.0, None, Some(&w), None);
+        assert_eq!(
+            line,
+            "terminal t1 (pwsh): echo of a 1-byte write shown after 1520 ms: written 3 ms after \
+             the backend got it, first output not seen, in the window 1498 ms after the write \
+             left it, painted 22 ms later"
+        );
+    }
+
+    #[test]
+    fn a_slow_echo_of_a_write_not_written_yet_says_so() {
+        let mut w = full(500_000, 0, 0);
+        w.written_us = None;
+        w.first_output_us = None;
+        let line = slow_echo_line("terminal t1 (pwsh)", 1, 1498.0, 22.0, None, Some(&w), None);
+        assert_eq!(
+            line,
+            "terminal t1 (pwsh): echo of a 1-byte write shown after 1520 ms: not written yet, \
+             first output not seen, in the window 1498 ms after the write left it, painted 22 ms \
+             later"
+        );
+        // An echo read before the write call returned: still not a time to split.
+        w.first_output_us = Some(600_000);
+        let line = slow_echo_line("terminal t1 (pwsh)", 1, 1498.0, 22.0, None, Some(&w), None);
+        assert!(line.contains("not written yet"), "{line}");
+        assert!(!line.contains("to and from"), "{line}");
+    }
+
+    #[test]
+    fn a_backend_part_longer_than_the_echo_took_in_the_window_never_shows_a_negative_step() {
+        // The window's durations and the backend's times are two clocks: nothing says one side's
+        // part fits in the other's whole.
+        let w = full(0, 100, 5_000_000);
+        let line = slow_echo_line("terminal t1 (pwsh)", 1, 1000.0, 20.0, None, Some(&w), None);
+        assert!(!line.contains(" -"), "{line}");
+        assert!(line.contains("to and from the window 0 ms"), "{line}");
+        // The same with the echo's own read, five seconds after the write.
+        let line = slow_echo_line(
+            "terminal t1 (pwsh)",
+            1,
+            1000.0,
+            20.0,
+            None,
+            Some(&w),
+            Some(5_000_000),
+        );
+        assert!(!line.contains(" -"), "{line}");
+        assert!(line.contains("to and from the window 0 ms"), "{line}");
+    }
+
+    #[test]
+    fn the_windows_reports_are_read_from_their_json() {
+        // Without what the window learned later: an older window's report.
+        let slow: TermReport = serde_json::from_str(
+            r#"{"kind":"slowEcho","seq":7,"bytes":4,"sentToReceived":1500.5,"receivedToPainted":20.25}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            slow,
+            TermReport::SlowEcho {
+                seq: 7,
+                bytes: 4,
+                sent_to_received,
+                received_to_painted,
+                sent_to_acked: None,
+                output_end: None,
+            } if sent_to_received == 1500.5 && received_to_painted == 20.25
+        ));
+        let full: TermReport = serde_json::from_str(
+            r#"{"kind":"slowEcho","seq":7,"bytes":4,"sentToReceived":1500.5,"receivedToPainted":20.25,"sentToAcked":3.75,"outputEnd":12345}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            full,
+            TermReport::SlowEcho {
+                seq: 7,
+                sent_to_received,
+                received_to_painted,
+                sent_to_acked: Some(acked),
+                output_end: Some(12_345),
+                ..
+            } if sent_to_received == 1500.5 && received_to_painted == 20.25 && acked == 3.75
+        ));
+        // A window that knows neither says so with nulls.
+        let nulls: TermReport = serde_json::from_str(
+            r#"{"kind":"slowEcho","seq":7,"bytes":4,"sentToReceived":1.0,"receivedToPainted":2.0,"sentToAcked":null,"outputEnd":null}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            nulls,
+            TermReport::SlowEcho {
+                sent_to_acked: None,
+                output_end: None,
+                ..
+            }
+        ));
+        // Only one of the two.
+        let only_end: TermReport = serde_json::from_str(
+            r#"{"kind":"slowEcho","seq":7,"bytes":4,"sentToReceived":1.0,"receivedToPainted":2.0,"outputEnd":9}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            only_end,
+            TermReport::SlowEcho {
+                sent_to_acked: None,
+                output_end: Some(9),
+                ..
+            }
+        ));
+        let webgl: TermReport = serde_json::from_str(
+            r#"{"kind":"renderer","renderer":"webgl","detail":"ANGLE (NVIDIA)"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            webgl,
+            TermReport::Renderer { renderer, detail: Some(d) } if renderer == "webgl" && d == "ANGLE (NVIDIA)"
+        ));
+        // No detail at all.
+        let dom: TermReport =
+            serde_json::from_str(r#"{"kind":"renderer","renderer":"dom"}"#).unwrap();
+        assert!(matches!(dom, TermReport::Renderer { detail: None, .. }));
+    }
+}
+
+/// What `ChildKiller` is for a terminal that has no process (tests).
+#[cfg(test)]
+#[derive(Debug)]
+struct NoKiller;
+
+#[cfg(test)]
+impl ChildKiller for NoKiller {
+    fn kill(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn clone_killer(&self) -> Box<dyn ChildKiller + Send + Sync> {
+        Box::new(NoKiller)
+    }
+}
+
+#[cfg(test)]
+impl PtyManager {
+    /// A terminal `id` with a pseudo-console but no process, whose input goes to `writer`.
+    fn insert_fake(&self, id: &str, writer: Box<dyn Write + Send>) {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let writes = Arc::new(WriteLog::default());
+        let (input, pending) = spawn_input(id, writer, writes.clone(), Arc::default()).unwrap();
+        self.terms.lock().insert(
+            id.into(),
+            Arc::new(Term {
+                info: TermInfo {
+                    id: id.into(),
+                    project_id: "p".into(),
+                    name: id.into(),
+                    shell: "fake".into(),
+                },
+                master: Mutex::new(Some(pair.master)),
+                input,
+                pending,
+                killer: Mutex::new(Box::new(NoKiller)),
+                job: None,
+                launch: false,
+                spare_windows: false,
+                detached_survive: false,
+                io_at: Arc::new(AtomicI64::new(now_ms())),
+                writes,
+                slow_echo_at: AtomicI64::new(i64::MIN),
+            }),
+        );
+    }
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    type Seen = Arc<Mutex<Vec<u8>>>;
+    /// What each call to a writer was given.
+    type Calls = Arc<Mutex<Vec<Vec<u8>>>>;
+
+    /// A writer that does not return until its gate is opened (a message, or the sender dropped
+    /// when the test is over, whatever the way it ends), as a program that does not read its
+    /// input; what it is given is in `seen`, once it was let through, and each call apart in
+    /// `calls`.
+    struct Gated {
+        gate: mpsc::Receiver<()>,
+        open: bool,
+        seen: Seen,
+        calls: Calls,
+    }
+
+    impl Write for Gated {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if !self.open {
+                let _ = self.gate.recv();
+                self.open = true;
+            }
+            // `calls` first: a test that waits for `seen` then reads `calls`.
+            self.calls.lock().push(buf.to_vec());
+            self.seen.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn gated() -> (Gated, mpsc::Sender<()>, Seen) {
+        let (writer, open, seen, _) = gated_recording();
+        (writer, open, seen)
+    }
+
+    fn gated_recording() -> (Gated, mpsc::Sender<()>, Seen, Calls) {
+        let (open, gate) = mpsc::channel();
+        let (seen, calls) = (Seen::default(), Calls::default());
+        let writer = Gated {
+            gate,
+            open: false,
+            seen: seen.clone(),
+            calls: calls.clone(),
+        };
+        (writer, open, seen, calls)
+    }
+
+    /// A program that reads its input.
+    struct Recorder(Seen);
+
+    impl Write for Recorder {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A program that ended: its input is a broken pipe.
+    struct Broken;
+
+    impl Write for Broken {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::ErrorKind::BrokenPipe.into())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Says when it is dropped.
+    struct Dropped(mpsc::Sender<()>);
+
+    impl Write for Dropped {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            let _ = self.0.send(());
+        }
+    }
+
+    /// `f`'s result, or None if it did not return within `ms` (it goes on in its thread).
+    fn within<T: Send + 'static>(ms: u64, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx.recv_timeout(Duration::from_millis(ms)).ok()
+    }
+
+    /// Waits for `seen` to hold `len` bytes.
+    fn wait_for(seen: &Seen, len: usize) {
+        let start = Instant::now();
+        while seen.lock().len() < len {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "the writer got {} of {len} bytes",
+                seen.lock().len()
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn writes_queue_at_once_while_the_program_reads_nothing_and_arrive_in_order() {
+        let pty = PtyManager::default();
+        let (writer, open, seen) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let chunks: Vec<Vec<u8>> = (0..200).map(|i| format!("<{i}>").into_bytes()).collect();
+        let queuing = pty.clone();
+        let sent = chunks.clone();
+        let took = within(5_000, move || {
+            let start = Instant::now();
+            for chunk in &sent {
+                queuing.write("t", chunk).unwrap();
+            }
+            start.elapsed()
+        });
+        let took = took.expect("the writes wait for the program to read its input");
+        // Generous: a loaded CI runner. That the writes do not wait is proved by the closed gate.
+        assert!(took < Duration::from_secs(2), "{took:?} for 200 writes");
+        assert!(seen.lock().is_empty());
+
+        open.send(()).unwrap();
+        let all: Vec<u8> = chunks.concat();
+        wait_for(&seen, all.len());
+        assert_eq!(*seen.lock(), all);
+    }
+
+    #[test]
+    fn a_program_that_ended_closes_its_terminal_for_the_next_write() {
+        let pty = PtyManager::default();
+        pty.insert_fake("t", Box::new(Broken));
+        // The first write only queues; the input thread then finds the pipe broken and ends.
+        let _ = pty.write("t", b"x");
+        let start = Instant::now();
+        let err = loop {
+            match pty.write("t", b"y") {
+                Err(e) => break e,
+                Ok(_) => {
+                    assert!(
+                        start.elapsed() < Duration::from_secs(5),
+                        "a broken input never closes the terminal"
+                    );
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            }
+        };
+        assert_eq!(err.to_string(), closed(i18n::ui()).to_string());
+    }
+
+    #[test]
+    fn a_terminal_that_does_not_read_blocks_no_other_terminal_nor_the_manager() {
+        let pty = PtyManager::default();
+        let (stuck, open, stuck_seen) = gated();
+        let seen = Seen::default();
+        pty.insert_fake("a", Box::new(stuck));
+        pty.insert_fake("b", Box::new(Recorder(seen.clone())));
+
+        let p = pty.clone();
+        assert!(
+            within(5_000, move || p.write("a", b"stuck")).is_some(),
+            "a write waits for the program to read its input"
+        );
+        let p = pty.clone();
+        assert!(within(5_000, move || p.write("b", b"hello")).is_some());
+        wait_for(&seen, 5);
+        assert_eq!(*seen.lock(), b"hello");
+        assert!(stuck_seen.lock().is_empty(), "a is meant to stay stuck");
+
+        let p = pty.clone();
+        assert!(
+            within(5_000, move || p.resize("a", 100, 30)).is_some(),
+            "a resize waits for the writes of its terminal"
+        );
+        let p = pty.clone();
+        assert!(within(5_000, move || p.list().len()).is_some_and(|n| n == 2));
+        let p = pty.clone();
+        assert!(within(5_000, move || p.activity()).is_some());
+        open.send(()).unwrap();
+        wait_for(&stuck_seen, 5);
+    }
+
+    #[test]
+    fn closing_a_terminal_ends_its_input_thread() {
+        let pty = PtyManager::default();
+        let (dropped, gone) = mpsc::channel();
+        pty.insert_fake("t", Box::new(Dropped(dropped)));
+        pty.write("t", b"x").unwrap();
+        pty.kill("t");
+        gone.recv_timeout(Duration::from_secs(5))
+            .expect("the input thread outlived its terminal");
+        assert!(pty.write("t", b"y").is_err());
+    }
+
+    /// A terminal `t` whose program reads everything.
+    fn reading_terminal() -> (PtyManager, Arc<Term>) {
+        let pty = PtyManager::default();
+        pty.insert_fake("t", Box::new(Recorder(Seen::default())));
+        let term = pty.term("t").unwrap();
+        (pty, term)
+    }
+
+    fn renderer(renderer: &str, detail: Option<&str>) -> TermReport {
+        TermReport::Renderer {
+            renderer: renderer.into(),
+            detail: detail.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn the_renderer_the_window_reports_goes_to_the_log_with_its_detail() {
+        let (_pty, term) = reading_terminal();
+        let (level, line) = term
+            .report_line(renderer("webgl", Some("ANGLE (NVIDIA)")), 0)
+            .unwrap();
+        assert_eq!(level, log::Level::Info);
+        assert_eq!(line, "terminal t (fake): renderer webgl (ANGLE (NVIDIA))");
+        let line = |detail| term.report_line(renderer("dom", detail), 0).unwrap().1;
+        assert_eq!(line(None), "terminal t (fake): renderer dom");
+        assert_eq!(line(Some("")), "terminal t (fake): renderer dom");
+        assert_eq!(
+            line(Some("context lost")),
+            "terminal t (fake): renderer dom (context lost)"
+        );
+    }
+
+    #[test]
+    fn what_the_window_says_of_its_renderer_goes_to_the_log_on_one_line_and_cut() {
+        let (_pty, term) = reading_terminal();
+        let detail = format!("ANGLE\r\n(forged line)\x1b[31m{}", "x".repeat(500));
+        let (_, line) = term
+            .report_line(renderer("webgl\nWARN forged", Some(&detail)), 0)
+            .unwrap();
+        assert!(!line.chars().any(char::is_control), "{line:?}");
+        assert!(line.starts_with(
+            "terminal t (fake): renderer webglWARN forged (ANGLE(forged line)[31mxxx"
+        ));
+        let shown = &line[line.find(" (ANGLE").unwrap() + 2..line.len() - 1];
+        assert_eq!(shown.chars().count(), 200);
+    }
+
+    #[test]
+    fn a_terminal_that_reads_nothing_refuses_writes_beyond_32_mb_until_it_reads_again() {
+        let pty = PtyManager::default();
+        let (writer, open, seen) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let chunk = vec![b'x'; MAX_PENDING / 8];
+        for _ in 0..8 {
+            pty.write("t", &chunk).unwrap();
+        }
+        let refused = pty.write("t", b"y").unwrap_err().to_string();
+        assert!(
+            refused == "le terminal ne lit plus son entrée"
+                || refused == "the terminal no longer reads its input",
+            "{refused}"
+        );
+        open.send(()).unwrap();
+        wait_for(&seen, MAX_PENDING);
+        // Once written, the backlog is gone and the terminal takes writes again.
+        let again = pty.clone();
+        let taken = within(5_000, move || loop {
+            if again.write("t", b"z").is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        });
+        assert!(
+            taken.is_some(),
+            "the terminal still refuses writes once it read"
+        );
+        wait_for(&seen, MAX_PENDING + 1);
+        assert_eq!(seen.lock().last(), Some(&b'z'));
+    }
+
+    fn slow(seq: u64) -> TermReport {
+        TermReport::SlowEcho {
+            seq,
+            bytes: 1,
+            sent_to_received: 1500.0,
+            received_to_painted: 20.0,
+            sent_to_acked: None,
+            output_end: None,
+        }
+    }
+
+    #[test]
+    fn a_write_returns_its_number_in_the_terminals_log() {
+        let pty = PtyManager::default();
+        let (writer, open, _) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let term = pty.term("t").unwrap();
+        let seqs: Vec<u64> = [&b"a"[..], b"bb", b"ccc"]
+            .into_iter()
+            .map(|data| pty.write("t", data).unwrap())
+            .collect();
+        assert_eq!(seqs, [0, 1, 2]);
+        let bytes: Vec<usize> = seqs
+            .iter()
+            .map(|seq| term.writes.get(*seq).unwrap().bytes)
+            .collect();
+        assert_eq!(bytes, [1, 2, 3]);
+        drop(open);
+    }
+
+    #[test]
+    fn a_slow_echo_is_matched_with_its_write_by_number_not_by_time() {
+        let (_pty, term) = reading_terminal();
+        // Two writes, in the log as the input thread and the reader would leave them.
+        let (a, b) = (term.writes.queued(1, 0), term.writes.queued(1, 10_000));
+        term.writes.started([a], 0);
+        term.writes.written([a], 2_000);
+        term.writes.started([b], 10_000);
+        term.writes.written([b], 17_000);
+        term.writes.output(1_000_000, 4);
+        let (level, line) = term.report_line(slow(b), 10_000).unwrap();
+        assert_eq!(level, log::Level::Warn);
+        assert_eq!(
+            line,
+            "terminal t (fake): echo of a 1-byte write shown after 1520 ms: written 7 ms after \
+             the backend got it, first output 983 ms after, the echo not identified, to and from \
+             the window 510 ms, painted 20 ms later"
+        );
+        // The other one, long after (the report says nothing of when).
+        let (_, line) = term.report_line(slow(a), 20_000).unwrap();
+        assert!(
+            line.contains("written 2 ms after the backend got it, first output 998 ms after"),
+            "{line}"
+        );
+    }
+
+    /// The report the window sends for the echo of write `seq`, as its JSON gives it: `end` is
+    /// the count of output bytes it had received up to the chunk with the echo.
+    fn slow_json(seq: u64, end: u64) -> TermReport {
+        serde_json::from_str(&format!(
+            r#"{{"kind":"slowEcho","seq":{seq},"bytes":1,"sentToReceived":1498,"receivedToPainted":22,"sentToAcked":4,"outputEnd":{end}}}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_slow_echo_is_dated_by_the_read_the_window_names_by_the_bytes_it_had_received() {
+        let (_pty, term) = reading_terminal();
+        let seq = term.writes.queued(1, 500_000);
+        term.writes.started([seq], 500_100);
+        term.writes.written([seq], 502_000);
+        // The output as the reader thread logs it: a prompt before the key (100 bytes), ConPTY
+        // hiding the cursor 1 ms after the write (6), the letter 1490 ms after (12), then more.
+        for (at, bytes) in [
+            (400_000, 100),
+            (503_000, 6),
+            (1_992_000, 12),
+            (2_100_000, 40),
+        ] {
+            term.writes.output(at, bytes);
+        }
+        // The window had received 100 + 6 + 12 bytes when the chunk with the letter came in.
+        let (level, line) = term.report_line(slow_json(seq, 118), 10_000).unwrap();
+        assert_eq!(level, log::Level::Warn);
+        assert_eq!(
+            line,
+            "terminal t (fake): echo of a 1-byte write shown after 1520 ms: written 2 ms after \
+             the backend got it, first output 1 ms after, the echo 1490 ms after, to and from \
+             the window 6 ms (answer to the write 4 ms), painted 22 ms later"
+        );
+        // A count that is the end of no read (a window that restarted its count, say): the echo
+        // is not identified, and the first output stands for it.
+        let (_, line) = term.report_line(slow_json(seq, 117), 20_000).unwrap();
+        assert_eq!(
+            line,
+            "terminal t (fake): echo of a 1-byte write shown after 1520 ms: written 2 ms after \
+             the backend got it, first output 1 ms after, the echo not identified, to and from \
+             the window 1495 ms (answer to the write 4 ms), painted 22 ms later"
+        );
+        // The cursor's chunk is a read like another: naming it dates it.
+        let (_, line) = term.report_line(slow_json(seq, 106), 30_000).unwrap();
+        assert!(line.contains("the echo 1 ms after"), "{line}");
+        // A report of an older window has neither: as before, plus what is not known.
+        let old = TermReport::SlowEcho {
+            seq,
+            bytes: 1,
+            sent_to_received: 1498.0,
+            received_to_painted: 22.0,
+            sent_to_acked: None,
+            output_end: None,
+        };
+        let (_, line) = term.report_line(old, 40_000).unwrap();
+        assert!(
+            line.contains("the echo not identified, to and from the window 1495 ms, painted"),
+            "{line}"
+        );
+    }
+
+    /// The number of ms that follows `before` in a log line.
+    fn ms_after(line: &str, before: &str) -> i64 {
+        let rest = line
+            .split(before)
+            .nth(1)
+            .unwrap_or_else(|| panic!("no {before:?} in {line}"));
+        rest.split_whitespace().next().unwrap().parse().unwrap()
+    }
+
+    #[test]
+    fn the_echo_of_a_real_write_is_found_among_the_reads_that_followed_it() {
+        let (pty, term) = reading_terminal();
+        let seq = pty.write("t", b"x").unwrap();
+        let start = Instant::now();
+        while term.writes.get(seq).unwrap().written_us.is_none() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "the write never was"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // What the reader does for each read: the cursor hidden, then the letter 30 ms later and
+        // the rest of the line.
+        term.writes.output(now_us(), 6);
+        std::thread::sleep(Duration::from_millis(30));
+        term.writes.output(now_us(), 1);
+        term.writes.output(now_us(), 20);
+        let (_, line) = term.report_line(slow_json(seq, 7), 10_000).unwrap();
+        assert!(ms_after(&line, "the echo ") >= 30, "{line}");
+        assert!(ms_after(&line, "first output ") <= ms_after(&line, "the echo "));
+        // The rest of the line is a later read: another count, another date.
+        let (_, rest) = term.report_line(slow_json(seq, 27), 20_000).unwrap();
+        assert!(
+            ms_after(&rest, "the echo ") >= ms_after(&line, "the echo "),
+            "{rest}"
+        );
+        // What the window cannot have counted yet is nobody's echo.
+        let (_, none) = term.report_line(slow_json(seq, 28), 30_000).unwrap();
+        assert!(none.contains("the echo not identified"), "{none}");
+    }
+
+    #[test]
+    fn a_terminals_reads_are_counted_in_its_own_log() {
+        // Two terminals each count their own output from their opening.
+        let pty = PtyManager::default();
+        pty.insert_fake("a", Box::new(Recorder(Seen::default())));
+        pty.insert_fake("b", Box::new(Recorder(Seen::default())));
+        let (a, b) = (pty.term("a").unwrap(), pty.term("b").unwrap());
+        a.writes.output(100, 10);
+        b.writes.output(200, 3);
+        assert_eq!(a.writes.read_ending_at(10).map(|r| r.at_us), Some(100));
+        assert_eq!(a.writes.read_ending_at(3), None);
+        assert_eq!(b.writes.read_ending_at(3).map(|r| r.at_us), Some(200));
+        assert_eq!(b.writes.read_ending_at(10), None);
+    }
+
+    #[test]
+    fn a_slow_echo_of_a_write_the_log_forgot_says_the_backend_times_are_unknown() {
+        let (pty, term) = reading_terminal();
+        for _ in 0..RECENT_WRITES + 3 {
+            pty.write("t", b"x").unwrap();
+        }
+        let (_, line) = term.report_line(slow(0), 10_000).unwrap();
+        assert_eq!(
+            line,
+            "terminal t (fake): echo of a 1-byte write shown after 1520 ms: backend times \
+             unknown, in the window 1500 ms after the write left it, painted 20 ms later"
+        );
+        let (_, line) = term.report_line(slow(9_999), 20_000).unwrap();
+        assert!(line.contains("backend times unknown"), "{line}");
+    }
+
+    #[test]
+    fn a_slow_echo_of_a_write_the_program_has_not_read_yet_says_so() {
+        let pty = PtyManager::default();
+        let (writer, open, _) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let term = pty.term("t").unwrap();
+        let seq = pty.write("t", b"x").unwrap();
+        let (_, line) = term.report_line(slow(seq), 10_000).unwrap();
+        assert!(line.contains("not written yet"), "{line}");
+        drop(open);
+    }
+
+    #[test]
+    fn a_terminal_logs_one_slow_echo_in_five_seconds() {
+        let (_pty, term) = reading_terminal();
+        assert!(term.report_line(slow(0), 10_000).is_some());
+        assert!(term.report_line(slow(0), 12_000).is_none());
+        // What was dropped does not delay the next one; the renderer is not limited.
+        assert!(term.report_line(renderer("webgl", None), 12_000).is_some());
+        assert!(term.report_line(slow(0), 14_999).is_none());
+        assert!(term.report_line(slow(0), 15_000).is_some());
+    }
+
+    #[test]
+    fn reports_that_come_together_log_one_slow_echo_between_them() {
+        // Two `term_report` calls run at once on the runtime's threads.
+        let (_pty, term) = reading_terminal();
+        for round in 1..=200 {
+            let barrier = std::sync::Barrier::new(16);
+            let logged = std::thread::scope(|s| {
+                let reports: Vec<_> = (0..16)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            term.report_line(slow(0), round * 10_000).is_some()
+                        })
+                    })
+                    .collect();
+                reports
+                    .into_iter()
+                    .map(|report| report.join().unwrap())
+                    .filter(|logged| *logged)
+                    .count()
+            });
+            assert_eq!(logged, 1, "round {round}");
+        }
+    }
+
+    #[test]
+    fn a_report_for_a_terminal_that_is_gone_is_ignored() {
+        let pty = PtyManager::default();
+        pty.report("nope", renderer("webgl", None));
+        pty.report("nope", slow(0));
+    }
+
+    /// The result of `write_and_wait` on terminal `t`, once it returns, in a channel (the call
+    /// runs in a thread of its own).
+    fn waiting_write(
+        pty: &PtyManager,
+        data: &'static [u8],
+        timeout: Duration,
+    ) -> mpsc::Receiver<Result<u64>> {
+        let (done, finished) = mpsc::channel();
+        let pty = pty.clone();
+        std::thread::spawn(move || {
+            let _ = done.send(pty.write_and_wait("t", data, timeout));
+        });
+        finished
+    }
+
+    #[test]
+    fn write_and_wait_returns_once_the_data_is_written_and_not_before() {
+        let pty = PtyManager::default();
+        let (writer, open, seen) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let finished = waiting_write(&pty, b"paste", Duration::from_secs(60));
+        // The input thread is held by the closed gate.
+        assert!(
+            finished.recv_timeout(Duration::from_millis(300)).is_err(),
+            "it returned before the program read anything"
+        );
+        open.send(()).unwrap();
+        let seq = finished
+            .recv_timeout(Duration::from_secs(5))
+            .expect("it never returned")
+            .unwrap();
+        assert_eq!(seq, 0);
+        assert_eq!(*seen.lock(), b"paste");
+    }
+
+    #[test]
+    fn write_and_wait_waits_for_a_write_the_queue_merged_with_others() {
+        let pty = PtyManager::default();
+        let (writer, open, seen) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        pty.write("t", b"first").unwrap();
+        pty.write("t", b"second").unwrap();
+        let finished = waiting_write(&pty, b"third", Duration::from_secs(60));
+        assert!(finished.recv_timeout(Duration::from_millis(300)).is_err());
+        open.send(()).unwrap();
+        finished
+            .recv_timeout(Duration::from_secs(5))
+            .expect("it never returned")
+            .unwrap();
+        assert_eq!(*seen.lock(), b"firstsecondthird");
+    }
+
+    #[test]
+    fn write_and_wait_gives_up_after_its_timeout_and_the_data_stays_queued() {
+        let pty = PtyManager::default();
+        let (writer, open, seen) = gated();
+        pty.insert_fake("t", Box::new(writer));
+        let finished = waiting_write(&pty, b"x", Duration::from_millis(200));
+        let seq = finished
+            .recv_timeout(Duration::from_secs(5))
+            .expect("a timeout that never ends")
+            .expect("best effort: a timeout is not an error");
+        assert_eq!(seq, 0);
+        assert!(seen.lock().is_empty(), "the gate is still closed");
+        // It goes through once the program reads.
+        open.send(()).unwrap();
+        wait_for(&seen, 1);
+    }
+
+    #[test]
+    fn write_and_wait_says_the_terminal_is_closed_when_the_program_ended() {
+        let pty = PtyManager::default();
+        pty.insert_fake("t", Box::new(Broken));
+        let err = pty
+            .write_and_wait("t", b"x", Duration::from_secs(5))
+            .unwrap_err();
+        assert_eq!(err.to_string(), closed(i18n::ui()).to_string());
+        assert!(pty
+            .write_and_wait("nope", b"x", Duration::from_secs(5))
+            .is_err());
+    }
+
+    fn item(seq: u64, data: &[u8]) -> Input {
+        Input {
+            data: data.to_vec(),
+            seq,
+            called_us: 0,
+            queued_us: 0,
+            ack: None,
+        }
+    }
+
+    /// The numbers of the writes of each call that `writes_to_make` makes of these.
+    fn plan(items: &[&[u8]]) -> Vec<Vec<u64>> {
+        let items = items
+            .iter()
+            .enumerate()
+            .map(|(seq, data)| item(seq as u64, data))
+            .collect();
+        writes_to_make(items)
+            .into_iter()
+            .map(|call| call.into_iter().map(|w| w.seq).collect())
+            .collect()
+    }
+
+    #[test]
+    fn what_is_queued_is_written_in_one_call_unless_it_is_a_lone_escape() {
+        assert_eq!(plan(&[b"a", b"b", b"c"]), [[0, 1, 2]]);
+        assert_eq!(plan(&[b"a", b"\x1b", b"b"]), [vec![0], vec![1], vec![2]]);
+        assert_eq!(plan(&[b"\x1b", b"a", b"b"]), [vec![0], vec![1, 2]]);
+        assert_eq!(plan(&[b"a", b"b", b"\x1b"]), [vec![0, 1], vec![2]]);
+        assert_eq!(plan(&[b"\x1b", b"\x1b"]), [vec![0], vec![1]]);
+        assert_eq!(
+            plan(&[b"a", b"\x1b", b"b", b"c", b"\x1b", b"d"]),
+            [vec![0], vec![1], vec![2, 3], vec![4], vec![5]]
+        );
+        // Anything else that starts with Escape is a key sequence: whole, and merged.
+        assert_eq!(
+            plan(&[b"a", b"\x1b[A", b"\x1bx", b"\x1b\x1b"]),
+            [[0, 1, 2, 3]]
+        );
+        assert!(plan(&[]).is_empty());
+    }
+
+    #[test]
+    fn what_is_queued_is_written_256_kb_at_most_at_a_time_but_a_bigger_write_stays_whole() {
+        let kb = |n: usize| vec![b'a'; n * 1024];
+        let (a, b, c, big, small) = (kb(100), kb(100), kb(100), kb(300), vec![b'z']);
+        assert_eq!(
+            plan(&[&a, &b, &c, &big, &small]),
+            [vec![0, 1], vec![2], vec![3], vec![4]]
+        );
+    }
+
+    #[test]
+    fn a_lone_escape_is_written_apart_from_what_was_queued_around_it() {
+        let pty = PtyManager::default();
+        let (writer, open, seen, calls) = gated_recording();
+        pty.insert_fake("t", Box::new(writer));
+        // Queued while the program reads nothing: without the rule, one write for the three.
+        for data in [&b"a"[..], b"\x1b", b"b"] {
+            pty.write("t", data).unwrap();
+        }
+        open.send(()).unwrap();
+        wait_for(&seen, 3);
+        assert_eq!(
+            *calls.lock(),
+            [b"a".to_vec(), b"\x1b".to_vec(), b"b".to_vec()]
+        );
+    }
+
+    #[test]
+    fn the_writes_of_a_queue_cut_around_an_escape_are_each_logged_when_their_call_is_done() {
+        let pty = PtyManager::default();
+        let (writer, open, seen, _) = gated_recording();
+        pty.insert_fake("t", Box::new(writer));
+        let term = pty.term("t").unwrap();
+        let seqs: Vec<u64> = [&b"a"[..], b"\x1b", b"b"]
+            .into_iter()
+            .map(|d| pty.write("t", d).unwrap())
+            .collect();
+        open.send(()).unwrap();
+        wait_for(&seen, 3);
+        let start = Instant::now();
+        while term.writes.all().iter().any(|r| r.written_us.is_none()) {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "never all written"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let all = term.writes.all();
+        assert_eq!(all.iter().map(|r| r.seq).collect::<Vec<_>>(), seqs);
+        assert!(all.iter().all(|r| r.started_us <= r.written_us));
+        // Each call begins once the one before is done.
+        assert!(all[0].written_us <= all[1].started_us);
+        assert!(all[1].written_us <= all[2].started_us);
+    }
+
+    #[test]
+    fn killing_a_terminal_closes_its_console_there_even_while_someone_holds_the_term() {
+        let (pty, term) = reading_terminal();
+        term.resize(100, 30).unwrap();
+        assert!(term.master.lock().is_some());
+        // A holder of the term (the main thread in a write, a reader answering a query) must not
+        // be the one to close the pseudo-console: the kill does.
+        pty.kill("t");
+        assert!(term.master.lock().is_none());
+        let err = term.resize(100, 30).unwrap_err();
+        assert_eq!(err.to_string(), closed(i18n::ui()).to_string());
+        // Closing again is harmless.
+        term.close_console();
     }
 }

@@ -433,6 +433,34 @@ test('a terminal runs commands in the project folder', async ({ app }) => {
   await expect.poll(() => fs.existsSync(path.join(app.repo, 'e2e-terminal.txt')), { timeout: 20_000 }).toBe(true);
 });
 
+test('a keystroke whose echo comes late is noted in the log, with where the time went', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  await page.getByRole('button', { name: 'Nouveau terminal' }).click();
+  await page.getByRole('menuitem', { name: /PowerShell/ }).click();
+  await expect(page.locator('.xterm')).toBeVisible();
+  await page.waitForTimeout(2500); // PowerShell start-up
+  await page.locator('.xterm').click();
+  // A program that answers each key 800 ms late: the time is the program's, the log must say so.
+  await page.keyboard.type('while ($true) { $k = [Console]::ReadKey($true); Start-Sleep -Milliseconds 800; [Console]::Write($k.KeyChar) }');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1500);
+  const log = () => fs.readFileSync(path.join(app.data, 'app.log'), 'utf8');
+  const slow =
+    /echo of a 1-byte write shown after (\d+) ms: written (\d+) ms after the backend got it, first output (\d+) ms after, the echo (\d+) ms after/g;
+  const slowEchoes = () => [...log().matchAll(slow)];
+  // A key of the command slow to show (a loaded machine) took the terminal's one report in 10 s: wait for the next.
+  if (slowEchoes().length) await page.waitForTimeout(10_500);
+  const before = slowEchoes().length;
+  await page.keyboard.press('x');
+  await expect.poll(() => slowEchoes().length, { timeout: 15_000 }).toBeGreaterThan(before);
+  const [, total, , , program] = slowEchoes().at(-1)!.map(Number);
+  expect(total).toBeGreaterThanOrEqual(800);
+  expect(program).toBeGreaterThanOrEqual(700);
+  // Which renderer draws the terminal is there too.
+  expect(log()).toMatch(/\((pwsh|powershell)\): renderer (webgl|dom)/);
+});
+
 test('a terminal opens in the worktree of an agent from the + of the terminals and from its conversation’s header', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });

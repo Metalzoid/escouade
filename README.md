@@ -141,6 +141,7 @@ ESCOUADE_DATA_DIR="$TMPDIR/escouade-sandbox" npm run tauri dev
 | `npm test` | Vitest + Testing Library : logique, stores et composants |
 | `cd src-tauri; cargo test` | tests unitaires Rust et tests d'intégration du cœur contre un faux CLI `claude` (`tests/fixtures/fake-claude.mjs`), de vrais dépôts git temporaires et le runtime de test de Tauri |
 | `npx tauri build --debug --no-bundle; npm run test:e2e` | tests de bout en bout : Playwright pilote l'application réelle via le protocole DevTools de WebView2 (Windows uniquement) |
+| `$env:ESCOUADE_TERM_BENCH = 1; npx playwright test tests/e2e/terminal-latency.spec.ts` | banc de latence des terminaux, à lancer à la main (sauté sinon) : chaque étape d'une frappe et d'un collage, au calme puis avec des agents et des terminaux qui débitent (`docs/PROTOCOL.md`, *Terminaux intégrés*) ; `ESCOUADE_TERM_TRACE=1` donné à l'app écrit les temps du backend dans son journal |
 
 La CI (`.github/workflows/ci.yml`) exécute l'ensemble sur chaque push et pull request sous Windows, et sous macOS tout sauf les tests de bout en bout, plus la construction du `.dmg` (téléchargeable dans les artefacts du run pour tester une branche).
 

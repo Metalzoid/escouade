@@ -206,6 +206,10 @@ fn no_proxy(env: &mut Vec<(String, String)>) {
     }
 }
 
+/// How long `send_to_tui` waits for a message's paste to be written to the terminal before it
+/// goes on (a program that reads nothing: the paste stays queued, and the Enter follows it).
+const PASTE_WRITTEN_WITHIN: Duration = Duration::from_secs(5);
+
 /// How long an image pasted in an interface is kept. Claude Code reads the file as it is pasted
 /// and keeps the image in its transcript (base64), which a resume sends again without the file
 /// (seen on 2.1.300); but it tells the model the file's path (« [Image: source: …] »), which the
@@ -817,9 +821,13 @@ impl<R: Runtime> Core<R> {
         };
         // Line breaks pasted stay in the message (Enter alone would send it).
         let pasted = format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""));
-        self.pty.write(&term, pasted.as_bytes())?;
+        // The pause starts once the paste is really written, not queued: under load the terminal's
+        // input thread may be behind, and the queue would then join the paste and the Enter into
+        // one write, which is what the pause keeps apart.
+        self.pty
+            .write_and_wait(&term, pasted.as_bytes(), PASTE_WRITTEN_WITHIN)?;
         std::thread::sleep(Duration::from_millis(150));
-        self.pty.write(&term, b"\r")
+        self.pty.write(&term, b"\r").map(|_| ())
     }
 
     /// Interrupts the turn of the agent's interface, as Escape does there.
@@ -827,7 +835,7 @@ impl<R: Runtime> Core<R> {
         let h = self.agent(id)?;
         let term = h.lock().tui.as_ref().map(|t| t.term_id.clone());
         match term {
-            Some(t) => self.pty.write(&t, b"\x1b").map(|()| true),
+            Some(t) => self.pty.write(&t, b"\x1b").map(|_| true),
             None => Ok(false),
         }
     }

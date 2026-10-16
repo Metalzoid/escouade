@@ -2987,7 +2987,11 @@ impl<R: Runtime> Core<R> {
             if !names {
                 h.lock().unprompted = Some(delivered.clone());
             }
-            let sent = self.send_to_tui(id, &delivered);
+            // Off the runtime's threads: it waits for the paste to be written, then pauses.
+            let (core, agent, message) = (self.clone(), id.to_string(), delivered.clone());
+            let sent = tokio::task::spawn_blocking(move || core.send_to_tui(&agent, &message))
+                .await
+                .unwrap_or_else(|e| Err(anyhow!(e)));
             if sent.is_err() && !names {
                 h.lock().unprompted = None;
             }

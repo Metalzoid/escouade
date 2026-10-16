@@ -7,6 +7,9 @@
 // unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
 // `--resume-session-at=missing…` entry fails as one Claude Code cannot find does. Each assistant
 // message carries the uuid of its entry in the session (`entry-<pid>-<n>`).
+// "flood 90s" (60 s by default) keeps it busy for that long, as an agent hard at work: a text streamed in small deltas (one
+// every 15 ms) and a tool call with ~1.5 KB of output every ~170 ms, then the turn ends; an interrupt stops it.
+// "flood-real 90s" (60 s by default) plays a busy superpowers agent for that long, timers pacing it: a 40-task plan, then subagents, tool results of 2-30 KB.
 // Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools} (its process id, which names a
 // new session of it `sess-<pid>`, its HTTPS_PROXY,
 // NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR and CLAUDE_CODE_ENABLE_TODO_TOOLS, null when unset) to $FAKE_CLAUDE_LOG, by
@@ -287,6 +290,10 @@ if (argv[0] === 'mcp') {
 // Bash first and goes on once the next Enter comes; "lent" makes the turn wait for Escape, which
 // interrupts it; "/exit" ends the process. A pasted path to an image file is the image, as Claude
 // Code takes it (« [Image #1] »): its path and content (base64) are added to <dir>/fake-tui-images.jsonl.
+// Like Claude Code's interface (a raw-mode terminal that echoes nothing itself), it draws the prompt line again at each key
+// it reads: `\r ESC[2K > ` and what is typed so far; a typed character is added to it, Backspace (\x7f) takes the last one off,
+// Ctrl+U (\x15) clears the line, a submitted prompt leaves an empty one. Inside a bracketed paste it draws nothing until the
+// paste ends, and then the line once.
 function tuiSession() {
   const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
   const flag = (name) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -363,11 +370,20 @@ function tuiSession() {
     await hook('Stop', { stop_hook_active: false });
     write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
   };
-  // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r).
+  // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r), and the prompt line drawn again at each.
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.setEncoding('utf8');
   let pasteStart = null;
   let images = 0;
+  const draw = () => process.stdout.write(`\r\x1b[2K> ${line}`);
+  // What the keys typed do to the line: a character is added, Backspace takes the last one off, Ctrl+U clears it.
+  const edit = (keys) => {
+    for (const c of keys) {
+      if (c === '\x7f' || c === '\b') line = line.slice(0, -1);
+      else if (c === '\x15') line = '';
+      else line += c;
+    }
+  };
   process.stdin.on('data', (chunk) => {
     for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
       if (part === '\x1b[200~') pasteStart = line.length;
@@ -383,6 +399,11 @@ function tuiSession() {
         }
         pasteStart = null;
       }
+      if (part === '\x1b[201~') {
+        // The paste is over (also one a line break in it cut short): the line, drawn once.
+        pasteStart = null;
+        draw();
+      }
       if (part === '\x1b[200~' || part === '\x1b[201~' || part === '') continue;
       if (part === '\x1b') {
         if (waiting) [waiting, (waiting = null)][0]('escape');
@@ -392,9 +413,14 @@ function tuiSession() {
         } else if (line.trim()) {
           const prompt = line.trim();
           line = '';
+          draw();
           turn(prompt);
         }
-      } else line += part;
+      } else if (pasteStart !== null) line += part;
+      else {
+        edit(part);
+        draw();
+      }
     }
   });
 }
@@ -422,6 +448,7 @@ function startSession() {
   let msg = 0;
   let pendingAnswer = null;
   let slowTimer = null;
+  let floodTimer = null;
   let asked = false;
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
@@ -564,6 +591,216 @@ function startSession() {
       };
     }
     streamText(`Boucle ${loop} faite.\n\n\`\`\`escouade\n${JSON.stringify(report)}\n\`\`\``);
+    result();
+  }
+
+  // ---------- "flood" ----------
+
+  // A busy agent for `ms`: ten deltas of 40 characters (one every 15 ms) make a message, a tool call comes after it
+  // and its output (~1.5 KB) on the next tick, and so on. One timer paces it; an interrupt clears it (`floodTimer`).
+  function flood(ms) {
+    clearInterval(floodTimer);
+    const end = Date.now() + ms;
+    const words = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore ';
+    const output = Array.from({ length: 24 }, (_, i) => `ligne ${String(i + 1).padStart(2, '0')} : ${'abcdefghij'.repeat(5)}`).join('\n');
+    const ev = (event) => out({ type: 'stream_event', event, parent_tool_use_id: null, session_id: sessionId });
+    let id = null;
+    let text = '';
+    let call = null;
+    let calls = 0;
+    floodTimer = setInterval(() => {
+      if (Date.now() >= end) {
+        clearInterval(floodTimer);
+        result();
+        return;
+      }
+      if (call) {
+        toolResult(call, output, { tool_use_result: { stdout: output, stderr: '', interrupted: false } });
+        call = null;
+        return;
+      }
+      if (id === null) {
+        id = `msg_${process.pid}_${++msg}`;
+        text = '';
+        ev({
+          type: 'message_start',
+          message: { id, usage: { input_tokens: 10, cache_read_input_tokens: 1000, cache_creation_input_tokens: 0 } },
+        });
+        ev({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+      }
+      const from = (text.length * 7 + calls) % (words.length - 40);
+      const delta = words.slice(from, from + 40);
+      text += delta;
+      ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: delta } });
+      if (text.length < 400) return;
+      assistant({ type: 'text', text }, id);
+      ev({ type: 'content_block_stop', index: 0 });
+      ev({ type: 'message_stop' });
+      id = null;
+      call = `toolu_f${process.pid}_${++calls}`;
+      const command = `npm test -- --shard ${calls}`;
+      assistant({ type: 'tool_use', id: call, name: 'Bash', input: { command, description: command } });
+    }, 15);
+  }
+
+  // ---------- "flood-real" ----------
+
+  // A busy agent as the superpowers skills drive one, for `ms`: a plan of 40 tasks (TaskCreate), then task after task its
+  // TaskUpdate, its own messages and tool calls and an implementer's and a reviewer's subagent (frames with a
+  // `parent_tool_use_id`), the results of 2 to 30 KB. Every message streams in small deltas, every step is a timer: ~50
+  // stream lines a second, ~8 of which change the agent's view. An interrupt clears the timer: the chain below is dropped.
+  async function floodReal(ms) {
+    clearTimeout(floodTimer);
+    const end = Date.now() + ms;
+    const over = new Error('flood-real over');
+    const sleep = (t) => new Promise((resolve, reject) => (Date.now() >= end ? reject(over) : (floodTimer = setTimeout(resolve, t))));
+    const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    const pick = (list) => list[rnd(0, list.length - 1)];
+    const prose =
+      'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua '.repeat(
+        30,
+      );
+    const said = (n) => {
+      const from = rnd(0, 100);
+      return prose.slice(from, from + n);
+    };
+    const big = Array.from({ length: 320 }, (_, i) => `${String(i + 1).padStart(4, '0')}: ${said(90)}`).join('\n');
+    const output = () => big.slice(0, rnd(2 * 1024, 30 * 1024));
+    const ev = (parent, event) => out({ type: 'stream_event', event, parent_tool_use_id: parent, session_id: sessionId });
+    const system = (o) => out({ type: 'system', session_id: sessionId, ...o });
+    const dir = process.cwd();
+    const files = Array.from({ length: 12 }, (_, i) => `src/module${i + 1}.ts`);
+    let calls = 0;
+
+    // One assistant message in the thread of `parent` (null: the main one): `chars` of text in small deltas, then the call of
+    // the tool `name` (none: the message ends). Returns the call's id.
+    const message = async (parent, chars, name, input) => {
+      const id = `msg_${process.pid}_${++msg}`;
+      const call = `toolu_r${process.pid}_${++calls}`;
+      const usage = { input_tokens: rnd(3, 30), cache_read_input_tokens: rnd(20000, 90000), cache_creation_input_tokens: rnd(0, 900) };
+      ev(parent, { type: 'message_start', message: { id, usage } });
+      ev(parent, { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
+      let text = '';
+      while (text.length < chars) {
+        const delta = said(rnd(15, 45));
+        text += delta;
+        ev(parent, { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: delta } });
+        await sleep(rnd(12, 28));
+      }
+      assistant({ type: 'text', text }, id, parent);
+      ev(parent, { type: 'content_block_stop', index: 0 });
+      if (name) {
+        const json = JSON.stringify(input);
+        const cut = json.length >> 1;
+        ev(parent, { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: call, name } });
+        ev(parent, { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: json.slice(0, cut) } });
+        ev(parent, { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: json.slice(cut) } });
+        assistant({ type: 'tool_use', id: call, name, input }, id, parent);
+        ev(parent, { type: 'content_block_stop', index: 1 });
+      }
+      ev(parent, {
+        type: 'message_delta',
+        delta: { stop_reason: name ? 'tool_use' : 'end_turn' },
+        usage: { output_tokens: Math.ceil(text.length / 4) + 50 },
+      });
+      ev(parent, { type: 'message_stop' });
+      return call;
+    };
+
+    // A message that calls a tool, and the tool's result a moment later.
+    const run = async (parent, chars, name, input, content, extra = {}) => {
+      const call = await message(parent, chars, name, input);
+      await sleep(rnd(60, 250));
+      toolResult(call, content, { parent_tool_use_id: parent, ...extra });
+    };
+
+    // A tool of the agent's work: a Read, a Grep, an Edit or a Bash, and its result.
+    const work = (parent) => {
+      const chars = parent ? rnd(100, 400) : rnd(200, 600);
+      const file = path.join(dir, pick(files));
+      const content = output();
+      switch (rnd(0, 3)) {
+        case 0:
+          return run(parent, chars, 'Read', { file_path: file }, content);
+        case 1:
+          return run(parent, chars, 'Grep', { pattern: said(12).trim(), path: dir }, content);
+        case 2:
+          return run(parent, chars, 'Edit', { file_path: file, old_string: said(120), new_string: said(160) }, content, {
+            tool_use_result: {
+              filePath: file,
+              structuredPatch: [{ oldStart: 10, oldLines: 3, newStart: 10, newLines: 4, lines: [' a', '-b', '+c', '+d'] }],
+            },
+          });
+        default: {
+          const command = `npm test -- --shard ${rnd(1, 9)}`;
+          return run(parent, chars, 'Bash', { command, description: command }, content, {
+            tool_use_result: { stdout: content, stderr: '', interrupted: false },
+          });
+        }
+      }
+    };
+
+    // A subagent in the foreground: launched by the main thread, its messages and tools in its own thread, its result.
+    const subagent = async (n, review) => {
+      const description = `${review ? 'Relire' : 'Implémenter'} la tâche ${n}`;
+      const prompt = `Lis .superpowers/sdd/demo/task-${n}-brief.md et fais ce qu'il demande.\n${said(rnd(600, 2500))}`;
+      const agent = { description, subagent_type: 'general-purpose', model: review ? 'sonnet' : 'haiku', prompt };
+      const id = await message(null, rnd(150, 400), 'Agent', agent);
+      system({
+        subtype: 'task_started',
+        task_id: `fakeflood-${id}`,
+        tool_use_id: id,
+        description,
+        subagent_type: agent.subagent_type,
+        is_backgrounded: false,
+        spawn_depth: 1,
+        task_type: 'local_agent',
+        prompt,
+        run_id: `run-${id}`,
+      });
+      const tools = rnd(3, 7);
+      for (let i = 0; i < tools; i++) await work(id);
+      await message(id, rnd(100, 300), null);
+      const content = [{ type: 'text', text: `${description} : fait. ${said(400)}` }];
+      toolResult(id, content, {
+        tool_use_result: {
+          status: 'completed',
+          agentId: `fakeflood-${id}`,
+          content,
+          totalToolUseCount: tools,
+          totalDurationMs: tools * 400,
+          totalTokens: tools * 1800,
+        },
+      });
+    };
+
+    const titles = Array.from({ length: 40 }, (_, i) => `Tâche ${i + 1} : ${said(30).trim()}`);
+    const update = (n, from, to) =>
+      run(null, rnd(40, 120), 'TaskUpdate', { taskId: String(n), status: to }, `Updated task #${n} status`, {
+        tool_use_result: { success: true, taskId: String(n), updatedFields: ['status'], statusChange: { from, to } },
+      });
+    try {
+      for (;;) {
+        for (const [i, subject] of titles.entries()) {
+          const input = { subject, description: said(rnd(100, 400)), activeForm: `Fait la tâche ${i + 1}` };
+          await run(null, rnd(20, 60), 'TaskCreate', input, `Task #${i + 1} created successfully: ${subject}`, {
+            tool_use_result: { task: { id: String(i + 1), subject } },
+          });
+        }
+        for (let n = 1; n <= titles.length; n++) {
+          await update(n, 'pending', 'in_progress');
+          await work(null);
+          await subagent(n, false);
+          for (let i = rnd(1, 2); i > 0; i--) await work(null);
+          await subagent(n, true);
+          await work(null);
+          await update(n, 'in_progress', 'completed');
+        }
+      }
+    } catch (e) {
+      if (e !== over) throw e;
+    }
+    streamText('Plan terminé');
     result();
   }
 
@@ -1033,6 +1270,16 @@ function startSession() {
       result();
       return;
     }
+    if (text.includes('flood-real')) {
+      // "flood-real 90s" lasts 90 seconds, a plain "flood-real" 60.
+      floodReal(Number(/flood-real (\d+)s/.exec(text)?.[1] ?? 60) * 1000);
+      return;
+    }
+    if (text.includes('flood')) {
+      // "flood 90s" lasts 90 seconds, a plain "flood" 60.
+      flood(Number(/flood (\d+)s/.exec(text)?.[1] ?? 60) * 1000);
+      return;
+    }
     if (text.includes('slow')) {
       streamText('Je commence…');
       // "slow 3s" ends after 3 seconds, a plain "slow" after 30.
@@ -1104,6 +1351,7 @@ function startSession() {
           });
         case 'interrupt':
           clearTimeout(slowTimer);
+          clearInterval(floodTimer);
           planCut = true;
           if (sys.includes('[fin-d-abord]')) {
             // The app reads the turn's end before the interrupt's answer reaches its caller.

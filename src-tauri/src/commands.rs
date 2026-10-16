@@ -9,7 +9,7 @@ use crate::integrations::{
 };
 use crate::model::Account as ClaudeAccount;
 use crate::model::*;
-use crate::pty::{self, ShellInfo, TermInfo};
+use crate::pty::{self, ShellInfo, TermInfo, TermReport};
 use crate::search;
 use crate::stats::StatsView;
 use crate::telemetry::{self, Event};
@@ -1140,19 +1140,39 @@ fn spawn_launch(
     Ok(launch.info)
 }
 
+/// Synchronous on purpose: Tauri handles these on the window's main thread, in the order the
+/// requests arrive, which keeps the bytes of a terminal in the order they were typed. It costs
+/// nothing there: `write` only queues the bytes for the terminal's input thread. Returns the
+/// write's number in the terminal's log of writes, which the window sends back with the report of
+/// a slow echo (`term_report`).
 #[tauri::command]
-pub fn term_write(core: CoreState, id: String, data: String) -> Res<()> {
+pub fn term_write(core: CoreState, id: String, data: String) -> Res<u64> {
     core.pty.write(&id, data.as_bytes()).map_err(err)
 }
 
+/// Synchronous, so that resizes keep their order among themselves (the last one wins); it waits
+/// on nothing heavy. It is not in order with the writes queued before it: the terminal's input
+/// thread writes those whenever the program reads.
 #[tauri::command]
 pub fn term_resize(core: CoreState, id: String, cols: u16, rows: u16) -> Res<()> {
     core.pty.resize(&id, cols, rows).map_err(err)
 }
 
+/// Off the main thread, and off the async runtime's workers: ending a process tree (listing the
+/// machine's processes, its windows…) and closing the pseudo-console take their time.
 #[tauri::command]
-pub fn term_kill(core: CoreState, id: String) {
-    core.pty.kill(&id);
+pub async fn term_kill(core: CoreState<'_>, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || core.pty.kill(&id))
+        .await
+        .map_err(|e| err(e.into()))
+}
+
+/// What the window measured of a terminal (the renderer it draws with, an echo that was slow to
+/// show), for the log.
+#[tauri::command(async)]
+pub fn term_report(core: CoreState, id: String, report: TermReport) {
+    core.pty.report(&id, report);
 }
 
 #[tauri::command]

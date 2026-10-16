@@ -8,6 +8,14 @@ const pasted = vi.hoisted(() => [] as string[]);
 const keyHandlers = vi.hoisted(() => [] as ((e: KeyboardEvent) => boolean)[]);
 // Whether the program in the terminal asked for bracketed pastes (Claude Code does as it starts).
 const modes = vi.hoisted(() => ({ bracketedPasteMode: true }));
+// The xterm.js instances made, with what they were given to type back (`onData`) and to draw (`write`).
+interface FakeTerm {
+  dataHandlers: ((d: string) => void)[];
+  writes: { data: Uint8Array; done?: () => void }[];
+}
+const terms = vi.hoisted(() => [] as FakeTerm[]);
+// The WebGL addon: `fail` is why loading it throws (none: it loads), `losses` its context loss listeners.
+const gl = vi.hoisted(() => ({ fail: null as string | null, losses: [] as (() => void)[], disposed: 0 }));
 // What each terminal was built with, and what its web links addon does with a link it found.
 const termOptions = vi.hoisted(() => [] as { linkHandler?: ILinkHandler }[]);
 const webLinks = vi.hoisted(() => [] as ((e: MouseEvent, uri: string) => void)[]);
@@ -20,18 +28,28 @@ vi.mock('@xterm/xterm', () => ({
     options = {};
     modes = modes;
     unicode = { activeVersion: '' };
+    dataHandlers: ((d: string) => void)[] = [];
+    writes: { data: Uint8Array; done?: () => void }[] = [];
     constructor(options: { linkHandler?: ILinkHandler }) {
+      terms.push(this);
       termOptions.push(options);
     }
-    loadAddon() {}
+    loadAddon(addon: { activate?: (term: unknown) => void }) {
+      addon.activate?.(this);
+    }
     open() {}
+    write(data: Uint8Array, done?: () => void) {
+      this.writes.push({ data, done });
+    }
     attachCustomKeyEventHandler(handler: (e: KeyboardEvent) => boolean) {
       keyHandlers.push(handler);
     }
     hasSelection() {
       return false;
     }
-    onData() {}
+    onData(handler: (d: string) => void) {
+      this.dataHandlers.push(handler);
+    }
     onResize() {}
     paste(text: string) {
       pasted.push(text);
@@ -55,7 +73,15 @@ vi.mock('@xterm/addon-web-links', () => ({
 }));
 vi.mock('@xterm/addon-webgl', () => ({
   WebglAddon: class {
-    onContextLoss() {}
+    activate() {
+      if (gl.fail) throw new Error(gl.fail);
+    }
+    onContextLoss(listener: () => void) {
+      gl.losses.push(listener);
+    }
+    dispose() {
+      gl.disposed++;
+    }
   },
 }));
 
@@ -63,6 +89,10 @@ import { app } from './state.svelte';
 import { getXTerm, openAgentTerminal, openTerminal, pastedContent } from './terminals';
 
 beforeEach(() => {
+  terms.length = 0;
+  gl.fail = null;
+  gl.losses.length = 0;
+  gl.disposed = 0;
   // The theme's colors are read back from a 1px canvas, which jsdom does not draw.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     fillRect() {},
@@ -396,5 +426,707 @@ describe('opening a terminal', () => {
   it('passes on the backend’s refusal of a place', async () => {
     fakeBackend({ term_spawn: () => Promise.reject('chemin hors du dossier : ..') });
     await expect(openTerminal('p1', 'pwsh', 'pwsh · ..', { subdir: '..' })).rejects.toBe('chemin hors du dossier : ..');
+  });
+});
+
+describe('what a terminal tells the log', () => {
+  const info = { id: 't1', projectId: 'p1', name: 'pwsh-1', shell: 'pwsh' };
+  const GPU = 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+  const DEBUG_INFO = { UNMASKED_RENDERER_WEBGL: 37446 };
+
+  // The clock the terminal's times are read from, and the animation frames waiting for it to move on.
+  const clock = { t: 5_000 };
+  const frames: (() => void)[] = [];
+  const at = (t: number) => performance.timeOrigin + t;
+  /** The next animation frame, drawn at `t`. */
+  const draw = (t: number) => {
+    clock.t = t;
+    frames.shift()!();
+  };
+
+  // The throwaway WebGL context the GPU's name is read from, which must be given back at once.
+  const lose = vi.fn();
+  const webgl = (o: { debugInfo?: boolean } = {}) => ({
+    getExtension: (name: string) =>
+      name === 'WEBGL_debug_renderer_info'
+        ? o.debugInfo === false
+          ? null
+          : DEBUG_INFO
+        : name === 'WEBGL_lose_context'
+          ? { loseContext: lose }
+          : null,
+    getParameter: (what: number) => (what === DEBUG_INFO.UNMASKED_RENDERER_WEBGL ? GPU : 'WebKit WebGL'),
+    RENDERER: 7937,
+  });
+  let probe: (kind: string) => unknown;
+  /** The contexts asked of a canvas, but the 2D one of the colors: the throwaway one `probe` gives. */
+  const getContext = vi.fn();
+
+  /** A fresh copy of the module: the GPU's name is read once per run of the app. */
+  async function load() {
+    vi.resetModules();
+    return await import('./terminals');
+  }
+
+  /** The channels of the terminals spawned, which the backend writes the output to. */
+  const outputs: { onmessage: (d: ArrayBuffer) => void }[] = [];
+  /** The number of the last write the backend numbered. */
+  let written = 0;
+  const backend = (spawned: () => unknown = () => info) =>
+    fakeBackend({
+      term_spawn: ({ output }) => {
+        outputs.push(output);
+        return spawned();
+      },
+      agent_terminal: ({ output }) => {
+        outputs.push(output);
+        return spawned();
+      },
+      term_write: () => ++written,
+      term_report: () => undefined,
+    });
+  const reports = (b: ReturnType<typeof backend>) => b.called('term_report').map((c) => ({ id: c.args.id, ...c.args.report }));
+
+  beforeEach(() => {
+    clock.t = 5_000;
+    frames.length = 0;
+    outputs.length = 0;
+    written = 0;
+    lose.mockClear();
+    probe = (kind) => (kind === 'webgl2' ? webgl() : null);
+    getContext.mockReset().mockImplementation((kind: string) => probe(kind));
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(((kind: string) =>
+      kind === '2d' ? { fillRect() {}, getImageData: () => ({ data: [0, 0, 0] }) } : getContext(kind)) as never);
+    vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    vi.stubGlobal('requestAnimationFrame', (frame: () => void) => frames.push(frame));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  describe('a slow echo', () => {
+    const encode = new TextEncoder();
+    /** The channel of the last terminal receives `text` (four zero bytes: none). */
+    const send = (text?: string) => outputs.at(-1)!.onmessage(text === undefined ? new ArrayBuffer(4) : encode.encode(text).slice().buffer);
+
+    /** A terminal opened on a fresh copy of the module, with the host xterm.js listens to pastes on. */
+    async function terminal(open: (m: typeof import('./terminals')) => Promise<unknown> = (m) => m.openTerminal('p1', 'pwsh', 'pwsh-1')) {
+      const m = await load();
+      await open(m);
+      const term = terms.at(-1)!;
+      return { term, host: m.getXTerm('t1')!.host };
+    }
+    type Opened = Awaited<ReturnType<typeof terminal>>;
+
+    /** The user presses `key`: the terminal's key handler gets it, and xterm.js then emits `data` (as the key types). */
+    const press = ({ term }: Opened, key: string, data = key, init: KeyboardEventInit = {}) => {
+      const toTerminal = keyHandlers.at(-1)!(new KeyboardEvent('keydown', { key, ...init }));
+      if (toTerminal) term.dataHandlers[0](data);
+    };
+    /** The user pastes `text`: the WebView's paste reaches the terminal's host, then xterm.js emits what it pastes. */
+    const paste = ({ term, host }: Opened, text: string, data = text) => {
+      const field = document.createElement('textarea');
+      host.appendChild(field);
+      fireEvent(field, createEvent.paste(field, { clipboardData: clipboard({ text }) }));
+      term.dataHandlers[0](data);
+    };
+    /** xterm.js parsed the last chunk it was given: it is drawn at the next animation frame, at `t`. */
+    const paint = ({ term }: Opened, t: number) => {
+      term.writes.at(-1)!.done?.();
+      draw(t);
+    };
+    const slowEchoes = (b: ReturnType<typeof backend>) => reports(b).filter((r) => r.kind === 'slowEcho');
+
+    it('is reported with the terminal’s id, the number of the write, its size in bytes and both durations', async () => {
+      const b = backend();
+      const t = await terminal();
+      // Numbered 1, and no key to measure.
+      press(t, 'Enter', '\r');
+      clock.t = 10_000;
+      press(t, 'é');
+      clock.t = 10_400;
+      send('é');
+      paint(t, 10_420);
+      await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+      expect(slowEchoes(b)[0]).toEqual({
+        id: 't1',
+        kind: 'slowEcho',
+        seq: 2,
+        bytes: 2,
+        sentToReceived: 400,
+        receivedToPainted: 20,
+        sentToAcked: expect.any(Number),
+        outputEnd: 2,
+      });
+      expect(b.called('term_write').map((c) => c.args)).toEqual([
+        { id: 't1', data: '\r' },
+        { id: 't1', data: 'é' },
+      ]);
+    });
+
+    it('is not reported when the echo came in time', async () => {
+      const b = backend();
+      const t = await terminal();
+      clock.t = 10_000;
+      press(t, 'a');
+      clock.t = 10_020;
+      send('a');
+      paint(t, 10_035);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(slowEchoes(b)).toEqual([]);
+    });
+
+    it('is drawn on the frame after xterm.js parsed the output, which is when its write calls back', async () => {
+      backend();
+      const t = await terminal();
+      press(t, 'a');
+      send('a');
+      // Not parsed yet: no frame is waited for.
+      expect(frames).toHaveLength(0);
+      t.term.writes[0].done!();
+      expect(frames).toHaveLength(1);
+      expect([...t.term.writes[0].data]).toEqual([...encode.encode('a')]);
+    });
+
+    it('asks for no callback of the output nobody is waiting for, nor of the ones that are no echo', async () => {
+      const b = backend();
+      const t = await terminal();
+      // The shell’s own output: no input waits for it.
+      send('PS C:\\>');
+      press(t, 'x');
+      // A spinner redrawn, then the letter.
+      send('\x1b[2K⠋ Thinking…');
+      send('> x');
+      send('> x again');
+      expect(t.term.writes.map((w) => typeof w.done)).toEqual(['undefined', 'undefined', 'function', 'undefined']);
+      expect(slowEchoes(b)).toEqual([]);
+    });
+
+    it('is reported by the terminal of Claude Code’s interface too', async () => {
+      const b = backend();
+      const t = await terminal((m) => m.openAgentTerminal('a1'));
+      clock.t = 1_000;
+      press(t, 'a');
+      clock.t = 2_000;
+      send('a');
+      paint(t, 2_050);
+      await waitFor(() => expect(slowEchoes(b)[0]).toMatchObject({ id: 't1', kind: 'slowEcho', seq: 1, bytes: 1 }));
+    });
+
+    describe('tells where its chunk stands in the output', () => {
+      const size = (...texts: string[]) => texts.reduce((n, text) => n + encode.encode(text).length, 0);
+      const SPINNER = '\x1b[2K⠋ Thinking…';
+
+      it('by the bytes the terminal had received once it came in: the chunks before and between count, the ones after do not', async () => {
+        const b = backend();
+        const t = await terminal();
+        const prompt = 'PS C:\\> ';
+        const echo = '\x1b[2K> é';
+        // Before the key, then between the key and its echo (the spinner is no echo): none of them is measured, all count.
+        send(prompt);
+        clock.t = 10_000;
+        press(t, 'é');
+        clock.t = 10_100;
+        send(SPINNER);
+        send();
+        clock.t = 10_500;
+        send(echo);
+        // After the echo, before it is painted.
+        send('> é again');
+        send(SPINNER);
+        // xterm.js parses the chunk of the echo, the only one asked to call back, and the next frame draws it.
+        t.term.writes.find((w) => w.done)!.done!();
+        draw(10_520);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        // The four bytes of `send()` are a chunk like any other.
+        expect(slowEchoes(b)[0]).toMatchObject({ seq: 1, sentToReceived: 500, outputEnd: size(prompt, SPINNER, echo) + 4 });
+      });
+
+      it('by the bytes of every message of the channel, whatever the text they hold', async () => {
+        const b = backend();
+        const t = await terminal();
+        // 6 bytes of 2 characters: the count is of bytes, not of characters.
+        send('🙂é');
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_400;
+        send('a');
+        paint(t, 10_410);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ outputEnd: 7 });
+      });
+
+      it('of the output of this terminal only', async () => {
+        const b = backend();
+        const m = await load();
+        await m.openTerminal('p1', 'pwsh', 'pwsh-1');
+        // A long output on the first one.
+        outputs[0].onmessage(new ArrayBuffer(1000));
+        await m.openTerminal('p1', 'pwsh', 'pwsh-2');
+        const t = { term: terms.at(-1)!, host: m.getXTerm('t1')!.host };
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_400;
+        outputs[1].onmessage(encode.encode('a').slice().buffer);
+        paint(t, 10_410);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ outputEnd: 1 });
+      });
+
+      it('for the terminal of Claude Code’s interface too', async () => {
+        const b = backend();
+        const t = await terminal((m) => m.openAgentTerminal('a1'));
+        send(SPINNER);
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_400;
+        send('a');
+        paint(t, 10_410);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ outputEnd: size(SPINNER, 'a') });
+      });
+    });
+
+    describe('tells how long the write took to be answered', () => {
+      const answering = () => {
+        const writes: ((seq: number) => void)[] = [];
+        const b = fakeBackend({
+          term_spawn: ({ output }) => {
+            outputs.push(output);
+            return info;
+          },
+          term_write: () => new Promise<number>((r) => writes.push(r)),
+          term_report: () => undefined,
+        });
+        return { b, writes };
+      };
+      /** Lets the answer of a write reach the terminal's code, with the clock where it is. */
+      const settle = () => new Promise((r) => setTimeout(r, 20));
+
+      it('from the call of term_write to the resolution of its promise, apart from the way to the echo', async () => {
+        const { b, writes } = answering();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_150;
+        writes[0](7);
+        await settle();
+        clock.t = 10_400;
+        send('a');
+        paint(t, 10_420);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toEqual({
+          id: 't1',
+          kind: 'slowEcho',
+          seq: 7,
+          bytes: 1,
+          sentToReceived: 400,
+          receivedToPainted: 20,
+          sentToAcked: 150,
+          outputEnd: 1,
+        });
+      });
+
+      it('even when the backend answers after the echo was drawn: the report waits for it', async () => {
+        const { b, writes } = answering();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_400;
+        send('a');
+        paint(t, 10_420);
+        await settle();
+        expect(slowEchoes(b)).toEqual([]);
+        clock.t = 10_900;
+        writes[0](3);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ seq: 3, sentToReceived: 400, receivedToPainted: 20, sentToAcked: 900 });
+      });
+    });
+
+    describe('is measured only for what the user typed or pasted', () => {
+      const SPINNER = '\x1b[2K⠋ Thinking…';
+
+      it('and not for the reports xterm.js writes by itself: focus, cursor, device attributes, mouse, OSC', async () => {
+        const b = backend();
+        const t = await terminal();
+        for (const auto of ['\x1b[I', '\x1b[O', '\x1b[12;40R', '\x1b[?1;2c', '\x1b[<0;10;5M', '\x1b]11;rgb:1b1b/1515/1212\x1b\\']) {
+          clock.t += 100;
+          t.term.dataHandlers[0](auto);
+          clock.t += 2_000;
+          send(SPINNER);
+          // Nothing waits for it.
+          expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        }
+        expect(frames).toHaveLength(0);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(slowEchoes(b)).toEqual([]);
+        // They went out all the same.
+        expect(b.called('term_write')).toHaveLength(6);
+      });
+
+      it('and not for a character xterm.js wrote long after the last key (more than 50 ms)', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        keyHandlers.at(-1)!(new KeyboardEvent('keydown', { key: 'Shift' }));
+        clock.t = 10_100;
+        t.term.dataHandlers[0]('a');
+        clock.t = 12_000;
+        send('a');
+        expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('and for a character xterm.js emits right after the key (within 50 ms)', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        keyHandlers.at(-1)!(new KeyboardEvent('keydown', { key: 'a' }));
+        clock.t = 10_040;
+        t.term.dataHandlers[0]('a');
+        clock.t = 10_600;
+        send('a');
+        paint(t, 10_610);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+      });
+
+      it('and not for a key the terminal hands over to the app (it does not go to the shell)', async () => {
+        const b = backend();
+        const t = await terminal();
+        // Ctrl+V pastes: the keydown is not the terminal's, whatever comes within 50 ms.
+        expect(keyHandlers.at(-1)!(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }))).toBe(false);
+        t.term.dataHandlers[0]('v');
+        clock.t += 2_000;
+        send('v');
+        expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('and not for a key that prints nothing: an arrow, Enter, Tab, Backspace, Ctrl+C', async () => {
+        const b = backend();
+        const t = await terminal();
+        for (const [key, data] of [
+          ['ArrowUp', '\x1b[A'],
+          ['Enter', '\r'],
+          ['Tab', '\t'],
+          ['Backspace', '\x7f'],
+          ['c', '\x03'],
+        ]) {
+          clock.t += 100;
+          press(t, key, data, key === 'c' ? { ctrlKey: true } : {});
+          clock.t += 2_000;
+          send(SPINNER);
+          expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        }
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('and not for a letter that is never echoed (a password): the output that follows is unrelated', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'p');
+        clock.t = 12_000;
+        send(SPINNER);
+        clock.t = 14_000;
+        send('\x1b[2K⠙ Thinking…');
+        expect(t.term.writes.map((w) => w.done)).toEqual([undefined, undefined]);
+        expect(frames).toHaveLength(0);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('and the letter is looked for in the text, not in the escape sequences around it', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'm');
+        clock.t = 10_300;
+        send('\x1b[0m\x1b[1;31m');
+        expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        clock.t = 10_400;
+        send('\x1b[0mm');
+        paint(t, 10_410);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ sentToReceived: 400, receivedToPainted: 10 });
+      });
+
+      it('is told for a letter the output redrawn around does not hide: the spinner does not answer, the letter does', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'x');
+        clock.t = 10_100;
+        send(SPINNER);
+        clock.t = 10_200;
+        send('\x1b[2K⠙ Thinking…');
+        clock.t = 10_500;
+        send('\x1b[2K⠹ Thinking…\r\n> x');
+        paint(t, 10_540);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ seq: 1, bytes: 1, sentToReceived: 500, receivedToPainted: 40 });
+      });
+    });
+
+    describe('a paste', () => {
+      it('is answered by the first output after it, and reported when late', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        // Bracketed, as Claude Code asks: 12 bytes of markers around the 6 of the text.
+        paste(t, 'é🙂', '\x1b[200~é🙂\x1b[201~');
+        clock.t = 10_500;
+        send('\x1b[2K⠋ Thinking…');
+        paint(t, 10_520);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toEqual({
+          id: 't1',
+          kind: 'slowEcho',
+          seq: 1,
+          bytes: 18,
+          sentToReceived: 500,
+          receivedToPainted: 20,
+          sentToAcked: expect.any(Number),
+          outputEnd: encode.encode('\x1b[2K⠋ Thinking…').length,
+        });
+      });
+
+      it('is the one of Claude Code’s interface, too', async () => {
+        const b = backend();
+        const t = await terminal((m) => m.openAgentTerminal('a1'));
+        clock.t = 10_000;
+        paste(t, 'npm test');
+        clock.t = 10_500;
+        send('npm test');
+        paint(t, 10_510);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+      });
+    });
+
+    describe('with the window out of sight', () => {
+      const show = (state: DocumentVisibilityState) =>
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      afterEach(() => {
+        delete (document as { visibilityState?: unknown }).visibilityState;
+      });
+
+      it('measures nothing typed while it is hidden', async () => {
+        const b = backend();
+        const t = await terminal();
+        show('hidden');
+        clock.t = 10_000;
+        press(t, 'a');
+        show('visible');
+        clock.t = 12_000;
+        send('a');
+        expect(t.term.writes.at(-1)!.done).toBeUndefined();
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('reports nothing of an echo drawn while it is hidden: the frame comes when it shows again', async () => {
+        const b = backend();
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 10_050;
+        send('a');
+        show('hidden');
+        paint(t, 12_000);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(slowEchoes(b)).toEqual([]);
+      });
+
+      it('goes on measuring once it shows again', async () => {
+        const b = backend();
+        const t = await terminal();
+        show('hidden');
+        press(t, 'a');
+        show('visible');
+        clock.t = 10_000;
+        press(t, 'b');
+        clock.t = 10_500;
+        send('b');
+        paint(t, 10_510);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ seq: 2 });
+      });
+    });
+
+    describe('with writes and reports that fail', () => {
+      it('does not stop the writes: they go to the backend as before, the report failing or not', async () => {
+        const b = fakeBackend({
+          term_spawn: ({ output }) => {
+            outputs.push(output);
+            return info;
+          },
+          term_write: () => 1,
+          term_report: () => Promise.reject('refusé'),
+        });
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'l');
+        clock.t = 11_000;
+        send('l');
+        paint(t, 11_010);
+        press(t, 'x');
+        expect(b.called('term_write').map((c) => c.args)).toEqual([
+          { id: 't1', data: 'l' },
+          { id: 't1', data: 'x' },
+        ]);
+      });
+
+      it('reports nothing of a write the backend refused, and the next writes still go out', async () => {
+        let refuse = true;
+        const b = fakeBackend({
+          term_spawn: ({ output }) => {
+            outputs.push(output);
+            return info;
+          },
+          term_write: () => (refuse ? Promise.reject('terminal introuvable') : 2),
+          term_report: () => undefined,
+        });
+        const t = await terminal();
+        clock.t = 10_000;
+        press(t, 'a');
+        clock.t = 11_000;
+        send('a');
+        paint(t, 11_010);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(slowEchoes(b)).toEqual([]);
+
+        refuse = false;
+        clock.t = 30_000;
+        press(t, 'b');
+        press(t, 'c');
+        expect(b.called('term_write').map((c) => c.args)).toEqual([
+          { id: 't1', data: 'a' },
+          { id: 't1', data: 'b' },
+          { id: 't1', data: 'c' },
+        ]);
+        clock.t = 30_500;
+        send('bc');
+        paint(t, 30_510);
+        await waitFor(() => expect(slowEchoes(b)).toHaveLength(1));
+        expect(slowEchoes(b)[0]).toMatchObject({ seq: 2 });
+      });
+    });
+  });
+
+  describe('its renderer', () => {
+    it('is reported once the terminal has its id: WebGL with the name of the GPU', async () => {
+      let opened!: (i: typeof info) => void;
+      const b = backend(() => new Promise((r) => (opened = r)));
+      const { openTerminal } = await load();
+      const pending = openTerminal('p1', 'pwsh', 'pwsh-1');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(b.called('term_report')).toEqual([]);
+      opened(info);
+      await pending;
+      await waitFor(() => expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'webgl', detail: GPU }]));
+    });
+
+    it('gives back the throwaway WebGL context the GPU’s name was read from, so it does not count among the 16 of the WebView', async () => {
+      backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      expect(getContext).toHaveBeenCalledWith('webgl2');
+      expect(lose).toHaveBeenCalledOnce();
+    });
+
+    it('reads the GPU’s name once per run of the app, not at each terminal', async () => {
+      const b = backend(() => info);
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await openTerminal('p1', 'pwsh', 'pwsh-2');
+      expect(getContext).toHaveBeenCalledTimes(1);
+      expect(lose).toHaveBeenCalledOnce();
+      await waitFor(() => expect(reports(b)).toHaveLength(2));
+      expect(reports(b).map((r) => r.detail)).toEqual([GPU, GPU]);
+    });
+
+    it('says a software renderer for what it is', async () => {
+      const software = 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)';
+      probe = () => ({ ...webgl(), getParameter: () => software });
+      const b = backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await waitFor(() => expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'webgl', detail: software }]));
+    });
+
+    it('falls back to the WebView’s own name of the renderer when it hides the GPU’s', async () => {
+      probe = () => webgl({ debugInfo: false });
+      const b = backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await waitFor(() => expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'webgl', detail: 'WebKit WebGL' }]));
+    });
+
+    it('is WebGL without a name when none could be read', async () => {
+      probe = () => null;
+      const b = backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await waitFor(() => expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'webgl' }]));
+    });
+
+    it('is the DOM renderer, and why, when WebGL does not load', async () => {
+      gl.fail = 'WebGL2 not supported null';
+      const b = backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await waitFor(() =>
+        expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'dom', detail: 'WebGL2 not supported null' }]),
+      );
+      // No context was made to read the name of a GPU nobody uses.
+      expect(getContext).not.toHaveBeenCalled();
+    });
+
+    it('is told again when the WebGL context is lost: the terminal then falls back to the DOM renderer', async () => {
+      const b = backend();
+      const { openTerminal } = await load();
+      await openTerminal('p1', 'pwsh', 'pwsh-1');
+      await waitFor(() => expect(reports(b)).toHaveLength(1));
+      gl.losses[0]();
+      expect(gl.disposed).toBe(1);
+      await waitFor(() => expect(reports(b)).toHaveLength(2));
+      expect(reports(b).at(-1)).toEqual({ id: 't1', kind: 'renderer', renderer: 'dom', detail: 'WebGL context lost' });
+    });
+
+    it('tells a context lost before the terminal had its id once it has', async () => {
+      let opened!: (i: typeof info) => void;
+      const b = backend(() => new Promise((r) => (opened = r)));
+      const { openTerminal } = await load();
+      const pending = openTerminal('p1', 'pwsh', 'pwsh-1');
+      await new Promise((r) => setTimeout(r, 20));
+      gl.losses[0]();
+      expect(b.called('term_report')).toEqual([]);
+      opened(info);
+      await pending;
+      await waitFor(() => expect(reports(b)).toEqual([{ id: 't1', kind: 'renderer', renderer: 'dom', detail: 'WebGL context lost' }]));
+    });
+
+    it('tells nothing of the terminal that never started', async () => {
+      const b = backend(() => Promise.reject('shell introuvable'));
+      const { openTerminal } = await load();
+      await expect(openTerminal('p1', 'pwsh', 'pwsh-1')).rejects.toBe('shell introuvable');
+      gl.losses[0]();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(b.called('term_report')).toEqual([]);
+    });
+  });
+
+  describe('a launch command’s log', () => {
+    it('reports nothing, neither its renderer, nor a lost context', async () => {
+      const b = backend();
+      const { launchLog } = await load();
+      const x = launchLog('c1', () => {});
+      expect(x.id).toBeUndefined();
+      gl.losses[0]();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(b.called('term_report')).toEqual([]);
+    });
   });
 });

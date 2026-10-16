@@ -358,6 +358,7 @@ pub fn run() {
             commands::term_write,
             commands::term_resize,
             commands::term_kill,
+            commands::term_report,
             commands::play_chime,
             commands::quit_app,
             commands::set_unsaved,

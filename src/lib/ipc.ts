@@ -50,6 +50,30 @@ import type {
   WorktreeSuggestion,
 } from './types';
 
+/**
+ * What a terminal tells the app's log (see pty.rs): which renderer draws it, or that an echo was slow. Durations only, in
+ * ms (fractional) from `performance.now()`: the window's clock is never compared with the backend's.
+ */
+export type TermReport =
+  /** `detail`: the GPU's name for WebGL (a software one, SwiftShader, would say so), or why WebGL is not used. */
+  | { kind: 'renderer'; renderer: 'webgl' | 'dom'; detail?: string }
+  /**
+   * The write numbered `seq` by `term_write` (`bytes` of UTF-8) took `sentToReceived` from leaving the window to the output
+   * that answers it, and `receivedToPainted` from that output to its paint. `sentToAcked`: from the call of `term_write` to
+   * the resolution of its promise (the way to the backend and back). `outputEnd`: the bytes of output the terminal had
+   * received, the echo's chunk included, when that chunk came in: every read of the backend is one message of the same
+   * bytes, in order, so this tells which read was the echo.
+   */
+  | {
+      kind: 'slowEcho';
+      seq: number;
+      bytes: number;
+      sentToReceived: number;
+      receivedToPainted: number;
+      sentToAcked?: number;
+      outputEnd?: number;
+    };
+
 export const api = {
   subscribe: (onEvent: (e: UiEvent) => void) => {
     const channel = new Channel<UiEvent>();
@@ -306,7 +330,9 @@ export const api = {
   updatePresence: (presence: { modal: boolean; testing: boolean; activeAt: number }) => invoke<void>('update_presence', { presence }),
   /** One HTTP request without proxy (2 s): true for any answer. */
   httpReady: (url: string) => invoke<boolean>('http_ready', { url }),
-  termWrite: (id: string, data: string) => invoke<void>('term_write', { id, data }),
+  /** The write's number, which the backend's log tells it by. */
+  termWrite: (id: string, data: string) => invoke<number>('term_write', { id, data }),
+  termReport: (id: string, report: TermReport) => invoke<void>('term_report', { id, report }),
   termResize: (id: string, cols: number, rows: number) => invoke<void>('term_resize', { id, cols, rows }),
   termKill: (id: string) => invoke<void>('term_kill', { id }),
   playChime: () => invoke<void>('play_chime'),

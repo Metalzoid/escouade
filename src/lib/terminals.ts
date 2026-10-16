@@ -7,6 +7,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { MAX_TOTAL, base64, clipboardImage, imageType, sizeLabel } from './attachments';
+import { echoWatch, type InputKind } from './echo-watch';
 import { t } from './i18n';
 import { api } from './ipc';
 import { openOutside, terminalLinks } from './links';
@@ -15,6 +16,12 @@ import { isAppShortcut } from './shortcuts';
 import { app } from './state.svelte';
 import type { TermInfo } from './types';
 
+/** What draws a terminal; the DOM renderer says why it is not WebGL, WebGL the GPU's name. */
+export interface Renderer {
+  renderer: 'webgl' | 'dom';
+  detail?: string;
+}
+
 export interface XTerm {
   term: Terminal;
   fit: FitAddon;
@@ -22,6 +29,12 @@ export interface XTerm {
   host: HTMLDivElement;
   /** A log: no input, no cursor. */
   readOnly?: boolean;
+  /** The backend's id of an interactive terminal, once it has one. */
+  id?: string;
+  renderer: Renderer;
+  /** When (`performance.now()`) a key went to the terminal, and the WebView's paste reached it: what tells the user's input from xterm.js's own. */
+  keyAt?: number;
+  pasteAt?: number;
 }
 
 const xterms = new Map<string, XTerm>();
@@ -81,6 +94,39 @@ export function terminalTheme(readOnly = false): ITheme {
 
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);
 
+let gpu: { name?: string } | null = null;
+
+/**
+ * The GPU's name WebGL gives (a software one such as SwiftShader says so), read once per run of the app from a
+ * context of its own, given back at once: Chromium keeps 16 WebGL contexts and drops the oldest of the others.
+ */
+function gpuName(): string | undefined {
+  if (gpu) return gpu.name;
+  gpu = {};
+  let gl: WebGL2RenderingContext | null = null;
+  try {
+    gl = document.createElement('canvas').getContext('webgl2');
+    if (gl) {
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      // Without it (hidden by the WebView) the generic name still tells WebGL is there.
+      gpu.name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    }
+  } catch {
+    // The name is only for the log.
+  }
+  try {
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    // Left to the garbage collector.
+  }
+  return gpu.name;
+}
+
+/** Tells the log which renderer an interactive terminal has, once it has an id. */
+function reportRenderer(x: XTerm) {
+  if (x.id) api.termReport(x.id, { kind: 'renderer', ...x.renderer }).catch(() => {});
+}
+
 /** A parked xterm.js instance; a read-only one takes no input (launch command logs). */
 function createXTerm(readOnly: boolean): XTerm {
   const term = new Terminal({
@@ -110,15 +156,24 @@ function createXTerm(readOnly: boolean): XTerm {
   term.unicode.activeVersion = '11';
   term.loadAddon(new WebLinksAddon((_e, uri) => openOutside(uri)));
   term.open(host);
+  const x: XTerm = { term, fit, search, host, readOnly, renderer: { renderer: 'dom' } };
   try {
     const webgl = new WebglAddon();
-    webgl.onContextLoss(() => webgl.dispose());
+    webgl.onContextLoss(() => {
+      webgl.dispose();
+      x.renderer = { renderer: 'dom', detail: 'WebGL context lost' };
+      reportRenderer(x);
+    });
     term.loadAddon(webgl);
-  } catch {
+    x.renderer = { renderer: 'webgl', detail: gpuName() };
+  } catch (e) {
     // Falls back to the DOM renderer.
+    x.renderer = { renderer: 'dom', detail: e instanceof Error ? e.message : String(e) };
   }
   fit.fit();
-  term.attachCustomKeyEventHandler((e) => {
+  // The user's paste, noted on its way down, before xterm.js's own listeners get it.
+  host.addEventListener('paste', () => (x.pasteAt = performance.now()), true);
+  const keyToTerminal = (e: KeyboardEvent): boolean => {
     if (e.type !== 'keydown') return true;
     // Navigation shortcuts go to the app (the event keeps bubbling to its window handler).
     if (isAppShortcut(e)) return false;
@@ -143,8 +198,13 @@ function createXTerm(readOnly: boolean): XTerm {
     }
     // A log only scrolls (Shift+PageUp…): every other key goes on to the app's shortcuts.
     return !readOnly || (e.shiftKey && SCROLL_KEYS.has(e.key));
+  };
+  term.attachCustomKeyEventHandler((e) => {
+    const toTerminal = keyToTerminal(e);
+    if (toTerminal && e.type === 'keydown') x.keyAt = performance.now();
+    return toTerminal;
   });
-  return { term, fit, search, host, readOnly };
+  return x;
 }
 
 function free(x: XTerm) {
@@ -255,19 +315,59 @@ async function bracketed(term: Terminal) {
   while (!term.modes.bracketedPasteMode && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
 }
 
+const decoder = new TextDecoder();
+
+/**
+ * How soon after a key or a paste xterm.js emits what it types (synchronously, from the keydown, keypress, input or
+ * paste handling). What comes later is its own: focus, cursor and mouse reports, replies to the program's queries.
+ */
+const INPUT_WINDOW = 50;
+
+/** What the data xterm.js emits at `at` is, when the user typed or pasted it; null for what it writes by itself. */
+function userInput(x: XTerm, at: number): InputKind | null {
+  if (x.pasteAt !== undefined && at - x.pasteAt <= INPUT_WINDOW) return 'paste';
+  if (x.keyAt !== undefined && at - x.keyAt <= INPUT_WINDOW) return 'key';
+  return null;
+}
+
 /** An interactive terminal that `spawn` starts at the size of a new xterm.js instance, which then shows it. */
 async function interactive(spawn: (cols: number, rows: number, onData: (d: ArrayBuffer) => void) => Promise<TermInfo>): Promise<TermInfo> {
   const x = createXTerm(false);
   const { term } = x;
+  // Made before the spawn, whose output can come in before its answer: what is told waits for the id.
+  const watch = echoWatch({
+    now: () => performance.now(),
+    visible: () => document.visibilityState === 'visible',
+    report: (r) => {
+      if (x.id) api.termReport(x.id, r).catch(() => {});
+    },
+  });
+  // Every read of the backend is one message of the same bytes, in order: the bytes received so far name the read of an
+  // echo (measured or not, every chunk counts).
+  let outputBytes = 0;
   let info: TermInfo;
   try {
-    info = await spawn(term.cols, term.rows, (buf) => term.write(new Uint8Array(buf)));
+    info = await spawn(term.cols, term.rows, (buf) => {
+      outputBytes += buf.byteLength;
+      // The text is only decoded while a typed key waits for its echo.
+      const token = watch.received(() => decoder.decode(buf), outputBytes);
+      // xterm.js calls back once the data is parsed: the next animation frame is when it is drawn.
+      term.write(new Uint8Array(buf), token === null ? undefined : () => requestAnimationFrame(() => watch.painted(token)));
+    });
   } catch (e) {
     // Nothing to attach to: free the xterm instance, its WebGL context and its host.
     free(x);
     throw e;
   }
-  term.onData((d) => api.termWrite(info.id, d).catch(() => {}));
+  x.id = info.id;
+  reportRenderer(x);
+  term.onData((d) => {
+    const kind = userInput(x, performance.now());
+    // The write goes out first and waits for nothing: its number is only for the report of a slow echo.
+    const seq = api.termWrite(info.id, d);
+    seq.catch(() => {});
+    if (kind) watch.sent({ data: d, kind, seq });
+  });
   term.onResize(({ cols, rows }) => api.termResize(info.id, cols, rows).catch(() => {}));
   xterms.set(info.id, x);
   return info;

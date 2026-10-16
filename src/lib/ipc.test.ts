@@ -104,3 +104,53 @@ describe('test launch commands', () => {
     expect(backend.calls).toEqual([{ cmd: 'test_recipe_approve', args: { agentId: 'a1', recipe } }]);
   });
 });
+
+describe('terminal writes and reports', () => {
+  it('gives the number the backend gave a write', async () => {
+    const backend = fakeBackend({ term_write: () => 41 });
+    await expect(api.termWrite('t1', 'a')).resolves.toBe(41);
+    expect(backend.calls).toEqual([{ cmd: 'term_write', args: { id: 't1', data: 'a' } }]);
+  });
+
+  it('tells the backend which renderer a terminal got and how slow an echo was, with the names its command takes', async () => {
+    const backend = fakeBackend({ term_report: () => undefined });
+    await api.termReport('t1', { kind: 'renderer', renderer: 'webgl', detail: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080)' });
+    await api.termReport('t1', { kind: 'renderer', renderer: 'dom' });
+    await api.termReport('t1', { kind: 'slowEcho', seq: 41, bytes: 1, sentToReceived: 1500.5, receivedToPainted: 18.25 });
+    await api.termReport('t1', {
+      kind: 'slowEcho',
+      seq: 42,
+      bytes: 2,
+      sentToReceived: 1500.5,
+      receivedToPainted: 18.25,
+      sentToAcked: 0.75,
+      outputEnd: 4096,
+    });
+    expect(backend.calls).toEqual([
+      {
+        cmd: 'term_report',
+        args: { id: 't1', report: { kind: 'renderer', renderer: 'webgl', detail: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080)' } },
+      },
+      { cmd: 'term_report', args: { id: 't1', report: { kind: 'renderer', renderer: 'dom' } } },
+      {
+        cmd: 'term_report',
+        args: { id: 't1', report: { kind: 'slowEcho', seq: 41, bytes: 1, sentToReceived: 1500.5, receivedToPainted: 18.25 } },
+      },
+      {
+        cmd: 'term_report',
+        args: {
+          id: 't1',
+          report: {
+            kind: 'slowEcho',
+            seq: 42,
+            bytes: 2,
+            sentToReceived: 1500.5,
+            receivedToPainted: 18.25,
+            sentToAcked: 0.75,
+            outputEnd: 4096,
+          },
+        },
+      },
+    ]);
+  });
+});

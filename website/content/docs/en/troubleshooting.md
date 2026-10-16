@@ -191,6 +191,16 @@ See [notifications](notifications).
 
 **Fix.** Restart Escouade; if the message comes back, reconnect the account (the token is then saved again). In the second case, the token stays in `integrations.json`, readable only by you on macOS and Linux.
 
+## Terminals
+
+### A terminal is slow
+
+**Symptom.** A letter typed or a text pasted in a [terminal](terminals) takes a while to show, when a terminal usually answers in a few hundredths of a second.
+
+**Cause.** The time goes into one of the steps a keystroke takes: the window sending it to the backend, the terminal’s program (the shell, or Claude Code in the Claude Code view) sending the echo back, the way back into the window, then the drawing. A paste of a few thousand characters into PowerShell takes a tenth of a second or more by itself: PSReadLine redraws the line as it grows, in Windows Terminal as in Escouade.
+
+**Fix.** Open the app’s log (see “Where the app’s log is”, below): every echo that took more than 300 ms to show is noted there (at most once every 10 seconds per terminal), with the time of each step, for example “echo of a 1-byte write shown after 837 ms: written 0 ms after the backend got it, first output 835 ms after, the echo 835 ms after, to and from the window 1 ms (answer to the write 2 ms), painted 1 ms later”. Here nearly everything comes before “the echo”: the program was slow. A long “to and from the window” comes from the window, a long “painted” from its drawing. When each terminal opens, the log also says what draws it: “renderer webgl” followed by the graphics card’s name (a name like SwiftShader means drawing without a graphics card, which is slower), or “renderer dom”. Report it with these lines (see “Reporting a bug”).
+
 ## Log and reports
 
 ### Where the app’s log is
