@@ -57,7 +57,7 @@ use super::Caller;
 use crate::accounts;
 use crate::agent::Waiting;
 use crate::board::{Held, MoveTo};
-use crate::core::{supports_effort, AgentOptions, Core};
+use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::i18n;
 use crate::model::{BoardSettings, Column, PauseReason, Project, Ticket, PROGRESS_LINE_MAX};
@@ -683,7 +683,7 @@ pub(super) fn start_ticket<R: Runtime>(
     let (model, effort, _) = ticket_agent_options(&started, &board, &core.settings.read());
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });
     // A model that takes no effort (Haiku) goes without one: none is said.
-    if supports_effort(&model) {
+    if crate::engine::default().supports_effort(&model) {
         answer["effort"] = json!(effort);
     }
     json(&answer)

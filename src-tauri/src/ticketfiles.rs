@@ -5,8 +5,8 @@
 //! question (`--add-dir`). The images the chat reads stay the ticket's images (`ticketimages`).
 
 use crate::attachfiles::{self, AttachedFile};
-use crate::claude::Program;
 use crate::core::Core;
+use crate::engine::Program;
 use crate::i18n::{self, Lang};
 use crate::model::{Ticket, TicketFile};
 use crate::paths::TICKET_FILES;
@@ -385,11 +385,11 @@ pub(crate) fn maintain(tickets: &Path, keep_days: u32) {
 }
 
 impl<R: Runtime> Core<R> {
-    /// The `--add-dir` argument that gives the Claude Code of the agent of a ticket the ticket's
-    /// files, which it reads without a question; made here first. None for an agent that has no
+    /// The folder of the files of the ticket of an agent, which it reads without a question
+    /// (`--add-dir` for Claude Code); made here first. None for an agent that has no
     /// ticket, a ticket that has no file (its folder is not made for nothing), or when the folder
     /// cannot be made (the agent starts, with its files asked for).
-    pub(crate) fn ticket_add_dir_arg(&self, agent_id: &str) -> Option<String> {
+    pub(crate) fn ticket_read_dir(&self, agent_id: &str) -> Option<std::path::PathBuf> {
         let ticket_id = self.agent(agent_id).ok()?.lock().meta.ticket_id.clone()?;
         // Read once the agent's lock is let go: the tickets come before the agents.
         if self.ticket(&ticket_id).ok()?.files.is_empty() {
@@ -397,7 +397,7 @@ impl<R: Runtime> Core<R> {
         }
         let dir = self.data.ticket_files(&ticket_id);
         match std::fs::create_dir_all(&dir) {
-            Ok(()) => Some(format!("--add-dir={}", dir.display())),
+            Ok(()) => Some(dir),
             Err(e) => {
                 log::warn!("agent {agent_id}: {} not made: {e}", dir.display());
                 None

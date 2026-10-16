@@ -686,7 +686,7 @@ fn the_files_of_the_users_own_that_were_joined_are_remembered_by_agent_and_the_o
 
 #[test]
 fn the_path_claude_reads_a_file_by_is_its_linux_one_in_wsl() {
-    let ubuntu = crate::claude::Program::Wsl(crate::wsl::Program {
+    let ubuntu = crate::engine::Program::Wsl(crate::wsl::Program {
         exe: PathBuf::from(r"C:\Windows\System32\wsl.exe"),
         distro: "Ubuntu-24.04".into(),
         path: "/home/me/.local/bin/claude".into(),
@@ -705,7 +705,7 @@ fn the_path_claude_reads_a_file_by_is_its_linux_one_in_wsl() {
         r"\\server\share\rapport.xlsx"
     );
     // A claude of the system, or none found: as it is.
-    let native = crate::claude::Program::Native(PathBuf::from(r"C:\bin\claude.exe"));
+    let native = crate::engine::Program::Native(PathBuf::from(r"C:\bin\claude.exe"));
     for program in [Some(&native), None] {
         assert_eq!(
             attachfiles::claude_path_of(program, file),

@@ -78,7 +78,7 @@ fn mask_secrets(text: &str, secrets: &[&str]) -> String {
 #[derive(Debug, Clone)]
 pub struct Target {
     /// Its `claude`.
-    pub program: crate::claude::Program,
+    pub program: crate::engine::Program,
     /// What its processes get besides the environment of the app: the network settings, and the
     /// account's `CLAUDE_CONFIG_DIR` (never Principal's).
     pub env: Vec<(String, String)>,
@@ -196,7 +196,7 @@ async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
-    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     crate::job::isolate(&mut cmd);
     let child = cmd.spawn().map_err(|e| {
         anyhow!(tr!(

@@ -205,7 +205,7 @@ pub async fn run(dir: &str, args: &[&str], limit: Duration) -> Result<String> {
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
-    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     let out = tokio::time::timeout(limit, cmd.output())
         .await
         .map_err(|_| {

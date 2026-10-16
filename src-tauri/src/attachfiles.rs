@@ -8,8 +8,8 @@
 //! (`OriginFiles`).
 
 use crate::accounts;
-use crate::claude::Program;
 use crate::core::Core;
+use crate::engine::Program;
 use crate::i18n::Lang;
 use crate::paths::{self, DataDir};
 use anyhow::{anyhow, bail, Result};
@@ -774,12 +774,13 @@ impl<R: Runtime> Core<R> {
         crate::ticketfiles::maintain(&self.data.tickets(), keep_days);
     }
 
-    /// The `--add-dir` argument that gives the agent's `claude` the folder of its joined files, made
-    /// here first. None when it cannot be made (the agent starts, with that folder asked for).
-    pub(crate) fn add_dir_arg(&self, id: &str) -> Option<String> {
+    /// The folder of the agent's joined files, which it reads without a question (`--add-dir` for
+    /// Claude Code), made here first. None when it cannot be made (the agent starts, with that
+    /// folder asked for).
+    pub(crate) fn agent_read_dir(&self, id: &str) -> Option<std::path::PathBuf> {
         let dir = self.data.agent_files(id);
         match std::fs::create_dir_all(&dir) {
-            Ok(()) => Some(format!("--add-dir={}", dir.display())),
+            Ok(()) => Some(dir),
             Err(e) => {
                 log::warn!("agent {id}: {} not made: {e}", dir.display());
                 None

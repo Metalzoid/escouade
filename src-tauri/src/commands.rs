@@ -123,8 +123,9 @@ pub fn subscribe(
     let accounts = core.integration_accounts();
     let version = core.app.package_info().version.to_string();
     let lang = core.lang();
-    let claude_path_found =
-        crate::claude::resolve_binary(&settings.claude_path, &settings.wsl_distro).is_some();
+    let claude_path_found = crate::engine::default()
+        .locate(&settings.claude_path, &settings.wsl_distro)
+        .is_some();
     InitialState {
         lang,
         projects,
@@ -173,10 +174,10 @@ pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>>
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
 /// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
 #[tauri::command(async)]
-pub fn claude_locate(path: String, wsl_distro: String) -> crate::claude::Located {
+pub fn claude_locate(path: String, wsl_distro: String) -> crate::engine::Located {
     // Asked by the user: what was not found is looked for again (maybe just installed).
     crate::wsl::forget(false);
-    crate::claude::locate(&path, &wsl_distro)
+    crate::engine::Located::of(crate::engine::default().locate(&path, &wsl_distro))
 }
 
 /// Whether Claude Code is found, as the start tells it (`claude_found`, `claude_path_found` of
@@ -195,11 +196,9 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
     let settings = core.settings.read().clone();
     ClaudeFound {
         claude_found: core.claude_found(),
-        claude_path_found: crate::claude::resolve_binary(
-            &settings.claude_path,
-            &settings.wsl_distro,
-        )
-        .is_some(),
+        claude_path_found: crate::engine::default()
+            .locate(&settings.claude_path, &settings.wsl_distro)
+            .is_some(),
     }
 }
 

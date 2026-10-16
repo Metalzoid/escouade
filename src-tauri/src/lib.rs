@@ -9,7 +9,6 @@ mod attachfiles_tests;
 mod board;
 #[cfg(test)]
 mod branches_tests;
-mod claude;
 mod clipboard;
 mod closed;
 #[cfg(test)]
@@ -20,6 +19,7 @@ mod convsearch;
 mod core;
 #[cfg(test)]
 mod core_tests;
+mod engine;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;
@@ -56,6 +56,7 @@ mod stats;
 mod taskout;
 mod telemetry;
 mod testlaunch;
+mod text;
 mod ticketfiles;
 mod ticketimages;
 mod tickets;

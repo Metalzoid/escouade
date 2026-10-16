@@ -3,8 +3,8 @@
 
 use super::tests::{answer_text, bearer, client, post, INITIALIZE, TEST_TOOL};
 use super::AgentAccess;
-use crate::claude::ClaudeProcess;
 use crate::core_tests::{harness, Harness};
+use crate::engine::Process;
 use crate::model::*;
 use rmcp::model::CallToolRequestParams;
 use serde_json::{json, Value};
@@ -59,7 +59,7 @@ async fn started_agent(h: &Harness, p: &Project) -> String {
 }
 
 /// Once `p` has exited.
-async fn gone(h: &Harness, p: &Arc<ClaudeProcess>) {
+async fn gone(h: &Harness, p: &Process) {
     h.wait("the process to exit", |_| !p.is_alive()).await;
 }
 

@@ -143,7 +143,7 @@ fn run_in(exe: &Path, distro: &str, script: &str, arg: &str) -> Option<(bool, St
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     }
     let mut child = cmd.spawn().ok()?;
     let started = Instant::now();
@@ -364,7 +364,7 @@ mod registry {
 
 /// The program of `configured` when it is one in WSL: a path to the WSL share, a Linux path, or
 /// one in the Linux home folder (`~/…`, when it names no Windows program: see
-/// `claude::resolve_binary`).
+/// `Engine::locate`).
 pub fn parse(configured: &str) -> Option<Spec> {
     let given = configured.trim();
     let slashed = given.replace('\\', "/");

@@ -4,10 +4,10 @@ use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind, RemoteLink};
 use crate::attachfiles::{self, AttachedFile};
 use crate::board;
-use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::closed;
 use crate::conv;
 use crate::convsearch;
+use crate::engine::{self, EngineProcess, Escouade, OneShot, Process, Remote, Spawn, Weight};
 use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
@@ -31,7 +31,7 @@ use crate::worktrees::{self, RunSuggestion, WorktreeSuggestion};
 use anyhow::{anyhow, bail, Context, Result};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 #[cfg(test)]
@@ -117,22 +117,22 @@ pub(crate) fn remote_wanted(meta: &AgentMeta, global: bool, project: bool) -> Op
 /// forgets it; until then the agent keeps its id).
 pub(crate) async fn close_remote_session(
     id: &str,
-    proc: &Arc<ClaudeProcess>,
+    proc: &Process,
     bridge: Option<&str>,
     name: &str,
     timeout: Duration,
 ) -> bool {
-    let off = json!({ "subtype": "remote_control", "enabled": false });
-    let mut requests = vec![off.clone()];
+    let mut requests = vec![Remote::Off];
     if let Some(bridge) = bridge {
-        requests.push(json!({
-            "subtype": "remote_control", "enabled": true, "name": name,
-            "keep_session_on_exit": false, "reattach_session_id": bridge,
-        }));
-        requests.push(off);
+        requests.push(Remote::On {
+            name: name.to_string(),
+            keep: false,
+            reattach: Some(bridge.to_string()),
+        });
+        requests.push(Remote::Off);
     }
     for request in requests {
-        if let Err(e) = proc.control(request, timeout).await {
+        if let Err(e) = proc.remote_control(request, timeout).await {
             log::warn!("agent {id}: remote session not closed: {e:#}");
             return false;
         }
@@ -421,13 +421,9 @@ pub enum SyncOp {
     Push,
 }
 
-/// A question to Claude with `claude -p` (`Core::ask_claude`).
+/// A one-shot question to a harness (`Core::ask_claude`).
 struct Ask<'a> {
-    /// As a timeout names it.
-    who: &'a str,
-    model: &'a str,
-    /// The tools it may use (`--tools`), none when empty.
-    tools: &'a str,
+    weight: Weight,
     cwd: &'a Path,
     system: &'a str,
     prompt: &'a str,
@@ -497,12 +493,8 @@ impl Attachment {
     }
 }
 
-/// The only image formats the API reads.
-const IMAGE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const KB: usize = 1024;
 pub(crate) const MB: usize = 1024 * KB;
-/// Past this, a text file alone would fill Claude's context (~4 bytes a token).
-const MAX_TEXT: usize = 256 * KB;
 /// All the files of a message: sent in base64 (4/3 bigger), under the API's 32 MB a request.
 pub(crate) const MAX_TOTAL: usize = 18 * MB;
 /// An image, as the API takes it.
@@ -525,81 +517,6 @@ pub(crate) fn from_origin(lang: i18n::Lang, origin: &str, text: &str) -> String 
         "Message de {origin} : {text}",
         "Message from {origin}: {text}"
     )
-}
-
-/// Content of a user message: its text alone, or the attached files as content blocks
-/// followed by the text.
-pub fn user_content(text: &str, attachments: &[Attachment]) -> Result<Value> {
-    if attachments.is_empty() {
-        return Ok(Value::String(text.to_string()));
-    }
-    let (mut blocks, sizes): (Vec<Value>, Vec<usize>) = attachments
-        .iter()
-        .map(attachment_block)
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .unzip();
-    if sizes.iter().sum::<usize>() > MAX_TOTAL {
-        let lang = i18n::ui();
-        bail!(tr_in!(
-            lang,
-            "Les fichiers joints à un message sont limités à {max} en tout.",
-            "The files attached to a message are limited to {max} in all.",
-            max = size_label(lang, MAX_TOTAL)
-        ));
-    }
-    if !text.is_empty() {
-        blocks.push(json!({ "type": "text", "text": text }));
-    }
-    Ok(Value::Array(blocks))
-}
-
-/// The content block of a file, and its size.
-fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
-    // Base64 carries 3 bytes in 4 characters, the padding none.
-    let padding = a.data.bytes().rev().take_while(|&b| b == b'=').count();
-    let decoded = (a.data.len() / 4 * 3).saturating_sub(padding);
-    let (block, size, max) = match a.media_type.as_str() {
-        t if IMAGE_TYPES.contains(&t) => (
-            json!({ "type": "image", "source": { "type": "base64", "media_type": t, "data": a.data } }),
-            decoded,
-            MAX_IMAGE,
-        ),
-        "application/pdf" => (
-            json!({
-                "type": "document",
-                "title": a.name,
-                "source": { "type": "base64", "media_type": "application/pdf", "data": a.data },
-            }),
-            decoded,
-            18 * MB,
-        ),
-        "text/plain" => (
-            json!({
-                "type": "document",
-                "title": a.name,
-                "source": { "type": "text", "media_type": "text/plain", "data": a.data },
-            }),
-            a.data.len(),
-            MAX_TEXT,
-        ),
-        t => bail!(tr!(
-            "« {name} » ({t}) ne peut pas être joint : les fichiers acceptés sont les images (PNG, JPEG, GIF, WebP), les PDF et les fichiers texte.",
-            "“{name}” ({t}) can’t be attached: the files accepted are images (PNG, JPEG, GIF, WebP), PDFs and text files.",
-            name = a.name
-        )),
-    };
-    if size > max {
-        let lang = i18n::ui();
-        bail!(tr_in!(
-            lang,
-            "{name} dépasse {max}",
-            "{name} is over {max}",
-            name = a.name,
-            max = size_label(lang, max)
-        ));
-    }
-    Ok((block, size))
 }
 
 /// What « Intégrer <base> » did (`Core::integrate_base`).
@@ -994,92 +911,6 @@ pub fn subagent_message(lang: i18n::Lang, title: &str, task: &str, text: &str) -
     )
 }
 
-const CLAUDE_BASE_ARGS: &[&str] = &[
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--input-format",
-    "stream-json",
-    "--permission-prompt-tool",
-    "stdio",
-    "--include-partial-messages",
-    // Messages sent from claude.ai (Remote Control) come back on stdout, so the app shows them.
-    "--replay-user-messages",
-    "--thinking-display",
-    "summarized",
-    "--allow-dangerously-skip-permissions",
-];
-
-pub fn supports_effort(model: &str) -> bool {
-    !model.to_lowercase().contains("haiku")
-}
-
-/// Whether a model takes the permission mode `auto`: every one but Haiku. The rule of
-/// `supportsAuto` in `src/lib/models.ts`, which keeps the Composer from offering it.
-pub fn supports_auto(model: &str) -> bool {
-    !model.to_lowercase().contains("haiku")
-}
-
-pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
-    let mut a: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
-    a.extend(["--model".into(), m.model.clone()]);
-    if supports_effort(&m.model) {
-        a.extend(["--effort".into(), m.effort.clone()]);
-    }
-    a.extend(["--permission-mode".into(), m.mode.clone()]);
-    if let Some(p) = m.append_prompt.as_deref().filter(|p| !p.trim().is_empty()) {
-        // On one line: a `.cmd` launcher (npm's claude.cmd) takes no argument with line breaks.
-        let one_line = p.split_whitespace().collect::<Vec<_>>().join(" ");
-        a.extend(["--append-system-prompt".into(), one_line]);
-    }
-    if let Some(s) = &m.session_id {
-        a.push(format!("--resume={s}"));
-    } else if let Some(s) = &m.fork_of {
-        // A copy's conversation so far is its original's, under a new session: the original's
-        // is left as it is.
-        a.extend([format!("--resume={s}"), "--fork-session".into()]);
-        // As it was when copied: the turns the original ran since stay out.
-        if let Some(at) = &m.fork_at {
-            a.push(format!("--resume-session-at={at}"));
-        }
-    }
-    a
-}
-
-/// The arguments as the log shows them: the protocol appended to the system prompt (up to several
-/// KB of ticket text) is only counted, not copied.
-fn args_for_log(args: &[String]) -> String {
-    let mut shown: Vec<String> = Vec::with_capacity(args.len());
-    let mut elide = false;
-    for a in args {
-        if std::mem::take(&mut elide) {
-            shown.push(format!("<{} chars>", a.chars().count()));
-            continue;
-        }
-        elide = a == "--append-system-prompt";
-        shown.push(a.clone());
-    }
-    shown.join(" ")
-}
-
-/// The JSON answer of `claude -p --output-format json`: the whole output, or its last line that
-/// is JSON when something came before (a warning of `wsl.exe` for a `claude` of WSL).
-fn json_answer(stdout: &[u8]) -> Result<Value> {
-    serde_json::from_slice(stdout).or_else(|e| {
-        String::from_utf8_lossy(stdout)
-            .lines()
-            .rev()
-            .find_map(|l| {
-                // Also without the NULs of a warning written in UTF-16.
-                let l = l.trim_matches(|c: char| c.is_whitespace() || c == '\0');
-                serde_json::from_str::<Value>(l)
-                    .ok()
-                    .filter(Value::is_object)
-            })
-            .ok_or_else(|| e.into())
-    })
-}
-
 /// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
 pub fn slugify(s: &str) -> String {
     slug_within(s, 40)
@@ -1190,7 +1021,7 @@ pub(crate) fn naming_prompt(lang: i18n::Lang, task: &str) -> String {
         "Give a short name to the development task below. Don’t carry it out.\n\
          Answer with a kebab-case slug of 2 or 3 words only (lowercase ASCII, no accents), \
          for example auth-refactor or e2e-tests.\n\n<task>\n{task}\n</task>",
-        task = claude::truncate(task.trim(), 2000)
+        task = crate::text::truncate(task.trim(), 2000)
     )
 }
 
@@ -1381,7 +1212,7 @@ pub(crate) fn commit_proposal_prompt(
         "Write the commit message of the changes below. Don’t carry them out, don’t comment on them. \
          Answer with the message only: a one-line subject, then, only if useful, a blank line and a short body.\n\n\
          {style}\n\n<files>\n{listed}</files>\n\n<diff>\n{diff}\n</diff>",
-        diff = claude::truncate(diff.trim_end(), PROPOSAL_DIFF)
+        diff = crate::text::truncate(diff.trim_end(), PROPOSAL_DIFF)
     )
 }
 
@@ -2316,7 +2147,7 @@ impl<R: Runtime> Core<R> {
 
     /// Waits (`agent_gone`) for the processes of the killed agent `id`, `p`, to be gone. None when
     /// they are; else what the warning says: how many still run (the log, which ones).
-    pub(crate) async fn await_agent_gone(&self, id: &str, p: &ClaudeProcess) -> Option<String> {
+    pub(crate) async fn await_agent_gone(&self, id: &str, p: &Process) -> Option<String> {
         let (within, waited) = (self.agent_gone(), Instant::now());
         let gone = p.wait_gone(within).await;
         log::info!(
@@ -2569,7 +2400,7 @@ impl<R: Runtime> Core<R> {
     // ---------- claude processes ----------
 
     /// Returns the agent's live process, starting it (with --resume) when needed.
-    pub async fn ensure_process(self: &Arc<Self>, id: &str) -> Result<Arc<ClaudeProcess>> {
+    pub async fn ensure_process(self: &Arc<Self>, id: &str) -> Result<Process> {
         // What a start resumes: its session, or a copy's original's, from where it was copied.
         let resumes = |m: &AgentMeta| (m.session_id.clone(), m.fork_of.clone(), m.fork_at.clone());
         let before = resumes(&self.agent(id)?.lock().meta);
@@ -2587,7 +2418,7 @@ impl<R: Runtime> Core<R> {
 
     /// Before a `claude` of WSL starts for the agent of `h`: its worktree leads to the repository
     /// by a relative path, which git of Linux can follow (`git::relative_gitdir`).
-    pub(crate) fn ready_for_wsl(&self, program: &claude::Program, h: &AgentHandle) {
+    pub(crate) fn ready_for_wsl(&self, program: &engine::Program, h: &AgentHandle) {
         if program.wsl().is_none() {
             return;
         }
@@ -2599,7 +2430,7 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    async fn start_process(self: &Arc<Self>, id: &str) -> Result<Arc<ClaudeProcess>> {
+    async fn start_process(self: &Arc<Self>, id: &str) -> Result<Process> {
         let h = self.agent(id)?;
         self.start_process_of(&h, id).await
     }
@@ -2609,7 +2440,7 @@ impl<R: Runtime> Core<R> {
         self: &Arc<Self>,
         h: &AgentHandle,
         id: &str,
-    ) -> Result<Arc<ClaudeProcess>> {
+    ) -> Result<Process> {
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
         // Deleted while it waited for the lock (the deletion has its own, now gone): a process
@@ -2652,70 +2483,68 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
-        let (mut opts, gen) = {
+        let (mut spawn, gen, engine) = {
             let mut rt = h.lock();
             rt.gen += 1;
-            let opts = SpawnOpts {
+            let mut spawn = Spawn::of(
+                &rt.meta,
                 program,
-                cwd: rt.meta.cwd.clone(),
-                args: claude_args(&rt.meta),
-                env: [settings.agent_env(), accounts::launch_env(&account)].concat(),
-            };
-            (opts, rt.gen)
+                [settings.agent_env(), accounts::launch_env(&account)].concat(),
+            );
+            spawn.account = account.id.clone();
+            (spawn, rt.gen, engine::of(&rt.meta))
         };
-        if !Path::new(&opts.cwd).is_dir() {
+        if !Path::new(&spawn.cwd).is_dir() {
             bail!(tr!(
                 "Le dossier {dir} n'existe plus",
                 "The folder {dir} no longer exists",
-                dir = opts.cwd
+                dir = spawn.cwd
             ));
         }
-        self.ready_for_wsl(&opts.program, h);
+        self.ready_for_wsl(&spawn.program, h);
         // The folder of the files joined to its messages, which it reads without a question
         // (`attachfiles`).
-        opts.args.extend(self.add_dir_arg(id));
+        spawn.read_dirs.extend(self.agent_read_dir(id));
         // A ticket's agent reads the ticket's files too (`ticketfiles`).
-        opts.args.extend(self.ticket_add_dir_arg(id));
+        spawn.read_dirs.extend(self.ticket_read_dir(id));
         // Escouade's MCP server, as this agent (a token of its own) or kept out of it.
         let access = self.agent_access(id);
-        if let Some(refusal) = access.refusal() {
-            match self.mcp_refusal_file(&refusal) {
-                Ok(file) => opts
-                    .args
-                    .extend(["--settings".into(), file.to_string_lossy().into_owned()]),
-                // Its tools refused all the same (`args`).
-                Err(e) => log::warn!("agent {id}: Escouade's server not kept out: {e:#}"),
-            }
-        }
-        opts.args.extend(access.args());
+        spawn.escouade = match &access {
+            crate::mcp::AgentAccess::Granted { config, .. } => Escouade::Granted {
+                config: config.clone(),
+            },
+            crate::mcp::AgentAccess::Denied => Escouade::Denied {
+                settings: access.refusal().and_then(|refusal| {
+                    self.mcp_refusal_file(&refusal)
+                        // Its tools refused all the same.
+                        .inspect_err(|e| {
+                            log::warn!("agent {id}: Escouade's server not kept out: {e:#}")
+                        })
+                        .ok()
+                }),
+            },
+        };
         // Given back when this process ends, unless a newer one of the agent has its own.
         let token = access.token().map(str::to_string);
-        log::info!(
-            "agent {id}: starting {} {} in {} (account {})",
-            opts.program.describe(),
-            args_for_log(&opts.args),
-            opts.cwd,
-            account.id
-        );
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
         let (agent_id, granted) = (id.to_string(), token.clone());
-        let spawned = ClaudeProcess::spawn(
-            opts,
-            move |frame| {
+        let spawned = engine.spawn(
+            spawn,
+            Box::new(move |frame| {
                 if let Some(c) = w1.upgrade() {
                     c.on_frame(&h1, gen, frame);
                 }
-            },
-            move |code, stderr| {
+            }),
+            Box::new(move |code, stderr| {
                 if let Some(c) = w2.upgrade() {
                     if let Some(t) = &granted {
                         c.mcp.release_agent(&agent_id, t);
                     }
                     c.on_exit(&h2, gen, code, stderr);
                 }
-            },
+            }),
         );
         let proc = match spawned {
             Ok(p) => p,
@@ -2747,14 +2576,15 @@ impl<R: Runtime> Core<R> {
             bail!(quitting_refusal());
         }
         self.emit_agent(h);
-        match proc
-            .control(json!({ "subtype": "initialize" }), Duration::from_secs(90))
-            .await
-        {
-            Ok(resp) => {
-                log::info!("agent {id}: ready in {} ms", started.elapsed().as_millis());
-                h.lock().commands = resp["commands"].as_array().cloned().unwrap_or_default();
-                self.set_models(&resp["models"]);
+        match proc.initialize().await {
+            Ok(ready) => {
+                log::info!(
+                    "agent {id}: {} ready in {} ms",
+                    engine.id(),
+                    started.elapsed().as_millis()
+                );
+                h.lock().commands = ready.commands;
+                self.set_models(&ready.models);
                 if h.lock().meta.remote_control {
                     if let Err(e) = self.link_remote(h, &proc).await {
                         self.remote_unavailable(id, &e, true);
@@ -2766,7 +2596,7 @@ impl<R: Runtime> Core<R> {
                 }
             }
             Err(_) if !proc.is_alive() => {
-                log::warn!("agent {id}: claude exited while starting");
+                log::warn!("agent {id}: {} exited while starting", engine.name());
                 return Err(StartupFailure.into());
             }
             Err(e) => log::warn!(
@@ -2908,11 +2738,7 @@ impl<R: Runtime> Core<R> {
 
     /// Links the agent's live process to claude.ai (Remote Control). Its previous remote session
     /// is reattached, so the link opened on a phone stays valid across restarts.
-    async fn link_remote(
-        self: &Arc<Self>,
-        h: &AgentHandle,
-        proc: &Arc<ClaudeProcess>,
-    ) -> Result<()> {
+    async fn link_remote(self: &Arc<Self>, h: &AgentHandle, proc: &Process) -> Result<()> {
         let id = {
             let mut rt = h.lock();
             rt.remote_tried = true;
@@ -2931,19 +2757,20 @@ impl<R: Runtime> Core<R> {
             }
             (self.remote_name(&rt.meta), rt.meta.remote_session.clone())
         };
-        let request = |reattach: Option<&String>| {
-            let mut r = json!({ "subtype": "remote_control", "enabled": true, "name": name, "keep_session_on_exit": true });
-            if let Some(s) = reattach {
-                r["reattach_session_id"] = json!(s);
-            }
-            r
+        let request = |reattach: Option<String>| Remote::On {
+            name: name.clone(),
+            keep: true,
+            reattach,
         };
         let timeout = Duration::from_secs(30);
-        let resp = match proc.control(request(reattach.as_ref()), timeout).await {
+        let resp = match proc
+            .remote_control(request(reattach.clone()), timeout)
+            .await
+        {
             Ok(r) => r,
             // The previous remote session is gone: open a new one.
             Err(_) if reattach.is_some() && proc.is_alive() => {
-                proc.control(request(None), timeout).await?
+                proc.remote_control(request(None), timeout).await?
             }
             Err(e) => return Err(e),
         };
@@ -3047,11 +2874,7 @@ impl<R: Runtime> Core<R> {
     /// The agent's process, just started, closes the remote session the agent still names though
     /// it holds no Remote Control: one that no live process could close when it ended
     /// (`AgentRt::end_link`). Its id is forgotten once it is closed.
-    async fn close_stale_remote_session(
-        self: &Arc<Self>,
-        h: &AgentHandle,
-        proc: &Arc<ClaudeProcess>,
-    ) {
+    async fn close_stale_remote_session(self: &Arc<Self>, h: &AgentHandle, proc: &Process) {
         let id = h.lock().meta.id.clone();
         let lock = self.remote_lock(&id);
         let _held = lock.lock().await;
@@ -3431,7 +3254,7 @@ impl<R: Runtime> Core<R> {
 
     /// The running Claude processes, with what they and everything they started use.
     pub fn sample_resources(&self) -> resources::Resources {
-        let procs: Vec<(String, Arc<ClaudeProcess>)> = self
+        let procs: Vec<(String, Process)> = self
             .agents
             .read()
             .iter()
@@ -3635,7 +3458,7 @@ impl<R: Runtime> Core<R> {
         // Refused before starting Claude: the composer keeps the message.
         let files = self.checked_files(id, files)?;
         let delivered = attachfiles::message_with_files(self.lang().claude, &delivered, &files);
-        let content = user_content(&delivered, &attachments)?;
+        let content = engine::of(&h.lock().meta).message(&delivered, &attachments)?;
         // Before its turn: its first question about one of them finds the right to ask it.
         self.grant_files(id, &files);
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
@@ -3662,10 +3485,10 @@ impl<R: Runtime> Core<R> {
     fn deliver(
         self: &Arc<Self>,
         id: &str,
-        proc: &Arc<ClaudeProcess>,
+        proc: &Process,
         text: &str,
         naming: &str,
-        content: &Value,
+        content: &engine::Message,
         attachments: &[Attachment],
     ) -> Result<bool> {
         let h = self.agent(id)?;
@@ -3676,8 +3499,7 @@ impl<R: Runtime> Core<R> {
                 return Ok(false);
             }
             let uid = uuid::Uuid::new_v4().to_string();
-            let frame = json!({ "type": "user", "message": { "role": "user", "content": content }, "parent_tool_use_id": null, "uuid": uid });
-            if proc.send(&frame).is_err() {
+            if proc.send_message(&uid, content).is_err() {
                 return Ok(false);
             }
             let (images, files): (Vec<_>, Vec<_>) = attachments.iter().partition(|a| a.is_image());
@@ -3713,10 +3535,7 @@ impl<R: Runtime> Core<R> {
             rt.proc.clone().filter(|_| active)
         };
         if let Some(p) = proc {
-            if let Err(e) = p
-                .control(json!({ "subtype": "interrupt" }), Duration::from_secs(15))
-                .await
-            {
+            if let Err(e) = p.interrupt(false, Duration::from_secs(15)).await {
                 h.lock().interrupted = false;
                 return Err(e);
             }
@@ -3855,12 +3674,7 @@ impl<R: Runtime> Core<R> {
                 "The agent’s process is not running."
             ));
         };
-        p.control(
-            json!({ "subtype": "stop_task", "task_id": task }),
-            Duration::from_secs(15),
-        )
-        .await
-        .context(tr!(
+        p.stop_task(&task).await.context(tr!(
             "Claude Code n’a pas arrêté le sous-agent",
             "Claude Code did not stop the subagent"
         ))?;
@@ -3904,12 +3718,7 @@ impl<R: Runtime> Core<R> {
                 "The agent’s process is not running."
             ));
         };
-        p.control(
-            json!({ "subtype": "stop_task", "task_id": task }),
-            Duration::from_secs(15),
-        )
-        .await
-        .context(tr!(
+        p.stop_task(task).await.context(tr!(
             "Claude Code n’a pas arrêté la tâche",
             "Claude Code did not stop the task"
         ))?;
@@ -3980,13 +3789,8 @@ impl<R: Runtime> Core<R> {
     /// What the process of the agent answers to `get_task_output` for `task`: none without a
     /// process, when Claude Code does not know the task (any more, or never) or answers something
     /// else.
-    async fn output_of_process(proc: Option<&ClaudeProcess>, task: &str) -> Option<TaskOutput> {
-        let asked = proc?
-            .control(
-                json!({ "subtype": "get_task_output", "task_id": task }),
-                Duration::from_secs(10),
-            )
-            .await;
+    async fn output_of_process(proc: Option<&dyn EngineProcess>, task: &str) -> Option<TaskOutput> {
+        let asked = proc?.task_output(task).await;
         match asked {
             Ok(answer) => TaskOutput::from_process(&answer),
             Err(e) => {
@@ -4367,22 +4171,18 @@ impl<R: Runtime> Core<R> {
         self.emit_agent(&h);
         self.request_save();
         if let Some(p) = proc {
-            let t = Duration::from_secs(15);
             if let Some(m) = model {
-                p.control(json!({ "subtype": "set_model", "model": m }), t)
-                    .await?;
+                p.set_model(&m).await?;
             }
-            let current_model = h.lock().meta.model.clone();
-            if let Some(e) = effort.filter(|_| supports_effort(&current_model)) {
-                p.control(
-                    json!({ "subtype": "apply_flag_settings", "settings": { "effortLevel": e } }),
-                    t,
-                )
-                .await?;
+            let (current_model, engine) = {
+                let rt = h.lock();
+                (rt.meta.model.clone(), engine::of(&rt.meta))
+            };
+            if let Some(e) = effort.filter(|_| engine.supports_effort(&current_model)) {
+                p.set_effort(&e).await?;
             }
             if let Some(m) = mode {
-                p.control(json!({ "subtype": "set_permission_mode", "mode": m }), t)
-                    .await?;
+                p.set_mode(&m).await?;
             }
         }
         Ok(())
@@ -4583,7 +4383,7 @@ impl<R: Runtime> Core<R> {
                     // folders (`/mnt/c/…` for a `claude` of WSL).
                     let program =
                         accounts::program(&accounts::get(&settings, &meta.account), &settings);
-                    let shown = |p: &str| match program.as_ref().and_then(claude::Program::wsl) {
+                    let shown = |p: &str| match program.as_ref().and_then(engine::Program::wsl) {
                         Some(wsl) => wsl.linux_path(p).unwrap_or_else(|| p.to_string()),
                         None => p.to_string(),
                     };
@@ -5174,9 +4974,7 @@ impl<R: Runtime> Core<R> {
     /// read (never Bash nor Edit): it can neither change nor run anything.
     async fn read_project(&self, project: &Project, system: &str, prompt: &str) -> Result<String> {
         self.ask_claude(Ask {
-            who: "Claude",
-            model: "sonnet",
-            tools: "Read,Glob,Grep",
+            weight: Weight::Reading,
             cwd: Path::new(&project.path),
             system,
             prompt,
@@ -5227,9 +5025,7 @@ impl<R: Runtime> Core<R> {
         project: Option<&str>,
     ) -> Result<String> {
         self.ask_claude(Ask {
-            who: "Haiku",
-            model: "haiku",
-            tools: "",
+            weight: Weight::Light,
             cwd: &std::env::temp_dir(),
             system,
             prompt,
@@ -5272,14 +5068,11 @@ impl<R: Runtime> Core<R> {
         Ok(accounts::get(settings, &id))
     }
 
-    /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
-    /// answer, within its limit.
+    /// One question to the harness of the account it is asked of (no session, no settings, no
+    /// MCP), as `ask` says: its answer, within its limit.
     async fn ask_claude(&self, ask: Ask<'_>) -> Result<String> {
-        use tokio::io::AsyncWriteExt;
         let Ask {
-            who,
-            model,
-            tools,
+            weight,
             cwd,
             system,
             prompt,
@@ -5291,57 +5084,22 @@ impl<R: Runtime> Core<R> {
         let account = self.account_for(&settings, agent, project)?;
         let program = accounts::program(&account, &settings)
             .with_context(|| tr!("claude introuvable", "claude not found"))?;
-        let args = [
-            "-p",
-            "--model",
-            model,
-            "--output-format",
-            "json",
-            "--no-session-persistence",
-            "--tools",
-            tools,
-            "--setting-sources",
-            "",
-            // No MCP servers (account connectors included): nothing that invites the model to act.
-            "--strict-mcp-config",
-            "--system-prompt",
-            system,
-        ]
-        .map(String::from);
         let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
-        let launch = program.launch(&cwd.to_string_lossy(), &args, &env)?;
-        let mut cmd = tokio::process::Command::new(&launch.program);
-        // Reading needs no permission in its folder, and is refused outside of it: nothing more is
-        // allowed.
-        cmd.args(&launch.args)
-            .current_dir(cwd)
-            .envs(launch.env)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .kill_on_drop(true);
-        #[cfg(windows)]
-        cmd.creation_flags(claude::CREATE_NO_WINDOW);
-        crate::job::isolate(&mut cmd);
-        let mut child = cmd.spawn()?;
-        // Dropped when this returns: whatever the process left running ends with it.
-        let _job = crate::job::Job::for_child(&child);
-        let asked = async move {
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(prompt.as_bytes()).await?;
-                // Dropped here: the input ends, and the CLI answers.
-            }
-            anyhow::Ok(child.wait_with_output().await?)
+        let engine = match agent.and_then(|id| self.agent(id).ok()) {
+            Some(h) => engine::of(&h.lock().meta),
+            None => engine::default(),
         };
-        let out = tokio::time::timeout(limit, asked).await.map_err(|_| {
-            anyhow!(tr!(
-                "pas de réponse de {who} en {s} s",
-                "no answer from {who} in {s} s",
-                s = limit.as_secs()
-            ))
-        })??;
-        let v = json_answer(&out.stdout)?;
-        Ok(v["result"].as_str().unwrap_or("").to_string())
+        engine
+            .one_shot(OneShot {
+                program,
+                env,
+                weight,
+                cwd,
+                system,
+                prompt,
+                limit,
+            })
+            .await
     }
 
     /// A short name for the task, or None when the model did not answer with one.
@@ -5421,12 +5179,7 @@ impl<R: Runtime> Core<R> {
             return Ok(());
         }
         if let Some(p) = proc {
-            let _ = p
-                .control(
-                    json!({ "subtype": "rename_session", "title": title, "source": "host" }),
-                    Duration::from_secs(10),
-                )
-                .await;
+            let _ = p.rename(&title).await;
         }
         Ok(())
     }
@@ -5446,12 +5199,7 @@ impl<R: Runtime> Core<R> {
         self.emit_agent(&h);
         self.request_save();
         if let Some(p) = proc {
-            let _ = p
-                .control(
-                    json!({ "subtype": "rename_session", "title": title, "source": "host" }),
-                    Duration::from_secs(10),
-                )
-                .await;
+            let _ = p.rename(&title).await;
         }
         Ok(())
     }
@@ -5479,12 +5227,7 @@ impl<R: Runtime> Core<R> {
                 running
             };
             if let Some(p) = running {
-                let _ = p
-                    .control(
-                        json!({ "subtype": "interrupt", "cancel_queued": true }),
-                        Duration::from_secs(5),
-                    )
-                    .await;
+                let _ = p.interrupt(true, Duration::from_secs(5)).await;
             }
         }
         let lock = self.spawn_lock(id);
@@ -6121,7 +5864,7 @@ impl<R: Runtime> Core<R> {
     /// get their name again (« projet · agent »), on a task of their own. The interfaces in the
     /// Claude Code view keep the name they started with: nothing reaches them.
     fn rename_remote_sessions(&self, project_id: &str) {
-        let renames: Vec<(Arc<ClaudeProcess>, String)> = self
+        let renames: Vec<(Process, String)> = self
             .project_agents(project_id)
             .iter()
             .filter_map(|h| {
@@ -6135,9 +5878,7 @@ impl<R: Runtime> Core<R> {
         }
         tauri::async_runtime::spawn(async move {
             for (proc, title) in renames {
-                let rename =
-                    json!({ "subtype": "rename_session", "title": title, "source": "host" });
-                if let Err(e) = proc.control(rename, Duration::from_secs(10)).await {
+                if let Err(e) = proc.rename(&title).await {
                     log::warn!("session not renamed on claude.ai: {e:#}");
                 }
             }
@@ -7568,7 +7309,7 @@ impl<R: Runtime> Core<R> {
     pub async fn refresh_usage(self: &Arc<Self>) {
         let settings = self.settings.read().clone();
         // One running process per account, its first.
-        let mut procs: HashMap<String, Arc<ClaudeProcess>> = HashMap::new();
+        let mut procs: HashMap<String, Process> = HashMap::new();
         for h in self.agents.read().values() {
             let rt = h.lock();
             if let Some(p) = rt.proc.clone() {
@@ -7604,19 +7345,11 @@ impl<R: Runtime> Core<R> {
         &self,
         settings: &Settings,
         account: &Account,
-        proc: Option<Arc<ClaudeProcess>>,
+        proc: Option<Process>,
     ) -> Option<usage::Reading> {
         if let Some(p) = proc {
-            let asked = p
-                .control(
-                    json!({ "subtype": "get_usage", "skip_behaviors": true }),
-                    Duration::from_secs(20),
-                )
-                .await;
-            if let Ok(v) = asked.as_ref().map(|v| &v["rate_limits"]) {
-                if v.is_object() {
-                    return Some(usage::Reading::Windows(usage::parse_windows(v)));
-                }
+            if let Ok(Some(v)) = p.read_usage().await {
+                return Some(usage::Reading::Windows(usage::parse_windows(&v)));
             }
         }
         if !account.active {
@@ -7654,41 +7387,6 @@ impl<R: Runtime> Core<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn auto_mode_is_taken_by_every_model_but_haiku_as_the_composer_offers_it() {
-        // The rule of `supportsAuto` (src/lib/models.ts), the effort's as well.
-        for model in [
-            "haiku",
-            "Haiku",
-            "claude-haiku-4-5",
-            "CLAUDE-HAIKU-4-5-20251001",
-        ] {
-            assert!(!supports_auto(model), "{model}");
-            assert!(!supports_effort(model), "{model}");
-        }
-        for model in ["sonnet", "opus", "claude-sonnet-4-5", "claude-opus-4-1", ""] {
-            assert!(supports_auto(model), "{model}");
-        }
-    }
-
-    #[test]
-    fn the_answer_of_claude_p_is_found_after_a_warning() {
-        let answer = br#"{"type":"result","result":"feat: x"}"#;
-        assert_eq!(json_answer(answer).unwrap()["result"], "feat: x");
-        let warned =
-            "wsl: Une configuration de proxy localhost a été détectée\r\n{\"result\":\"ok\"}\r\n";
-        assert_eq!(json_answer(warned.as_bytes()).unwrap()["result"], "ok");
-        // The warning in UTF-16, as wsl.exe writes it without WSL_UTF8.
-        let utf16: Vec<u8> = "wsl: x\n"
-            .encode_utf16()
-            .flat_map(u16::to_le_bytes)
-            .chain(*b"{\"result\":\"ok\"}")
-            .collect();
-        assert_eq!(json_answer(&utf16).unwrap()["result"], "ok");
-        assert!(json_answer(b"pas du JSON").is_err());
-        assert!(json_answer(b"").is_err());
-    }
 
     #[test]
     fn names_are_taken_only_from_slug_like_answers() {
@@ -7921,70 +7619,6 @@ mod tests {
     }
 
     #[test]
-    fn args_for_haiku_skip_effort() {
-        let m = AgentMeta {
-            model: "haiku".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            session_id: Some("s1".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        assert!(!a.contains(&"--effort".to_string()));
-        assert!(a.contains(&"--resume=s1".to_string()));
-        let m = AgentMeta {
-            model: "opus".into(),
-            effort: "max".into(),
-            mode: "plan".into(),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        assert!(a.windows(2).any(|w| w == ["--effort", "max"]));
-    }
-
-    #[test]
-    fn a_copy_forks_the_session_of_its_original_until_it_has_its_own() {
-        let copy = AgentMeta {
-            model: "opus".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            fork_of: Some("s1".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&copy);
-        assert!(
-            a.windows(2).any(|w| w == ["--resume=s1", "--fork-session"]),
-            "{a:?}"
-        );
-        // An original that ran no turn since it was recorded: its session as it is.
-        assert!(!a.iter().any(|x| x.starts_with("--resume-session-at")));
-        // Where it was copied: the turns the original ran since are left out.
-        let pinned = AgentMeta {
-            fork_at: Some("e1".into()),
-            ..copy
-        };
-        let a = claude_args(&pinned);
-        assert!(
-            a.windows(3)
-                .any(|w| w == ["--resume=s1", "--fork-session", "--resume-session-at=e1"]),
-            "{a:?}"
-        );
-        // Its own session once a turn gave it one: the original's is read no more.
-        let own = AgentMeta {
-            session_id: Some("s2".into()),
-            ..pinned
-        };
-        let a = claude_args(&own);
-        assert!(a.contains(&"--resume=s2".to_string()), "{a:?}");
-        assert!(
-            !a.iter().any(|x| x == "--fork-session"
-                || x == "--resume=s1"
-                || x.starts_with("--resume-session-at")),
-            "{a:?}"
-        );
-    }
-
-    #[test]
     fn a_copys_branch_keeps_its_marker_within_a_slug() {
         assert_eq!(
             copy_branch("escouade/", "refacto-auth", "refacto-auth (copie)"),
@@ -8049,132 +7683,6 @@ mod tests {
             ),
             "refacto-auth (copie 3)"
         );
-    }
-
-    #[test]
-    fn the_protocol_is_appended_to_the_system_prompt_on_one_line() {
-        let m = AgentMeta {
-            model: "sonnet".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            append_prompt: Some("Ligne 1\nLigne 2 « % & \" »".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        let i = a
-            .iter()
-            .position(|x| x == "--append-system-prompt")
-            .unwrap();
-        assert_eq!(a[i + 1], "Ligne 1 Ligne 2 « % & \" »");
-        assert!(!claude_args(&AgentMeta::default()).contains(&"--append-system-prompt".to_string()));
-        // Blank: nothing to append.
-        let blank = AgentMeta {
-            append_prompt: Some(" \n ".into()),
-            ..Default::default()
-        };
-        assert!(!claude_args(&blank).contains(&"--append-system-prompt".to_string()));
-    }
-
-    #[test]
-    fn the_log_line_of_a_start_does_not_copy_the_protocol() {
-        let m = AgentMeta {
-            model: "opus".into(),
-            effort: "max".into(),
-            mode: "plan".into(),
-            session_id: Some("s1".into()),
-            append_prompt: Some("Protocole « secret » du ticket ATL-42".into()),
-            ..Default::default()
-        };
-        let line = args_for_log(&claude_args(&m));
-        assert!(
-            !line.contains("secret") && !line.contains("ATL-42"),
-            "{line}"
-        );
-        // The flag stays, its value is only counted; the arguments around it are untouched.
-        assert!(
-            line.contains("--append-system-prompt <37 chars> --resume=s1"),
-            "{line}"
-        );
-        assert!(line.contains("--model opus --effort max --permission-mode plan"));
-        // Without a protocol, the line is the arguments as they are.
-        let plain = claude_args(&AgentMeta::default());
-        assert_eq!(args_for_log(&plain), plain.join(" "));
-        // A flag ending the list has no value to elide.
-        assert_eq!(
-            args_for_log(&["--append-system-prompt".to_string()]),
-            "--append-system-prompt"
-        );
-    }
-
-    /// The command line of a `.cmd` launcher (npm's claude.cmd) is cmd.exe's, which takes 8191
-    /// characters in all: every argument counts as Rust escapes it (`board::escaped_len`) between
-    /// its quotes, with a space before it, behind the launcher's path and cmd.exe's own prefix.
-    fn command_line_weight(program: &str, args: &[String]) -> usize {
-        const CMD_PREFIX: &str = "C:\\Windows\\System32\\cmd.exe /e:ON /v:OFF /d /c \"";
-        CMD_PREFIX.len()
-            + program.len()
-            + 2
-            + args
-                .iter()
-                .map(|a| 1 + 2 + crate::board::escaped_len(a))
-                .sum::<usize>()
-    }
-
-    #[test]
-    fn a_ticket_agents_whole_command_line_fits_cmds_limit_in_the_worst_case() {
-        // Criteria and a title made of what a `.cmd` argument escapes the most (`%`, `"`, `\`),
-        // accents, and every kind of line break; far more of them than fit.
-        let nasty = "%\"\\é\r\n%\"\\\\\"à\n".repeat(40);
-        let t = Ticket {
-            id: "t1".into(),
-            project_id: "p1".into(),
-            key: "ATL-42".into(),
-            title: nasty.clone(),
-            criteria: (0..60)
-                .map(|_| Criterion {
-                    text: nasty.clone(),
-                    ..Default::default()
-                })
-                .collect(),
-            max_loops: 5,
-            ..Default::default()
-        };
-        // A long launcher path, as npm puts it under a user profile with a long name.
-        let program = "C:\\Users\\guillaume.gagnaire-lefebvre\\AppData\\Roaming\\npm\\claude.cmd";
-        for ports in [None, Some(4100)] {
-            let m = AgentMeta {
-                model: "claude-opus-4-5-20251101[1m]".into(),
-                effort: "max".into(),
-                mode: "bypassPermissions".into(),
-                session_id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
-                append_prompt: Some(crate::board::protocol_prompt(&t, ports)),
-                ..Default::default()
-            };
-            let args = claude_args(&m);
-            assert!(
-                args.contains(&"--append-system-prompt".to_string()),
-                "{ports:?}"
-            );
-            assert!(
-                args.iter().all(|a| !a.contains('\n') && !a.contains('\r')),
-                "{ports:?}: a line break in an argument"
-            );
-            let weight = command_line_weight(program, &args);
-            assert!(weight < 8191, "{ports:?}: {weight} of 8191");
-            // The criteria are cut where they stop fitting, which leaves some of the protocol's
-            // budget unused: with all of it used, the line must still fit.
-            let protocol = m.append_prompt.as_deref().unwrap();
-            let unused = crate::board::PROTOCOL_BUDGET - crate::board::escaped_len(protocol);
-            println!(
-                "worst-case command line, ports {ports:?}: {weight} of 8191, {} with the whole protocol budget used",
-                weight + unused
-            );
-            assert!(
-                weight + unused < 8191,
-                "{ports:?}: {} of 8191 with the whole protocol budget used",
-                weight + unused
-            );
-        }
     }
 
     #[test]
@@ -8266,81 +7774,6 @@ mod tests {
         }
     }
 
-    fn att(name: &str, media_type: &str, data: &str) -> Attachment {
-        Attachment {
-            name: name.into(),
-            media_type: media_type.into(),
-            data: data.into(),
-        }
-    }
-
-    #[test]
-    fn a_message_without_attachments_is_plain_text() {
-        assert_eq!(user_content("Bonjour", &[]).unwrap(), json!("Bonjour"));
-    }
-
-    #[test]
-    fn attachments_come_before_the_text_as_content_blocks() {
-        let c = user_content(
-            "Résume",
-            &[
-                att("capture.png", "image/png", "iVBO"),
-                att("rapport.pdf", "application/pdf", "JVBE"),
-                att("notes.md", "text/plain", "# Notes\nà faire"),
-            ],
-        )
-        .unwrap();
-        assert_eq!(
-            c,
-            json!([
-                { "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": "iVBO" } },
-                { "type": "document", "title": "rapport.pdf",
-                  "source": { "type": "base64", "media_type": "application/pdf", "data": "JVBE" } },
-                { "type": "document", "title": "notes.md",
-                  "source": { "type": "text", "media_type": "text/plain", "data": "# Notes\nà faire" } },
-                { "type": "text", "text": "Résume" },
-            ])
-        );
-    }
-
-    #[test]
-    fn a_file_alone_is_sent_without_an_empty_text_block() {
-        let c = user_content("", &[att("a.pdf", "application/pdf", "JVBE")]).unwrap();
-        assert_eq!(c.as_array().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn unsupported_or_oversized_attachments_are_refused() {
-        let e = user_content("x", &[att("plan.docx", "application/msword", "UEsD")]).unwrap_err();
-        assert!(e.to_string().contains("plan.docx"), "{e}");
-        // The API reads only these image formats.
-        assert!(user_content("x", &[att("a.bmp", "image/bmp", "Qk0=")]).is_err());
-        let big = "A".repeat(7 * 1024 * 1024);
-        let e = user_content("x", &[att("photo.png", "image/png", &big)]).unwrap_err();
-        assert!(e.to_string().contains("5 Mo"), "{e}");
-    }
-
-    #[test]
-    fn text_pdf_and_whole_message_sizes_fit_what_claude_takes() {
-        // Past ~256 KB, a text file alone would fill Claude's context.
-        let ok = "a".repeat(256 * 1024);
-        assert!(user_content("x", &[att("log.txt", "text/plain", &ok)]).is_ok());
-        let e = user_content("x", &[att("log.txt", "text/plain", &(ok + "a"))]).unwrap_err();
-        assert!(e.to_string().contains("256 Ko"), "{e}");
-        // A PDF of 18 MB fits in the whole message's limit.
-        let pdf = "A".repeat(19 * MB / 3 * 4);
-        let e = user_content("x", &[att("a.pdf", "application/pdf", &pdf)]).unwrap_err();
-        assert!(e.to_string().contains("18 Mo"), "{e}");
-        let pdf = "A".repeat(18 * MB / 3 * 4);
-        assert!(user_content("x", &[att("a.pdf", "application/pdf", &pdf)]).is_ok());
-        // Together, the files stay under the API's request size.
-        let part = "A".repeat(10 * MB);
-        let three = ["a.pdf", "b.pdf", "c.pdf"].map(|n| att(n, "application/pdf", &part));
-        let e = user_content("x", &three).unwrap_err();
-        assert!(e.to_string().contains("18 Mo en tout"), "{e}");
-        assert!(user_content("x", &three[..2]).is_ok());
-    }
-
     #[test]
     fn what_the_core_tells_the_window_reads_in_english() {
         use crate::i18n::Lang::{En, Fr};
@@ -8426,13 +7859,5 @@ mod tests {
         scan.last = Some(Instant::now() - Duration::from_secs(3));
         assert_eq!(scan.wait(every), Duration::ZERO);
         assert_eq!(PLAN_SCAN_EVERY, Duration::from_secs(2));
-    }
-
-    #[test]
-    fn base64_padding_is_not_counted_as_data() {
-        // Exactly 5 MB: 5 MB ≡ 2 (mod 3), so its base64 ends with one '='.
-        let n = 5 * MB;
-        let b64 = format!("{}=", "A".repeat((n / 3 + 1) * 4 - 1));
-        assert!(user_content("x", &[att("p.png", "image/png", &b64)]).is_ok());
     }
 }

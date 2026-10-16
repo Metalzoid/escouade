@@ -981,7 +981,7 @@ impl PtyManager {
     pub fn spawn_program(
         &self,
         info: TermInfo,
-        program: &crate::claude::Program,
+        program: &crate::engine::Program,
         args: &[String],
         cwd: &str,
         size: (u16, u16),
@@ -1901,7 +1901,7 @@ mod tests {
         let (ended, done) = std::sync::mpsc::channel();
         pty.spawn_program(
             info,
-            &crate::claude::Program::Native(PathBuf::from(&shell.path)),
+            &crate::engine::Program::Native(PathBuf::from(&shell.path)),
             &[
                 "-NoProfile".into(),
                 "-ExecutionPolicy".into(),
@@ -2263,7 +2263,7 @@ mod unix_tests {
         let (ended, done) = std::sync::mpsc::channel();
         pty.spawn_program(
             info,
-            &crate::claude::Program::Native(PathBuf::from("/bin/sh")),
+            &crate::engine::Program::Native(PathBuf::from("/bin/sh")),
             &[program.display().to_string()],
             &dir.to_string_lossy(),
             (120, 30),

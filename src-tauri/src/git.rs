@@ -27,7 +27,7 @@ pub(crate) fn command(cwd: &str, args: &[&str]) -> tokio::process::Command {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(windows)]
-    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     cmd
 }
 

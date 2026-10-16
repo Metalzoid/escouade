@@ -482,7 +482,7 @@ pub fn tui_args(
     settings_file: &Path,
 ) -> Vec<String> {
     let mut a: Vec<String> = vec!["--model".into(), m.model.clone()];
-    if crate::core::supports_effort(&m.model) {
+    if crate::engine::of(m).supports_effort(&m.model) {
         a.extend(["--effort".into(), m.effort.clone()]);
     }
     a.extend([
@@ -1264,7 +1264,10 @@ impl<R: Runtime> Core<R> {
         let mut args = args;
         // The folder of the files joined to its messages, read without a question: the window
         // copies a file dropped on its terminal there (`attachfiles`) and types its path.
-        args.extend(self.add_dir_arg(id));
+        args.extend(
+            self.agent_read_dir(id)
+                .map(|d| format!("--add-dir={}", d.display())),
+        );
         let access = self.agent_access(id);
         args.extend(access.args());
         // Its hooks, and Escouade's server kept out of it when its tools are refused.
@@ -1841,7 +1844,7 @@ impl<R: Runtime> Core<R> {
         id: &str,
         settings: &Settings,
         account: &Account,
-        program: &crate::claude::Program,
+        program: &crate::engine::Program,
         config_dir: &Path,
     ) {
         let Ok(h) = self.agent(id) else { return };
@@ -1991,7 +1994,7 @@ impl<R: Runtime> Core<R> {
 
 /// Waits a moment for a stream's process asked to stop to be gone (its session is then free),
 /// then kills it.
-async fn stop_and_wait(p: &Arc<crate::claude::ClaudeProcess>) {
+async fn stop_and_wait(p: &crate::engine::Process) {
     for _ in 0..50 {
         if !p.is_alive() {
             return;

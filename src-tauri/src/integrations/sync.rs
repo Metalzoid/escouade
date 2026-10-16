@@ -471,7 +471,7 @@ impl<R: Runtime> Core<R> {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         #[cfg(windows)]
-        cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
         let out = tokio::time::timeout(GH_TOKEN_LIMIT, cmd.output())
             .await
             .map_err(|_| none())??;

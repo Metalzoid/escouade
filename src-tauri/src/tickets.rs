@@ -5,8 +5,8 @@
 use crate::accounts;
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
-use crate::claude::ClaudeProcess;
 use crate::core::{not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core};
+use crate::engine::Process;
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
@@ -197,7 +197,7 @@ pub(crate) fn ticket_agent_options(
     let model = first(&t.model, &board.model, &settings.default_model);
     let effort = first(&t.effort, &board.effort, &settings.default_effort);
     let mut mode = first("", &board.mode, &settings.default_mode);
-    if mode == "auto" && !crate::core::supports_auto(&model) {
+    if mode == "auto" && !crate::engine::default().supports_auto(&model) {
         mode = "default".into();
     }
     (model, effort, mode)
@@ -2381,7 +2381,7 @@ impl<R: Runtime> Core<R> {
         t: &Ticket,
         project: &Project,
         wt: &Worktree,
-        proc: Option<Arc<ClaudeProcess>>,
+        proc: Option<Process>,
         ports: Option<u16>,
         keep_branch: bool,
     ) {
@@ -2986,7 +2986,7 @@ async fn gh_pr_create(gh: &Path, cwd: &str, pr: &PullRequest<'_>) -> Result<Stri
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
-    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     crate::job::isolate(&mut cmd);
     let mut child = cmd.spawn()?;
     // Dropped when this returns: whatever it left running (a `.cmd`'s node…) ends with it.

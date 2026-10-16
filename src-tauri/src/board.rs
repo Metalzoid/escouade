@@ -3,10 +3,10 @@
 //! sent to the agents.
 
 use crate::accounts::PRINCIPAL;
-use crate::claude::truncate;
 use crate::core::{slugify, RESUME_MARGIN_MS};
 use crate::i18n::{self, Lang};
 use crate::model::*;
+use crate::text::truncate;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 

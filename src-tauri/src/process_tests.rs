@@ -3,8 +3,8 @@
 
 use crate::agent::{AgentHandle, AgentRt, Effects};
 use crate::board::TurnEnd;
-use crate::claude::{ClaudeProcess, SpawnOpts};
-use crate::core::claude_args;
+use crate::engine::claude_args;
+use crate::engine::{ClaudeProcess, SpawnOpts};
 use crate::model::{AgentMeta, AgentStatus, RateWindow};
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -82,7 +82,7 @@ fn spawn_with(
             ));
         }
         let opts = SpawnOpts {
-            program: crate::claude::Program::Native(PathBuf::from("node")),
+            program: crate::engine::Program::Native(PathBuf::from("node")),
             cwd: rt.meta.cwd.clone(),
             args,
             env,
@@ -868,7 +868,7 @@ async fn a_claude_of_wsl_gets_its_arguments_folder_and_variables_in_linux() {
     let (f, x) = (frames.clone(), exit.clone());
     let proc = ClaudeProcess::spawn(
         SpawnOpts {
-            program: crate::claude::Program::Wsl(program.clone()),
+            program: crate::engine::Program::Wsl(program.clone()),
             cwd: dir.to_string_lossy().into_owned(),
             args: [
                 "--mcp-config",
@@ -951,7 +951,7 @@ async fn a_claude_of_wsl_gets_its_arguments_folder_and_variables_in_linux() {
     let g = gone.clone();
     let proc = ClaudeProcess::spawn(
         SpawnOpts {
-            program: crate::claude::Program::Wsl(lost),
+            program: crate::engine::Program::Wsl(lost),
             cwd: dir.to_string_lossy().into_owned(),
             args: vec![],
             env: vec![],

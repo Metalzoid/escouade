@@ -233,8 +233,8 @@ Il existe en français (à la racine) et en anglais (sous `/en/`) ; ses textes s
 ## Architecture
 
 - `src-tauri/` : backend Rust (Tauri 2).
-  - `claude.rs` : pilotage d'un processus `claude` en mode `stream-json`, avec son protocole de contrôle (voir [docs/PROTOCOL.md](docs/PROTOCOL.md)).
-  - `agent.rs` : normalisation des messages en conversation, statuts, questions et permissions, usage par tour.
+  - `engine/` : l'interface « moteur » (un harness : Claude Code, puis Codex, Copilot CLI, Cursor CLI, OpenCode), voir [docs/ENGINES.md](docs/ENGINES.md). `engine/claude/` en est l'implémentation pour Claude Code : pilotage d'un processus `claude` en mode `stream-json`, avec son protocole de contrôle (voir [docs/PROTOCOL.md](docs/PROTOCOL.md)).
+  - `agent.rs` : conversation normalisée, statuts, questions et permissions, usage par tour ; `agent/claude.rs` y traduit les frames de Claude Code.
   - `core.rs` : orchestration.
   - Modules annexes : `git.rs`, `pty.rs`, `stats.rs`, `usage.rs` (quotas par compte), `accounts.rs` (comptes Claude), `i18n.rs` (langues du backend), `mcp/` (serveur MCP), `notify.rs`, `job.rs` (arbres de processus : Job Objects sous Windows, groupes de processus sous macOS), `shellenv.rs` (`PATH` du shell de connexion sous macOS).
   - `tauri.macos.conf.json` : ce qui change sous macOS (barre de titre native avec les boutons de fenêtre, bundle `.app` / `.dmg`).

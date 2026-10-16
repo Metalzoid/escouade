@@ -369,7 +369,7 @@ pub async fn run_streaming(
         cmd.env("CHERE_INVOKING", "1");
     }
     #[cfg(windows)]
-    cmd.creation_flags(crate::claude::CREATE_NO_WINDOW);
+    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     crate::job::isolate(&mut cmd);
     crate::proc::no_inherited_fds(&mut cmd);
     let mut child = cmd.spawn()?;

@@ -6,8 +6,8 @@
 //! The order of `Settings::accounts` is their priority: new agents go to the first one usable.
 
 use crate::board;
-use crate::claude::{self, ClaudeProcess};
 use crate::core::Core;
+use crate::engine::{self, Process};
 use crate::i18n::Lang;
 use crate::model::{Account, AccountUsage, Settings};
 use crate::pty::TermInfo;
@@ -307,7 +307,7 @@ pub(crate) fn app_env() -> (Option<String>, PathBuf) {
 pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<String>, PathBuf) {
     match program(account, settings)
         .as_ref()
-        .and_then(claude::Program::wsl)
+        .and_then(engine::Program::wsl)
     {
         Some(wsl) => (None, wsl.windows_path(&wsl.home)),
         None => app_env(),
@@ -351,15 +351,15 @@ pub fn launch_env(account: &Account) -> Vec<(String, String)> {
 }
 
 /// The `claude` the account runs: its own when it names one, else the settings' (found as
-/// `claude::resolve_binary` finds it). None when it cannot be found.
-pub fn program(account: &Account, settings: &Settings) -> Option<claude::Program> {
+/// `Engine::locate` finds it). None when it cannot be found.
+pub fn program(account: &Account, settings: &Settings) -> Option<engine::Program> {
     let own = account.claude_path.trim();
     let path = if own.is_empty() {
         &settings.claude_path
     } else {
         own
     };
-    claude::resolve_binary(path, &settings.wsl_distro)
+    engine::default().locate(path, &settings.wsl_distro)
 }
 
 /// The file Claude Code keeps the account's own state in (its email, its MCP servers): in its
@@ -584,7 +584,7 @@ fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     let out = std::process::Command::new(cmd)
         .args(CMD_SWITCHES)
         .raw_arg(line)
-        .creation_flags(claude::CREATE_NO_WINDOW)
+        .creation_flags(crate::proc::CREATE_NO_WINDOW)
         .output()?;
     if !out.status.success() {
         let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -841,7 +841,7 @@ const KILL_GRACE: Duration = Duration::from_secs(5);
 /// The process stopped (its input closed: it finishes what it does and ends; killed if it does not
 /// within `STOP_GRACE`) and gone. A session is never copied before: the process may write it as
 /// it ends, and the account it goes to would resume a session another still writes.
-async fn stop_and_wait(p: &Arc<ClaudeProcess>) -> Result<()> {
+async fn stop_and_wait(p: &Process) -> Result<()> {
     if ended(p).await {
         return Ok(());
     }
@@ -853,7 +853,7 @@ async fn stop_and_wait(p: &Arc<ClaudeProcess>) -> Result<()> {
 
 /// The process stopped (its input closed, killed if it does not end within `STOP_GRACE`): whether
 /// it is gone.
-pub(crate) async fn ended(p: &Arc<ClaudeProcess>) -> bool {
+pub(crate) async fn ended(p: &Process) -> bool {
     p.close_input();
     if p.wait_exit(STOP_GRACE).await {
         return true;
@@ -1696,7 +1696,7 @@ mod tests {
             claude_path,
             ..account("pro", "/a")
         };
-        let native = |p: &PathBuf| Some(claude::Program::Native(p.clone()));
+        let native = |p: &PathBuf| Some(engine::Program::Native(p.clone()));
         assert_eq!(program(&with(path(&own)), &settings), native(&own));
         assert_eq!(program(&with(String::new()), &settings), native(&set));
         assert_eq!(program(&with("  ".into()), &settings), native(&set));

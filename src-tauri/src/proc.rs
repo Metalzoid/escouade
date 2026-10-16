@@ -13,6 +13,10 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
 use tokio::time::{sleep_until, timeout, Instant};
 
+/// The creation flag that starts a console program of Windows without a window of its own.
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// Once the process has ended, how long its pipes may stay silent before what was read is taken
 /// as the whole output: a program it started and left running can hold them open.
 const EOF_GRACE: Duration = Duration::from_secs(2);

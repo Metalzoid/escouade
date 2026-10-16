@@ -18,7 +18,7 @@ use std::time::Duration;
 fn target(name: &str) -> Target {
     let dir = test_dir(name);
     Target {
-        program: crate::claude::Program::Native(fake_cli().into()),
+        program: crate::engine::Program::Native(fake_cli().into()),
         env: vec![
             // Blank, in case the tests run inside a Claude Code session with a folder of its own.
             ("CLAUDE_CONFIG_DIR".into(), String::new()),
@@ -203,7 +203,7 @@ async fn a_declaration_that_fails_says_why_and_leaves_nothing_half_done() {
 
     // Its `claude` is not there.
     let mut gone = target("mcp-install-gone");
-    gone.program = crate::claude::Program::Native(gone.cwd.join("pas-de-claude"));
+    gone.program = crate::engine::Program::Native(gone.cwd.join("pas-de-claude"));
     let e = declare(&gone, &entry(47123, "tok-1")).await.unwrap_err();
     assert!(format!("{e:#}").contains("claude"), "{e:#}");
 

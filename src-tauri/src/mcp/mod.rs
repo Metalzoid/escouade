@@ -94,7 +94,7 @@ pub struct McpStatus {
 
 /// What `--disallowedTools` is given to refuse an agent every tool of Escouade's server, whatever
 /// config declares it: Claude Code names them `mcp__escouade__<tool>`.
-const ALL_TOOLS: &str = "mcp__escouade";
+pub(crate) const ALL_TOOLS: &str = "mcp__escouade";
 
 /// What an agent's process is started with of Escouade (`Core::agent_access`).
 #[derive(Clone, PartialEq, Eq)]
