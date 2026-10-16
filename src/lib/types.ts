@@ -66,7 +66,51 @@ export interface Settings {
   terminalFontSize: number;
   /** « Taille du texte de l’éditeur », in CSS pixels before the zoom. */
   editorFontSize: number;
+  /** « Voix »: the dictation. */
+  voice: VoiceSettings;
 }
+
+/** The dictation's settings (Réglages › Voix). */
+export interface VoiceSettings {
+  /** The microphone (its id); empty: the system's default one. */
+  device: string;
+  /** The Whisper model, downloaded at the first dictation. */
+  model: string;
+  /** What Whisper is told the speech is in: "ui" (the interface's language), "auto", or a language's code. */
+  language: string;
+  /** Starts and stops a dictation, held down to talk: `Mod+Shift+Space` (Mod: Ctrl, Cmd on macOS). */
+  shortcut: string;
+}
+
+/** A microphone, as Réglages › Voix lists it. */
+export interface VoiceDevice {
+  id: string;
+  name: string;
+  default: boolean;
+}
+
+/** A Whisper model: its size, how fast and how good (1 to 5), and whether it is on the disk. */
+export interface VoiceModel {
+  id: string;
+  size: number;
+  speed: number;
+  quality: number;
+  downloaded: boolean;
+}
+
+export interface VoiceInfo {
+  devices: VoiceDevice[];
+  models: VoiceModel[];
+}
+
+/** What starting a dictation answers: it listens, or the model is to be downloaded first. */
+export type VoiceStarted = { kind: 'listening'; session: number } | { kind: 'needsModel'; model: string; size: number };
+
+/** The dictation's events: the level while it listens, a listening that ended by itself, a model's download. */
+export type VoiceEvent =
+  | { kind: 'level'; session: number; level: number; ms: number }
+  | { kind: 'ended'; session: number; error: string | null }
+  | { kind: 'download'; model: string; done: number; total: number };
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
 export interface Account {
@@ -1235,6 +1279,8 @@ export type UiEvent =
   | { type: 'mcpActivity'; entry: McpActivityEntry }
   /** Where the MCP server stands in each active account's Claude Code. */
   | { type: 'mcpDeclared'; declared: McpDeclaration[] }
+  /** The dictation: its level, its end, a model's download. */
+  | { type: 'voice'; voice: VoiceEvent }
   /** Lines a step of the setup of an agent's worktree wrote since the last event, `total` counting all it wrote; a step starts with none. */
   | ({ type: 'setupOutput'; agentId: string } & SetupOutput);
 

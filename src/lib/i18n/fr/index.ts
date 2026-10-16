@@ -22,6 +22,7 @@ import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
+import voice from './voice';
 
 export const fr = {
   common,
@@ -46,6 +47,7 @@ export const fr = {
   subagents,
   bgtasks,
   wizard,
+  voice,
 } as const;
 
 export type Catalog = typeof fr;

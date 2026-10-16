@@ -23,6 +23,7 @@ import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
 import wizard from './wizard';
+import voice from './voice';
 
 export const en = defineCatalog({
   common,
@@ -47,4 +48,5 @@ export const en = defineCatalog({
   subagents,
   bgtasks,
   wizard,
+  voice,
 });

@@ -99,6 +99,8 @@ pub struct Settings {
     pub terminal_font_size: f64,
     /// « Taille du texte de l’éditeur », in CSS pixels, before the zoom (`FONT_SIZE_RANGE`).
     pub editor_font_size: f64,
+    /// « Voix »: the dictation (`voice`).
+    pub voice: VoiceSettings,
 }
 
 /// The steps of « Zoom de l’interface », in percent: the window's own (`Settings::normalize_display`).
@@ -143,6 +145,33 @@ pub struct Account {
     /// to it (a client's account kept to that client's projects); empty: every project. Principal's
     /// too: a project no active account serves then starts nothing (`accounts::serves_any`).
     pub projects: Vec<String>,
+}
+
+/// The dictation's settings.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VoiceSettings {
+    /// The microphone (its cpal id); empty: the system's default one.
+    pub device: String,
+    /// The Whisper model (`voice::models::CATALOG`), downloaded at the first dictation.
+    pub model: String,
+    /// What Whisper is told the speech is in: "ui" (the interface's language), "auto" (found
+    /// by Whisper), or a language's code ("fr", "en", "de"…).
+    pub language: String,
+    /// The shortcut that starts and stops a dictation, held down to talk: "Mod" is Ctrl, Cmd on
+    /// macOS (the window reads it, `shortcuts.ts`).
+    pub shortcut: String,
+}
+
+impl Default for VoiceSettings {
+    fn default() -> Self {
+        Self {
+            device: String::new(),
+            model: crate::voice::models::DEFAULT_MODEL.into(),
+            language: "ui".into(),
+            shortcut: "Mod+Shift+Space".into(),
+        }
+    }
 }
 
 impl Account {
@@ -348,6 +377,7 @@ impl Default for Settings {
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
+            voice: VoiceSettings::default(),
         }
     }
 }
@@ -1525,6 +1555,11 @@ pub enum UiEvent {
     /// Where the server stands in each active account's Claude Code (declared, or why not).
     McpDeclared {
         declared: Vec<crate::mcp::install::Declaration>,
+    },
+    /// The dictation: the level while it listens, a listening that ended by itself, a model's
+    /// download.
+    Voice {
+        voice: crate::voice::VoiceEvent,
     },
 }
 
