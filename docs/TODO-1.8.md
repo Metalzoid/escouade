@@ -488,7 +488,7 @@ Elle regroupe ce qui était « Extraction d'une interface moteur » et « Reste 
 
 Lots, dans l'ordre :
 1. **Interface « moteur »** : extraction de Claude Code, sans changement de comportement (voir « Un moteur par agent »).
-2. **Données** : moteur de l'agent, du ticket et du projet ; colonne `engine` des stats.
+2. **Données** : moteur de l'agent, du ticket et du projet ; colonne `engine` des stats. Fait (ESC-27), voir docs/ENGINES.md, « Les données ».
 3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ».
 4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »).
 5. **Comptes et quotas par moteur** (voir « Comptes et quotas », « Coût, tokens, stats »).
@@ -681,7 +681,7 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
 - [ ] **OpenCode** : `cost` et `tokens` de chaque message, additionnés par tour.
 - [ ] **Fenêtre de contexte** : `modelContextWindow` chez Codex, `session.usage_info` chez Copilot, la limite du modèle chez OpenCode ; chez Cursor, à relever au point 0.
 - [ ] **Stats** :
-  - Une colonne `engine` dans la table des tours (les tours d'avant valent `claude`).
+  - [x] Une colonne `engine` dans la table des tours (les tours d'avant valent `claude`), et `by_engine` dans la vue des stats (ESC-27).
   - Un filtre « Tous les moteurs / Claude Code / Codex / Copilot / Cursor / OpenCode », qui se combine avec celui des comptes.
   - Une vue « Par moteur ».
 

@@ -19,7 +19,7 @@ pub(crate) use claude::{claude_args, ClaudeProcess, SpawnOpts};
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::job::JobUsage;
-use crate::model::AgentMeta;
+use crate::model::{AgentMeta, EngineId};
 use anyhow::Result;
 use serde_json::Value;
 use std::future::Future;
@@ -41,10 +41,22 @@ pub type OnFrame = Box<dyn Fn(Value) + Send + Sync>;
 /// frames (its stderr).
 pub type OnExit = Box<dyn FnOnce(Option<i32>, String) + Send>;
 
-/// The engine of an agent. There is only Claude Code for now: the agent's own engine is the next
-/// lot of the work (`AgentMeta.engine`).
-pub fn of(_meta: &AgentMeta) -> &'static dyn Engine {
-    &CLAUDE
+/// The engine of an agent, as its `AgentMeta.engine` says.
+pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
+    by_id(meta.engine)
+}
+
+/// The engine `id` names. Claude Code is the only one written yet: the others get theirs with
+/// their adapter (docs/TODO-1.8.md, chapter 1), and until then nothing makes an agent of theirs
+/// (the interface offers none).
+pub fn by_id(id: EngineId) -> &'static dyn Engine {
+    match id {
+        EngineId::Claude
+        | EngineId::Codex
+        | EngineId::Copilot
+        | EngineId::Cursor
+        | EngineId::Opencode => &CLAUDE,
+    }
 }
 
 /// The engine of what has no agent yet (a question about a project, the settings).
@@ -196,8 +208,8 @@ pub enum StartLost {
 
 /// A harness: Claude Code, then Codex, Copilot CLI, Cursor CLI, OpenCode.
 pub trait Engine: Send + Sync {
-    /// Its id, as the data will keep it (`claude`).
-    fn id(&self) -> &'static str;
+    /// Its id, as the data keeps it (`claude`).
+    fn id(&self) -> EngineId;
     /// Its name, as the interface says it (`Claude Code`).
     fn name(&self) -> &'static str;
 

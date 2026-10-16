@@ -235,8 +235,8 @@ fn json_answer(stdout: &[u8]) -> Result<Value> {
 }
 
 impl Engine for Claude {
-    fn id(&self) -> &'static str {
-        "claude"
+    fn id(&self) -> crate::model::EngineId {
+        crate::model::EngineId::Claude
     }
 
     fn name(&self) -> &'static str {

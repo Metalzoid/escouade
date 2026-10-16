@@ -20,7 +20,7 @@ Le reste du backend (cœur, tickets, pilote auto, serveur MCP, stats, comptes) n
 
 ### `Engine` : le moteur
 
-Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). Les deux rendent Claude Code tant que l'agent n'a pas de moteur à lui (`AgentMeta.engine`, lot 2).
+Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` ; tant que seul Claude Code est écrit, chaque id rend Claude Code. `engine::default()` rend Claude Code.
 
 | Méthode | Ce qu'elle fait | Claude Code |
 |---|---|---|
@@ -90,11 +90,24 @@ L'extraction s'est arrêtée là où d'autres lots reprennent :
 - **Les consignes et les textes** : le protocole du ticket (`board::protocol_prompt`), les textes qui disent « Claude ». Lots 6 et 7.
 - **Les modèles** : `ModelInfo::list` lit la liste de `initialize` de Claude Code. Lot 3.
 
+## Les données (ESC-27)
+
+Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs` : `claude`, `codex`, `copilot`, `cursor`, `opencode`). Ce qui a été enregistré avant la 1.8 vaut Claude Code.
+
+| Où | Champ | Avant la 1.8 | Ce qu'il dit |
+|---|---|---|---|
+| Agent | `AgentMeta.engine` | `claude` | Le moteur de l'agent, un à la fois. Il n'en change que par une passation (ESC-88). Sa copie (« Dupliquer la conversation ») prend celui qu'il a au moment de la copie. |
+| Ticket | `Ticket.engine` | `null` | Le moteur de ses agents, que le pilote auto suit ; `null` : celui du projet. |
+| Projet | `Project.engine` | `null` | « Harness par défaut » de ses nouveaux agents et de ses tickets ; `null` : Claude Code (`Project::engine()`). L'assistant « Nouveau projet » le copie avec les réglages des agents. |
+| Tour | `TurnRow.engine`, élément `turn` (`engine`), colonne `engine` de la table `turns` de `stats.db` | `claude` (défaut de la colonne, ajoutée par `stats::migrate`) | Le moteur qui a fait le tour : celui de l'agent à ce tour, gardé même s'il en change ensuite. `StatsView.by_engine` les additionne. |
+
+Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celui de son ticket, sinon celui de son projet. Les outils MCP `list_agents` et `get_agent_summary` le donnent (`engine`). Aucun texte de l'interface ne le montre encore : le choix et la marque du moteur viennent avec le lot 4.
+
 ## Ajouter un moteur (ébauche)
 
 1. Écrire `engine/<moteur>/` : un `Engine` (lancement, message, one-shot, lecture du stderr) et un `EngineProcess` pour son process (dans le Job de l'agent, `job::Job::for_child`).
 2. Écrire `agent/<moteur>.rs` : la traduction de son flux dans les éléments normalisés, les noms d'outils de Claude Code.
-3. Le faire rendre par `engine::of` pour les agents dont c'est le moteur (`AgentMeta.engine`, lot 2).
+3. Le faire rendre par `engine::by_id` pour son `EngineId` (déjà dans les données : `AgentMeta.engine`, voir « Les données »).
 4. Ses capacités (lot 3), son faux moteur et le banc de conformité (lot 10).
 
 ## Vérification de l'extraction (ESC-26)

@@ -166,7 +166,7 @@ fn draft_after(title: &str, after: &[&Ticket]) -> TicketDraft {
 }
 
 impl Harness {
-    fn ticket(&self, id: &str) -> Ticket {
+    pub(crate) fn ticket(&self, id: &str) -> Ticket {
         self.core.ticket(id).unwrap()
     }
 
@@ -6111,6 +6111,7 @@ async fn the_statistics_add_up_the_agents_of_a_ticket_archived_ones_included() {
             cache: 0,
             output: 5,
             cost,
+            ..Default::default()
         };
         h.core.stats.record_turns("principal", id, &p.id, &[row]);
     };

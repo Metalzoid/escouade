@@ -20,6 +20,8 @@ mod core;
 #[cfg(test)]
 mod core_tests;
 mod engine;
+#[cfg(test)]
+mod engines_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;

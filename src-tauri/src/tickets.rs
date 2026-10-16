@@ -1425,6 +1425,8 @@ impl<R: Runtime> Core<R> {
             .create_agent_with(
                 &project.id,
                 AgentOptions {
+                    // The ticket's own, else the project's.
+                    engine: t.engine,
                     model: Some(model),
                     effort: Some(effort),
                     mode: Some(mode),

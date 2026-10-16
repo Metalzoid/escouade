@@ -105,6 +105,7 @@ export function project(over: Partial<Project> = {}): Project {
     agentBranchPrefix: 'escouade/',
     ticketBranchPrefix: 'ticket/',
     remoteControl: false,
+    engine: null,
     ...over,
   };
 }
@@ -115,6 +116,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     projectId: 'p1',
     name: 'refacto-auth',
     named: true,
+    engine: 'claude',
     model: 'opus',
     effort: 'high',
     mode: 'auto',
@@ -229,6 +231,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     branch: '',
     model: '',
     effort: '',
+    engine: null,
     images: [],
     files: [],
     ...over,

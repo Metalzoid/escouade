@@ -293,6 +293,9 @@ export interface IssuePage {
   total: number | null;
 }
 
+/** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode. */
+export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode';
+
 export interface Project {
   id: string;
   name: string;
@@ -324,6 +327,8 @@ export interface Project {
   ticketBranchPrefix: string;
   /** « Remote control pour les agents de ce projet »: each of its agents is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
   remoteControl: boolean;
+  /** « Harness par défaut »: the one its new agents and tickets run on unless they say theirs; null: Claude Code. */
+  engine: EngineId | null;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -455,6 +460,8 @@ export interface Ticket {
   model: string;
   /** The effort its agent runs at, over the Kanban's; empty: the Kanban's. */
   effort: string;
+  /** The harness its agents run on (the autopilot starts them on it); null: the project's. */
+  engine: EngineId | null;
   /** The images pasted or dropped in its form, in their order: its agent gets them with its first message. */
   images: TicketImage[];
   /** The files attached in its form that are no image it can show (any format, any size): its agent gets their paths with its first message. */
@@ -617,6 +624,8 @@ export interface Agent {
   projectId: string;
   name: string;
   named: boolean;
+  /** The harness it runs on, one at a time ('claude' for an agent saved before 1.8); a copy takes the original's. */
+  engine: EngineId;
   model: string;
   effort: string;
   mode: string;
@@ -1194,6 +1203,8 @@ export interface TurnItem extends Base {
   error: string | null;
   /** Stopped by the usage limit (absent from turns saved before the accounts): the card offers to go on, on another account. */
   limited?: boolean;
+  /** The harness that ran it (absent from turns saved before 1.8, all Claude Code's). */
+  engine?: EngineId;
 }
 export interface NoticeItem extends Base {
   kind: 'notice';
@@ -1421,6 +1432,8 @@ export interface StatsView {
   prompts: number;
   byProject: Share[];
   byModel: Share[];
+  /** By harness (its id), the one that ran each turn. */
+  byEngine: Share[];
   byAgent: AgentShare[];
   byTicket: TicketShare[];
   /** Every account side by side, dearest first, whichever account the other fields are for. */

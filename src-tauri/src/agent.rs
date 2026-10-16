@@ -55,6 +55,8 @@ impl AgentAlert {
 
 #[derive(Debug, Clone, Default)]
 pub struct TurnRow {
+    /// The harness that ran it: the agent's at that turn (`AgentMeta::engine`).
+    pub engine: EngineId,
     pub model: String,
     pub input: u64,
     pub cache: u64,
@@ -1187,7 +1189,7 @@ impl AgentRt {
                 let turn = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null,
                     "cost": 0, "tokens": 0, "isError": true, "interrupted": false,
-                    "error": said, "limited": false,
+                    "error": said, "limited": false, "engine": self.meta.engine,
                 });
                 self.append(turn, fx);
             } else {
