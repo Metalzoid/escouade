@@ -5,6 +5,7 @@
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
   import { canSwitchView, copyRemoteLink, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
+  import { can, canFork, showsCost } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { runIn } from '../lib/launch-actions';
   import { ticketTag } from '../lib/board';
@@ -86,7 +87,8 @@
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
       { label: t('common.rename'), onClick: () => startRename(a) },
-      ...(a.archived
+      // Only for a harness that copies a conversation.
+      ...(a.archived || !canFork(a)
         ? []
         : [
             {
@@ -139,7 +141,7 @@
   }
 
   function remoteItems(a: Agent): MenuItem[] {
-    if (a.archived) return [];
+    if (a.archived || !can(a, 'remoteControl')) return [];
     const items: MenuItem[] = [
       { label: '', separator: true },
       a.remoteControl
@@ -160,6 +162,7 @@
 
   /** The state of the remote control icon of an agent's card, null for none: what its link is, or what keeps it. */
   function remoteStateOf(a: Agent): RemoteState | null {
+    if (!can(a, 'remoteControl')) return null;
     if (!a.terminal) {
       if (!a.remoteControl) return null;
       return a.remoteState === 'connected' ? 'connected' : a.remoteState === 'ready' ? 'connecting' : 'waiting';
@@ -388,7 +391,7 @@
       {@const s = spent(a)}
       {@const tag = ticketTag(app.ticketOf(a.id))}
       {@const plan = planView(a)?.mini}
-      {@const inBg = bgCount(a.plan)}
+      {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
       {@const remote = remoteStateOf(a)}
       <div
         class="card"
@@ -478,7 +481,7 @@
             >{/if}
         </div>
         <div class="meta dim" use:tip={s.estimated ? estimateHint() : undefined}>
-          <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span><span>{fSpentUsd(s)}</span><span
+          <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span>{#if showsCost(a)}<span>{fSpentUsd(s)}</span>{/if}<span
             >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
           >
         </div>
@@ -551,7 +554,7 @@
           {/if}
         </div>
       {/if}
-      {@const bg = sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })}
+      {@const bg = can(a, 'backgroundTasks') ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] }) : null}
       {#if bg}
         <!-- Under the card too, after the subagents: the tasks Claude Code runs in the background, unfolded while one runs. -->
         {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}

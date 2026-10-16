@@ -6,7 +6,7 @@ import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
-import { agent, branchInfo, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
@@ -2194,5 +2194,43 @@ describe('Sidebar background tasks of an agent', () => {
       await userEvent.click(screen.getByRole('button', { name: '11 finished tasks' }));
       expect(within(group('Background tasks of refacto-auth')).getByRole('button', { name: '1 more' })).toBeInTheDocument();
     });
+  });
+});
+
+describe('Sidebar of agents on harnesses that do not all do the same', () => {
+  const items = () => menu.open?.items.map((i) => i.label) ?? [];
+
+  it('hides, not greys out, what the harness of an agent cannot do', async () => {
+    const url = 'https://claude.ai/code/session_abc';
+    const on = { remoteControl: true, remoteUrl: url, remoteState: 'connected' as const, cost: 1.25 };
+    resetApp({
+      agents: [agent({ ...on }), agent({ ...on, id: 'a2', name: 'sur-codex', engine: 'codex', createdAt: 2 })],
+    });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    // Claude Code's agent: copy, terminal view, remote control and cost.
+    const claude = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(getByTip(claude, /Remote control : connecté/)).toBeInTheDocument();
+    expect(claude).toHaveTextContent('1,25 $');
+    await fireEvent.contextMenu(claude);
+    expect(items()).toEqual(
+      expect.arrayContaining(['Dupliquer la conversation', 'Vue Claude Code', 'Désactiver le remote control', 'Ouvrir sur claude.ai']),
+    );
+    // The other one: none of them, not even disabled.
+    const other = screen.getByRole('button', { name: /sur-codex/ });
+    expect(other.querySelector('.rc')).toBeNull();
+    expect(other).not.toHaveTextContent('1,25 $');
+    await fireEvent.contextMenu(other);
+    for (const label of [
+      'Dupliquer la conversation',
+      'Vue Claude Code',
+      'Désactiver le remote control',
+      'Activer le remote control',
+      'Ouvrir sur claude.ai',
+    ]) {
+      expect(items()).not.toContain(label);
+    }
+    expect(items()).toContain('Renommer');
   });
 });

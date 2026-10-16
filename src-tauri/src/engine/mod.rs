@@ -9,6 +9,7 @@
 
 mod claude;
 mod program;
+pub mod registry;
 
 pub use claude::CLAUDE;
 pub use program::{Located, Program};
@@ -216,6 +217,18 @@ pub trait Engine: Send + Sync {
     /// Its program, from the path of a setting (empty: where it usually is) and the distribution
     /// of WSL of the settings.
     fn locate(&self, configured: &str, wsl_distro: &str) -> Option<Program>;
+
+    /// The versions Escouade was tested with: an older one is refused (`oldest_reason` says why),
+    /// a newer one taken with a warning (`registry`).
+    fn tested(&self) -> registry::Tested;
+    /// Why a version older than `tested().oldest` is refused, in `lang`.
+    fn oldest_reason(&self, lang: crate::i18n::Lang) -> String;
+    /// The command that updates it, as the refusal tells it.
+    fn update_command(&self) -> &'static str;
+    /// The arguments that make its program print its version.
+    fn version_args(&self) -> &'static [&'static str];
+    /// What it can do, as the interface reads it (`registry::EngineCaps`).
+    fn caps(&self) -> registry::EngineCaps;
 
     /// Whether `model` takes an effort.
     fn supports_effort(&self, model: &str) -> bool;

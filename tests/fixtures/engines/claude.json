@@ -1,0 +1,31 @@
+{
+  "id": "claude",
+  "name": "Claude Code",
+  "tested": {
+    "oldest": "2.1.283",
+    "newest": "2.1.301"
+  },
+  "caps": {
+    "modes": [
+      { "id": "auto", "meaning": null },
+      { "id": "default", "meaning": null },
+      { "id": "plan", "meaning": null },
+      { "id": "acceptEdits", "meaning": null },
+      { "id": "bypassPermissions", "meaning": null }
+    ],
+    "effort": true,
+    "images": true,
+    "pdf": true,
+    "fork": "entry",
+    "resumeOtherAccount": true,
+    "midTurn": "queued",
+    "slashCommands": true,
+    "quota": "windows",
+    "cost": "exact",
+    "terminalView": true,
+    "remoteControl": true,
+    "backgroundTasks": true,
+    "todoTools": true,
+    "defaultRefusal": true
+  }
+}

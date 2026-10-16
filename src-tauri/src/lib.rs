@@ -335,6 +335,7 @@ pub fn run() {
             commands::save_settings,
             commands::claude_locate,
             commands::claude_found,
+            commands::engines,
             commands::account_shareable,
             commands::account_create,
             commands::account_update,

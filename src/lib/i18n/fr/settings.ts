@@ -105,6 +105,11 @@ export default {
     notLocated:
       'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
     notLocatedHere: 'Introuvable. Indique le chemin de claude.',
+    /** The version found of the saved path, and where it stands against the versions Escouade was tested with. */
+    version: 'Version',
+    versionTested: 'Testée avec Escouade (de la {oldest} à la {newest}).',
+    versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
+    versionNotConnected: 'Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
     newAgents: 'Nouveaux agents',
     defaultModel: 'Modèle par défaut',
     defaultEffort: 'Effort par défaut',

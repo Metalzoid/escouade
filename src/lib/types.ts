@@ -296,6 +296,63 @@ export interface IssuePage {
 /** A harness that runs agents (« Harness » in the interface): Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode. */
 export type EngineId = 'claude' | 'codex' | 'copilot' | 'cursor' | 'opencode';
 
+/** A mode of Escouade a harness takes, and what it means there (null: what Escouade's menu says of it, Claude Code's meaning). */
+export interface ModeCap {
+  id: string;
+  meaning: string | null;
+}
+
+/** What a harness can do, as it declares it: the window shows a function from these, never from the harness's name. A function it lacks is hidden, not greyed out. */
+export interface EngineCaps {
+  modes: ModeCap[];
+  /** Its models take an effort (each model may still have none). */
+  effort: boolean;
+  images: boolean;
+  pdf: boolean;
+  /** Copying an agent (« Dupliquer la conversation »), and up to where; 'none': hidden. */
+  fork: 'none' | 'entry' | 'turn' | 'event' | 'message';
+  resumeOtherAccount: boolean;
+  /** A message sent while a turn runs: queued, read at once, or refused. */
+  midTurn: 'queued' | 'immediate' | 'refused';
+  slashCommands: boolean;
+  quota: 'windows' | 'credits' | 'none';
+  /** What a turn costs: told by the harness, estimated, or unknown (nothing shown). */
+  cost: 'exact' | 'estimated' | 'none';
+  /** Its own interface in a terminal (« Vue Claude Code »). */
+  terminalView: boolean;
+  remoteControl: boolean;
+  /** Background tasks and workflows, and stopping a subagent. */
+  backgroundTasks: boolean;
+  todoTools: boolean;
+  /** It tells which requests it would refuse by default. */
+  defaultRefusal: boolean;
+}
+
+/** The versions of a harness Escouade was tested with. */
+export interface EngineTested {
+  oldest: string;
+  newest: string;
+}
+
+/** What a harness declares, as the window gets it at its start. */
+export interface EngineDecl {
+  id: EngineId;
+  name: string;
+  tested: EngineTested;
+  caps: EngineCaps;
+}
+
+/** A harness with what is found of it here (Réglages). */
+export interface EngineInfo extends EngineDecl {
+  located: ClaudeLocated;
+  /** Its version as it tells it, null when not found or not told. */
+  version: string | null;
+  /** absent, refused for a version older than the tested ones, no account signed in, newer than the tested ones (taken with a warning), ready. */
+  state: 'absent' | 'tooOld' | 'notConnected' | 'untested' | 'ready';
+  /** What its state means: the refusal and its reason, the warning. */
+  note: string | null;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -1351,6 +1408,8 @@ export interface InitialState {
   version: string;
   /** Claude Code's models as it last reported them, empty until a process has started. */
   models: ModelInfo[];
+  /** What each harness declares: its capabilities. */
+  engines: EngineDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
   /** Why no ticket of a project that goes to any account starts for now (none: they may). */

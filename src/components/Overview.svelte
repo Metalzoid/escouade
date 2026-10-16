@@ -9,6 +9,7 @@
   import { modelLabel } from '../lib/models';
   import { keyLabel } from '../lib/platform';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
+  import { showsCost } from '../lib/engines';
   import { app } from '../lib/state.svelte';
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
@@ -302,7 +303,7 @@
       </span>
       <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
       <span class="num" use:tip={used.estimated ? estimateHint() : undefined}
-        ><span class="sr">{t('common.cost')}{' '}</span>{fSpentUsd(used)}</span
+        ><span class="sr">{t('common.cost')}{' '}</span>{showsCost(a) ? fSpentUsd(used) : ''}</span
       >
       <span class="num ctx" class:full={ctx?.full} use:tip={ctx?.title ?? t('stats.overview.contextUnknown')}
         ><span class="sr">{t('stats.overview.context')}{' '}</span>{ctx ? fPct(ctx.pct) : '—'}</span

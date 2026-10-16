@@ -30,6 +30,7 @@ import type {
   LangInfo,
   LaunchState,
   ModelInfo,
+  EngineDecl,
   Project,
   Resources,
   Settings,
@@ -244,6 +245,8 @@ class AppState {
   claudePathFound = $state(true);
   /** Claude Code's models as it last reported them: the version each alias runs. */
   models = $state<ModelInfo[]>([]);
+  /** What each harness declares (its capabilities), as the backend gave it at the start. */
+  engines = $state.raw<EngineDecl[]>([]);
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -492,6 +495,7 @@ class AppState {
     this.claudePathFound = s.claudePathFound ?? s.claudeFound;
     this.version = s.version;
     this.models = s.models;
+    this.engines = s.engines ?? [];
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     // Not answered yet (closed without a choice: asked again at the next start).

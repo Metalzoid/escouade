@@ -6,6 +6,7 @@ mod process;
 
 pub(crate) use process::{ClaudeProcess, SpawnOpts};
 
+use super::registry::{CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, QuotaKind, Tested};
 #[cfg(test)]
 use super::Program;
 use super::{
@@ -14,7 +15,7 @@ use super::{
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL, MB};
-use crate::i18n;
+use crate::i18n::{self, Lang};
 use crate::job::JobUsage;
 #[cfg(test)]
 use crate::model::AgentMeta;
@@ -26,6 +27,44 @@ use std::time::Duration;
 pub struct Claude;
 
 pub static CLAUDE: Claude = Claude;
+
+/// The versions of Claude Code Escouade was tested with: its stream-json protocol from 2.1.283
+/// (docs/PROTOCOL.md), up to the one of the last real run (2.1.301, 2026-10-16).
+pub const TESTED: Tested = Tested {
+    oldest: "2.1.283",
+    newest: "2.1.301",
+};
+
+/// What Claude Code does, as Escouade drives it today.
+pub fn caps() -> EngineCaps {
+    let mode = |id| ModeCap { id, meaning: None };
+    EngineCaps {
+        modes: [
+            "auto",
+            "default",
+            "plan",
+            "acceptEdits",
+            "bypassPermissions",
+        ]
+        .into_iter()
+        .map(mode)
+        .collect(),
+        effort: true,
+        images: true,
+        pdf: true,
+        fork: ForkPoint::Entry,
+        resume_other_account: true,
+        mid_turn: MidTurn::Queued,
+        slash_commands: true,
+        quota: QuotaKind::Windows,
+        cost: CostKind::Exact,
+        terminal_view: true,
+        remote_control: true,
+        background_tasks: true,
+        todo_tools: true,
+        default_refusal: true,
+    }
+}
 
 const KB: usize = 1024;
 /// The only image formats the API reads.
@@ -245,6 +284,30 @@ impl Engine for Claude {
 
     fn locate(&self, configured: &str, wsl_distro: &str) -> Option<super::Program> {
         locate::resolve_binary(configured, wsl_distro)
+    }
+
+    fn tested(&self) -> Tested {
+        TESTED
+    }
+
+    fn oldest_reason(&self, lang: Lang) -> String {
+        tr_in!(
+            lang,
+            "son flux JSON n’a été vérifié qu’à partir de celle-ci (docs/PROTOCOL.md)",
+            "its JSON stream was only checked from that one on (docs/PROTOCOL.md)"
+        )
+    }
+
+    fn update_command(&self) -> &'static str {
+        "claude update"
+    }
+
+    fn version_args(&self) -> &'static [&'static str] {
+        &["--version"]
+    }
+
+    fn caps(&self) -> EngineCaps {
+        caps()
     }
 
     fn supports_effort(&self, model: &str) -> bool {

@@ -11,6 +11,7 @@ import type {
   BranchInfo,
   CheckedUpdate,
   ClaudeLocated,
+  EngineInfo,
   ClosedProject,
   CommitScope,
   Container,
@@ -119,6 +120,8 @@ export const api = {
   locateClaude: (path: string, wslDistro: string) => invoke<ClaudeLocated>('claude_locate', { path, wslDistro }),
   /** Whether Claude Code is found for the account new agents go to, and by the settings' own path (as at the start). */
   claudeFound: () => invoke<{ claudeFound: boolean; claudePathFound: boolean }>('claude_found'),
+  /** Every harness with what is found of it here: its program, version and state (versions read again). */
+  engines: () => invoke<EngineInfo[]>('engines'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
   accountShareable: () => invoke<string[]>('account_shareable'),
   /** A new Claude account, its folder made with the items `share` of Principal's linked or copied, saved last. */

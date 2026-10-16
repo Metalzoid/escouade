@@ -2486,6 +2486,9 @@ impl<R: Runtime> Core<R> {
                 "Claude Code not found. Install it or give its path in the settings."
             ))
         })?;
+        // A version older than the tested ones is refused, with its reason.
+        let harness = engine::of(&h.lock().meta);
+        engine::registry::check(harness, &program).await?;
         let (mut spawn, gen, engine) = {
             let mut rt = h.lock();
             rt.gen += 1;

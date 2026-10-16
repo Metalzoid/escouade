@@ -6,8 +6,8 @@ import { setLang } from '../../lib/i18n';
 import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { PROJECT_COLORS } from '../../lib/theme';
-import type { RunCommand } from '../../lib/types';
-import { board, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
+import type { EngineInfo, RunCommand } from '../../lib/types';
+import { BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
@@ -1380,5 +1380,85 @@ describe('SettingsModal in English', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(backend.called('save_settings')).toHaveLength(1);
     expect(app.toasts.at(-1)?.text).toBe('Settings saved');
+  });
+});
+
+describe('SettingsModal, the version of Claude Code', () => {
+  beforeEach(() => resetApp());
+  const located = { path: 'C:\Users\me\.local\bin\claude.exe', wsl: null, nat: false, canWsl: true };
+  const info = (over: Partial<EngineInfo>): EngineInfo => ({
+    ...CLAUDE_ENGINE,
+    located,
+    version: '2.1.301',
+    state: 'ready',
+    note: null,
+    ...over,
+  });
+
+  it('says that the version found was tested with Escouade, or what keeps it from running', async () => {
+    let answer = info({});
+    fakeBackend({ claude_locate: () => located, engines: () => [answer] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('Testée avec Escouade (de la 2.1.283 à la 2.1.301).')).toBeInTheDocument();
+    expect(screen.getByText('2.1.301')).toHaveAttribute('data-state', 'ready');
+    cleanup();
+    // Older than the tested ones: refused, its reason as the backend writes it.
+    const refusal =
+      'Claude Code 2.0.14 est trop ancien pour Escouade, qui demande au moins la version 2.1.283 : son flux JSON n’a été vérifié qu’à partir de celle-ci (docs/PROTOCOL.md). Mets-le à jour (claude update).';
+    answer = info({ version: '2.0.14', state: 'tooOld', note: refusal });
+    fakeBackend({ claude_locate: () => located, engines: () => [answer] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText(refusal)).toBeInTheDocument();
+    expect(screen.getByText('2.0.14')).toHaveClass('bad');
+    expect(screen.getByText('2.0.14')).toHaveAccessibleDescription(refusal);
+    cleanup();
+    answer = info({ state: 'notConnected' });
+    fakeBackend({ claude_locate: () => located, engines: () => [answer] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(
+      await screen.findByText(
+        'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no version while the path typed is not the saved one, nor for a claude not found', async () => {
+    const backend = fakeBackend({ claude_locate: () => located, engines: () => [info({})] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('2.1.301')).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: "Chemin de l'exécutable" }), 'C:\autre\claude.exe');
+    await waitFor(() => expect(screen.queryByText('2.1.301')).toBeNull());
+    expect(backend.called('engines').length).toBeGreaterThan(0);
+  });
+
+  it('says it in English too', async () => {
+    setLang('en');
+    fakeBackend({ claude_locate: () => located, engines: () => [info({ state: 'notConnected' })] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(
+      await screen.findByText(
+        'Tested with Escouade (from 2.1.283 to 2.1.301). No account signed in: sign in from the Claude accounts tab.',
+      ),
+    ).toBeInTheDocument();
+    cleanup();
+    fakeBackend({ claude_locate: () => located, engines: () => [info({})] });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('Tested with Escouade (from 2.1.283 to 2.1.301).')).toBeInTheDocument();
+  });
+
+  it('hides the settings of what no harness does', () => {
+    const labels = [
+      'Ouvrir les nouveaux agents dans l’interface de Claude Code',
+      'Les agents tiennent une liste de tâches',
+      'Remote control pour tous les agents',
+    ];
+    fakeBackend({ claude_locate: () => located });
+    render(SettingsModal, { tab: 'claude' });
+    for (const name of labels) expect(screen.getByRole('switch', { name })).toBeInTheDocument();
+    cleanup();
+    app.engines = [BARE_ENGINE];
+    fakeBackend({ claude_locate: () => located });
+    render(SettingsModal, { tab: 'claude' });
+    for (const name of labels) expect(screen.queryByRole('switch', { name })).toBeNull();
   });
 });

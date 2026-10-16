@@ -7,7 +7,7 @@ import { setLang } from '../lib/i18n';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import type { AttachedFile } from '../lib/types';
-import { agent, fakeBackend, resetApp } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
 import Composer from './Composer.svelte';
 
 // Where a file lies on the disk is the system's to say: no file has a known path unless a test gives one.
@@ -1038,5 +1038,39 @@ describe('Composer: files attached by their path', () => {
       expect(screen.getByRole('button', { name: 'Retirer film.mkv' })).toBeInTheDocument();
       expect(app.toasts).toEqual([]);
     });
+  });
+});
+
+describe('Composer of an agent on another harness', () => {
+  function bare(over: Parameters<typeof agent>[0] = {}) {
+    const a = agent({ id: `c${Math.random()}`, engine: 'codex', ...over });
+    resetApp({ agents: [a] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const backend = fakeBackend({ get_conversation: () => [], get_commands: () => [{ name: 'compact', description: 'Compacte' }] });
+    render(Composer, { agent: app.agents[a.id] });
+    return { backend, textarea: screen.getByRole('textbox') as HTMLTextAreaElement };
+  }
+
+  it('hides the effort its harness does not take, rather than greying it out', () => {
+    bare({ model: 'opus' });
+    expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Mode/ })).toBeInTheDocument();
+  });
+
+  it('offers only the modes its harness takes, with what they mean there', async () => {
+    bare({ mode: 'default' });
+    await userEvent.click(screen.getByRole('button', { name: /^Mode/ }));
+    const modes = screen.getAllByRole('menuitemradio').map((m) => m.textContent ?? '');
+    expect(modes).toHaveLength(2);
+    expect(modes.some((m) => /Auto/.test(m))).toBe(false);
+    expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toHaveTextContent('Lecture seule, dans un bac à sable');
+  });
+
+  it('suggests no / command when its harness offers none', async () => {
+    const { backend, textarea } = bare();
+    await userEvent.type(textarea, '/com');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(backend.called('get_commands')).toEqual([]);
+    expect(screen.queryByText('/compact')).toBeNull();
   });
 });

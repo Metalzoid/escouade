@@ -74,6 +74,8 @@ pub struct InitialState {
     claude_path_found: bool,
     version: String,
     models: Vec<ModelInfo>,
+    /// What each harness declares: its capabilities, which the window reads to show a function.
+    engines: Vec<crate::engine::registry::EngineDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -147,6 +149,7 @@ pub fn subscribe(
         failed_update: updates.failed(),
         version,
         models,
+        engines: crate::engine::registry::declared(),
         board_issues,
         autopilot_pause,
         project_pauses,
@@ -172,6 +175,16 @@ pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>>
             .track(Event::RemoteControlEnabled { from: "global" });
     }
     Ok(pty::detect_shells(&settings))
+}
+
+// ---------- Harnesses ----------
+
+/// Every harness with what is found of it here: its program, its version, its state (`registry`).
+/// Asked by the user: versions are read again.
+#[tauri::command]
+pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::EngineInfo>> {
+    crate::engine::registry::forget();
+    Ok(core.engines().await)
 }
 
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the

@@ -2,12 +2,13 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
+  import { anyCan } from '../../lib/engines';
   import { EFFORTS, MODES, modelOptions } from '../../lib/models';
   import { IS_MAC } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
-  import type { ClaudeLocated } from '../../lib/types';
+  import type { ClaudeLocated, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -41,6 +42,35 @@
       clearTimeout(timer);
     };
   });
+
+  // The harness of the saved path, its version and state (`engines`), read once its `claude` is located: only shown while
+  // the field is the saved path (the backend reads the saved settings).
+  let engine = $state<EngineInfo | null>(null);
+  const saved = $derived(s.claudePath === app.settings.claudePath && s.wslDistro === app.settings.wslDistro);
+  $effect(() => {
+    if (tab !== 'claude' || !located?.path || !saved) return;
+    let stale = false;
+    api
+      .engines()
+      .then((all) => {
+        if (!stale) engine = all?.[0] ?? null;
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  });
+
+  /** Under the version: where it stands against the tested ones, or what keeps it from running. */
+  function versionText(e: EngineInfo): string {
+    // The refusal or the warning (told signed in or not), else where the version stands.
+    const version =
+      e.note ??
+      (e.version
+        ? t('settings.claude.versionTested', { oldest: e.tested.oldest, newest: e.tested.newest })
+        : t('settings.claude.versionUnknown'));
+    return e.state === 'notConnected' ? `${version} ${t('settings.claude.versionNotConnected')}` : version;
+  }
 
   /** The line under the path: where its `claude` was found, or how to name one. */
   function locatedText(l: ClaudeLocated | null): string {
@@ -84,6 +114,17 @@
         oninput={(e) => (s.claudePath = e.currentTarget.value)}
       />
     </Row>
+    {#if engine && located?.path && saved && engine.state !== 'absent'}
+      <Row label={t('settings.claude.version')} desc={versionText(engine)} descId="claude-version">
+        <span
+          class="mono version"
+          class:warn={engine.state === 'untested' || engine.state === 'notConnected'}
+          class:bad={engine.state === 'tooOld'}
+          data-state={engine.state}
+          aria-describedby="claude-version">{engine.version ?? '—'}</span
+        >
+      </Row>
+    {/if}
   </Group>
   <Group title={t('settings.claude.newAgents')}>
     <Row label={t('settings.claude.defaultModel')}>
@@ -106,12 +147,17 @@
         <Switch label={t('accounts.switchOnLimit.label')} bind:on={s.switchOnLimit} />
       </Row>
     {/if}
-    <Row label={t('settings.claude.terminalView')} desc={t('settings.claude.terminalViewDesc')}>
-      <Switch label={t('settings.claude.terminalView')} bind:on={s.terminalView} />
-    </Row>
-    <Row label={t('settings.claude.todoTools')} desc={t('settings.claude.todoToolsDesc')}>
-      <Switch label={t('settings.claude.todoTools')} bind:on={s.todoTools} />
-    </Row>
+    <!-- Settings of what only some harnesses do: shown while one of them is there. -->
+    {#if anyCan('terminalView')}
+      <Row label={t('settings.claude.terminalView')} desc={t('settings.claude.terminalViewDesc')}>
+        <Switch label={t('settings.claude.terminalView')} bind:on={s.terminalView} />
+      </Row>
+    {/if}
+    {#if anyCan('todoTools')}
+      <Row label={t('settings.claude.todoTools')} desc={t('settings.claude.todoToolsDesc')}>
+        <Switch label={t('settings.claude.todoTools')} bind:on={s.todoTools} />
+      </Row>
+    {/if}
     <Row label={t('settings.claude.idleStop')} hint={t('settings.claude.idleStopHint')}>
       <input
         class="field mono input short"
@@ -158,11 +204,13 @@
     </Row>
   </Group>
   <!-- Beside « Claude et les agents peuvent piloter Escouade », before its activity log, which can be long. -->
-  <Group title={t('settings.claude.remoteTitle')}>
-    <Row label={t('settings.claude.remoteAll')} desc={t('settings.claude.remoteAllDesc')}>
-      <Switch label={t('settings.claude.remoteAll')} bind:on={s.remoteControlAll} />
-    </Row>
-  </Group>
+  {#if anyCan('remoteControl')}
+    <Group title={t('settings.claude.remoteTitle')}>
+      <Row label={t('settings.claude.remoteAll')} desc={t('settings.claude.remoteAllDesc')}>
+        <Switch label={t('settings.claude.remoteAll')} bind:on={s.remoteControlAll} />
+      </Row>
+    </Group>
+  {/if}
   <McpSection />
 {:else if tab === 'notifications'}
   <Group
@@ -257,5 +305,15 @@
   }
   .input.short {
     width: 110px;
+  }
+  .version {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .version.warn {
+    color: var(--wait);
+  }
+  .version.bad {
+    color: var(--del);
   }
 </style>

@@ -489,7 +489,7 @@ Elle regroupe ce qui était « Extraction d'une interface moteur » et « Reste 
 Lots, dans l'ordre :
 1. **Interface « moteur »** : extraction de Claude Code, sans changement de comportement (voir « Un moteur par agent »).
 2. **Données** : moteur de l'agent, du ticket et du projet ; colonne `engine` des stats. Fait (ESC-27), voir docs/ENGINES.md, « Les données ».
-3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ».
+3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ». Fait (ESC-28), voir docs/ENGINES.md, « Le registre ».
 4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »).
 5. **Comptes et quotas par moteur** (voir « Comptes et quotas », « Coût, tokens, stats »).
 6. **Textes et consignes** indépendants du moteur (voir « Textes »).

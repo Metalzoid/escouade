@@ -24,6 +24,7 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { EFFORTS, MODES, modelOptions, supportsAuto, supportsEffort } from '../lib/models';
+  import { can, capsOf, modesOf } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
@@ -82,14 +83,17 @@
   const pendingItem = $derived(agent.pending.length ? conv.items.find((i) => i.id === agent.pending[0]) : undefined);
   const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
   const effortOk = $derived(supportsEffort(agent.model));
+  // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
+  const caps = $derived(capsOf(agent.engine));
   const modeOptions = $derived(
-    MODES.map((md) => {
+    modesOf(agent, MODES).map((md) => {
       const unavailable = md.value === 'auto' && !supportsAuto(agent.model);
+      const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? md.title;
       return {
         value: md.value,
         label: md.label,
-        detail: unavailable ? t('composer.mode.autoUnavailableDetail') : md.title,
-        title: unavailable ? t('composer.mode.autoUnavailableTitle') : md.title,
+        detail: unavailable ? t('composer.mode.autoUnavailableDetail') : meaning,
+        title: unavailable ? t('composer.mode.autoUnavailableTitle') : meaning,
         disabled: unavailable,
       };
     }),
@@ -183,6 +187,9 @@
       const files = await api.fileSuggestions(agent.id, trig.query).catch(() => [] as string[]);
       if (seq !== reqSeq) return;
       suggestions = files.slice(0, 12).map((f) => ({ label: basename(f), detail: dirname(f), value: f }));
+    } else if (!can(agent, 'slashCommands')) {
+      // Its harness offers no `/` command to a client.
+      suggestions = [];
     } else {
       let cmds = commandCache.get(agent.id);
       if (!cmds) {
@@ -585,17 +592,19 @@
           onPick={pickAccount}
         />
       {/if}
-      <Dropdown
-        caption={t('composer.bar.effort')}
-        value={effortOk ? agent.effort : ''}
-        options={EFFORTS.map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
-        open={menu === 'effort'}
-        showCaption={!tight}
-        disabled={!effortOk}
-        title={effortOk ? t('composer.bar.effortTitle') : t('composer.bar.effortUnsupported')}
-        onToggle={() => toggleMenu('effort')}
-        onPick={(v) => pick({ effort: v })}
-      />
+      {#if caps?.effort}
+        <Dropdown
+          caption={t('composer.bar.effort')}
+          value={effortOk ? agent.effort : ''}
+          options={EFFORTS.map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
+          open={menu === 'effort'}
+          showCaption={!tight}
+          disabled={!effortOk}
+          title={effortOk ? t('composer.bar.effortTitle') : t('composer.bar.effortUnsupported')}
+          onToggle={() => toggleMenu('effort')}
+          onPick={(v) => pick({ effort: v })}
+        />
+      {/if}
       <Dropdown
         caption={t('composer.bar.mode')}
         value={agent.mode}

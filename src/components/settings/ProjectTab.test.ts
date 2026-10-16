@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { fakeBackend, project, resetApp } from '../../test/ipc';
+import { BARE_ENGINE, fakeBackend, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
@@ -48,6 +48,14 @@ describe('ProjectTab', () => {
       if (global !== (all.getAttribute('aria-checked') === 'true')) await userEvent.click(all);
       await userEvent.click(tab(projectsTab));
     };
+
+    it('is hidden while no harness has Remote Control', () => {
+      fakeBackend();
+      app.engines = [BARE_ENGINE];
+      render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+      expect(screen.queryByRole('switch', { name: LABEL })).toBeNull();
+      expect(headings()).not.toContain('Remote control');
+    });
 
     it('has its own group after the project’s identity, off by default, and says what it does', () => {
       fakeBackend();

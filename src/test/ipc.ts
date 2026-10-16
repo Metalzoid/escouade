@@ -10,7 +10,11 @@ import { mcp } from '../lib/mcp.svelte';
 import { dictation } from '../lib/dictation.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
-import type { Agent, BoardSettings, BranchInfo, GitInfo, Project, Settings, Ticket } from '../lib/types';
+import type { Agent, BoardSettings, BranchInfo, EngineDecl, GitInfo, Project, Settings, Ticket } from '../lib/types';
+import claudeEngine from '../../tests/fixtures/engines/claude.json';
+
+/** Claude Code as the backend declares it (the Rust tests keep the file the same as its declaration). */
+export const CLAUDE_ENGINE = claudeEngine as EngineDecl;
 
 export interface Call {
   cmd: string;
@@ -288,6 +292,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.relaunched = {};
   app.autopilotPause = null;
   app.claudePathFound = true;
+  app.engines = [CLAUDE_ENGINE];
   app.projectPauses = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
@@ -331,3 +336,34 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   recentFiles.reset();
   fileSearches.reset();
 }
+
+/**
+ * A harness that does nothing Claude Code alone does: no effort, attachments, copy, `/` commands, quota, cost, terminal
+ * view, remote control or background tasks, and two modes, one with a meaning of its own. What the window shows for
+ * its agents is what any harness has.
+ */
+export const BARE_ENGINE: EngineDecl = {
+  id: 'codex',
+  name: 'Harness nu',
+  tested: { oldest: '0.160.0', newest: '0.163.0' },
+  caps: {
+    modes: [
+      { id: 'default', meaning: null },
+      { id: 'plan', meaning: 'Lecture seule, dans un bac à sable' },
+    ],
+    effort: false,
+    images: false,
+    pdf: false,
+    fork: 'none',
+    resumeOtherAccount: false,
+    midTurn: 'refused',
+    slashCommands: false,
+    quota: 'none',
+    cost: 'none',
+    terminalView: false,
+    remoteControl: false,
+    backgroundTasks: false,
+    todoTools: false,
+    defaultRefusal: false,
+  },
+};

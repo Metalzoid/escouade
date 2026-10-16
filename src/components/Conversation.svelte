@@ -11,6 +11,7 @@
   import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
+  import { showsCost } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { subagentInfo } from '../lib/subagents';
   import { editsByTurn } from '../lib/tools';
@@ -586,9 +587,11 @@
         <span class="k">{t('conv.header.context')}</span><span class="v mono" class:full={context.full}>{context.shown}</span>
       </div>
       <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
-      <div class="m opt2" use:tip={used.estimated ? estimateHint() : undefined}>
-        <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
-      </div>
+      {#if showsCost(agent)}
+        <div class="m opt2" use:tip={used.estimated ? estimateHint() : undefined}>
+          <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
+        </div>
+      {/if}
       {#if app.split}
         <div class="m opt2"><span class="k">{t('common.files')}</span><span class="v mono">{files}</span></div>
       {:else}

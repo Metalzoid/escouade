@@ -1,4 +1,4 @@
-# Moteurs (harness) — l'interface entre Escouade et les CLI qui font tourner ses agents
+| `supports_effort(modèle)`, `supports_auto(modèle)` | Ce que prend un modèle (par modèle ; ce que prend le moteur est dans ses capacités, « Le registre »). |# Moteurs (harness) — l'interface entre Escouade et les CLI qui font tourner ses agents
 
 Un **moteur** fait tourner les agents d'Escouade : Claude Code aujourd'hui, puis Codex, Copilot CLI, Cursor CLI et OpenCode (docs/TODO-1.8.md, chapitre 1). L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
 
@@ -9,6 +9,7 @@ Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec
 | Fichier | Rôle |
 |---|---|
 | `src-tauri/src/engine/mod.rs` | L'interface : les traits `Engine` et `EngineProcess`, leurs types (`Spawn`, `Start`, `Escouade`, `Message`, `PermissionAnswer`, `Ready`, `Remote`, `OneShot`, `Weight`, `StartLost`), et `engine::of(meta)`, le moteur d'un agent. |
+| `src-tauri/src/engine/registry.rs` | Le registre des moteurs : ce que chacun déclare (`EngineCaps`, `Tested`), sa version et son état sur la machine (`EngineInfo`), le refus d'une version trop ancienne (voir « Le registre »). |
 | `src-tauri/src/engine/program.rs` | `Program` : le programme d'un moteur, du système ou de WSL (lancé par `wsl.exe`), et `Located`, où il est, comme les réglages le montrent. Commun à tous les moteurs. |
 | `src-tauri/src/engine/claude/` | Claude Code, première implémentation : `mod.rs` (le moteur `Claude`, ses arguments, ses messages, ses one-shots, et `EngineProcess` pour son process), `process.rs` (`ClaudeProcess` : le process stdio et ses requêtes de contrôle, l'ancien `claude.rs`), `locate.rs` (où est `claude`). |
 | `src-tauri/src/agent/claude.rs` | La traduction des frames de Claude Code (stream-json) en éléments de conversation : l'ancien corps de `AgentRt::handle_frame`. |
@@ -26,7 +27,7 @@ Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` d
 |---|---|---|
 | `id()`, `name()` | Son id dans les données (`claude`) et son nom (`Claude Code`). | |
 | `locate(réglage, distribution)` | Son programme, du chemin d'un réglage (vide : là où il est d'habitude) ; un `Program` du système ou de WSL. | `resolve_binary` |
-| `supports_effort(modèle)`, `supports_auto(modèle)` | Ce que prend un modèle. Deviendront des capacités déclarées (`EngineCaps`, lot 3). | tous sauf Haiku |
+| `supports_effort(modèle)`, `supports_auto(modèle)` | Ce que prend un modèle (ce que prend le moteur, lui, est dans ses capacités : « Le registre »). | tous sauf Haiku |
 | `spawn(Spawn, on_frame, on_exit)` | **Lancer, reprendre, copier** : le process d'un agent, d'une conversation neuve, reprise ou copiée selon `Spawn.start`. | `claude --output-format stream-json …` |
 | `message(texte, pièces jointes)` | **Le message avec ses pièces jointes**, dans la forme de son moteur (`Message`, opaque) ; refusé pour un fichier d'un type ou d'une taille qu'il ne prend pas. | blocs `image`, `document`, `text` |
 | `translate(rt, frame, fx)` | **La traduction** d'une frame du process dans la conversation de l'agent. | `AgentRt::claude_frame` |
@@ -69,12 +70,12 @@ Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edi
 
 1. **Deux traits objets**, plutôt qu'une énumération des moteurs : ajouter un moteur, c'est écrire son adaptateur et une ligne dans `engine::of`, sans toucher aux appels du cœur. Les méthodes asynchrones rendent un `BoxFuture` (`Pin<Box<dyn Future + Send>>`) : les traits restent utilisables en objets, sans dépendance nouvelle (`async-trait`).
 2. **Le moteur (sans état) et le process (vivant) sont séparés.** Ce qui se décide avant le process (son programme, ses arguments, la forme d'un message, un one-shot, la lecture de son stderr) est au moteur ; ce qui parle au process est au process. Un message est préparé par `Engine::message` **avant** que le process démarre : un fichier refusé laisse le message dans le composer sans rien lancer, comme avant.
-3. **Lancer, reprendre et copier sont une seule méthode**, `spawn`, avec `Start::New`, `Start::Resume { session }` ou `Start::Fork { of, at }` (le point de la copie : le dernier message de l'original quand il a été copié). C'est la forme des essais de Codex (`thread/start`, `thread/resume`, `thread/fork` avec `lastTurnId`) et ce que docs/TODO-1.8.md dit de Copilot (dernier événement) et d'OpenCode (dernier message). Un moteur qui ne sait pas copier refusera `Start::Fork` (et « Dupliquer la conversation » sera masqué par ses capacités, lot 3).
+3. **Lancer, reprendre et copier sont une seule méthode**, `spawn`, avec `Start::New`, `Start::Resume { session }` ou `Start::Fork { of, at }` (le point de la copie : le dernier message de l'original quand il a été copié). C'est la forme des essais de Codex (`thread/start`, `thread/resume`, `thread/fork` avec `lastTurnId`) et ce que docs/TODO-1.8.md dit de Copilot (dernier événement) et d'OpenCode (dernier message). Un moteur qui ne sait pas copier refusera `Start::Fork` (et « Dupliquer la conversation » est masqué par ses capacités, `fork: none`, voir « Le registre »).
 4. **`spawn` reçoit ce qu'il faut savoir, pas des arguments de `claude`** : `Spawn` porte le programme, le dossier, l'environnement, le modèle, l'effort, le mode, les consignes ajoutées, `Start`, les dossiers lisibles sans question (`read_dirs` : fichiers joints, fichiers du ticket) et l'accès au serveur MCP d'Escouade (`Escouade::Granted { config }` ou `Denied { settings }`). Chaque moteur en fait ses options : `--add-dir`, `--mcp-config` ou `--settings` + `--disallowedTools` pour Claude Code ; `-c mcp_servers.escouade.*` pour Codex (essayé, docs/TODO-1.8.md, point 0).
 5. **Le flux reste du JSON** (`serde_json::Value`) entre le process et la traduction : tous les protocoles connus en sont (stream-json de Claude Code, JSON-RPC de Codex, de Copilot et d'ACP, événements SSE d'OpenCode). Un moteur dont le transport n'est pas une ligne par message (en-têtes `Content-Length`, SSE) le lit dans son process et passe la même chose à `on_frame`.
 6. **La traduction vit dans `agent/<moteur>.rs`**, un module enfant de `agent` : elle atteint l'état de l'agent (blocs en cours, demandes en attente, compteurs, plan) sans qu'il soit ouvert au reste du crate, comme `agent/transcript.rs` et `agent/sidechain.rs` le faisaient déjà. Le moteur l'appelle depuis `Engine::translate`.
 7. **Les réponses aux demandes sont typées** (`PermissionAnswer::Allow`, `Always`, `Deny`) et portent à part l'id de la demande et l'appel d'outil qu'elle concerne (`call`) : chez Claude Code, `request_id` et `tool_use_id` ; chez Codex, l'id JSON-RPC de `requestApproval` et l'`itemId` ; chez ACP, l'id de `session/request_permission` et le `toolCallId`. Qui a répondu (« Refusé par <client> via Escouade ») reste écrit par le cœur, dans le message, pour tous les moteurs.
-8. **Modèle, effort et mode gardent les valeurs d'Escouade** (celles de Claude Code : `auto`, `plan`, `acceptEdits`…) ; un autre moteur fera sa correspondance dans son adaptateur (pour Codex : `approvalPolicy`, bac à sable et `collaborationMode` pour le mode Plan). Les menus fournis par le moteur viennent avec le registre (lot 3) et le composer (lot 4).
+8. **Modèle, effort et mode gardent les valeurs d'Escouade** (celles de Claude Code : `auto`, `plan`, `acceptEdits`…) ; un autre moteur fera sa correspondance dans son adaptateur (pour Codex : `approvalPolicy`, bac à sable et `collaborationMode` pour le mode Plan). Les modes qu'il prend et leur sens sont dans ses capacités (« Le registre ») ; ses modèles viennent avec le composer (lot 4).
 9. **Ce que Claude Code est seul à faire** (Remote Control, tâches de fond, arrêt d'un sous-agent) a ses méthodes à part dans `EngineProcess`, plutôt que des requêtes brutes dans le cœur. Un autre moteur les refusera (« non pris en charge ») et l'interface les masquera par ses capacités (docs/TODO-1.8.md, « Ce qui reste propre à Claude Code »).
 10. **Une échappatoire, `control` et `reply`** : une requête et une réponse dans le protocole du moteur. Les tests s'en servent (`background_tasks`), et la traduction pour refuser ce qu'Escouade ne sait pas traiter. Le cœur n'en a pas besoin.
 11. **Les one-shots disent leur poids, pas leur modèle** : `Weight::Light` (le modèle le plus rapide, sans outil : Haiku) ou `Weight::Reading` (un modèle plus fort, avec des outils qui ne font que lire : Sonnet avec `Read,Glob,Grep`). Le moteur choisit ; les textes rédigés par moteur sont le lot 7.
@@ -88,7 +89,7 @@ L'extraction s'est arrêtée là où d'autres lots reprennent :
 - **Les comptes et le quota** : `accounts.rs` (comptes Claude, `CLAUDE_CONFIG_DIR`, connexion), `usage.rs` (fenêtres du quota, point d'accès OAuth). Lot 5. `Program::launch` traduit encore `CLAUDE_CONFIG_DIR` et les options de chemin de Claude Code pour WSL (`PATH_OPTIONS`).
 - **Le serveur MCP** : `mcp/install.rs` (l'entrée dans la config de Claude Code), `AgentAccess::refusal` (le fichier de réglages qui tient le serveur à l'écart). Lot 8.
 - **Les consignes et les textes** : le protocole du ticket (`board::protocol_prompt`), les textes qui disent « Claude ». Lots 6 et 7.
-- **Les modèles** : `ModelInfo::list` lit la liste de `initialize` de Claude Code. Lot 3.
+- **Les modèles** : `ModelInfo::list` lit la liste de `initialize` de Claude Code. Avec les menus du composer (lot 4).
 
 ## Les données (ESC-27)
 
@@ -103,12 +104,61 @@ Le moteur est gardé partout où il compte, par son id (`EngineId` de `model.rs`
 
 Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celui de son ticket, sinon celui de son projet. Les outils MCP `list_agents` et `get_agent_summary` le donnent (`engine`). Aucun texte de l'interface ne le montre encore : le choix et la marque du moteur viennent avec le lot 4.
 
+## Le registre (ESC-28)
+
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code seul aujourd'hui), le moteur par défaut en premier.
+
+### Ce que chaque moteur déclare (`Engine`)
+
+| Méthode | Ce qu'elle dit | Claude Code |
+|---|---|---|
+| `locate(réglage, distribution)` | Son exécutable, comme `resolve_binary` le trouve pour `claude` (binaire natif sous Windows, ou programme de WSL). | `resolve_binary` |
+| `version_args()` | Ce qui lui fait écrire sa version ; `registry::version` en lit le premier numéro (`2.1.301 (Claude Code)`), gardé tant que le fichier ne change pas. | `--version` |
+| `tested()` | Sa plage de versions testées (`Tested { oldest, newest }`). | 2.1.283 (protocole de base, docs/PROTOCOL.md) à 2.1.301 (dernier essai réel) |
+| `oldest_reason(langue)`, `update_command()` | Pourquoi une version plus ancienne est refusée, et la commande qui le met à jour. | « son flux JSON n'a été vérifié qu'à partir de celle-ci », `claude update` |
+| `caps()` | Ses capacités (`EngineCaps`, ci-dessous). | voir `tests/fixtures/engines/claude.json` |
+
+### Les capacités (`EngineCaps`)
+
+| Champ | Ce qu'il dit | Ce que l'interface en fait | Claude Code |
+|---|---|---|---|
+| `modes` | Les modes d'Escouade qu'il prend, chacun avec son sens chez lui (`meaning`, `null` : celui du menu, donc de Claude Code). | Le menu « Mode » ne liste qu'eux, avec leur sens. | les cinq |
+| `effort` | Ses modèles prennent un effort (chaque modèle peut encore n'en avoir aucun : `supports_effort`). | Le menu « Effort » est masqué sinon. | oui |
+| `images`, `pdf` | Images et PDF joints à un message. | `Engine::message` refuse ce qu'il ne lit pas. | oui |
+| `fork` | La copie d'une conversation et jusqu'où : `none`, `entry`, `turn`, `event`, `message`. | « Dupliquer la conversation » masqué pour `none`. | `entry` |
+| `resumeOtherAccount` | Une conversation reprise sur un autre compte du même moteur. | (comptes, lot 5) | oui |
+| `midTurn` | Un message envoyé pendant un tour : `queued`, `immediate` ou `refused`. | (composer, lot 4) | `queued` |
+| `slashCommands` | Ses commandes `/` pour un client. | Le composer n'en propose pas sinon. | oui |
+| `quota` | Le quota de ses comptes : `windows`, `credits` ou `none`. | (lot 5) | `windows` |
+| `cost` | Le coût d'un tour : `exact`, `estimated` ou `none`. | Le coût est masqué pour `none` (carte, en-tête, vue d'ensemble). | `exact` |
+| `terminalView` | Sa propre interface dans un terminal. | « Vue Claude Code » et son réglage masqués sinon. | oui |
+| `remoteControl` | Remote Control. | Le menu, l'icône de la carte et le réglage masqués sinon. | oui |
+| `backgroundTasks` | Tâches de fond, workflows, arrêt d'un sous-agent. | La pastille « N en fond » et la liste sous la carte masquées sinon. | oui |
+| `todoTools` | Les outils de tâches qu'on peut lui donner (`CLAUDE_CODE_ENABLE_TODO_TOOLS`). | Le réglage masqué si aucun moteur ne l'a. | oui |
+| `defaultRefusal` | Il dit ce qu'il refuserait par défaut. | (l'avertissement vient de son flux) | oui |
+
+La fenêtre reçoit les déclarations au démarrage (`InitialState.engines`, `EngineDecl`) et ne décide d'afficher une fonction que par `src/lib/engines.ts` (`can`, `canFork`, `showsCost`, `modesOf`, `anyCan`) : jamais d'après le nom du moteur, ce qu'un test vérifie en cherchant dans le code de la fenêtre (`src/lib/engines.test.ts`). Une fonction qu'un moteur n'a pas est masquée, pas grisée. Le fichier `tests/fixtures/engines/claude.json`, la déclaration de Claude Code que prennent les tests de la fenêtre, reste égal à celle du backend (test Rust).
+
+### Version et état
+
+`registry::state_of` donne l'état d'un moteur : `absent` (programme introuvable), `tooOld` (version plus ancienne que la plage : refusée), `notConnected` (aucun compte connecté), `untested` (plus récente : utilisée, avec un avertissement), `ready`. Une version qu'il ne dit pas est prise telle quelle. La commande `engines` le rend pour chaque moteur (`EngineInfo` : programme, version, plage, état, texte, capacités) ; Réglages › Claude Code l'affiche sous le chemin de l'exécutable.
+
+Le refus est fait au démarrage du process d'un agent, en vue Escouade comme en vue Claude Code (`registry::check`, après `accounts::program`) : « Claude Code 2.0.14 est trop ancien pour Escouade, qui demande au moins la version 2.1.283 : … Mets-le à jour (claude update). » L'avertissement : « Claude Code 2.1.400 n'a pas été testé avec Escouade (testé jusqu'à la 2.1.301) : il est utilisé quand même, et ce qu'Escouade ne reconnaît pas de lui est ignoré. »
+
+### La lecture tolère l'inconnu
+
+Un champ inconnu est ignoré, une frame, un événement, un bloc ou un delta inconnus sont écartés sans casser le tour (`agent.rs`, `an_unknown_field_or_frame_of_a_newer_claude_code_leaves_the_turn_going`). Chaque nouvel adaptateur fait de même.
+
+### Les schémas des versions testées
+
+Le schéma de la plus récente version testée est gardé dans le dépôt : `tests/fixtures/engines/claude-code-<version>.schema.json`, les frames de Claude Code et leurs champs, relevés dans ses flux réels enregistrés (`tests/fixtures/real-run-*.jsonl`) et, pour ce qu'aucun enregistrement n'a, dans docs/PROTOCOL.md. Deux tests le tiennent : chaque champ qu'Escouade lit y est (`claude_code_frames_read_by_escouade_are_in_the_schema`), et chaque champ des flux enregistrés aussi. Passer `tested().newest` à une version nouvelle demande son schéma. Pour Codex, ce sera la sortie de `codex app-server generate-json-schema` ; pour Copilot, le schéma du protocole de son SDK ; pour Cursor, celui d'ACP et la liste des extensions `cursor/*`.
+
 ## Ajouter un moteur (ébauche)
 
 1. Écrire `engine/<moteur>/` : un `Engine` (lancement, message, one-shot, lecture du stderr) et un `EngineProcess` pour son process (dans le Job de l'agent, `job::Job::for_child`).
 2. Écrire `agent/<moteur>.rs` : la traduction de son flux dans les éléments normalisés, les noms d'outils de Claude Code.
 3. Le faire rendre par `engine::by_id` pour son `EngineId` (déjà dans les données : `AgentMeta.engine`, voir « Les données »).
-4. Ses capacités (lot 3), son faux moteur et le banc de conformité (lot 10).
+4. Sa ligne dans `registry::all()`, ses capacités, sa plage de versions testées et le schéma de la plus récente (voir « Le registre »), son faux moteur et le banc de conformité (lot 10).
 
 ## Vérification de l'extraction (ESC-26)
 

@@ -2,6 +2,7 @@
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
+  import { anyCan } from '../../lib/engines';
   import { accountName, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { joinPath, tildify } from '../../lib/format';
@@ -188,20 +189,23 @@
   {/if}
 </Group>
 
-<Group title={t('settings.project.remoteTitle')}>
-  <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
-    <div class="remote">
-      <!-- The setting for all agents covers every project: the switch shows it, the project’s own value stays as it is. -->
-      <Switch
-        label={t('settings.project.remote')}
-        disabled={coveredByAll}
-        describedby={coveredByAll ? 'remote-covered' : undefined}
-        bind:on={() => coveredByAll || draft.remoteControl, (v) => (draft.remoteControl = v)}
-      />
-      {#if coveredByAll}<p class="why" id="remote-covered">{t('settings.project.remoteGlobal')}</p>{/if}
-    </div>
-  </Row>
-</Group>
+<!-- Only while a harness has Remote Control. -->
+{#if anyCan('remoteControl')}
+  <Group title={t('settings.project.remoteTitle')}>
+    <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
+      <div class="remote">
+        <!-- The setting for all agents covers every project: the switch shows it, the project’s own value stays as it is. -->
+        <Switch
+          label={t('settings.project.remote')}
+          disabled={coveredByAll}
+          describedby={coveredByAll ? 'remote-covered' : undefined}
+          bind:on={() => coveredByAll || draft.remoteControl, (v) => (draft.remoteControl = v)}
+        />
+        {#if coveredByAll}<p class="why" id="remote-covered">{t('settings.project.remoteGlobal')}</p>{/if}
+      </div>
+    </Row>
+  </Group>
+{/if}
 
 <Group title="Git">
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
