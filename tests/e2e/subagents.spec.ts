@@ -197,8 +197,10 @@ test('a finished subagent is answered from the conversation of its agent, and st
   const back = await app.restart();
   expect(back).toBe(app.page);
   expect(back).not.toBe(before);
-  // A second start of the app, on the same data: what is shown below is what it read back, not what it kept in memory.
-  expect(fs.readFileSync(path.join(app.data, 'app.log'), 'utf8').match(/Escouade \S+ starting/g)).toHaveLength(2);
+  // A second start of the app, on the same data: what is shown below is what it read back, not what it kept in memory. Its
+  // log line may come after its page: waited for.
+  const starts = () => fs.readFileSync(path.join(app.data, 'app.log'), 'utf8').match(/Escouade \S+ starting/g)?.length ?? 0;
+  await expect.poll(starts).toBe(2);
   await back.locator('.card', { hasText: name }).first().click();
   const subs = sidebar(back, name);
   await expect(subs.group).toBeVisible();
