@@ -14,7 +14,7 @@ import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
-import { testCommand } from './recipe';
+import { testCommand, worktreeCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
@@ -358,7 +358,7 @@ class AppState {
     if (!p) return null;
     const id = this.selectedLaunch[p.id];
     if (!id) return null;
-    return p.runCommands.find((c) => c.id === id) ?? testCommand(id, this.agents, this.shells[0]?.id ?? '');
+    return p.runCommands.find((c) => c.id === id) ?? worktreeCommand(id, p, this.agents) ?? testCommand(id, this.agents, this.shells[0]?.id ?? '');
   });
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
