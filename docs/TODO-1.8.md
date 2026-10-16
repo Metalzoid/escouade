@@ -173,7 +173,7 @@ Aussi pour la 1.8 :
   - Décidé le 2026-10-15 : toutes les voix dont la licence le permet, au choix ; envoi seul après un silence ; en mode vocal, l'agent écrit lui-même le texte lu (un résumé moins verbeux et moins technique), la réponse complète restant à l'écran ; barge-in ; vue Escouade seulement.
   - Catalogue relevé le 2026-10-15 (données de PiperHub : `github.com/fox3000foxy/piper-bank`, `src/data/models.json` et `datasets.json`) : licence du modèle et du jeu de données permissives, et aucune voix de personnage, de personne ni de marque (l'audit de PiperHub met « MIT » sur des voix de GLaDOS ou de Wheatley). La licence lue sur Hugging Face prime sur celle de PiperHub (Fuze : « SandBlock Studios » chez PiperHub, CC BY 4.0 dans le README de son jeu de données). En français, quatre des cinq voix haute définition sont des personnages ou des marques ; Fuze passe par sa licence, mais son jeu de données a été généré par ElevenLabs v4 (« gaming YouTuber style ») : conditions d'ElevenLabs et droit à la voix à vérifier ; 8 voix basses ou moyennes officielles en MIT (Siwis, Tom, MLS, UPMC, Gilles, MLS 1840). En anglais, 64 sur 135, dont LibriTTS, Ryan, LJSpeech, Cori, Librivox AU, Colin, Mei en haute définition (Lessac à vérifier : jeu de données Blizzard 2013).
   - Voix téléchargées à la demande (somme de contrôle), essai écoutable, vitesse, volume, licence et attribution ; pas d'écho du haut-parleur dans le micro ; questions et permissions de l'agent lues et répondues à la voix, ou conversation en pause.
-  - Licences : Escouade passe en GPL-3.0 ou ultérieure le 2026-10-15 ; Piper (piper1-gpl) et espeak-ng, en GPL-3.0, peuvent être liés ou lancés à part (à choisir à l'implémentation : programme à part téléchargé à la demande, ou lié).
+  - Licences : Escouade passe en GPL-3.0 ou ultérieure le 2026-10-15 ; Piper (piper1-gpl) et espeak-ng, en GPL-3.0, peuvent être liés ou lancés à part. Décidé le 2026-10-16 : Piper est lié à l'app, et le catalogue des voix est une liste aux licences vérifiées, livrée avec l'app et mise à jour aux releases (pas le catalogue de PiperHub lu en direct).
 - [x] **Fermer un projet garde son historique** (demandé le 2026-10-14, ESC-89 ; fait le 2026-10-15) : le rouvrir dans le même dossier le retrouve.
   - Aujourd'hui, « Fermer le projet » (`Core::remove_project`) efface le journal de conversation de chaque agent et son journal de préparation, les tickets du projet (`drop_project_tickets`) et ses réservations de comptes. Les worktrees, les sessions de Claude Code et les stats restent. Un projet recréé dans le même dossier reçoit un nouvel id et repart de zéro.
   - Fermer retire le projet de l'app sans effacer son historique : réglages, agents et conversations, tickets (images comprises) restent sur le disque, rangés comme « projet fermé » avec le chemin de son dossier. Les process, terminaux et lancements de test s'arrêtent comme aujourd'hui.
@@ -740,7 +740,8 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Contre : ACP est le plus petit dénominateur. Quota, crédits, coût et permissions typées passent peut-être seulement par les protocoles propres (à vérifier). Et sa v2 arrive.
   - Pour OpenCode, garder `opencode serve` garde aussi `opencode attach` : sa vue terminal, la plus simple de toutes, se branche sur le serveur de l'agent.
   - Proposé : ACP pour Cursor. Pour Copilot et OpenCode, décider après le point 0, en comparant ce que donne chaque voie.
-- [ ] **Mot de l'interface** : « Moteur » (proposé) ? « Agent » est déjà pris.
+- [x] **Mot de l'interface** (décidé le 2026-10-16) : « Harness », le mot anglais gardé tel quel en français comme en anglais (Réglages › « Harness », « un harness ») ; « Agent » est déjà pris. Le code peut garder `engine`.
+- [x] **Essais du point 0** (décidé le 2026-10-16) : Codex seul pour l'instant (installé et connecté) ; la refonte commence avec Claude Code et Codex (ESC-26 ne dépend plus que d'ESC-22). Copilot CLI, Cursor CLI et OpenCode, pas installés, seront essayés plus tard (ESC-23 à 25). Pas de second compte ChatGPT : l'essai de `CODEX_HOME` et de la reprise sur un autre compte reste à faire.
 - [x] **Repli sur un autre moteur** (décidé le 2026-10-14) : oui, et pour un agent en cours, pas seulement pour les nouveaux tickets : voir « Continuer sur un autre moteur quand le quota est épuisé ». Décidé le même jour : l'automatique est une option, désactivée par défaut, et les moteurs de secours se règlent par projet, par les comptes réservés aux projets. Le retour n'est jamais automatique : « Revenir sur Claude » est proposé.
 - [ ] **Garde-fou d'OpenCode**, qui n'a pas de quota : un budget par jour en dollars, au-delà duquel le pilote auto se met en pause ?
 
@@ -884,9 +885,11 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [x] **Correction automatique par le pilote auto** (décidé le 2026-10-14) :
   - CI en échec : corrigée seule, dans la limite des boucles ;
   - retours de relecture : Escouade propose de les faire corriger par l'agent dès qu'ils arrivent, et l'agent ne part qu'avec l'accord de l'utilisateur (un relecteur humain peut attendre une discussion plutôt qu'un correctif).
-- [ ] **Ce qu'Escouade publie au nom de l'utilisateur** (réponses sous les fils, relecture rédigée par un agent) : proposé, rien sans un réglage ou une validation à la main.
-- [ ] **Mot de l'interface** : « PR » partout, ou « MR » sur GitLab ? Proposé : le mot de l'hébergeur.
-- [ ] **Worktree pendant la revue** : le garder jusqu'au merge (corrections plus rapides, mais disque et `node_modules`), ou le supprimer comme aujourd'hui et le recréer au besoin depuis la branche ? Proposé : comme aujourd'hui.
+- [x] **Ce qu'Escouade publie au nom de l'utilisateur** (décidé le 2026-10-16) : rien sans un réglage allumé ou une validation à la main ; répondre sous les fils est un réglage éteint par défaut, une relecture rédigée par un agent attend sa validation.
+- [x] **Mot de l'interface** (décidé le 2026-10-16) : le mot de l'hébergeur, « MR » sur GitLab, « PR » ailleurs.
+- [x] **Worktree pendant la revue** (décidé le 2026-10-16) : comme aujourd'hui, supprimé à la validation et recréé depuis la branche quand l'agent doit corriger.
+- [x] **Essais réels** (décidé le 2026-10-16) : sur GitHub seulement ; GitLab, Bitbucket Cloud et Gitea/Forgejo d'après leur documentation et leurs sources, à essayer en vrai plus tard.
+- [x] **Ordre** (décidé le 2026-10-16) : les hébergeurs passent après les harness.
 - [x] **Ce qui entre dans la 1.8** (décidé le 2026-10-14) : tout le chapitre 2, pour l'instant. La découpe de « Ampleur » reste le repli si la 1.8 s'allonge.
 
 ### Plus tard
