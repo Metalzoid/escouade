@@ -39,7 +39,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github` or `linear` |
 | `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github` or `linear` |
 | `account_created` | A Claude account is added | — |
-| `remote_control_enabled` | Remote control is turned on | — |
+| `remote_control_enabled` | Remote control is turned on, by hand or by a setting | `from`: `agent` (right-click on an agent), `project` (a project’s setting) or `global` (the setting for all agents) |
 
 An event says that a feature was used, not on what: never the name of the project, the agent or the branch, nor anything that was written.
 

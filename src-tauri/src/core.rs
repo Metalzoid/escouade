@@ -1,7 +1,7 @@
 //! Application core: projects, agents and their Claude processes, git, usage, persistence.
 
 use crate::accounts;
-use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind};
+use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind, RemoteLink};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::closed;
@@ -81,6 +81,61 @@ pub(crate) fn project_not_found() -> anyhow::Error {
 /// Refused: the folder is not (or no longer) in a git repository.
 pub(crate) fn not_a_repo() -> anyhow::Error {
     anyhow!(tr!("pas un dépôt git", "not a git repository"))
+}
+
+/// Where the Remote Control an agent should have comes from, if it should have any: the user's
+/// own choice for it first, then the global setting, then its project's. Kept apart by hand (or
+/// archived), it has none whatever the settings say.
+pub(crate) fn remote_wanted(meta: &AgentMeta, global: bool, project: bool) -> Option<RemoteSource> {
+    if meta.archived {
+        return None;
+    }
+    if meta.remote_control && meta.remote_source == Some(RemoteSource::Hand) {
+        return Some(RemoteSource::Hand);
+    }
+    if meta.remote_off {
+        return None;
+    }
+    if global {
+        Some(RemoteSource::Global)
+    } else if project {
+        Some(RemoteSource::Project)
+    } else {
+        None
+    }
+}
+
+/// Closes the remote session `bridge` of the agent `id` for good, through its process linked to
+/// claude.ai. Turning Remote Control off alone leaves a session opened to be kept
+/// (`keep_session_on_exit`, which a restart needs to reattach it) on claude.ai, orphan: it is
+/// turned off, reattached under its name without that option, then turned off again, which
+/// archives it (seen on Claude Code 2.1.300). With no id of the session, it is turned off, no
+/// more. A request that fails is logged and ends it: the session stays on claude.ai, and nothing
+/// waits for it. True when every request worked: the session is closed (`Core::close_link` then
+/// forgets it; until then the agent keeps its id).
+pub(crate) async fn close_remote_session(
+    id: &str,
+    proc: &Arc<ClaudeProcess>,
+    bridge: Option<&str>,
+    name: &str,
+    timeout: Duration,
+) -> bool {
+    let off = json!({ "subtype": "remote_control", "enabled": false });
+    let mut requests = vec![off.clone()];
+    if let Some(bridge) = bridge {
+        requests.push(json!({
+            "subtype": "remote_control", "enabled": true, "name": name,
+            "keep_session_on_exit": false, "reattach_session_id": bridge,
+        }));
+        requests.push(off);
+    }
+    for request in requests {
+        if let Err(e) = proc.control(request, timeout).await {
+            log::warn!("agent {id}: remote session not closed: {e:#}");
+            return false;
+        }
+    }
+    true
 }
 
 /// Refused: the app is quitting, no agent process starts any more.
@@ -417,6 +472,13 @@ const GIT_IDLE: Duration = Duration::from_secs(10);
 /// How often every repository with a remote is fetched in the background.
 const FETCH_EVERY: Duration = Duration::from_secs(5 * 60);
 
+/// How many processes and interfaces a Remote Control setting (or the app's start) starts at once:
+/// a setting turned on for every agent would otherwise start them all together.
+const REMOTE_STARTS: usize = 3;
+/// How long a start of an interface that a setting makes keeps its place among them, at most:
+/// until the interface is up (`Core::wait_interface_ready`), so that they do not all begin together.
+const REMOTE_START_READY: Duration = Duration::from_secs(15);
+
 /// A file attached to a message: `data` is base64 for images and PDFs, the text itself for
 /// text files (`text/plain`).
 #[derive(Debug, Clone, Deserialize)]
@@ -584,6 +646,9 @@ pub struct AgentOptions {
     /// With `branch`: the branch it is merged into. None: the project's (the board's target while
     /// it exists, else the branch the folder is on).
     pub base: Option<String>,
+    /// Set apart from Remote Control from the start (`AgentMeta::remote_off`): a ticket's next
+    /// agent, when the user set the ticket's previous one apart.
+    pub remote_off: bool,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -603,6 +668,9 @@ pub struct CopyOf {
     pub items: Vec<Value>,
     /// What the copy's conversation tells after it (the original's changes left out).
     pub notice: Option<String>,
+    /// The original was set apart from Remote Control by hand: so is the copy (it never takes the
+    /// Remote Control the original was given by hand, but it keeps the original's refusal).
+    pub remote_off: bool,
 }
 
 /// Work under way, counted in `Core::works` until dropped.
@@ -648,6 +716,13 @@ pub struct Core<R: Runtime = Wry> {
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
     spawn_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// Held while an interface of the agent quits, which what starts a process or an interface of
+    /// the agent waits for (`Core::quit_soon`); apart from the spawn lock, which is not held for
+    /// the seconds a quit takes.
+    pub(crate) quit_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// Serializes, by agent, what links the agent's process to claude.ai and what closes its remote
+    /// session (`link_remote`, `close_link`): two such sequences never interleave their requests.
+    remote_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     /// The projects being closed (`remove_project`): a second closing of one has nothing to do,
     /// and no validation of their tickets starts.
     pub(crate) closing: Mutex<HashSet<String>>,
@@ -735,6 +810,10 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) mcp: crate::mcp::McpServer<R>,
     /// The server the hooks of the agents' Claude Code interfaces call (`tui`).
     pub(crate) hooks: crate::tui::Hooks,
+    /// How many processes and interfaces the application of Remote Control settings (and the
+    /// app's start) starts at once: `REMOTE_STARTS`. A message or a window opening starts its own
+    /// at once, with no permit.
+    pub(crate) remote_starts: tokio::sync::Semaphore,
     /// Times the files of an agent's plan were read, not counting the looks that found them as
     /// before (tests only).
     #[cfg(test)]
@@ -770,16 +849,6 @@ pub struct Core<R: Runtime = Wry> {
     /// it).
     #[cfg(test)]
     pub(crate) clock_ahead: std::sync::atomic::AtomicI64,
-}
-
-/// The ids of those of `agents` that Remote Control keeps reachable: on, and not archived.
-pub(crate) fn remote_agent_ids<'a>(agents: impl Iterator<Item = &'a AgentHandle>) -> Vec<String> {
-    agents
-        .filter_map(|h| {
-            let rt = h.lock();
-            (rt.meta.remote_control && !rt.meta.archived).then(|| rt.meta.id.clone())
-        })
-        .collect()
 }
 
 /// The least time between two looks at the files of an agent's plan (`planfiles`).
@@ -1534,6 +1603,8 @@ impl<R: Runtime> Core<R> {
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
             spawn_locks: Mutex::default(),
+            quit_locks: Mutex::default(),
+            remote_locks: Mutex::default(),
             closing: Mutex::default(),
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
@@ -1575,6 +1646,7 @@ impl<R: Runtime> Core<R> {
             searches: convsearch::Searches::default(),
             mcp: crate::mcp::McpServer::new(me.clone()),
             hooks: Default::default(),
+            remote_starts: tokio::sync::Semaphore::new(REMOTE_STARTS),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
@@ -1795,7 +1867,14 @@ impl<R: Runtime> Core<R> {
         let auto_resume = s.auto_resume;
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let telemetry = s.telemetry;
-        let mcp_was_enabled = std::mem::replace(&mut *self.settings.write(), s).mcp_enabled;
+        let remote_all = s.remote_control_all;
+        let before_settings = std::mem::replace(&mut *self.settings.write(), s);
+        let mcp_was_enabled = before_settings.mcp_enabled;
+        if before_settings.remote_control_all != remote_all {
+            // Every agent gets Remote Control or loses it, on tasks of their own: the save does
+            // not wait for the processes it starts.
+            self.apply_remote_to(None);
+        }
         if self.telemetry.set_consent(telemetry) {
             // Said yes during the session: it counts as started.
             self.telemetry.track(self.started_event());
@@ -1988,6 +2067,15 @@ impl<R: Runtime> Core<R> {
 
     pub(crate) fn spawn_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.spawn_locks
+            .lock()
+            .entry(id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    /// The lock of the agent's Remote Control requests (`remote_locks`).
+    fn remote_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.remote_locks
             .lock()
             .entry(id.to_string())
             .or_default()
@@ -2447,6 +2535,9 @@ impl<R: Runtime> Core<R> {
                 "The agent is in the Claude Code view: its terminal runs it."
             ));
         }
+        // An interface of the agent that is quitting is gone first: never two processes on one
+        // session.
+        self.after_quit(id).await;
         let settings = self.settings.read().clone();
         // Its account's Claude Code, where its session is kept.
         let account = accounts::get(&settings, &h.lock().meta.account);
@@ -2556,19 +2647,12 @@ impl<R: Runtime> Core<R> {
                 self.set_models(&resp["models"]);
                 if h.lock().meta.remote_control {
                     if let Err(e) = self.link_remote(h, &proc).await {
-                        log::warn!("agent {id}: remote control failed: {e:#}");
-                        let _ = self.with_agent(id, |rt, fx| {
-                            rt.notice(
-                                "warn",
-                                tr!(
-                                    "Remote control indisponible : {e}",
-                                    "Remote control unavailable: {e}"
-                                ),
-                                fx,
-                            );
-                            Ok(())
-                        });
+                        self.remote_unavailable(id, &e, true);
                     }
+                } else {
+                    // A session it held that nothing could close then (no live process linked)
+                    // is closed now.
+                    self.close_stale_remote_session(h, &proc).await;
                 }
             }
             Err(_) if !proc.is_alive() => {
@@ -2597,22 +2681,36 @@ impl<R: Runtime> Core<R> {
         self.request_save();
     }
 
-    /// Starts the agent's process in the background so the first message answers fast.
+    /// Starts the agent's process in the background so the first message answers fast. In the
+    /// Claude Code view there is none to warm up, but the interface of an agent that holds
+    /// Remote Control (it stays up).
     pub fn warm(self: &Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
-        {
+        let interface = {
             let rt = h.lock();
-            if rt.proc.is_some()
-                || rt.meta.archived
-                || rt.meta.terminal
-                || rt.meta.status == AgentStatus::Error
-            {
-                return;
+            if rt.meta.terminal {
+                if !rt.meta.remote_control || rt.meta.archived {
+                    return;
+                }
+                true
+            } else {
+                if rt.proc.is_some() || rt.meta.archived || rt.meta.status == AgentStatus::Error {
+                    return;
+                }
+                false
             }
-        }
+        };
         let (c, id) = (self.clone(), id.to_string());
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = c.ensure_process(&id).await {
+            if interface {
+                if let Err(e) = c.start_interface(&id).await {
+                    c.remote_unavailable(&id, &e, false);
+                }
+                // Cut while it started: it has no reason to run.
+                if let Ok(h) = c.agent(&id) {
+                    c.stop_unseen_interface(&h);
+                }
+            } else if let Err(e) = c.ensure_process(&id).await {
                 log::warn!("warm-up failed: {e:#}");
             }
         });
@@ -2667,12 +2765,34 @@ impl<R: Runtime> Core<R> {
     // ---------- remote control ----------
 
     /// Name of the agent's session in claude.ai / the Claude app.
-    fn remote_name(&self, meta: &AgentMeta) -> String {
+    pub(crate) fn remote_name(&self, meta: &AgentMeta) -> String {
         let project = self
             .project(&meta.project_id)
             .map(|p| p.name)
             .unwrap_or_default();
         format!("{project} · {}", meta.name)
+    }
+
+    /// The title of the agent's session for its live process: its name, or, while Remote Control
+    /// links it to claude.ai, the name it has there (« projet · agent »), which Claude Code may
+    /// show in place of the session's own title.
+    fn session_title(&self, rt: &AgentRt) -> String {
+        if rt.remote_linked {
+            self.remote_name(&rt.meta)
+        } else {
+            rt.meta.name.clone()
+        }
+    }
+
+    /// The global Remote Control setting and the agent's project's, in that order. Read with no
+    /// lock of an agent held. The order of the locks is the agent's first, then the projects'
+    /// (read only: `remote_name`, `session_title`, the start of an interface), never the other
+    /// way round; the settings' are never held with an agent's.
+    fn remote_settings(&self, h: &AgentHandle) -> (bool, bool) {
+        let global = self.settings.read().remote_control_all;
+        let project_id = h.lock().meta.project_id.clone();
+        let project = self.project(&project_id).is_ok_and(|p| p.remote_control);
+        (global, project)
     }
 
     /// Links the agent's live process to claude.ai (Remote Control). Its previous remote session
@@ -2682,8 +2802,22 @@ impl<R: Runtime> Core<R> {
         h: &AgentHandle,
         proc: &Arc<ClaudeProcess>,
     ) -> Result<()> {
+        let id = {
+            let mut rt = h.lock();
+            rt.remote_tried = true;
+            rt.meta.id.clone()
+        };
+        // After a closing of the agent's remote session that is under way: its requests and this
+        // one's never interleave on the process (the session it closes is no longer there to
+        // reattach when this one begins).
+        let lock = self.remote_lock(&id);
+        let _held = lock.lock().await;
         let (name, reattach) = {
             let rt = h.lock();
+            // Cut meanwhile, or gone to the Claude Code view: nothing to link.
+            if !rt.meta.remote_control || rt.meta.terminal {
+                return Ok(());
+            }
             (self.remote_name(&rt.meta), rt.meta.remote_session.clone())
         };
         let request = |reattach: Option<&String>| {
@@ -2702,70 +2836,376 @@ impl<R: Runtime> Core<R> {
             }
             Err(e) => return Err(e),
         };
-        {
+        let in_force = {
             let mut rt = h.lock();
-            rt.remote_linked = true;
-            rt.meta.remote_session = resp["bridge_session_id"].as_str().map(str::to_string);
-            rt.meta.remote_url = resp["session_url"].as_str().map(str::to_string);
+            // Cut meanwhile (the link took its time), or gone to the Claude Code view, whose
+            // interface holds the session: nothing of the link is kept.
+            let in_force = rt.meta.remote_control && !rt.meta.terminal;
+            if in_force {
+                rt.remote_linked = true;
+                // It works: the next failure is news again.
+                rt.remote_told = false;
+                rt.meta.remote_session = resp["bridge_session_id"].as_str().map(str::to_string);
+                rt.meta.remote_url = resp["session_url"].as_str().map(str::to_string);
+            }
+            in_force
+        };
+        if !in_force {
+            let bridge = resp["bridge_session_id"].as_str();
+            if close_remote_session(&id, proc, bridge, &name, Duration::from_secs(15)).await {
+                // The id of the session it reattached, if the agent still kept it, is its no more.
+                h.lock().forget_remote_session(bridge);
+                self.request_save();
+            }
+            return Ok(());
         }
         self.request_save();
         self.emit_agent(h);
         Ok(())
     }
 
-    /// Turns Remote Control on (the agent's process starts if needed and stays up) or off.
-    pub async fn set_remote_control(self: &Arc<Self>, id: &str, enabled: bool) -> Result<()> {
-        let h = self.agent(id)?;
-        h.lock().meta.remote_control = enabled;
+    /// Tells the agent that its Remote Control could not be linked (the setting stays in force:
+    /// its next start tries again), once: not again at every start, until a link works or the user
+    /// turns it on by hand (`AgentRt::remote_told`). `stream`: it is the stream's process that
+    /// failed.
+    pub(crate) fn remote_unavailable(self: &Arc<Self>, id: &str, e: &anyhow::Error, stream: bool) {
+        log::warn!("agent {id}: remote control failed: {e:#}");
+        let _ = self.with_agent(id, |rt, fx| {
+            // Cut meanwhile, or (for the stream) gone to the Claude Code view, whose interface
+            // holds the session: there is nothing to tell.
+            if !rt.meta.remote_control || (stream && rt.meta.terminal) {
+                return Ok(());
+            }
+            rt.remote_unavailable_notice(
+                tr!(
+                    "Remote control indisponible : {e}",
+                    "Remote control unavailable: {e}"
+                ),
+                fx,
+            );
+            Ok(())
+        });
+    }
+
+    /// Ends the agent's Remote Control: no longer in force, at once, and its remote session
+    /// closed for good (its live process, when linked, is told). Neither sets it apart
+    /// (`remote_off`) nor changes what a setting wants for it. A session that cannot be closed,
+    /// or that no live process can close now, keeps its id (`AgentRt::end_link`): the agent's
+    /// next process closes it (`close_stale_remote_session`), or takes it back if Remote Control
+    /// is back by then.
+    async fn cut_remote(self: &Arc<Self>, h: &AgentHandle) {
+        let (name, link) = {
+            let mut rt = h.lock();
+            (self.remote_name(&rt.meta), rt.end_remote())
+        };
         self.request_save();
-        if enabled {
-            let linked = match self.ensure_process(id).await {
+        self.emit_agent(h);
+        // An interface started for it, and that no window showed, has no reason to run.
+        self.stop_unseen_interface(h);
+        if let Some(link) = link {
+            // Unless Remote Control came back meanwhile: the link that follows takes the session.
+            self.close_link(h, link, &name, Duration::from_secs(15), true)
+                .await;
+        }
+    }
+
+    /// Closes the remote session of the agent that `link` held (the process that held it), when
+    /// no other request on its Remote Control is under way (`remote_locks`), and forgets its id
+    /// once it is closed. With `unless_back`, nothing is closed if the agent holds Remote Control
+    /// again by then: its link reattaches the session, which is still there.
+    pub(crate) async fn close_link(
+        self: &Arc<Self>,
+        h: &AgentHandle,
+        link: RemoteLink,
+        name: &str,
+        timeout: Duration,
+        unless_back: bool,
+    ) {
+        let id = h.lock().meta.id.clone();
+        let lock = self.remote_lock(&id);
+        let _held = lock.lock().await;
+        if unless_back && h.lock().meta.remote_control {
+            return;
+        }
+        if close_remote_session(&id, &link.proc, link.bridge.as_deref(), name, timeout).await {
+            h.lock().forget_remote_session(link.bridge.as_deref());
+            self.request_save();
+        }
+    }
+
+    /// The agent's process, just started, closes the remote session the agent still names though
+    /// it holds no Remote Control: one that no live process could close when it ended
+    /// (`AgentRt::end_link`). Its id is forgotten once it is closed.
+    async fn close_stale_remote_session(
+        self: &Arc<Self>,
+        h: &AgentHandle,
+        proc: &Arc<ClaudeProcess>,
+    ) {
+        let id = h.lock().meta.id.clone();
+        let lock = self.remote_lock(&id);
+        let _held = lock.lock().await;
+        let (name, bridge) = {
+            let rt = h.lock();
+            // Turned on meanwhile: its link reattaches that session.
+            if rt.meta.remote_control {
+                return;
+            }
+            let Some(bridge) = rt.meta.remote_session.clone() else {
+                return;
+            };
+            (self.remote_name(&rt.meta), bridge)
+        };
+        if close_remote_session(&id, proc, Some(&bridge), &name, Duration::from_secs(15)).await {
+            h.lock().forget_remote_session(Some(&bridge));
+            self.request_save();
+        }
+    }
+
+    /// The user turns Remote Control on (the agent's process starts if needed and stays up) or off
+    /// for this agent, from its menu. On, it is the agent's own whatever the settings do; off, the
+    /// agent is set apart, whether a setting covers it or not: the settings give it none until the
+    /// user turns it on again (its copies, and a ticket's next agents, are set apart too). True
+    /// when, in the Claude Code view, the change waits for the interface's next start: it runs,
+    /// and was started with another state of Remote Control than the one asked for.
+    pub async fn set_remote_control(self: &Arc<Self>, id: &str, enabled: bool) -> Result<bool> {
+        let h = self.agent(id)?;
+        if !enabled {
+            h.lock().meta.remote_off = true;
+            self.remember_remote_off(id, true);
+            self.cut_remote(&h).await;
+            return Ok(self.waits_for_next_start(&h, false));
+        }
+        let (before, terminal) = {
+            let mut rt = h.lock();
+            let before = (
+                rt.meta.remote_control,
+                rt.meta.remote_source,
+                rt.meta.remote_off,
+            );
+            rt.meta.remote_control = true;
+            rt.meta.remote_source = Some(RemoteSource::Hand);
+            rt.meta.remote_off = false;
+            // By hand: the interface tries the option again, and what fails is news again.
+            rt.remote_fallback = false;
+            rt.remote_told = false;
+            (before, rt.meta.terminal)
+        };
+        self.remember_remote_off(id, false);
+        self.request_save();
+        // In the Claude Code view the interface holds the session: it is started with Remote
+        // Control (a running one has it from its next start).
+        let linked = if terminal {
+            self.start_interface(id).await
+        } else {
+            match self.ensure_process(id).await {
                 Ok(_) if h.lock().remote_linked => Ok(()),
                 Ok(proc) => self.link_remote(&h, &proc).await,
                 Err(e) => Err(e),
-            };
-            if let Err(e) = linked {
-                h.lock().meta.remote_control = false;
-                self.emit_agent(&h);
-                return Err(e.context(tr!(
-                    "Remote control indisponible",
-                    "Remote control unavailable"
-                )));
             }
-        } else {
-            let proc = {
+        };
+        if let Err(e) = linked {
+            {
                 let mut rt = h.lock();
-                let linked = std::mem::take(&mut rt.remote_linked);
-                rt.meta.remote_session = None;
-                rt.meta.remote_url = None;
-                rt.remote_state = None;
-                rt.proc.clone().filter(|_| linked)
-            };
-            if let Some(p) = proc {
-                p.control(
-                    json!({ "subtype": "remote_control", "enabled": false }),
-                    Duration::from_secs(15),
-                )
-                .await?;
+                (
+                    rt.meta.remote_control,
+                    rt.meta.remote_source,
+                    rt.meta.remote_off,
+                ) = before;
             }
+            self.remember_remote_off(id, before.2);
+            self.request_save();
+            self.emit_agent(&h);
+            return Err(e.context(tr!(
+                "Remote control indisponible",
+                "Remote control unavailable"
+            )));
         }
         self.emit_agent(&h);
-        Ok(())
+        Ok(self.waits_for_next_start(&h, true))
     }
 
-    /// Starts the Remote Control agents with the app, so they are reachable from claude.ai.
+    /// In the Claude Code view, an interface still runs that was started with another state of
+    /// Remote Control than `enabled`, the one just asked for: the change is for its next start.
+    fn waits_for_next_start(&self, h: &AgentHandle, enabled: bool) -> bool {
+        let rt = h.lock();
+        rt.meta.terminal && rt.tui.as_ref().is_some_and(|t| t.remote != enabled)
+    }
+
+    /// Gives the agent the Remote Control the settings want for it, or takes back what they no
+    /// longer want it to have (`remote_wanted`). What the user turned on by hand stays; so does
+    /// what it set apart. A Remote Control that cannot be linked stays in force, and the agent
+    /// says why: its next start tries again.
+    pub(crate) async fn apply_remote(self: &Arc<Self>, id: &str) {
+        enum Step {
+            Nothing,
+            Changed,
+            On,
+            Off,
+        }
+        let Ok(h) = self.agent(id) else { return };
+        let (global, project) = self.remote_settings(&h);
+        let step = {
+            let mut rt = h.lock();
+            match (
+                remote_wanted(&rt.meta, global, project),
+                rt.meta.remote_control,
+            ) {
+                (Some(source), false) => {
+                    rt.meta.remote_control = true;
+                    rt.meta.remote_source = Some(source);
+                    Step::On
+                }
+                (Some(source), true) if rt.meta.remote_source != Some(source) => {
+                    rt.meta.remote_source = Some(source);
+                    Step::Changed
+                }
+                (None, true) => Step::Off,
+                _ => Step::Nothing,
+            }
+        };
+        match step {
+            Step::Nothing => {}
+            Step::Changed => {
+                self.request_save();
+                self.emit_agent(&h);
+            }
+            Step::Off => self.cut_remote(&h).await,
+            Step::On => {
+                self.request_save();
+                self.emit_agent(&h);
+                let (terminal, setting_up) = {
+                    let rt = h.lock();
+                    (rt.meta.terminal, rt.setup.is_some())
+                };
+                // A new worktree is set up before the process starts (which links it, once it is
+                // over).
+                if setting_up {
+                    return;
+                }
+                // Not all at once: a setting turned on for every agent starts three at a time.
+                let _start = self.remote_starts.acquire().await;
+                // The setting went off while it waited for its turn: nothing to start.
+                if !h.lock().meta.remote_control {
+                    return;
+                }
+                // Its interface holds the session in the Claude Code view: started with it.
+                if terminal {
+                    if let Err(e) = self.start_interface(id).await {
+                        self.remote_unavailable(id, &e, false);
+                    }
+                    // Its place is kept until the interface is up: it has launched, it has not
+                    // started.
+                    self.wait_interface_ready(&h, REMOTE_START_READY).await;
+                    // The setting went off while it started: no reason for it to run.
+                    self.stop_unseen_interface(&h);
+                    return;
+                }
+                // Through the start, which waits for one under way: that start links it (and says
+                // why when it cannot), unless it began before the setting did.
+                let linked = match self.ensure_process(id).await {
+                    Ok(p) => {
+                        let (linked, tried) = {
+                            let rt = h.lock();
+                            (rt.remote_linked, rt.remote_tried)
+                        };
+                        if linked || tried {
+                            Ok(())
+                        } else {
+                            self.link_remote(&h, &p).await
+                        }
+                    }
+                    Err(e) => Err(e),
+                };
+                if let Err(e) = linked {
+                    self.remote_unavailable(id, &e, true);
+                }
+            }
+        }
+    }
+
+    /// `apply_remote` on its own task. The task is for whoever waits for it (tests).
+    pub(crate) fn apply_remote_soon(
+        self: &Arc<Self>,
+        id: &str,
+    ) -> tauri::async_runtime::JoinHandle<()> {
+        let (c, id) = (self.clone(), id.to_string());
+        tauri::async_runtime::spawn(async move { c.apply_remote(&id).await })
+    }
+
+    /// `apply_remote` on every agent of the project (every agent, with none), each on its own
+    /// task: a setting that changes does not wait for the processes it starts.
+    pub(crate) fn apply_remote_to(
+        self: &Arc<Self>,
+        project: Option<&str>,
+    ) -> Vec<tauri::async_runtime::JoinHandle<()>> {
+        let ids: Vec<String> = self
+            .agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                project
+                    .is_none_or(|p| rt.meta.project_id == p)
+                    .then(|| rt.meta.id.clone())
+            })
+            .collect();
+        ids.iter().map(|id| self.apply_remote_soon(id)).collect()
+    }
+
+    /// With the app: the settings are applied to every agent (`start_remote`).
     pub fn start_remote_agents(self: &Arc<Self>) {
-        let ids = remote_agent_ids(self.agents.read().values());
+        let ids: Vec<String> = self.agents.read().keys().cloned().collect();
         self.start_remote(ids);
     }
 
-    /// Starts the agents `ids` (Remote Control ones), each on its own task.
+    /// The settings applied to the agents `ids` (all of them when the app starts, those of a
+    /// project opened again): the ones left in force without a setting that covers them go,
+    /// the ones a setting covers come in, and those that hold Remote Control start their process
+    /// (their interface, in the Claude Code view), so they are reachable from claude.ai.
     pub(crate) fn start_remote(self: &Arc<Self>, ids: Vec<String>) {
-        for id in ids {
+        let held: Vec<(String, bool)> = ids
+            .into_iter()
+            .filter_map(|id| {
+                let held = self.agent(&id).ok()?.lock().meta.remote_control;
+                Some((id, held))
+            })
+            .collect();
+        for (id, held) in held {
             let c = self.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = c.ensure_process(&id).await {
+                // One that comes in starts its process on its own.
+                c.apply_remote(&id).await;
+                if !held {
+                    return;
+                }
+                let Ok(h) = c.agent(&id) else { return };
+                let (holds, terminal) = {
+                    let rt = h.lock();
+                    (
+                        rt.meta.remote_control && !rt.meta.archived,
+                        rt.meta.terminal,
+                    )
+                };
+                if !holds {
+                    return;
+                }
+                // Not all at once: the agents of the last run start three at a time.
+                let _start = c.remote_starts.acquire().await;
+                // The interface, in the Claude Code view, runs with no window until one asks.
+                let started = if terminal {
+                    c.start_interface(&id).await
+                } else {
+                    c.ensure_process(&id).await.map(|_| ())
+                };
+                if let Err(e) = started {
                     log::warn!("agent {id}: remote control start failed: {e:#}");
+                }
+                if terminal {
+                    // Its place is kept until the interface is up: it has launched, it has not
+                    // started.
+                    c.wait_interface_ready(&h, REMOTE_START_READY).await;
+                    // Cut while its interface started: it has no reason to run.
+                    c.stop_unseen_interface(&h);
                 }
             });
         }
@@ -2980,12 +3420,14 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// What is left of a core that is done with (a test's): its agents' processes stop, and none
-    /// starts after. The background tasks it spawned live on, on the application's runtime.
+    /// What is left of a core that is done with (a test's): its agents' processes stop (their
+    /// interfaces too, which run with no window), and none starts after. The background tasks it
+    /// spawned live on, on the application's runtime.
     #[cfg(test)]
     pub(crate) fn stop_for_good(&self) {
         self.quitting.store(true, Ordering::Release);
         self.kill_agent_processes();
+        self.pty.kill_all();
     }
 
     pub async fn send_message(
@@ -3683,6 +4125,7 @@ impl<R: Runtime> Core<R> {
             created_at: now_ms(),
             last_activity: now_ms(),
             terminal: settings.terminal_view && o.ticket_id.is_none(),
+            remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
             port_base: o.port_base,
@@ -3830,6 +4273,8 @@ impl<R: Runtime> Core<R> {
         if !setting_up {
             self.warm(&id);
         }
+        // The Remote Control a setting gives it (a copy never takes its original's).
+        self.apply_remote_soon(&id);
         let view = h.lock().view();
         Ok(view)
     }
@@ -3895,6 +4340,7 @@ impl<R: Runtime> Core<R> {
                     worktree: original.worktree,
                     items,
                     notice,
+                    remote_off: original.remote_off,
                 }),
                 ..Default::default()
             },
@@ -4550,7 +4996,7 @@ impl<R: Runtime> Core<R> {
                 }
             }
         }
-        let (named_now, proc) = {
+        let (named_now, proc, title) = {
             let mut rt = h.lock();
             if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
                 w.branch = branch;
@@ -4561,7 +5007,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.name = name.clone();
                 rt.meta.named = true;
             }
-            (named_now, rt.proc.clone())
+            (named_now, rt.proc.clone(), self.session_title(&rt))
         };
         // The name is set: the next one in the project need not wait for the session rename.
         drop(naming_guard);
@@ -4573,7 +5019,7 @@ impl<R: Runtime> Core<R> {
         if let Some(p) = proc {
             let _ = p
                 .control(
-                    json!({ "subtype": "rename_session", "title": name, "source": "host" }),
+                    json!({ "subtype": "rename_session", "title": title, "source": "host" }),
                     Duration::from_secs(10),
                 )
                 .await;
@@ -4587,18 +5033,18 @@ impl<R: Runtime> Core<R> {
             bail!(tr!("nom vide", "empty name"));
         }
         let h = self.agent(id)?;
-        let proc = {
+        let (proc, title) = {
             let mut rt = h.lock();
             rt.meta.name = name.to_string();
             rt.meta.named = true;
-            rt.proc.clone()
+            (rt.proc.clone(), self.session_title(&rt))
         };
         self.emit_agent(&h);
         self.request_save();
         if let Some(p) = proc {
             let _ = p
                 .control(
-                    json!({ "subtype": "rename_session", "title": name, "source": "host" }),
+                    json!({ "subtype": "rename_session", "title": title, "source": "host" }),
                     Duration::from_secs(10),
                 )
                 .await;
@@ -4608,9 +5054,11 @@ impl<R: Runtime> Core<R> {
 
     pub async fn archive_agent(self: &Arc<Self>, id: &str, archived: bool) -> Result<()> {
         if archived {
-            // An archived agent is no longer reachable from claude.ai.
-            if self.agent(id)?.lock().meta.remote_control {
-                let _ = self.set_remote_control(id, false).await;
+            // An archived agent is no longer reachable from claude.ai (nor set apart: restored, a
+            // setting gives it Remote Control again).
+            let h = self.agent(id)?;
+            if h.lock().meta.remote_control {
+                self.cut_remote(&h).await;
             }
             // Its ticket lets go of it before its turn is stopped: that turn's end, whenever it is
             // read, no longer moves the ticket (no « bloqué » for it).
@@ -4636,21 +5084,27 @@ impl<R: Runtime> Core<R> {
             }
         }
         let lock = self.spawn_lock(id);
-        let _guard = lock.lock().await;
+        let guard = lock.lock().await;
+        // The process it had, and the remote session it was linked to on claude.ai (a setting
+        // changed meanwhile), with its name there.
+        let mut stopped = None;
+        let mut linked = None;
+        // Its Claude Code interface, which quits as its user would once the agent is archived.
+        let mut interface = None;
         self.with_agent(id, |rt, fx| {
             rt.meta.archived = archived;
             if archived {
+                let name = self.remote_name(&rt.meta);
+                linked = rt.end_remote().map(|link| (link, name));
                 rt.meta.resume_at = None;
                 // Its test ports are free for others.
                 rt.meta.port_base = None;
-                if let Some(p) = rt.detach() {
-                    p.close_input();
-                }
+                stopped = rt.detach();
                 if let Some(t) = rt.tui.as_ref().map(|t| t.term_id.clone()) {
                     rt.gen += 1;
                     rt.stop_tui(fx);
                     self.hooks.revoke(&rt.meta.id);
-                    self.pty.kill(&t);
+                    interface = Some(t);
                 }
                 rt.clear_pending(fx);
                 if rt.meta.status.is_active() {
@@ -4660,6 +5114,21 @@ impl<R: Runtime> Core<R> {
             fx.save = true;
             Ok(())
         })?;
+        // Its session on claude.ai is closed for good before its input closes.
+        if let Some((link, name)) = linked {
+            let h = self.agent(id)?;
+            self.close_link(&h, link, &name, Duration::from_secs(5), false)
+                .await;
+        }
+        if let Some(p) = stopped {
+            p.close_input();
+        }
+        // Marked as quitting under the launch lock, which is let go for the seconds it takes.
+        if let Some(t) = interface {
+            let quit = self.quit_soon(id, &t);
+            drop(guard);
+            let _ = quit.await;
+        }
         let pid = self.agent(id)?.lock().meta.project_id.clone();
         self.git.refresh(&pid);
         // Its test launches stop with it. Its ticket already let go of it (above); what may start
@@ -4672,6 +5141,7 @@ impl<R: Runtime> Core<R> {
             self.release_ticket(id);
         } else {
             self.restore_worktree(id).await;
+            self.apply_remote_soon(id);
         }
         Ok(())
     }
@@ -4684,35 +5154,44 @@ impl<R: Runtime> Core<R> {
         remove_worktree: bool,
     ) -> Result<Option<String>> {
         // End its claude.ai session rather than leave it behind.
-        if self.agent(id)?.lock().meta.remote_control {
-            let _ = self.set_remote_control(id, false).await;
+        let h = self.agent(id)?;
+        if h.lock().meta.remote_control {
+            self.cut_remote(&h).await;
         }
         // Wait for an in-flight start (warm-up) so that its process is killed too.
         let lock = self.spawn_lock(id);
-        let _guard = lock.lock().await;
+        let guard = lock.lock().await;
         let h = self.agents.write().remove(id).ok_or_else(agent_not_found)?;
-        let (pid, worktree, ports, killed) = {
+        let (pid, worktree, ports, killed, interface) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let killed = rt.proc.take();
             if let Some(p) = &killed {
                 p.kill();
             }
-            if let Some(t) = rt.tui.take() {
-                self.pty.kill(&t.term_id);
-            }
+            let interface = rt.tui.take().map(|t| t.term_id);
             rt.conv.delete_file();
             (
                 rt.meta.project_id.clone(),
                 rt.meta.worktree.clone(),
                 rt.meta.port_base,
                 killed,
+                interface,
             )
         };
         // Refused at once, without waiting for its process to end.
         self.mcp.forget_agent(id);
         self.hooks.revoke(id);
+        // Its Claude Code interface quits as its user would (it archives its remote session), and
+        // is gone before its worktree is removed; the launch lock is not held meanwhile.
+        let quit = interface.map(|t| self.quit_soon(id, &t));
         self.spawn_locks.lock().remove(id);
+        self.quit_locks.lock().remove(id);
+        self.remote_locks.lock().remove(id);
+        drop(guard);
+        if let Some(quit) = quit {
+            let _ = quit.await;
+        }
         // The setup of its worktree stops, with what it started (which holds the worktree). Once it
         // is gone: what waited for that setup (its ticket's first message) finds no agent to send to.
         // Its log goes with it.
@@ -5094,6 +5573,7 @@ impl<R: Runtime> Core<R> {
             worktree_dir: String::new(),
             agent_branch_prefix: crate::model::default_agent_branch_prefix(),
             ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
+            remote_control: false,
         };
         let accounts: Vec<String> = self
             .settings
@@ -5201,6 +5681,9 @@ impl<R: Runtime> Core<R> {
             .find(|x| x.id == p.id)
             .ok_or_else(project_not_found)?;
         let account_changed = cur.account != account;
+        let remote_changed = cur.remote_control != p.remote_control;
+        let renamed = cur.name != p.name;
+        cur.remote_control = p.remote_control;
         cur.name = p.name;
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
@@ -5229,7 +5712,42 @@ impl<R: Runtime> Core<R> {
         if account_changed {
             self.schedule();
         }
+        // Its agents get Remote Control or lose it, on tasks of their own.
+        if remote_changed {
+            self.apply_remote_to(Some(&updated.id));
+        }
+        // Their sessions on claude.ai are called « projet · agent ».
+        if renamed {
+            self.rename_remote_sessions(&updated.id);
+        }
         Ok(())
+    }
+
+    /// The sessions on claude.ai of the project's agents linked through their stream's process
+    /// get their name again (« projet · agent »), on a task of their own. The interfaces in the
+    /// Claude Code view keep the name they started with: nothing reaches them.
+    fn rename_remote_sessions(&self, project_id: &str) {
+        let renames: Vec<(Arc<ClaudeProcess>, String)> = self
+            .project_agents(project_id)
+            .iter()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let proc = rt.proc.clone().filter(|_| rt.remote_linked)?;
+                Some((proc, self.session_title(&rt)))
+            })
+            .collect();
+        if renames.is_empty() {
+            return;
+        }
+        tauri::async_runtime::spawn(async move {
+            for (proc, title) in renames {
+                let rename =
+                    json!({ "subtype": "rename_session", "title": title, "source": "host" });
+                if let Err(e) = proc.control(rename, Duration::from_secs(10)).await {
+                    log::warn!("session not renamed on claude.ai: {e:#}");
+                }
+            }
+        });
     }
 
     pub fn reorder_projects(&self, ids: &[String]) {
@@ -5289,6 +5807,7 @@ impl<R: Runtime> Core<R> {
             .iter()
             .map(|h| h.lock().meta.id.clone())
             .collect();
+        let mut interfaces = Vec::new();
         let mut kept: Vec<AgentMeta> = Vec::new();
         for aid in agents.iter().cloned() {
             // Wait for an in-flight start (a warm-up), as the deletion of an agent does: it would
@@ -5306,9 +5825,9 @@ impl<R: Runtime> Core<R> {
                     p.kill();
                     at_work = true;
                 }
-                // Its Claude Code interface is no terminal of the project's (killed below).
+                // Its Claude Code interface is no terminal of the project's (it quits below).
                 if let Some(t) = rt.tui.take() {
-                    self.pty.kill(&t.term_id);
+                    interfaces.push(t.term_id);
                     at_work = true;
                 }
                 // What its turn left open is closed in the conversation the history keeps (its
@@ -5328,6 +5847,8 @@ impl<R: Runtime> Core<R> {
             self.mcp.forget_agent(&aid);
             self.hooks.revoke(&aid);
             self.spawn_locks.lock().remove(&aid);
+            self.quit_locks.lock().remove(&aid);
+            self.remote_locks.lock().remove(&aid);
             // The setup of its worktree stops, with what it started (its log stays with the
             // history), and the images pasted in its interface go.
             if let Some(s) = self.setups.lock().remove(&aid) {
@@ -5345,6 +5866,19 @@ impl<R: Runtime> Core<R> {
                 id: aid,
                 project_id: id.to_string(),
             });
+        }
+        // The interfaces of its agents quit as their users would, all together.
+        let quits: Vec<_> = interfaces
+            .into_iter()
+            .map(|t| {
+                let pty = self.pty.clone();
+                tauri::async_runtime::spawn(
+                    async move { crate::tui::quit_interface(&pty, &t).await },
+                )
+            })
+            .collect();
+        for quit in quits {
+            let _ = quit.await;
         }
         self.pty.kill_project(id);
         self.git.unwatch(id);

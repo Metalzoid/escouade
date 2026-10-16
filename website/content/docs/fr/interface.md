@@ -70,7 +70,7 @@ L’en-tête « Agents » porte le nombre d’agents du projet et le bouton «
 
 Chaque agent est une carte :
 
-- son **nom** (double-clic pour le renommer sur place : `Entrée` valide, `Échap` annule), une icône d’ondes quand le [remote control](remote-control) est activé (bleue une fois connecté), et son **statut** ;
+- son **nom** (double-clic pour le renommer sur place : `Entrée` valide, `Échap` annule), une icône d’ondes quand le [remote control](remote-control) est activé (bleue une fois connecté ; son infobulle dit d’où il vient : de toi, du réglage du projet ou du réglage de tous les agents ; en [vue Claude Code](claude-code-view), elle dit l’état de l’interface), et son **statut** ;
 - ce que l’agent annonce faire, quand il l’a dit par le [serveur MCP](mcp) ;
 - son **modèle**, le temps pendant lequel il a travaillé et, s’il a un worktree, sa branche (`⎇ …`) ;
 - ses **tokens**, son **coût** (précédé de « ≈ » tant qu’un tour tourne : c’est alors une estimation) et le nombre de ses fichiers modifiés (« N fich. ») ;
@@ -107,7 +107,7 @@ Un clic droit sur une carte ouvre son menu :
 | « Ouvrir dans l’éditeur » | Ouvre l’éditeur sur son worktree, sinon sur le dossier du projet. |
 | « Ouvrir un terminal » | Ouvre un terminal dans son worktree, sinon dans le dossier du projet. |
 | « Vue Claude Code » ou « Vue Escouade » | Change de vue, comme le bouton de l’en-tête de sa conversation. Absente pour un agent de ticket et pour un agent archivé. Voir [la vue Claude Code](claude-code-view). |
-| « Activer le remote control » ou « Désactiver le remote control » | Rend la session accessible depuis claude.ai et l’app Claude (« claude.ai, mobile »). Quand le lien est disponible, « Ouvrir sur claude.ai » et « Copier le lien claude.ai » apparaissent. Absente en [vue Claude Code](claude-code-view), où c’est la commande `/remote-control` de Claude Code qui le fait. |
+| « Activer le remote control » ou « Désactiver le remote control » | Rend la session accessible depuis claude.ai et l’app Claude (« claude.ai, mobile »). Quand le lien est disponible, « Ouvrir sur claude.ai » et « Copier le lien claude.ai » apparaissent. « Désactiver » met toujours l’agent à part : un réglage allumé ensuite ne lui rend pas le remote control. En [vue Claude Code](claude-code-view), « Ouvrir sur claude.ai » et « Copier le lien claude.ai » n’apparaissent qu’une fois l’interface connectée, et le changement vaut au prochain lancement de l’interface. |
 | « Supprimer… » | Arrête le processus Claude et retire la conversation de l’application ; la session Claude Code reste sur le disque. Pour un agent avec un worktree, une case propose de supprimer aussi le worktree, et sa branche si elle a été créée pour l’agent. |
 
 Les agents archivés sont sous « Archivés (N) », un titre que tu déplies d’un clic ; leur carte ne montre que le nom et le coût.

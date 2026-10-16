@@ -72,6 +72,7 @@ export const SETTINGS: Settings = {
   mcpPort: 0,
   todoTools: true,
   terminalView: false,
+  remoteControlAll: false,
 };
 
 export function project(over: Partial<Project> = {}): Project {
@@ -93,6 +94,7 @@ export function project(over: Partial<Project> = {}): Project {
     worktreeDir: '',
     agentBranchPrefix: 'escouade/',
     ticketBranchPrefix: 'ticket/',
+    remoteControl: false,
     ...over,
   };
 }
@@ -131,6 +133,9 @@ export function agent(over: Partial<Agent> = {}): Agent {
     liveTokens: 0,
     liveCost: 0,
     remoteControl: false,
+    remoteSource: null,
+    remoteOff: false,
+    interfaceRemote: null,
     remoteSession: null,
     remoteUrl: null,
     remoteState: null,

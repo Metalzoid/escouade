@@ -97,7 +97,7 @@ Each agent has a card in the list:
 - its tokens, its cost (preceded by “≈” while a turn runs: it’s then an estimate), and the number of files changed in its folder;
 - the “Plan 2/7” line when it follows a task list (see [plan progress](plan));
 - the `▸ KEY` label of its ticket, when it has one;
-- a wave icon when remote control is on (see [remote control](remote-control));
+- a wave icon when remote control is on, whose tooltip also says where it comes from: you, the project’s setting, or the setting for all agents; in the [Claude Code view](claude-code-view), it says the state of the interface (see [remote control](remote-control));
 - the line the agent publishes itself when it uses Escouade’s MCP server.
 
 A click on the card shows it; `Ctrl+Tab` and `Ctrl+Shift+Tab` move to the project’s next or previous agent, skipping archived ones (see [keeping track of your agents](overview)). When an agent asks a question, finishes, or fails while you weren’t looking at it, its card blinks until you show it (see [notifications](notifications)).
@@ -129,7 +129,7 @@ A right-click on an agent’s card opens its menu.
 | Open in editor | Opens the [editor](editor) on the agent’s worktree, or on the project. |
 | Open a terminal | Opens a [terminal](terminals) in the agent’s worktree, or in the project’s folder. |
 | Claude Code view, or Escouade view | Runs the agent in Claude Code’s own interface, or brings it back to Escouade’s conversation, like the header’s button (see [the Claude Code view](claude-code-view)). Absent for a ticket’s agent. |
-| Turn on remote control | Makes the agent reachable from claude.ai and the Claude app (see [remote control](remote-control)). Absent for an agent in the [Claude Code view](claude-code-view), where Claude Code’s own `/remote-control` command does it. |
+| Turn on remote control, or Turn off remote control | Makes the agent reachable from claude.ai and the Claude app, or takes it away (see [remote control](remote-control)). “Turn off” always sets the agent apart: a setting turned on afterwards doesn’t give it remote control back until you turn it on again. In the [Claude Code view](claude-code-view), the change takes effect the next time the interface starts. |
 | Delete… | Removes the agent after confirmation. See below. |
 
 An archived agent only has “Rename”, “Restore”, and “Delete…”.
@@ -140,13 +140,14 @@ An archived agent only has “Rename”, “Restore”, and “Delete…”.
 
 - If the original works in a worktree, the copy gets a worktree of its own, created from the commit the original is on. Its uncommitted changes aren’t there, and a notice at the end of the copied conversation says so. Without a worktree, the copy works in the same folder.
 - A ticket agent is copied like an ordinary agent: with no ticket.
+- For [remote control](remote-control), the copy is a new agent: a setting that is on covers it, but not the remote control you had turned on by hand on the original. If the original is [set apart](remote-control#setting-an-agent-apart), the copy is too.
 - The entry is grayed out while the original works or waits for an answer.
 
 ### Archive and restore
 
 Archiving keeps the conversation but stops the agent: its Claude process stops, a turn in progress is interrupted, its remote control is turned off, and its test launches stop. The agent leaves the list and joins the “Archived (N)” section at the bottom; a click on it opens it read-only, with an “Agent archived.” banner and a “Restore” button.
 
-If the agent works on an “In progress” or “To review” ticket, a confirmation warns you that the ticket goes back to “To do”. Restoring an agent whose worktree was deleted in the meantime recreates it from its branch, if that still exists.
+If the agent works on an “In progress” or “To review” ticket, a confirmation warns you that the ticket goes back to “To do”. Restoring an agent whose worktree was deleted in the meantime recreates it from its branch, if that still exists. Restoring an agent gives its remote control back if a setting covers it, but not if you had turned it on by hand.
 
 ### Delete
 

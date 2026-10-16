@@ -119,15 +119,15 @@
   }
 
   function remoteItems(a: Agent): MenuItem[] {
-    // In Claude Code's own interface, its /remote-control does it.
-    if (a.archived || (a.terminal && !a.remoteControl)) return [];
+    if (a.archived) return [];
     const items: MenuItem[] = [
       { label: '', separator: true },
       a.remoteControl
         ? { label: t('nav.sidebar.menu.remoteOff'), onClick: () => toggleRemote(a) }
         : { label: t('nav.sidebar.menu.remoteOn'), hint: t('nav.sidebar.menu.remoteOnHint'), onClick: () => toggleRemote(a) },
     ];
-    if (a.remoteControl && a.remoteUrl) {
+    // In Claude Code's own interface, the session is the interface's: its link is offered once the interface says it is up.
+    if (a.remoteControl && a.remoteUrl && (!a.terminal || a.remoteState === 'connected')) {
       items.push(
         { label: t('nav.sidebar.menu.openRemote'), onClick: () => openRemote(a) },
         { label: t('nav.sidebar.menu.copyRemoteLink'), onClick: () => copyRemoteLink(a) },
@@ -136,14 +136,32 @@
     return items;
   }
 
-  function remoteTitle(a: Agent) {
-    return t(
-      a.remoteState === 'connected'
-        ? 'nav.sidebar.remote.connected'
-        : a.remoteState === 'ready'
-          ? 'nav.sidebar.remote.connecting'
-          : 'nav.sidebar.remote.waiting',
-    );
+  type RemoteState = 'connected' | 'connecting' | 'waiting' | 'noInterface' | 'nextLaunch' | 'unavailable' | 'stillOn';
+
+  /** The state of the remote control icon of an agent's card, null for none: what its link is, or what keeps it. */
+  function remoteStateOf(a: Agent): RemoteState | null {
+    if (!a.terminal) {
+      if (!a.remoteControl) return null;
+      return a.remoteState === 'connected' ? 'connected' : a.remoteState === 'ready' ? 'connecting' : 'waiting';
+    }
+    // In Claude Code's view the link is the interface's, which Escouade does not drive: what it reports is the state.
+    if (!a.remoteControl) {
+      // Off for Escouade, but the open interface stays linked to claude.ai until its next launch: only if it really is linked.
+      return a.interfaceRemote === true && a.remoteState === 'connected' ? 'stillOn' : null;
+    }
+    // One started before the remote control came on has it only from its next launch.
+    if (a.interfaceRemote === null) return 'noInterface';
+    if (a.interfaceRemote === false) return 'nextLaunch';
+    // Started with it: linked, or not opened by Claude Code (no subscription, network, proxy or policy), or not told yet.
+    return a.remoteState === 'unavailable' ? 'unavailable' : a.remoteState === 'connected' ? 'connected' : 'connecting';
+  }
+
+  /** The state of its link, then what turned it on. */
+  function remoteTitle(a: Agent, state: RemoteState) {
+    const text = t(`nav.sidebar.remote.${state}`);
+    return a.remoteSource
+      ? t('nav.sidebar.remote.withSource', { state: text, source: t(`nav.sidebar.remote.source.${a.remoteSource}`) })
+      : text;
   }
 
   /** Archives the agent; one whose ticket is under way or to test asks first: its ticket starts over from "À faire". */
@@ -323,6 +341,7 @@
       {@const s = spent(a)}
       {@const tag = ticketTag(app.ticketOf(a.id))}
       {@const plan = planView(a)?.mini}
+      {@const remote = remoteStateOf(a)}
       <div
         class="card"
         class:sel
@@ -353,8 +372,8 @@
           {:else}
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
           {/if}
-          {#if a.remoteControl}
-            <span class="rc" class:on={a.remoteState === 'connected'} use:tip={remoteTitle(a)}>
+          {#if remote}
+            <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
               <svg
                 width="12"
                 height="12"
@@ -364,7 +383,12 @@
                 stroke-width="2.2"
                 stroke-linecap="round"
                 aria-hidden="true"
-                ><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" /><circle cx="12" cy="19.5" r="1" fill="currentColor" /></svg
+                ><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" /><circle
+                  cx="12"
+                  cy="19.5"
+                  r="1"
+                  fill="currentColor"
+                />{#if remote === 'stillOn'}<path class="bar" d="M4 4l16 16" />{/if}</svg
               >
             </span>
           {/if}
@@ -784,6 +808,10 @@
   }
   .rc.on {
     color: var(--info);
+  }
+  /* Off for Escouade, still linked in the interface left open: barred, in the colour of the other warnings. */
+  .rc.warn {
+    color: var(--wait);
   }
   .meta {
     display: flex;

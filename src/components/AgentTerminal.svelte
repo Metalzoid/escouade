@@ -108,11 +108,21 @@
     };
   });
 
-  // The one it shows is gone; a new interface takes its place.
-  function start(byUser: boolean) {
-    if (term) disposeTerminal(term);
+  /** The old interface is being stopped: the new one is not started before, or the backend would attach to the old one. */
+  let restarting = false;
+
+  // The one it shows is gone (stopped first, waited for); a new interface takes its place.
+  async function start(byUser: boolean) {
+    if (restarting) return;
+    restarting = true;
+    const old = term;
     term = null;
     manual = byUser;
+    try {
+      if (old) await disposeTerminal(old);
+    } finally {
+      restarting = false;
+    }
     asked += 1;
   }
 
@@ -120,7 +130,7 @@
   function restart() {
     retried = false;
     lost = false;
-    start(true);
+    void start(true);
   }
 
   // « Relancer » of « Outils d’Escouade au prochain démarrage », asked from the conversation's banner: a new interface on
@@ -142,7 +152,7 @@
     untrack(() => {
       retried = true;
       lost = true;
-      start(false);
+      void start(false);
     });
   });
 

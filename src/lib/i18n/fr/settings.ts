@@ -105,6 +105,11 @@ export default {
     todoTools: 'Les agents tiennent une liste de tâches',
     todoToolsDesc:
       'Donne aux agents l’outil de liste de tâches de Claude Code : s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan » (le modèle n’est pas obligé de s’en servir). S’applique aux agents lancés ensuite.',
+    /** The group of the remote control of every agent, after the MCP server’s. */
+    remoteTitle: 'Remote control',
+    remoteAll: 'Remote control pour tous les agents',
+    remoteAllDesc:
+      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
   },
 
   // The « Notifications » tab.
@@ -179,6 +184,13 @@ export default {
     identity: 'Identité',
     nameLabel: 'Nom du projet',
     colorN: 'Couleur {n}',
+    /** The group of the remote control of the project’s agents, after its identity. */
+    remoteTitle: 'Remote control',
+    remote: 'Remote control pour les agents de ce projet',
+    remoteDesc:
+      'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
+    /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
+    remoteGlobal: 'Activé pour tous les projets dans Réglages › Claude Code',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
     worktreeDir: 'Dossier des worktrees',

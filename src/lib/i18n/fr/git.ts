@@ -94,6 +94,9 @@ export default {
     switchBodyDetached: 'Le projet n’est sur aucune branche (HEAD détachée). Escouade bascule sur « {base} » puis merge « {branch} ».',
     switchConfirm: 'Basculer et merger',
     remoteOn: '{name} est accessible depuis claude.ai et l’app Claude',
+    /** After a change on an agent whose Claude Code interface runs: the backend kept the choice for its next launch. */
+    remoteNextLaunch:
+      'Pris en compte au prochain lancement de son interface Claude Code ; d’ici là, c’est sa commande /remote-control qui le fait.',
     linkCopied: 'Lien claude.ai copié',
   },
 } as const satisfies Tree;

@@ -231,7 +231,11 @@ export const api = {
   branchesMerged: (projectId: string) => invoke<string[]>('branches_merged', { projectId }),
   /** The diff from `a` to `b` (`git diff a b`), two branches or commits. */
   gitDiffRefs: (projectId: string, a: string, b: string) => invoke<string>('git_diff_refs', { projectId, a, b }),
-  setRemoteControl: (id: string, enabled: boolean) => invoke<void>('set_remote_control', { id, enabled }),
+  /**
+   * Turns an agent's remote control on or off by hand (off sets it apart from the settings that cover it). Resolves with
+   * whether the change waits for the next launch of the Claude Code interface that is open: Escouade can't change it there.
+   */
+  setRemoteControl: (id: string, enabled: boolean) => invoke<boolean>('set_remote_control', { id, enabled }),
   /** The statistics of a period: of every account (null) or of one. */
   stats: (range: string, account: string | null = null) => invoke<StatsView>('stats', { range, account }),
   refreshUsage: () => invoke<void>('refresh_usage'),

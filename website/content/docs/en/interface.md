@@ -70,7 +70,7 @@ The “Agents” header carries the number of agents in the project and the “+
 
 Each agent is a card:
 
-- its **name** (double-click to rename it in place: `Enter` confirms, `Esc` cancels), a waves icon when [remote control](remote-control) is on (blue once connected), and its **status**;
+- its **name** (double-click to rename it in place: `Enter` confirms, `Esc` cancels), a waves icon when [remote control](remote-control) is on (blue once connected; its tooltip says where it comes from: you, the project’s setting, or the setting for all agents; in the [Claude Code view](claude-code-view), it says the state of the interface), and its **status**;
 - what the agent says it is doing, when it said so through the [MCP server](mcp);
 - its **model**, the time it has worked and, if it has a worktree, its branch (`⎇ …`);
 - its **tokens**, its **cost** (preceded by “≈” while a turn is running: it is then an estimate) and the number of its changed files (“N files”);
@@ -107,7 +107,7 @@ A right click on a card opens its menu:
 | “Open in editor” | Opens the editor on its worktree, otherwise on the project’s folder. |
 | “Open a terminal” | Opens a terminal in its worktree, otherwise in the project’s folder. |
 | “Claude Code view” or “Escouade view” | Switches views, like the button in its conversation header. Absent for a ticket’s agent and for an archived agent. See [the Claude Code view](claude-code-view). |
-| “Turn on remote control” or “Turn off remote control” | Makes the session reachable from claude.ai and the Claude app (“claude.ai, mobile”). When the link is available, “Open on claude.ai” and “Copy the claude.ai link” appear. Absent in the [Claude Code view](claude-code-view), where Claude Code’s own `/remote-control` command does it. |
+| “Turn on remote control” or “Turn off remote control” | Makes the session reachable from claude.ai and the Claude app (“claude.ai, mobile”). When the link is available, “Open on claude.ai” and “Copy the claude.ai link” appear. “Turn off” always sets the agent apart: a setting turned on afterwards doesn’t give it remote control back. In the [Claude Code view](claude-code-view), “Open on claude.ai” and “Copy the claude.ai link” only appear once the interface is connected, and the change takes effect the next time the interface starts. |
 | “Delete…” | Stops the Claude process and removes the conversation from the application; the Claude Code session stays on disk. For an agent with a worktree, a checkbox offers to delete the worktree too, and its branch if it was created for the agent. |
 
 Archived agents are under “Archived (N)”, a title you unfold with a click; their card only shows the name and the cost.

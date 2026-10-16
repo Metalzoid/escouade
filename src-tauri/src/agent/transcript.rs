@@ -45,6 +45,8 @@ impl AgentRt {
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.interrupt_plan();
+        // It tells the state of its link to claude.ai itself, once it has one.
+        self.remote_state = None;
     }
 
     /// Claude Code could not find the session the agent was to resume (or the original's, for a
@@ -68,8 +70,18 @@ impl AgentRt {
             "system" => match e["subtype"].as_str().unwrap_or("") {
                 "turn_duration" => self.end_tui_turn(e["durationMs"].as_u64(), fx),
                 "compact_boundary" => self.handle_frame(e, fx),
+                // Started with Remote Control, the interface tells the link of its session.
+                "bridge_status" => self.on_bridge_status(e, fx),
                 _ => {}
             },
+            "bridge-session" => {
+                if let Some(run) = self.tui.as_mut() {
+                    run.spoke = true;
+                }
+                if e["bridgeSessionId"].as_str().is_some_and(|s| !s.is_empty()) {
+                    self.interface_linked(fx);
+                }
+            }
             // « Shift+Tab » in the interface: the agent's mode is the one it shows.
             "permission-mode" => {
                 if let Some(mode) = e["permissionMode"].as_str() {
@@ -82,6 +94,91 @@ impl AgentRt {
             }
             _ => {}
         }
+    }
+
+    /// The interface tells how the link of its session to claude.ai went (`bridge_status`): at
+    /// `url`, or, with none, that it did not open (a network, a proxy, a rule of the
+    /// organization). Either way it is up.
+    fn on_bridge_status(&mut self, e: &Value, fx: &mut Effects) {
+        let mut unasked = true;
+        if let Some(run) = self.tui.as_mut() {
+            run.spoke = true;
+            // Only what it was asked for is news, and only until a link was seen.
+            unasked = !run.remote || run.linked;
+        }
+        match e["url"].as_str() {
+            Some(url) => self.on_interface_link(url, fx),
+            None if unasked => {}
+            None => {
+                let said: String = e["content"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .chars()
+                    .take(200)
+                    .collect();
+                let text = if said.is_empty() {
+                    tr!(
+                        "Remote control indisponible : Claude Code n’a pas pu ouvrir la session distante.",
+                        "Remote control unavailable: Claude Code could not open the remote session."
+                    )
+                } else {
+                    tr!(
+                        "Remote control indisponible : Claude Code n’a pas pu ouvrir la session distante (« {said} »).",
+                        "Remote control unavailable: Claude Code could not open the remote session (“{said}”).",
+                        said = said
+                    )
+                };
+                self.interface_unlinked(text, fx);
+            }
+        }
+    }
+
+    /// The interface's session is linked to claude.ai at `url` (`bridge_status`). Its session is
+    /// its own: the stream's (`meta.remote_session`) is left alone.
+    fn on_interface_link(&mut self, url: &str, fx: &mut Effects) {
+        self.interface_linked(fx);
+        if self.meta.remote_url.as_deref() != Some(url) {
+            self.meta.remote_url = Some(url.to_string());
+            fx.agent_changed = true;
+            fx.save = true;
+        }
+    }
+
+    /// A sign says the interface's session is linked to claude.ai: connected, whatever the wait
+    /// for one had said, and what fails after that is news again.
+    pub(crate) fn interface_linked(&mut self, fx: &mut Effects) {
+        if let Some(run) = self.tui.as_mut() {
+            run.linked = true;
+        }
+        self.remote_told = false;
+        if self.remote_state.as_deref() != Some("connected") {
+            self.remote_state = Some("connected".into());
+            fx.agent_changed = true;
+        }
+    }
+
+    /// The interface, up, started with Remote Control, has no link to claude.ai: unavailable, and
+    /// the agent is told, once. Remote Control stays in force for the agent: its next start tries
+    /// again.
+    pub(crate) fn interface_unlinked(&mut self, text: String, fx: &mut Effects) {
+        if self.remote_state.as_deref() != Some("unavailable") {
+            self.remote_state = Some("unavailable".into());
+            fx.agent_changed = true;
+        }
+        self.remote_unavailable_notice(text, fx);
+    }
+
+    /// Its interface takes what is typed in it: a window showed it (the user sees the screen), or
+    /// it is up, past its welcome screen and the box about the folder, where a text typed would
+    /// choose an option. Claude Code 2.1.301 has no hook for that (its HTTP hooks are skipped for
+    /// SessionStart); it says so by the registry of its sessions, which lists the interface
+    /// (`tui::find_registered`), or by a `bridge_status` or `bridge-session` entry of its
+    /// transcript, written since it started.
+    pub fn interface_ready(&self) -> bool {
+        self.tui
+            .as_ref()
+            .is_some_and(|t| t.output.shown() || t.spoke || t.registered.is_some())
     }
 
     fn on_tui_user(&mut self, e: &Value, fx: &mut Effects) {
@@ -330,6 +427,8 @@ impl AgentRt {
         }
         self.tui = None;
         self.tui_prompt = None;
+        // Its link to claude.ai is over with it (the interface archives its session itself).
+        self.remote_state = None;
         fx.agent_changed = true;
     }
 }
@@ -510,5 +609,187 @@ mod tests {
         a.stop_tui(&mut fx);
         assert_eq!(fx.turn_end, Some(TurnEnd::Interrupted));
         assert!(!a.meta.status.is_active());
+    }
+
+    /// A `bridge_status` entry, with its link or, with none, what it says.
+    fn bridge_status(content: &str, url: Option<&str>) -> Value {
+        let mut e = json!({ "type": "system", "subtype": "bridge_status", "content": content });
+        if let Some(url) = url {
+            e["url"] = json!(url);
+        }
+        e
+    }
+
+    #[test]
+    fn a_bridge_status_entry_gives_the_interfaces_link_and_each_interface_starts_without_it() {
+        let mut a = agent();
+        let mut fx = Effects::default();
+        assert_eq!(a.remote_state, None);
+        // No interface to ask: a failure to link is nothing to tell, and an entry without an
+        // identifier tells no session.
+        a.on_transcript(
+            &bridge_status("/remote-control is not active", None),
+            &mut fx,
+        );
+        a.on_transcript(&json!({ "type": "bridge-session" }), &mut fx);
+        a.on_transcript(
+            &json!({ "type": "bridge-session", "bridgeSessionId": "" }),
+            &mut fx,
+        );
+        assert_eq!(a.remote_state, None);
+        assert_eq!(a.meta.remote_url, None);
+        assert!(!fx.agent_changed);
+
+        // The entry that tells the session: connected, with no address to give yet.
+        a.on_transcript(
+            &json!({ "type": "bridge-session", "bridgeSessionId": "cse_abc" }),
+            &mut fx,
+        );
+        assert_eq!(a.remote_state.as_deref(), Some("connected"));
+        assert_eq!(a.meta.remote_url, None);
+
+        let url = "https://claude.ai/code/session_abc";
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &bridge_status(&format!("/remote-control is active · {url}"), Some(url)),
+            &mut fx,
+        );
+        assert_eq!(a.remote_state.as_deref(), Some("connected"));
+        assert_eq!(a.meta.remote_url.as_deref(), Some(url));
+        // The stream's session is another: left alone.
+        assert_eq!(a.meta.remote_session, None);
+        assert!(fx.save);
+        // The same entry read again changes nothing more.
+        let mut again = Effects::default();
+        a.on_transcript(&bridge_status("", Some(url)), &mut again);
+        assert!(!again.save);
+
+        // A new interface knows nothing of the link until it tells it; the link stays recorded.
+        a.start_tui();
+        assert_eq!(a.remote_state, None);
+        assert_eq!(a.meta.remote_url.as_deref(), Some(url));
+    }
+
+    fn notices(a: &mut AgentRt) -> Vec<String> {
+        a.conv
+            .items()
+            .iter()
+            .filter(|i| i["kind"] == "notice")
+            .filter_map(|i| i["text"].as_str().map(str::to_string))
+            .collect()
+    }
+
+    #[test]
+    fn an_interface_started_with_remote_control_that_writes_no_link_is_unavailable_once() {
+        let mut a = agent();
+        a.tui = Some(TuiRun::quiet(true));
+        let mut fx = Effects::default();
+        assert!(!a.interface_ready());
+        a.on_transcript(
+            &bridge_status("/remote-control is not active", None),
+            &mut fx,
+        );
+        // Up, and unavailable.
+        assert!(a.interface_ready());
+        assert_eq!(a.remote_state.as_deref(), Some("unavailable"));
+        assert!(fx.agent_changed);
+        assert_eq!(
+            notices(&mut a),
+            ["Remote control indisponible : Claude Code n’a pas pu ouvrir la session distante (« /remote-control is not active »)."]
+        );
+        // Told once, however many times it says it.
+        a.on_transcript(
+            &bridge_status("/remote-control is not active", None),
+            &mut fx,
+        );
+        a.on_transcript(&bridge_status("   ", None), &mut fx);
+        assert_eq!(notices(&mut a).len(), 1);
+
+        // The link comes after all: connected, and the next failure is news again.
+        let url = "https://claude.ai/code/session_abc";
+        a.on_transcript(&bridge_status("", Some(url)), &mut fx);
+        assert_eq!(a.remote_state.as_deref(), Some("connected"));
+        assert!(!a.remote_told);
+        // A link seen, a later entry without one (the user turned it off in the interface) is
+        // not a failure to open it.
+        a.on_transcript(
+            &bridge_status("/remote-control is not active", None),
+            &mut fx,
+        );
+        assert_eq!(a.remote_state.as_deref(), Some("connected"));
+        assert_eq!(notices(&mut a).len(), 1);
+    }
+
+    #[test]
+    fn an_entry_without_a_link_is_no_news_for_an_interface_started_without_remote_control() {
+        let mut a = agent();
+        a.tui = Some(TuiRun::quiet(false));
+        let mut fx = Effects::default();
+        a.on_transcript(
+            &bridge_status("/remote-control is not active", None),
+            &mut fx,
+        );
+        // It says it is up, and that is all.
+        assert!(a.interface_ready());
+        assert_eq!(a.remote_state, None);
+        assert!(notices(&mut a).is_empty());
+    }
+
+    #[test]
+    fn the_entries_of_the_link_make_an_interface_ready_and_the_session_start_hook_does_not() {
+        let mut a = agent();
+        a.tui = Some(TuiRun::quiet(true));
+        let mut fx = Effects::default();
+        // Claude Code skips its HTTP hooks for SessionStart; if one came, it would change nothing.
+        let status = a.meta.status;
+        let out = a.on_hook(
+            &json!({ "hook_event_name": "SessionStart", "source": "startup",
+                "session_id": "55555555-2222-3333-4444-555555555555" }),
+            &mut fx,
+        );
+        assert_eq!(out, HookOutcome::default());
+        assert_eq!(a.meta.status, status);
+        assert!(a.conv.items().is_empty());
+        assert!(!a.interface_ready());
+        a.on_transcript(
+            &json!({ "type": "bridge-session", "bridgeSessionId": "cse_abc" }),
+            &mut fx,
+        );
+        assert!(a.interface_ready());
+        // Registered by the registry of the sessions, or shown by a window: ready all the same.
+        let mut b = agent();
+        b.tui = Some(TuiRun::quiet(false));
+        assert!(!b.interface_ready());
+        b.tui.as_mut().unwrap().registered = Some(std::time::Instant::now());
+        assert!(b.interface_ready());
+        let mut c = agent();
+        c.tui = Some(TuiRun::quiet(false));
+        c.tui.as_ref().unwrap().output.mark_shown();
+        assert!(c.interface_ready());
+    }
+
+    #[test]
+    fn ending_the_link_keeps_the_remote_session_until_it_is_closed_and_the_interfaces_state() {
+        let mut a = agent();
+        a.meta.remote_session = Some("cse_abc".into());
+        a.meta.remote_url = Some("https://claude.ai/code/session_abc".into());
+        a.remote_state = Some("connected".into());
+        // No live process linked: nothing can close the session now.
+        assert!(a.end_link().is_none());
+        assert_eq!(a.meta.remote_session.as_deref(), Some("cse_abc"));
+        assert_eq!(a.meta.remote_url, None);
+        assert_eq!(a.remote_state, None);
+        // Forgotten when it is closed, if it is still the one.
+        a.forget_remote_session(Some("cse_other"));
+        assert_eq!(a.meta.remote_session.as_deref(), Some("cse_abc"));
+        a.forget_remote_session(Some("cse_abc"));
+        assert_eq!(a.meta.remote_session, None);
+
+        // In the Claude Code view, the state is the interface's: it keeps its link.
+        let mut b = agent();
+        b.meta.terminal = true;
+        b.remote_state = Some("connected".into());
+        b.end_link();
+        assert_eq!(b.remote_state.as_deref(), Some("connected"));
     }
 }

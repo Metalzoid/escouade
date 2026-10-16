@@ -1337,6 +1337,8 @@ impl<R: Runtime> Core<R> {
                     isolated: None,
                     branch: taken_up,
                     base,
+                    // Set apart from Remote Control by hand for its earlier agent: so is this one.
+                    remote_off: t.remote_off,
                 },
             )
             .await;
@@ -1818,6 +1820,26 @@ impl<R: Runtime> Core<R> {
                     && matches!(t.column, Column::Doing | Column::Review)
                 {
                     board::back_to_todo(t);
+                }
+                Ok(())
+            });
+        }
+    }
+
+    /// The user set the agent apart from Remote Control, or turned it on for it by hand: its
+    /// ticket remembers it for the agents it gets next (sent back to do and started again).
+    pub(crate) fn remember_remote_off(&self, agent_id: &str, off: bool) {
+        let ticket = self
+            .tickets
+            .read()
+            .iter()
+            .find(|t| t.agent_id.as_deref() == Some(agent_id) && t.remote_off != off)
+            .map(|t| t.id.clone());
+        if let Some(id) = ticket {
+            let _ = self.edit_ticket(&id, |t| {
+                // Checked again under the lock: it may have moved since.
+                if t.agent_id.as_deref() == Some(agent_id) {
+                    t.remote_off = off;
                 }
                 Ok(())
             });

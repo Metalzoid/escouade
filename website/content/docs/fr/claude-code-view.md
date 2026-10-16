@@ -8,12 +8,11 @@ La conversation d’Escouade montre l’essentiel du travail d’un agent, mais 
 
 ## Passer d’une vue à l’autre
 
-Dans l’en-tête de la conversation d’un agent, le bouton « Vue Claude Code » (`>_`) lance l’interface de Claude Code dans un terminal qui prend la place de la conversation. Le bouton devient « Vue Escouade » (`◧`) : un clic te ramène à la conversation. Le menu de la carte de l’agent, dans la barre latérale (clic droit), propose la même chose : « Vue Claude Code » ou « Vue Escouade ». La session est la même dans les deux sens : Escouade arrête le processus de l’une des vues et reprend la session dans l’autre (`--resume`), donc l’agent n’oublie rien. Le choix est gardé pour chaque agent. L’interface démarre quand tu affiches l’agent (le terminal dit alors « Démarrage de Claude Code… »), y compris après un redémarrage d’Escouade, et reprend sa session.
+Dans l’en-tête de la conversation d’un agent, le bouton « Vue Claude Code » (`>_`) lance l’interface de Claude Code dans un terminal qui prend la place de la conversation. Le bouton devient « Vue Escouade » (`◧`) : un clic te ramène à la conversation. Le menu de la carte de l’agent, dans la barre latérale (clic droit), propose la même chose : « Vue Claude Code » ou « Vue Escouade ». La session est la même dans les deux sens : Escouade arrête le processus de l’une des vues et reprend la session dans l’autre (`--resume`), donc l’agent n’oublie rien. Le choix est gardé pour chaque agent. L’interface démarre quand tu affiches l’agent (le terminal dit alors « Démarrage de Claude Code… »), y compris après un redémarrage d’Escouade, et reprend sa session. Un agent en remote control fait exception : au démarrage d’Escouade, son interface est lancée en fond pour qu’il soit joignable (voir [plus bas](#le-remote-control-dans-cette-vue)).
 
-Le passage à la vue Claude Code est refusé dans trois cas, avec un message ; le retour à la vue Escouade, lui, n’est refusé dans aucun :
+Le passage à la vue Claude Code est refusé dans deux cas, avec un message ; le retour à la vue Escouade, lui, n’est refusé dans aucun :
 
 - **L’agent travaille encore** : change de vue quand son tour est fini.
-- **Le remote control est activé** : coupe-le d’abord. Dans l’interface de Claude Code, c’est sa commande `/remote-control` qui le fait (voir [le remote control](remote-control)).
 - **L’agent travaille sur un ticket** : un agent de ticket reste dans la vue d’Escouade, que son tableau pilote (voir [le Kanban](board)). Ni le bouton ni l’entrée du menu de sa carte n’existent pour lui, ni pour un agent archivé.
 
 Si l’interface s’arrête (tu as tapé `/exit`, ou le processus a été tué), le terminal affiche « Claude Code s’est arrêté. » et un bouton « Relancer » ; si elle ne démarre pas, « Claude Code n’a pas démarré : » suivi de l’erreur, avec le même bouton. Archiver ou supprimer l’agent ferme aussi son terminal.
@@ -46,7 +45,18 @@ Dans cette vue, aucun signal ne dit à Escouade qu’un sous-agent en arrière-p
 
 Le champ de saisie d’Escouade n’est pas affiché : tu écris dans le terminal, comme dans Claude Code. Pour joindre une image, par exemple une capture d’écran copiée, colle-la dans le terminal (`Ctrl+V`, `Cmd+V` sous macOS) : Escouade l’enregistre dans un fichier et tape son chemin, que Claude Code prend pour l’image (« [Image #1] »). Du texte collé est tapé tel quel.
 
-Un message envoyé à l’agent d’ailleurs, par exemple par le [serveur MCP](mcp), est tapé dans son interface. Il est refusé tant que l’agent attend une réponse dans son terminal (« L’agent attend une réponse dans son terminal : réponds-y d’abord. »). Une interruption demandée depuis Escouade devient la touche `Échap` dans l’interface.
+Un message envoyé à l’agent d’ailleurs, par exemple par le [serveur MCP](mcp), est tapé dans son interface. Il est refusé tant que l’agent attend une réponse dans son terminal (« L’agent attend une réponse dans son terminal : réponds-y d’abord. »). Il l’est aussi pour une interface lancée en fond que personne n’a encore affichée, tant qu’elle n’est pas prête (voir [plus bas](#le-remote-control-dans-cette-vue)). Une interruption demandée depuis Escouade devient la touche `Échap` dans l’interface.
+
+## Le remote control dans cette vue
+
+Le [remote control](remote-control) suit les mêmes règles que dans la vue Escouade : tu l’actives par un clic droit sur la carte de l’agent ou par un réglage (celui d’un projet ou le réglage global), et l’agent est accessible depuis claude.ai et l’app Claude sous le nom `projet · agent`. Le passage à la vue Claude Code n’est pas refusé quand il est activé. C’est l’interface de Claude Code qui tient alors la session distante.
+
+- **Le lancement.** L’interface d’un agent en remote control est lancée avec `--remote-control=<projet · agent>` : Claude Code affiche le lien de la session. Quand l’interface reprend sa session (redémarrage d’Escouade, relance), Claude Code rattache la même session distante, avec le même lien. Une interface fermée archive sa session distante.
+- **Au démarrage d’Escouade.** L’interface d’un tel agent est lancée en fond, sans que tu l’ouvres. Ouvrir l’agent affiche l’interface déjà lancée ; si son remote control s’éteint avant, elle s’arrête, sauf en plein tour. Ces lancements se font au plus 3 à la fois : un démarrage garde sa place jusqu’à ce que l’interface soit prête, 15 secondes au plus.
+- **Un changement.** Escouade ne peut pas allumer ni couper le remote control d’une interface déjà ouverte : un changement vaut au prochain lancement de l’interface. Après un clic droit, un message le dit ; pour un réglage, c’est sa description. D’ici là, la commande `/remote-control` de Claude Code le fait.
+- **Le menu de la carte.** Il propose « Activer le remote control » ou « Désactiver le remote control ». « Ouvrir sur claude.ai » et « Copier le lien claude.ai » sont proposés aussi, une fois l’interface connectée : le lien vient de l’interface, qui l’affiche dans la sienne.
+- **L’icône de la carte.** Son infobulle dit où en est l’interface : aucune interface lancée (pas joignable pour l’instant), connexion…, connecté, au prochain lancement de l’interface (ouverte avant que le remote control s’allume), ou pas ouvert par Claude Code (compte sans abonnement claude.ai, réseau, proxy ou règle de l’organisation). Éteint pour Escouade mais encore actif dans l’interface ouverte, le remote control garde une icône barrée, dans la couleur d’avertissement, jusqu’au prochain lancement, si l’interface a vraiment eu son lien. Le détail est dans [le remote control](remote-control#l-icone-d-une-interface).
+- **Un message refusé.** Tant qu’une interface lancée en fond n’a jamais été affichée et n’est pas prête (écran du premier lancement, dossier à approuver), un message de la fenêtre ou du serveur MCP est refusé : ouvre l’agent pour voir l’interface.
 
 ## Ouvrir les nouveaux agents dans cette vue
 

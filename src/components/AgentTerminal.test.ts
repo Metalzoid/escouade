@@ -19,6 +19,8 @@ const terms = vi.hoisted(() => ({
   mounted: [] as (string | null)[],
   disposed: [] as string[],
   held: new Set<string>(),
+  /** What the backend’s kill of a terminal is waiting on: settled by default. */
+  kill: Promise.resolve() as Promise<void>,
   /** While set, a start is not over: the interface is still starting. */
   gate: null as Promise<void> | null,
   /** What `roomOf` measures, and the elements it was asked to measure. */
@@ -57,6 +59,7 @@ vi.mock('../lib/terminals', () => ({
   disposeTerminal: (id: string) => {
     terms.disposed.push(id);
     terms.held.delete(id);
+    return terms.kill;
   },
 }));
 
@@ -73,6 +76,7 @@ beforeEach(() => {
   terms.mounted = [];
   terms.disposed = [];
   terms.held.clear();
+  terms.kill = Promise.resolve();
   terms.gate = null;
   terms.room = { width: 1124, height: 932 };
   terms.measured = [];
@@ -142,6 +146,47 @@ describe('the agent in Claude Code’s interface', () => {
     await waitFor(() => expect(terms.mounted).toContain('t2'));
     expect(terms.disposed).toEqual(['t1']);
     expect(screen.queryByText('Claude Code s’est arrêté.')).toBeNull();
+  });
+
+  it('opens the new interface only once the old one is stopped: the backend would attach to one still running', async () => {
+    const a = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend();
+    render(AgentTerminal, { agent: a });
+    await waitFor(() => expect(terms.mounted).toContain('t1'));
+    // Its kill is not done yet when « Relancer » is clicked.
+    let stopped!: () => void;
+    terms.kill = new Promise<void>((resolve) => (stopped = resolve));
+    app.exitedTerms['t1'] = 0;
+    await userEvent.click(await screen.findByRole('button', { name: 'Relancer' }));
+    expect(terms.disposed).toEqual(['t1']);
+    // Nothing is opened while it runs, however long it takes.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(terms.opened).toEqual([a.id]);
+    expect(screen.getByText('Démarrage de Claude Code…')).toBeInTheDocument();
+    stopped();
+    await waitFor(() => expect(terms.mounted).toContain('t2'));
+    expect(terms.opened).toEqual([a.id, a.id]);
+  });
+
+  it('starts only one new interface when another restart is asked while the old one is being stopped', async () => {
+    const a = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend();
+    render(AgentTerminal, { agent: a });
+    await waitFor(() => expect(terms.mounted).toContain('t1'));
+    let stopped!: () => void;
+    terms.kill = new Promise<void>((resolve) => (stopped = resolve));
+    app.exitedTerms['t1'] = 0;
+    await userEvent.click(await screen.findByRole('button', { name: 'Relancer' }));
+    // « Outils d’Escouade au prochain démarrage » asks for one too.
+    app.relaunched[a.id] = 1;
+    await new Promise((r) => setTimeout(r, 20));
+    stopped();
+    await waitFor(() => expect(terms.mounted).toContain('t2'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(terms.disposed).toEqual(['t1']);
+    expect(terms.opened).toEqual([a.id, a.id]);
   });
 
   it('starts it again when first asked from elsewhere, the count not there before', async () => {

@@ -42,6 +42,9 @@
   /** Where its next worktree would go, as typed. */
   const nextWorktree = $derived(tildify(joinPath(worktreesRoot(project.path, draft.worktreeDir), t('settings.project.nextName'))));
 
+  /** The setting for all agents, as drafted in this modal (not as saved), is on: it covers this project’s agents already. */
+  const coveredByAll = $derived(!!settingsForm.settings.remoteControlAll);
+
   /** Who writes the commits of the files panel's « Commit… » and « Commit tout… ». */
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
@@ -183,6 +186,21 @@
       <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={draft.account} />
     </Row>
   {/if}
+</Group>
+
+<Group title={t('settings.project.remoteTitle')}>
+  <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
+    <div class="remote">
+      <!-- The setting for all agents covers every project: the switch shows it, the project’s own value stays as it is. -->
+      <Switch
+        label={t('settings.project.remote')}
+        disabled={coveredByAll}
+        describedby={coveredByAll ? 'remote-covered' : undefined}
+        bind:on={() => coveredByAll || draft.remoteControl, (v) => (draft.remoteControl = v)}
+      />
+      {#if coveredByAll}<p class="why" id="remote-covered">{t('settings.project.remoteGlobal')}</p>{/if}
+    </div>
+  </Row>
 </Group>
 
 <Group title="Git">
@@ -383,6 +401,22 @@
     border-radius: 7px;
     padding: 0;
     cursor: pointer;
+  }
+  .remote {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .why {
+    margin: 0;
+    max-width: 230px;
+    font-size: 11.5px;
+    line-height: 1.45;
+    text-align: right;
+    color: var(--muted);
+    text-wrap: pretty;
   }
   .copy {
     height: auto;

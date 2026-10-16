@@ -1,6 +1,6 @@
 # Settings: Projects
 
-The “Projects” tab sets one project at a time: its name and color, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
+The “Projects” tab sets one project at a time: its name and color, its remote control, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
 
 ## Choosing the project
 
@@ -16,6 +16,16 @@ The tab acts on the project chosen in the “Project” row, under the header of
 | “Preferred account” | The account new agents and tickets of the project start on. Only visible with several accounts. Choices: “Automatic” (the first active account under the pause threshold, in the order of the accounts) or one of the active accounts that serve this project. | “Automatic” |
 
 Accounts are described in [accounts](accounts) and set in the [“Claude accounts”](settings-accounts) tab. An account switched off after it was chosen stays shown with “(inactive)” as long as it is chosen, and is ignored in the meantime.
+
+## Remote control
+
+| Setting | Effect | Default |
+|---|---|---|
+| “Remote control for this project’s agents” | Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s `claude` process right away, at most 3 at a time, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. | Off |
+
+To set an agent apart, right-click its card, then “Turn off remote control”. When off, the setting takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those the global setting still covers.
+
+When “Remote control for all agents” is on in the [“Claude Code”](settings-claude-code) tab, the project’s switch shows on and grayed out, with “On for all projects in Settings › Claude Code”. The project’s own choice is kept: once the global setting is off, the switch goes back to its state. See [remote control](remote-control).
 
 ## Git
 

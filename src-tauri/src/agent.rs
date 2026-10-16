@@ -141,6 +141,16 @@ pub struct AgentRt {
     pub remote_state: Option<String>,
     /// The live process was linked to claude.ai (Remote Control).
     pub remote_linked: bool,
+    /// A link to claude.ai was tried on the live process (it worked, or the agent says why not).
+    pub remote_tried: bool,
+    /// Its interface closed right after it started with Remote Control (`tui::RC_GRACE`): the
+    /// ones that follow start without the option, until the app starts again or the user turns
+    /// Remote Control on by hand (not saved).
+    pub remote_fallback: bool,
+    /// The agent was told its Remote Control is unavailable, and nothing has worked since: it is
+    /// not told again at every start, until a link works or the user turns it on by hand (not
+    /// saved).
+    pub remote_told: bool,
     /// What the agent does now, from its latest tool, thinking or text (main thread only).
     pub activity: Option<String>,
     /// The plans it wrote (docs/superpowers/plans/*.md, as absolute paths), oldest first, five at
@@ -213,11 +223,50 @@ pub struct AgentRt {
     pub(crate) escouade_next: bool,
 }
 
+/// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
+/// known).
+pub struct RemoteLink {
+    pub proc: Arc<ClaudeProcess>,
+    pub bridge: Option<String>,
+}
+
 /// Claude Code's interface running for an agent (`tui`).
 #[derive(Debug, Clone)]
 pub struct TuiRun {
     /// Its terminal.
     pub term_id: String,
+    /// The same, as the window is told of it.
+    pub info: crate::pty::TermInfo,
+    /// What the terminal printed, and the window that shows it: the terminal runs with none too
+    /// (Remote Control keeps the interface up).
+    pub output: Arc<crate::tui::TuiOutput>,
+    /// It was started with Remote Control (`--remote-control`): it has it whatever the agent's
+    /// setting says now, until its next start.
+    pub remote: bool,
+    /// When it started, as an instant: what the registry is waited for since (`REGISTRY_PATIENCE`),
+    /// and the quick close that Remote Control is taken for (`RC_GRACE`).
+    pub launched_at: std::time::Instant,
+    /// Its transcript has an entry that says it is up and how the link of its session to claude.ai
+    /// went (`bridge_status`, `bridge-session`), written since it started. See
+    /// `AgentRt::interface_ready`.
+    pub spoke: bool,
+    /// When the registry of Claude Code's sessions first listed it (`tui::find_registered`):
+    /// it is past its welcome screen and the box about the folder.
+    pub registered: Option<std::time::Instant>,
+    /// The file of the registry that lists it, once found: read again for its link.
+    pub registry_file: Option<std::path::PathBuf>,
+    /// The folder of that registry (`<the account's config folder>/sessions`).
+    pub sessions: std::path::PathBuf,
+    /// A sign was seen that its session is linked to claude.ai (a `bridge-session` entry, a
+    /// `bridge_status` with a link, the `bridgeSessionId` of the registry).
+    pub linked: bool,
+    /// Held while a message is typed in it, paste then Enter: two messages never mix.
+    pub typing: Arc<parking_lot::Mutex<()>>,
+    /// The user closed its terminal (`Core::kill_terminal`): its end is no failure to start.
+    pub killed: bool,
+    /// Remote Control ended while it ran a turn, and no window had shown it: it stops once the
+    /// turn is over, if it still has none.
+    pub stop_when_idle: bool,
     /// Which of the agent's interfaces it is: what the terminal's exit and the reads of the
     /// transcript check, so that an older one's are ignored.
     pub gen: u64,
@@ -228,6 +277,39 @@ pub struct TuiRun {
     pub offset: u64,
     /// The `claude` it runs: what reads the files Escouade gives it (an image pasted there).
     pub program: crate::claude::Program,
+}
+
+#[cfg(test)]
+impl TuiRun {
+    /// An interface that has said nothing yet, no window has shown (tests).
+    pub(crate) fn quiet(remote: bool) -> Self {
+        let info = crate::pty::TermInfo {
+            id: "term-1".into(),
+            project_id: String::new(),
+            name: "agent".into(),
+            shell: "claude".into(),
+        };
+        Self {
+            term_id: info.id.clone(),
+            info,
+            output: Arc::new(crate::tui::TuiOutput::new(None)),
+            remote,
+            launched_at: std::time::Instant::now(),
+            spoke: false,
+            registered: None,
+            registry_file: None,
+            sessions: std::path::PathBuf::new(),
+            linked: false,
+            typing: Arc::default(),
+            killed: false,
+            stop_when_idle: false,
+            gen: 1,
+            started: now_ms(),
+            transcript: None,
+            offset: 0,
+            program: crate::claude::Program::Native(std::path::PathBuf::new()),
+        }
+    }
 }
 
 const MAX_TEXT: usize = 8000;
@@ -317,6 +399,10 @@ impl AgentRt {
         if let Some(plan) = meta.plan.as_mut() {
             plan.close_running(now_ms());
         }
+        // Saved before Remote Control had a source: the user turned it on for this agent.
+        if meta.remote_control && meta.remote_source.is_none() {
+            meta.remote_source = Some(RemoteSource::Hand);
+        }
         Self {
             conv: Conv::new(conv_dir, &meta.id),
             meta,
@@ -335,6 +421,9 @@ impl AgentRt {
             saw_init: false,
             remote_state: None,
             remote_linked: false,
+            remote_tried: false,
+            remote_fallback: false,
+            remote_told: false,
             activity: None,
             plan_written: Vec::new(),
             plan_calls: HashSet::new(),
@@ -412,6 +501,7 @@ impl AgentRt {
             alive: self.proc.is_some() || self.tui.is_some(),
             escouade_next: self.escouade_next && (self.proc.is_some() || self.tui.is_some()),
             terminal_id: self.tui.as_ref().map(|t| t.term_id.clone()),
+            interface_remote: self.tui.as_ref().map(|t| t.remote),
             tui_exit: self.tui_exit.clone(),
             pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),
             requests: self.pending.iter().map(|p| p.view.clone()).collect(),
@@ -442,6 +532,7 @@ impl AgentRt {
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
+        self.remote_tried = false;
         self.forget_turn();
         self.saw_init = false;
         self.queued = 0;
@@ -778,7 +869,58 @@ impl AgentRt {
         self.interrupt_plan();
         let p = self.proc.take()?;
         self.gen += 1;
+        // Its exit is ignored from now on, so the link it held is dropped here.
+        self.remote_state = None;
+        self.remote_linked = false;
+        self.remote_tried = false;
         Some(p)
+    }
+
+    /// Remote Control ends for the agent: no longer in force, its remote session forgotten. The
+    /// live process, when it was linked, is given back with the session to close (`end_link`).
+    pub fn end_remote(&mut self) -> Option<RemoteLink> {
+        self.meta.remote_control = false;
+        self.meta.remote_source = None;
+        self.end_link()
+    }
+
+    /// The link of the live process to claude.ai ends; Remote Control stays in force for the
+    /// agent (its interface will hold its own). The process, when it was linked, is given back
+    /// with the session it held: closing it is up to the caller (`Core::close_link`). The
+    /// session's id is kept (`meta.remote_session`) until a closing has worked
+    /// (`forget_remote_session`): with no live linked process (just started, a link that failed,
+    /// a process gone) nothing can close it now, and the agent's next process does.
+    pub fn end_link(&mut self) -> Option<RemoteLink> {
+        let bridge = self.meta.remote_session.clone();
+        self.meta.remote_url = None;
+        // In the Claude Code view the state is the interface's, which keeps its link until its
+        // next launch.
+        if !self.meta.terminal {
+            self.remote_state = None;
+        }
+        // A link to claude.ai is to be tried again when it comes back.
+        self.remote_tried = false;
+        let linked = std::mem::take(&mut self.remote_linked);
+        self.proc
+            .clone()
+            .filter(|_| linked)
+            .map(|proc| RemoteLink { proc, bridge })
+    }
+
+    /// The remote session `bridge` is closed on claude.ai: the agent no longer holds it, unless
+    /// it holds another one meanwhile.
+    pub fn forget_remote_session(&mut self, bridge: Option<&str>) {
+        if self.meta.remote_session.as_deref() == bridge {
+            self.meta.remote_session = None;
+        }
+    }
+
+    /// Tells the agent its Remote Control is unavailable, unless it was told already and nothing
+    /// has worked since (`remote_told`).
+    pub fn remote_unavailable_notice(&mut self, text: String, fx: &mut Effects) {
+        if !std::mem::replace(&mut self.remote_told, true) {
+            self.notice("warn", text, fx);
+        }
     }
 
     pub fn clear_pending(&mut self, fx: &mut Effects) {
@@ -966,6 +1108,7 @@ impl AgentRt {
         self.live.clear();
         self.remote_state = None;
         self.remote_linked = false;
+        self.remote_tried = false;
         self.forget_turn();
         self.plan_apply(fx, |plan| plan.close_running(now_ms()));
         self.clear_pending(fx);

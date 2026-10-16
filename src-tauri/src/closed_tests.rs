@@ -1221,6 +1221,120 @@ async fn the_remote_control_agents_of_a_project_that_comes_back_start_again() {
     assert!(!h.alive(&b));
 }
 
+/// Whether the Remote Control of the agent is in force from `source` and linked to claude.ai
+/// (with none: out, and not linked).
+fn remote_held(h: &Harness, id: &str, source: Option<RemoteSource>) -> bool {
+    let handle = h.core.agent(id).unwrap();
+    let rt = handle.lock();
+    rt.meta.remote_control == source.is_some()
+        && rt.meta.remote_source == source
+        && rt.remote_linked == source.is_some()
+}
+
+/// The Remote Control requests the fake CLI started in `cwd` got so far.
+fn remote_asked(h: &Harness, cwd: &str) -> Vec<Value> {
+    h.fake_log(Path::new(cwd), "control")
+}
+
+#[tokio::test]
+async fn the_agents_of_a_project_with_remote_control_come_back_each_as_it_was_set_whatever_the_global_setting_did_meanwhile(
+) {
+    use RemoteSource::{Global, Hand, Project as OfProject};
+    let h = harness("closed-remote-settings");
+    let (p, r) = h.project(true).await;
+    // « Remote control pour les agents de ce projet ».
+    let mut project = h.core.project(&p.id).unwrap();
+    project.remote_control = true;
+    h.core.update_project(project).unwrap();
+    // One covered by that setting, one set apart by hand, one turned on by hand.
+    let covered = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let apart = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let by_hand = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let all = [covered.clone(), apart.clone(), by_hand.clone()];
+    h.wait("the project's setting in force for its three agents", |h| {
+        all.iter().all(|id| remote_held(h, id, Some(OfProject)))
+    })
+    .await;
+    h.core.set_remote_control(&apart, false).await.unwrap();
+    h.core.set_remote_control(&by_hand, true).await.unwrap();
+    assert!(remote_held(&h, &covered, Some(OfProject)));
+    assert!(remote_held(&h, &apart, None) && h.agent(&apart).remote_off);
+    assert!(remote_held(&h, &by_hand, Some(Hand)));
+    // Each has a folder of its own (a worktree), so a log of requests of its own.
+    let cwds: Vec<String> = all.iter().map(|id| h.agent(id).cwd).collect();
+    assert!(cwds[0] != cwds[1] && cwds[1] != cwds[2] && cwds[0] != cwds[2]);
+    // Linked: the fake CLI got their requests.
+    assert!(!remote_asked(&h, &cwds[0]).is_empty());
+    assert!(!remote_asked(&h, &cwds[2]).is_empty());
+    let session_of = |id: &str| h.agent(id).remote_session.unwrap();
+    let (covered_session, hand_session) = (session_of(&covered), session_of(&by_hand));
+    assert!(h.agent(&apart).remote_session.is_none());
+
+    close(&h, &p.id).await;
+
+    assert!(all.iter().all(|id| h.core.agent(id).is_err()));
+    let asked: Vec<usize> = cwds.iter().map(|c| remote_asked(&h, c).len()).collect();
+    let launched: Vec<usize> = cwds
+        .iter()
+        .map(|c| h.launches(Path::new(c)).len())
+        .collect();
+    // The global setting turned on while the project is closed: nothing of it is started for it,
+    // no request is made for its agents.
+    h.remote_all(true);
+    h.settle_remote().await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(all.iter().all(|id| h.core.agent(id).is_err()));
+    let still: Vec<usize> = cwds.iter().map(|c| remote_asked(&h, c).len()).collect();
+    assert_eq!(still, asked);
+    for (cwd, before) in cwds.iter().zip(&launched) {
+        assert_eq!(h.launches(Path::new(cwd)).len(), *before, "{cwd}");
+    }
+
+    let back = add_again(&h, &r).await;
+
+    // The project's setting is still on; the agent set apart still is.
+    assert_eq!(back.id, p.id);
+    assert!(back.remote_control && h.core.project(&p.id).unwrap().remote_control);
+    let m = h.agent(&apart);
+    assert!(m.remote_off && !m.remote_control && m.remote_source.is_none());
+    // The other two hold Remote Control again, the covered one from the global setting now, and
+    // their process is up and linked to the remote session they had.
+    tokio::time::timeout(
+        Duration::from_secs(15),
+        h.wait("the remote agents linked again", |h| {
+            h.alive(&covered)
+                && h.alive(&by_hand)
+                && remote_held(h, &covered, Some(Global))
+                && remote_held(h, &by_hand, Some(Hand))
+        }),
+    )
+    .await
+    .expect("the remote control agents were not started again");
+    h.settle_remote().await;
+    for (i, session) in [(0, &covered_session), (2, &hand_session)] {
+        let tail = remote_asked(&h, &cwds[i]).split_off(asked[i]);
+        assert_eq!(tail.len(), 1, "{tail:?}");
+        assert_eq!(tail[0]["enabled"], true, "{tail:?}");
+        assert_eq!(tail[0]["reattach_session_id"], session.as_str(), "{tail:?}");
+        assert_eq!(h.launches(Path::new(&cwds[i])).len(), launched[i] + 1);
+    }
+    assert_eq!(
+        h.agent(&covered).remote_session.as_deref(),
+        Some(covered_session.as_str())
+    );
+    assert_eq!(
+        h.agent(&by_hand).remote_session.as_deref(),
+        Some(hand_session.as_str())
+    );
+    // The one set apart has none: no request for it, no process.
+    let m = h.agent(&apart);
+    assert!(m.remote_off && !m.remote_control && m.remote_source.is_none());
+    assert!(m.remote_session.is_none() && m.remote_url.is_none());
+    assert_eq!(remote_asked(&h, &cwds[1]).len(), asked[1]);
+    assert_eq!(h.launches(Path::new(&cwds[1])).len(), launched[1]);
+    assert!(!h.alive(&apart));
+}
+
 #[tokio::test]
 async fn closing_does_not_read_the_conversation_of_an_agent_that_had_nothing_running() {
     let h = harness("closed-light");

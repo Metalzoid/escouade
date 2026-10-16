@@ -5,6 +5,8 @@
 use crate::core::AgentOptions;
 use crate::core_tests::{agent_on, harness, plain_text, second_account, Harness};
 use crate::model::*;
+use crate::pty::TermInfo;
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 /// An agent on a Claude account of its own (the fake keeps its transcripts in its folder), in the
@@ -14,11 +16,33 @@ async fn agent_in_tui(h: &Harness) -> String {
     second_account(h);
     let id = agent_on(h, &p, "pro").await.id;
     h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(h, &id).await;
+    up(h, &id).await;
+    id
+}
+
+/// Waits until the registry of Claude Code's sessions lists the agent's interface: it is up, and
+/// reads its input. A Ctrl+C sent before (it prints its first screen first) is lost.
+async fn up(h: &Harness, id: &str) {
+    let session = h.agent(id).session_id.unwrap();
+    h.wait("its interface registered", |h| {
+        std::fs::read_dir(registry_dir(h))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|f| std::fs::read_to_string(f.path()).is_ok_and(|c| c.contains(&session)))
+    })
+    .await;
+}
+
+/// The interface of the agent (in the Claude Code view) opened as the window does, its first
+/// screen waited for: its terminal, and what that has shown.
+async fn open_interface(h: &Harness, id: &str) -> (TermInfo, Arc<parking_lot::Mutex<String>>) {
     let screen = Arc::new(parking_lot::Mutex::new(String::new()));
     let sink = screen.clone();
     let info = h
         .core
-        .open_agent_terminal(&id, (100, 30), false, move |b| {
+        .open_agent_terminal(id, (100, 30), false, move |b| {
             sink.lock().push_str(&String::from_utf8_lossy(&b))
         })
         .await
@@ -39,7 +63,518 @@ async fn agent_in_tui(h: &Harness) -> String {
         );
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    id
+    (info, screen)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn remote_control_goes_with_an_agent_into_the_claude_code_view_and_back() {
+    let h = harness("tui-remote");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_remote_control(&id, true).await.unwrap();
+    let m = h.agent(&id);
+    let session = m.remote_session.clone().unwrap();
+    let name = format!("demo · {}", m.name);
+
+    // Not refused: its stream's process stops, after its remote session was closed for good (the
+    // interface will have a session of its own), and Remote Control stays in force.
+    let asked = h.fake_log(&r, "control").len();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    assert!(!h.alive(&id));
+    {
+        let a = h.core.agent(&id).unwrap();
+        let rt = a.lock();
+        assert!(!rt.remote_linked);
+        assert_eq!(rt.remote_state, None);
+        assert!(rt.meta.remote_control);
+        assert_eq!(rt.meta.remote_source, Some(RemoteSource::Hand));
+        assert_eq!(
+            (&rt.meta.remote_session, &rt.meta.remote_url),
+            (&None, &None)
+        );
+    }
+    let closing: Vec<Value> = h.fake_log(&r, "control").split_off(asked);
+    assert_eq!(
+        closing
+            .iter()
+            .map(|q| q["enabled"].clone())
+            .collect::<Vec<_>>(),
+        [json!(false), json!(true), json!(false)],
+        "{closing:?}"
+    );
+    assert_eq!(closing[1]["reattach_session_id"], session.as_str());
+    assert_eq!(h.fake_log(&r, "archived"), [json!({ "bridge": session })]);
+
+    // Its interface starts with Remote Control, under the name of its session in claude.ai.
+    open_interface(&h, &id).await;
+    let launch = h.launches(&r).pop().unwrap();
+    assert!(
+        launch.contains(&format!("--remote-control={name}")),
+        "{launch:?}"
+    );
+
+    // Back to the stream: its next process opens a session of its own (the interface's was closed
+    // on its side, and the stream's was closed when it left).
+    h.core.set_agent_view(&id, false).await.unwrap();
+    h.wait("the stream linked again", |h| {
+        h.core.agent(&id).unwrap().lock().remote_linked
+    })
+    .await;
+    let req = h.fake_log(&r, "control").pop().unwrap();
+    assert_eq!(req["enabled"], true);
+    assert!(req.get("reattach_session_id").is_none(), "{req}");
+}
+
+/// Waits until the agent's interface takes a message (a window showed it, or it said it is up).
+async fn ready(h: &Harness, id: &str) {
+    h.wait("its interface ready", |h| {
+        h.core.agent(id).unwrap().lock().interface_ready()
+    })
+    .await;
+}
+
+/// The agent has its interface running.
+fn interface_runs(h: &Harness, id: &str) -> bool {
+    h.core.agent(id).unwrap().lock().tui.is_some()
+}
+
+/// The terminal of the agent's interface.
+fn terminal_of(h: &Harness, id: &str) -> String {
+    h.core
+        .agent(id)
+        .unwrap()
+        .lock()
+        .tui
+        .as_ref()
+        .unwrap()
+        .term_id
+        .clone()
+}
+
+/// A window taking the agent's terminal over: what it was sent.
+async fn show(h: &Harness, id: &str) -> (TermInfo, Arc<parking_lot::Mutex<String>>) {
+    let screen = Arc::new(parking_lot::Mutex::new(String::new()));
+    let sink = screen.clone();
+    let info = h
+        .core
+        .open_agent_terminal(id, (100, 30), false, move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
+        .await
+        .unwrap();
+    (info, screen)
+}
+
+/// When (ms) the fake interface read each Ctrl+C in `cwd`.
+fn ctrl_c(h: &Harness, cwd: &std::path::Path) -> Vec<i64> {
+    h.fake_log(cwd, "quit")
+        .iter()
+        .map(|q| q["at"].as_i64().unwrap())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn going_back_to_escouades_view_quits_the_interface_with_two_ctrl_c() {
+    let h = harness("tui-quit-back");
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let term = terminal_of(&h, &id);
+    let started = std::time::Instant::now();
+    h.core.set_agent_view(&id, false).await.unwrap();
+    // Two, 700 ms apart: Claude Code closes on them and archives its remote session. (The pause
+    // is the app's: the interface reads both as it can, however loaded the machine.)
+    let at = ctrl_c(&h, &cwd);
+    assert_eq!(at.len(), 2, "{at:?}");
+    assert!(started.elapsed() >= std::time::Duration::from_millis(700));
+    // It left by itself (its own code, not a kill's), and it is gone before the stream resumes its
+    // session.
+    assert!(!h.core.pty.exists(&term));
+    assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
+    h.wait("its exit told", |h| exit_code(h, &term).is_some())
+        .await;
+    assert_eq!(exit_code(&h, &term), Some(Some(0)));
+}
+
+/// What the window was told of the end of the terminal `term`: None while it was told nothing,
+/// else the code of the program (None if it was killed).
+fn exit_code(h: &Harness, term: &str) -> Option<Option<u64>> {
+    h.events
+        .lock()
+        .iter()
+        .find(|e| e["type"] == "terminalExit" && e["id"] == term)
+        .map(|e| e["code"].as_u64())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_does_not_quit_on_two_ctrl_c_is_killed_after_five_seconds() {
+    let h = harness("tui-quit-stuck");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, "tui-ignore-quit");
+    open_interface(&h, &id).await;
+    up(&h, &id).await;
+    let term = terminal_of(&h, &id);
+    let started = std::time::Instant::now();
+    h.core.set_agent_view(&id, false).await.unwrap();
+    assert_eq!(ctrl_c(&h, &r).len(), 2);
+    assert!(started.elapsed() >= std::time::Duration::from_millis(4900));
+    assert!(!h.core.pty.exists(&term));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn archiving_or_deleting_an_agent_quits_its_interface_with_two_ctrl_c() {
+    let h = harness("tui-quit-archive-delete");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let archived = agent_on(&h, &p, "pro").await.id;
+    let deleted = agent_on(&h, &p, "pro").await.id;
+    open_interface(&h, &archived).await;
+    open_interface(&h, &deleted).await;
+    up(&h, &archived).await;
+    up(&h, &deleted).await;
+    let (first, second) = (terminal_of(&h, &archived), terminal_of(&h, &deleted));
+
+    h.core.archive_agent(&archived, true).await.unwrap();
+    assert_eq!(ctrl_c(&h, &r).len(), 2);
+    assert!(!h.core.pty.exists(&first));
+    assert!(h.core.pty.exists(&second));
+
+    h.core.delete_agent(&deleted, false).await.unwrap();
+    assert_eq!(ctrl_c(&h, &r).len(), 4);
+    assert!(!h.core.pty.exists(&second));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_users_closing_of_a_terminal_is_immediate_and_sends_no_ctrl_c() {
+    let h = harness("tui-quit-not-for-the-window");
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let term = terminal_of(&h, &id);
+    h.core.kill_terminal(&term);
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    assert!(!h.core.pty.exists(&term));
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(ctrl_c(&h, &cwd).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_quit_by_the_app_soon_after_it_started_with_remote_control_is_no_failure() {
+    let h = harness("tui-quit-no-fallback");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_remote_control(&id, true).await.unwrap();
+    let term = terminal_of(&h, &id);
+    ready(&h, &id).await;
+    // Turned off soon after: no window showed the interface, it quits.
+    h.core.set_remote_control(&id, false).await.unwrap();
+    h.wait("its terminal closed", |h| !h.core.pty.exists(&term))
+        .await;
+    assert_eq!(ctrl_c(&h, &r).len(), 2);
+    // Its end is nothing to be told, and starts no other interface.
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert!(unavailable(&h, &id).is_empty());
+    assert!(!h.core.agent(&id).unwrap().lock().remote_fallback);
+    assert_eq!(interface_launches(&h, &r).len(), 1);
+    assert!(!interface_runs(&h, &id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_app_starting_starts_the_interface_of_the_claude_code_agents_a_setting_covers() {
+    let h = harness("tui-remote-startup");
+    let (p, r) = h.project(false).await;
+    let other = h.second_project().await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let covered = agent_on(&h, &p, "pro").await;
+    let apart = agent_on(&h, &other, "pro").await;
+    assert!(covered.terminal && apart.terminal);
+    // The project's setting as the last run left it: no agent has it yet.
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .remote_control = true;
+
+    h.core.start_remote_agents();
+    h.wait("its interface", |h| interface_runs(h, &covered.id))
+        .await;
+    // No window asked for it: it runs by itself, with Remote Control under its name.
+    let name = format!("demo · {}", covered.name);
+    h.wait("its launch", |h| !h.launches(&r).is_empty()).await;
+    let launch = h.launches(&r).pop().unwrap();
+    assert!(
+        launch.contains(&format!("--remote-control={name}")),
+        "{launch:?}"
+    );
+    let m = h.agent(&covered.id);
+    assert_eq!(m.remote_source, Some(RemoteSource::Project));
+    // The other one is not covered: no interface.
+    h.settle_remote().await;
+    assert!(!interface_runs(&h, &apart.id));
+    assert!(h.launches(std::path::Path::new(&other.path)).is_empty());
+    assert!(!h.agent(&apart.id).remote_control);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_window_opening_an_interface_that_runs_takes_it_over_without_starting_another() {
+    let h = harness("tui-attach");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.remote_all(true);
+    h.wait("its interface", |h| interface_runs(h, &id)).await;
+    let term = terminal_of(&h, &id);
+    // It printed its first screen with no window to show it.
+    h.wait("its first screen", |h| {
+        let run = h.core.agent(&id).unwrap();
+        let out = run.lock().tui.as_ref().unwrap().output.kept();
+        plain_text(&String::from_utf8_lossy(&out)).contains("fake-claude-tui")
+    })
+    .await;
+    let launched = h.launches(&r).len();
+
+    let (info, screen) = show(&h, &id).await;
+    assert_eq!(info.id, term);
+    assert!(h.agent(&id).terminal);
+    // Its screen first.
+    assert!(plain_text(&screen.lock()).contains("fake-claude-tui"));
+    // Then what it writes.
+    h.core
+        .send_message(&id, "bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn on its screen", |_| {
+        plain_text(&screen.lock()).contains("fake-turn bonjour")
+    })
+    .await;
+    // The window is reloaded and asks again: the same terminal, its screen as it is now.
+    let (again, screen) = show(&h, &id).await;
+    assert_eq!(again.id, term);
+    let seen = plain_text(&screen.lock());
+    assert!(
+        seen.contains("fake-claude-tui") && seen.contains("fake-turn bonjour"),
+        "{seen:?}"
+    );
+    assert_eq!(h.launches(&r).len(), launched);
+    assert_eq!(terminal_of(&h, &id), term);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn remote_control_ending_stops_an_interface_no_window_showed_and_leaves_one_that_was() {
+    let h = harness("tui-remote-ends");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let unseen = agent_on(&h, &p, "pro").await.id;
+    let seen = agent_on(&h, &p, "pro").await.id;
+    let working = agent_on(&h, &p, "pro").await.id;
+    h.remote_all(true);
+    for id in [&unseen, &seen, &working] {
+        h.wait("its interface", |h| interface_runs(h, id)).await;
+    }
+    show(&h, &seen).await;
+    // Up and reading its input: a Ctrl+C sent while it starts would be lost.
+    for id in [&unseen, &seen, &working] {
+        ready(&h, id).await;
+    }
+    // A turn under way is not cut.
+    h.core.agent(&working).unwrap().lock().meta.status = AgentStatus::Running;
+    let (term, kept) = (terminal_of(&h, &unseen), terminal_of(&h, &seen));
+
+    h.remote_all(false);
+    h.wait("the interface stopped", |h| !interface_runs(h, &unseen))
+        .await;
+    // Each agent's turn of the setting is its own task: waited for, not assumed over.
+    for id in [&unseen, &seen, &working] {
+        h.wait("the remote control out", |h| !h.agent(id).remote_control)
+            .await;
+    }
+    assert!(!h.core.hooks.holds(&unseen));
+    assert!(h.agent(&unseen).terminal);
+    // Quit as its user would, with two Ctrl+C, so that it archives its remote session.
+    h.wait("its terminal closed", |h| !h.core.pty.exists(&term))
+        .await;
+    assert_eq!(ctrl_c(&h, &r).len(), 2);
+    // Shown once: it goes on, with the choice for its next start.
+    h.settle_remote().await;
+    assert!(interface_runs(&h, &seen) && h.core.pty.exists(&kept));
+    assert!(interface_runs(&h, &working));
+
+    // By hand: turned on, its interface is started again; turned off, stopped again.
+    h.core.set_remote_control(&unseen, true).await.unwrap();
+    assert!(interface_runs(&h, &unseen));
+    assert_eq!(h.agent(&unseen).remote_source, Some(RemoteSource::Hand));
+    h.core.set_remote_control(&unseen, false).await.unwrap();
+    assert!(!interface_runs(&h, &unseen));
+    // Turned off by hand, it is set apart whether a setting covered it or not.
+    assert!(h.agent(&unseen).remote_off);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_running_a_turn_when_remote_control_ends_stops_with_the_turn() {
+    let h = harness("tui-remote-ends-late");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let stops = agent_on(&h, &p, "pro").await.id;
+    let stays = agent_on(&h, &p, "pro").await.id;
+    h.remote_all(true);
+    for id in [&stops, &stays] {
+        ready(&h, id).await;
+        h.core
+            .send_message(id, "lent".into(), Vec::new())
+            .await
+            .unwrap();
+        h.wait("its turn", |h| h.agent(id).status == AgentStatus::Running)
+            .await;
+    }
+
+    h.remote_all(false);
+    for id in [&stops, &stays] {
+        h.wait("the remote control out", |h| !h.agent(id).remote_control)
+            .await;
+    }
+    // A turn is not cut.
+    h.settle_remote().await;
+    assert!(interface_runs(&h, &stops) && interface_runs(&h, &stays));
+    // One of them gets Remote Control back, by hand, before its turn ends.
+    h.core.set_remote_control(&stays, true).await.unwrap();
+
+    for id in [&stops, &stays] {
+        h.core.interrupt(id).await.unwrap();
+        h.wait("its turn over", |h| {
+            h.agent(id).status != AgentStatus::Running
+        })
+        .await;
+    }
+    // Over, with no window and no Remote Control: it stops. The other one holds it.
+    let term = terminal_of(&h, &stays);
+    h.wait("the interface stopped", |h| !interface_runs(h, &stops))
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert!(interface_runs(&h, &stays) && h.core.pty.exists(&term));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_view_tells_whether_the_interface_that_runs_was_started_with_remote_control() {
+    let h = harness("tui-interface-remote");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let with = agent_on(&h, &p, "pro").await.id;
+    let without = agent_on(&h, &p, "pro").await.id;
+    let idle = agent_on(&h, &p, "pro").await.id;
+    let started = |id: &str| h.core.agent(id).unwrap().lock().view().interface_remote;
+    // No interface runs.
+    assert_eq!(started(&idle), None);
+    // Started with Remote Control on.
+    h.core.set_remote_control(&with, true).await.unwrap();
+    assert_eq!(started(&with), Some(true));
+    // Started without it.
+    open_interface(&h, &without).await;
+    assert_eq!(started(&without), Some(false));
+    // Turned on while it runs: it has not got it before its next start.
+    h.core.set_remote_control(&without, true).await.unwrap();
+    assert!(h.agent(&without).remote_control);
+    assert_eq!(started(&without), Some(false));
+    // Stopped: none runs.
+    h.core.set_agent_view(&without, false).await.unwrap();
+    assert_eq!(started(&without), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn turning_remote_control_on_or_off_by_hand_says_whether_the_interface_waits_for_its_next_start(
+) {
+    let h = harness("tui-rc-next-start");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    let started = |h: &Harness| h.core.agent(&id).unwrap().lock().view().interface_remote;
+    let set = |on: bool| {
+        let (core, id) = (h.core.clone(), id.clone());
+        async move { core.set_remote_control(&id, on).await.unwrap() }
+    };
+    // No interface runs: it is started with the change, which is made, nothing waits.
+    assert!(!set(true).await);
+    assert_eq!(started(&h), Some(true));
+    // Off: no window showed it, it stops.
+    assert!(!set(false).await);
+    assert!(!interface_runs(&h, &id));
+
+    // A window shows an interface started without Remote Control: turned on, it has it from its
+    // next start.
+    open_interface(&h, &id).await;
+    assert_eq!(started(&h), Some(false));
+    assert!(set(true).await);
+    assert!(h.agent(&id).remote_control);
+    // Turned off again, what runs has none either: nothing waits.
+    assert!(!set(false).await);
+
+    // Started with it, shown, turned off: it keeps it until its next start.
+    assert!(set(true).await);
+    h.core.kill_terminal(&terminal_of(&h, &id));
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    open_interface(&h, &id).await;
+    assert_eq!(started(&h), Some(true));
+    assert!(set(false).await);
+    assert!(!h.agent(&id).remote_control);
+    // And turned on again, it has it: nothing waits.
+    assert!(!set(true).await);
+
+    // In Escouade's view the stream holds it at once: nothing waits.
+    h.core.settings.write().terminal_view = false;
+    let stream = agent_on(&h, &p, "pro").await.id;
+    assert!(!h.agent(&stream).terminal);
+    assert!(!h.core.set_remote_control(&stream, true).await.unwrap());
+    assert!(!h.core.set_remote_control(&stream, false).await.unwrap());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_window_taking_an_interface_over_shows_it_under_the_lock_that_finds_it() {
+    let h = harness("tui-take-over");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.remote_all(true);
+    h.wait("its interface", |h| interface_runs(h, &id)).await;
+    let handle = h.core.agent(&id).unwrap();
+    // Found by what starts it: nobody shows it.
+    let (_, output) = h.core.running_interface(&handle, false).unwrap();
+    assert!(!output.shown());
+    // Found by a window: shown at once, with nothing between that could stop it.
+    let (_, output) = h.core.running_interface(&handle, true).unwrap();
+    assert!(output.shown());
+    handle.lock().meta.remote_control = false;
+    h.core.stop_unseen_interface(&handle);
+    assert!(interface_runs(&h, &id));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_without_remote_control_starts_without_it() {
+    let h = harness("tui-no-remote");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    let launch = h.launches(&r).pop().unwrap();
+    assert!(
+        !launch.iter().any(|a| a == "--remote-control"),
+        "{launch:?}"
+    );
 }
 
 fn texts(h: &Harness, id: &str, kind: &str) -> Vec<String> {
@@ -48,6 +583,483 @@ fn texts(h: &Harness, id: &str, kind: &str) -> Vec<String> {
         .filter(|i| i["kind"] == kind)
         .map(|i| i["text"].as_str().unwrap_or_default().to_string())
         .collect()
+}
+
+/// What the agent is told about its Remote Control being unavailable.
+fn unavailable(h: &Harness, id: &str) -> Vec<String> {
+    texts(h, id, "notice")
+        .into_iter()
+        .filter(|t| t.starts_with("Remote control indisponible : "))
+        .collect()
+}
+
+/// The arguments of each launch of Claude Code's interface in `cwd` (the stream's are left out).
+fn interface_launches(h: &Harness, cwd: &std::path::Path) -> Vec<Vec<String>> {
+    h.launches(cwd)
+        .into_iter()
+        .filter(|a| !a.iter().any(|x| x == "stream-json"))
+        .collect()
+}
+
+fn asks_remote_control(args: &[String]) -> bool {
+    args.iter().any(|a| a.starts_with("--remote-control"))
+}
+
+/// The remote control of the agent, with the interface in the Claude Code view started for it in
+/// force by hand (no setting), without waiting for anything to run.
+fn hold_remote_control(h: &Harness, id: &str) {
+    let a = h.core.agent(id).unwrap();
+    let mut rt = a.lock();
+    rt.meta.remote_control = true;
+    rt.meta.remote_source = Some(RemoteSource::Hand);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_closes_right_after_starting_with_remote_control_is_started_again_without_it(
+) {
+    let h = harness("tui-rc-fallback");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Claude Code closes as soon as it is started with Remote Control.
+    h.fake_flag(&r, "tui-rc-exit");
+    h.remote_all(true);
+    // No window showed it: started again, in the background, without the option.
+    h.wait("the interface started again without it", |h| {
+        interface_launches(h, &r).len() >= 2
+            && h.core.agent(&id).unwrap().lock().view().interface_remote == Some(false)
+    })
+    .await;
+    let launches = interface_launches(&h, &r);
+    assert_eq!(launches.len(), 2, "{launches:?}");
+    assert!(asks_remote_control(&launches[0]), "{:?}", launches[0]);
+    assert!(!asks_remote_control(&launches[1]), "{:?}", launches[1]);
+    // Told, once; Remote Control stays in force for the agent.
+    assert_eq!(
+        unavailable(&h, &id),
+        ["Remote control indisponible : l’interface de Claude Code s’est fermée juste après son lancement avec le remote control ; elle est relancée sans lui."]
+    );
+    assert!(h.agent(&id).remote_control);
+    // The one started again, without the option, says it is up by the registry alone.
+    ready(&h, &id).await;
+    // What the settings do again starts nothing.
+    h.settle_remote().await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert_eq!(interface_launches(&h, &r).len(), 2);
+
+    // Only once: the interface started without the option closing soon after starts nothing.
+    h.core.pty.kill(&terminal_of(&h, &id));
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert_eq!(interface_launches(&h, &r).len(), 2);
+    assert_eq!(unavailable(&h, &id).len(), 1);
+}
+
+/// An interface started with Remote Control that a window shows ends soon after (`typed`: the
+/// user types `/exit` on the box about the folder, else Claude Code closes with code 1 by itself):
+/// the user saw it, and may have ended it themselves. No failure of the option, nothing told,
+/// nothing started again; the next launch asks for the option as before.
+async fn a_shown_interface_ends_soon_after_it_started(name: &str, typed: bool) {
+    let h = harness(name);
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, if typed { "tui-welcome" } else { "tui-rc-exit" });
+    hold_remote_control(&h, &id);
+    // The window opens it: started with Remote Control, shown, closed at once.
+    let (info, _) = open_interface(&h, &id).await;
+    if typed {
+        h.core.pty.write(&info.id, b"/exit\r").unwrap();
+    }
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert!(unavailable(&h, &id).is_empty());
+    assert!(!h.core.agent(&id).unwrap().lock().remote_fallback);
+    // Nothing starts it again by itself: « Relancer » is the window's.
+    assert_eq!(interface_launches(&h, &r).len(), 1);
+    h.fake_unflag(&r, "tui-rc-exit");
+    // Which asks for the option as the first launch did.
+    open_interface(&h, &id).await;
+    let launches = interface_launches(&h, &r);
+    assert_eq!(launches.len(), 2);
+    assert!(asks_remote_control(&launches[0]));
+    assert!(asks_remote_control(&launches[1]), "{:?}", launches[1]);
+    assert!(h.agent(&id).remote_control);
+    assert_eq!(
+        h.core.agent(&id).unwrap().lock().view().interface_remote,
+        Some(true)
+    );
+    assert!(unavailable(&h, &id).is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_a_window_showed_that_closes_by_itself_soon_after_starting_is_no_failure_of_remote_control(
+) {
+    a_shown_interface_ends_soon_after_it_started("tui-rc-shown-closes", false).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_a_window_showed_that_its_user_exits_soon_after_starting_is_no_failure_of_remote_control(
+) {
+    a_shown_interface_ends_soon_after_it_started("tui-rc-shown-exit", true).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_shown_after_it_started_in_the_background_is_no_failure_when_it_closes() {
+    let h = harness("tui-rc-shown-late");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Started on the box about the folder, a window takes it over, then its user exits it.
+    h.fake_flag(&r, "tui-welcome");
+    h.core.set_remote_control(&id, true).await.unwrap();
+    first_screen(&h, &id).await;
+    show(&h, &id).await;
+    let term = terminal_of(&h, &id);
+    h.core.pty.write(&term, b"/exit\r").unwrap();
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert!(unavailable(&h, &id).is_empty());
+    assert!(!h.core.agent(&id).unwrap().lock().remote_fallback);
+    assert_eq!(interface_launches(&h, &r).len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_link_of_an_interface_started_with_remote_control_is_read_from_its_transcript() {
+    let h = harness("tui-rc-link");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
+    assert_eq!(state(&h), None);
+    h.core.set_remote_control(&id, true).await.unwrap();
+    h.wait("the interface linked", |h| {
+        state(h).as_deref() == Some("connected")
+    })
+    .await;
+    // The link it wrote: the interface's own, not the stream's session.
+    let m = h.agent(&id);
+    let url = m.remote_url.unwrap();
+    assert!(
+        url.starts_with("https://claude.ai/code/session_fake_tui_"),
+        "{url}"
+    );
+    assert_eq!(m.remote_session, None);
+    // It is in the view the window gets.
+    let view = serde_json::to_value(h.core.agent(&id).unwrap().lock().view()).unwrap();
+    assert_eq!(view["remoteState"], "connected");
+    assert_eq!(view["remoteUrl"], url.as_str());
+    assert!(unavailable(&h, &id).is_empty());
+
+    // The user closes it: its link is over with it, and the next interface knows nothing of it
+    // until it tells it. Closing it soon after it started is no failure of Remote Control.
+    let term = terminal_of(&h, &id);
+    h.core.kill_terminal(&term);
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    assert_eq!(state(&h), None);
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    assert!(unavailable(&h, &id).is_empty());
+    assert!(!h.core.agent(&id).unwrap().lock().remote_fallback);
+    assert_eq!(interface_launches(&h, &r).len(), 1);
+    open_interface(&h, &id).await;
+    assert_eq!(interface_launches(&h, &r).len(), 2);
+    h.wait("the interface linked again", |h| {
+        state(h).as_deref() == Some("connected")
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_control_that_does_not_open_is_told_once_and_a_late_link_connects_it() {
+    let h = harness("tui-rc-unavailable");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Up, but Remote Control never opens (an account with no claude.ai subscription, a network or
+    // an organization that refuses it): Claude Code says nothing of it in its terminal.
+    h.fake_flag(&r, "tui-rc-hold");
+    h.core.set_remote_control(&id, true).await.unwrap();
+    let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
+    h.wait("the verdict", |h| {
+        state(h).as_deref() == Some("unavailable")
+    })
+    .await;
+    assert_eq!(unavailable(&h, &id), [NO_LINK]);
+    // It runs (it did not close), with no link, and it takes a message: it is up.
+    assert!(interface_runs(&h, &id));
+    assert_eq!(h.agent(&id).remote_url, None);
+    say_in_tui(&h, &id, "bonjour").await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+    // Remote Control stays in force for the agent: its next start tries again.
+    assert!(h.agent(&id).remote_control);
+    // Told once.
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert_eq!(unavailable(&h, &id).len(), 1);
+    assert_eq!(state(&h).as_deref(), Some("unavailable"));
+
+    // The link comes after all: connected, and what fails after that is news again.
+    h.fake_unflag(&r, "tui-rc-hold");
+    h.wait("the late link", |h| {
+        state(h).as_deref() == Some("connected")
+    })
+    .await;
+    assert!(!h.core.agent(&id).unwrap().lock().remote_told);
+    assert!(h.agent(&id).remote_url.is_some());
+    assert_eq!(unavailable(&h, &id).len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_writes_no_link_in_its_remote_control_entry_is_unavailable_at_once() {
+    let h = harness("tui-rc-inactive");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Claude Code runs but the link failed: its entry says what it did not do.
+    h.fake_flag(&r, "tui-rc-inactive");
+    h.core.set_remote_control(&id, true).await.unwrap();
+    let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
+    h.wait("the verdict", |h| {
+        state(h).as_deref() == Some("unavailable")
+    })
+    .await;
+    assert_eq!(
+        unavailable(&h, &id),
+        ["Remote control indisponible : Claude Code n’a pas pu ouvrir la session distante (« /remote-control is not active »)."]
+    );
+    assert_eq!(h.agent(&id).remote_url, None);
+    assert!(interface_runs(&h, &id) && h.agent(&id).remote_control);
+    // The entry makes it ready, and told once: the waiting for a link says no more.
+    ready(&h, &id).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert_eq!(unavailable(&h, &id).len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_link_the_registry_alone_tells_connects_the_interface() {
+    let h = harness("tui-rc-registry-only");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Its session carries a `bridgeSessionId` in the registry; its transcript says nothing.
+    h.fake_flag(&r, "tui-rc-registry-only");
+    h.core.set_remote_control(&id, true).await.unwrap();
+    let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
+    h.wait("connected", |h| state(h).as_deref() == Some("connected"))
+        .await;
+    // Linked, with no address to give.
+    assert_eq!(h.agent(&id).remote_url, None);
+    // Nothing is said of a verdict, however long it waits.
+    tokio::time::sleep(std::time::Duration::from_millis(1800)).await;
+    assert_eq!(state(&h).as_deref(), Some("connected"));
+    assert!(unavailable(&h, &id).is_empty());
+}
+
+/// The refusal of a message to an interface that is not ready.
+const NOT_READY: &str = "L’interface de Claude Code de cet agent n’est pas encore prête (premier lancement ou dossier à approuver) : ouvre l’agent pour la voir.";
+
+/// What the agent is told when its interface, up, never opened Remote Control.
+const NO_LINK: &str = "Remote control indisponible : l’interface de Claude Code ne l’a pas ouvert (compte sans abonnement claude.ai, réseau, proxy ou règle de l’organisation).";
+
+/// Sends `text` to the agent until its interface takes it (60 s at most), the refusals met on the
+/// way being the one of an interface that is not ready.
+async fn send_when_ready(h: &Harness, id: &str, text: &str) {
+    let started = std::time::Instant::now();
+    loop {
+        match h.core.send_message(id, text.into(), Vec::new()).await {
+            Ok(()) => return,
+            Err(e) => {
+                assert_eq!(e.to_string(), NOT_READY);
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(60),
+                    "{e:#}"
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    }
+}
+
+/// The agent's interface, started with no window, has printed its first screen.
+async fn first_screen(h: &Harness, id: &str) {
+    h.wait("its first screen", |h| {
+        let run = h.core.agent(id).unwrap();
+        let kept = run.lock().tui.as_ref().map(|t| t.output.kept());
+        plain_text(&String::from_utf8_lossy(&kept.unwrap_or_default())).contains("fake-claude-tui")
+    })
+    .await;
+}
+
+/// The folder where the Claude Code of the test's second account registers its interfaces.
+fn registry_dir(h: &Harness) -> std::path::PathBuf {
+    h.dir.join("claude-pro").join("sessions")
+}
+
+/// An agent whose interface, started with no window, sits on its welcome screen (until the
+/// `tui-welcome` file of the fake in the returned folder goes): it refuses a message, as the text
+/// typed would choose an option there.
+async fn background_interface_on_its_welcome_screen(
+    name: &str,
+) -> (Harness, String, std::path::PathBuf) {
+    let h = harness(name);
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, "tui-welcome");
+    h.core.set_remote_control(&id, true).await.unwrap();
+    first_screen(&h, &id).await;
+    (h, id, r)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_to_a_background_interface_waits_until_the_registry_lists_its_session() {
+    let (h, id, r) = background_interface_on_its_welcome_screen("tui-ready-registry").await;
+    // Typed there, the text would choose an option of the box.
+    for _ in 0..2 {
+        let refusal = h
+            .core
+            .send_message(&id, "bonjour".into(), Vec::new())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(refusal, NOT_READY);
+    }
+    assert!(texts(&h, &id, "user").is_empty());
+    assert!(!h.core.agent(&id).unwrap().lock().interface_ready());
+    assert!(std::fs::read_dir(registry_dir(&h)).is_err());
+    // Past the screen: it registers its session, and takes the message.
+    h.fake_unflag(&r, "tui-welcome");
+    send_when_ready(&h, &id, "bonjour").await;
+    // Its link comes in its own time after it is up.
+    h.wait("connected", |h| {
+        h.core
+            .agent(&id)
+            .unwrap()
+            .lock()
+            .view()
+            .remote_state
+            .as_deref()
+            == Some("connected")
+    })
+    .await;
+    h.wait("the turn's end", |h| {
+        h.items(&id).iter().any(|i| i["kind"] == "turn")
+    })
+    .await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_registry_makes_an_interface_started_without_the_option_ready_too() {
+    // The agent holds Remote Control but its interface starts without the option: nothing but the
+    // registry says it is up.
+    let h = harness("tui-ready-no-option");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, "tui-welcome");
+    hold_remote_control(&h, &id);
+    h.core.agent(&id).unwrap().lock().remote_fallback = true;
+    h.core.start_interface(&id).await.unwrap();
+    first_screen(&h, &id).await;
+    assert!(!asks_remote_control(
+        &interface_launches(&h, &r).pop().unwrap()
+    ));
+    assert!(!h.core.agent(&id).unwrap().lock().interface_ready());
+    h.fake_unflag(&r, "tui-welcome");
+    ready(&h, &id).await;
+    assert_eq!(h.core.agent(&id).unwrap().lock().view().remote_state, None);
+    say_in_tui(&h, &id, "bonjour").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_registry_of_other_sessions_or_half_written_makes_no_interface_ready() {
+    let (h, id, r) = background_interface_on_its_welcome_screen("tui-ready-registry-junk").await;
+    let session = h.agent(&id).session_id.unwrap();
+    let dir = registry_dir(&h);
+    std::fs::create_dir_all(&dir).unwrap();
+    let entry = |sid: &str, entrypoint: &str| {
+        json!({ "pid": 1, "sessionId": sid, "kind": "interactive", "entrypoint": entrypoint })
+            .to_string()
+    };
+    // The stream's process of the same session, another session's interface, a file being written,
+    // one that holds no JSON, one that is empty, a folder, and the key file of a box not answered.
+    std::fs::write(dir.join("901.json"), entry(&session, "sdk-cli")).unwrap();
+    std::fs::write(dir.join("902.json"), entry("another-session", "cli")).unwrap();
+    std::fs::write(dir.join("903.json"), r#"{"pid":3,"sessionId":""#).unwrap();
+    std::fs::write(dir.join("904.json"), "not json").unwrap();
+    std::fs::write(dir.join("905.json"), "").unwrap();
+    std::fs::create_dir_all(dir.join("907.json")).unwrap();
+    std::fs::write(dir.join("906.0a1b2c.key"), entry(&session, "cli")).unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert!(!h.core.agent(&id).unwrap().lock().interface_ready());
+    assert_eq!(
+        h.core
+            .send_message(&id, "bonjour".into(), Vec::new())
+            .await
+            .unwrap_err()
+            .to_string(),
+        NOT_READY
+    );
+    // Its own entry does.
+    h.fake_unflag(&r, "tui-welcome");
+    ready(&h, &id).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_to_an_interface_a_window_showed_before_is_not_held_back() {
+    let (h, id, _) = background_interface_on_its_welcome_screen("tui-shown-before").await;
+    assert!(h
+        .core
+        .send_message(&id, "bonjour".into(), Vec::new())
+        .await
+        .is_err());
+    // A window takes it over later: it is shown from then on.
+    show(&h, &id).await;
+    say_in_tui(&h, &id, "bonjour").await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_interface_that_starts_normally_takes_a_message_once_it_is_up() {
+    let h = harness("tui-ready");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core.set_remote_control(&id, true).await.unwrap();
+    send_when_ready(&h, &id, "bonjour").await;
+    h.wait("the turn's end", |h| {
+        h.items(&id).iter().any(|i| i["kind"] == "turn")
+    })
+    .await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_a_window_showed_takes_a_message_whatever_it_has_said() {
+    let h = harness("tui-shown-not-ready");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // Started by the window, with no Remote Control: it never says anything of it.
+    open_interface(&h, &id).await;
+    assert_eq!(h.core.agent(&id).unwrap().lock().view().remote_state, None);
+    // The user sees the screen: what is typed there is on them.
+    say_in_tui(&h, &id, "bonjour").await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -594,20 +1606,8 @@ fn notices(h: &Harness, id: &str, level: &str) -> Vec<String> {
 }
 
 /// The arguments of each interface the fake `claude` launched in the agent's folder (not its streams).
-fn interface_launches(h: &Harness, id: &str) -> Vec<Vec<String>> {
-    let cwd = std::path::PathBuf::from(h.agent(id).cwd);
-    h.launch_log(&cwd)
-        .into_iter()
-        .filter(|l| !l["argv"].to_string().contains("stream-json"))
-        .map(|l| {
-            l["argv"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|a| a.as_str().map(str::to_string))
-                .collect()
-        })
-        .collect()
+fn agent_interface_launches(h: &Harness, id: &str) -> Vec<Vec<String>> {
+    interface_launches(h, std::path::Path::new(&h.agent(id).cwd))
 }
 
 fn session_args(launches: &[Vec<String>], arg: &str) -> bool {
@@ -681,7 +1681,7 @@ async fn a_session_with_no_transcript_is_given_up_and_the_interface_starts_a_new
         let old = session.or(original).unwrap();
         assert_ne!(new, old);
         assert_eq!((a.fork_of, a.fork_at, a.last_entry), (None, None, None));
-        let launches = interface_launches(&h, &id);
+        let launches = agent_interface_launches(&h, &id);
         assert!(session_args(&launches, &format!("--session-id={new}")));
         for arg in [format!("--resume={old}"), "--fork-session".to_string()] {
             assert!(!session_args(&launches, &arg), "{arg} in {launches:?}");
@@ -746,7 +1746,7 @@ async fn a_session_left_in_another_accounts_folder_is_copied_and_resumed() {
     assert!(left.join(format!("{session}.jsonl")).exists());
     assert_eq!(h.agent(&id).session_id.as_deref(), Some(session));
     assert!(session_args(
-        &interface_launches(&h, &id),
+        &agent_interface_launches(&h, &id),
         &format!("--resume={session}")
     ));
     assert!(notices(&h, &id, "warn").is_empty());
@@ -801,7 +1801,7 @@ async fn a_session_that_cannot_be_copied_from_another_account_is_given_up_with_i
         "{warns:?}"
     );
     assert!(!session_args(
-        &interface_launches(&h, &id),
+        &agent_interface_launches(&h, &id),
         &format!("--resume={session}")
     ));
 }
@@ -850,7 +1850,7 @@ async fn an_interface_that_quits_on_a_session_it_does_not_find_gives_it_up_and_t
         }
     );
     assert!(session_args(
-        &interface_launches(&h, &id),
+        &agent_interface_launches(&h, &id),
         &format!("--resume={session}")
     ));
     let a = h.agent(&id);
@@ -871,7 +1871,7 @@ async fn an_interface_that_quits_on_a_session_it_does_not_find_gives_it_up_and_t
     let new = h.agent(&id).session_id.expect("a session of its own");
     assert_ne!(new, session);
     assert!(session_args(
-        &interface_launches(&h, &id),
+        &agent_interface_launches(&h, &id),
         &format!("--session-id={new}")
     ));
     assert!(h.core.agent(&id).unwrap().lock().view().tui_exit.is_none());
@@ -904,14 +1904,14 @@ async fn an_interface_that_crashes_as_it_starts_is_not_started_again_by_itself_m
         assert_eq!(quick_exits(), n);
     }
     // The third is refused, and says why; nothing is started.
-    let launched = interface_launches(&h, &id).len();
+    let launched = agent_interface_launches(&h, &id).len();
     let refused = open_tui(&h, &id, false).await.unwrap_err().to_string();
     assert!(refused.contains('2'), "{refused}");
     assert!(
         refused.contains("Relancer") || refused.contains("Restart"),
         "{refused}"
     );
-    assert_eq!(interface_launches(&h, &id).len(), launched);
+    assert_eq!(agent_interface_launches(&h, &id).len(), launched);
     assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
 
     // « Relancer » goes through, and begins the count again.
@@ -933,11 +1933,100 @@ async fn an_interface_that_crashes_as_it_starts_is_not_started_again_by_itself_m
     assert_eq!(quick_exits(), 0);
 }
 
+/// The interface launches in `cwd` stay `launched` for a while: nothing starts another one, and
+/// the agent has none running, its quick exits in a row still `exits`.
+async fn nothing_starts_it_again(
+    h: &Harness,
+    id: &str,
+    cwd: &std::path::Path,
+    (launched, exits): (usize, u32),
+    way: &str,
+) {
+    // Time for a start to launch the fake `claude` and for it to write its log.
+    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
+    let launches = interface_launches(h, cwd);
+    assert_eq!(
+        launches.len(),
+        launched,
+        "started again by {way}: {launches:?}"
+    );
+    assert!(!interface_runs(h, id), "{way} left an interface running");
+    assert_eq!(
+        h.core.agent(id).unwrap().lock().tui_quick_exits,
+        exits,
+        "{way} changed the count of quick exits"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_quits_at_once_is_started_again_by_itself_once_whatever_the_way() {
+    // Remote Control makes the first start (no window shows it); the interface quits as soon as it
+    // started, and so does the one started again without the option (the fallback). From then on
+    // nothing starts it by itself, by whichever way, but « Relancer » (ESC-93 and ESC-106).
+    let h = harness("tui-quick-exits-every-way");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    std::fs::create_dir_all(h.dir.join("claude-pro")).unwrap();
+    std::fs::write(h.dir.join("claude-pro").join("fake-tui-crash"), "").unwrap();
+    let quick_exits = |h: &Harness| h.core.agent(&id).unwrap().lock().tui_quick_exits;
+
+    // The setting starts it with Remote Control, then the fallback starts it without: two starts.
+    h.remote_all(true);
+    h.wait("the two starts over", |h| {
+        interface_launches(h, &r).len() >= 2 && quick_exits(h) == 2 && !interface_runs(h, &id)
+    })
+    .await;
+    let launches = interface_launches(&h, &r);
+    assert_eq!(launches.len(), 2, "{launches:?}");
+    assert!(asks_remote_control(&launches[0]), "{:?}", launches[0]);
+    assert!(!asks_remote_control(&launches[1]), "{:?}", launches[1]);
+    assert_eq!(unavailable(&h, &id).len(), 1);
+    assert!(h.agent(&id).remote_control);
+    let stays = (2, 2);
+
+    // The start of the interface in the background.
+    h.core.start_interface(&id).await.unwrap();
+    nothing_starts_it_again(&h, &id, &r, stays, "start_interface").await;
+    // The warm-up.
+    h.core.warm(&id);
+    nothing_starts_it_again(&h, &id, &r, stays, "the warm-up").await;
+    // The agents of the last run, started with the app.
+    h.core.start_remote_agents();
+    nothing_starts_it_again(&h, &id, &r, stays, "the start with the app").await;
+    // The setting turned off, then on again: it applies to the agent as to one that has none.
+    h.remote_all(false);
+    h.wait("the setting cut", |h| !h.agent(&id).remote_control)
+        .await;
+    h.remote_all(true);
+    h.settle_remote().await;
+    nothing_starts_it_again(&h, &id, &r, stays, "the setting").await;
+    assert!(h.agent(&id).remote_control);
+    // The window's own start (it opened the view) is refused, and says why.
+    let refused = open_tui(&h, &id, false).await.unwrap_err().to_string();
+    assert!(refused.contains('2'), "{refused}");
+    assert!(
+        refused.contains("Relancer") || refused.contains("Restart"),
+        "{refused}"
+    );
+    nothing_starts_it_again(&h, &id, &r, stays, "the window").await;
+    // None of this was told as a failure again.
+    assert_eq!(unavailable(&h, &id).len(), 1);
+
+    // « Relancer » goes through (one more start, which quits as soon as it started too, and begins
+    // the count again); nothing starts it again after it either.
+    let (info, screen) = open_tui(&h, &id, true).await.unwrap();
+    over(&h, &id, &info.id, &screen).await;
+    nothing_starts_it_again(&h, &id, &r, (3, 1), "« Relancer »").await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn removing_the_project_stops_its_agents_interfaces_and_clears_their_pasted_images() {
     let h = harness("tui-paste-project");
     let id = agent_in_tui(&h).await;
     let project = h.agent(&id).project_id;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
     let mine = h.core.paste_image(&id, "image/png", &b64(&PNG)).unwrap();
     assert!(h.core.pty.list().iter().any(|t| t.shell == "claude"));
 
@@ -947,6 +2036,147 @@ async fn removing_the_project_stops_its_agents_interfaces_and_clears_their_paste
         !h.core.pty.list().iter().any(|t| t.shell == "claude"),
         "Claude Code's interface still runs"
     );
+    // It quit as its user would.
+    assert_eq!(ctrl_c(&h, &cwd).len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn turning_remote_control_off_keeps_the_link_of_an_interface_a_window_showed_until_its_next_launch(
+) {
+    let h = harness("tui-rc-off-keeps-link");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
+    h.core.set_remote_control(&id, true).await.unwrap();
+    h.wait("the interface linked", |h| {
+        state(h).as_deref() == Some("connected")
+    })
+    .await;
+    show(&h, &id).await;
+
+    // Off for Escouade, but the interface a window showed runs on with its link: that is what the
+    // state tells, until it starts again.
+    assert!(h.core.set_remote_control(&id, false).await.unwrap());
+    assert!(!h.agent(&id).remote_control);
+    assert!(interface_runs(&h, &id));
+    assert_eq!(state(&h).as_deref(), Some("connected"));
+    h.core.kill_terminal(&terminal_of(&h, &id));
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    assert_eq!(state(&h), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_setting_starts_three_interfaces_at_most_until_they_are_up() {
+    let h = harness("tui-remote-throttle");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let mut ids = Vec::new();
+    for _ in 0..4 {
+        ids.push(agent_on(&h, &p, "pro").await.id);
+    }
+    // None gets past its welcome screen: each keeps the place it started in.
+    h.fake_flag(&r, "tui-welcome");
+    h.remote_all(true);
+    h.wait("three interfaces", |h| interface_launches(h, &r).len() >= 3)
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    assert_eq!(interface_launches(&h, &r).len(), 3);
+    assert_eq!(
+        ids.iter().filter(|id| interface_runs(&h, id)).count(),
+        3,
+        "the fourth waits for a place"
+    );
+    // One is up: its place goes to the next.
+    h.fake_unflag(&r, "tui-welcome");
+    h.wait("the fourth", |h| interface_launches(h, &r).len() == 4)
+        .await;
+    for id in &ids {
+        ready(&h, id).await;
+    }
+    h.settle_remote().await;
+    assert_eq!(interface_launches(&h, &r).len(), 4);
+}
+
+/// The launches of the stream's process (not of an interface) in `cwd`.
+fn stream_launches(h: &Harness, cwd: &std::path::Path) -> usize {
+    h.launches(cwd)
+        .iter()
+        .filter(|a| a.iter().any(|x| x == "stream-json"))
+        .count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn quitting_an_interface_does_not_hold_the_launch_lock_and_no_process_starts_before_it_is_gone(
+) {
+    let h = harness("tui-quit-lock");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    // It holds out against the two Ctrl+C: it is killed five seconds after the second.
+    h.fake_flag(&r, "tui-ignore-quit");
+    open_interface(&h, &id).await;
+    up(&h, &id).await;
+    let term = terminal_of(&h, &id);
+    let streams = stream_launches(&h, &r);
+
+    let (core, agent) = (h.core.clone(), id.clone());
+    let back = tokio::spawn(async move { core.set_agent_view(&agent, false).await });
+    h.wait("both Ctrl+C sent", |h| ctrl_c(h, &r).len() == 2)
+        .await;
+    // It quits (for five seconds still): the lock that serializes the launches is free.
+    assert!(h.core.pty.exists(&term));
+    assert!(h.core.spawn_lock(&id).try_lock().is_ok());
+    // A start asked meanwhile waits for the interface to be gone: never two processes on one
+    // session.
+    let (core, agent) = (h.core.clone(), id.clone());
+    let started = tokio::spawn(async move { core.ensure_process(&agent).await.map(|_| ()) });
+    tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+    assert!(h.core.pty.exists(&term));
+    assert_eq!(stream_launches(&h, &r), streams);
+    back.await.unwrap().unwrap();
+    started.await.unwrap().unwrap();
+    assert!(!h.core.pty.exists(&term));
+    h.wait("the stream's process", |h| stream_launches(h, &r) > streams)
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_place_among_the_starts_is_kept_until_the_interface_is_up_but_for_a_while_at_most() {
+    let (h, id, r) = background_interface_on_its_welcome_screen("tui-place-kept").await;
+    let agent = h.core.agent(&id).unwrap();
+    // Not up: its place is kept for as long as it is given, no less.
+    let waited = std::time::Instant::now();
+    h.core
+        .wait_interface_ready(&agent, std::time::Duration::from_millis(700))
+        .await;
+    assert!(waited.elapsed() >= std::time::Duration::from_millis(700));
+    assert!(!agent.lock().interface_ready());
+    // Up: given back as soon as it is, whatever it was given.
+    h.fake_unflag(&r, "tui-welcome");
+    tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        h.core
+            .wait_interface_ready(&agent, std::time::Duration::from_secs(3600)),
+    )
+    .await
+    .expect("given back once the interface is up");
+    assert!(agent.lock().interface_ready());
+    // Gone: nothing to wait for.
+    h.core.kill_terminal(&terminal_of(&h, &id));
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        h.core
+            .wait_interface_ready(&agent, std::time::Duration::from_secs(3600)),
+    )
+    .await
+    .expect("given back once the interface is gone");
 }
 
 /// What Claude Code 2.1.300 wrote of a real subagent (`tests/fixtures`), and its call and task.

@@ -97,7 +97,7 @@ Chaque agent a une carte dans la liste :
 - ses tokens, son coût (précédé de « ≈ » tant qu’un tour tourne : c’est alors une estimation) et le nombre de fichiers modifiés dans son dossier ;
 - la ligne « Plan 2/7 » quand il suit une liste de tâches (voir [l’avancée d’un plan](plan)) ;
 - l’étiquette `▸ CLÉ` de son ticket, quand il en a un ;
-- une icône d’onde quand le remote control est activé (voir [le remote control](remote-control)) ;
+- une icône d’onde quand le remote control est activé, dont l’infobulle dit aussi d’où il vient : de toi, du réglage du projet ou du réglage de tous les agents ; en [vue Claude Code](claude-code-view), elle dit l’état de l’interface (voir [le remote control](remote-control)) ;
 - la ligne que l’agent publie lui-même quand il utilise le serveur MCP d’Escouade.
 
 Un clic sur la carte l’affiche ; `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à l’agent suivant ou précédent du projet, sans les agents archivés (voir [suivre ses agents](overview)). Quand un agent pose une question, termine ou tombe en erreur alors que tu ne le regardais pas, sa carte clignote jusqu’à ce que tu l’affiches (voir [les notifications](notifications)).
@@ -129,7 +129,7 @@ Un clic droit sur la carte d’un agent ouvre son menu.
 | Ouvrir dans l’éditeur | Ouvre l’[éditeur](editor) sur le worktree de l’agent, ou sur le projet. |
 | Ouvrir un terminal | Ouvre un [terminal](terminals) dans le worktree de l’agent, ou dans le dossier du projet. |
 | Vue Claude Code, ou Vue Escouade | Fait tourner l’agent dans l’interface de Claude Code elle-même, ou le ramène dans la conversation d’Escouade, comme le bouton de l’en-tête (voir [la vue Claude Code](claude-code-view)). Absente pour un agent de ticket. |
-| Activer le remote control | Rend l’agent joignable depuis claude.ai et l’app Claude (voir [le remote control](remote-control)). Absente pour un agent en [vue Claude Code](claude-code-view), où c’est la commande `/remote-control` de Claude Code qui le fait. |
+| Activer le remote control, ou Désactiver le remote control | Rend l’agent joignable depuis claude.ai et l’app Claude, ou le retire (voir [le remote control](remote-control)). « Désactiver » met toujours l’agent à part : un réglage allumé ensuite ne lui rend pas le remote control avant que tu le rallumes. En [vue Claude Code](claude-code-view), le changement vaut au prochain lancement de l’interface. |
 | Supprimer… | Retire l’agent après confirmation. Voir plus bas. |
 
 Un agent archivé n’a que « Renommer », « Restaurer » et « Supprimer… ».
@@ -140,13 +140,14 @@ Un agent archivé n’a que « Renommer », « Restaurer » et « Supprimer
 
 - Si l’original travaille dans un worktree, la copie reçoit un worktree à elle, créé à partir du commit où se trouve l’original. Ses modifications non commitées n’y sont pas, et un avis à la fin de la conversation copiée le dit. Sans worktree, la copie travaille dans le même dossier.
 - Un agent de ticket est copié comme un agent ordinaire : sans ticket.
+- Pour le [remote control](remote-control), la copie est un nouvel agent : un réglage allumé la couvre, mais pas le remote control que tu avais activé à la main sur l’original. Si l’original est [mis à part](remote-control#mettre-un-agent-a-part), la copie l’est aussi.
 - L’entrée est grisée tant que l’original travaille ou attend une réponse.
 
 ### Archiver et restaurer
 
 Archiver garde la conversation mais arrête l’agent : son processus Claude s’arrête, un tour en cours est interrompu, son remote control est coupé, ses lancements de test s’arrêtent. L’agent quitte la liste et rejoint le dépliant « Archivés (N) » en bas ; un clic sur lui l’ouvre en lecture, avec un bandeau « Agent archivé. » et un bouton « Restaurer ».
 
-Si l’agent travaille sur un ticket « En cours » ou « À tester », une confirmation te prévient que le ticket repartira « À faire ». Restaurer un agent dont le worktree a été supprimé entre-temps le recrée à partir de sa branche, si elle existe encore.
+Si l’agent travaille sur un ticket « En cours » ou « À tester », une confirmation te prévient que le ticket repartira « À faire ». Restaurer un agent dont le worktree a été supprimé entre-temps le recrée à partir de sa branche, si elle existe encore. Restaurer un agent lui rend son remote control si un réglage le couvre, mais pas s’il l’avait activé à la main.
 
 ### Supprimer
 

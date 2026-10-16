@@ -289,11 +289,27 @@ if (argv[0] === 'mcp') {
 
 // Claude Code's own interface (« Vue Claude Code »: no -p, its hooks in --settings). It needs
 // CLAUDE_CONFIG_DIR. Each line it reads (pasted text, then Enter) is a prompt: it calls the hooks
-// of the settings (HTTP, with the token of ESCOUADE_HOOK_TOKEN) and writes its transcript as
+// of the settings (HTTP, with the token of ESCOUADE_HOOK_TOKEN), shows `fake-turn <prompt>` on its
+// screen when a turn starts, and writes its transcript as
 // Claude Code does (see tests/fixtures/tui-transcript.jsonl). "permission" in the prompt asks for
 // Bash first and goes on once the next Enter comes; "lent" makes the turn wait for Escape, which
 // interrupts it; "/exit" ends the process. A pasted path to an image file is the image, as Claude
 // Code takes it (« [Image #1] »): its path and content (base64) are added to <dir>/fake-tui-images.jsonl.
+// Like the real one (2.1.301) it sends no SessionStart hook (Claude Code skips its HTTP hooks for that
+// event). Once it is up (past its welcome screen and the box about the folder) it registers itself as
+// Claude Code does, in <CLAUDE_CONFIG_DIR>/sessions/<pid>.json ({pid, sessionId, cwd, startedAt, version,
+// kind: "interactive", entrypoint: "cli", status}), a file it removes when it ends; while <log>.tui-welcome
+// is there it is not up (a welcome screen: no registry file, no Remote Control either), and goes on when the
+// file is removed. Started with --remote-control=<name>, once it is up it opens Remote Control: a
+// `bridge-session` and a `bridge_status` entry with the link in its transcript, and the `bridgeSessionId`
+// of its registry file, as Claude Code does. While <log>.tui-rc-hold is there it does not open it (as an
+// account with no subscription, or a network that refuses), and does when the file is removed; while
+// <log>.tui-rc-inactive is there the `bridge_status` it writes has no link ("/remote-control is not active")
+// and the registry has no `bridgeSessionId`; while <log>.tui-rc-registry-only is there the link is told in the
+// registry alone; while <log>.tui-rc-exit is there
+// it closes 200 ms after it started (code 1). Each Ctrl+C (\x03) it reads is added, with its time (ms),
+// to <log>.quit.jsonl; the second one ends it (code 0), as Claude Code quits on two, unless
+// <log>.tui-ignore-quit is there: then it goes on.
 // As Claude Code does, it writes no transcript before its first message (a session that never got one cannot be resumed), and
 // a `--resume=<id>` of a session absent from every <dir>/projects/* folder (or named `missing…`) fails as an unknown one does:
 // "No conversation found with session ID: <id>" on stderr, exit code 1, a moment after (the pseudo-console flushes its
@@ -307,6 +323,7 @@ if (argv[0] === 'mcp') {
 function tuiSession() {
   const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
   const flag = (name) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
+  const side = (kind) => logFile.replace(/\.jsonl$/, '') + `.${kind}`;
   // It quits as Claude Code does, once what it wrote has reached the terminal.
   const quit = (text) => {
     try {
@@ -386,9 +403,13 @@ function tuiSession() {
   };
   reportSize();
   setInterval(reportSize, 50).unref();
+  const remote = flag('--remote-control');
+  if (remote !== undefined && fs.existsSync(side('tui-rc-exit'))) setTimeout(() => process.exit(1), 200);
   const turn = async (prompt) => {
     if (prompt === '/exit') process.exit(0);
     begin();
+    // What its screen shows of the turn that starts (the terminal's output the app keeps).
+    process.stdout.write(`fake-turn ${prompt}\r\n`);
     await hook('UserPromptSubmit', { prompt });
     write({ type: 'user', uuid: `u-${process.pid}-${n++}`, origin: { kind: 'human' }, message: { role: 'user', content: prompt } });
     if (prompt.includes('permission')) {
@@ -426,6 +447,7 @@ function tuiSession() {
   process.stdin.setEncoding('utf8');
   let pasteStart = null;
   let images = 0;
+  let ctrlC = 0;
   const draw = () => process.stdout.write(`\r\x1b[2K> ${line}`);
   // What the keys typed do to the line: a character is added, Backspace takes the last one off, Ctrl+U clears it.
   const edit = (keys) => {
@@ -436,6 +458,11 @@ function tuiSession() {
     }
   };
   process.stdin.on('data', (chunk) => {
+    for (const _ of chunk.matchAll(/\x03/g)) {
+      fs.appendFileSync(side('quit.jsonl'), JSON.stringify({ at: Date.now() }) + '\n');
+      if (++ctrlC >= 2 && !fs.existsSync(side('tui-ignore-quit'))) process.exit(0);
+    }
+    chunk = chunk.replaceAll('\x03', '');
     for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
       if (part === '\x1b[200~') pasteStart = line.length;
       if (part === '\x1b[201~' && pasteStart !== null && pasteStart <= line.length) {
@@ -475,6 +502,49 @@ function tuiSession() {
       }
     }
   });
+  // Up and reading its input: registered, as Claude Code 2.1.301 does once it is past its welcome
+  // screen and the box about the folder (the one signal an interface no window shows is ready by),
+  // then Remote Control opened, if it was started with it.
+  const registry = configDir ? path.join(configDir, 'sessions', `${process.pid}.json`) : null;
+  const registered = {
+    pid: process.pid,
+    sessionId,
+    cwd: process.cwd(),
+    startedAt: Date.now(),
+    version: '2.1.301',
+    kind: 'interactive',
+    entrypoint: 'cli',
+    status: 'idle',
+  };
+  const register = (extra = {}) => {
+    if (!registry) return;
+    fs.mkdirSync(path.dirname(registry), { recursive: true });
+    fs.writeFileSync(registry, JSON.stringify({ ...registered, ...extra }));
+  };
+  process.on('exit', () => {
+    if (registry) fs.rmSync(registry, { force: true });
+  });
+  const until = async (kind) => {
+    while (fs.existsSync(side(kind))) await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+  (async () => {
+    await until('tui-welcome');
+    register();
+    if (remote === undefined) return;
+    await until('tui-rc-hold');
+    // Remote Control makes the session's file, as Claude Code does, before any message.
+    begin();
+    const url = `https://claude.ai/code/session_fake_tui_${process.pid}`;
+    if (fs.existsSync(side('tui-rc-inactive'))) {
+      write({ type: 'system', subtype: 'bridge_status', content: '/remote-control is not active' });
+      return;
+    }
+    const bridgeSessionId = `cse_fake_tui_${process.pid}`;
+    register({ bridgeSessionId });
+    if (fs.existsSync(side('tui-rc-registry-only'))) return;
+    write({ type: 'bridge-session', bridgeSessionId });
+    write({ type: 'system', subtype: 'bridge_status', content: `/remote-control is active · ${url}`, url });
+  })();
 }
 
 function startSession() {
@@ -515,6 +585,15 @@ function startSession() {
 
   const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
   const ok = (id, response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, response } });
+  // While <log>.<kind>-slow is there, holding a number of milliseconds, `later` runs `then` that
+  // long after (kind: 'initialize', 'remote'): a request whose answer takes its time.
+  const later = (kind, then) => {
+    let ms = 0;
+    try {
+      ms = Number(fs.readFileSync(logFile.replace(/\.jsonl$/, '') + `.${kind}-slow`, 'utf8')) || 0;
+    } catch {}
+    return ms ? setTimeout(then, ms) : then();
+  };
 
   // An entry of the session, kept in the account's folder when it has one.
   function keep(entry) {
@@ -1564,19 +1643,21 @@ function startSession() {
       const r = m.request;
       switch (r.subtype) {
         case 'initialize':
-          return ok(m.request_id, {
-            commands: [
-              { name: 'compact', description: 'Compacte le contexte', argumentHint: '' },
-              { name: 'review', description: 'Revue de code', argumentHint: '[pr]' },
-            ],
-            // As Claude Code 2.1.284 lists them (abridged): an alias and the model it runs.
-            models: [
-              { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)' },
-              { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5' },
-              { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1' },
-            ],
-            account: {},
-          });
+          return later('initialize', () =>
+            ok(m.request_id, {
+              commands: [
+                { name: 'compact', description: 'Compacte le contexte', argumentHint: '' },
+                { name: 'review', description: 'Revue de code', argumentHint: '[pr]' },
+              ],
+              // As Claude Code 2.1.284 lists them (abridged): an alias and the model it runs.
+              models: [
+                { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)' },
+                { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5' },
+                { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1' },
+              ],
+              account: {},
+            }),
+          );
         case 'get_usage':
           return ok(m.request_id, {
             rate_limits: {
@@ -1597,6 +1678,10 @@ function startSession() {
           return result({ isError: true, subtype: 'error_during_execution' });
         case 'remote_control':
           return remoteControl(m.request_id, r);
+        case 'rename_session':
+          // Logged to <log>.rename.jsonl: the title it is given.
+          fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.rename.jsonl', JSON.stringify(r) + '\n');
+          return ok(m.request_id);
         case 'stop_task':
           fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
           return stopTask(m.request_id, r.task_id);
@@ -1615,16 +1700,26 @@ function startSession() {
 
   // Remote Control: requests are logged to <log>.control.jsonl. With $FAKE_CLAUDE_REMOTE_MESSAGE,
   // a message "sent from claude.ai" arrives once it is on (replayed with origin human, then run).
+  // As Claude Code does, a session opened with keep_session_on_exit stays on claude.ai when Remote
+  // Control is turned off; one opened with keep_session_on_exit false is archived then (its bridge
+  // id is added to <log>.archived.jsonl).
+  let remoteOn = null;
   function remoteControl(id, r) {
     fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
     if (!r.enabled) {
+      if (remoteOn && remoteOn.keep === false)
+        fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.archived.jsonl', JSON.stringify({ bridge: remoteOn.bridge }) + '\n');
+      remoteOn = null;
       ok(id);
       return out({ type: 'system', subtype: 'bridge_state', state: 'disconnected', session_id: sessionId });
     }
     const bridge = r.reattach_session_id ?? `cse_fake_${process.pid}`;
-    out({ type: 'system', subtype: 'bridge_state', state: 'ready', session_id: sessionId });
-    ok(id, { session_url: `https://claude.ai/code/session_${bridge.slice(4)}`, bridge_session_id: bridge, bridge_epoch: 1 });
-    out({ type: 'system', subtype: 'bridge_state', state: 'connected', bridge_epoch: 1, session_id: sessionId });
+    if (!remoteOn) remoteOn = { bridge, keep: r.keep_session_on_exit !== false };
+    later('remote', () => {
+      out({ type: 'system', subtype: 'bridge_state', state: 'ready', session_id: sessionId });
+      ok(id, { session_url: `https://claude.ai/code/session_${bridge.slice(4)}`, bridge_session_id: bridge, bridge_epoch: 1 });
+      out({ type: 'system', subtype: 'bridge_state', state: 'connected', bridge_epoch: 1, session_id: sessionId });
+    });
     const text = process.env.FAKE_CLAUDE_REMOTE_MESSAGE;
     if (text && !remoteSent) {
       remoteSent = true;

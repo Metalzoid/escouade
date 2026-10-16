@@ -77,7 +77,10 @@ pub enum Event {
         service: &'static str,
     },
     AccountCreated,
-    RemoteControlEnabled,
+    /// Where it comes from: "agent" (turned on for one), "project" or "global".
+    RemoteControlEnabled {
+        from: &'static str,
+    },
 }
 
 impl Event {
@@ -105,7 +108,7 @@ impl Event {
             Event::IntegrationConnected { .. } => "integration_connected",
             Event::TicketsImported { .. } => "tickets_imported",
             Event::AccountCreated => "account_created",
-            Event::RemoteControlEnabled => "remote_control_enabled",
+            Event::RemoteControlEnabled { .. } => "remote_control_enabled",
         }
     }
 
@@ -132,6 +135,7 @@ impl Event {
                 json!({ "by": if *autopilot { "autopilot" } else { "user" } })
             }
             Event::GitSync { op } => json!({ "op": op }),
+            Event::RemoteControlEnabled { from } => json!({ "from": from }),
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }
@@ -716,7 +720,7 @@ mod tests {
             Event::IntegrationConnected { service: "linear" },
             Event::TicketsImported { service: "jira" },
             Event::AccountCreated,
-            Event::RemoteControlEnabled,
+            Event::RemoteControlEnabled { from: "agent" },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());
@@ -742,6 +746,12 @@ mod tests {
             Value::Object(Event::TicketsImported { service: "jira" }.props()),
             json!({ "service": "jira" })
         );
+        for from in ["agent", "project", "global"] {
+            assert_eq!(
+                Value::Object(Event::RemoteControlEnabled { from }.props()),
+                json!({ "from": from })
+            );
+        }
         assert!(Event::MessageSent.props().is_empty());
     }
 

@@ -1,6 +1,6 @@
 # Réglages : Projets
 
-L’onglet « Projets » règle un projet à la fois : son nom et sa couleur, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
+L’onglet « Projets » règle un projet à la fois : son nom et sa couleur, son remote control, ses worktrees, la façon dont ses commits sont rédigés et ses commandes de préparation, de démontage et de lancement.
 
 ## Choisir le projet
 
@@ -16,6 +16,16 @@ L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en
 | « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif sous le seuil de pause, dans l’ordre des comptes) ou un des comptes actifs qui servent ce projet. | « Automatique » |
 
 Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’onglet [« Comptes Claude »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
+
+## Remote control
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Remote control pour les agents de ce projet » | Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le processus `claude` de chacun, au plus 3 à la fois, et il reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. | Désactivé |
+
+Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ». Éteint, le réglage retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage global couvre encore.
+
+Quand « Remote control pour tous les agents » est allumé dans l’onglet [« Claude Code »](settings-claude-code), l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Claude Code ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur retrouve son état. Voir [le remote control](remote-control).
 
 ## Git
 

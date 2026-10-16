@@ -48,6 +48,8 @@ export interface Settings {
   todoTools: boolean;
   /** « Ouvrir les nouveaux agents dans l'interface de Claude Code »: a new agent (not a ticket's) starts in the Claude Code view. */
   terminalView: boolean;
+  /** « Remote control pour tous les agents »: every agent of every project is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
+  remoteControlAll: boolean;
 }
 
 /** A Claude account: Claude Code with a configuration folder of its own (its own sign-in, sessions and quota). */
@@ -260,6 +262,8 @@ export interface Project {
   agentBranchPrefix: string;
   /** « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`. */
   ticketBranchPrefix: string;
+  /** « Remote control pour les agents de ce projet »: each of its agents is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
+  remoteControl: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -522,6 +526,9 @@ export interface PendingRequest {
   defaultNo: boolean;
 }
 
+/** Where an agent’s remote control comes from. */
+export type RemoteSource = 'hand' | 'project' | 'global';
+
 export interface Agent {
   id: string;
   projectId: string;
@@ -563,12 +570,23 @@ export interface Agent {
   liveTokens: number;
   /** Estimated cost (list prices) of the running turn so far; `cost` gets the exact figure at its end. */
   liveCost: number;
-  /** Remote Control: reachable from claude.ai / the Claude app (its process stays up). */
+  /** Remote Control: reachable from claude.ai / the Claude app (its process stays up), whatever turned it on. */
   remoteControl: boolean;
+  /** What turned it on: the user by hand, its project’s setting, or the setting for all agents; null while it is off. */
+  remoteSource: RemoteSource | null;
+  /** Set apart by hand (« Désactiver le remote control », a setting covering the agent or not): off in spite of a setting, until turned on by hand. */
+  remoteOff: boolean;
+  /** The Claude Code interface (« Vue Claude Code ») that runs was started with the remote control; null while no interface runs. */
+  interfaceRemote: boolean | null;
   remoteSession: string | null;
   /** The session on claude.ai. */
   remoteUrl: string | null;
-  /** Link state reported by Claude Code ("ready", "connected"…), null without a live link. */
+  /**
+   * Link state reported by Claude Code ("ready", "connected"…), null without a live link. In Claude Code's view it is the interface's,
+   * whatever the agent's remote control says (an open interface keeps its link until its next launch): "connected" (then `remoteUrl` is
+   * its session), "unavailable" when the interface runs but Claude Code did not open the remote control (no claude.ai subscription,
+   * network, proxy or organization policy; the agent's conversation says so in a notification), or null.
+   */
   remoteState: string | null;
   /** Stopped by the usage limit: when it is sent "continue" by itself (epoch ms). */
   resumeAt: number | null;

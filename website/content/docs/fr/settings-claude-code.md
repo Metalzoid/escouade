@@ -1,6 +1,6 @@
 # Réglages : Claude Code
 
-L’onglet « Claude Code » règle l’exécutable de Claude Code, le modèle, l’effort et le mode de permission des nouveaux agents, la vie des processus Claude, et le serveur qui laisse Claude piloter Escouade.
+L’onglet « Claude Code » règle l’exécutable de Claude Code, le modèle, l’effort et le mode de permission des nouveaux agents, la vie des processus Claude, le remote control de tous les agents et le serveur qui laisse Claude piloter Escouade.
 
 ## Exécutable
 
@@ -103,6 +103,20 @@ Si l’agent tient une liste, Escouade montre son avancée dans le bandeau « P
 ### Processus inactifs
 
 Le champ est un nombre de minutes ; 0 veut dire jamais, et un champ vide vaut 0. La session d’un agent dont le processus a été arrêté reste reprenable. Un agent en remote control n’est jamais arrêté ainsi, pour rester joignable depuis claude.ai.
+
+## Remote control
+
+Ce groupe rend les agents de tous les projets accessibles depuis claude.ai et l’app Claude, sans activer le [remote control](remote-control) agent par agent.
+
+### Remote control pour tous les agents
+
+L’interrupteur est désactivé par défaut. Allumé, chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le processus `claude` de chacun, au plus 3 à la fois, et il reste lancé : il démarre avec l’app et n’est jamais arrêté pour inactivité. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ».
+
+Le réglage s’enregistre avec « Enregistrer », comme la plupart des autres. Éteint, il retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage de leur projet couvre encore.
+
+Tant qu’il est allumé, l’interrupteur « Remote control pour les agents de ce projet » de chaque projet, dans [l’onglet « Projets »](settings-projects), se montre allumé et grisé : « Activé pour tous les projets dans Réglages › Claude Code ». Le choix propre de chaque projet est gardé, et revient quand celui-ci est éteint.
+
+Pour un agent en [vue Claude Code](claude-code-view), le changement vaut au prochain lancement de son interface. La page sur [le remote control](remote-control) donne le détail : d’où il vient, comment mettre un agent à part et ce qui se passe au redémarrage.
 
 ## Escouade dans Claude
 

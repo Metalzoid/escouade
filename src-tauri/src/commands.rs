@@ -160,7 +160,12 @@ pub fn set_ui(core: CoreState, ui: UiState) {
 /// changes them with the `account_*` commands).
 #[tauri::command(async)]
 pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>> {
+    let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
+    if settings.remote_control_all && !remote_was_on {
+        core.telemetry
+            .track(Event::RemoteControlEnabled { from: "global" });
+    }
     Ok(pty::detect_shells(&settings))
 }
 
@@ -389,7 +394,14 @@ pub async fn create_project(
 
 #[tauri::command(async)]
 pub fn update_project(core: CoreState, project: Project) -> Res<()> {
-    core.update_project(project).map_err(err)
+    let remote_was_on = core.project(&project.id).is_ok_and(|p| p.remote_control);
+    let remote_on = project.remote_control;
+    core.update_project(project).map_err(err)?;
+    if remote_on && !remote_was_on {
+        core.telemetry
+            .track(Event::RemoteControlEnabled { from: "project" });
+    }
+    Ok(())
 }
 
 #[tauri::command(async)]
@@ -1259,7 +1271,7 @@ pub fn term_resize(core: CoreState, id: String, cols: u16, rows: u16) -> Res<()>
 #[tauri::command]
 pub async fn term_kill(core: CoreState<'_>, id: String) -> Res<()> {
     let core = core.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || core.pty.kill(&id))
+    tauri::async_runtime::spawn_blocking(move || core.kill_terminal(&id))
         .await
         .map_err(|e| err(e.into()))
 }
@@ -1289,13 +1301,16 @@ pub fn set_unsaved(core: CoreState, count: usize) {
         .store(count, std::sync::atomic::Ordering::Release);
 }
 
+/// Turns Remote Control on or off for the agent. True when, in the Claude Code view, the change
+/// waits for the interface's next start: it runs, and was started with the other state.
 #[tauri::command]
-pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) -> Res<()> {
-    core.set_remote_control(&id, enabled).await.map_err(err)?;
+pub async fn set_remote_control(core: CoreState<'_>, id: String, enabled: bool) -> Res<bool> {
+    let at_next_start = core.set_remote_control(&id, enabled).await.map_err(err)?;
     if enabled {
-        core.telemetry.track(Event::RemoteControlEnabled);
+        core.telemetry
+            .track(Event::RemoteControlEnabled { from: "agent" });
     }
-    Ok(())
+    Ok(at_next_start)
 }
 
 // ---------- board ----------

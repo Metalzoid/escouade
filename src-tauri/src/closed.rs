@@ -9,7 +9,7 @@
 
 use crate::agent::{AgentHandle, AgentRt};
 use crate::conv;
-use crate::core::{approval_interrupted, remote_agent_ids, Core};
+use crate::core::{approval_interrupted, Core};
 use crate::i18n::Lang;
 use crate::model::*;
 use crate::paths::{self, DataDir};
@@ -754,7 +754,15 @@ impl<R: Runtime> Core<R> {
         for ticket in tickets {
             self.hub.emit(UiEvent::Ticket { ticket });
         }
-        remote_agent_ids(handles.iter())
+        // The Remote Control settings are applied to them as when the app starts (`start_remote`):
+        // the project's own setting and the agents set apart come back with them.
+        handles
+            .iter()
+            .filter_map(|h| {
+                let rt = h.lock();
+                (!rt.meta.archived).then(|| rt.meta.id.clone())
+            })
+            .collect()
     }
 
     /// The file of the closed project `id`, once what it kept is in the state (saved): the

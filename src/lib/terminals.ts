@@ -489,10 +489,14 @@ export function mountTerminal(id: string, container: HTMLElement | null) {
   }
 }
 
-export function disposeTerminal(id: string) {
+/**
+ * Lets go of the terminal and stops its process. The promise settles once the backend has done it (or could not: it may
+ * be gone already), for what must not start again before: the backend attaches to an interface still running.
+ */
+export function disposeTerminal(id: string): Promise<void> {
   const x = xterms.get(id);
-  if (!x) return;
+  if (!x) return Promise.resolve();
   free(x);
   xterms.delete(id);
-  api.termKill(id).catch(() => {});
+  return api.termKill(id).catch(() => {});
 }

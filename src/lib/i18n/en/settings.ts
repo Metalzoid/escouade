@@ -93,6 +93,10 @@ export default defineZone('settings', {
     todoTools: 'Agents keep a task list',
     todoToolsDesc:
       'Gives agents Claude Code’s task list tool: if they keep a list, Escouade shows their progress in the “Plan” banner (the model does not have to use it). Applies to agents started afterwards.',
+    remoteTitle: 'Remote control',
+    remoteAll: 'Remote control for all agents',
+    remoteAllDesc:
+      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
   },
 
   notifications: {
@@ -159,6 +163,11 @@ export default defineZone('settings', {
     identity: 'Identity',
     nameLabel: 'Project name',
     colorN: 'Color {n}',
+    remoteTitle: 'Remote control',
+    remote: 'Remote control for this project’s agents',
+    remoteDesc:
+      'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
+    remoteGlobal: 'On for all projects in Settings › Claude Code',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
     worktreeDir: 'Worktrees folder',

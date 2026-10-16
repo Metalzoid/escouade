@@ -293,6 +293,31 @@ test('an agent in remote control shows what is sent to it from claude.ai', async
   await expect(card.locator('[data-tip*="Remote control"]')).toBeHidden();
 });
 
+test('the setting for all agents gives each one remote control, which one is set apart from by hand', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  const card = page.locator('.card').first();
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await dialog.getByRole('tab', { name: 'Claude Code' }).click();
+  await dialog.getByRole('switch', { name: 'Remote control pour tous les agents' }).click();
+  // The project's own switch never says otherwise: on and grayed, with the reason.
+  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  const own = dialog.getByRole('switch', { name: 'Remote control pour les agents de ce projet' });
+  await expect(own).toHaveAttribute('aria-checked', 'true');
+  await expect(own).toBeDisabled();
+  await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Claude Code')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  // The agent there was gets it, and its card says where it comes from.
+  await expect(card.locator('[data-tip*="Remote control : connecté"][data-tip*="activé par le réglage de tous les agents"]')).toBeVisible();
+  // Set apart by hand: off in spite of the setting.
+  await card.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Désactiver le remote control' }).click();
+  await expect(card.locator('[data-tip*="Remote control"]')).toBeHidden();
+  await card.click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: /Activer le remote control/ })).toBeVisible();
+});
+
 test('scrolling up slowly from the bottom of a conversation is never pulled back down', async ({ app }) => {
   const { page } = app;
   // The window of the CI runners: the first reply just fits, and the message field shrinking back

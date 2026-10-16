@@ -253,6 +253,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Archiver / Restaurer / Archivés | Archive / Restore / Archived | un agent |
 | Dupliquer la conversation | Duplicate the conversation | menu d’un agent |
 | remote control | remote control | écrit en minuscules, comme dans la conversation |
+| activé à la main / par le réglage du projet / par le réglage de tous les agents | turned on by hand / by the project’s setting / by the setting for all agents | d’où vient le remote control d’un agent, à la fin de l’infobulle de son icône ; « Remote control pour tous les agents » → “Remote control for all agents”, « … pour les agents de ce projet » → “… for this project’s agents” (réglages) |
 | Terminaux / terminal terminé | Terminals / exited | un terminal dont le shell s’est arrêté |
 | À voir (un agent à regarder) | Needs a look | l’info-bulle d’un onglet de projet qui clignote |
 | Réduire / Agrandir / Restaurer (la fenêtre) | Minimize / Maximize / Restore | boutons de la barre de titre |

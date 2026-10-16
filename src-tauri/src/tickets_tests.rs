@@ -1645,6 +1645,26 @@ async fn without_the_autopilot_a_ticket_waits_until_launched_by_hand() {
 }
 
 #[tokio::test]
+async fn a_tickets_agent_has_the_remote_control_a_setting_gives_it() {
+    let h = harness("tk-remote");
+    let (p, _) = h.project(true).await;
+    let mut project = h.core.project(&p.id).unwrap();
+    project.remote_control = true;
+    h.core.update_project(project).unwrap();
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    h.wait("its remote control", |h| {
+        let m = h.agent(&aid);
+        m.remote_control && m.remote_source == Some(RemoteSource::Project) && m.remote_url.is_some()
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn a_ticket_whose_agent_dies_is_blocked_and_frees_its_place() {
     let h = harness("tk-crash");
     let (p, _) = h.project(false).await;
@@ -6908,6 +6928,60 @@ async fn a_ticket_started_again_takes_its_branch_back_from_its_archived_agent_un
         .filter(|l| *l == "branch refs/heads/feat/login")
         .count();
     assert_eq!(held, 1);
+}
+
+#[tokio::test]
+async fn a_ticket_whose_agent_was_set_apart_from_remote_control_keeps_its_next_agents_apart() {
+    let h = harness("tk-remote-apart");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Fichier [ok]", &[], 5))
+        .await
+        .unwrap();
+    // What the ticket says on the wire: set apart from Remote Control, or not.
+    let apart = |h: &Harness| json!(h.ticket(&t.id))["remoteOff"] == json!(true);
+    // A setting gives its agents Remote Control.
+    h.remote_all(true);
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let first = h.ticket(&t.id).agent_id.unwrap();
+    h.wait("its remote control", |h| h.agent(&first).remote_control)
+        .await;
+    assert!(!apart(&h));
+
+    // « Désactiver le remote control » on its agent: set apart, and so is the ticket.
+    h.core.set_remote_control(&first, false).await.unwrap();
+    assert!(h.agent(&first).remote_off);
+    assert!(apart(&h));
+
+    // Sent back to do (its agent archived) and started again: the new agent is set apart too.
+    h.core.archive_agent(&first, true).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Todo);
+    assert!(apart(&h));
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test again", |t| {
+        t.column == Column::Review && t.agent_id.as_deref().is_some_and(|a| a != first)
+    })
+    .await;
+    let second = h.ticket(&t.id).agent_id.unwrap();
+    h.settle_remote().await;
+    let m = h.agent(&second);
+    assert!(m.remote_off && !m.remote_control);
+
+    // Turned on by hand for that agent, the ticket is no longer apart.
+    h.core.set_remote_control(&second, true).await.unwrap();
+    assert!(!apart(&h));
+    h.core.archive_agent(&second, true).await.unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test a third time", |t| {
+        t.column == Column::Review && t.agent_id.as_deref().is_some_and(|a| a != second)
+    })
+    .await;
+    let third = h.ticket(&t.id).agent_id.unwrap();
+    assert!(!h.agent(&third).remote_off);
 }
 
 #[tokio::test]

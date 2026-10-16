@@ -74,6 +74,9 @@ pub struct Settings {
     /// « Statistiques d’usage » (`telemetry`): None until the user answered the question
     /// of the first start (settings saved before it have none: they are asked too).
     pub telemetry: Option<bool>,
+    /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
+    /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
+    pub remote_control_all: bool,
 }
 
 /// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
@@ -263,6 +266,7 @@ impl Default for Settings {
             todo_tools: true,
             switch_on_limit: false,
             telemetry: None,
+            remote_control_all: false,
         }
     }
 }
@@ -315,6 +319,10 @@ pub struct Project {
     /// « Préfixe des branches des tickets »: a ticket's own branch is `<prefix><key>`.
     #[serde(default = "default_ticket_branch_prefix")]
     pub ticket_branch_prefix: String,
+    /// « Remote control pour les agents de ce projet »: its agents, those of tickets too, are
+    /// reachable from claude.ai (`RemoteSource::Project`).
+    #[serde(default)]
+    pub remote_control: bool,
 }
 
 impl Project {
@@ -580,6 +588,10 @@ pub struct Ticket {
     /// tool); empty: the board's.
     pub model: String,
     pub effort: String,
+    /// Its agent was set apart from Remote Control by hand (`AgentMeta::remote_off`): so is the
+    /// next one it gets (sent back to do and started again), until the user turns Remote Control
+    /// on for one by hand.
+    pub remote_off: bool,
     /// The images pasted or dropped in its form, in their order: files of its folder
     /// (`DataDir::ticket_dir`), sent to its agent with its first message.
     pub images: Vec<TicketImage>,
@@ -758,6 +770,18 @@ pub struct Worktree {
     pub existing: bool,
 }
 
+/// Where an agent's Remote Control comes from (`AgentMeta::remote_source`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RemoteSource {
+    /// Turned on for this agent, from its menu.
+    Hand,
+    /// The project's setting.
+    Project,
+    /// The global setting.
+    Global,
+}
+
 /// The longest status line an agent reports (`AgentMeta::progress_line`), in characters.
 pub const PROGRESS_LINE_MAX: usize = 120;
 
@@ -794,9 +818,17 @@ pub struct AgentMeta {
     pub touched_files: Vec<String>,
     pub last_activity: i64,
     pub prompts: u32,
-    /// Remote Control on: the session is also reachable from claude.ai / the Claude app, so the
-    /// agent's process stays up (started with the app, never idle-stopped).
+    /// Remote Control in force now, whatever it comes from (`remote_source`): the session is also
+    /// reachable from claude.ai / the Claude app, so the agent's process stays up (started with
+    /// the app, never idle-stopped).
     pub remote_control: bool,
+    /// Where the Remote Control in force comes from: the user's choice for this agent, its
+    /// project's setting or the global one. None while it is not in force.
+    pub remote_source: Option<RemoteSource>,
+    /// Set apart by hand (« Désactiver le remote control », whether a setting covered it then or
+    /// not): the settings give it none, restarts included, until the user turns it on for this
+    /// agent. Its copies and, for a ticket's agent, the ticket's next agents are set apart too.
+    pub remote_off: bool,
     /// Remote session to reattach to when the process restarts, and its claude.ai link.
     pub remote_session: Option<String>,
     pub remote_url: Option<String>,
@@ -924,6 +956,9 @@ pub struct AgentView {
     pub activity: Option<String>,
     /// The terminal of Claude Code's interface running for it (« Vue Claude Code »).
     pub terminal_id: Option<String>,
+    /// Its interface runs (Claude Code view) and was started with Remote Control or not; None: no
+    /// interface runs.
+    pub interface_remote: Option<bool>,
     /// How the last interface it ran ended, until the next one starts (not saved).
     pub tui_exit: Option<TuiExit>,
     /// The setup of its new worktree under way: the command running ("npm ci (1/2)").

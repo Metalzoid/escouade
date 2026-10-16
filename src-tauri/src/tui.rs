@@ -13,11 +13,11 @@
 //! A ticket's agent never runs there: its board drives it over the stream.
 
 use crate::accounts;
-use crate::agent::{Effects, TuiRun};
+use crate::agent::{AgentHandle, Effects, TuiRun};
 use crate::core::Core;
 use crate::mcp::AgentAccess;
 use crate::model::*;
-use crate::pty::TermInfo;
+use crate::pty::{PtyManager, TermInfo};
 use anyhow::{anyhow, bail, Context, Result};
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::{Bytes, Incoming};
@@ -33,7 +33,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::net::{Ipv4Addr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::Runtime;
 
 /// The path of the hooks' endpoint.
@@ -44,6 +44,30 @@ const TOKEN_VAR: &str = "ESCOUADE_HOOK_TOKEN";
 const READ_EVERY: Duration = Duration::from_millis(400);
 /// The most a hook may send (its tool's input, a prompt with a pasted file).
 const MAX_BODY: usize = 4 << 20;
+/// How long after it started an interface's end is taken for a failure of Remote Control (the
+/// option it was given), if it was started with it and no window ever showed it.
+const RC_GRACE: Duration = Duration::from_secs(10);
+/// How long an interface started with Remote Control, once it is up (listed by the registry of
+/// Claude Code's sessions), is waited for to show a sign of its link: without one it has none (an
+/// account with no claude.ai subscription, a network, a proxy or a rule of the organization), and
+/// Claude Code says nothing of it in its terminal.
+#[cfg(not(test))]
+const LINK_WAIT: Duration = Duration::from_secs(20);
+#[cfg(test)]
+const LINK_WAIT: Duration = Duration::from_millis(1500);
+/// How long an interface a window showed, started with Remote Control, is looked for in the
+/// registry to arm that wait: past it, the registry is read no more if it never listed it.
+const REGISTRY_PATIENCE: Duration = Duration::from_secs(5 * 60);
+/// The most files of the registry looked into, and the most one of them may weigh (bytes).
+const REGISTRY_FILES: usize = 512;
+const REGISTRY_FILE_MAX: u64 = 64 << 10;
+/// How long the first Ctrl+C that quits an interface may take to be written before the pause that
+/// precedes the second begins anyway.
+const QUIT_WRITTEN_WITHIN: Duration = Duration::from_secs(2);
+/// How far apart the two Ctrl+C that make an interface quit are sent.
+const QUIT_GAP: Duration = Duration::from_millis(700);
+/// How long an interface told to quit is given to end, before it is killed.
+const QUIT_WAIT: Duration = Duration::from_secs(5);
 /// The hooks Escouade listens to.
 const EVENTS: &[&str] = &[
     "UserPromptSubmit",
@@ -92,6 +116,339 @@ impl Hooks {
     }
 }
 
+/// The answer to the pseudo-console's cursor position query when no window gives one.
+const CURSOR_HOME: &[u8] = b"\x1b[1;1R";
+/// The size of the terminal of an interface started with no window.
+const BACKGROUND_SIZE: (u16, u16) = (120, 40);
+/// The most an interface's output keeps (bytes): its last screens, for a window that shows it
+/// later.
+const OUTPUT_KEPT: usize = 4 << 20;
+/// The size of the pieces the kept output is sent to a window in.
+const REPLAY_PIECE: usize = 64 << 10;
+
+/// What an interface printed in its terminal. The pseudo-terminal lives in the backend, which
+/// keeps the last `OUTPUT_KEPT` bytes of its output, so that the interface runs with no window
+/// (Remote Control keeps it up) and a window that opens it, or opens it again after a reload,
+/// finds its screen as it is.
+#[derive(Default)]
+pub struct TuiOutput {
+    inner: Mutex<Output>,
+}
+
+/// Where a window is sent what a terminal prints.
+pub type Forward = Box<dyn Fn(Vec<u8>) + Send>;
+
+#[derive(Default)]
+struct Output {
+    kept: std::collections::VecDeque<u8>,
+    /// The window's sink, while a window shows the terminal.
+    forward: Option<Forward>,
+    /// A window has shown it (it still does, or did before it was closed).
+    shown: bool,
+    /// The private modes the program set (`CSI ? Pn h` and `l`), by number: on or off, as last
+    /// seen. The start of the output, where a program sets most of them once, is dropped in
+    /// time, and the window's terminal would never know.
+    modes: std::collections::BTreeMap<u16, bool>,
+    /// Where the sequence being read stands, from one piece of output to the next.
+    parse: ModeParse,
+    /// The cursor position query, whose end may come in the next piece.
+    query: crate::pty::CursorQuery,
+}
+
+/// The most private modes followed.
+const MAX_MODES: usize = 64;
+/// The longest list of mode numbers looked into (`CSI ? 1049;25;… h`).
+const MAX_MODE_PARAMS: usize = 64;
+/// Where the output is cut at the start when it is too long: after the first line end found in
+/// this many bytes, so that what is kept does not begin in the middle of a sequence.
+const CUT_LOOKS_IN: usize = 4096;
+
+/// What of a private mode's sequence has been read: `ESC`, `ESC [`, `ESC [ ?` and its numbers.
+#[derive(Default)]
+enum ModeParse {
+    #[default]
+    Ground,
+    Esc,
+    Csi,
+    Private(Vec<u8>),
+}
+
+impl Output {
+    /// Follows the modes `data` sets or resets.
+    fn track_modes(&mut self, data: &[u8]) {
+        for &b in data {
+            self.parse = match (std::mem::take(&mut self.parse), b) {
+                (_, ESC) => ModeParse::Esc,
+                (ModeParse::Esc, b'[') => ModeParse::Csi,
+                (ModeParse::Csi, b'?') => ModeParse::Private(Vec::new()),
+                (ModeParse::Private(mut numbers), b'0'..=b'9' | b';')
+                    if numbers.len() < MAX_MODE_PARAMS =>
+                {
+                    numbers.push(b);
+                    ModeParse::Private(numbers)
+                }
+                (ModeParse::Private(numbers), b'h' | b'l') => {
+                    for n in numbers.split(|c| *c == b';') {
+                        let mode = std::str::from_utf8(n)
+                            .ok()
+                            .and_then(|n| n.parse::<u16>().ok());
+                        if let Some(mode) = mode {
+                            if self.modes.len() < MAX_MODES || self.modes.contains_key(&mode) {
+                                self.modes.insert(mode, b == b'h');
+                            }
+                        }
+                    }
+                    ModeParse::Ground
+                }
+                _ => ModeParse::Ground,
+            };
+        }
+    }
+
+    /// The sequences that set the modes again, as last seen.
+    fn modes_again(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        for (mode, on) in &self.modes {
+            out.extend_from_slice(
+                format!("\x1b[?{mode}{}", if *on { 'h' } else { 'l' }).as_bytes(),
+            );
+        }
+        out
+    }
+}
+
+impl std::fmt::Debug for TuiOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let o = self.inner.lock();
+        f.debug_struct("TuiOutput")
+            .field("kept", &o.kept.len())
+            .field("shown", &o.shown)
+            .finish()
+    }
+}
+
+impl TuiOutput {
+    /// An output for the window `forward` sends to, if there is one yet.
+    pub(crate) fn new(forward: Option<Forward>) -> Self {
+        Self {
+            inner: Mutex::new(Output {
+                shown: forward.is_some(),
+                forward,
+                ..Default::default()
+            }),
+        }
+    }
+
+    /// What the terminal just printed: kept, and sent to the window that shows it. Under one lock
+    /// with `attach`, so that a window taking over finds every byte once, in order. True when it
+    /// ends the cursor position query of a terminal no window has shown: the caller answers it,
+    /// where a window would have (the same lock tells whether one does).
+    pub(crate) fn push(&self, data: Vec<u8>) -> bool {
+        let mut o = self.inner.lock();
+        o.track_modes(&data);
+        let asked = o.query.feed(&data);
+        o.kept.extend(data.iter());
+        let excess = o.kept.len().saturating_sub(OUTPUT_KEPT);
+        if excess > 0 {
+            o.kept.drain(..excess);
+            // Not in the middle of a sequence, or of a line: from the next line.
+            let line = o.kept.iter().take(CUT_LOOKS_IN).position(|b| *b == b'\n');
+            if let Some(line) = line {
+                o.kept.drain(..=line);
+            }
+        }
+        if let Some(forward) = &o.forward {
+            forward(data);
+        }
+        asked && !o.shown
+    }
+
+    /// A window is taking the terminal over: it is shown from now on, so that nothing stops it
+    /// as one nobody looks at. Called under the lock of the agent, with the terminal found.
+    pub(crate) fn mark_shown(&self) {
+        self.inner.lock().shown = true;
+    }
+
+    /// A window takes the terminal over: it is sent all that was kept, then what comes, and the
+    /// window that had it before (a reloaded one) is let go. The queries the terminal made
+    /// (`without_terminal_queries`) are left out of what is replayed: they were answered, and
+    /// the window's terminal would answer them again, the answers typed into the interface.
+    pub(crate) fn attach(&self, forward: Forward) {
+        let mut o = self.inner.lock();
+        let kept: Vec<u8> = o.kept.iter().copied().collect();
+        // The modes first: the start of the output, which set them, may be gone.
+        let modes = o.modes_again();
+        if !modes.is_empty() {
+            forward(modes);
+        }
+        for piece in without_terminal_queries(&kept).chunks(REPLAY_PIECE) {
+            forward(piece.to_vec());
+        }
+        o.forward = Some(forward);
+        o.shown = true;
+    }
+
+    /// A window has shown the terminal.
+    pub(crate) fn shown(&self) -> bool {
+        self.inner.lock().shown
+    }
+
+    /// The bytes kept (tests).
+    #[cfg(test)]
+    pub(crate) fn kept(&self) -> Vec<u8> {
+        self.inner.lock().kept.iter().copied().collect()
+    }
+}
+
+const ESC: u8 = 0x1b;
+const BEL: u8 = 0x07;
+/// The longest OSC or DCS string looked into for a query (the longer ones are kept as they are).
+const MAX_STRING: usize = 4096;
+
+/// `bytes` less the requests a terminal answers (the answers go to the program as input): device
+/// attributes (`CSI c`), device and cursor status reports (`CSI n`, `CSI ? n`), `CSI > q`, mode
+/// requests (`CSI $ p`), the keyboard protocol's (`CSI ? u`), window reports (`CSI 14 t`, 16, 18,
+/// 19), the OSC that ask a color or the clipboard (`?` for a value), and the DCS `$ q` and `+ q`.
+/// All else stays byte for byte. A sequence cut short at the end (or started before what the
+/// buffer begins with) is left as it is.
+fn without_terminal_queries(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let Some(at) = bytes[i..].iter().position(|b| *b == ESC) else {
+            out.extend_from_slice(&bytes[i..]);
+            break;
+        };
+        out.extend_from_slice(&bytes[i..i + at]);
+        i += at;
+        match terminal_query_len(&bytes[i..]) {
+            Some(n) => i += n,
+            None => {
+                out.push(ESC);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The length of the query `s`, which begins with ESC, opens; None when it opens something else
+/// or is not whole.
+fn terminal_query_len(s: &[u8]) -> Option<usize> {
+    match *s.get(1)? {
+        b'[' => csi_query_len(s),
+        b']' => {
+            let (end, len) = string_end(s, true)?;
+            let mut parts = s[2..end].split(|b| *b == b';');
+            let colors_or_clipboard = matches!(parts.next()?, b"4" | b"10" | b"11" | b"12" | b"52");
+            (colors_or_clipboard && parts.any(|p| p == b"?")).then_some(len)
+        }
+        b'P' => {
+            let (end, len) = string_end(s, false)?;
+            let payload = &s[2..end];
+            (payload.starts_with(b"$q") || payload.starts_with(b"+q")).then_some(len)
+        }
+        _ => None,
+    }
+}
+
+/// Where the OSC or DCS string `s` (ESC, then its opener) ends: the end of its payload and the
+/// length of the whole, up to its terminator (BEL too, for an OSC; else ESC \). None when it has
+/// none within `MAX_STRING`, or something else comes first.
+fn string_end(s: &[u8], bel: bool) -> Option<(usize, usize)> {
+    let limit = s.len().min(2 + MAX_STRING);
+    for i in 2..limit {
+        match s[i] {
+            BEL if bel => return Some((i, i + 1)),
+            ESC => return (s.get(i + 1) == Some(&b'\\')).then_some((i, i + 2)),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The length of the query the CSI `s` (ESC [ …) is, if it is one.
+fn csi_query_len(s: &[u8]) -> Option<usize> {
+    let mut i = 2;
+    while s.get(i).is_some_and(|b| (0x30..=0x3f).contains(b)) {
+        i += 1;
+    }
+    let params = &s[2..i];
+    let from = i;
+    while s.get(i).is_some_and(|b| (0x20..=0x2f).contains(b)) {
+        i += 1;
+    }
+    let intermediates = &s[from..i];
+    let last = *s.get(i)?;
+    // `params` less the prefix (one of `prefixes`, or none), made of digits only.
+    let digits_after = |prefixes: &[u8]| {
+        let rest = match params.split_first() {
+            Some((p, rest)) if prefixes.contains(p) => rest,
+            _ => params,
+        };
+        rest.iter().all(u8::is_ascii_digit)
+    };
+    let query = match (intermediates, last) {
+        // Device attributes: `CSI c`, `CSI 0 c`, `CSI > c`, `CSI > 0 c`, `CSI = c`.
+        ([], b'c') => digits_after(b">="),
+        // Status reports: `CSI 5 n`, `CSI 6 n`, `CSI ? 6 n`, `CSI ? 996 n`.
+        ([], b'n') => !params.is_empty() && params != b"?" && digits_after(b"?"),
+        // The terminal's name and version: `CSI > q`, `CSI > 0 q`.
+        ([], b'q') => params.first() == Some(&b'>') && digits_after(b">"),
+        // A mode's state: `CSI Ps $ p`, `CSI ? Ps $ p`.
+        ([b'$'], b'p') => digits_after(b"?"),
+        // The keyboard protocol's flags: `CSI ? u`.
+        ([], b'u') => params == b"?",
+        // Window reports: the size in pixels (14), of a cell (16), in characters (18), of the
+        // screen (19).
+        ([], b't') => {
+            let first = params.split(|b| *b == b';').next().unwrap_or_default();
+            params.iter().all(|b| b.is_ascii_digit() || *b == b';')
+                && matches!(first, b"14" | b"16" | b"18" | b"19")
+        }
+        _ => false,
+    };
+    query.then_some(i + 1)
+}
+
+/// Ends the interface in the terminal `term` for good, as its user would: two Ctrl+C, 700 ms apart,
+/// on which Claude Code closes cleanly and archives its remote session (seen on 2.1.301); killed
+/// only if it is still there `QUIT_WAIT` after the second. Where the app ends an interface
+/// that will not run again: back in Escouade's view, archived, deleted, no longer holding Remote
+/// Control. Not when the app quits (the remote session is kept, so that the next start reattaches
+/// it), nor when the user closes the terminal (`Core::kill_terminal`).
+pub(crate) async fn quit_interface(pty: &PtyManager, term: &str) {
+    // The first one is waited for until it is really written (the terminal's input thread may be
+    // behind), off the runtime's threads: the pause starts then, not when it was queued, else the
+    // two could be written together, one key press and not two.
+    let first = {
+        let (pty, term) = (pty.clone(), term.to_string());
+        tokio::task::spawn_blocking(move || pty.write_and_wait(&term, b"\x03", QUIT_WRITTEN_WITHIN))
+            .await
+    };
+    match first {
+        Ok(Ok(_)) => {
+            tokio::time::sleep(QUIT_GAP).await;
+            match pty.write(term, b"\x03") {
+                Ok(_) => {
+                    let deadline = Instant::now() + QUIT_WAIT;
+                    while pty.exists(term) && Instant::now() < deadline {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                }
+                // Gone meanwhile, or it reads nothing: killed below all the same.
+                Err(e) => log::debug!("terminal {term}: second Ctrl+C not written: {e:#}"),
+            }
+        }
+        // Gone already, or it takes no input (killed below).
+        Ok(Err(e)) => log::debug!("terminal {term}: Ctrl+C not written: {e:#}"),
+        Err(e) => log::warn!("terminal {term}: Ctrl+C not written: {e}"),
+    }
+    // Closing a pseudo-console may wait: off the runtime's threads too.
+    let (pty, term) = (pty.clone(), term.to_string());
+    let _ = tokio::task::spawn_blocking(move || pty.kill(&term)).await;
+}
+
 /// The settings an interface is started with (`--settings <file>`): its hooks, each an HTTP call
 /// to `port` with the token of its environment, and, Escouade's tools refused to it (`access`),
 /// the server itself kept out (`AgentAccess::refusal`: Claude Code reads the last `--settings`
@@ -116,8 +473,14 @@ pub fn tui_settings(port: u16, access: &AgentAccess) -> Value {
 }
 
 /// The arguments of an agent's interface, as its stream's are (`claude_args`) less the stream's
-/// own; `session` is the session it starts or forks into, when it resumes none.
-pub fn tui_args(m: &AgentMeta, session: Option<&str>, settings_file: &Path) -> Vec<String> {
+/// own; `session` is the session it starts or forks into, when it resumes none, and `remote` the
+/// name of its session in claude.ai when it starts with Remote Control.
+pub fn tui_args(
+    m: &AgentMeta,
+    session: Option<&str>,
+    remote: Option<&str>,
+    settings_file: &Path,
+) -> Vec<String> {
     let mut a: Vec<String> = vec!["--model".into(), m.model.clone()];
     if crate::core::supports_effort(&m.model) {
         a.extend(["--effort".into(), m.effort.clone()]);
@@ -141,6 +504,11 @@ pub fn tui_args(m: &AgentMeta, session: Option<&str>, settings_file: &Path) -> V
             a.extend(session.map(|s| format!("--session-id={s}")));
         }
         (None, None) => a.extend(session.map(|s| format!("--session-id={s}"))),
+    }
+    // One argument, the name glued to the flag: Claude Code takes it so, even one that starts with
+    // « - » (as a separate argument, it might be read as an option).
+    if let Some(name) = remote {
+        a.push(format!("--remote-control={name}"));
     }
     a.extend([
         "--settings".into(),
@@ -172,7 +540,7 @@ pub(crate) const QUICK_EXIT: Duration = Duration::from_secs(20);
 /// started.
 const QUICK_EXITS_MAX: u32 = 2;
 /// How much of an interface's first output is kept, to read what it said when it stopped at once.
-const OUTPUT_KEPT: usize = 8 << 10;
+const EXIT_OUTPUT_KEPT: usize = 8 << 10;
 /// What Claude Code says, before it quits, of a session to resume that its folder does not have.
 const NO_CONVERSATION: &str = "No conversation found";
 
@@ -241,10 +609,10 @@ pub fn other_accounts(
         .collect()
 }
 
-/// `bytes` added to the output kept of an interface, up to `OUTPUT_KEPT`: its first lines, which
+/// `bytes` added to the output kept of an interface, up to `EXIT_OUTPUT_KEPT`: its first lines, which
 /// say why it stopped at once.
 fn keep_output(kept: &mut Vec<u8>, bytes: &[u8]) {
-    let room = OUTPUT_KEPT.saturating_sub(kept.len());
+    let room = EXIT_OUTPUT_KEPT.saturating_sub(kept.len());
     kept.extend_from_slice(&bytes[..bytes.len().min(room)]);
 }
 
@@ -327,6 +695,70 @@ pub fn read_lines(path: &Path, offset: u64) -> std::io::Result<(Vec<Value>, u64)
         .filter_map(|l| serde_json::from_slice::<Value>(l).ok())
         .collect();
     Ok((lines, offset + end as u64 + 1))
+}
+
+/// An interface as the registry of Claude Code's sessions lists it.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Registered {
+    /// The file that lists it (`<pid>.json`).
+    pub file: PathBuf,
+    /// Its session is linked to claude.ai: the file has a `bridgeSessionId`.
+    pub linked: bool,
+}
+
+/// What `file` of the registry says, if it is a whole JSON object: one that is being written, is
+/// empty, is too big or is no file gives nothing (it is read again soon).
+fn read_registry_file(file: &Path) -> Option<Value> {
+    let meta = std::fs::metadata(file).ok()?;
+    if !meta.is_file() || meta.len() == 0 || meta.len() > REGISTRY_FILE_MAX {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(&std::fs::read(file).ok()?).ok()?;
+    value.is_object().then_some(value)
+}
+
+/// The interface of `session` in the registry of Claude Code's sessions, `dir` (`<the account's
+/// config folder>/sessions`): Claude Code writes a `<pid>.json` there (`sessionId`, `kind`,
+/// `entrypoint`, `status`, and a `bridgeSessionId` when the session's Remote Control is active)
+/// for each of its processes, once it is up: not on its welcome screen nor on the box about the
+/// folder (only a `<pid>.<hash>.key` is there then). The interface's entry has the `cli`
+/// entrypoint, the stream's process of the same session the `sdk-cli` one. Once the interface's
+/// file is known (`known`) only that one is read. Never blocks for long nor fails: what cannot be
+/// read is not there yet.
+pub(crate) fn find_registered(
+    dir: &Path,
+    session: &str,
+    known: Option<&Path>,
+) -> Option<Registered> {
+    let registered = |file: &Path, entry: &Value| Registered {
+        file: file.to_path_buf(),
+        linked: entry["bridgeSessionId"]
+            .as_str()
+            .is_some_and(|id| !id.is_empty()),
+    };
+    if let Some(file) = known {
+        let entry = read_registry_file(file)?;
+        return (entry["entrypoint"] == "cli").then(|| registered(file, &entry));
+    }
+    for item in std::fs::read_dir(dir).ok()?.flatten().take(REGISTRY_FILES) {
+        let file = item.path();
+        // `<pid>.json`: the `.key` files and the like are other things.
+        let named_by_pid = file.extension().is_some_and(|e| e == "json")
+            && file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()));
+        if !named_by_pid {
+            continue;
+        }
+        let Some(entry) = read_registry_file(&file) else {
+            continue;
+        };
+        if entry["sessionId"] == session && entry["entrypoint"] == "cli" {
+            return Some(registered(&file, &entry));
+        }
+    }
+    None
 }
 
 /// An entry written before `since` (ms): one of the conversation's history (a session forked or
@@ -436,7 +868,7 @@ impl<R: Runtime> Core<R> {
     pub async fn set_agent_view(self: &Arc<Self>, id: &str, terminal: bool) -> Result<()> {
         let h = self.agent(id)?;
         let lock = self.spawn_lock(id);
-        let _guard = lock.lock().await;
+        let guard = lock.lock().await;
         {
             let rt = h.lock();
             if rt.meta.terminal == terminal {
@@ -444,12 +876,6 @@ impl<R: Runtime> Core<R> {
             }
             if terminal && rt.meta.ticket_id.is_some() {
                 return Err(ticket_refusal());
-            }
-            if terminal && rt.meta.remote_control {
-                bail!(tr!(
-                    "Coupe d’abord le remote control : dans l’interface de Claude Code, c’est sa commande /remote-control qui le fait.",
-                    "Turn remote control off first: in Claude Code’s interface, its /remote-control command does it."
-                ));
             }
             if rt.meta.status.is_active() && rt.tui.is_none() {
                 bail!(tr!(
@@ -459,14 +885,24 @@ impl<R: Runtime> Core<R> {
             }
         }
         if terminal {
-            let stopped = {
+            // Its stream's session on claude.ai is closed for good first, the interface will hold
+            // its own (Remote Control stays in force): a process that just stopped would leave
+            // one behind, orphan, at every switch.
+            let (name, link) = {
                 let mut rt = h.lock();
                 rt.meta.terminal = true;
                 // The user chose this view: the interface it starts is a fresh try.
                 rt.tui_quick_exits = 0;
                 rt.tui_exit = None;
-                rt.detach()
+                (self.remote_name(&rt.meta), rt.end_link())
             };
+            if let Some(link) = link {
+                self.request_save();
+                // Closed even if Remote Control is in force: the interface holds its own session.
+                self.close_link(&h, link, &name, Duration::from_secs(15), false)
+                    .await;
+            }
+            let stopped = h.lock().detach();
             if let Some(p) = stopped {
                 p.close_input();
                 stop_and_wait(&p).await;
@@ -484,20 +920,39 @@ impl<R: Runtime> Core<R> {
                 term
             };
             self.hooks.revoke(id);
+            // Gone before the stream resumes the session: never two processes on one. The launch
+            // lock is not held while it quits (five seconds at worst): what starts a process or
+            // an interface of the agent waits for the quit (`after_quit`).
             if let Some(t) = term {
-                self.pty.kill(&t);
+                let quit = self.quit_soon(id, &t);
+                drop(guard);
+                let _ = quit.await;
             }
         }
         self.emit_agent(&h);
         self.request_save();
-        if !terminal {
-            self.warm(id);
-        }
+        // The stream's process; or, in the Claude Code view, the interface of an agent that holds
+        // Remote Control (it stays up with no window to show it).
+        self.warm(id);
         Ok(())
     }
 
+    /// The user closes the terminal `term` (the window's « × » or « Relancer »). When it is an
+    /// agent's interface, its end is no failure to start with Remote Control, however soon it
+    /// comes.
+    pub fn kill_terminal(&self, term: &str) {
+        for h in self.agents.read().values() {
+            if let Some(run) = h.lock().tui.as_mut().filter(|t| t.term_id == term) {
+                run.killed = true;
+            }
+        }
+        self.pty.kill(term);
+    }
+
     /// Claude Code's interface for the agent, in a terminal the window shows (`on_data`): its
-    /// session resumed, or started. One it had already stops first.
+    /// session resumed, or started. One that runs already (started with Remote Control, or shown
+    /// before the window was reloaded) is neither stopped nor started again: the window takes it
+    /// over, and is sent its screen first.
     ///
     /// The session to resume is looked for first, where Claude Code will look (`settle_session`):
     /// found in another account's folder, it is copied into the agent's; found nowhere, it is given
@@ -544,14 +999,192 @@ impl<R: Runtime> Core<R> {
                 rt.tui_quick_exits = 0;
             }
         }
+        if let Some((info, output)) = self.running_interface(&h, true) {
+            output.attach(Box::new(on_data));
+            // Claude Code draws its screen again at the window's size.
+            let _ = self.pty.resize(&info.id, size.0, size.1);
+            return Ok(info);
+        }
+        self.launch_interface(&h, id, size, Some(Box::new(on_data)))
+            .await
+    }
+
+    /// The agent's interface, when it runs: its terminal and what that printed. With `show`, a
+    /// window is taking it over: it is shown from now on, under the lock that found it, so that
+    /// `stop_unseen_interface` (which looks under that lock) does not stop it before the window
+    /// is attached.
+    pub(crate) fn running_interface(
+        &self,
+        h: &AgentHandle,
+        show: bool,
+    ) -> Option<(TermInfo, Arc<TuiOutput>)> {
+        let rt = h.lock();
+        let run = rt.tui.as_ref()?;
+        if !self.pty.exists(&run.term_id) {
+            return None;
+        }
+        if show {
+            run.output.mark_shown();
+        }
+        Some((run.info.clone(), run.output.clone()))
+    }
+
+    /// Starts the interface of an agent in the Claude Code view that holds Remote Control, with no
+    /// window (`TuiOutput`): the session must stay reachable from claude.ai. One that runs already
+    /// is left as it is, as is an agent that does not hold it, has no such view, is a ticket's or
+    /// is archived.
+    pub(crate) async fn start_interface(self: &Arc<Self>, id: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let lock = self.spawn_lock(id);
+        let _guard = lock.lock().await;
+        if self.quitting.load(std::sync::atomic::Ordering::Acquire) {
+            return Ok(());
+        }
+        {
+            let rt = h.lock();
+            let m = &rt.meta;
+            if !(m.remote_control && m.terminal) || m.archived || m.ticket_id.is_some() {
+                return Ok(());
+            }
+            // It stopped as soon as it started too often in a row: not started again by itself,
+            // as the window's own start is not (`open_agent_terminal`); « Relancer » is the user's.
+            if starts_too_fast(false, rt.tui_quick_exits) {
+                log::info!(
+                    "agent {id}: interface not started in the background, it stopped as soon as it started {} times in a row",
+                    rt.tui_quick_exits
+                );
+                return Ok(());
+            }
+        }
+        if self.running_interface(&h, false).is_some() {
+            return Ok(());
+        }
+        self.launch_interface(&h, id, BACKGROUND_SIZE, None)
+            .await
+            .map(|_| ())
+    }
+
+    /// Stops the interface of the agent that holds Remote Control no more, when no window has
+    /// shown it: nobody types in it. Left alone when a window showed it (the choice holds from
+    /// its next start). While it runs a turn (stopped, the work would be lost) it is marked to stop
+    /// when the turn is over (`stop_interface_when_idle`).
+    pub(crate) fn stop_unseen_interface(&self, h: &AgentHandle) {
+        let (id, term) = {
+            let mut rt = h.lock();
+            let (held, active) = (rt.meta.remote_control, rt.meta.status.is_active());
+            let Some(run) = rt.tui.as_mut() else { return };
+            if held {
+                // It holds it again: nothing is to stop.
+                run.stop_when_idle = false;
+                return;
+            }
+            if run.output.shown() {
+                return;
+            }
+            if active {
+                run.stop_when_idle = true;
+                return;
+            }
+            let term = run.term_id.clone();
+            rt.gen += 1;
+            rt.stop_tui(&mut Effects::default());
+            (rt.meta.id.clone(), term)
+        };
+        self.hooks.revoke(&id);
+        // Quits on a task of its own, as its user would; its end is ignored (the agent's run of it
+        // is over), so it is no failure to start with Remote Control.
+        self.quit_soon(&id, &term);
+        self.emit_agent(h);
+        self.request_save();
+    }
+
+    /// The turn of the agent's interface may be over: the interface that was to stop with it
+    /// (`stop_unseen_interface`) stops, if no window showed it and it holds no Remote Control.
+    pub(crate) fn stop_interface_when_idle(&self, id: &str) {
+        let Ok(h) = self.agent(id) else { return };
+        let marked = h.lock().tui.as_ref().is_some_and(|t| t.stop_when_idle);
+        if marked {
+            self.stop_unseen_interface(&h);
+        }
+    }
+
+    /// The lock held while an interface of the agent `id` quits (`quit_soon`), and that what
+    /// starts a process or an interface of the agent waits for (`after_quit`).
+    fn quit_lock(&self, id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.quit_locks
+            .lock()
+            .entry(id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    /// Quits the interface in the terminal `term` of the agent `id` as its user would
+    /// (`quit_interface`), on a task of its own, which the caller may wait for. Called under the
+    /// agent's launch lock, the caller may let it go next: the quit is already marked, and nothing
+    /// starts a process or an interface of the agent before it is over (`after_quit`). Neither
+    /// holds the launch lock for the five seconds an interface that holds out takes to be killed.
+    pub(crate) fn quit_soon(&self, id: &str, term: &str) -> tauri::async_runtime::JoinHandle<()> {
+        let lock = self.quit_lock(id);
+        // Marked now when no other quit of the agent is under way (it is, in the rare case of two
+        // in a row: the task then waits its turn).
+        let held = lock.clone().try_lock_owned().ok();
+        let (pty, term) = (self.pty.clone(), term.to_string());
+        tauri::async_runtime::spawn(async move {
+            let _held = match held {
+                Some(held) => held,
+                None => lock.lock_owned().await,
+            };
+            quit_interface(&pty, &term).await;
+        })
+    }
+
+    /// Waits for the interface of the agent `id` that quits (`quit_soon`) to be gone: never two
+    /// processes on one session. Called with the launch lock held.
+    pub(crate) async fn after_quit(&self, id: &str) {
+        let lock = self.quit_locks.lock().get(id).cloned();
+        if let Some(lock) = lock {
+            drop(lock.lock().await);
+        }
+    }
+
+    /// Waits at most `within` for the interface of the agent to be up (`interface_ready`), or
+    /// gone: what keeps a place in the starts that a setting makes a few at a time.
+    pub(crate) async fn wait_interface_ready(&self, h: &AgentHandle, within: Duration) {
+        let deadline = Instant::now() + within;
+        loop {
+            {
+                let rt = h.lock();
+                if rt.tui.is_none() || rt.interface_ready() {
+                    return;
+                }
+            }
+            if Instant::now() >= deadline {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    /// Starts the agent's interface (its spawn lock held): `forward` is the window's sink, if a
+    /// window asks for it.
+    async fn launch_interface(
+        self: &Arc<Self>,
+        h: &AgentHandle,
+        id: &str,
+        size: (u16, u16),
+        forward: Option<Forward>,
+    ) -> Result<TermInfo> {
         // Never two processes on one session.
+        self.after_quit(id).await;
         let stopped = h.lock().detach();
         if let Some(p) = stopped {
             p.close_input();
             stop_and_wait(&p).await;
         }
-        if let Some(old) = h.lock().tui.take() {
-            self.pty.kill(&old.term_id);
+        let old = h.lock().tui.take();
+        if let Some(old) = old {
+            let (pty, term) = (self.pty.clone(), old.term_id);
+            let _ = tokio::task::spawn_blocking(move || pty.kill(&term)).await;
         }
         self.hooks.revoke(id);
         let settings = self.settings.read().clone();
@@ -570,7 +1203,7 @@ impl<R: Runtime> Core<R> {
         self.settle_session(id, &settings, &account, &program, &config_dir)
             .await;
         let started = now_ms();
-        let (args, cwd, name, gen, transcript, since) = {
+        let (args, cwd, name, gen, transcript, since, with_remote) = {
             let mut rt = h.lock();
             // A session of its own from the start: its transcript is known before any hook.
             let new_session = rt
@@ -578,7 +1211,15 @@ impl<R: Runtime> Core<R> {
                 .session_id
                 .is_none()
                 .then(|| uuid::Uuid::new_v4().to_string());
-            let args = tui_args(&rt.meta, new_session.as_deref(), &settings_file);
+            // Without the option once an interface closed right after starting with it.
+            let remote =
+                (rt.meta.remote_control && !rt.remote_fallback).then(|| self.remote_name(&rt.meta));
+            let args = tui_args(
+                &rt.meta,
+                new_session.as_deref(),
+                remote.as_deref(),
+                &settings_file,
+            );
             if let Some(s) = new_session {
                 rt.meta.session_id = Some(s);
                 rt.meta.fork_of = None;
@@ -609,6 +1250,7 @@ impl<R: Runtime> Core<R> {
                 rt.gen,
                 (transcript, offset),
                 since,
+                remote.is_some(),
             )
         };
         if !Path::new(&cwd).is_dir() {
@@ -618,7 +1260,7 @@ impl<R: Runtime> Core<R> {
                 dir = cwd
             ));
         }
-        self.ready_for_wsl(&program, &h);
+        self.ready_for_wsl(&program, h);
         let mut args = args;
         let access = self.agent_access(id);
         args.extend(access.args());
@@ -655,18 +1297,33 @@ impl<R: Runtime> Core<R> {
             info.id.clone(),
             access.token().map(str::to_string),
         );
-        // Its first output is kept: what it says when it stops at once (a session it does not
-        // find) is read from it, by its exit.
-        let output = Arc::new(Mutex::new(Vec::new()));
-        let kept = output.clone();
-        let on_data = move |bytes: Vec<u8>| {
-            {
-                let mut kept = kept.lock();
-                if kept.len() < OUTPUT_KEPT {
-                    keep_output(&mut kept, &bytes);
+        let output = Arc::new(TuiOutput::new(forward));
+        // Its first output is kept apart too: what it says when it stops at once (a session it
+        // does not find) is read from it, by its exit.
+        let first = Arc::new(Mutex::new(Vec::new()));
+        let on_data = {
+            let (pty, term, output, kept) = (
+                self.pty.clone(),
+                info.id.clone(),
+                output.clone(),
+                first.clone(),
+            );
+            move |data: Vec<u8>| {
+                {
+                    let mut kept = kept.lock();
+                    if kept.len() < EXIT_OUTPUT_KEPT {
+                        keep_output(&mut kept, &data);
+                    }
+                }
+                // With no window to answer it, the pseudo-console's cursor position query is
+                // answered here (ConPTY waits for the answer before running anything). Queued, as
+                // all writes are: this is the terminal's reader thread, which never waits on it.
+                if output.push(data) {
+                    if let Err(e) = pty.write(&term, CURSOR_HOME) {
+                        log::debug!("terminal {term}: cursor position not answered: {e:#}");
+                    }
                 }
             }
-            on_data(bytes);
         };
         let spawned = self.pty.spawn_program(
             info.clone(),
@@ -683,7 +1340,7 @@ impl<R: Runtime> Core<R> {
                     if let Some(t) = &granted {
                         c.mcp.release_agent(&agent, t);
                     }
-                    c.on_tui_exit(&agent, gen, &term, code, &output);
+                    c.on_tui_exit(&agent, gen, &term, code, &first);
                 }
             },
         );
@@ -698,18 +1355,30 @@ impl<R: Runtime> Core<R> {
             let mut rt = h.lock();
             rt.tui = Some(TuiRun {
                 term_id: info.id.clone(),
+                info: info.clone(),
+                output,
                 gen,
                 started: now_ms(),
                 transcript: transcript.0,
                 offset: transcript.1,
                 program,
+                remote: with_remote,
+                launched_at: Instant::now(),
+                spoke: false,
+                registered: None,
+                registry_file: None,
+                sessions: config_dir.join("sessions"),
+                linked: false,
+                typing: Default::default(),
+                killed: false,
+                stop_when_idle: false,
             });
             rt.tui_since = since;
             // Under its lock, as a process's start does it (`start_process_of`).
             let given = access.token().is_some_and(|t| self.mcp.caller(t).is_some());
             rt.started_with_escouade(given, self.escouade_granted());
         }
-        self.emit_agent(&h);
+        self.emit_agent(h);
         self.request_save();
         let (c, agent) = (self.clone(), id.to_string());
         tauri::async_runtime::spawn(async move { c.read_loop(&agent, gen).await });
@@ -795,7 +1464,8 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Reads the transcript of the agent's interface `gen` as it is written, until it stops.
+    /// Reads the transcript of the agent's interface `gen` as it is written, and the registry of
+    /// Claude Code's sessions while it tells something new, until the interface stops.
     async fn read_loop(self: Arc<Self>, id: &str, gen: u64) {
         loop {
             tokio::time::sleep(READ_EVERY).await;
@@ -804,13 +1474,87 @@ impl<R: Runtime> Core<R> {
                 return;
             }
             self.read_transcript(id);
+            self.read_registry(&h, id, gen).await;
+        }
+    }
+
+    /// Looks the agent's interface `gen` up in the registry of Claude Code's sessions
+    /// (`find_registered`) while that has something to tell: that it is up, until it is known to
+    /// be (a window showed it, or its transcript spoke, do too); and, started with Remote Control,
+    /// whether its session has a link, until a sign of one is seen. No link `LINK_WAIT` after it
+    /// is up (a sign in its transcript comes first, in the same pass) is the verdict that it has
+    /// none (Claude Code says nothing of it in its terminal); one that comes later still connects it.
+    async fn read_registry(self: &Arc<Self>, h: &AgentHandle, id: &str, gen: u64) {
+        let look = {
+            let rt = h.lock();
+            let Some(run) = rt.tui.as_ref().filter(|t| t.gen == gen) else {
+                return;
+            };
+            let waits_for_a_link = run.remote
+                && !run.linked
+                && (run.registered.is_some() || run.launched_at.elapsed() < REGISTRY_PATIENCE);
+            (!rt.interface_ready() || waits_for_a_link)
+                .then(|| {
+                    Some((
+                        run.sessions.clone(),
+                        rt.meta.session_id.clone()?,
+                        run.registry_file.clone(),
+                    ))
+                })
+                .flatten()
+        };
+        // Off the runtime's threads: files are read, as many as the folder holds.
+        let found = match look {
+            Some((dir, session, known)) => tokio::task::spawn_blocking(move || {
+                find_registered(&dir, &session, known.as_deref())
+            })
+            .await
+            .ok()
+            .flatten(),
+            None => None,
+        };
+        let mut fx = Effects::default();
+        let (pid, name, view) = {
+            let mut rt = h.lock();
+            if rt.tui.as_ref().is_none_or(|t| t.gen != gen) {
+                return;
+            }
+            if let Some(found) = found {
+                if let Some(run) = rt.tui.as_mut() {
+                    run.registry_file = Some(found.file);
+                    run.registered.get_or_insert_with(Instant::now);
+                }
+                if found.linked {
+                    rt.interface_linked(&mut fx);
+                }
+            }
+            // Up for `LINK_WAIT` and no sign of a link, though it was started with Remote Control
+            // and the agent holds it still: it has none.
+            let late = rt.tui.as_ref().is_some_and(|t| {
+                t.remote && !t.linked && t.registered.is_some_and(|at| at.elapsed() >= LINK_WAIT)
+            });
+            if late && rt.meta.remote_control {
+                rt.interface_unlinked(
+                    tr!(
+                        "Remote control indisponible : l’interface de Claude Code ne l’a pas ouvert (compte sans abonnement claude.ai, réseau, proxy ou règle de l’organisation).",
+                        "Remote control unavailable: Claude Code’s interface did not open it (an account with no claude.ai subscription, a network, a proxy or a rule of the organization)."
+                    ),
+                    &mut fx,
+                );
+            }
+            let view = fx.agent_changed.then(|| rt.view());
+            (rt.meta.project_id.clone(), rt.meta.name.clone(), view)
+        };
+        // Told only when something changed: this runs at every pass of the read loop.
+        if view.is_some() || !fx.ops.is_empty() {
+            self.apply(id, &pid, &name, fx, view);
         }
     }
 
     /// What the agent's interface wrote in its transcript since the last read.
     pub(crate) fn read_transcript(self: &Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
-        let (gen, path, offset, account, sid) = {
+        let (gen, known, offset, account, sid) = {
             let rt = h.lock();
             let Some(t) = rt.tui.as_ref() else { return };
             (
@@ -822,7 +1566,7 @@ impl<R: Runtime> Core<R> {
             )
         };
         // Not written yet when the interface started: looked for until it is.
-        let path = match path {
+        let path = match known.clone() {
             Some(p) => p,
             None => {
                 let settings = self.settings.read().clone();
@@ -845,7 +1589,13 @@ impl<R: Runtime> Core<R> {
         let mut fx = Effects::default();
         let (pid, name, view, naming) = {
             let mut rt = h.lock();
-            if rt.tui.as_ref().is_none_or(|t| t.gen != gen) {
+            // Another read (the read loop's and a hook's run at once) applied these lines
+            // meanwhile: they are not applied twice, and what follows them is read next time.
+            if rt
+                .tui
+                .as_ref()
+                .is_none_or(|t| t.gen != gen || t.offset != offset || t.transcript != known)
+            {
                 return;
             }
             let mut naming = None;
@@ -885,6 +1635,8 @@ impl<R: Runtime> Core<R> {
             return;
         }
         self.apply(id, &pid, &name, fx, view);
+        // The turn that held up the stop of an interface may be over.
+        self.stop_interface_when_idle(id);
         if let Some(text) = naming {
             let (c, id) = (self.clone(), id.to_string());
             tauri::async_runtime::spawn(async move { c.auto_name(&id, &text).await });
@@ -946,6 +1698,7 @@ impl<R: Runtime> Core<R> {
                     }
                     Ok(())
                 });
+                c.stop_interface_when_idle(&id);
             });
         }
     }
@@ -986,7 +1739,53 @@ impl<R: Runtime> Core<R> {
         if exit.session_lost {
             log::info!("agent {id}: Claude Code did not find the session to resume");
         }
+        // A session that is gone made it stop, not Remote Control.
+        let failed = !exit.session_lost && self.remote_failed_to_start(id, gen);
         self.tui_ended_with(id, gen, Some(exit));
+        // No window ever showed it: it is started again in the background, without the option,
+        // unless it quit at once too often already (`start_interface` counts the quick exits as
+        // the window does): an interface that quits quickly is never started again twice.
+        if failed {
+            let (c, id) = (self.clone(), id.to_string());
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = c.start_interface(&id).await {
+                    log::warn!("agent {id}: interface not started again: {e:#}");
+                }
+            });
+        }
+    }
+
+    /// The agent's interface `gen`, started with Remote Control, closed right after it started
+    /// (`RC_GRACE`), though no window ever showed it and the user did not close its terminal: the
+    /// option is taken for the cause. The agent is told, and its next interfaces start without the
+    /// option until the app starts again or the user turns Remote Control on by hand
+    /// (`AgentRt::remote_fallback`). Whether that is the case. One a window showed is no such
+    /// failure, whatever its code: its user saw its screen, and may have ended it (« No, exit » on
+    /// the box about the folder, Escape there, `/exit`, two Ctrl+C); « Relancer » is theirs.
+    fn remote_failed_to_start(self: &Arc<Self>, id: &str, gen: u64) -> bool {
+        self.with_agent(id, |rt, fx| {
+            let Some(run) = rt.tui.as_ref().filter(|t| t.gen == gen) else {
+                return Ok(false);
+            };
+            if !run.remote || run.killed || run.launched_at.elapsed() >= RC_GRACE || run.output.shown()
+            {
+                return Ok(false);
+            }
+            // Turned off meanwhile, or archived: not what closed it.
+            if !rt.meta.remote_control || rt.meta.archived {
+                return Ok(false);
+            }
+            rt.remote_fallback = true;
+            rt.remote_unavailable_notice(
+                tr!(
+                    "Remote control indisponible : l’interface de Claude Code s’est fermée juste après son lancement avec le remote control ; elle est relancée sans lui.",
+                    "Remote control unavailable: Claude Code’s interface closed right after it started with remote control; it is started again without it."
+                ),
+                fx,
+            );
+            Ok(true)
+        })
+        .unwrap_or(false)
     }
 
     /// The interface `gen` of the agent is over: its hooks' token is refused and the agent's run of
@@ -1134,7 +1933,7 @@ impl<R: Runtime> Core<R> {
     /// then Enter. Refused while it waits for an answer there (the text would go to its dialog).
     pub(crate) fn send_to_tui(&self, id: &str, text: &str) -> Result<()> {
         let h = self.agent(id)?;
-        let term = {
+        let (term, typing) = {
             let rt = h.lock();
             if rt.meta.status == AgentStatus::Waiting {
                 bail!(tr!(
@@ -1142,9 +1941,20 @@ impl<R: Runtime> Core<R> {
                     "The agent is waiting for an answer in its terminal: answer there first."
                 ));
             }
-            rt.tui.as_ref().map(|t| t.term_id.clone())
+            // An interface that is not up may be on its welcome screen, or on the box about the
+            // folder, where a text typed chooses an option.
+            if rt.tui.is_some() && !rt.interface_ready() {
+                bail!(tr!(
+                    "L’interface de Claude Code de cet agent n’est pas encore prête (premier lancement ou dossier à approuver) : ouvre l’agent pour la voir.",
+                    "The Claude Code interface of this agent is not ready yet (first launch or a folder to approve): open the agent to see it."
+                ));
+            }
+            (
+                rt.tui.as_ref().map(|t| t.term_id.clone()),
+                rt.tui.as_ref().map(|t| t.typing.clone()),
+            )
         };
-        let Some(term) = term else {
+        let (Some(term), Some(typing)) = (term, typing) else {
             bail!(tr!(
                 "L’agent est en vue Claude Code : ouvre-le pour démarrer son terminal.",
                 "The agent is in the Claude Code view: open it to start its terminal."
@@ -1152,9 +1962,13 @@ impl<R: Runtime> Core<R> {
         };
         // Line breaks pasted stay in the message (Enter alone would send it).
         let pasted = format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""));
+        // One message at a time, paste and Enter: another one's paste between them would join the
+        // two messages into one. (This runs off the runtime's threads: `Core::send`.)
+        let _typing = typing.lock();
         // The pause starts once the paste is really written, not queued: under load the terminal's
         // input thread may be behind, and the queue would then join the paste and the Enter into
-        // one write, which is what the pause keeps apart.
+        // one write, which is what the pause keeps apart. An error on either write is the
+        // message's: it did not go, or not whole.
         self.pty
             .write_and_wait(&term, pasted.as_bytes(), PASTE_WRITTEN_WITHIN)?;
         std::thread::sleep(Duration::from_millis(150));
@@ -1288,7 +2102,7 @@ mod tests {
     #[test]
     fn a_new_agent_starts_a_session_of_its_own_and_a_known_one_is_resumed() {
         let f = Path::new("/data/tui/a1.json");
-        let a = tui_args(&meta(), Some("s-new"), f);
+        let a = tui_args(&meta(), Some("s-new"), None, f);
         assert!(a.contains(&"--session-id=s-new".to_string()));
         assert!(a
             .windows(2)
@@ -1300,7 +2114,7 @@ mod tests {
             session_id: Some("s1".into()),
             ..meta()
         };
-        let a = tui_args(&resumed, None, f);
+        let a = tui_args(&resumed, None, None, f);
         assert!(a.contains(&"--resume=s1".to_string()));
         assert!(!a.iter().any(|x| x.starts_with("--session-id")));
         // A copy forks its original's into its own.
@@ -1309,7 +2123,7 @@ mod tests {
             fork_at: Some("e1".into()),
             ..meta()
         };
-        let a = tui_args(&copy, Some("s2"), f);
+        let a = tui_args(&copy, Some("s2"), None, f);
         for x in [
             "--resume=s0",
             "--fork-session",
@@ -1318,6 +2132,394 @@ mod tests {
         ] {
             assert!(a.contains(&x.to_string()), "{x} in {a:?}");
         }
+    }
+
+    #[test]
+    fn an_interface_with_remote_control_starts_with_its_name_in_claude_ai() {
+        let f = Path::new("/data/tui/a1.json");
+        let a = tui_args(&meta(), Some("s-new"), Some("demo · agent-1"), f);
+        // One argument, the name glued to the flag: a name is never taken for an option of its own.
+        assert!(
+            a.contains(&"--remote-control=demo · agent-1".to_string()),
+            "{a:?}"
+        );
+        assert!(!a.iter().any(|x| x == "--remote-control"), "{a:?}");
+        // Not even one that starts with « - ».
+        let a = tui_args(&meta(), Some("s-new"), Some("-demo · agent-1"), f);
+        assert!(
+            a.contains(&"--remote-control=-demo · agent-1".to_string()),
+            "{a:?}"
+        );
+        assert!(!a.contains(&"-demo · agent-1".to_string()), "{a:?}");
+        let a = tui_args(&meta(), Some("s-new"), None, f);
+        assert!(
+            !a.iter().any(|x| x.starts_with("--remote-control")),
+            "{a:?}"
+        );
+    }
+
+    fn collecting() -> (Arc<Mutex<Vec<u8>>>, Forward) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        (seen, Box::new(move |b| sink.lock().extend(b)))
+    }
+
+    #[test]
+    fn an_interfaces_output_is_kept_up_to_its_limit_and_its_end_stays() {
+        let out = TuiOutput::new(None);
+        for _ in 0..4 {
+            out.push(vec![b'a'; 1 << 20]);
+        }
+        assert_eq!(out.kept().len(), OUTPUT_KEPT);
+        // What comes pushes the oldest out.
+        out.push(b"fin".to_vec());
+        let kept = out.kept();
+        assert_eq!(kept.len(), OUTPUT_KEPT);
+        assert!(kept.ends_with(b"fin"));
+        assert!(kept.starts_with(b"aaa"));
+        // A piece bigger than all of it: its end stays.
+        let mut big = vec![b'x'; 10];
+        big.extend(vec![b'z'; OUTPUT_KEPT]);
+        out.push(big);
+        let kept = out.kept();
+        assert_eq!(kept.len(), OUTPUT_KEPT);
+        assert!(kept.iter().all(|b| *b == b'z'));
+    }
+
+    #[test]
+    fn a_window_taking_the_output_over_is_sent_what_was_kept_then_what_comes() {
+        let out = TuiOutput::new(None);
+        assert!(!out.shown());
+        out.push(b"avant ".to_vec());
+        let (first, forward) = collecting();
+        out.attach(forward);
+        assert!(out.shown());
+        assert_eq!(*first.lock(), b"avant ");
+        out.push(b"apres".to_vec());
+        assert_eq!(*first.lock(), b"avant apres");
+        // A reloaded window takes it over: it is sent it all, and the first is let go.
+        let (second, forward) = collecting();
+        out.attach(forward);
+        assert_eq!(*second.lock(), b"avant apres");
+        out.push(b"!".to_vec());
+        assert_eq!(*second.lock(), b"avant apres!");
+        assert_eq!(*first.lock(), b"avant apres");
+        // A window that closes leaves it shown: it was seen.
+        assert!(out.shown());
+    }
+
+    #[test]
+    fn an_output_made_for_a_window_is_shown_from_the_start() {
+        let (seen, forward) = collecting();
+        let out = TuiOutput::new(Some(forward));
+        assert!(out.shown());
+        out.push(b"ok".to_vec());
+        assert_eq!(*seen.lock(), b"ok");
+    }
+
+    #[test]
+    fn what_is_replayed_to_a_window_is_sent_in_pieces_without_the_cursor_query() {
+        let out = TuiOutput::new(None);
+        // The query is answered already: a second answer would be typed into the interface.
+        out.push(b"a\x1b[6".to_vec());
+        out.push(b"nb".to_vec());
+        out.push(vec![b'c'; REPLAY_PIECE * 2 + 1]);
+        let pieces = Arc::new(Mutex::new(Vec::<usize>::new()));
+        let all = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let (sizes, bytes) = (pieces.clone(), all.clone());
+        out.attach(Box::new(move |b| {
+            sizes.lock().push(b.len());
+            bytes.lock().extend(b);
+        }));
+        let mut want = b"ab".to_vec();
+        want.extend(vec![b'c'; REPLAY_PIECE * 2 + 1]);
+        assert_eq!(*all.lock(), want);
+        assert!(pieces.lock().iter().all(|n| *n <= REPLAY_PIECE));
+        assert!(pieces.lock().len() >= 3);
+        // The terminal's own copy is left as it was printed.
+        assert!(out.kept().windows(4).any(|w| w == b"\x1b[6n"));
+    }
+
+    /// What a window is sent when it takes the output over, as one string.
+    fn replayed(out: &TuiOutput) -> Vec<u8> {
+        let (all, forward) = collecting();
+        out.attach(forward);
+        let all = all.lock().clone();
+        all
+    }
+
+    #[test]
+    fn the_modes_an_interface_set_are_posed_again_when_the_start_of_its_output_is_lost() {
+        let out = TuiOutput::new(None);
+        // Set once, at the start, as Claude Code does.
+        out.push(b"\x1b[?2004h\x1b[?1004h\x1b[?25l\x1b[?1049h".to_vec());
+        // Then more than the output keeps.
+        let line = b"some line of the screen\r\n".repeat(1000);
+        for _ in 0..(OUTPUT_KEPT / line.len() + 2) {
+            out.push(line.clone());
+        }
+        assert!(!out.kept().windows(8).any(|w| w == b"\x1b[?2004h"));
+        let replay = replayed(&out);
+        let preamble: &[u8] = b"\x1b[?25l\x1b[?1004h\x1b[?1049h\x1b[?2004h";
+        assert!(replay.starts_with(preamble), "{:?}", &replay[..40]);
+        // What follows is whole lines.
+        assert!(replay[preamble.len()..].starts_with(b"some line of the screen\r\n"));
+    }
+
+    #[test]
+    fn a_mode_is_followed_across_pieces_with_the_last_state_seen_and_many_numbers_at_once() {
+        let out = TuiOutput::new(None);
+        // Cut in the middle of the sequence, of its number, of its end.
+        for piece in [&b"a\x1b"[..], b"[?20", b"04", b"h b\x1b[?", b"25l"] {
+            out.push(piece.to_vec());
+        }
+        // Several numbers in one; the last state wins.
+        out.push(b"\x1b[?1049;1004h\x1b[?25h\x1b[?25l\x1b[?25h".to_vec());
+        // Not a mode: a private query, an ANSI mode, a report, text that looks like one.
+        out.push(b"\x1b[?2004$p\x1b[4h\x1b[?7$y \x1b[?2026 h ?7h \x1b[1;?9h".to_vec());
+        let replay = replayed(&out);
+        assert!(
+            replay.starts_with(b"\x1b[?25h\x1b[?1004h\x1b[?1049h\x1b[?2004h"),
+            "{:?}",
+            String::from_utf8_lossy(&replay)
+        );
+    }
+
+    #[test]
+    fn nothing_is_posed_again_when_no_mode_was_set_and_garbage_is_no_mode() {
+        let out = TuiOutput::new(None);
+        out.push(b"plain\x1b[?h\x1b[?;h\x1b[?99999999999h\x1b[?\x1b[?2004h\x1b[?25\x07l".to_vec());
+        let replay = replayed(&out);
+        // Only the mode that was whole is posed; a number too big for a mode is none.
+        assert!(replay.starts_with(b"\x1b[?2004h"), "{replay:?}");
+        let out = TuiOutput::new(None);
+        out.push(b"plain\x1b[31mred\x1b[0m".to_vec());
+        assert_eq!(replayed(&out), b"plain\x1b[31mred\x1b[0m");
+    }
+
+    #[test]
+    fn the_output_kept_after_the_start_was_dropped_begins_after_a_line() {
+        let out = TuiOutput::new(None);
+        let mut first = b"x".repeat(100);
+        first.extend_from_slice(b"\x1b[38;5;2");
+        out.push(first);
+        // The cut falls inside a sequence: what is kept does not begin with its end.
+        let mut second = b"31m text\r\nthe real start of the kept output\r\n".to_vec();
+        second.extend(vec![b'y'; OUTPUT_KEPT - 40]);
+        out.push(second.clone());
+        let kept = out.kept();
+        assert!(kept.len() < OUTPUT_KEPT);
+        assert!(
+            kept.starts_with(b"the real start of the kept output\r\n"),
+            "{:?}",
+            String::from_utf8_lossy(&kept[..40])
+        );
+        // No newline in the first 4 KiB: kept as it is.
+        let out = TuiOutput::new(None);
+        out.push(vec![b'a'; OUTPUT_KEPT + 10]);
+        assert_eq!(out.kept().len(), OUTPUT_KEPT);
+    }
+
+    #[test]
+    fn the_cursor_query_is_answered_by_the_one_that_sees_no_window() {
+        let out = TuiOutput::new(None);
+        // Cut between two pieces, as it is when it is printed.
+        assert!(!out.push(b"text \x1b[6".to_vec()));
+        assert!(out.push(b"n".to_vec()));
+        assert!(!out.push(b"more".to_vec()));
+        assert!(out.push(b"\x1b[6n".to_vec()));
+        // A window shows it: its terminal answers.
+        out.mark_shown();
+        assert!(out.shown());
+        assert!(!out.push(b"\x1b[6n".to_vec()));
+        let (_, forward) = collecting();
+        let shown = TuiOutput::new(Some(forward));
+        assert!(!shown.push(b"\x1b[6n".to_vec()));
+    }
+
+    /// Every request a terminal answers, as a program sends it.
+    const QUERIES: &[&[u8]] = &[
+        // Device attributes.
+        b"\x1b[c",
+        b"\x1b[0c",
+        b"\x1b[>c",
+        b"\x1b[>0c",
+        b"\x1b[=c",
+        // Status reports, the cursor position's.
+        b"\x1b[5n",
+        b"\x1b[6n",
+        b"\x1b[?6n",
+        b"\x1b[?996n",
+        // The terminal's name and version.
+        b"\x1b[>q",
+        b"\x1b[>0q",
+        // Modes.
+        b"\x1b[?2004$p",
+        b"\x1b[20$p",
+        // The keyboard protocol's.
+        b"\x1b[?u",
+        // Window reports.
+        b"\x1b[14t",
+        b"\x1b[16t",
+        b"\x1b[18t",
+        b"\x1b[19t",
+        // Colors and clipboard, ended by BEL or ST.
+        b"\x1b]10;?\x07",
+        b"\x1b]11;?\x1b\\",
+        b"\x1b]12;?\x07",
+        b"\x1b]4;1;?\x07",
+        b"\x1b]4;1;?\x1b\\",
+        b"\x1b]52;c;?\x07",
+        b"\x1b]52;;?\x1b\\",
+        // Settings and capabilities.
+        b"\x1bP$qm\x1b\\",
+        b"\x1bP+q544e\x1b\\",
+    ];
+
+    /// What a terminal prints that no terminal answers.
+    const ORDINARY: &[&[u8]] = &[
+        b"plain text, a line\r\n",
+        "é ✓ 日本語".as_bytes(),
+        b"\x1b[31;1mred\x1b[0m",
+        b"\x1b[2J\x1b[H\x1b[10;5H\x1b[K\x1b[2K",
+        b"\x1b[?25l\x1b[?2004h\x1b[?1049h",
+        b"\x1b[5 q",
+        b"\x1b[!p",
+        // Answers, not requests.
+        b"\x1b[?1;2c",
+        b"\x1b[?1u",
+        // Settings, not requests.
+        b"\x1b[>4;2m",
+        b"\x1b[>4n",
+        b"\x1b[>1u",
+        b"\x1b[<u",
+        b"\x1b[22;0;0t",
+        b"\x1b[8;40;120t",
+        b"\x1b[?2004$y",
+        // Titles, links, colors set, clipboard set.
+        b"\x1b]0;a title\x07",
+        b"\x1b]2;a title\x1b\\",
+        b"\x1b]8;;https://example.com/?q=1\x1b\\link\x1b]8;;\x1b\\",
+        b"\x1b]10;#ffffff\x07",
+        b"\x1b]11;rgb:00/00/00\x1b\\",
+        b"\x1b]4;1;rgb:ff/00/00\x07",
+        b"\x1b]52;c;aGVsbG8=\x07",
+        b"\x1bPq#0;2;0;0;0\x1b\\",
+        b"\x1b(B\x1b=\x1b>\x1b7\x1b8",
+    ];
+
+    #[test]
+    fn every_request_a_terminal_answers_is_left_out_of_what_is_replayed() {
+        for q in QUERIES {
+            let shown = String::from_utf8_lossy(q).into_owned();
+            assert_eq!(without_terminal_queries(q), b"", "{shown:?}");
+            let mut around = b"a".to_vec();
+            around.extend_from_slice(q);
+            around.push(b'b');
+            assert_eq!(without_terminal_queries(&around), b"ab", "{shown:?}");
+        }
+        // Side by side, and between ordinary sequences.
+        let all: Vec<u8> = QUERIES.concat();
+        assert_eq!(without_terminal_queries(&all), b"");
+    }
+
+    #[test]
+    fn what_no_terminal_answers_is_replayed_byte_for_byte() {
+        for s in ORDINARY {
+            let shown = String::from_utf8_lossy(s).into_owned();
+            assert_eq!(without_terminal_queries(s), *s, "{shown:?}");
+        }
+        // Mixed with requests, in order.
+        let mut mixed = Vec::new();
+        let mut want = Vec::new();
+        for (i, s) in ORDINARY.iter().enumerate() {
+            mixed.extend_from_slice(QUERIES[i % QUERIES.len()]);
+            mixed.extend_from_slice(s);
+            want.extend_from_slice(s);
+        }
+        assert_eq!(without_terminal_queries(&mixed), want);
+    }
+
+    #[test]
+    fn a_request_across_two_pieces_of_the_replay_is_left_out_whole() {
+        for q in QUERIES {
+            let shown = String::from_utf8_lossy(q).into_owned();
+            // It begins two bytes before the end of a piece (a shorter one ends in it).
+            let mut buffer = vec![b'x'; REPLAY_PIECE - 2];
+            buffer.extend_from_slice(q);
+            buffer.extend_from_slice(b"y");
+            let out = TuiOutput::new(None);
+            out.push(buffer);
+            let (all, forward) = collecting();
+            out.attach(forward);
+            let mut want = vec![b'x'; REPLAY_PIECE - 2];
+            want.push(b'y');
+            assert_eq!(*all.lock(), want, "{shown:?}");
+        }
+    }
+
+    #[test]
+    fn a_sequence_cut_short_is_left_as_it_is() {
+        for q in QUERIES {
+            for n in 1..q.len() {
+                let cut = &q[..n];
+                let shown = String::from_utf8_lossy(cut).into_owned();
+                assert_eq!(without_terminal_queries(cut), cut, "{shown:?}");
+                let mut after_text = b"text".to_vec();
+                after_text.extend_from_slice(cut);
+                assert_eq!(
+                    without_terminal_queries(&after_text),
+                    after_text,
+                    "{shown:?}"
+                );
+            }
+        }
+        // The buffer begins in the middle of one (the beginning was dropped): nothing to find.
+        for tail in [
+            &b";?\x07rest"[..],
+            b"6n and text",
+            b"?\x1b\\ok",
+            b"4;1;?\x07",
+        ] {
+            assert_eq!(without_terminal_queries(tail), tail);
+        }
+        // Another sequence begins before it ends: what came is kept, the new one is looked at.
+        let aborted = b"\x1b]10;?\x1b[31mx\x1b[6n";
+        assert_eq!(without_terminal_queries(aborted), b"\x1b]10;?\x1b[31mx");
+        // A string with no end within reach is kept as it is.
+        let mut open = b"\x1b]11;?".to_vec();
+        open.extend(vec![b'z'; MAX_STRING]);
+        open.push(BEL);
+        assert_eq!(without_terminal_queries(&open), open);
+    }
+
+    #[test]
+    fn any_bytes_are_filtered_without_a_panic() {
+        // A generator of its own: bytes that open and close the sequences, much more often than
+        // chance would.
+        let alphabet: &[u8] = b"\x1b\x1b\x1b[[]]P\\\\\x07;?$>=<0123456789cnqputm +!xyz\x00\xff\xc3";
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..20_000 {
+            let len = (next() % 48) as usize;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| alphabet[(next() % alphabet.len() as u64) as usize])
+                .collect();
+            let out = without_terminal_queries(&bytes);
+            assert!(out.len() <= bytes.len());
+        }
+        // Openers with no end, in great number: no quadratic wait.
+        let started = std::time::Instant::now();
+        for opener in [&b"\x1b]"[..], b"\x1bP", b"\x1b[", b"\x1b"] {
+            let bytes = opener.repeat(200_000);
+            assert_eq!(without_terminal_queries(&bytes), bytes);
+        }
+        assert!(started.elapsed() < Duration::from_secs(20));
     }
 
     #[test]
@@ -1335,6 +2537,10 @@ mod tests {
         for e in EVENTS {
             assert!(s["hooks"][e].is_array(), "{e}");
         }
+        // Claude Code skips its HTTP hooks for SessionStart ("HTTP hooks are not supported for
+        // SessionStart"): none is asked for there, the registry of its sessions says it is up.
+        assert!(!EVENTS.contains(&"SessionStart"));
+        assert!(s["hooks"].get("SessionStart").is_none(), "{s}");
         assert!(s.get("deniedMcpServers").is_none(), "{s}");
     }
 
@@ -1386,6 +2592,108 @@ mod tests {
         let get = |k: &str| env.iter().find(|(x, _)| x == k).map(|(_, v)| v.clone());
         assert_eq!(get("NO_PROXY").unwrap(), "corp.lan,127.0.0.1,localhost,::1");
         assert_eq!(get("no_proxy").unwrap(), "127.0.0.1,localhost,::1");
+    }
+
+    /// A folder for a test of the registry, with the files `(name, content)` in it.
+    fn registry(files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("escouade-tui-registry-{}", new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, content) in files {
+            std::fs::write(dir.join(name), content).unwrap();
+        }
+        dir
+    }
+
+    fn entry(session: &str, entrypoint: &str) -> String {
+        json!({ "pid": 1, "sessionId": session, "kind": "interactive", "entrypoint": entrypoint,
+            "status": "idle" })
+        .to_string()
+    }
+
+    #[test]
+    fn the_registry_lists_the_interface_of_a_session_by_its_cli_entrypoint() {
+        let dir = registry(&[
+            // The stream's process of the same session, and other sessions' interfaces.
+            ("11.json", &entry("s1", "sdk-cli")),
+            ("12.json", &entry("s2", "cli")),
+            ("13.json", &entry("s1", "cli")),
+        ]);
+        let found = find_registered(&dir, "s1", None).unwrap();
+        assert_eq!(found.file, dir.join("13.json"));
+        assert!(!found.linked);
+        assert_eq!(find_registered(&dir, "s3", None), None);
+        // Not there yet: the folder itself may be missing.
+        assert_eq!(find_registered(&dir.join("absent"), "s1", None), None);
+    }
+
+    #[test]
+    fn the_registry_tells_a_link_by_a_non_empty_bridge_session_id() {
+        let with = |bridge: Value| {
+            let mut e: Value = serde_json::from_str(&entry("s1", "cli")).unwrap();
+            e["bridgeSessionId"] = bridge;
+            e.to_string()
+        };
+        for (bridge, linked) in [
+            (json!("cse_abc"), true),
+            (json!(""), false),
+            (json!(null), false),
+            (json!(7), false),
+        ] {
+            let dir = registry(&[("5.json", &with(bridge.clone()))]);
+            let found = find_registered(&dir, "s1", None).unwrap();
+            assert_eq!(found.linked, linked, "{bridge}");
+        }
+        // Absent: not linked.
+        let dir = registry(&[("5.json", &entry("s1", "cli"))]);
+        assert!(!find_registered(&dir, "s1", None).unwrap().linked);
+    }
+
+    #[test]
+    fn the_registry_ignores_what_is_not_a_whole_file_of_a_pid_without_panicking() {
+        let dir = registry(&[
+            // The key of a box not answered, whatever it holds.
+            ("14.0a1b2c.key", &entry("s1", "cli")),
+            ("notes.json", &entry("s1", "cli")),
+            ("15.txt", &entry("s1", "cli")),
+            // Being written, empty, not JSON, not an object, binary.
+            ("16.json", "{\"pid\":16,\"sessionId\":\"s1\",\"entry"),
+            ("17.json", ""),
+            ("18.json", "not json"),
+            ("19.json", "[1, 2]"),
+            ("20.json", "\u{0}\u{1}\u{2}"),
+        ]);
+        // A folder under a pid's name, and a file too big to be one of theirs.
+        std::fs::create_dir_all(dir.join("21.json")).unwrap();
+        let big = format!(
+            "{{\"sessionId\":\"s1\",\"entrypoint\":\"cli\",\"pad\":\"{}\"}}",
+            "x".repeat(70 << 10)
+        );
+        std::fs::write(dir.join("22.json"), big).unwrap();
+        assert_eq!(find_registered(&dir, "s1", None), None);
+        // The file that completes is found at the next look.
+        std::fs::write(dir.join("16.json"), entry("s1", "cli")).unwrap();
+        assert_eq!(
+            find_registered(&dir, "s1", None).unwrap().file,
+            dir.join("16.json")
+        );
+    }
+
+    #[test]
+    fn once_the_interfaces_file_is_known_only_it_is_read_again() {
+        let dir = registry(&[("30.json", &entry("s1", "cli"))]);
+        let file = dir.join("30.json");
+        let found = find_registered(&dir, "s1", None).unwrap();
+        assert_eq!(found.file, file);
+        // It gains its link; the session id is not asked for again (a `/clear` changes it).
+        let mut e: Value = serde_json::from_str(&entry("s9", "cli")).unwrap();
+        e["bridgeSessionId"] = json!("cse_abc");
+        std::fs::write(&file, e.to_string()).unwrap();
+        assert!(find_registered(&dir, "s1", Some(&file)).unwrap().linked);
+        // A moment where it cannot be read changes nothing known (None: look again later).
+        std::fs::write(&file, "{\"pid\":3,").unwrap();
+        assert_eq!(find_registered(&dir, "s1", Some(&file)), None);
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(find_registered(&dir, "s1", Some(&file)), None);
     }
 
     #[test]
@@ -1530,7 +2838,7 @@ mod tests {
             let dir = std::env::temp_dir().join(format!("escouade-tui-forget-{}", new_id()));
             let mut rt = crate::agent::AgentRt::new(lost, &dir);
             rt.forget_session();
-            let a = tui_args(&rt.meta, Some("s-new"), f);
+            let a = tui_args(&rt.meta, Some("s-new"), None, f);
             assert!(a.contains(&"--session-id=s-new".to_string()), "{a:?}");
             assert!(
                 !a.iter()
@@ -1590,11 +2898,11 @@ mod tests {
     fn the_first_bytes_of_the_output_are_kept_up_to_a_cap() {
         let mut kept = Vec::new();
         keep_output(&mut kept, b"hello ");
-        keep_output(&mut kept, &vec![b'x'; OUTPUT_KEPT]);
-        assert_eq!(kept.len(), OUTPUT_KEPT);
+        keep_output(&mut kept, &vec![b'x'; EXIT_OUTPUT_KEPT]);
+        assert_eq!(kept.len(), EXIT_OUTPUT_KEPT);
         assert!(kept.starts_with(b"hello xxx"));
         keep_output(&mut kept, b"more");
-        assert_eq!(kept.len(), OUTPUT_KEPT);
+        assert_eq!(kept.len(), EXIT_OUTPUT_KEPT);
     }
 
     #[test]

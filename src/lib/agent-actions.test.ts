@@ -201,8 +201,9 @@ describe('agent actions in English', () => {
     const url = 'https://claude.ai/code/session_abc';
     const write = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
-    fakeBackend({ set_remote_control: () => null });
+    const backend = fakeBackend({ set_remote_control: () => false });
     await toggleRemote(app.agents.a2);
+    expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a2', enabled: true });
     expect(app.toasts.at(-1)).toMatchObject({ text: 'landing is reachable from claude.ai and the Claude app', kind: 'ok' });
     await copyRemoteLink({ ...app.agents.a2, remoteUrl: url });
     expect(write).toHaveBeenCalledWith(url);
@@ -223,6 +224,84 @@ describe('agent actions in English', () => {
     await commitViaAgent(app.agents.a2, 'project');
     expect(backend.called('send_message')[0].args.text).toMatch(/^Commit all the current changes/);
     expect(app.toasts.at(-1)).toMatchObject({ text: 'Demande de commit envoyée à landing', kind: 'ok' });
+  });
+});
+
+describe('toggleRemote', () => {
+  const NEXT_LAUNCH =
+    'Pris en compte au prochain lancement de son interface Claude Code ; d’ici là, c’est sa commande /remote-control qui le fait.';
+  const REACHABLE = 'landing est accessible depuis claude.ai et l’app Claude';
+  const toasts = () => app.toasts.map((x) => [x.text, x.kind]);
+  /** The agent in Claude Code’s view, its interface on `terminalId`. */
+  const inClaudeCode = (over: Partial<Parameters<typeof agent>[0]> = {}) =>
+    agent({ id: 'a2', name: 'landing', terminal: true, terminalId: 't1', ...over });
+
+  beforeEach(() => resetApp({ agents: [landing()] }));
+
+  it.each([
+    ['on', false],
+    ['off', true],
+  ] as const)('tells it applies at the next launch when the backend says so, turning it %s', async (_, remoteControl) => {
+    const backend = fakeBackend({ set_remote_control: () => true });
+    await toggleRemote(inClaudeCode({ remoteControl }));
+    expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a2', enabled: !remoteControl });
+    expect(toasts()).toEqual([[NEXT_LAUNCH, 'ok']]);
+  });
+
+  it('tells the same for an agent in Escouade’s view when the backend says so, whatever the window holds', async () => {
+    fakeBackend({ set_remote_control: () => true });
+    await toggleRemote(agent({ id: 'a2', name: 'landing' }));
+    expect(toasts()).toEqual([[NEXT_LAUNCH, 'ok']]);
+  });
+
+  it('says the agent is reachable when it is turned on and the change applies now: the backend starts it in the background', async () => {
+    fakeBackend({ set_remote_control: () => false });
+    // Whether it is in Claude Code’s view, with an interface or none, or not.
+    await toggleRemote(inClaudeCode({ terminalId: 't1' }));
+    await toggleRemote(inClaudeCode({ terminalId: null }));
+    await toggleRemote(agent({ id: 'a2', name: 'landing', terminalId: 't1' }));
+    expect(toasts()).toEqual([
+      [REACHABLE, 'ok'],
+      [REACHABLE, 'ok'],
+      [REACHABLE, 'ok'],
+    ]);
+  });
+
+  it('says nothing when it is turned off and the change applies now: the backend stops the one it started', async () => {
+    const backend = fakeBackend({ set_remote_control: () => false });
+    await toggleRemote(inClaudeCode({ terminalId: 't1', remoteControl: true }));
+    await toggleRemote(inClaudeCode({ terminalId: null, remoteControl: true }));
+    expect(backend.called('set_remote_control')).toHaveLength(2);
+    expect(toasts()).toEqual([]);
+  });
+
+  it('says the agent is reachable for a backend that answers nothing', async () => {
+    fakeBackend({ set_remote_control: () => null });
+    await toggleRemote(inClaudeCode());
+    expect(toasts()).toEqual([[REACHABLE, 'ok']]);
+  });
+
+  it('says nothing more than the backend’s refusal', async () => {
+    fakeBackend({
+      set_remote_control: () => {
+        throw 'Le remote control a échoué.';
+      },
+    });
+    await toggleRemote(inClaudeCode());
+    await toggleRemote(inClaudeCode({ terminalId: null }));
+    expect(toasts()).toEqual([
+      ['Le remote control a échoué.', 'error'],
+      ['Le remote control a échoué.', 'error'],
+    ]);
+  });
+
+  it('tells in English that the change applies at the next launch', async () => {
+    setLang('en');
+    fakeBackend({ set_remote_control: () => true });
+    await toggleRemote(inClaudeCode());
+    expect(toasts()).toEqual([
+      ['Applies at the next launch of its Claude Code interface; until then, its /remote-control command does it.', 'ok'],
+    ]);
   });
 });
 

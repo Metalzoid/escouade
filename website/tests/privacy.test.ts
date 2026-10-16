@@ -39,8 +39,8 @@ const EVENTS = [
   'remote_control_enabled',
 ];
 /** The values some props take, written on the page as `value`. */
-const VALUES = ['user', 'autopilot', 'fetch', 'pull', 'push', 'jira', 'trello', 'github', 'linear'];
-const PROPS = ['worktree', 'by', 'op', 'service'];
+const VALUES = ['user', 'autopilot', 'fetch', 'pull', 'push', 'jira', 'trello', 'github', 'linear', 'agent', 'project', 'global'];
+const PROPS = ['worktree', 'by', 'op', 'service', 'from'];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');
 const render = (lang: Lang) => renderDoc(source(lang), { lang, link: (p) => p, callouts: CATALOGS[lang].docs.callouts });

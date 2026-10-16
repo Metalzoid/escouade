@@ -60,7 +60,17 @@ export const SETTINGS_TABS: TabInfo[] = [
 /** The app's settings each tab sets. */
 const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   app: ['language', 'claudeLanguage'],
-  claude: ['claudePath', 'defaultModel', 'defaultEffort', 'defaultMode', 'autoResume', 'switchOnLimit', 'todoTools', 'idleStopMinutes'],
+  claude: [
+    'claudePath',
+    'defaultModel',
+    'defaultEffort',
+    'defaultMode',
+    'autoResume',
+    'switchOnLimit',
+    'todoTools',
+    'idleStopMinutes',
+    'remoteControlAll',
+  ],
   notifications: ['sound', 'osNotifications', 'notifyFor'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
   network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
@@ -85,6 +95,7 @@ type ProjectFields = Pick<
   | 'worktreeDir'
   | 'agentBranchPrefix'
   | 'ticketBranchPrefix'
+  | 'remoteControl'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -109,6 +120,8 @@ export interface ProjectDraft {
   agentBranchPrefix: string;
   /** « Préfixe des branches des tickets ». */
   ticketBranchPrefix: string;
+  /** « Remote control pour les agents de ce projet »: its own value, kept while the setting for all agents covers it too. */
+  remoteControl: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -128,6 +141,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
+    remoteControl,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -144,6 +158,7 @@ function draftOf(p: Project): ProjectDraft {
     worktreeDir,
     agentBranchPrefix,
     ticketBranchPrefix,
+    remoteControl,
     board,
     integrations,
   };
@@ -190,6 +205,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     worktreeDir: d.worktreeDir.trim(),
     agentBranchPrefix: d.agentBranchPrefix.trim(),
     ticketBranchPrefix: d.ticketBranchPrefix.trim(),
+    remoteControl: d.remoteControl,
   };
 }
 

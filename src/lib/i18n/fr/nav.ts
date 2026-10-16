@@ -24,6 +24,23 @@ export default {
       connected: 'Remote control : connecté (accessible depuis claude.ai et l’app Claude)',
       connecting: 'Remote control : connexion… (accessible depuis claude.ai et l’app Claude)',
       waiting: 'Remote control : en attente de connexion (accessible depuis claude.ai et l’app Claude)',
+      /** An agent in Claude Code’s view with the remote control on: no interface runs (not started yet, or ended): not reachable. */
+      noInterface: 'Remote control : aucune interface lancée, pas joignable pour l’instant (ouvre l’agent pour la lancer)',
+      /** Its interface was started without the remote control, which its next launch has. */
+      nextLaunch: 'Remote control : au prochain lancement de son interface Claude Code',
+      /** Its interface runs but Claude Code did not open the remote control (no claude.ai subscription, network, proxy or organization policy). */
+      unavailable:
+        'Remote control : pas ouvert par Claude Code (compte sans abonnement claude.ai, réseau, proxy ou règle de l’organisation)',
+      /** Off for Escouade, but its interface, still open, stays linked to claude.ai (it is off: no source follows). */
+      stillOn:
+        'Remote control encore actif dans l’interface ouverte, jusqu’à son prochain lancement (sa commande /remote-control le coupe)',
+      /** `{state}`: one of the states above; `{source}`: where the remote control comes from (below). */
+      withSource: '{state} · {source}',
+      source: {
+        hand: 'activé à la main',
+        project: 'activé par le réglage du projet',
+        global: 'activé par le réglage de tous les agents',
+      },
     },
     terminals: 'Terminaux',
     newTerminal: 'Nouveau terminal',

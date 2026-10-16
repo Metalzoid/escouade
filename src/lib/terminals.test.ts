@@ -123,7 +123,7 @@ vi.mock('@xterm/addon-webgl', () => ({
 }));
 
 import { app } from './state.svelte';
-import { getXTerm, openAccountLogin, openAgentTerminal, openTerminal, pastedContent, roomOf } from './terminals';
+import { disposeTerminal, getXTerm, openAccountLogin, openAgentTerminal, openTerminal, pastedContent, roomOf } from './terminals';
 
 beforeEach(() => {
   terms.length = 0;
@@ -480,6 +480,42 @@ describe('opening a terminal', () => {
   it('passes on the backend’s refusal of a place', async () => {
     fakeBackend({ term_spawn: () => Promise.reject('chemin hors du dossier : ..') });
     await expect(openTerminal('p1', 'pwsh', 'pwsh · ..', { subdir: '..' })).rejects.toBe('chemin hors du dossier : ..');
+  });
+});
+
+describe('freeing a terminal', () => {
+  const info = { id: 't1', projectId: 'p1', name: 'pwsh-1', shell: 'pwsh' };
+
+  it('lets go of it at once, and resolves once the backend has stopped its process', async () => {
+    let stop!: () => void;
+    const backend = fakeBackend({
+      term_spawn: () => info,
+      term_kill: () => new Promise<void>((resolve) => (stop = resolve)),
+    });
+    await openTerminal('p1', 'pwsh', 'pwsh-1');
+    expect(getXTerm('t1')).toBeDefined();
+    let done = false;
+    const freed = disposeTerminal('t1').then(() => (done = true));
+    // The window no longer holds it; the kill is asked, not yet answered.
+    expect(getXTerm('t1')).toBeUndefined();
+    await waitFor(() => expect(backend.called('term_kill')).toEqual([{ cmd: 'term_kill', args: { id: 't1' } }]));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(done).toBe(false);
+    stop();
+    await freed;
+    expect(done).toBe(true);
+  });
+
+  it('resolves all the same when the backend cannot stop it: it may be gone already', async () => {
+    fakeBackend({ term_spawn: () => info, term_kill: () => Promise.reject('terminal introuvable') });
+    await openTerminal('p1', 'pwsh', 'pwsh-1');
+    await expect(disposeTerminal('t1')).resolves.toBeUndefined();
+  });
+
+  it('asks nothing for a terminal this window does not hold', async () => {
+    const backend = fakeBackend();
+    await expect(disposeTerminal('t404')).resolves.toBeUndefined();
+    expect(backend.called('term_kill')).toEqual([]);
   });
 });
 

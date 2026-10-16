@@ -39,7 +39,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github` ou `linear` |
 | `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github` ou `linear` |
 | `account_created` | Un compte Claude est ajouté | — |
-| `remote_control_enabled` | Le contrôle à distance est activé | — |
+| `remote_control_enabled` | Le remote control est activé, à la main ou par un réglage | `from` : `agent` (clic droit sur un agent), `project` (réglage d’un projet) ou `global` (réglage de tous les agents) |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent ou de la branche, ni ce qui a été écrit.
 

@@ -11,7 +11,7 @@ import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
 
-// The xterm.js instance a terminal draws on is not one of jsdom's: only what is asked of the backend is looked at.
+// The terminal opened is not one of xterm.js (jsdom has no canvas for it): only what is asked of the backend is looked at.
 vi.mock('../lib/terminals', async (original) => ({
   ...(await original<typeof import('../lib/terminals')>()),
   openTerminal: vi.fn((projectId: string, shell: string, name: string) => Promise.resolve({ id: 't1', projectId, name, shell })),
@@ -494,6 +494,389 @@ describe('Sidebar remote control', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     expect(getByTip(document.body, /Remote control : en attente de connexion/)).toBeInTheDocument();
+  });
+
+  describe('where it comes from', () => {
+    const STATE = 'Remote control : connecté (accessible depuis claude.ai et l’app Claude)';
+
+    it.each([
+      ['hand', 'activé à la main'],
+      ['project', 'activé par le réglage du projet'],
+      ['global', 'activé par le réglage de tous les agents'],
+    ] as const)('says on the card of an agent whose remote control is %s’s, after its link state', (remoteSource, source) => {
+      resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteSource, remoteState: 'connected' })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /refacto-auth/ });
+      expect(getByTip(card, `${STATE} · ${source}`)).toBeInTheDocument();
+    });
+
+    it('follows the link state with the source, whatever the state', () => {
+      resetApp({
+        projects: [project()],
+        agents: [
+          agent({ remoteControl: true, remoteSource: 'project', remoteState: 'ready' }),
+          agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, remoteControl: true, remoteSource: 'global', remoteState: null }),
+        ],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(
+        getByTip(
+          screen.getByRole('button', { name: /refacto-auth/ }),
+          'Remote control : connexion… (accessible depuis claude.ai et l’app Claude) · activé par le réglage du projet',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        getByTip(
+          screen.getByRole('button', { name: /tests-e2e/ }),
+          'Remote control : en attente de connexion (accessible depuis claude.ai et l’app Claude) · activé par le réglage de tous les agents',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the plain state when the backend gives no source', () => {
+      resetApp({ projects: [project()], agents: [agent({ remoteControl: true, remoteSource: null, remoteState: 'connected' })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(getByTip(document.body, STATE)).toBeInTheDocument();
+    });
+
+    it('has no icon for an agent without remote control, set apart or not', () => {
+      resetApp({
+        projects: [project()],
+        agents: [agent({ remoteControl: false }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, remoteOff: true })],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(document.querySelector('.rc')).toBeNull();
+    });
+  });
+
+  describe('of an agent in Claude Code’s view', () => {
+    const STATE_CONNECTED = 'Remote control : connecté (accessible depuis claude.ai et l’app Claude)';
+    const STATE_CONNECTING = 'Remote control : connexion… (accessible depuis claude.ai et l’app Claude)';
+    const NO_INTERFACE = 'Remote control : aucune interface lancée, pas joignable pour l’instant (ouvre l’agent pour la lancer)';
+    const NEXT_LAUNCH_STATE = 'Remote control : au prochain lancement de son interface Claude Code';
+    const UNAVAILABLE =
+      'Remote control : pas ouvert par Claude Code (compte sans abonnement claude.ai, réseau, proxy ou règle de l’organisation)';
+    const STILL_ON =
+      'Remote control encore actif dans l’interface ouverte, jusqu’à son prochain lancement (sa commande /remote-control le coupe)';
+    const NEXT_LAUNCH =
+      'Pris en compte au prochain lancement de son interface Claude Code ; d’ici là, c’est sa commande /remote-control qui le fait.';
+    const SESSION = 'https://claude.ai/code/session_abc';
+    const toasts = () => app.toasts.map((x) => [x.text, x.kind]);
+    const settle = () => new Promise((r) => setTimeout(r));
+    /** An agent in Claude Code’s view, with the remote control `over` says. */
+    const inClaudeCode = (over: Partial<Parameters<typeof agent>[0]> = {}) => agent({ terminal: true, ...over });
+    const icon = (name: RegExp, text: string) => getByTip(screen.getByRole('button', { name }), text);
+
+    describe('on its card', () => {
+      it('says no interface runs when it has none: not reachable until one starts', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            // The state is the interface’s: with none, a stale one is of no account.
+            inClaudeCode({ remoteControl: true, remoteSource: 'global', interfaceRemote: null, remoteState: 'connected' }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const tip = icon(/refacto-auth/, `${NO_INTERFACE} · activé par le réglage de tous les agents`);
+        expect(tip).toBeInTheDocument();
+        // Neutral: no link to speak of.
+        expect(tip).not.toHaveClass('on');
+        expect(tip).not.toHaveClass('warn');
+      });
+
+      it('says its interface takes the remote control from its next launch when it was started without it', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({ remoteControl: true, remoteSource: 'project', interfaceRemote: false }),
+            // Whatever the state the interface reports: it has not the remote control of Escouade’s.
+            inClaudeCode({
+              id: 'a2',
+              name: 'tests-e2e',
+              createdAt: 2,
+              remoteControl: true,
+              remoteSource: 'hand',
+              interfaceRemote: false,
+              remoteState: 'connected',
+            }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const later = icon(/refacto-auth/, `${NEXT_LAUNCH_STATE} · activé par le réglage du projet`);
+        expect(later).not.toHaveClass('on');
+        expect(later).not.toHaveClass('warn');
+        expect(icon(/tests-e2e/, `${NEXT_LAUNCH_STATE} · activé à la main`)).not.toHaveClass('on');
+      });
+
+      it('says Claude Code did not open the remote control when its interface runs without having been linked (no subscription, network, proxy or policy)', () => {
+        resetApp({
+          projects: [project()],
+          agents: [inClaudeCode({ remoteControl: true, remoteSource: 'global', interfaceRemote: true, remoteState: 'unavailable' })],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const tip = icon(/refacto-auth/, `${UNAVAILABLE} · activé par le réglage de tous les agents`);
+        expect(tip).not.toHaveClass('on');
+        expect(tip).not.toHaveClass('warn');
+      });
+
+      it('is blue and says it is connected when its interface says its remote control is on', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({
+              remoteControl: true,
+              remoteSource: 'project',
+              interfaceRemote: true,
+              remoteUrl: SESSION,
+              remoteState: 'connected',
+            }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const tip = icon(/refacto-auth/, `${STATE_CONNECTED} · activé par le réglage du projet`);
+        expect(tip).toHaveClass('on');
+        expect(tip).not.toHaveClass('warn');
+      });
+
+      it('says it is connecting while its interface, started with the remote control, does not say it is on yet', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({ remoteControl: true, remoteSource: 'hand', interfaceRemote: true, remoteState: null }),
+            inClaudeCode({ id: 'a2', name: 'tests-e2e', createdAt: 2, remoteControl: true, interfaceRemote: true, remoteState: 'ready' }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const tip = icon(/refacto-auth/, `${STATE_CONNECTING} · activé à la main`);
+        expect(tip).not.toHaveClass('on');
+        expect(tip).not.toHaveClass('warn');
+        expect(icon(/tests-e2e/, STATE_CONNECTING)).not.toHaveClass('on');
+      });
+
+      it('shows a lasting marker when the remote control is off but the open interface is still linked', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({ remoteControl: false, remoteOff: true, interfaceRemote: true, remoteState: 'connected', remoteUrl: SESSION }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        const tip = icon(/refacto-auth/, STILL_ON);
+        // Set apart from the blue and the grey ones: a warning, barred.
+        expect(tip).toHaveClass('warn');
+        expect(tip).not.toHaveClass('on');
+        expect(tip.querySelector('.bar')).not.toBeNull();
+      });
+
+      it('bars only the lasting marker', () => {
+        resetApp({
+          projects: [project()],
+          agents: [inClaudeCode({ remoteControl: true, interfaceRemote: true, remoteState: 'connected' })],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        expect(document.querySelector('.rc')).not.toBeNull();
+        expect(document.querySelector('.rc .bar')).toBeNull();
+      });
+
+      it('shows no marker when the interface is not linked, or is not the one that is shown', () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            // Off, and its interface started without it, or none.
+            inClaudeCode({ remoteControl: false, interfaceRemote: false }),
+            inClaudeCode({ id: 'a2', name: 'tests-e2e', createdAt: 2, remoteControl: false, interfaceRemote: null }),
+            // Off, its interface started with it, but Claude Code did not open it: it is linked to nothing.
+            inClaudeCode({ id: 'a3', name: 'lint', createdAt: 3, remoteControl: false, interfaceRemote: true, remoteState: 'unavailable' }),
+            // Off, its interface started with it, but not linked (yet): nothing to warn about.
+            inClaudeCode({ id: 'a5', name: 'booting', createdAt: 5, remoteControl: false, interfaceRemote: true, remoteState: null }),
+            // Not in Claude Code’s view: the interface is not Escouade’s to show.
+            agent({ id: 'a4', name: 'docs', createdAt: 4, remoteControl: false, interfaceRemote: true }),
+          ],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        expect(document.querySelector('.rc')).toBeNull();
+      });
+    });
+
+    describe('in its menu', () => {
+      it('offers to turn it on, as an agent in Escouade’s view, with no claude.ai session to open', async () => {
+        resetApp({ projects: [project()], agents: [inClaudeCode({ remoteUrl: SESSION })] });
+        const backend = fakeBackend();
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        expect(items()).toContain('Activer le remote control');
+        expect(items()).not.toContain('Désactiver le remote control');
+        expect(items()).not.toContain('Ouvrir sur claude.ai');
+        expect(items()).not.toContain('Copier le lien claude.ai');
+        click('Activer le remote control');
+        await settle();
+        expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: true });
+      });
+
+      it('offers to turn it off, and its claude.ai session, once its interface says it is connected', async () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({
+              remoteControl: true,
+              remoteSource: 'global',
+              interfaceRemote: true,
+              remoteUrl: SESSION,
+              remoteState: 'connected',
+            }),
+          ],
+        });
+        const backend = fakeBackend();
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        expect(items()).toContain('Désactiver le remote control');
+        expect(items()).not.toContain('Activer le remote control');
+        expect(items()).toEqual(expect.arrayContaining(['Ouvrir sur claude.ai', 'Copier le lien claude.ai']));
+        click('Désactiver le remote control');
+        await settle();
+        expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: false });
+      });
+
+      it.each([
+        ['it is not connected yet', { interfaceRemote: true, remoteState: null, remoteUrl: SESSION }],
+        ['Claude Code did not open it', { interfaceRemote: true, remoteState: 'unavailable', remoteUrl: SESSION }],
+        ['the interface says connected but gave no link', { interfaceRemote: true, remoteState: 'connected', remoteUrl: null }],
+        ['no interface runs', { interfaceRemote: null, remoteState: null, remoteUrl: SESSION }],
+      ] as const)('offers no claude.ai session when %s', async (_, over) => {
+        resetApp({ projects: [project()], agents: [inClaudeCode({ remoteControl: true, ...over })] });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        expect(items()).toContain('Désactiver le remote control');
+        expect(items()).not.toContain('Ouvrir sur claude.ai');
+        expect(items()).not.toContain('Copier le lien claude.ai');
+      });
+
+      it('offers to turn it on, and no claude.ai session, while only its open interface is still linked', async () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            inClaudeCode({ remoteControl: false, remoteOff: true, interfaceRemote: true, remoteState: 'connected', remoteUrl: SESSION }),
+          ],
+        });
+        const backend = fakeBackend({ set_remote_control: () => true });
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        expect(items()).toContain('Activer le remote control');
+        expect(items()).not.toContain('Désactiver le remote control');
+        expect(items()).not.toContain('Ouvrir sur claude.ai');
+        expect(items()).not.toContain('Copier le lien claude.ai');
+        click('Activer le remote control');
+        await expect.poll(toasts).toEqual([[NEXT_LAUNCH, 'ok']]);
+        expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: true });
+      });
+
+      it('copies the claude.ai session of its interface', async () => {
+        const write = vi.fn(() => Promise.resolve());
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+        resetApp({
+          projects: [project()],
+          agents: [inClaudeCode({ remoteControl: true, interfaceRemote: true, remoteUrl: SESSION, remoteState: 'connected' })],
+        });
+        fakeBackend();
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        click('Copier le lien claude.ai');
+        await expect.poll(toasts).toEqual([['Lien claude.ai copié', 'ok']]);
+        expect(write).toHaveBeenCalledWith(SESSION);
+      });
+
+      it('is not offered to an archived agent, in either view', async () => {
+        resetApp({
+          projects: [project()],
+          agents: [
+            agent({ archived: true, remoteControl: true }),
+            agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, archived: true, terminal: true }),
+          ],
+        });
+        fakeBackend();
+        app.showArchived = true;
+        render(Sidebar, { project: project() });
+        for (const name of [/refacto-auth/, /tests-e2e/]) {
+          await fireEvent.contextMenu(screen.getByRole('button', { name }));
+          expect(items()).toContain('Restaurer');
+          expect(items().filter((x) => /remote control|claude\.ai/.test(x))).toEqual([]);
+        }
+        app.showArchived = false;
+      });
+    });
+
+    describe('when it is changed', () => {
+      it.each([
+        ['on', false],
+        ['off', true],
+      ] as const)(
+        'tells it applies at the next launch of its interface when the backend says so, turning it %s',
+        async (_, remoteControl) => {
+          resetApp({ projects: [project()], agents: [inClaudeCode({ terminalId: 't1', remoteControl, interfaceRemote: remoteControl })] });
+          fakeBackend({ set_remote_control: () => true });
+          render(Sidebar, { project: project() });
+          await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+          click(remoteControl ? 'Désactiver le remote control' : 'Activer le remote control');
+          await expect.poll(toasts).toEqual([[NEXT_LAUNCH, 'ok']]);
+        },
+      );
+
+      it('says it is reachable when turned on and the backend applies it now: it starts it in the background', async () => {
+        resetApp({ projects: [project()], agents: [inClaudeCode({ terminalId: 't1' })] });
+        const backend = fakeBackend({ set_remote_control: () => false });
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        click('Activer le remote control');
+        await expect.poll(toasts).toEqual([['refacto-auth est accessible depuis claude.ai et l’app Claude', 'ok']]);
+        expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: true });
+      });
+
+      it('says nothing when turned off and the backend applies it now: it stops the one it started', async () => {
+        resetApp({ projects: [project()], agents: [inClaudeCode({ terminalId: null, remoteControl: true })] });
+        const backend = fakeBackend({ set_remote_control: () => false });
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        click('Désactiver le remote control');
+        await settle();
+        expect(backend.called('set_remote_control')[0].args).toEqual({ id: 'a1', enabled: false });
+        expect(toasts()).toEqual([]);
+      });
+
+      it('tells the refusal of the backend, and not that the change applies later', async () => {
+        resetApp({ projects: [project()], agents: [inClaudeCode({ terminalId: 't1' })] });
+        fakeBackend({
+          set_remote_control: () => {
+            throw 'Le remote control a échoué.';
+          },
+        });
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        click('Activer le remote control');
+        await expect.poll(toasts).toEqual([['Le remote control a échoué.', 'error']]);
+      });
+
+      it('still says the agent is reachable when it is turned on in Escouade’s view', async () => {
+        resetApp({ projects: [project()], agents: [agent({ terminalId: 't1' })] });
+        fakeBackend({ set_remote_control: () => false });
+        render(Sidebar, { project: project() });
+        await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+        click('Activer le remote control');
+        await expect.poll(toasts).toEqual([['refacto-auth est accessible depuis claude.ai et l’app Claude', 'ok']]);
+      });
+    });
   });
 });
 
@@ -1053,6 +1436,80 @@ describe('Sidebar in English', () => {
       'Delete…',
     ]);
     expect(menu.open!.items.find((i) => i.label === 'Archive')).toMatchObject({ hint: 'keeps the conversation' });
+  });
+
+  it('writes where the remote control of an agent comes from, and its state in Claude Code’s view, in English', async () => {
+    const view = { terminal: true, remoteControl: true } as const;
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ remoteControl: true, remoteSource: 'hand', remoteState: 'connected' }),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, remoteControl: true, remoteSource: 'project', remoteState: 'connected' }),
+        agent({ id: 'a3', name: 'lint', createdAt: 3, remoteControl: true, remoteSource: 'global', remoteState: null }),
+        agent({ id: 'a4', name: 'docs', createdAt: 4, ...view, remoteSource: 'global', interfaceRemote: null }),
+        agent({ id: 'a5', name: 'relaunch', createdAt: 5, ...view, remoteSource: 'project', interfaceRemote: false }),
+        agent({ id: 'a6', name: 'denied', createdAt: 6, ...view, remoteSource: 'hand', interfaceRemote: true, remoteState: 'unavailable' }),
+        agent({
+          id: 'a7',
+          name: 'linked',
+          createdAt: 7,
+          ...view,
+          remoteSource: 'global',
+          interfaceRemote: true,
+          remoteState: 'connected',
+          remoteUrl: 'https://claude.ai/code/session_abc',
+        }),
+        agent({ id: 'a8', name: 'booting', createdAt: 8, ...view, remoteSource: 'hand', interfaceRemote: true, remoteState: null }),
+        agent({ id: 'a9', name: 'sticky', createdAt: 9, terminal: true, remoteOff: true, interfaceRemote: true, remoteState: 'connected' }),
+        // Off, its interface started with the remote control but never linked: no marker.
+        agent({ id: 'a10', name: 'dormant', createdAt: 10, terminal: true, remoteOff: true, interfaceRemote: true, remoteState: null }),
+      ],
+    });
+    setLang('en');
+    fakeBackend({ set_remote_control: () => true });
+    render(Sidebar, { project: project() });
+    const tipOf = (name: RegExp, text: string) => getByTip(screen.getByRole('button', { name }), text);
+    const reach = '(reachable from claude.ai and the Claude app)';
+    expect(tipOf(/refacto-auth/, `Remote control: connected ${reach} · turned on by hand`)).toBeInTheDocument();
+    expect(tipOf(/tests-e2e/, `Remote control: connected ${reach} · turned on by the project’s setting`)).toBeInTheDocument();
+    expect(
+      tipOf(/lint/, `Remote control: waiting for a connection ${reach} · turned on by the setting for all agents`),
+    ).toBeInTheDocument();
+    expect(
+      tipOf(
+        /docs/,
+        'Remote control: no interface running, not reachable for now (open the agent to start it) · turned on by the setting for all agents',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      tipOf(/relaunch/, 'Remote control: from the next launch of its Claude Code interface · turned on by the project’s setting'),
+    ).toBeInTheDocument();
+    expect(
+      tipOf(
+        /denied/,
+        'Remote control: not opened by Claude Code (no claude.ai subscription, network, proxy or organization policy) · turned on by hand',
+      ),
+    ).toBeInTheDocument();
+    expect(tipOf(/linked/, `Remote control: connected ${reach} · turned on by the setting for all agents`)).toHaveClass('on');
+    expect(tipOf(/booting/, `Remote control: connecting… ${reach} · turned on by hand`)).toBeInTheDocument();
+    expect(
+      tipOf(/sticky/, 'Remote control still on in the open interface, until its next launch (its /remote-control command turns it off)'),
+    ).toHaveClass('warn');
+    expect(screen.getByRole('button', { name: /dormant/ }).querySelector('.rc')).toBeNull();
+    // The menu of an agent in Claude Code’s view with a link, and what a change tells.
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /linked/ }));
+    expect(items()).toEqual(expect.arrayContaining(['Turn off remote control', 'Open on claude.ai', 'Copy the claude.ai link']));
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /docs/ }));
+    expect(items()).toContain('Turn off remote control');
+    expect(items()).not.toContain('Open on claude.ai');
+    menu.open!.items.find((i) => i.label === 'Turn off remote control')!.onClick!();
+    await expect
+      .poll(() => app.toasts.map((x) => [x.text, x.kind]))
+      .toEqual([['Applies at the next launch of its Claude Code interface; until then, its /remote-control command does it.', 'ok']]);
+    // The marker of a lasting remote control offers to turn it on.
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /sticky/ }));
+    expect(items()).toContain('Turn on remote control');
+    expect(items()).not.toContain('Turn off remote control');
   });
 
   it('offers to go back to Escouade’s view in English', async () => {

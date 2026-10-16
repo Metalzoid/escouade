@@ -83,6 +83,7 @@ export default defineZone('git', {
     switchBodyDetached: 'The project is on no branch (detached HEAD). Escouade switches to “{base}” and then merges “{branch}”.',
     switchConfirm: 'Switch and merge',
     remoteOn: '{name} is reachable from claude.ai and the Claude app',
+    remoteNextLaunch: 'Applies at the next launch of its Claude Code interface; until then, its /remote-control command does it.',
     linkCopied: 'claude.ai link copied',
   },
 });

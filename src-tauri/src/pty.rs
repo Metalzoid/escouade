@@ -695,7 +695,7 @@ fn write_executable(path: &Path, text: &str) -> std::io::Result<()> {
 /// Finds the cursor position query (`ESC [ 6 n`) in what a terminal prints, even when it is cut
 /// between two reads: the end of each read is kept to join it to the next.
 #[derive(Default)]
-struct CursorQuery {
+pub(crate) struct CursorQuery {
     tail: Vec<u8>,
 }
 
@@ -703,7 +703,7 @@ impl CursorQuery {
     const QUERY: &'static [u8] = b"\x1b[6n";
 
     /// Whether the query ends in `read`, the next one of the terminal's output.
-    fn feed(&mut self, read: &[u8]) -> bool {
+    pub(crate) fn feed(&mut self, read: &[u8]) -> bool {
         let mut seen = std::mem::take(&mut self.tail);
         seen.extend_from_slice(read);
         let found = seen.windows(Self::QUERY.len()).any(|w| w == Self::QUERY);
@@ -1270,6 +1270,11 @@ impl PtyManager {
         if let Some((level, line)) = term.report_line(report, now_ms()) {
             log::log!(level, "{line}");
         }
+    }
+
+    /// The terminal `id` is open (its program has not ended).
+    pub fn exists(&self, id: &str) -> bool {
+        self.terms.lock().contains_key(id)
     }
 
     pub fn kill(&self, id: &str) {

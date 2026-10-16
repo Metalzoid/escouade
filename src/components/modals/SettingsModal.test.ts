@@ -225,6 +225,42 @@ describe('SettingsModal', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
+  it('makes every agent reachable by remote control from its own group, beside the MCP switch, off until the user switches it on', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const remote = group('Remote control');
+    const all = remote.getByRole('switch', { name: 'Remote control pour tous les agents' });
+    expect(all).toHaveAttribute('aria-checked', 'false');
+    expect(remote.getByText(/^Chaque agent de chaque projet, existant ou nouveau \(agents des tickets compris\)/)).toHaveTextContent(
+      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
+    );
+    // Right before the MCP server’s switch, not after its activity log, which can be long.
+    const headings = within(panel())
+      .getAllByRole('heading')
+      .map((h) => h.textContent);
+    expect(headings.slice(-3)).toEqual(['Remote control', 'Escouade dans Claude', 'Activité MCP']);
+    expect(tab('Claude Code')).not.toHaveClass('changed');
+    await userEvent.click(all);
+    expect(all).toHaveAttribute('aria-checked', 'true');
+    // A setting of the draft like the others: marked, saved by « Enregistrer ».
+    expect(tab('Claude Code')).toHaveClass('changed');
+    expect(backend.called('save_settings')).toHaveLength(0);
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
+    expect(app.settings.remoteControlAll).toBe(true);
+  });
+
+  it('puts the remote control of all agents back, and saves nothing when it is switched on again', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const all = screen.getByRole('switch', { name: 'Remote control pour tous les agents' });
+    await userEvent.click(all);
+    await userEvent.click(all);
+    expect(tab('Claude Code')).not.toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')).toHaveLength(0);
+  });
+
   it('lets a ticket’s agent stopped by the limit go on on another account, off until the user switches it on', async () => {
     const backend = backendSaving();
     app.settings.accounts = [
@@ -1090,6 +1126,20 @@ describe('SettingsModal in English', () => {
     expect(screen.getByRole('heading', { name: 'Processes' })).toBeInTheDocument();
   });
 
+  it('names the remote control setting for all agents in English', async () => {
+    const backend = backendSaving();
+    render(SettingsModal);
+    const remote = group('Remote control');
+    const all = remote.getByRole('switch', { name: 'Remote control for all agents' });
+    expect(all).toHaveAttribute('aria-checked', 'false');
+    expect(remote.getByText(/^Every agent of every project/)).toHaveTextContent(
+      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
+    );
+    await userEvent.click(all);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
+  });
+
   it('says of the executable path whether it is found, not whether the current account’s Claude Code is', async () => {
     fakeBackend();
     // An account with a `claude` of its own is the current one: Claude Code is found, the settings' path is not.
@@ -1207,7 +1257,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading', { level: 3 })
         .map((h) => h.textContent),
-    ).toEqual(['Identity', 'Git', 'Worktrees', 'Launch', 'Danger zone']);
+    ).toEqual(['Identity', 'Remote control', 'Git', 'Worktrees', 'Launch', 'Danger zone']);
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();

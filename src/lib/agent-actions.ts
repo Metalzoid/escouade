@@ -106,11 +106,20 @@ export const canSwitchView = (agent: Agent) => !agent.ticketId && !agent.archive
 /** Into the other view; the backend's refusals (a turn under way, remote control on) are told. */
 export const switchView = (agent: Agent) => app.run(api.setAgentView(agent.id, !agent.terminal));
 
-/** Remote Control on / off: the agent becomes reachable from claude.ai and the Claude app. */
+/**
+ * Remote Control on / off by hand (off always sets the agent apart, a setting covering it or not): the agent becomes
+ * reachable from claude.ai and the Claude app. The backend answers whether the change waits for the next launch of an
+ * interface of Claude Code that is open (it keeps the remote control it was started with, and its own /remote-control
+ * does it until then): told, rather than that it is reachable. Otherwise the backend starts the process in the
+ * background when the remote control comes on, and stops it when it goes off: reachable once on, and nothing to tell
+ * once off.
+ */
 export async function toggleRemote(agent: Agent) {
   const on = !agent.remoteControl;
-  const ok = await app.run(api.setRemoteControl(agent.id, on));
-  if (ok !== undefined && on) app.toast(t('git.agent.remoteOn', { name: agent.name }), 'ok');
+  const later = await app.run(api.setRemoteControl(agent.id, on));
+  if (later === undefined) return;
+  if (later) app.toast(t('git.agent.remoteNextLaunch'), 'ok');
+  else if (on) app.toast(t('git.agent.remoteOn', { name: agent.name }), 'ok');
 }
 
 export function openRemote(agent: Agent) {
