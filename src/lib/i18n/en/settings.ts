@@ -93,6 +93,25 @@ export default defineZone('settings', {
     todoTools: 'Agents keep a task list',
     todoToolsDesc:
       'Gives agents Claude Code’s task list tool: if they keep a list, Escouade shows their progress in the “Plan” banner (the model does not have to use it). Applies to agents started afterwards.',
+    attachments: 'Attachments',
+    attachmentsNote:
+      'Images, PDFs and text files within their limits go in the message. Any other file, or one too big for the message, is attached by its path: Claude reads it with its tools.',
+    attachMax: 'Largest attached file',
+    attachMaxHint: 'MB, 0 = no limit',
+    attachMaxLabel: 'Largest attached file (MB)',
+    attachWarn: 'Warn above',
+    attachWarnHint: 'MB, 0 = never',
+    attachWarnLabel: 'Warn for an attached file over (MB)',
+    attachOrigin: 'Attach the original file',
+    attachOriginDesc:
+      'A file you drop is attached where it is, without a copy: Claude reads it at its location. When off, Escouade always keeps a copy. Tickets and the Claude Code view always copy.',
+    attachBigText: 'Text over 256 KB',
+    attachBigTextDesc: 'A text file too big for the message is attached by its path, or refused.',
+    attachBigTextPath: 'Attached by its path',
+    attachBigTextRefuse: 'Refused',
+    attachKeep: 'Purge copies after',
+    attachKeepHint: 'days, 0 = as long as their owner exists',
+    attachKeepLabel: 'Purge copies after (days)',
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control for all agents',
     remoteAllDesc:

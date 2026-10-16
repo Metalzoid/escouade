@@ -105,6 +105,25 @@ export default {
     todoTools: 'Les agents tiennent une liste de tâches',
     todoToolsDesc:
       'Donne aux agents l’outil de liste de tâches de Claude Code : s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan » (le modèle n’est pas obligé de s’en servir). S’applique aux agents lancés ensuite.',
+    attachments: 'Pièces jointes',
+    attachmentsNote:
+      'Les images, les PDF et les textes dans leurs limites partent dans le message. Tout autre fichier, ou un fichier trop gros pour le message, est joint par son chemin : Claude le lit avec ses outils.',
+    attachMax: 'Taille maximale d’un fichier joint',
+    attachMaxHint: 'Mo, 0 = aucune limite',
+    attachMaxLabel: 'Taille maximale d’un fichier joint (Mo)',
+    attachWarn: 'Avertir au-delà de',
+    attachWarnHint: 'Mo, 0 = jamais',
+    attachWarnLabel: 'Avertir pour un fichier joint de plus de (Mo)',
+    attachOrigin: 'Joindre le fichier d’origine',
+    attachOriginDesc:
+      'Un fichier déposé est joint là où il est, sans copie : Claude le lit à son emplacement. Désactivé, Escouade en garde toujours une copie. Les tickets et la vue Claude Code copient toujours.',
+    attachBigText: 'Texte de plus de 256 Ko',
+    attachBigTextDesc: 'Un fichier texte trop gros pour le message est joint par son chemin, ou refusé.',
+    attachBigTextPath: 'Joint par son chemin',
+    attachBigTextRefuse: 'Refusé',
+    attachKeep: 'Purger les copies après',
+    attachKeepHint: 'jours, 0 = tant que leur propriétaire existe',
+    attachKeepLabel: 'Purger les copies après (jours)',
     /** The group of the remote control of every agent, after the MCP server’s. */
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control pour tous les agents',

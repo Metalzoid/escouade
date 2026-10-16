@@ -355,9 +355,10 @@ pub struct Launch {
     pub env: Vec<(String, String)>,
 }
 
-/// The options whose value is a file Escouade wrote for Claude Code (in its data folder, on
-/// Windows): a `claude` of WSL is given its Linux path.
-const PATH_OPTIONS: [&str; 2] = ["--mcp-config", "--settings"];
+/// The options whose value is a file or a folder Escouade made for Claude Code (in its data folder,
+/// on Windows): a `claude` of WSL is given its Linux path. `--add-dir` is the folder of the files
+/// joined to an agent's messages.
+const PATH_OPTIONS: [&str; 3] = ["--mcp-config", "--settings", "--add-dir"];
 
 /// Stands for an empty argument on `wsl.exe`'s command line, which it refuses (E_INVALIDARG):
 /// `WSL_RUN` puts the empty argument back.
@@ -747,6 +748,43 @@ mod tests {
             ]
         );
         assert!(WSL_RUN.contains(&format!("'{WSL_EMPTY}'")));
+    }
+
+    #[test]
+    fn the_folder_of_the_joined_files_is_given_to_a_claude_of_wsl_by_its_linux_path_in_both_forms()
+    {
+        let launch = Program::Wsl(ubuntu_claude())
+            .launch(
+                r"C:\Users\me\proj",
+                &strings(&[
+                    r"--add-dir=C:\Users\Jean Dupont\.escouade\attachments\a1",
+                    "-p",
+                    "--add-dir",
+                    r"C:\Users\me\.escouade\attachments\a2",
+                    "--tools",
+                    "",
+                ]),
+                &[],
+            )
+            .unwrap();
+        let tail = &launch.args[8..];
+        assert_eq!(
+            tail,
+            strings(&[
+                "--add-dir=/mnt/c/Users/Jean Dupont/.escouade/attachments/a1",
+                "-p",
+                "--add-dir",
+                "/mnt/c/Users/me/.escouade/attachments/a2",
+                "--tools",
+                WSL_EMPTY,
+            ])
+        );
+        // A claude of the system is given the folder as it is.
+        let args = strings(&[r"--add-dir=C:\x\attachments\a1"]);
+        let native = Program::Native(PathBuf::from(r"C:\tools\claude.exe"))
+            .launch(r"C:\p", &args, &[])
+            .unwrap();
+        assert_eq!(native.args, args);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Réglages : Claude Code
 
-L’onglet « Claude Code » règle l’exécutable de Claude Code, le modèle, l’effort et le mode de permission des nouveaux agents, la vie des processus Claude, le remote control de tous les agents et le serveur qui laisse Claude piloter Escouade.
+L’onglet « Claude Code » règle l’exécutable de Claude Code, le modèle, l’effort et le mode de permission des nouveaux agents, la vie des processus Claude, les pièces jointes, le remote control de tous les agents et le serveur qui laisse Claude piloter Escouade.
 
 ## Exécutable
 
@@ -103,6 +103,20 @@ Si l’agent tient une liste, Escouade montre son avancée dans le bandeau « P
 ### Processus inactifs
 
 Le champ est un nombre de minutes ; 0 veut dire jamais, et un champ vide vaut 0. La session d’un agent dont le processus a été arrêté reste reprenable. Un agent en remote control n’est jamais arrêté ainsi, pour rester joignable depuis claude.ai.
+
+## Pièces jointes
+
+Ce groupe décide de ce qui arrive aux fichiers joints envoyés par chemin (voir [les pièces jointes](chat#pieces-jointes)). Il ne touche pas à ce que Claude lit dans le message : images, PDF et textes dans leurs limites.
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Taille maximale d’un fichier joint » (Mo, 0 = aucune limite) | Au-delà, le fichier est refusé. | 0 |
+| « Avertir au-delà de » (Mo, 0 = jamais) | Au-delà, la puce du fichier porte un avertissement ; le fichier se joint quand même. | 200 |
+| « Joindre le fichier d’origine » | Activé : un fichier déposé est joint là où il est, sans copie : Claude le lit à son emplacement, quand Escouade en connaît le chemin (sous Windows seulement : sous Linux et macOS, les fichiers sont toujours copiés). Désactivé : Escouade en garde toujours une copie. Les tickets et la vue Claude Code copient dans tous les cas. | Activé |
+| « Texte de plus de 256 Ko » | « Joint par son chemin », comme les autres fichiers, ou « Refusé », comme avant. | « Joint par son chemin » |
+| « Purger les copies après » (jours, 0 = tant que leur propriétaire existe) | Les copies plus vieilles que ce nombre de jours sont effacées, avec leurs dossiers vides, au démarrage puis chaque heure. 0 = elles restent tant que leur agent, leur projet ou leur ticket existe. | 0 |
+
+Un champ de nombre vidé vaut 0. La taille maximale vaut pour tous les fichiers envoyés par chemin : dans le chat, dans la vue Claude Code et dans les tickets. L’avertissement n’apparaît que sur une puce (chat et tickets). La purge n’efface jamais un fichier d’origine. Les copies des messages sont dans `attachments/<agent>/`, celles d’un ticket dans `tickets/<ticket>/files/`, sous le [dossier de données](data).
 
 ## Remote control
 

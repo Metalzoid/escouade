@@ -50,7 +50,9 @@ Dans cette vue, aucun signal ne les annonce à Escouade. Elle lit le début d’
 
 ## Écrire à un agent dans cette vue
 
-Le champ de saisie d’Escouade n’est pas affiché : tu écris dans le terminal, comme dans Claude Code. Pour joindre une image, par exemple une capture d’écran copiée, colle-la dans le terminal (`Ctrl+V`, `Cmd+V` sous macOS) : Escouade l’enregistre dans un fichier et tape son chemin, que Claude Code prend pour l’image (« [Image #1] »). Du texte collé est tapé tel quel.
+Le champ de saisie d’Escouade n’est pas affiché : tu écris dans le terminal, comme dans Claude Code. Pour joindre une image, par exemple une capture d’écran copiée, colle-la dans le terminal (`Ctrl+V`, `Cmd+V` sous macOS) ou dépose-la dessus : Escouade l’enregistre dans un fichier et tape son chemin, que Claude Code prend pour l’image (« [Image #1] »). Du texte collé est tapé tel quel.
+
+Un autre fichier (une archive, un tableur, un document…) se joint de la même façon : colle-le dans le terminal, ou dépose-le dessus (un cadre en pointillés montre la zone de dépôt). Escouade le copie toujours, et ne lit jamais le fichier à son emplacement d’origine : l’interface de Claude Code est lancée une fois, et seul le dossier de l’agent y est lisible sans demander. Elle tape ensuite le chemin de la copie (`/mnt/c/…` pour un Claude Code dans WSL), que Claude lit avec ses outils. La copie est dans le dossier de l’agent, avec celles du chat (voir [les pièces jointes](chat#pieces-jointes)). La taille maximale des [réglages](settings-claude-code#pieces-jointes) s’applique ; l’avertissement de taille, lui, n’existe pas ici, faute de puce.
 
 Un message envoyé à l’agent d’ailleurs, par exemple par le [serveur MCP](mcp), est tapé dans son interface. Il est refusé tant que l’agent attend une réponse dans son terminal (« L’agent attend une réponse dans son terminal : réponds-y d’abord. »). Il l’est aussi pour une interface lancée en fond que personne n’a encore affichée, tant qu’elle n’est pas prête (voir [plus bas](#le-remote-control-dans-cette-vue)). Une interruption demandée depuis Escouade devient la touche `Échap` dans l’interface.
 

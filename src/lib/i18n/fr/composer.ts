@@ -30,12 +30,18 @@ export default {
       '« {name} » ne peut pas être joint : les fichiers acceptés sont les images (PNG, JPEG, GIF, WebP), les PDF et les fichiers texte.',
     tooBig: '{name} dépasse {max}',
     notText: "{name} n'est pas un fichier texte : il ne peut pas être joint.",
-    totalTooBig: "{name} n'est pas joint : les fichiers d'un message sont limités à {max} en tout.",
     remove: 'Retirer {name}',
+    /** The name of the bar that shows a copy going on. */
+    copying: 'Copie de {name}',
+    /** A file past the size the settings warn at: copied to the disk, or kept where it is. */
+    warnCopy: 'Gros fichier : {size}, copié sur le disque',
+    warnOrigin: 'Gros fichier : {size}, joint là où il est, sans copie',
+    /** The mark of a chip whose file is the original one, attached where it lies (nothing was copied). */
+    original: 'Fichier d’origine, lu là où il est',
   },
   attach: {
     label: 'Joindre un fichier',
-    title: 'Joindre une image, un PDF ou un fichier texte (ou colle / glisse-le)',
+    title: 'Joindre un fichier (ou colle / glisse-le)',
   },
 
   placeholder: {

@@ -69,6 +69,11 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'switchOnLimit',
     'todoTools',
     'idleStopMinutes',
+    'attachMaxMb',
+    'attachWarnMb',
+    'attachOrigin',
+    'attachBigText',
+    'attachKeepDays',
     'remoteControlAll',
   ],
   notifications: ['sound', 'osNotifications', 'notifyFor'],
@@ -214,9 +219,17 @@ function boardOf(d: ProjectDraft): BoardSettings {
   return { ...d.board, testCommand, testsFirst: d.board.testsFirst && !!testCommand };
 }
 
+/** A whole number of 0 or more: an emptied number field is null, and the backend expects a number. */
+const count = (n: number) => Math.max(0, Math.floor(Number(n) || 0));
+
 function settingsOf(s: Settings): Settings {
-  // An emptied number field is null: the backend expects a number.
-  return { ...s, idleStopMinutes: Math.max(0, Math.floor(Number(s.idleStopMinutes) || 0)) };
+  return {
+    ...s,
+    idleStopMinutes: count(s.idleStopMinutes),
+    attachMaxMb: count(s.attachMaxMb),
+    attachWarnMb: count(s.attachWarnMb),
+    attachKeepDays: count(s.attachKeepDays),
+  };
 }
 
 /** The fields of `next` that differ from `base`. */

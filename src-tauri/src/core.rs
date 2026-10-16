@@ -2,6 +2,7 @@
 
 use crate::accounts;
 use crate::agent::{AgentAlert, AgentHandle, AgentRt, Effects, NotifyKind, RemoteLink};
+use crate::attachfiles::{self, AttachedFile};
 use crate::board;
 use crate::claude::{self, ClaudeProcess, SpawnOpts};
 use crate::closed;
@@ -811,6 +812,15 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) mcp: crate::mcp::McpServer<R>,
     /// The server the hooks of the agents' Claude Code interfaces call (`tui`).
     pub(crate) hooks: crate::tui::Hooks,
+    /// The copies of the files joined to messages that are under way (`attachfiles`).
+    pub(crate) uploads: crate::attachfiles::Uploads,
+    /// The paths the window's host read for the files the page handed it (`fileorigin`): the table
+    /// the app manages (the listener fills it, `file_origin` answers from it), or a table of its
+    /// own where the app has none. `attach_origin` takes the paths handed out from it, only.
+    pub(crate) file_origins: crate::fileorigin::FileOrigins,
+    /// The files of the user's own joined by their path, by agent: the only ones a message may
+    /// give as joined by it (`attachfiles::OriginFiles`).
+    pub(crate) origin_files: crate::attachfiles::OriginFiles,
     /// How many processes and interfaces the application of Remote Control settings (and the
     /// app's start) starts at once: `REMOTE_STARTS`. A message or a window opening starts its own
     /// at once, with no permit.
@@ -1594,6 +1604,13 @@ impl<R: Runtime> Core<R> {
             settings.telemetry,
             paths::sandbox_dir().is_none(),
         ));
+        // The table the window's listener fills, when the app made it (it does, before the core).
+        let file_origins = {
+            use tauri::Manager;
+            app.try_state::<crate::fileorigin::FileOrigins>()
+                .map(|s| s.inner().clone())
+                .unwrap_or_default()
+        };
         let core = Arc::new_cyclic(|me| Self {
             me: me.clone(),
             telemetry,
@@ -1655,6 +1672,9 @@ impl<R: Runtime> Core<R> {
             searches: convsearch::Searches::default(),
             mcp: crate::mcp::McpServer::new(me.clone()),
             hooks: Default::default(),
+            uploads: Default::default(),
+            file_origins,
+            origin_files: Default::default(),
             remote_starts: tokio::sync::Semaphore::new(REMOTE_STARTS),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
@@ -1680,6 +1700,9 @@ impl<R: Runtime> Core<R> {
         core.usage.lock().set_today(&core.stats.today_by_account());
         // The images pasted in the interfaces a week ago or more, also when nobody pastes any more.
         crate::tui::clear_pastes(&core.pastes_dir());
+        // The copies of joined files a window left half written, the drafts' of a day ago, and
+        // those older than the days of the settings (then every hour: `start`).
+        core.maintain_attachments();
         core.settle_recovered(&recovered);
         (core, rx)
     }
@@ -1725,6 +1748,17 @@ impl<R: Runtime> Core<R> {
             loop {
                 tokio::time::sleep(Duration::from_secs(60)).await;
                 c.stop_idle_processes();
+            }
+        });
+        // The copies of joined files that are old enough to go (`attachKeepDays`), and the ones
+        // lost half written: at the start (`load`), then every hour.
+        let c = self.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+                let core = c.clone();
+                let _ =
+                    tauri::async_runtime::spawn_blocking(move || core.maintain_attachments()).await;
             }
         });
         let c = self.clone();
@@ -1869,6 +1903,7 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        s.normalize_attachments();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
         let bytes = serde_json::to_vec_pretty(&s)?;
@@ -2575,6 +2610,11 @@ impl<R: Runtime> Core<R> {
             ));
         }
         self.ready_for_wsl(&opts.program, h);
+        // The folder of the files joined to its messages, which it reads without a question
+        // (`attachfiles`).
+        opts.args.extend(self.add_dir_arg(id));
+        // A ticket's agent reads the ticket's files too (`ticketfiles`).
+        opts.args.extend(self.ticket_add_dir_arg(id));
         // Escouade's MCP server, as this agent (a token of its own) or kept out of it.
         let access = self.agent_access(id);
         if let Some(refusal) = access.refusal() {
@@ -3452,6 +3492,18 @@ impl<R: Runtime> Core<R> {
         self.send_message_from(id, None, text, attachments).await
     }
 
+    /// `send_message` with files joined by their path (`files`, ESC-95), as the window sends them:
+    /// Claude is told where they are (`attachfiles::message_with_files`).
+    pub async fn send_message_files(
+        self: &Arc<Self>,
+        id: &str,
+        text: String,
+        attachments: Vec<Attachment>,
+        files: Vec<AttachedFile>,
+    ) -> Result<()> {
+        self.send(id, None, text, attachments, files, true).await
+    }
+
     /// `send_message` of a text someone else wrote than the user at the window: the author's name
     /// is `origin` (a caller of the MCP server). The agent reads it, and the conversation shows
     /// it, under « Message de <origin> : » (`from_origin`), so that it is never taken for the
@@ -3463,23 +3515,29 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
-        self.send(id, origin, text, attachments, true).await
+        self.send(id, origin, text, attachments, Vec::new(), true)
+            .await
     }
 
     /// `send_message` of a text the app writes by itself (« continue » after the usage limit, the
     /// conflicts of the base to resolve): no task of the user's to name the agent after, so it
     /// never does.
     pub(crate) async fn send_by_app(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
-        self.send(id, None, text, Vec::new(), false).await
+        self.send(id, None, text, Vec::new(), Vec::new(), false)
+            .await
     }
 
-    /// Sends the message to the agent; `names`: it may name the agent (`naming_text`).
+    /// Sends the message to the agent; `names`: it may name the agent (`naming_text`). `files` are
+    /// the files joined by their path: they are checked again (`checked_files`), the message ends
+    /// with a line for each, and the agent may read the ones of the user's own from then on. The
+    /// agent is named from the text alone, never from those lines.
     async fn send(
         self: &Arc<Self>,
         id: &str,
         origin: Option<&str>,
         text: String,
         attachments: Vec<Attachment>,
+        files: Vec<AttachedFile>,
         names: bool,
     ) -> Result<()> {
         // Until its turn runs (its process started, the message delivered), it is under way.
@@ -3493,7 +3551,7 @@ impl<R: Runtime> Core<R> {
         // In the Claude Code view: typed in its interface.
         let h = self.agent(id)?;
         if h.lock().meta.terminal {
-            if !attachments.is_empty() {
+            if !attachments.is_empty() || !files.is_empty() {
                 bail!(tr!(
                     "Pas de pièce jointe en vue Claude Code : colle-la dans son terminal.",
                     "No attachments in the Claude Code view: paste them in its terminal."
@@ -3514,7 +3572,11 @@ impl<R: Runtime> Core<R> {
             return sent;
         }
         // Refused before starting Claude: the composer keeps the message.
+        let files = self.checked_files(id, files)?;
+        let delivered = attachfiles::message_with_files(self.lang().claude, &delivered, &files);
         let content = user_content(&delivered, &attachments)?;
+        // Before its turn: its first question about one of them finds the right to ask it.
+        self.grant_files(id, &files);
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
         // twice, files half written).
         self.wait_setup(id).await;
@@ -5374,6 +5436,8 @@ impl<R: Runtime> Core<R> {
         self.stop_setup(id).await;
         let _ = std::fs::remove_file(self.data.setup_log(id));
         self.forget_pastes(id);
+        // The files joined to its messages (the copies; never a file of the user's own).
+        self.forget_attachments(id);
         self.forget_sidechains(id);
         {
             let mut ui = self.ui.write();

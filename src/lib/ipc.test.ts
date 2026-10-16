@@ -200,3 +200,58 @@ describe('terminal writes and reports', () => {
     ]);
   });
 });
+
+describe('attached files', () => {
+  const path = 'C:\\data\\attachments\\a1\\1f2e3d4c\\rapport.xlsx';
+  const copy = { name: 'rapport.xlsx', path, claudePath: path, size: 3, origin: false };
+
+  it('opens, fills, finishes, cancels and discards a copy with the names its commands take', async () => {
+    const backend = fakeBackend({ attach_open: () => 'h1', attach_finish: () => copy });
+    expect(await api.attachOpen('a1', 'rapport.xlsx', 3)).toBe('h1');
+    await api.attachChunk('h1', new Uint8Array([1, 2, 3]));
+    expect(await api.attachFinish('h1')).toEqual(copy);
+    await api.attachCancel('h1');
+    await api.attachDiscard('a1', path);
+    expect(backend.calls.map((c) => c.cmd)).toEqual(['attach_open', 'attach_chunk', 'attach_finish', 'attach_cancel', 'attach_discard']);
+    expect(backend.calls[0].args).toEqual({ owner: 'a1', name: 'rapport.xlsx', size: 3 });
+    expect(backend.calls[2].args).toEqual({ handle: 'h1' });
+    expect(backend.calls[3].args).toEqual({ handle: 'h1' });
+    expect(backend.calls[4].args).toEqual({ owner: 'a1', path });
+  });
+
+  it('sends a chunk as the raw bytes, its handle in a header: no base64 in a JSON', async () => {
+    const backend = fakeBackend();
+    const seen: { cmd: string; args: unknown; options: unknown }[] = [];
+    const internals = (window as any).__TAURI_INTERNALS__;
+    const invoke = internals.invoke;
+    internals.invoke = (cmd: string, args: unknown, options: unknown) => {
+      seen.push({ cmd, args, options });
+      return invoke(cmd, args, options);
+    };
+    const bytes = new Uint8Array([1, 2, 3]);
+    await api.attachChunk('h1', bytes);
+    expect(seen).toEqual([{ cmd: 'attach_chunk', args: bytes, options: { headers: { 'x-handle': 'h1' } } }]);
+    expect(backend.called('attach_chunk')).toHaveLength(1);
+  });
+
+  it('attaches a file where it is by the id the host holds for it, and asks the host where a file of the window comes from', async () => {
+    const original = { ...copy, path: 'C:\\Users\\Jean\\rapport.xlsx', origin: true };
+    const backend = fakeBackend({ attach_origin: () => original, file_origin: () => original.path });
+    expect(await api.attachOrigin('a1', '3f2a')).toEqual(original);
+    expect(await api.fileOrigin('3f2a')).toBe(original.path);
+    expect(backend.calls).toEqual([
+      { cmd: 'attach_origin', args: { owner: 'a1', id: '3f2a' } },
+      { cmd: 'file_origin', args: { id: '3f2a' } },
+    ]);
+  });
+
+  it('sends the files of a message beside its attachments, none when it has none', async () => {
+    const backend = fakeBackend();
+    await api.sendMessage('a1', 'Lis ça', [], [copy]);
+    await api.sendMessage('a1', 'Salut');
+    expect(backend.calls).toEqual([
+      { cmd: 'send_message', args: { id: 'a1', text: 'Lis ça', attachments: [], files: [copy] } },
+      { cmd: 'send_message', args: { id: 'a1', text: 'Salut', attachments: [], files: [] } },
+    ]);
+  });
+});

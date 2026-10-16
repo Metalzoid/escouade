@@ -74,6 +74,21 @@ pub struct Settings {
     /// « Statistiques d’usage » (`telemetry`): None until the user answered the question
     /// of the first start (settings saved before it have none: they are asked too).
     pub telemetry: Option<bool>,
+    /// « Taille maximale d’un fichier joint », in MB (0: none): a bigger file is refused
+    /// (`attachfiles`).
+    pub attach_max_mb: u32,
+    /// « Avertir au-delà de », in MB (0: never): a file this big is joined, with a warning (the
+    /// window's).
+    pub attach_warn_mb: u32,
+    /// « Joindre le fichier d’origine »: a file dropped is joined by the path it has, nothing copied;
+    /// off, it is always copied (`attachfiles`).
+    pub attach_origin: bool,
+    /// « Texte de plus de 256 Ko »: "path" (sent by its path, as any file) or "refuse" (refused, as
+    /// before 1.8). Any other value is "path" (`normalize_attachments`).
+    pub attach_big_text: String,
+    /// « Effacer les copies après », in days (0: they stay as long as their owner does): the copies
+    /// of joined files older than this go (`attachfiles::purge`).
+    pub attach_keep_days: u32,
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
@@ -193,6 +208,14 @@ impl Default for IntegrationSettings {
 pub const TODO_TOOLS_VAR: &str = "CLAUDE_CODE_ENABLE_TODO_TOOLS";
 
 impl Settings {
+    /// What the settings of the attached files say that they may not (a value saved by a later
+    /// version, or written by hand): « Texte de plus de 256 Ko » is "path" unless it is "refuse".
+    pub fn normalize_attachments(&mut self) {
+        if self.attach_big_text != "refuse" {
+            self.attach_big_text = "path".into();
+        }
+    }
+
     /// The network settings of a Claude Code process: its proxy, and its TLS verification off
     /// when asked.
     pub fn claude_env(&self) -> Vec<(String, String)> {
@@ -266,6 +289,11 @@ impl Default for Settings {
             todo_tools: true,
             switch_on_limit: false,
             telemetry: None,
+            attach_max_mb: 0,
+            attach_warn_mb: 200,
+            attach_origin: true,
+            attach_big_text: "path".into(),
+            attach_keep_days: 0,
             remote_control_all: false,
         }
     }
@@ -595,6 +623,23 @@ pub struct Ticket {
     /// The images pasted or dropped in its form, in their order: files of its folder
     /// (`DataDir::ticket_dir`), sent to its agent with its first message.
     pub images: Vec<TicketImage>,
+    /// The files other than images joined in its form, in their order: copies in its `files`
+    /// folder (`DataDir::ticket_files`), whose paths its agent is given with its first message.
+    /// Always in the JSON, empty for a ticket saved before.
+    pub files: Vec<TicketFile>,
+}
+
+/// A file of a ticket that is no image the chat reads: a copy in the ticket's `files` folder
+/// (`ticketfiles`), never in the JSON of the tickets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TicketFile {
+    /// Its name, as shown and as its agent is told it.
+    pub name: String,
+    /// Where it is under the ticket's `files` folder: `<uniq>/<name>`.
+    pub file: String,
+    /// Its size, in bytes, when it was joined.
+    pub size: u64,
 }
 
 /// An image of a ticket: its content is a file of the ticket's folder, never in the JSON of the
@@ -873,6 +918,27 @@ pub struct AgentMeta {
     /// How far the transcript its interface writes was read: the file and the offset (bytes),
     /// so that what was written while the app was not reading it is read when it starts again.
     pub transcript_read: Option<(String, u64)>,
+    /// The files joined to its messages by their own path (no copy), as its Claude Code reads
+    /// them: the only files outside its folders that its `Read` is allowed without asking
+    /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.
+    pub granted_files: Vec<String>,
+}
+
+/// The most files of the user's own an agent keeps the right to read (`AgentMeta::granted_files`):
+/// the oldest ones go past it, and are asked for again when read.
+pub const MAX_GRANTED_FILES: usize = 200;
+
+impl AgentMeta {
+    /// Remembers that the user joined the file `claude_path` (as Claude Code reads it) by its own
+    /// path: its `Read` of exactly that file is allowed from now on. Joined again, it only moves to
+    /// the end; past `MAX_GRANTED_FILES` the oldest go.
+    pub fn grant_file(&mut self, claude_path: String) {
+        self.granted_files
+            .retain(|f| !crate::attachfiles::same_file(f, &claude_path));
+        self.granted_files.push(claude_path);
+        let extra = self.granted_files.len().saturating_sub(MAX_GRANTED_FILES);
+        self.granted_files.drain(..extra);
+    }
 }
 
 fn principal_id() -> String {
@@ -1614,6 +1680,71 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["quotaPause"], json!(90));
+    }
+
+    #[test]
+    fn settings_saved_before_the_attached_files_get_the_defaults_of_the_spec() {
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        let d = Settings::default();
+        for s in [&s, &d] {
+            assert_eq!(
+                (s.attach_max_mb, s.attach_warn_mb, s.attach_origin),
+                (0, 200, true)
+            );
+            assert_eq!(
+                (s.attach_big_text.as_str(), s.attach_keep_days),
+                ("path", 0)
+            );
+        }
+        let v = serde_json::to_value(Settings {
+            attach_max_mb: 500,
+            attach_warn_mb: 50,
+            attach_origin: false,
+            attach_big_text: "refuse".into(),
+            attach_keep_days: 30,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["attachMaxMb"], json!(500));
+        assert_eq!(v["attachWarnMb"], json!(50));
+        assert_eq!(v["attachOrigin"], json!(false));
+        assert_eq!(v["attachBigText"], json!("refuse"));
+        assert_eq!(v["attachKeepDays"], json!(30));
+    }
+
+    #[test]
+    fn a_big_text_setting_the_app_does_not_know_is_sent_by_path() {
+        let mut s = Settings {
+            attach_big_text: "whatever".into(),
+            ..Default::default()
+        };
+        s.normalize_attachments();
+        assert_eq!(s.attach_big_text, "path");
+        s.attach_big_text = "refuse".into();
+        s.normalize_attachments();
+        assert_eq!(s.attach_big_text, "refuse");
+    }
+
+    #[test]
+    fn the_files_granted_to_an_agent_are_saved_and_the_oldest_go_past_the_cap() {
+        let old: AgentMeta = serde_json::from_value(json!({ "id": "a1" })).unwrap();
+        assert!(old.granted_files.is_empty());
+        let mut m = AgentMeta::default();
+        for n in 0..MAX_GRANTED_FILES + 5 {
+            m.grant_file(format!("C:/docs/f{n}.xlsx"));
+        }
+        assert_eq!(m.granted_files.len(), MAX_GRANTED_FILES);
+        assert_eq!(m.granted_files[0], "C:/docs/f5.xlsx");
+        // One granted again moves to the end rather than twice in the list.
+        m.grant_file("C:/docs/f5.xlsx".into());
+        assert_eq!(m.granted_files.len(), MAX_GRANTED_FILES);
+        assert_eq!(m.granted_files.last().unwrap(), "C:/docs/f5.xlsx");
+        assert_eq!(m.granted_files[0], "C:/docs/f6.xlsx");
+        let v = serde_json::to_value(&m).unwrap();
+        assert_eq!(
+            v["grantedFiles"].as_array().unwrap().len(),
+            MAX_GRANTED_FILES
+        );
     }
 
     #[test]
@@ -2368,6 +2499,35 @@ mod tests {
         assert_eq!(v["outcomeCommit"], json!("0a1b2c"));
         let back: Ticket = serde_json::from_value(v).unwrap();
         assert_eq!(back.outcome_commit.as_deref(), Some("0a1b2c"));
+    }
+
+    #[test]
+    fn a_ticket_saved_before_its_files_still_loads_with_none_and_always_tells_its_files() {
+        // A state.json of 1.7: its tickets have images, and no `files`.
+        let s: PersistedState = serde_json::from_value(json!({
+            "projects": [],
+            "tickets": [{ "id": "t1", "projectId": "p1", "key": "DEM-1", "column": "todo" }]
+        }))
+        .unwrap();
+        assert!(s.tickets[0].files.is_empty());
+        // The window reads `ticket.files.map(…)`: the field is there even when empty.
+        let v = serde_json::to_value(&s.tickets[0]).unwrap();
+        assert_eq!(v["files"], json!([]));
+        let v = serde_json::to_value(Ticket {
+            files: vec![TicketFile {
+                name: "rapport.xlsx".into(),
+                file: "4f2a9c01/rapport.xlsx".into(),
+                size: 4096,
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(
+            v["files"],
+            json!([{ "name": "rapport.xlsx", "file": "4f2a9c01/rapport.xlsx", "size": 4096 }])
+        );
+        let back: Ticket = serde_json::from_value(v).unwrap();
+        assert_eq!(back.files[0].file, "4f2a9c01/rapport.xlsx");
     }
 
     #[test]

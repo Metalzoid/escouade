@@ -39,7 +39,9 @@ Quand Claude attend une réponse à une question ou une autorisation, le champ c
 
 ### Pièces jointes
 
-Il y a trois façons de joindre un fichier : le coller (`Ctrl+V`, par exemple une capture d’écran copiée), le glisser sur le champ, ou cliquer sur le trombone (« Joindre un fichier »). Une miniature ou un nom de fichier apparaît au-dessus du champ ; la croix la retire.
+Tu peux joindre n’importe quel fichier : une image, un PDF ou un texte, mais aussi une archive, un tableur, un document, une vidéo, un fichier audio… Il y a trois façons de le joindre : le coller (`Ctrl+V`, par exemple une capture d’écran copiée), le glisser sur le champ, ou cliquer sur le trombone (« Joindre un fichier »). La fenêtre de choix n’a pas de filtre : elle montre tous les fichiers. Chaque fichier apparaît au-dessus du champ : une miniature pour une image, sinon une puce avec une icône selon son type (archive, tableur, document, vidéo, audio, code ou générique), son nom, sa taille et une croix qui le retire. Pendant qu’un fichier se copie (voir plus bas), sa puce montre un pourcentage et une barre de progression, et « Envoyer » reste grisé.
+
+Escouade transmet un fichier à Claude de deux façons. Ce que Claude lit directement reste **dans le message**, dans ces limites :
 
 | Type | Formats | Taille maximale |
 |---|---|---|
@@ -47,9 +49,43 @@ Il y a trois façons de joindre un fichier : le coller (`Ctrl+V`, par exemple un
 | PDF | `.pdf` | 18 Mo |
 | Texte | Code, configuration, journaux, CSV, Markdown, JSON… et les fichiers sans extension connue comme `Dockerfile` ou `.env.local` | 256 Ko |
 
-Les fichiers d’un même message ne dépassent pas 18 Mo en tout. Un fichier refusé (format inconnu, trop gros, binaire) est nommé dans un message rouge, et les autres sont joints quand même. Dans la conversation, le message affiche « 2 images » et le nom des fichiers.
+Les fichiers d’un même message ne dépassent pas 18 Mo en tout.
 
-Les fichiers joints n’accompagnent pas une réponse à une question ou à une autorisation : ils restent prêts pour ton prochain message. Dans la vue Claude Code, le champ de saisie d’Escouade n’est pas affiché : seule une image (une capture d’écran, par exemple) s’y joint, collée dans le terminal ; voir [la vue Claude Code](claude-code-view).
+Tout le reste part **par chemin** : un autre format, un fichier lisible mais trop gros pour le message (une image de plus de 5 Mo, un PDF de plus de 18 Mo, un texte de plus de 256 Ko), ou ce qui ferait dépasser les 18 Mo du message. Le message donne alors à Claude le chemin du fichier : une ligne de plus par fichier, à la suite de ton texte (ou seule, si tu n’as rien écrit). Claude lit le fichier avec ses outils.
+
+```text
+Fichier joint : rapport.xlsx, C:\…\rapport.xlsx
+```
+
+La ligne suit la langue des textes rédigés par Claude (`Attached file: …` en anglais, voir [Réglages › Application](settings-application)). Sous WSL, le chemin est celui que lit Claude Code, par exemple `/mnt/c/…`.
+
+Un fichier est refusé s’il dépasse la taille maximale que tu as fixée (aucune par défaut), si c’est un texte de plus de 256 Ko et que tu as choisi de les refuser, ou si Escouade ne peut pas le lire ou le copier. Il est nommé dans un message rouge, et les autres fichiers sont joints quand même. Dans la conversation, le message affiche « 2 images » et le nom des fichiers ; les lignes des fichiers envoyés par chemin y sont aussi, avec ton texte. Si Escouade ne retrouve plus un fichier au moment d’envoyer (déplacé ou supprimé entre-temps), le message est refusé, avec la raison, et revient dans le champ.
+
+Les fichiers joints n’accompagnent pas une réponse à une question ou à une autorisation : ils restent prêts pour ton prochain message. Dans la vue Claude Code, le champ de saisie d’Escouade n’est pas affiché : un fichier se joint en le collant ou en le déposant sur le terminal, et il y est toujours copié ; voir [la vue Claude Code](claude-code-view). Dans la fenêtre d’un ticket, les fichiers sont aussi toujours copiés ; voir [le Kanban](board).
+
+### Copie ou fichier d’origine
+
+Un fichier envoyé par chemin est soit le fichier d’origine, soit une copie.
+
+- **Le fichier d’origine** (par défaut, grâce au réglage « Joindre le fichier d’origine ») : rien n’est copié, Claude lit le fichier là où il est. Escouade doit en connaître le chemin, et elle ne le connaît que sous Windows : l’application lit elle-même le chemin d’un fichier du disque déposé ou collé depuis l’Explorateur, et la fenêtre ne peut pas lui en donner un autre. Une capture d’écran collée n’est pas un fichier du disque : elle n’a pas de chemin. Un chemin que l’application n’a pas lu elle-même est refusé, à la jointure comme à l’envoi du message, et un fichier du dossier de données d’Escouade ne se joint jamais par son chemin : il est refusé. Sous Linux et macOS, il n’y a aucun chemin d’origine : les fichiers sont copiés. Pour un fichier déposé, Escouade ne donne pas son dossier à Claude : Claude Code demande l’autorisation de lire un fichier qui n’est dans aucun de ses dossiers, et Escouade y répond « autorisé » d’elle-même, pour ce fichier seul, à son chemin d’origine, et pour le lire (jamais pour y écrire). Toute autre demande te revient comme d’habitude, y compris celle d’un autre outil que la lecture (par exemple `Bash`). Claude lit le fichier tel qu’il est à ce moment-là : modifié, il est lu modifié ; déplacé ou supprimé, il n’est plus trouvé. La puce d’un fichier d’origine porte un marqueur et l’infobulle « Fichier d’origine, lu là où il est », pour que tu ne la prennes pas pour une copie.
+- **Une copie** : Escouade copie le fichier sous son vrai nom, par morceaux de 4 Mo au plus, dans son dossier de données (`attachments/<agent>/`, voir [les données locales](data)), hors de ton dépôt. Claude Code lit ce dossier sans rien demander. La copie est faite quand le chemin d’origine est inconnu (sous Linux et macOS, et pour une capture collée du presse-papiers, qui n’est pas un fichier du disque), quand tu désactives « Joindre le fichier d’origine », pour les tickets (leur agent lit le fichier plus tard, quand l’original peut avoir bougé ou disparu) et pour la vue Claude Code (son processus est lancé une fois, sans moyen de lui ouvrir un dossier de plus).
+
+> [!NOTE]
+> Que Claude Code lise sans rien demander le dossier des copies a été vérifié avec le vrai Claude Code (2.1.301). L’autorisation d’un fichier d’origine par Escouade l’a été avec un faux Claude Code dans les tests automatiques (le vrai envoie bien le chemin exact du message dans sa demande) ; le chemin traduit sous WSL n’a pas été essayé en vrai.
+
+### Taille, gros textes et réglages
+
+- **Taille.** Aucune limite par défaut. Un fichier de plus de 200 Mo porte un avertissement (une marque « ! » sur sa puce, dont l’infobulle dit « Gros fichier : 250 Mo, copié sur le disque », ou « … joint là où il est, sans copie » pour un fichier d’origine), mais il se joint. Un fichier vide aussi. Tu peux fixer une taille maximale : au-delà, le fichier est refusé.
+- **Texte de plus de 256 Ko.** Par défaut, il part par chemin comme les autres fichiers. Tu peux le faire refuser, comme avant, en réglant « Texte de plus de 256 Ko » sur « Refusé » ; cela vaut aussi dans la fenêtre d’un ticket et dans la vue Claude Code.
+- **Réglages.** Les cinq réglages du groupe « Pièces jointes » (« Taille maximale d’un fichier joint », « Avertir au-delà de », « Joindre le fichier d’origine », « Texte de plus de 256 Ko » et « Purger les copies après ») sont dans [Réglages › Claude Code](settings-claude-code#pieces-jointes), avec leurs valeurs par défaut.
+
+### Effacer les fichiers joints
+
+- La croix de la puce efface la copie, ou arrête celle qui est en cours. Pour un fichier d’origine, elle ne retire que la puce.
+- Les copies d’un agent partent avec lui quand tu le supprimes. Celles d’un projet partent quand tu le supprimes pour de bon : fermer un projet les garde avec son historique, et la taille de cet historique (dans Réglages › Projets) les compte aussi, comme les images de ses tickets. Celles d’un ticket partent avec le ticket.
+- Si tu règles la purge, Escouade efface les copies plus vieilles que le nombre de jours choisi, au démarrage puis chaque heure. Par défaut, rien n’est purgé.
+- Escouade n’efface jamais un fichier d’origine.
+- Pour chaque agent, Escouade garde, avec lui, la liste des fichiers d’origine qu’elle l’a autorisé à lire (200 au plus, les plus récents). L’interface ne montre pas encore cette liste et ne permet pas d’en retirer un fichier ; supprimer l’agent l’efface.
 
 ### Mentionner un fichier avec @
 
@@ -65,7 +101,7 @@ Au tout début d’un message, `/` ouvre la liste des commandes que Claude Code 
 
 ### Les brouillons
 
-Ce que tu écris est gardé séparément pour chaque agent : passer à un autre agent puis revenir retrouve ton texte. Le texte survit aussi à un redémarrage, à une mise à jour ou à un rechargement de la fenêtre (il est enregistré un instant après la dernière frappe). Les pièces jointes, elles, restent en mémoire : elles disparaissent au redémarrage. Un brouillon est effacé quand le message part, ou quand l’agent est supprimé. Si l’envoi échoue, le message revient dans le champ et une erreur s’affiche.
+Ce que tu écris est gardé séparément pour chaque agent : passer à un autre agent puis revenir retrouve ton texte. Le texte survit aussi à un redémarrage, à une mise à jour ou à un rechargement de la fenêtre (il est enregistré un instant après la dernière frappe). Les pièces jointes, elles, restent en mémoire : leurs puces disparaissent au redémarrage (la copie d’un fichier envoyé par chemin reste sur le disque, avec celles de l’agent). Un brouillon est effacé quand le message part, ou quand l’agent est supprimé. Si l’envoi échoue, le message revient dans le champ et une erreur s’affiche.
 
 ### Modèle, effort, mode et compte
 

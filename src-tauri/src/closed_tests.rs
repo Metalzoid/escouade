@@ -26,6 +26,7 @@ fn draft(title: &str) -> TicketDraft {
         after: Vec::new(),
         branch: String::new(),
         images: None,
+        files: None,
     }
 }
 
@@ -1538,6 +1539,97 @@ async fn the_size_of_a_closed_project_is_counted_when_it_is_written_not_each_tim
 
     let (re, _app) = restarted(&h);
     assert_eq!(re.closed_projects()[0].size, size + 1000);
+}
+
+#[tokio::test]
+async fn the_size_of_a_closed_project_counts_the_copies_of_the_files_joined_to_its_agents() {
+    let h = harness("closed-agent-files-size");
+    let (p, _) = h.project(false).await;
+    let a = agent_that_talked(&h, &p.id).await;
+    let archived = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.archive_agent(&archived, true).await.unwrap();
+    // Two copies of an agent, one of an archived agent of the project, one of another owner.
+    crate::attachfiles_tests::copy(&h, &a, "rapport.xlsx", &vec![7u8; 600_000]);
+    crate::attachfiles_tests::copy(&h, &a, "autre.zip", &vec![8u8; 300_000]);
+    crate::attachfiles_tests::copy(&h, &archived, "vieux.bin", &vec![9u8; 100_000]);
+    crate::attachfiles_tests::copy(&h, "draft", "brouillon.bin", &vec![1u8; 5_000_000]);
+    close(&h, &p.id).await;
+    let size = h.core.closed_projects()[0].size;
+    // Closing keeps them, and the history counts them (not the drafts', which are no agent's).
+    assert!(h.core.data.agent_files(&a).is_dir());
+    assert!(size >= 1_000_000, "{size}");
+    assert!(size < 2_000_000, "{size}");
+    // Read again at the next start, the same.
+    let (re, _app) = restarted(&h);
+    assert_eq!(re.closed_projects()[0].size, size);
+}
+
+#[tokio::test]
+async fn closing_a_project_keeps_the_files_of_its_tickets_and_erasing_its_history_removes_them() {
+    use crate::tickets::DraftFile;
+    let h = harness("closed-ticket-files");
+    let (p, r) = h.project(false).await;
+    quiet_board(&h, &p.id);
+    let copy = crate::attachfiles_tests::copy(&h, "draft", "rapport.xlsx", &vec![7u8; 1_000_000]);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![DraftFile {
+                    name: copy.name,
+                    path: copy.path,
+                    ..Default::default()
+                }]),
+                ..draft("Avec fichier")
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    let (uniq, name) = t.files[0].file.split_once('/').unwrap();
+    let file = h.core.data.ticket_files(&t.id).join(uniq).join(name);
+    close(&h, &p.id).await;
+    // Closing keeps them, and the size of the history counts them (one folder below the ticket's).
+    assert_eq!(std::fs::metadata(&file).unwrap().len(), 1_000_000);
+    assert!(h.core.closed_projects()[0].size >= 1_000_000);
+    // The project added again has its ticket with its file, where it was.
+    add_again(&h, &r).await;
+    assert_eq!(h.core.ticket(&t.id).unwrap().files, t.files);
+    assert!(file.is_file());
+    // Closed, and its history erased for good: the files go with it.
+    close(&h, &p.id).await;
+    h.core.erase_closed_project(&p.id).unwrap();
+    assert!(!dir.exists());
+}
+
+#[tokio::test]
+async fn removing_a_project_for_good_removes_the_files_of_its_tickets() {
+    use crate::tickets::DraftFile;
+    let h = harness("closed-ticket-files-erase");
+    let (p, _) = h.project(false).await;
+    quiet_board(&h, &p.id);
+    let copy = crate::attachfiles_tests::copy(&h, "draft", "rapport.xlsx", b"xlsx");
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![DraftFile {
+                    name: copy.name,
+                    path: copy.path,
+                    ..Default::default()
+                }]),
+                ..draft("Avec fichier")
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert!(dir.join("files").is_dir());
+    h.core.remove_project(&p.id, true).await.unwrap();
+    assert!(!dir.exists());
+    assert!(h.core.closed_projects().is_empty());
 }
 
 #[tokio::test]

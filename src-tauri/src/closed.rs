@@ -79,15 +79,19 @@ impl ClosedEntry {
     /// The entry of a history just written or read from its file.
     fn of(closed: &ClosedProject, data: &DataDir) -> Self {
         let conversations = data.conversations();
+        // The logs of its agents, and the copies of the files joined to their messages (they stay
+        // with the history: closing a project does not remove them).
         let logs: u64 = closed
             .agents
             .iter()
             .filter(|a| paths::is_plain_id(&a.id))
             .map(|a| {
-                size_of(&conv::log_path(&conversations, &a.id)) + size_of(&data.setup_log(&a.id))
+                size_of(&conv::log_path(&conversations, &a.id))
+                    + size_of(&data.setup_log(&a.id))
+                    + size_of_dir(&data.agent_files(&a.id))
             })
             .sum();
-        // The images of its tickets, kept in their folders with it.
+        // The images and the files of its tickets, kept in their folders with it.
         let images: u64 = closed
             .tickets
             .iter()
@@ -221,10 +225,21 @@ fn size_of(path: &Path) -> u64 {
     std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
 }
 
-/// What the files right in the folder `dir` take (a ticket's images: no folder below); none if it is not there.
+/// What the files in the folder `dir` take, those of the folders below it too (a ticket's images
+/// are right in its folder, its other files in `files/<uniq>/`); none if it is not there. A link is
+/// not followed.
 fn size_of_dir(dir: &Path) -> u64 {
     std::fs::read_dir(dir)
-        .map(|entries| entries.flatten().map(|e| size_of(&e.path())).sum())
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| match e.file_type() {
+                    Ok(t) if t.is_dir() => size_of_dir(&e.path()),
+                    Ok(t) if t.is_file() => size_of(&e.path()),
+                    _ => 0,
+                })
+                .sum()
+        })
         .unwrap_or(0)
 }
 
@@ -634,9 +649,10 @@ impl<R: Runtime> Core<R> {
             .map(|entry| entry.info)
     }
 
-    /// The history of a closed project gone for good: its conversations, its setups' logs and its
-    /// file, and its place in the accounts' « Réservé aux projets ». Its worktrees and its
-    /// statistics stay, as when a project is closed. A file that cannot be read goes alone.
+    /// The history of a closed project gone for good: its conversations, its setups' logs, the
+    /// files joined to its agents' messages and its file, and its place in the accounts' « Réservé
+    /// aux projets ». Its worktrees and its statistics stay, as when a project is closed. A file
+    /// that cannot be read goes alone.
     pub fn erase_closed_project(self: &Arc<Self>, id: &str) -> Result<()> {
         let entry = self
             .closed_entries()
@@ -691,9 +707,12 @@ impl<R: Runtime> Core<R> {
         for id in agent_ids.iter().filter(|id| paths::is_plain_id(id)) {
             remove_if_there(&conv::log_path(&conversations, id));
             remove_if_there(&self.data.setup_log(id));
+            // The files joined to its messages (copies only: a file of the user's own stays).
+            crate::attachfiles::remove_agent_files(&self.data, id);
         }
-        // The images of its tickets. A doubtful id is left out: `ticket_dir` puts every such
-        // ticket in one shared folder (`tickets/_`), no one ticket's own.
+        // The images and the files of its tickets (their folder holds both). A doubtful id is left
+        // out: `ticket_dir` puts every such ticket in one shared folder (`tickets/_`), no one
+        // ticket's own.
         for id in ticket_ids.iter().filter(|id| paths::is_plain_id(id)) {
             ticketimages::remove(&self.data.ticket_dir(id));
         }

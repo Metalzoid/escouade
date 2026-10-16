@@ -14,6 +14,7 @@ use crate::isola;
 use crate::model::*;
 use crate::telemetry::Event;
 use crate::testlaunch;
+use crate::ticketfiles;
 use crate::ticketimages;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
@@ -39,7 +40,7 @@ pub(crate) fn error_reason(e: &anyhow::Error) -> String {
     board::error_blocked(i18n::ui(), &error_line(e))
 }
 
-/// The folder of a ticket and its images go, off the async workers.
+/// The folder of a ticket, its images and its files go, off the async workers.
 async fn remove_images(dir: PathBuf) {
     if let Err(e) = tokio::task::spawn_blocking(move || ticketimages::remove(&dir)).await {
         log::warn!("ticket images: not removed: {e}");
@@ -288,6 +289,9 @@ pub struct TicketDraft {
     /// Its images, the whole list, in their order; None: they stay as they are (the tools of the
     /// MCP server, the imports).
     pub images: Option<Vec<DraftImage>>,
+    /// Its files other than images, the whole list, in their order; None: they stay as they are
+    /// (the tools of the MCP server, the imports).
+    pub files: Option<Vec<DraftFile>>,
 }
 
 /// An image of a ticket's form: one the ticket has (`file`, in its folder), or one pasted or
@@ -299,6 +303,16 @@ pub struct DraftImage {
     pub media_type: String,
     pub file: String,
     pub data: String,
+}
+
+/// A file of a ticket's form: one the ticket has (`file`, `<uniq>/<name>` in its `files` folder;
+/// no `path`), or a copy the form made in the drafts (`path`; no `file`).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DraftFile {
+    pub name: String,
+    pub file: String,
+    pub path: String,
 }
 
 impl<R: Runtime> Core<R> {
@@ -387,7 +401,20 @@ impl<R: Runtime> Core<R> {
         let id = new_id();
         let dir = self.data.ticket_dir(&id);
         let checked = ticketimages::check(&dir, &[], d.images.as_deref().unwrap_or_default())?;
+        let files = ticketfiles::check(
+            &self.data.drafts_files(),
+            &dir,
+            &[],
+            d.files.as_deref().unwrap_or_default(),
+            self.attach_cap(),
+        )?;
         let current = git::head_branch(&project.path).await;
+        // Refused here, before a file is moved out of the drafts, when the key will be refused for
+        // want of a branch (below, under the lock): a copy moved for a ticket that is not made is
+        // gone, and the form's chip would point at nothing when the user tries again.
+        if project.board.target.is_empty() && current.is_empty() {
+            bail!(board::no_branch(i18n::ui()));
+        }
         // Written before a key is used up too (a disk that refuses them takes none), and off the
         // async workers.
         let images = if checked.is_empty() {
@@ -395,6 +422,24 @@ impl<R: Runtime> Core<R> {
         } else {
             let dir = dir.clone();
             tokio::task::spawn_blocking(move || ticketimages::write(&dir, checked)).await??
+        };
+        // The same for the files, moved out of the drafts: one that cannot be leaves what the
+        // images wrote no more than it leaves itself.
+        let files = if files.is_empty() {
+            Vec::new()
+        } else {
+            let folder = dir.clone();
+            let placed = tokio::task::spawn_blocking(move || ticketfiles::place(&folder, files))
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|placed| placed);
+            match placed {
+                Ok(files) => files,
+                Err(e) => {
+                    remove_images(dir).await;
+                    return Err(e);
+                }
+            }
         };
         let key = (|| -> Result<String> {
             let mut projects = self.projects.write();
@@ -434,6 +479,7 @@ impl<R: Runtime> Core<R> {
             external,
             branch,
             images,
+            files,
             ..Default::default()
         };
         let pushed = {
@@ -506,9 +552,32 @@ impl<R: Runtime> Core<R> {
         if !branch.is_empty() && branch == target.trim() {
             bail!(target_branch_refusal(i18n::ui()));
         }
-        // The images pasted are written first, out of the lock. Then only this save's files go:
-        // those it wrote when it is refused, those it took away once it is done.
+        // The images pasted are written first, out of the lock, and the files joined moved out of
+        // the drafts. Then only this save's files go: those it wrote when it is refused, those it
+        // took away once it is done. Everything is checked before anything is written.
         let dir = self.data.ticket_dir(id);
+        // A ticket that left « À faire » is refused before a copy is moved out of the drafts: one
+        // moved for a save that fails is gone, and the form's chip would point at nothing.
+        if d.files.is_some() && self.ticket(id)?.column != Column::Todo {
+            bail!(tr!(
+                "Seul un ticket « À faire » se modifie.",
+                "Only a ticket in “To do” can be edited."
+            ));
+        }
+        let checked_files = match &d.files {
+            Some(list) => {
+                let had = self.ticket(id)?.files;
+                let checked = ticketfiles::check(
+                    &self.data.drafts_files(),
+                    &dir,
+                    &had,
+                    list,
+                    self.attach_cap(),
+                )?;
+                Some((checked, had))
+            }
+            None => None,
+        };
         let (images, written) = match &d.images {
             Some(list) => {
                 let had = self.ticket(id)?.images;
@@ -519,6 +588,26 @@ impl<R: Runtime> Core<R> {
                     .map(|i| i.file.clone())
                     .collect();
                 (Some(images), written)
+            }
+            None => (None, Vec::new()),
+        };
+        let (files, placed) = match checked_files {
+            Some((checked, had)) => {
+                match ticketfiles::place(&dir, checked) {
+                    Ok(files) => {
+                        let placed = files
+                            .iter()
+                            .filter(|f| !had.iter().any(|h| h.file == f.file))
+                            .map(|f| f.file.clone())
+                            .collect();
+                        (Some(files), placed)
+                    }
+                    Err(e) => {
+                        // The images this save wrote go as they do when it is refused.
+                        ticketimages::let_go(&dir, &written);
+                        return Err(e);
+                    }
+                }
             }
             None => (None, Vec::new()),
         };
@@ -546,22 +635,35 @@ impl<R: Runtime> Core<R> {
                 t.after = after;
                 t.branch = branch;
                 let before = images.map(|i| std::mem::replace(&mut t.images, i));
-                Ok((t.clone(), before))
+                let files_before = files.map(|f| std::mem::replace(&mut t.files, f));
+                Ok((t.clone(), before, files_before))
             },
         );
         match &saved {
-            Ok((t, Some(before))) => {
-                let gone: Vec<String> = before
-                    .iter()
-                    .filter(|b| !t.images.iter().any(|i| i.file == b.file))
-                    .map(|b| b.file.clone())
-                    .collect();
-                ticketimages::let_go(&dir, &gone);
+            Ok((t, before, files_before)) => {
+                if let Some(before) = before {
+                    let gone: Vec<String> = before
+                        .iter()
+                        .filter(|b| !t.images.iter().any(|i| i.file == b.file))
+                        .map(|b| b.file.clone())
+                        .collect();
+                    ticketimages::let_go(&dir, &gone);
+                }
+                if let Some(before) = files_before {
+                    let gone: Vec<String> = before
+                        .iter()
+                        .filter(|b| !t.files.iter().any(|f| f.file == b.file))
+                        .map(|b| b.file.clone())
+                        .collect();
+                    ticketfiles::let_go(&dir, &gone);
+                }
             }
-            Ok((_, None)) => {}
-            Err(_) => ticketimages::let_go(&dir, &written),
+            Err(_) => {
+                ticketimages::let_go(&dir, &written);
+                ticketfiles::let_go(&dir, &placed);
+            }
         }
-        let (ticket, _) = saved?;
+        let (ticket, ..) = saved?;
         self.schedule();
         Ok(ticket)
     }
@@ -747,12 +849,12 @@ impl<R: Runtime> Core<R> {
             project_id: t.project_id.clone(),
         });
         self.request_save();
-        if !t.images.is_empty() {
-            // The state without the ticket is on disk before its images go: a crash in between
-            // would bring it back without them. Off the async workers, as the saver does.
+        if !t.images.is_empty() || !t.files.is_empty() {
+            // The state without the ticket is on disk before its images and files go: a crash in
+            // between would bring it back without them. Off the async workers, as the saver does.
             let c = self.clone();
             if let Err(e) = tokio::task::spawn_blocking(move || c.save_now()).await {
-                log::warn!("{}: state not saved before its images go: {e}", t.key);
+                log::warn!("{}: state not saved before its files go: {e}", t.key);
             }
         }
         remove_images(self.data.ticket_dir(id)).await;
@@ -1368,11 +1470,14 @@ impl<R: Runtime> Core<R> {
             .ok()
             .and_then(|h| h.lock().setup_failure.take());
         let (images, missing) = self.ticket_attachments(t).await;
-        let first = board::with_setup_failure(
+        // After the text and the images, a line for each of its other files.
+        let first = self.with_ticket_files(
             lang,
+            &agent_id,
+            t,
             board::first_message_with(lang, t, images.len(), &missing),
-            failure.as_deref(),
         );
+        let first = board::with_setup_failure(lang, first, failure.as_deref());
         self.send_message(&agent_id, first, images).await
     }
 
@@ -1757,13 +1862,11 @@ impl<R: Runtime> Core<R> {
         match t.agent_id.as_deref().and_then(|a| self.live_agent(a)) {
             Some(agent) => {
                 // Its start failed once it was made: the ticket was never given to it, nor its
-                // images.
+                // images, nor its files.
                 let (text, images) = if agent.prompts == 0 {
                     let (images, missing) = self.ticket_attachments(&t).await;
-                    (
-                        board::first_message_with(lang, &t, images.len(), &missing),
-                        images,
-                    )
+                    let text = board::first_message_with(lang, &t, images.len(), &missing);
+                    (self.with_ticket_files(lang, &agent.id, &t, text), images)
                 } else {
                     (board::resume_message(lang, &t.key), Vec::new())
                 };

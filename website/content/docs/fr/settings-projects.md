@@ -135,7 +135,7 @@ Fermer est refusé tant que la validation d’un ticket du projet tourne : « L
 
 ## Projets fermés
 
-Tant qu’aucun projet n’a été fermé en gardant son historique, ce groupe n’existe pas. Ensuite, « Projets fermés » liste ces projets, du plus récemment fermé au plus ancien, sous la note « Leur historique est gardé : ajouter un projet dans leur dossier le retrouve. ». Chaque ligne donne la couleur du projet, son nom, son dossier, la place que son historique prend sur le disque et sa dernière activité (« dernière activité le … »), avec deux boutons : « Rouvrir » et « Effacer l’historique… ».
+Tant qu’aucun projet n’a été fermé en gardant son historique, ce groupe n’existe pas. Ensuite, « Projets fermés » liste ces projets, du plus récemment fermé au plus ancien, sous la note « Leur historique est gardé : ajouter un projet dans leur dossier le retrouve. ». Chaque ligne donne la couleur du projet, son nom, son dossier, la place que son historique prend sur le disque (ses conversations, les images et les fichiers de ses tickets, et les fichiers joints à ses agents compris) et sa dernière activité (« dernière activité le … »), avec deux boutons : « Rouvrir » et « Effacer l’historique… ».
 
 « Rouvrir » ouvre la fenêtre « Nouveau projet » déjà sur le dossier de ce projet, lu tout de suite, avec l’historique retrouvé. C’est celui de cette ligne qui revient, même quand plusieurs projets fermés se trouvaient dans le même dossier (sans « Rouvrir », c’est le plus récemment fermé). Si tu changes le chemin dans la fenêtre, cet historique est abandonné : le nouveau dossier a le sien, ou n’en a pas. « Annuler » ferme la fenêtre, sans rien rouvrir ni effacer.
 

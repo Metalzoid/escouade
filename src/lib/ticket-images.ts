@@ -25,15 +25,21 @@ export interface FormImage {
  */
 export const MAX_IMAGES = 20;
 
-/** Reads an image pasted or dropped in the form, `have` being those it has already; rejects with the reason to show. */
+/** The file is no image: its form attaches it as a file instead (a PDF, or a « .png » that holds something else). */
+export class NotImageError extends Error {}
+
+/**
+ * Reads an image pasted or dropped in the form, `have` being those it has already; rejects with the reason to show (a
+ * `NotImageError` for a file that is none).
+ */
 export async function readTicketImage(f: File, have: FormImage[]): Promise<FormImage> {
-  if (!imageType(f)) throw new Error(t('board.form.images.notImage', { name: f.name }));
+  if (!imageType(f)) throw new NotImageError(t('board.form.images.notImage', { name: f.name }));
   // Before it is read: one more has no place, whatever its size.
   if (have.length >= MAX_IMAGES) throw new Error(t('board.form.images.tooMany', { name: f.name, max: MAX_IMAGES }));
   // Its size, as the chat refuses it.
   const a = await readAttachment(f);
   const mediaType = sniff(a.data);
-  if (!mediaType) throw new Error(t('board.form.images.notImage', { name: f.name }));
+  if (!mediaType) throw new NotImageError(t('board.form.images.notImage', { name: f.name }));
   if (have.reduce((n, x) => n + x.size, a.size) > MAX_TOTAL) {
     throw new Error(t('board.form.images.totalTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }));
   }

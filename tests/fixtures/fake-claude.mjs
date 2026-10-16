@@ -52,6 +52,8 @@
 // own thread asks a permission (`can_use_tool` with its `agent_id`, request "req_subperm"); "sous-agent long" then runs
 // until a `stop_task` of its task ("fakelong-agent", logged to <log>.control.jsonl), "sous-agent fini" hands back its
 // report (`handback_report`) once the permission is answered.
+// "lire-fichier <path>" in the message makes it ask the permission to `Read` that file, "modifier-fichier <path>" to `Edit` it
+// (the rest of the first line is the path); answered, it says « Read : allow » (or deny, Edit…) and ends the turn.
 // "commande de fond 20s", "surveillance de fond 20s" and "commande premier plan 20s" run a command, a `Monitor` and a
 // command that goes to the background from the foreground, as Claude Code 2.1.301 does (ESC-14): see bgRun (the output
 // grows by a line every 200 ms, answers `get_task_output`, ends by itself after that long or by a `stop_task`).
@@ -1586,8 +1588,51 @@ function startSession() {
     result();
   }
 
+  // The folders Claude Code reads without asking: its own and those of --add-dir (as the app gives them).
+  const readable = [process.cwd(), ...argv.filter((a) => a.startsWith('--add-dir=')).map((a) => a.slice('--add-dir='.length))];
+  const within = (file, dir) => {
+    const rel = path.relative(dir, file);
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+
+  // Files attached by path (« Fichier joint : <nom>, <chemin> »), read with the Read tool as Claude would: one outside the
+  // folders above asks for a permission first (which the app answers by itself for a file it attached by its origin).
+  function readAttached(files, sizes = []) {
+    const next = files.shift();
+    if (!next) {
+      streamText(`Lu : ${sizes.join(', ')}`);
+      return result();
+    }
+    const tuid = `toolu_r${msg}-${sizes.length}`;
+    const done = (allowed) => {
+      let size = 'refusé';
+      if (allowed) {
+        try {
+          size = `${next.name}=${fs.statSync(next.file).size}`;
+        } catch {
+          size = `${next.name}=introuvable`;
+        }
+      }
+      toolResult(tuid, allowed ? size : 'Refusé');
+      readAttached(files, [...sizes, allowed ? size : `${next.name}=refusé`]);
+    };
+    assistant({ type: 'tool_use', id: tuid, name: 'Read', input: { file_path: next.file } });
+    if (readable.some((dir) => within(next.file, dir))) return done(true);
+    pendingAnswer = { id: `req_read${msg}-${sizes.length}`, tuid, kind: 'read', then: (r) => done(r.behavior === 'allow') };
+    out({
+      type: 'control_request',
+      request_id: pendingAnswer.id,
+      request: { subtype: 'can_use_tool', tool_name: 'Read', input: { file_path: next.file }, tool_use_id: tuid },
+    });
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    const attached = [...text.matchAll(/^(?:Fichier joint : |Attached file: )(.+), (.+)$/gm)].map((m) => ({
+      name: m[1],
+      file: m[2].trim(),
+    }));
+    if (attached.length) return readAttached(attached);
     if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('crash')) process.exit(3);
     if (text.includes('grandchild')) {
@@ -1749,6 +1794,23 @@ function startSession() {
       result();
       return;
     }
+    if (text.includes('lire-fichier ') || text.includes('modifier-fichier ')) {
+      // A file the agent wants to read (`Read`) or to change (`Edit`): Claude Code asks the permission, unless the
+      // host answers it by itself.
+      const read = text.includes('lire-fichier ');
+      const tool = read ? 'Read' : 'Edit';
+      const file = new RegExp(`${read ? 'lire' : 'modifier'}-fichier (.+)`).exec(text)[1].trim();
+      const tuid = `toolu_f${msg}`;
+      const input = read ? { file_path: file } : { file_path: file, old_string: 'a', new_string: 'b' };
+      assistant({ type: 'tool_use', id: tuid, name: tool, input });
+      pendingAnswer = { id: `req_f${msg}`, tuid, kind: 'file', tool };
+      out({
+        type: 'control_request',
+        request_id: `req_f${msg}`,
+        request: { subtype: 'can_use_tool', tool_name: tool, input, tool_use_id: tuid },
+      });
+      return;
+    }
     if (text.includes('exit plan')) {
       // The plan mode's end: ExitPlanMode asks for the plan to be approved (a permission).
       const tuid = `toolu_x${msg}`;
@@ -1837,11 +1899,15 @@ function startSession() {
     pendingAnswer = null;
     const r = resp.response ?? {};
     if (p.kind === 'subagent') return subagentAnswered(p, r);
+    if (p.kind === 'read') return p.then(r);
     if (p.kind === 'question') {
       const answers = r.updatedInput?.answers ?? {};
       toolResult(p.tuid, `Réponses : ${JSON.stringify(answers)}`, { tool_use_result: { answers } });
       if (p.then) return p.then();
       streamText(`Choix retenu : ${Object.values(answers).join(', ')}`);
+    } else if (p.kind === 'file') {
+      toolResult(p.tuid, r.behavior === 'allow' ? 'contenu du fichier' : `Refusé : ${r.message}`);
+      streamText(`${p.tool} : ${r.behavior}`);
     } else if (r.behavior === 'allow' && p.plan) {
       toolResult(p.tuid, 'Plan approuvé');
       streamText(r.updatedPermissions ? 'Plan approuvé (édits acceptés).' : 'Plan approuvé.');

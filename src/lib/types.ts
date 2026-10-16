@@ -14,6 +14,16 @@ export interface Settings {
   /** « Me prévenir pour »: what the chime and the system notifications are for. */
   notifyFor: NotifyFor;
   idleStopMinutes: number;
+  /** « Taille maximale d'un fichier joint », in MB: 0 = no limit. */
+  attachMaxMb: number;
+  /** « Avertir au-delà de », in MB: a file this big is attached with a warning; 0 = never. */
+  attachWarnMb: number;
+  /** « Joindre le fichier d'origine »: a file dropped is attached where it is, not copied (when its path is known). */
+  attachOrigin: boolean;
+  /** « Texte de plus de 256 Ko »: sent by its path like any file, or refused. */
+  attachBigText: 'path' | 'refuse';
+  /** « Purger les copies après », in days: 0 = kept as long as their owner (agent, project, ticket). */
+  attachKeepDays: number;
   pwshPath: string;
   bashPath: string;
   wslDistro: string;
@@ -397,6 +407,27 @@ export interface Ticket {
   effort: string;
   /** The images pasted or dropped in its form, in their order: its agent gets them with its first message. */
   images: TicketImage[];
+  /** The files attached in its form that are no image it can show (any format, any size): its agent gets their paths with its first message. */
+  files: TicketFile[];
+}
+
+/** A file of a ticket other than an image: a copy in the ticket's folder, `files/<file>`. */
+export interface TicketFile {
+  name: string;
+  /** `<uniq>/<name>`, under the ticket's `files/` folder. */
+  file: string;
+  /** In bytes. */
+  size: number;
+}
+
+/**
+ * A file a ticket's form sends: one the ticket has (`file`, `path` empty), or a copy the form made in the drafts (`path`, the
+ * copy's own, `file` empty). The backend moves the copies into the ticket's folder and erases the files left out of the list.
+ */
+export interface DraftFile {
+  name: string;
+  file: string;
+  path: string;
 }
 
 /** An image of a ticket: its content is a file of the ticket's folder, never in the tickets' JSON. */
@@ -452,6 +483,8 @@ export interface TicketDraft {
   branch?: string;
   /** Its images, the whole list; absent: they stay as they are. */
   images?: DraftImage[];
+  /** Its other files, the whole list; absent: they stay as they are. */
+  files?: DraftFile[];
 }
 
 export interface RecipeStep {
@@ -1388,4 +1421,18 @@ export interface Attachment {
   name: string;
   mediaType: string;
   data: string;
+}
+
+/** A file attached to a message by its path (any file): a copy kept by the backend, or the original (`origin`). */
+export interface AttachedFile {
+  /** Shown, and given to Claude. */
+  name: string;
+  /** On this machine (Windows here). */
+  path: string;
+  /** The same, as the agent's Claude Code reads it (a Linux path under WSL); empty for a draft's. */
+  claudePath: string;
+  /** In bytes. */
+  size: number;
+  /** The file itself: nothing was copied. */
+  origin: boolean;
 }

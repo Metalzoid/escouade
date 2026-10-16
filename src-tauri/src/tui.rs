@@ -1262,6 +1262,9 @@ impl<R: Runtime> Core<R> {
         }
         self.ready_for_wsl(&program, h);
         let mut args = args;
+        // The folder of the files joined to its messages, read without a question: the window
+        // copies a file dropped on its terminal there (`attachfiles`) and types its path.
+        args.extend(self.add_dir_arg(id));
         let access = self.agent_access(id);
         args.extend(access.args());
         // Its hooks, and Escouade's server kept out of it when its tools are refused.

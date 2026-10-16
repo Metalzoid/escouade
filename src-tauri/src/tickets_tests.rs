@@ -14,7 +14,7 @@ use crate::core_tests::{
     wt_step, Harness,
 };
 use crate::model::*;
-use crate::tickets::{error_reason, DraftImage, TicketDraft};
+use crate::tickets::{error_reason, DraftFile, DraftImage, TicketDraft};
 use crate::usage::Reading;
 use base64::Engine;
 use serde_json::{json, Value};
@@ -33,6 +33,7 @@ pub(crate) fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDra
         after: Vec::new(),
         branch: String::new(),
         images: None,
+        files: None,
     }
 }
 
@@ -100,6 +101,59 @@ fn files_of(dir: &Path) -> Vec<String> {
         .unwrap_or_default();
     names.sort();
     names
+}
+
+/// A file joined in a ticket's form, as the window does: copied in the drafts at once, then named
+/// by the path of that copy.
+fn joined(h: &Harness, name: &str, bytes: &[u8]) -> DraftFile {
+    let copy = crate::attachfiles_tests::copy(h, "draft", name, bytes);
+    DraftFile {
+        name: copy.name,
+        path: copy.path,
+        ..Default::default()
+    }
+}
+
+/// A file the ticket has, kept by its form.
+fn kept_file(f: &TicketFile) -> DraftFile {
+    DraftFile {
+        name: f.name.clone(),
+        file: f.file.clone(),
+        ..Default::default()
+    }
+}
+
+/// Where the ticket's file is (`<uniq>/<name>` under the ticket's `files` folder).
+fn file_path(h: &Harness, ticket_id: &str, f: &TicketFile) -> PathBuf {
+    let (uniq, name) = f.file.split_once('/').unwrap();
+    h.core.data.ticket_files(ticket_id).join(uniq).join(name)
+}
+
+/// The `<uniq>/<name>` of every file under the ticket's `files` folder, sorted.
+fn ticket_files_on_disk(h: &Harness, ticket_id: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let root = h.core.data.ticket_files(ticket_id);
+    for uniq in files_of(&root) {
+        for name in files_of(&root.join(&uniq)) {
+            out.push(format!("{uniq}/{name}"));
+        }
+    }
+    out
+}
+
+/// What is left in the drafts' folder: the copies a form made and nobody took.
+fn drafts_left(h: &Harness) -> Vec<String> {
+    files_of(&h.core.data.drafts_files())
+}
+
+/// `file` as old as `days` days.
+fn aged(file: &Path, days: u64) {
+    std::fs::File::options()
+        .write(true)
+        .open(file)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(days * 24 * 3600))
+        .unwrap();
 }
 
 /// `draft`, coming after the tickets `after`.
@@ -7226,4 +7280,982 @@ async fn a_ticket_agent_on_a_model_that_has_no_auto_mode_goes_in_the_default_mod
     assert_eq!(launched(board_haiku), said("haiku", "default", None));
     assert_eq!(launched(app_haiku), said("haiku", "default", None));
     assert_eq!(launched(plan_haiku), said("haiku", "plan", None));
+}
+
+#[tokio::test]
+async fn a_ticket_takes_the_files_of_its_form_out_of_the_drafts_into_its_own_folder() {
+    let h = harness("tkf-create");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let (sheet, zip) = (
+        joined(&h, "budget 2026.xlsx", b"xlsx"),
+        joined(&h, "sources.zip", b"zip!!"),
+    );
+    assert_eq!(drafts_left(&h).len(), 2);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![sheet.clone(), zip.clone()]),
+                ..draft("Joindre les pièces", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    // Their names and sizes, in the form's order, no image among them.
+    assert_eq!(
+        t.files
+            .iter()
+            .map(|f| (f.name.as_str(), f.size))
+            .collect::<Vec<_>>(),
+        [("budget 2026.xlsx", 4), ("sources.zip", 5)]
+    );
+    assert!(t.images.is_empty());
+    // `<uniq>/<name>` in the ticket's folder, with what they held.
+    for (f, bytes) in t.files.iter().zip([b"xlsx".as_slice(), b"zip!!"]) {
+        let (uniq, name) = f.file.split_once('/').unwrap();
+        assert_eq!((uniq.len(), name), (8, f.name.as_str()));
+        assert_eq!(std::fs::read(file_path(&h, &t.id, f)).unwrap(), bytes);
+    }
+    assert_eq!(files_of(&h.core.data.ticket_dir(&t.id)), ["files"]);
+    // Moved, not copied: nothing is left in the drafts.
+    assert!(drafts_left(&h).is_empty(), "{:?}", drafts_left(&h));
+    assert!(!Path::new(&sheet.path).exists() && !Path::new(&zip.path).exists());
+    // The ticket as saved has them, and its JSON says them without their content.
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    let json = serde_json::to_string(&h.ticket(&t.id)).unwrap();
+    assert!(
+        json.contains("budget 2026.xlsx") && !json.contains("xlsx!"),
+        "{json}"
+    );
+    // Without a file, the JSON still has the field: the window reads `ticket.files`.
+    let bare = h
+        .core
+        .ticket_create(&p.id, draft("Sans fichier", &[], 5))
+        .await
+        .unwrap();
+    assert_eq!(serde_json::to_value(&bare).unwrap()["files"], json!([]));
+    assert!(!h.core.data.ticket_dir(&bare.id).exists());
+}
+
+#[tokio::test]
+async fn editing_a_ticket_keeps_the_files_it_names_adds_the_new_ones_and_erases_the_rest() {
+    let h = harness("tkf-update");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "a.zip", b"a"), joined(&h, "b.zip", b"b")]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    let (a, b) = (t.files[0].clone(), t.files[1].clone());
+    // Edited without a word of its files (the tools of the MCP server): it keeps them.
+    let same = h
+        .core
+        .ticket_update(&t.id, draft("Pièces, précisées", &[], 5))
+        .unwrap();
+    assert_eq!(same.files, t.files);
+    // The first kept, the second taken away, a third one joined.
+    let c = joined(&h, "c.zip", b"c!");
+    let edited = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&a), c.clone()]),
+                ..draft("Pièces, précisées", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        edited
+            .files
+            .iter()
+            .map(|f| (f.name.as_str(), f.size))
+            .collect::<Vec<_>>(),
+        [("a.zip", 1), ("c.zip", 2)]
+    );
+    assert_eq!(edited.files[0], a);
+    assert_eq!(
+        std::fs::read(file_path(&h, &t.id, &edited.files[1])).unwrap(),
+        b"c!"
+    );
+    // The second is erased with its folder, the third was moved out of the drafts.
+    assert!(!file_path(&h, &t.id, &b).exists());
+    assert!(!file_path(&h, &t.id, &b).parent().unwrap().exists());
+    assert!(drafts_left(&h).is_empty());
+    let mut left = vec![a.file.clone(), edited.files[1].file.clone()];
+    left.sort();
+    assert_eq!(ticket_files_on_disk(&h, &t.id), left);
+    // The order is the form's.
+    let moved = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&edited.files[1]), kept_file(&a)]),
+                ..draft("Pièces, précisées", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        moved
+            .files
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["c.zip", "a.zip"]
+    );
+    // All taken away: so is the ticket's folder.
+    let bare = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![]),
+                ..draft("Pièces, précisées", &[], 5)
+            },
+        )
+        .unwrap();
+    assert!(bare.files.is_empty());
+    assert!(!dir.exists());
+}
+
+#[tokio::test]
+async fn editing_the_images_of_a_ticket_leaves_its_files_and_the_other_way_round() {
+    let h = harness("tkf-with-images");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("capture.png", "image/png", PNG)]),
+                files: Some(vec![joined(&h, "a.zip", b"a")]),
+                ..draft("Les deux", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert_eq!((t.images.len(), t.files.len()), (1, 1));
+    // The images taken away: the folder stays, the file is there.
+    let no_images = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                images: Some(vec![]),
+                ..draft("Les deux", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        (no_images.images.len(), no_images.files.clone()),
+        (0, t.files.clone())
+    );
+    assert_eq!(files_of(&dir), ["files"]);
+    // The file taken away, an image back: the image stays, and so does the folder.
+    let image_only = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                images: Some(vec![new_image("capture.png", "image/png", PNG)]),
+                files: Some(vec![]),
+                ..draft("Les deux", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!((image_only.images.len(), image_only.files.len()), (1, 0));
+    assert_eq!(files_of(&dir), [image_only.images[0].file.clone()]);
+    // A ticket's folder deleted with the ticket takes both.
+    h.core.ticket_delete(&t.id).await.unwrap();
+    assert!(!dir.exists());
+}
+
+#[tokio::test]
+async fn a_path_that_is_not_a_copy_of_the_drafts_is_refused_and_a_refusal_uses_no_key() {
+    let h = harness("tkf-refused");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    // A file of the user's own, which no form may take away from where it is.
+    let own = h.dir.join("mes-documents");
+    std::fs::create_dir_all(&own).unwrap();
+    std::fs::write(own.join("secret.txt"), b"mine").unwrap();
+    let copy = joined(&h, "a.zip", b"zip");
+    let at = |path: &Path| DraftFile {
+        name: "x".into(),
+        path: path.to_string_lossy().into_owned(),
+        ..Default::default()
+    };
+    // The drafts' own folder reached by a way up: `<drafts>/<uniq>/../../../../mes-documents/…`
+    // is the user's file, out of the drafts.
+    let up = Path::new(&copy.path)
+        .parent()
+        .unwrap()
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("..")
+        .join("mes-documents")
+        .join("secret.txt");
+    assert!(up.is_file());
+    // A file of another ticket, which a form names by its path.
+    let other = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "autre.zip", b"other")]),
+                ..draft("Autre", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let theirs = file_path(&h, &other.id, &other.files[0]);
+    let refused = |file: DraftFile| {
+        let (core, id) = (h.core.clone(), p.id.clone());
+        async move {
+            core.ticket_create(
+                &id,
+                TicketDraft {
+                    files: Some(vec![file]),
+                    ..draft("Refusé", &[], 5)
+                },
+            )
+            .await
+            .unwrap_err()
+            .to_string()
+        }
+    };
+    for bad in [own.join("secret.txt"), up, theirs.clone()] {
+        let e = refused(at(&bad)).await;
+        assert_eq!(
+            e, "« x » n’est pas un fichier joint dans ce formulaire.",
+            "{bad:?}"
+        );
+    }
+    // A link of the drafts that leads to the user's folder.
+    let link = h.core.data.drafts_files().join("99999999");
+    if paths_link(&own, &link) {
+        let e = refused(at(&link.join("secret.txt"))).await;
+        assert!(e.contains("« x »"), "{e}");
+    }
+    // A file the ticket does not have, kept by name.
+    let e = refused(DraftFile {
+        name: "x".into(),
+        file: other.files[0].file.clone(),
+        ..Default::default()
+    })
+    .await;
+    assert_eq!(e, "« x » n’est pas un fichier de ce ticket.");
+    // Nothing moved, nothing taken: the user's file, the other ticket's, the copy in the drafts.
+    assert_eq!(std::fs::read(own.join("secret.txt")).unwrap(), b"mine");
+    assert_eq!(std::fs::read(&theirs).unwrap(), b"other");
+    assert!(Path::new(&copy.path).exists());
+    // None of them used a key up, nor left a folder.
+    assert_eq!(h.core.tickets.read().len(), 1);
+    assert_eq!(
+        files_of(&h.core.data.tickets()),
+        std::slice::from_ref(&other.id)
+    );
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![copy.clone()]),
+                ..draft("Accepté", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(t.key, "DEM-2");
+}
+
+/// A link (a junction on Windows) of `link` to the folder `target`; false when none can be made.
+fn paths_link(target: &Path, link: &Path) -> bool {
+    crate::paths::make_dir_link(target, link)
+}
+
+#[tokio::test]
+async fn an_edit_refuses_a_path_outside_the_drafts_and_leaves_the_ticket_as_it_was() {
+    let h = harness("tkf-refused-update");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "a.zip", b"a")]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let own = h.dir.join("secret.txt");
+    std::fs::write(&own, b"mine").unwrap();
+    let e = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![
+                    kept_file(&t.files[0]),
+                    DraftFile {
+                        name: "secret.txt".into(),
+                        path: own.to_string_lossy().into_owned(),
+                        ..Default::default()
+                    },
+                ]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "« secret.txt » n’est pas un fichier joint dans ce formulaire."
+    );
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    assert_eq!(ticket_files_on_disk(&h, &t.id), [t.files[0].file.clone()]);
+    assert_eq!(std::fs::read(&own).unwrap(), b"mine");
+}
+
+#[tokio::test]
+async fn a_kept_file_whose_name_leads_out_of_the_tickets_folder_is_refused_and_never_touched() {
+    let h = harness("tkf-kept-outside");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Pièces", &[], 5))
+        .await
+        .unwrap();
+    // A state edited by hand: the file of the ticket is a way up, to a file that exists.
+    let outside = h.core.data.tickets().join("outside.txt");
+    std::fs::create_dir_all(h.core.data.tickets()).unwrap();
+    std::fs::write(&outside, b"mine").unwrap();
+    let bad = TicketFile {
+        name: "outside.txt".into(),
+        file: "../../outside.txt".into(),
+        size: 4,
+    };
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.files = vec![bad.clone()];
+            Ok(())
+        })
+        .unwrap();
+    let e = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&bad)]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .unwrap_err();
+    assert_eq!(e.to_string(), "chemin hors du dossier : ../../outside.txt");
+    assert_eq!(h.ticket(&t.id).files, std::slice::from_ref(&bad));
+    // Taken off the list, it is no file to remove.
+    let cleaned = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .unwrap();
+    assert!(cleaned.files.is_empty());
+    assert_eq!(std::fs::read(&outside).unwrap(), b"mine");
+    // And it is deleted with the ticket's folder only.
+    h.core.ticket_delete(&t.id).await.unwrap();
+    assert_eq!(std::fs::read(&outside).unwrap(), b"mine");
+}
+
+#[tokio::test]
+async fn a_ticket_takes_twenty_files_at_most_and_a_refusal_uses_no_key() {
+    let h = harness("tkf-count");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let many = |n: usize| -> Vec<DraftFile> {
+        (0..n)
+            .map(|i| joined(&h, &format!("{i}.bin"), b"x"))
+            .collect()
+    };
+    let with = |files: Vec<DraftFile>, title: &str| TicketDraft {
+        files: Some(files),
+        ..draft(title, &[], 5)
+    };
+    let e = h
+        .core
+        .ticket_create(&p.id, with(many(21), "Trop"))
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), "Un ticket prend 20 fichiers au plus.");
+    // Neither a ticket, nor a folder, nor a key; the copies are still the form's.
+    assert!(h.core.tickets.read().is_empty());
+    assert!(files_of(&h.core.data.tickets()).is_empty());
+    assert_eq!(drafts_left(&h).len(), 21);
+    let t = h
+        .core
+        .ticket_create(&p.id, with(many(20), "Vingt"))
+        .await
+        .unwrap();
+    assert_eq!((t.key.as_str(), t.files.len()), ("DEM-1", 20));
+    // An edit past 20 is refused: the ticket keeps its files and nothing comes of it.
+    let before = ticket_files_on_disk(&h, &t.id);
+    let more: Vec<DraftFile> = t
+        .files
+        .iter()
+        .map(kept_file)
+        .chain([joined(&h, "21.bin", b"x")])
+        .collect();
+    let e = h
+        .core
+        .ticket_update(&t.id, with(more, "Vingt"))
+        .unwrap_err();
+    assert_eq!(e.to_string(), "Un ticket prend 20 fichiers au plus.");
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    assert_eq!(ticket_files_on_disk(&h, &t.id), before);
+}
+
+#[tokio::test]
+async fn a_file_over_the_cap_of_the_settings_is_refused_whole_and_one_under_it_goes_in() {
+    let h = harness("tkf-cap");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    // Joined while no cap was set, saved once it is: the cap is the save's too.
+    let big = joined(&h, "gros.iso", &vec![0u8; (1 << 20) + 1]);
+    let fit = joined(&h, "juste.iso", &vec![0u8; 1 << 20]);
+    h.set_settings(|s| s.attach_max_mb = 1);
+    let e = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![fit.clone(), big.clone()]),
+                ..draft("Trop gros", &[], 5)
+            },
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), "gros.iso dépasse 1 Mo");
+    // Nothing of it moved, no key used.
+    assert!(Path::new(&big.path).exists() && Path::new(&fit.path).exists());
+    assert!(h.core.tickets.read().is_empty());
+    assert!(files_of(&h.core.data.tickets()).is_empty());
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![fit]),
+                ..draft("Juste", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!((t.key.as_str(), t.files[0].size), ("DEM-1", 1 << 20));
+    // The edit has it too; a file the ticket has is not asked again.
+    h.set_settings(|s| s.attach_max_mb = 0);
+    let more = joined(&h, "plus.iso", &vec![0u8; (1 << 20) + 1]);
+    h.set_settings(|s| s.attach_max_mb = 1);
+    let e = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&t.files[0]), more]),
+                ..draft("Juste", &[], 5)
+            },
+        )
+        .unwrap_err();
+    assert_eq!(e.to_string(), "plus.iso dépasse 1 Mo");
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    h.set_settings(|s| s.attach_max_mb = 0);
+    h.core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&t.files[0])]),
+                ..draft("Juste", &[], 5)
+            },
+        )
+        .unwrap();
+    h.set_settings(|s| s.attach_max_mb = 1);
+    assert!(h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&t.files[0])]),
+                ..draft("Juste", &[], 5)
+            },
+        )
+        .is_ok());
+}
+
+#[tokio::test]
+async fn a_save_that_fails_leaves_the_ticket_as_it_was_and_the_files_it_moved_do_not_stay() {
+    let h = harness("tkf-fails");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    // A creation refused for want of a branch to target (a detached HEAD, before a first ticket
+    // fixes it) is refused before anything is moved: the copy stays in the drafts, for the
+    // form's chip to be saved again once the branch is there, and no key is used.
+    git(&r, &["checkout", "-q", "--detach"]);
+    let d = joined(&h, "d.zip", b"d");
+    let e = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![d.clone()]),
+                ..draft("Sans branche", &[], 5)
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("aucune branche"), "{e}");
+    assert!(files_of(&h.core.data.tickets()).is_empty());
+    assert!(Path::new(&d.path).exists());
+    git(&r, &["checkout", "-q", "main"]);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "a.zip", b"a"), joined(&h, "b.zip", b"b")]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let before = ticket_files_on_disk(&h, &t.id);
+    // Refused (it left « À faire » meanwhile) before anything is moved: the one it would have
+    // taken away stays, and the copy in the drafts is still there for the form's chip.
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    let c = joined(&h, "c.zip", b"c");
+    let c_path = c.path.clone();
+    let e = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(vec![kept_file(&t.files[0]), c]),
+                ..draft("Pièces", &[], 5)
+            },
+        )
+        .unwrap_err();
+    assert!(e.to_string().contains("À faire"), "{e}");
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    assert_eq!(ticket_files_on_disk(&h, &t.id), before);
+    assert!(Path::new(&c_path).exists());
+    // The tickets' folder is a file: nothing can be written in it. The copy stays in the drafts.
+    let e_copy = joined(&h, "e.zip", b"e");
+    let tickets = h.core.data.tickets();
+    std::fs::remove_dir_all(&tickets).unwrap();
+    std::fs::write(&tickets, b"x").unwrap();
+    let e = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![e_copy.clone()]),
+                ..draft("Refusé", &[], 5)
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("e.zip"), "{e}");
+    assert!(Path::new(&e_copy.path).exists());
+    assert_eq!(h.core.tickets.read().len(), 1);
+    std::fs::remove_file(&tickets).unwrap();
+    let ok = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![e_copy]),
+                ..draft("Accepté", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok.key, "DEM-2");
+}
+
+#[tokio::test]
+async fn a_tickets_agent_gets_its_files_as_lines_after_its_message_and_its_folder_to_read() {
+    let h = harness("tkf-first");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![
+                    joined(&h, "budget 2026.xlsx", b"xlsx"),
+                    joined(&h, "sources.zip", b"zip"),
+                ]),
+                description: "Lis les pièces.".into(),
+                ..draft("Lire les pièces", &["Il est lu", "Il est relu"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    let wt = h.worktree_of(&t.id);
+    let sent = h.stdin_messages(&wt);
+    let first = sent[0]["message"]["content"].as_str().unwrap();
+    let lines = format!(
+        "Fichier joint : budget 2026.xlsx, {}\nFichier joint : sources.zip, {}",
+        file_path(&h, &t.id, &t.files[0]).display(),
+        file_path(&h, &t.id, &t.files[1]).display()
+    );
+    // After the text of the ticket, its criteria and its loop, an empty line, then one line each.
+    assert!(
+        first.starts_with("Ticket DEM-1 : Lire les pièces") && first.contains("Lis les pièces."),
+        "{first}"
+    );
+    assert!(
+        first.ends_with(&format!("puis termine par le bilan.\n\n{lines}")),
+        "{first}"
+    );
+    // With the first message only: the later ones are the loop's own text.
+    assert!(sent.len() > 1, "{sent:?}");
+    for later in &sent[1..] {
+        assert!(
+            !text_of(&later["message"]["content"]).contains("Fichier joint"),
+            "{sent:?}"
+        );
+    }
+    // The conversation shows the message whole, the lines too.
+    let agent = h.agent_of(&t.id).id;
+    let user = h
+        .items(&agent)
+        .into_iter()
+        .find(|i| i["kind"] == "user")
+        .unwrap();
+    assert!(user["text"].as_str().unwrap().ends_with(&lines), "{user}");
+    // The fake `claude` read them as Claude Code does: the folders of `--add-dir` ask nothing.
+    assert!(
+        h.items(&agent)
+            .iter()
+            .any(|i| i["text"] == "Lu : budget 2026.xlsx=4, sources.zip=3"),
+        "{:?}",
+        h.items(&agent)
+    );
+    assert!(h.items(&agent).iter().all(|i| i["kind"] != "permission"));
+    // Its Claude Code is given the folder of the ticket's files, as well as its own.
+    let argv = h
+        .launches(&wt)
+        .into_iter()
+        .rfind(|a| a.iter().any(|x| x == "stream-json"))
+        .expect("the agent's process");
+    let dirs: Vec<&String> = argv.iter().filter(|a| a.starts_with("--add-dir")).collect();
+    assert_eq!(
+        dirs,
+        [
+            &format!("--add-dir={}", h.core.data.agent_files(&agent).display()),
+            &format!("--add-dir={}", h.core.data.ticket_files(&t.id).display()),
+        ]
+    );
+    assert!(h.core.data.ticket_files(&t.id).is_dir());
+}
+
+#[tokio::test]
+async fn the_lines_of_a_tickets_files_are_in_the_language_of_the_texts_for_claude() {
+    let h = harness("tkf-first-en");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| s.claude_language = "en".into());
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "report.xlsx", b"xlsx")]),
+                ..draft("Read the report [ok]", &["It is read"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    let sent = h.stdin_messages(&h.worktree_of(&t.id));
+    let first = sent[0]["message"]["content"].as_str().unwrap();
+    assert!(
+        first.ends_with(&format!(
+            "end with the report.\n\nAttached file: report.xlsx, {}",
+            file_path(&h, &t.id, &t.files[0]).display()
+        )),
+        "{first}"
+    );
+    assert!(!first.contains("Fichier joint"), "{first}");
+}
+
+#[tokio::test]
+async fn a_ticket_without_files_makes_no_folder_for_them_and_its_agent_has_no_second_folder() {
+    let h = harness("tkf-none");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Sans pièce [ok]", &["Fait"], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    let wt = h.worktree_of(&t.id);
+    let first = text_of(&h.stdin_messages(&wt)[0]["message"]["content"]);
+    assert!(!first.contains("Fichier joint"), "{first}");
+    let argv = h
+        .launches(&wt)
+        .into_iter()
+        .rfind(|a| a.iter().any(|x| x == "stream-json"))
+        .expect("the agent's process");
+    assert_eq!(
+        argv.iter().filter(|a| a.starts_with("--add-dir")).count(),
+        1
+    );
+    assert!(!h.core.data.ticket_dir(&t.id).exists());
+}
+
+#[tokio::test]
+async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_its_files_again() {
+    let h = harness("tkf-resume");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "rapport.xlsx", b"xlsx")]),
+                ..draft("Limiter", &["5 essais par IP"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    // Its start failed once the agent was made, before its first message.
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some(t.id.clone()),
+                ..AgentOptions::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 1;
+            t.agent_id = Some(a.clone());
+            t.blocked = Some(NO_CLAUDE.into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_resume(&t.id).await.unwrap();
+    h.wait_sent(&r, "Ticket DEM-1 : Limiter").await;
+    // The first message (the fake agent sends no report, and is reminded after it).
+    let first = h
+        .stdin_messages(&r)
+        .iter()
+        .map(|m| text_of(&m["message"]["content"]))
+        .find(|m| m.starts_with("Ticket DEM-1 : Limiter"))
+        .unwrap();
+    assert!(
+        first.ends_with(&format!(
+            "puis termine par le bilan.\n\nFichier joint : rapport.xlsx, {}",
+            file_path(&h, &t.id, &t.files[0]).display()
+        )),
+        "{first}"
+    );
+    // Its Claude Code reads the ticket's folder too.
+    let argv = h
+        .launches(&r)
+        .into_iter()
+        .rfind(|a| a.iter().any(|x| x == "stream-json"))
+        .expect("the agent's process");
+    assert!(
+        argv.contains(&format!(
+            "--add-dir={}",
+            h.core.data.ticket_files(&t.id).display()
+        )),
+        "{argv:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_ticket_sent_back_to_do_and_started_again_gives_its_files_to_its_new_agent() {
+    let h = harness("tkf-again");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "rapport.xlsx", b"xlsx")]),
+                ..draft("Relire [ok]", &["Fait"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let first_agent = h.ticket(&t.id).agent_id.unwrap();
+    let wt = h.worktree_of(&t.id);
+    let sent_before = h.stdin_messages(&wt).len();
+    // Its agent deleted, the ticket is back to do with its files as it had them.
+    h.core.delete_agent(&first_agent, true).await.unwrap();
+    let back = h.ticket(&t.id);
+    assert_eq!((back.column, back.agent_id.clone()), (Column::Todo, None));
+    assert_eq!(back.files, t.files);
+    assert!(file_path(&h, &t.id, &t.files[0]).exists());
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test again", |t| {
+        t.column == Column::Review && t.agent_id.as_deref() != Some(first_agent.as_str())
+    })
+    .await;
+    let again = h.worktree_of(&t.id);
+    let skip = if again == wt { sent_before } else { 0 };
+    let sent = h.stdin_messages(&again);
+    let text = text_of(&sent[skip]["message"]["content"]);
+    assert!(
+        text.ends_with(&format!(
+            "Fichier joint : rapport.xlsx, {}",
+            file_path(&h, &t.id, &t.files[0]).display()
+        )),
+        "{text}"
+    );
+}
+
+#[tokio::test]
+async fn a_file_the_purge_took_is_told_missing_to_its_agent_and_the_others_are_still_given() {
+    let h = harness("tkf-purged");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![
+                    joined(&h, "recent.xlsx", b"xlsx"),
+                    joined(&h, "ancien.zip", b"zip"),
+                ]),
+                ..draft("Relire [ok]", &["Fait"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    // Three days old, with two days kept: the next purge takes it, and only it.
+    aged(&file_path(&h, &t.id, &t.files[1]), 3);
+    h.set_settings(|s| s.attach_keep_days = 2);
+    h.core.maintain_attachments();
+    assert!(!file_path(&h, &t.id, &t.files[1]).exists());
+    assert!(file_path(&h, &t.id, &t.files[0]).exists());
+    // The ticket still lists both.
+    assert_eq!(h.ticket(&t.id).files, t.files);
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let text = text_of(&h.stdin_messages(&h.worktree_of(&t.id))[0]["message"]["content"]);
+    assert!(
+        text.ends_with(&format!(
+            "Fichier joint : recent.xlsx, {}\n\nFichier absent du dossier du ticket, non joint : ancien.zip.",
+            file_path(&h, &t.id, &t.files[0]).display()
+        )),
+        "{text}"
+    );
+}
+
+#[tokio::test]
+async fn editing_a_ticket_drops_a_file_the_purge_took_from_its_list() {
+    let h = harness("tkf-purged-edit");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![
+                    joined(&h, "recent.xlsx", b"xlsx"),
+                    joined(&h, "ancien.zip", b"zip"),
+                ]),
+                ..draft("Relire", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    aged(&file_path(&h, &t.id, &t.files[1]), 3);
+    h.set_settings(|s| s.attach_keep_days = 2);
+    h.core.maintain_attachments();
+    // Saved as the form shows it (both chips): the file that is gone is no longer the ticket's.
+    let edited = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                files: Some(t.files.iter().map(kept_file).collect()),
+                ..draft("Relire", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!(edited.files, [t.files[0].clone()]);
+}
+
+#[tokio::test]
+async fn a_deleted_tickets_files_go_with_it_once_the_state_without_it_is_saved() {
+    let h = harness("tkf-delete");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                files: Some(vec![joined(&h, "a.zip", b"a")]),
+                ..draft("Avec fichier", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.core.save_now();
+    let state = || std::fs::read_to_string(h.core.data.state_file()).unwrap();
+    assert!(state().contains(&t.id), "{}", state());
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert!(file_path(&h, &t.id, &t.files[0]).exists());
+    h.core.ticket_delete(&t.id).await.unwrap();
+    // No wait for the background save: a crash now must not bring the ticket back without them.
+    assert!(!state().contains(&t.id), "the saved state still has it");
+    assert!(!dir.exists());
 }

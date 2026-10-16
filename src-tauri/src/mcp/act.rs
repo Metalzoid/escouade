@@ -448,6 +448,8 @@ pub(super) async fn create_ticket<R: Runtime>(
             Some(list) => Some(images::drafts(core, caller, list, 0).await?),
             None => None,
         },
+        // The tools do not join files (another ticket's).
+        files: None,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -517,6 +519,8 @@ pub(super) async fn update_ticket<R: Runtime>(
         branch: t.branch.clone(),
         // Its images stay as they are unless a list is built below.
         images: None,
+        // Nor its files: the tools do not join them.
+        files: None,
     };
     if !add.is_empty() || !remove.is_empty() {
         // The core refuses a ticket that has started too, but only once the files are read: said
@@ -1773,6 +1777,7 @@ fn sub_draft<R: Runtime>(
         after,
         branch: String::new(),
         images: None,
+        files: None,
     })
 }
 

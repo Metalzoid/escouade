@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { MAX_TOTAL, base64, clipboardImage, imageType, sizeLabel } from './attachments';
+import { MAX_TOTAL, base64, clipboardImage, copyToDisk, imageType, planByPath, sizeLabel } from './attachments';
 import { echoWatch, type InputKind } from './echo-watch';
 import { t } from './i18n';
 import { api } from './ipc';
@@ -264,32 +264,38 @@ export async function openAgentTerminal(agentId: string, room?: Room | null, man
 }
 
 /**
- * What a paste in Claude Code's interface carries: text, which xterm.js types (also beside an image:
- * the cells of a spreadsheet, but not a mere line break some applications add to one); images
- * without text (a screenshot, image files copied); or, the WebView giving neither text nor file,
+ * What a paste in Claude Code’s interface carries: text, which xterm.js types (also beside a file:
+ * the cells of a spreadsheet, but not a mere line break some applications add to one); files
+ * without text (a screenshot, files copied); or, the WebView giving neither text nor file,
  * maybe an image only the system's clipboard holds (WebKitGTK leaves it out).
  */
-export type Pasted = { kind: 'text'; text: string } | { kind: 'image'; files: File[] } | { kind: 'clipboard' };
+export type Pasted = { kind: 'text'; text: string } | { kind: 'files'; files: File[] } | { kind: 'clipboard' };
 
 export function pastedContent(data: { getData(type: string): string; files: Iterable<File> } | null): Pasted {
   const text = data?.getData('text/plain') ?? '';
-  const all = [...(data?.files ?? [])];
-  const files = all.filter((f) => imageType(f));
+  const files = [...(data?.files ?? [])];
   if (text.trim() || (text && !files.length)) return { kind: 'text', text };
-  if (files.length) return { kind: 'image', files };
-  return all.length ? { kind: 'text', text } : { kind: 'clipboard' };
+  return files.length ? { kind: 'files', files } : { kind: 'clipboard' };
 }
 
 /**
  * Claude Code reads the clipboard's image on a key of its own (Alt+V under Windows, Ctrl+V
  * elsewhere), never on the terminal's paste: a pasted image is written to a file of the agent's,
  * and its path pasted, which Claude Code takes for the image (« [Image #1] ») as it does a file
- * dropped on a terminal. Text goes on to xterm.js, unless an image pasted before it is still being
- * written: it then waits its turn.
+ * dropped on a terminal. Any other file is copied to the agent's folder and its path pasted the same
+ * way. Text goes on to xterm.js, unless a file pasted before it is still being written: it then
+ * waits its turn. Files dropped on the terminal are taken as files pasted are: same queue, same paths.
  */
 function pasteImages(x: XTerm, agentId: string) {
   let queue = Promise.resolve();
   let waiting = 0;
+  const enqueue = (pasted: Pasted) => {
+    waiting++;
+    queue = queue
+      .then(() => paste(x.term, agentId, pasted))
+      .catch((err) => app.toast(err instanceof Error ? err.message : String(err), 'error'))
+      .finally(() => waiting--);
+  };
   // Caught on its way down, before xterm.js's own listeners.
   x.host.addEventListener(
     'paste',
@@ -298,35 +304,110 @@ function pasteImages(x: XTerm, agentId: string) {
       if (pasted.kind === 'text' && !waiting) return;
       e.preventDefault();
       e.stopPropagation();
-      waiting++;
-      queue = queue
-        .then(() => paste(x.term, agentId, pasted))
-        .catch((err) => app.toast(err instanceof Error ? err.message : String(err), 'error'))
-        .finally(() => waiting--);
+      enqueue(pasted);
     },
     true,
   );
+  dropFiles(x, (files) => enqueue({ kind: 'files', files }));
   // Said on the terminal once its pastes go through here (after its interface started): what the
   // end-to-end tests wait for before pasting.
   x.host.dataset.pastes = 'images';
 }
 
+/**
+ * Accepts the files dropped on a terminal's host and hands them to `take`. A drag without a file (text) is left alone,
+ * and with it the WebView's and xterm.js's own handling.
+ */
+function dropFiles(x: XTerm, take: (files: File[]) => void) {
+  const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+  // The terminal's canvas covers what the host paints itself, so the cue is a veil over it, of the theme's accent.
+  const veil = document.createElement('div');
+  veil.className = 'drop-veil';
+  veil.style.cssText =
+    'display:none;position:absolute;inset:0;z-index:2;pointer-events:none;border:2px dashed var(--accent);background:color-mix(in oklch, var(--accent) 10%, transparent);';
+  x.host.style.position = 'relative';
+  x.host.appendChild(veil);
+  // dragenter and dragleave come for every element the drag crosses, not for the host alone: the veil goes with the last.
+  let crossed = 0;
+  x.host.addEventListener(
+    'dragenter',
+    (e) => {
+      if (!hasFiles(e)) return;
+      crossed++;
+      veil.style.display = 'block';
+    },
+    true,
+  );
+  x.host.addEventListener(
+    'dragleave',
+    () => {
+      if (crossed > 0 && --crossed === 0) veil.style.display = 'none';
+    },
+    true,
+  );
+  x.host.addEventListener(
+    'dragover',
+    (e) => {
+      if (!hasFiles(e)) return;
+      // Without it the WebView refuses the drop.
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'copy';
+    },
+    true,
+  );
+  x.host.addEventListener(
+    'drop',
+    (e) => {
+      crossed = 0;
+      veil.style.display = 'none';
+      // The drag's data is emptied once this handler returns: its files are taken now.
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (!files.length) return;
+      // Left to the WebView, a dropped file would replace the app.
+      e.preventDefault();
+      e.stopPropagation();
+      take(files);
+    },
+    true,
+  );
+}
+
 async function paste(term: Terminal, agentId: string, pasted: Pasted) {
   if (pasted.kind === 'text') return term.paste(pasted.text);
-  const files = pasted.kind === 'image' ? pasted.files : [await clipboardImage()].filter((f) => f !== null);
-  // No image after all: the empty paste xterm.js would have made.
+  const files = pasted.kind === 'files' ? pasted.files : [await clipboardImage()].filter((f) => f !== null);
+  // No file after all: the empty paste xterm.js would have made.
   if (!files.length) return term.paste('');
   // One paste a path: Claude Code reads two paths pasted at once only when neither has a space.
   for (const f of files) {
-    // Refused before it is read, as the backend would after.
-    if (f.size > MAX_TOTAL) {
-      app.toast(t('conv.terminal.imageTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }), 'error');
-      continue;
-    }
-    const path = await api.pasteImage(agentId, imageType(f)!, await base64(f));
+    const path = await pastedPath(f, agentId);
+    if (path === null) continue;
     await bracketed(term);
     term.paste(path);
   }
+}
+
+/**
+ * The path, as Claude Code reads it, of a file pasted: an image is written for its pastes, any other file is copied for the
+ * agent, never attached where it is (this view's process is started once, with no way to give it another folder to read
+ * afterwards). Null for an image refused, which a toast says.
+ */
+async function pastedPath(f: File, agentId: string): Promise<string | null> {
+  const type = imageType(f);
+  if (!type) {
+    // As the composer's: a text over what a message carries, refused when the settings say so.
+    const plan = planByPath(f, app.settings);
+    if ('refusal' in plan) {
+      app.toast(plan.refusal, 'error');
+      return null;
+    }
+    return (await copyToDisk(f, agentId)).claudePath;
+  }
+  // Refused before it is read, as the backend would after.
+  if (f.size > MAX_TOTAL) {
+    app.toast(t('conv.terminal.imageTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }), 'error');
+    return null;
+  }
+  return api.pasteImage(agentId, type, await base64(f));
 }
 
 /**

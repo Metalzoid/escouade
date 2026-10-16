@@ -213,6 +213,65 @@ describe('SettingsModal', () => {
     expect(app.settings.todoTools).toBe(false);
   });
 
+  describe('the attachments of the Claude Code tab', () => {
+    const maxField = () => screen.getByRole('spinbutton', { name: 'Taille maximale d’un fichier joint (Mo)' });
+    const warnField = () => screen.getByRole('spinbutton', { name: 'Avertir pour un fichier joint de plus de (Mo)' });
+    const keepField = () => screen.getByRole('spinbutton', { name: 'Purger les copies après (jours)' });
+
+    it('shows the five settings with their defaults: no maximum, a warning at 200 Mo, the original file, a big text by its path', () => {
+      fakeBackend();
+      render(SettingsModal);
+      const attachments = group('Pièces jointes');
+      expect(maxField()).toHaveValue(0);
+      expect(warnField()).toHaveValue(200);
+      expect(keepField()).toHaveValue(0);
+      expect(attachments.getByRole('switch', { name: 'Joindre le fichier d’origine' })).toHaveAttribute('aria-checked', 'true');
+      const bigText = attachments.getByRole('group', { name: 'Texte de plus de 256 Ko' });
+      expect(within(bigText).getByRole('button', { name: 'Joint par son chemin' })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(bigText).getByRole('button', { name: 'Refusé' })).toHaveAttribute('aria-pressed', 'false');
+      // Each says what 0 means.
+      expect(attachments.getByText('Mo, 0 = aucune limite')).toBeInTheDocument();
+      expect(attachments.getByText('Mo, 0 = jamais')).toBeInTheDocument();
+      expect(attachments.getByText('jours, 0 = tant que leur propriétaire existe')).toBeInTheDocument();
+    });
+
+    it('saves what is set', async () => {
+      const backend = backendSaving();
+      render(SettingsModal);
+      const attachments = group('Pièces jointes');
+      expect(tab('Claude Code')).not.toHaveClass('changed');
+      await userEvent.clear(maxField());
+      await userEvent.type(maxField(), '500');
+      await userEvent.clear(warnField());
+      await userEvent.type(keepField(), '30');
+      await userEvent.click(attachments.getByRole('switch', { name: 'Joindre le fichier d’origine' }));
+      await userEvent.click(attachments.getByRole('button', { name: 'Refusé' }));
+      expect(tab('Claude Code')).toHaveClass('changed');
+      await save();
+      expect(backend.called('save_settings')[0].args.settings).toMatchObject({
+        attachMaxMb: 500,
+        attachWarnMb: 0,
+        attachOrigin: false,
+        attachBigText: 'refuse',
+        attachKeepDays: 30,
+      });
+      expect(app.settings).toMatchObject({ attachMaxMb: 500, attachBigText: 'refuse', attachOrigin: false });
+    });
+
+    it('is written in English too', () => {
+      setLang('en');
+      fakeBackend();
+      render(SettingsModal);
+      const attachments = group('Attachments');
+      expect(attachments.getByRole('spinbutton', { name: 'Largest attached file (MB)' })).toBeInTheDocument();
+      expect(attachments.getByRole('spinbutton', { name: 'Warn for an attached file over (MB)' })).toBeInTheDocument();
+      expect(attachments.getByRole('spinbutton', { name: 'Purge copies after (days)' })).toBeInTheDocument();
+      expect(attachments.getByRole('switch', { name: 'Attach the original file' })).toBeInTheDocument();
+      expect(attachments.getByRole('button', { name: 'Attached by its path' })).toBeInTheDocument();
+      expect(attachments.getByText('MB, 0 = no limit')).toBeInTheDocument();
+    });
+  });
+
   it('puts the task list back, and saves nothing when it is switched on again', async () => {
     const backend = backendSaving();
     render(SettingsModal);

@@ -2,6 +2,7 @@
 //! interface in a real terminal, calls the hooks of its settings over HTTP and writes its
 //! transcript, which the core reads as it comes.
 
+use crate::attachfiles_tests::copy;
 use crate::core::AgentOptions;
 use crate::core_tests::{agent_on, harness, plain_text, second_account, Harness};
 use crate::model::*;
@@ -1277,6 +1278,40 @@ async fn an_interface_refused_escouades_tools_is_started_without_its_server() {
     h.core.set_mcp_enabled(true).unwrap();
     assert!(next(&h));
     h.core.mcp.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_interface_starts_with_the_folder_of_the_files_joined_to_its_agent_readable() {
+    let h = harness("tui-add-dir");
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let launch = h
+        .launches(&cwd)
+        .into_iter()
+        .rfind(|argv| !argv.iter().any(|a| a == "stream-json"))
+        .expect("the interface's launch");
+    let folder = h.core.data.agent_files(&id);
+    let wanted = format!("--add-dir={}", folder.display());
+    assert_eq!(
+        launch.iter().filter(|a| a.starts_with("--add-dir")).count(),
+        1,
+        "{launch:?}"
+    );
+    assert!(launch.contains(&wanted), "{launch:?}");
+    // Made before it starts.
+    assert!(folder.is_dir());
+    // The window copies a file dropped on its terminal there, as for a message, and types the path
+    // its `claude` reads it by.
+    let file = copy(&h, &id, "a.zip", b"zip");
+    assert!(std::path::Path::new(&file.path).starts_with(&folder));
+    assert_eq!(file.claude_path, file.path);
+    // The files of a message stay refused in this view: they are typed in its terminal.
+    let e = h
+        .core
+        .send_message_files(&id, "x".into(), vec![], vec![file])
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("terminal"), "{e}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

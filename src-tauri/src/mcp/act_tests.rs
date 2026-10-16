@@ -276,6 +276,7 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "after": [],
             "progress": [],
             "images": [],
+            "files": 0,
             "external": null,
             "agent": null,
             "branch": null,
@@ -422,6 +423,62 @@ async fn a_ticket_lists_its_images() {
     assert_eq!(updated["images"], got["images"], "{updated}");
     let none = read(&c, "get_ticket", json!({ "ticket": plain.key })).await;
     assert_eq!(none["images"], json!([]), "{none}");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_says_how_many_files_it_has_and_the_tools_that_change_it_keep_them() {
+    use crate::tickets::DraftFile;
+    let h = harness("mcp-act-ticket-files");
+    let p = project(&h).await;
+    let joined = |name: &str| {
+        let copy = crate::attachfiles_tests::copy(&h, "draft", name, b"zip");
+        DraftFile {
+            name: copy.name,
+            path: copy.path,
+            ..Default::default()
+        }
+    };
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                title: "Avec des fichiers".into(),
+                files: Some(vec![joined("a.zip"), joined("b.xlsx"), joined("c.pdf")]),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let plain = made(&h, &p, "Sans fichier").await;
+    let c = external(&h).await;
+    let got = read(&c, "get_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(
+        (got["files"].as_u64(), &got["images"]),
+        (Some(3), &json!([])),
+        "{got}"
+    );
+    // The tools that change a ticket answer with it as it is, files kept.
+    let updated = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.key, "title": "Avec trois fichiers" }),
+    )
+    .await;
+    assert_eq!(updated["files"], 3, "{updated}");
+    assert_eq!(h.core.ticket(&t.id).unwrap().files.len(), 3);
+    let none = read(&c, "get_ticket", json!({ "ticket": plain.key })).await;
+    assert_eq!(none["files"], 0, "{none}");
+    // Made through the tools, a ticket has none.
+    let made_by_tool = read(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Par l’outil" }),
+    )
+    .await;
+    assert_eq!(made_by_tool["files"], 0, "{made_by_tool}");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { MAX_IMAGES, draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from './ticket-images';
+import { MAX_IMAGES, NotImageError, draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from './ticket-images';
 
 const MB = 1024 * 1024;
 const file = (name: string, type = '', body: BlobPart = 'x') => new File([body], name, { type });
@@ -53,6 +53,17 @@ describe('readTicketImage', () => {
     expect(gif.mediaType).toBe('image/gif');
     const webp = await readTicketImage(file('a.webp', '', 'RIFF' + '\0'.repeat(4) + 'WEBPVP8 '), []);
     expect(webp.mediaType).toBe('image/webp');
+  });
+
+  it('says with its own kind of error that a file is no image, which the form attaches as a file instead', async () => {
+    for (const f of [file('x.png', 'image/png', 'bonjour'), file('rapport.pdf', 'application/pdf', '%PDF-1.4')]) {
+      await expect(readTicketImage(f, [])).rejects.toBeInstanceOf(NotImageError);
+    }
+    // Any other reason to refuse an image is the user's to read.
+    const full = Array.from({ length: 20 }, () => pasted());
+    const refused = await readTicketImage(file('x.png', 'image/png', new Uint8Array(PNG)), full).catch((e) => e);
+    expect(refused).toBeInstanceOf(Error);
+    expect(refused).not.toBeInstanceOf(NotImageError);
   });
 
   it('takes the images of the chat alone, no other file', async () => {

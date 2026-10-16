@@ -60,6 +60,10 @@ tauri-winrt-notification = "0.7"
 # The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
 # that keeps them in memory (lost at the next start) nor Linux's secret-service.
 keyring = { version = "3.6", features = ["windows-native"] }
+# The path of a file the page hands the window (`fileorigin`): WebView2's own COM interfaces, in the
+# versions Tauri's wry already uses (`windows-core` for `Interface::cast`, which webview2-com does not re-export).
+webview2-com = "0.39"
+windows-core = "0.62"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

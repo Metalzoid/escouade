@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { setLang } from '../../lib/i18n';
 import { app, type TicketFormDraft } from '../../lib/state.svelte';
 import { menu } from '../../lib/menu.svelte';
-import type { Ticket, TicketDraft } from '../../lib/types';
+import type { AttachedFile, Ticket, TicketDraft } from '../../lib/types';
 import { branchInfo, fakeBackend, resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
 
@@ -577,11 +577,11 @@ describe('TicketForm, its images', () => {
     expect(backend.called('clipboard_image')).toHaveLength(0);
   });
 
-  it('attaches an image picked from the file dialog, which offers the images of the chat alone', async () => {
+  it('attaches an image picked from the file dialog, which offers every file', async () => {
     fakeBackend();
     show();
-    const input = screen.getByLabelText('Joindre une image', { selector: 'input' });
-    expect(input).toHaveAttribute('accept', 'image/png,image/jpeg,image/gif,image/webp');
+    const input = screen.getByLabelText('Joindre un fichier', { selector: 'input' });
+    expect(input).not.toHaveAttribute('accept');
     await userEvent.upload(input, capture('maquette.webp', 'image/webp'));
     expect(await screen.findByAltText('maquette.webp')).toBeInTheDocument();
   });
@@ -650,16 +650,6 @@ describe('TicketForm, its images', () => {
     give(new Uint8Array(png).buffer);
     expect(await screen.findByAltText('image.png')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ajouter' })).toBeEnabled();
-  });
-
-  it('refuses a file that is not an image the chat takes, and says why', async () => {
-    fakeBackend();
-    show();
-    expect(drop(description(), [new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' })])).toBe(true);
-    await waitFor(() =>
-      expect(app.toasts.at(-1)?.text).toBe("« rapport.pdf » n'est pas une image : un ticket prend les images PNG, JPEG, GIF et WebP."),
-    );
-    expect(screen.queryByRole('list', { name: 'Images du ticket' })).not.toBeInTheDocument();
   });
 
   it('keeps 20 images of a paste of 21, and says the 21st was not added', async () => {
@@ -820,18 +810,544 @@ describe('TicketForm, its images', () => {
     expect(app.modal).toBeNull();
   });
 
-  it('is written in English', async () => {
+  it('is written in English', () => {
     setLang('en');
     fakeBackend({ ticket_images: () => new Promise(() => {}) });
     show({ ticket: ticket({ images: IMAGES }) });
-    expect(screen.getByLabelText('Attach an image', { selector: 'input' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Attach a file', { selector: 'input' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Ticket images' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Loading capture.png (1/2)…' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove capture.png (1/2)' })).toBeInTheDocument();
-    drop(description(), [new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' })]);
-    await waitFor(() =>
-      expect(app.toasts.at(-1)?.text).toBe('“rapport.pdf” isn’t an image: a ticket takes PNG, JPEG, GIF and WebP images.'),
-    );
+  });
+});
+
+const MB = 1024 * 1024;
+
+describe('TicketForm, its files', () => {
+  beforeEach(() => resetApp());
+  afterEach(() => setLang('fr'));
+  const PNG = [137, 80, 78, 71, 13, 10, 26, 10];
+  const capture = (name = 'capture.png') => new File([new Uint8Array(PNG)], name, { type: 'image/png' });
+  const zip = (name = 'sources.zip') => new File([new Uint8Array([80, 75, 3, 4])], name, { type: 'application/zip' });
+  /** A file that says it has `size` bytes, without holding them. */
+  const sized = (name: string, size: number, type = '') => {
+    const f = new File(['x'], name, { type });
+    Object.defineProperty(f, 'size', { value: size });
+    return f;
+  };
+  /** The copy of a file in the drafts, as the backend gives it. */
+  const copyOf = (name: string, over: Partial<AttachedFile> = {}): AttachedFile => ({
+    name,
+    size: 4,
+    origin: false,
+    path: `/data/attachments/_drafts/1f2e3d4c/${name}`,
+    claudePath: '',
+    ...over,
+  });
+  /** The backend of a copy: each file gets its handle, named after it, and comes back as its copy. */
+  const copying = (over: Record<string, (a: any) => unknown> = {}) => ({
+    attach_open: ({ name }: { name: string }) => `h:${name}`,
+    attach_finish: ({ handle }: { handle: string }) => copyOf(handle.slice(2)),
+    ...over,
+  });
+  /** The copy of a big file whose second chunk waits for `release`. */
+  const stalled = () => {
+    let release: () => void = () => {};
+    let chunks = 0;
+    const backend = fakeBackend(copying({ attach_chunk: () => (++chunks === 2 ? new Promise<void>((r) => (release = r)) : undefined) }));
+    const stuck = () => waitFor(() => expect(backend.called('attach_chunk')).toHaveLength(2));
+    return { backend, stuck, release: () => release() };
+  };
+  const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
+  const description = () => screen.getByRole('textbox', { name: 'Description' });
+  const add = () => screen.getByRole('button', { name: 'Ajouter' });
+  const drop = (files: File[], target: HTMLElement = description()) => {
+    const e = createEvent.drop(target, { dataTransfer: { files, types: ['Files'] } });
+    fireEvent(target, e);
+    return e.defaultPrevented;
+  };
+  const paste = (target: HTMLElement, clipboardData: { files: File[]; types: string[] }) => {
+    const e = createEvent.paste(target, { clipboardData });
+    fireEvent(target, e);
+    return e.defaultPrevented;
+  };
+  /** The copies are done: no chip is waiting for its path. */
+  const copied = (backend: ReturnType<typeof fakeBackend>, count = 1) =>
+    waitFor(() => {
+      expect(backend.called('attach_finish')).toHaveLength(count);
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+  const FILES = [
+    { name: 'budget.xlsx', file: 'ab12cd34/budget.xlsx', size: 2048 },
+    { name: 'sources.zip', file: 'ef56ab78/sources.zip', size: 4096 },
+  ];
+
+  describe('a file that is no image of the ticket', () => {
+    it('is copied to the drafts, shown as a chip, and added to the ticket by its copy', async () => {
+      const backend = fakeBackend(copying());
+      const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Le bouton');
+      expect(drop([zip()])).toBe(true);
+      const list = await screen.findByRole('list', { name: 'Fichiers du ticket' });
+      expect(within(list).getByText('sources.zip')).toBeInTheDocument();
+      expect(within(list).getByText('1 Ko')).toBeInTheDocument();
+      await copied(backend);
+      expect(backend.called('attach_open')[0].args).toEqual({ owner: 'draft', name: 'sources.zip', size: 4 });
+      expect([...(backend.called('attach_chunk')[0].args as unknown as Uint8Array)]).toEqual([80, 75, 3, 4]);
+      expect(backend.called('attach_finish')[0].args).toEqual({ handle: 'h:sources.zip' });
+      await userEvent.click(add());
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      expect(onsubmit.mock.calls[0][0]).toEqual({
+        title: 'Le bouton',
+        description: '',
+        criteria: [],
+        maxLoops: 5,
+        after: [],
+        files: [{ name: 'sources.zip', file: '', path: copyOf('sources.zip').path }],
+      });
+    });
+
+    it.each([
+      ['dropped on the window', () => drop([zip()], screen.getByText('Nouveau ticket'))],
+      ['pasted from the clipboard', () => paste(description(), { files: [zip()], types: ['Files'] })],
+    ])('is taken when it is %s, as an image is', async (_, give) => {
+      const backend = fakeBackend(copying());
+      show();
+      expect(give()).toBe(true);
+      expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+      await copied(backend);
+    });
+
+    it('is taken from the file dialog, which offers every file', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      const input = screen.getByLabelText('Joindre un fichier', { selector: 'input' });
+      expect(input).not.toHaveAttribute('accept');
+      expect(input).toHaveAttribute('multiple');
+      await userEvent.upload(input, [zip(), new File(['PK'], 'budget.xlsx')]);
+      expect(await screen.findByText('budget.xlsx')).toBeInTheDocument();
+      expect(screen.getByText('sources.zip')).toBeInTheDocument();
+      await copied(backend, 2);
+    });
+
+    it('is a PDF or a text as well, which the chat would send in its message: a ticket copies them all', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }), new File(['# Notes'], 'notes.md')]);
+      expect(await screen.findByText('notes.md')).toBeInTheDocument();
+      expect(screen.getByText('rapport.pdf')).toBeInTheDocument();
+      await copied(backend, 2);
+      expect(backend.called('attach_open').map((c) => c.args.owner)).toEqual(['draft', 'draft']);
+    });
+
+    it('is an image over 5 MB, which the chat would refuse, or one whose content is no image', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([sized('photo.png', 5 * MB + 1, 'image/png'), new File(['bonjour'], 'faux.png', { type: 'image/png' })]);
+      expect(await screen.findByText('faux.png')).toBeInTheDocument();
+      expect(screen.getByText('photo.png')).toBeInTheDocument();
+      await copied(backend, 2);
+      expect(backend.called('attach_open')[0].args).toEqual({ owner: 'draft', name: 'photo.png', size: 5 * MB + 1 });
+      expect(screen.queryByRole('list', { name: 'Images du ticket' })).not.toBeInTheDocument();
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('is empty, 0 byte, and still attached', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([new File([], 'vide.txt')]);
+      expect(await screen.findByText('vide.txt')).toBeInTheDocument();
+      await copied(backend);
+      expect(backend.called('attach_chunk')).toHaveLength(0);
+    });
+
+    it('is never attached where it lies: a ticket copies, and its path is not even asked for', async () => {
+      const backend = fakeBackend(copying());
+      app.settings.attachOrigin = true;
+      show();
+      drop([zip()]);
+      await screen.findByText('sources.zip');
+      await copied(backend);
+      expect(backend.called('attach_origin')).toHaveLength(0);
+    });
+  });
+
+  describe('an image the chat reads', () => {
+    it('stays an image of the ticket, 5 MB or less, with its preview and no copy', async () => {
+      const backend = fakeBackend(copying());
+      const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Le bouton');
+      // An image that says it weighs 5 MB, the limit.
+      const limit = capture('limite.png');
+      Object.defineProperty(limit, 'size', { value: 5 * MB });
+      drop([capture(), limit]);
+      expect(await screen.findByAltText('capture.png (1/2)')).toBeInTheDocument();
+      expect(await screen.findByAltText('limite.png (2/2)')).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Fichiers du ticket' })).not.toBeInTheDocument();
+      expect(backend.called('attach_open')).toHaveLength(0);
+      await userEvent.click(add());
+      expect(onsubmit.mock.calls[0][0]).toHaveProperty('images');
+      expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('files');
+    });
+
+    it('goes with the files of the same drop, each to its list', async () => {
+      const backend = fakeBackend(copying());
+      const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Les deux');
+      drop([capture(), zip()]);
+      expect(await screen.findByAltText('capture.png')).toBeInTheDocument();
+      expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+      await copied(backend);
+      await userEvent.click(add());
+      expect(onsubmit.mock.calls[0][0].images).toHaveLength(1);
+      expect(onsubmit.mock.calls[0][0].files).toEqual([{ name: 'sources.zip', file: '', path: copyOf('sources.zip').path }]);
+    });
+  });
+
+  describe('the chip of a file', () => {
+    it('says its name and size, and is a chip of the chat: its icon by type', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([zip('sources.zip'), new File(['PK'], 'budget.xlsx')]);
+      const list = await screen.findByRole('list', { name: 'Fichiers du ticket' });
+      await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(2));
+      expect(list.querySelector('[data-icon="archive"]')).not.toBeNull();
+      expect(list.querySelector('[data-icon="sheet"]')).not.toBeNull();
+      await copied(backend, 2);
+    });
+
+    it('shows how far its copy went, and does not let the ticket be added meanwhile', async () => {
+      const { release, stuck } = stalled();
+      const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Le film');
+      drop([sized('film.mkv', 10 * MB, 'video/x-matroska')]);
+      const bar = await screen.findByRole('progressbar', { name: 'Copie de film.mkv' });
+      await stuck();
+      expect(bar).toHaveAttribute('aria-valuenow', '40');
+      expect(add()).toBeDisabled();
+      await userEvent.keyboard('{Control>}{Enter}{/Control}');
+      expect(onsubmit).not.toHaveBeenCalled();
+      release();
+      await waitFor(() => expect(add()).toBeEnabled());
+      await userEvent.click(add());
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('is not added while its copy has not even begun', async () => {
+      let open: (handle: string) => void = () => {};
+      fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+      show();
+      await userEvent.type(title(), 'Le film');
+      drop([zip()]);
+      expect(await screen.findByRole('progressbar', { name: 'Copie de sources.zip' })).toHaveAttribute('aria-valuenow', '0');
+      expect(add()).toBeDisabled();
+      open('h:sources.zip');
+      await waitFor(() => expect(add()).toBeEnabled());
+    });
+
+    it('erases its copy when it is taken away, and keeps the focus in the form', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([zip('a.zip'), zip('b.zip')]);
+      await screen.findByText('b.zip');
+      await copied(backend, 2);
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer a.zip' }));
+      expect(screen.queryByText('a.zip')).not.toBeInTheDocument();
+      expect(backend.called('attach_discard').map((c) => c.args)).toEqual([{ owner: 'draft', path: copyOf('a.zip').path }]);
+      expect(screen.getByRole('button', { name: 'Retirer b.zip' })).toHaveFocus();
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer b.zip' }));
+      expect(backend.called('attach_discard')).toHaveLength(2);
+      expect(description()).toHaveFocus();
+      expect(screen.queryByRole('list', { name: 'Fichiers du ticket' })).not.toBeInTheDocument();
+    });
+
+    it('stops its copy when it is taken away while it goes on, without a word', async () => {
+      const { backend, release, stuck } = stalled();
+      show();
+      drop([sized('film.mkv', 10 * MB, 'video/x-matroska')]);
+      await stuck();
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer film.mkv' }));
+      expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+      release();
+      await waitFor(() => expect(backend.called('attach_cancel')).toHaveLength(1));
+      expect(backend.called('attach_cancel')[0].args).toEqual({ handle: 'h:film.mkv' });
+      expect(backend.called('attach_finish')).toHaveLength(0);
+      expect(backend.called('attach_discard')).toHaveLength(0);
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('is taken away, and the reason told, when its copy fails: the ticket can still be added', async () => {
+      fakeBackend(
+        copying({
+          attach_open: () => {
+            throw 'film.mkv dépasse 100 Mo';
+          },
+        }),
+      );
+      const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Le film');
+      drop([sized('film.mkv', 2 * MB)]);
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'film.mkv dépasse 100 Mo' }));
+      expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+      await waitFor(() => expect(add()).toBeEnabled());
+      await userEvent.click(add());
+      expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('files');
+    });
+
+    it('is refused over the maximum size of the settings, with nothing copied, and warned of over their threshold', async () => {
+      app.settings.attachMaxMb = 3;
+      app.settings.attachWarnMb = 1;
+      const backend = fakeBackend(copying());
+      show();
+      drop([sized('enorme.mkv', 4 * MB)]);
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'enorme.mkv dépasse 3 Mo' }));
+      expect(screen.queryByText('enorme.mkv')).not.toBeInTheDocument();
+      expect(backend.called('attach_open')).toHaveLength(0);
+      drop([sized('film.mkv', 2 * MB), zip()]);
+      expect(await screen.findByRole('img', { name: 'Gros fichier : 2 Mo, copié sur le disque' })).toBeInTheDocument();
+      // A small one is not warned of.
+      expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+      expect(screen.getAllByRole('img', { name: /^Gros fichier/ })).toHaveLength(1);
+      await copied(backend, 2);
+    });
+
+    it('takes 20 files at most, those of the ticket counted, and names the one that is left out', async () => {
+      const backend = fakeBackend(copying());
+      const have = Array.from({ length: 18 }, (_, n) => ({ name: `a${n}.zip`, file: `ab12cd34/a${n}.zip`, size: 4 }));
+      show({ ticket: ticket({ files: have }) });
+      drop([zip('x.zip'), zip('y.zip'), zip('z.zip')]);
+      await waitFor(() => expect(app.toasts.at(-1)?.text).toBe("z.zip n'est pas ajouté : un ticket prend 20 fichiers au plus."));
+      expect(within(screen.getByRole('list', { name: 'Fichiers du ticket' })).getAllByRole('listitem')).toHaveLength(20);
+      expect(screen.queryByText('z.zip')).not.toBeInTheDocument();
+      await copied(backend, 2);
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['x.zip', 'y.zip']);
+    });
+
+    it('is no part of the 20 images: each list has its own 20', async () => {
+      fakeBackend(copying());
+      show();
+      paste(description(), { files: Array.from({ length: 20 }, (_, n) => capture(`image-${n + 1}.png`)), types: ['Files'] });
+      await waitFor(() => expect(within(screen.getByRole('list', { name: 'Images du ticket' })).getAllByRole('img')).toHaveLength(20));
+      drop([zip()]);
+      expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('gives two rows of the description to its chips, so that nothing more shows below them in a short window', async () => {
+      fakeBackend(copying());
+      window.innerHeight = 700;
+      window.dispatchEvent(new Event('resize'));
+      try {
+        show();
+        expect(description()).toHaveAttribute('rows', '10');
+        drop([zip()]);
+        await screen.findByText('sources.zip');
+        expect(description()).toHaveAttribute('rows', '8');
+        await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
+        expect(description()).toHaveAttribute('rows', '10');
+      } finally {
+        window.innerHeight = 768;
+        window.dispatchEvent(new Event('resize'));
+      }
+    });
+  });
+
+  describe('a ticket that has files', () => {
+    it('shows them as chips in its form, with their name and size', () => {
+      fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES }) });
+      const list = screen.getByRole('list', { name: 'Fichiers du ticket' });
+      expect(within(list).getByText('budget.xlsx')).toBeInTheDocument();
+      expect(within(list).getByText('2 Ko')).toBeInTheDocument();
+      expect(within(list).getByText('sources.zip')).toBeInTheDocument();
+      expect(within(list).getByText('4 Ko')).toBeInTheDocument();
+      expect(within(list).getAllByRole('button', { name: /^Retirer / })).toHaveLength(2);
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    it('asks nothing of the backend to show them, and leaves without asking when nothing changed', async () => {
+      const backend = fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES }) });
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toBeNull();
+      expect(backend.calls).toEqual([]);
+    });
+
+    it('sends no files when it is saved without touching them', async () => {
+      fakeBackend(copying());
+      const { onsubmit } = show({ ticket: ticket({ files: FILES }), onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), ' bis');
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(onsubmit).toHaveBeenCalledTimes(1);
+      expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('files');
+    });
+
+    it('keeps those left by their file, and adds the new ones by the path of their copy', async () => {
+      const backend = fakeBackend(copying());
+      const { onsubmit } = show({ ticket: ticket({ files: FILES }), onsubmit: vi.fn(() => true) });
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer budget.xlsx' }));
+      // Not erased now: the ticket's file goes when the ticket is saved.
+      expect(backend.called('attach_discard')).toHaveLength(0);
+      drop([zip('nouveau.zip')]);
+      await screen.findByText('nouveau.zip');
+      await copied(backend);
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(onsubmit.mock.calls[0][0].files).toEqual([
+        { name: 'sources.zip', file: 'ef56ab78/sources.zip', path: '' },
+        { name: 'nouveau.zip', file: '', path: copyOf('nouveau.zip').path },
+      ]);
+      expect(backend.called('attach_discard')).toHaveLength(0);
+    });
+
+    it('sends an empty list when every file was taken away, which takes them off the ticket', async () => {
+      fakeBackend(copying());
+      const { onsubmit } = show({ ticket: ticket({ files: FILES.slice(0, 1) }), onsubmit: vi.fn(() => true) });
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer budget.xlsx' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(onsubmit.mock.calls[0][0].files).toEqual([]);
+    });
+
+    it('asks before leaving once a file was taken away from it, or put in', async () => {
+      fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer budget.xlsx' }));
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+    });
+
+    it('does not ask when what was taken away is back to what it was', async () => {
+      const backend = fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES.slice(0, 1) }) });
+      drop([zip()]);
+      await screen.findByText('sources.zip');
+      await copied(backend);
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
+      await userEvent.keyboard('{Escape}');
+      expect(app.modal).toBeNull();
+    });
+  });
+
+  describe('closing the form without saving', () => {
+    /** « Annuler » asks first, and the confirmation of it is the one that gives up. */
+    const giveUp = async () => {
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+      return (app.modal as any).onConfirm();
+    };
+
+    it('asks before leaving a new ticket a file was attached to', async () => {
+      const backend = fakeBackend(copying());
+      show();
+      drop([zip()]);
+      await screen.findByText('sources.zip');
+      await copied(backend);
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+      // Nothing is erased before the user agrees.
+      expect(backend.called('attach_discard')).toHaveLength(0);
+    });
+
+    it('erases the copies this form made once the user gives up, not the files the ticket had', async () => {
+      const backend = fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES }) });
+      drop([zip('un.zip'), zip('deux.zip')]);
+      await screen.findByText('deux.zip');
+      await copied(backend, 2);
+      await giveUp();
+      expect(backend.called('attach_discard').map((c) => c.args)).toEqual([
+        { owner: 'draft', path: copyOf('un.zip').path },
+        { owner: 'draft', path: copyOf('deux.zip').path },
+      ]);
+    });
+
+    it('erases nothing of a copy taken away already, and nothing when the form had no copy', async () => {
+      const backend = fakeBackend(copying());
+      show({ ticket: ticket({ files: FILES }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer budget.xlsx' }));
+      await giveUp();
+      expect(backend.called('attach_discard')).toHaveLength(0);
+    });
+
+    it('stops a copy that goes on, which erases what it wrote', async () => {
+      const { backend, release, stuck } = stalled();
+      show();
+      drop([sized('film.mkv', 10 * MB, 'video/x-matroska')]);
+      await stuck();
+      await giveUp();
+      release();
+      await waitFor(() => expect(backend.called('attach_cancel')).toHaveLength(1));
+      expect(backend.called('attach_finish')).toHaveLength(0);
+      expect(backend.called('attach_discard')).toHaveLength(0);
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('does not erase a copy when the confirmation is dismissed: the form comes back with its files', async () => {
+      const backend = fakeBackend(copying());
+      const self = (show(), app.modal);
+      await userEvent.type(title(), 'Un début');
+      drop([zip()]);
+      await screen.findByText('sources.zip');
+      await copied(backend);
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      cleanup();
+      (app.modal as any).onCancel();
+      expect(app.modal).toBe(self);
+      const { onsubmit } = show({ resume: (self as { resume?: TicketFormDraft }).resume, onsubmit: vi.fn(() => true) });
+      expect(screen.getByRole('button', { name: 'Retirer sources.zip' })).toBeInTheDocument();
+      expect(backend.called('attach_discard')).toHaveLength(0);
+      await userEvent.click(add());
+      expect(onsubmit.mock.calls[0][0].files).toEqual([{ name: 'sources.zip', file: '', path: copyOf('sources.zip').path }]);
+    });
+
+    it('shows a copy that went on while another dialog had its place, done once the form is back', async () => {
+      const { release, stuck } = stalled();
+      const self = (show(), app.modal);
+      await userEvent.type(title(), 'Le film');
+      drop([sized('film.mkv', 10 * MB, 'video/x-matroska')]);
+      await stuck();
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      cleanup();
+      const { onsubmit } = show({ resume: (self as { resume?: TicketFormDraft }).resume, onsubmit: vi.fn(() => true) });
+      expect(screen.getByRole('progressbar', { name: 'Copie de film.mkv' })).toHaveAttribute('aria-valuenow', '40');
+      expect(add()).toBeDisabled();
+      release();
+      await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+      await userEvent.click(add());
+      expect(onsubmit.mock.calls[0][0].files).toEqual([{ name: 'film.mkv', file: '', path: copyOf('film.mkv').path }]);
+    });
+
+    it('keeps what it sent once it is saved: nothing is erased', async () => {
+      const backend = fakeBackend(copying());
+      show({ onsubmit: vi.fn(() => true) });
+      await userEvent.type(title(), 'Le bouton');
+      drop([zip()]);
+      await screen.findByText('sources.zip');
+      await copied(backend);
+      await userEvent.click(add());
+      await waitFor(() => expect(app.modal).toBeNull());
+      expect(backend.called('attach_discard')).toHaveLength(0);
+    });
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    const backend = fakeBackend(copying());
+    show({ ticket: ticket({ files: FILES }) });
+    expect(screen.getByLabelText('Attach a file', { selector: 'input' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Attach a file' })).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: 'Ticket files' });
+    expect(within(list).getByRole('button', { name: 'Remove budget.xlsx' })).toBeInTheDocument();
+    drop([sized('film.mkv', 2 * MB)]);
+    await screen.findByText('film.mkv');
+    await copied(backend);
+    await userEvent.click(screen.getByRole('button', { name: 'Remove film.mkv' }));
+    app.settings.attachMaxMb = 1;
+    drop([sized('enorme.mkv', 2 * MB)]);
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('enorme.mkv is over 1 MB'));
+    app.settings.attachMaxMb = 0;
+    drop(Array.from({ length: 19 }, (_, n) => zip(`f${n}.zip`)));
+    // The ticket has 2, the first 18 of these come to 20, the 19th has no place.
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('f18.zip wasn’t added: a ticket takes 20 files at most.'));
   });
 });
 

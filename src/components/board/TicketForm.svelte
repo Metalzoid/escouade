@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
-  import { IMAGE_ACCEPT, clipboardImage } from '../../lib/attachments';
+  import { clipboardImage, copyToDisk, planByPath } from '../../lib/attachments';
   import { cycleRefusal, ticketBranch } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
-  import { draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from '../../lib/ticket-images';
+  import { MAX_FILES, draftFiles, filesChanged, keptFile, ticketPlace, type FormFile } from '../../lib/ticket-files';
+  import { NotImageError, draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from '../../lib/ticket-images';
   import { menu } from '../../lib/menu.svelte';
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { ariaEnter } from '../../lib/shortcuts';
   import { app, type TicketFormDraft } from '../../lib/state.svelte';
   import type { Ticket, TicketDraft } from '../../lib/types';
+  import AttachmentChip from '../AttachmentChip.svelte';
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Modal from '../modals/Modal.svelte';
   import { tip } from '../../lib/tip';
@@ -39,6 +41,7 @@
     after: ticket?.after ?? [],
     branch: ticket?.branch ?? '',
     images: ticket?.images.map((i) => i.file) ?? [],
+    files: ticket?.files.map((f) => f.file) ?? [],
   }));
   const uid = $props.id();
 
@@ -71,15 +74,23 @@
    * those the backend could not read (their file is gone), which the window drops by itself. That is no change of the user's.
    */
   let held = $state(untrack(() => [...(resume?.held ?? start.images)]));
+  /**
+   * Its other files, as chips under the images: those the ticket has, and the copies this form made in the drafts (a chip is
+   * there while its copy is written). Never a file where it lies: the agent reads a ticket's files later, when it may be gone.
+   */
+  let files = $state<FormFile[]>(untrack(() => resume?.files ?? ticket?.files.map(keptFile) ?? []));
   /** Files being read: the ticket waits for them before it is added or saved. */
   let reading = $state(0);
+  /** A copy is being written: its chip has no path yet, the ticket waits for it as well. */
+  const copying = $derived(files.some((f) => f.copying));
   let dragOver = $state(false);
   let fileInput = $state<HTMLInputElement>();
   let form = $state<HTMLDivElement>();
   let imageList = $state<HTMLUListElement>();
+  let fileList = $state<HTMLUListElement>();
   let descriptionField = $state<HTMLTextAreaElement>();
   let busy = $state(false);
-  const ready = $derived(title.trim().length > 0 && !busy && !reading);
+  const ready = $derived(title.trim().length > 0 && !busy && !reading && !copying);
   const changed = $derived(
     title !== start.title ||
       description !== start.description ||
@@ -88,7 +99,8 @@
       branch !== start.branch ||
       after.length !== start.after.length ||
       after.some((id) => !start.after.includes(id)) ||
-      imagesChanged(images, held),
+      imagesChanged(images, held) ||
+      filesChanged(files, start.files),
   );
   /** What it may come after: the other tickets of the project not done yet, oldest first. */
   const candidates = $derived(
@@ -119,6 +131,8 @@
         branch,
         images: images.map((i) => ({ ...i })),
         held: [...held],
+        // Not a copy: the one of a file being written is still this list's, which it takes the chip out of if it fails.
+        files,
       };
   });
 
@@ -168,12 +182,12 @@
   });
 
   // A file that cannot be added is named in a toast, never left out without a word.
-  async function addImages(source: Iterable<File> | Promise<File[]>) {
+  async function addFiles(source: Iterable<File> | Promise<File[]>) {
     reading++;
     try {
       for (const f of await source) {
         try {
-          images.push(await readTicketImage(f, images));
+          await addFile(f);
         } catch (e) {
           failed(e);
         }
@@ -183,6 +197,84 @@
     } finally {
       reading--;
     }
+  }
+
+  /**
+   * An image the chat reads becomes an image of the ticket, with its preview; any other file, or an image that is none or too
+   * big, is copied to the drafts.
+   */
+  async function addFile(f: File) {
+    if (ticketPlace(f) === 'image') {
+      try {
+        images.push(await readTicketImage(f, images));
+        return;
+      } catch (e) {
+        // A « .png » that holds something else is a file like any other; any other refusal is the user's to read.
+        if (!(e instanceof NotImageError)) throw e;
+      }
+    }
+    attachFile(f);
+  }
+
+  /**
+   * Its chip is there at once, while the file is copied. Not waited for: the next files of a drop do not wait for the copy of
+   * a big one, and the ticket waits for the chip itself (`copying`).
+   */
+  function attachFile(f: File) {
+    if (files.length >= MAX_FILES) throw new Error(t('board.form.files.tooMany', { name: f.name, max: MAX_FILES }));
+    const plan = planByPath(f, app.settings);
+    if ('refusal' in plan) throw new Error(plan.refusal);
+    const abort = new AbortController();
+    const chip = $state<FormFile>({
+      kind: 'file',
+      name: f.name,
+      mediaType: '',
+      data: '',
+      size: f.size,
+      kept: '',
+      warn: plan.warn,
+      copying: true,
+      progress: 0,
+      cancel: () => abort.abort(),
+    });
+    files.push(chip);
+    void copyChip(f, chip, abort.signal);
+  }
+
+  /** The copy of a file that its chip stands for, until its path is known; a failed one takes its chip away. */
+  async function copyChip(f: File, chip: FormFile, signal: AbortSignal) {
+    try {
+      chip.file = await copyToDisk(f, 'draft', { signal, onProgress: (done) => (chip.progress = done / f.size) });
+      chip.copying = false;
+      chip.cancel = undefined;
+    } catch (e) {
+      const i = files.indexOf(chip);
+      if (i >= 0) files.splice(i, 1);
+      // Taken away by the user: nothing to say.
+      if (!signal.aborted) failed(e);
+    }
+  }
+
+  /**
+   * Its chip goes with it, as an image's thumbnail does (the focus moves on in the same way). A copy still being written stops;
+   * one finished is erased. A file the ticket has is not: it goes from the ticket when the ticket is saved, not before.
+   */
+  async function removeFile(i: number) {
+    erase(files.splice(i, 1)[0]);
+    await tick();
+    const crosses = fileList?.querySelectorAll<HTMLButtonElement>('.rm') ?? [];
+    (crosses[Math.min(i, crosses.length - 1)] ?? descriptionField)?.focus();
+  }
+
+  /** A copy this form is writing stops, one it made is erased; a file the ticket has is not touched (it has no `file`). */
+  function erase(f: FormFile) {
+    if (f.copying) f.cancel?.();
+    else if (f.file) api.attachDiscard('draft', f.file.path).catch(() => {});
+  }
+
+  /** Giving the ticket up erases the copies this form made, which no ticket will ever have; never the files the ticket had. */
+  function discardCopies() {
+    files.forEach(erase);
   }
 
   /**
@@ -201,7 +293,7 @@
   }
 
   /**
-   * The files pasted are images for the ticket. Text stays text, even with an image beside it: the cells of a spreadsheet
+   * The files pasted are attached to the ticket. Text stays text, even with an image beside it: the cells of a spreadsheet
    * come with an image of themselves.
    */
   function onPaste(e: ClipboardEvent) {
@@ -209,9 +301,9 @@
     const list = [...(e.clipboardData?.files ?? [])];
     if (list.length) {
       e.preventDefault();
-      addImages(list);
+      addFiles(list);
     } else {
-      addImages(clipboardImage().then((f) => (f ? [f] : [])));
+      addFiles(clipboardImage().then((f) => (f ? [f] : [])));
     }
   }
 
@@ -221,7 +313,7 @@
     if (list.length) {
       // Left to the WebView, a dropped file would replace the app.
       e.preventDefault();
-      addImages(list);
+      addFiles(list);
     }
   }
 
@@ -280,7 +372,8 @@
       body: t('board.form.discardBody'),
       confirm: t('board.form.discard'),
       danger: true,
-      onConfirm: () => {},
+      // Given up for good: the copies this form made are of no use to anyone. Cancelled, the form comes back with them.
+      onConfirm: discardCopies,
       onCancel: () => (app.modal = self),
     };
   }
@@ -306,6 +399,8 @@
         // Only when they changed from what the ticket had (not `held`: one gone from its folder is taken off at any save);
         // those of an edited ticket may not be read yet.
         ...(imagesChanged(images, start.images) ? { images: draftImages(images) } : {}),
+        // The same for the files: the whole list, those kept by their file and the copies by their path.
+        ...(filesChanged(files, start.files) ? { files: draftFiles(files) } : {}),
       });
     } finally {
       busy = false;
@@ -327,7 +422,7 @@
 
   /**
    * The height of the window of the app: a short one gets two rows less in each big field, for the rest of the form to show.
-   * The images take three rows of the description (their height) for the same reason.
+   * The images take three rows of the description (their height) for the same reason, the chips of the files two.
    */
   let viewHeight = $state(window.innerHeight);
   const short = $derived(viewHeight < 820);
@@ -361,17 +456,16 @@
         <input
           bind:this={fileInput}
           type="file"
-          accept={IMAGE_ACCEPT}
           multiple
           hidden
-          aria-label={t('board.form.images.attach')}
+          aria-label={t('board.form.attach')}
           onchange={(e) => {
-            // Copied first: the list is the input's own, emptied with its value below, before `addImages` reads it.
-            addImages([...(e.currentTarget.files ?? [])]);
+            // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
+            addFiles([...(e.currentTarget.files ?? [])]);
             e.currentTarget.value = '';
           }}
         />
-        <button class="attach" use:tip={t('board.form.images.attachTitle')} onclick={() => fileInput?.click()}>
+        <button class="attach" use:tip={t('board.form.attachTitle')} onclick={() => fileInput?.click()}>
           <svg
             width="13"
             height="13"
@@ -383,14 +477,14 @@
             stroke-linejoin="round"
             aria-hidden="true"
             ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
-          >{t('board.form.images.attach')}
+          >{t('board.form.attach')}
         </button>
       </div>
       <textarea
         bind:this={descriptionField}
         id="{uid}-description"
         class="description"
-        rows={(short ? 10 : 12) - (images.length ? 3 : 0)}
+        rows={(short ? 10 : 12) - (images.length ? 3 : 0) - (files.length ? 2 : 0)}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
         use:grow={description}
@@ -409,6 +503,13 @@
               {/if}
               <button class="rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}>×</button>
             </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if files.length}
+        <ul class="files" bind:this={fileList} aria-label={t('board.form.files.label')}>
+          {#each files as f, i (f)}
+            <li><AttachmentChip attachment={f} onremove={() => removeFile(i)} /></li>
           {/each}
         </ul>
       {/if}
@@ -557,6 +658,15 @@
   }
   /* The images under the description, as the chat shows its attachments. */
   .imgs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* The files that are no image, as the chat shows them: chips. */
+  .files {
     list-style: none;
     margin: 0;
     padding: 0;

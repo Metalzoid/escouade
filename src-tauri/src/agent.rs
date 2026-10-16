@@ -1,6 +1,7 @@
 //! Runtime state of one agent: turns raw Claude Code frames into conversation items,
 //! tracks status, pending questions/permissions and per-turn usage.
 
+use crate::attachfiles;
 use crate::board::TurnEnd;
 use crate::claude::{truncate, ClaudeProcess};
 use crate::conv::Conv;
@@ -1993,6 +1994,26 @@ impl AgentRt {
                 let tool = req["tool_name"].as_str().unwrap_or("").to_string();
                 let input = req["input"].clone();
                 let tool_use_id = req["tool_use_id"].as_str().unwrap_or("").to_string();
+                // The reading of a file the user joined by its own path (the file itself, nothing
+                // else, never a change): allowed on the spot, no card and nobody waited for. The
+                // user chose that file; `--add-dir` cannot give a folder that was not known at the
+                // start. Any other request, or one the process no longer takes, goes on below.
+                if attachfiles::granted(&self.meta.granted_files, &tool, &input) {
+                    let allowed = json!({
+                        "behavior": "allow", "updatedInput": input, "toolUseID": tool_use_id,
+                    });
+                    if self
+                        .proc
+                        .as_ref()
+                        .is_some_and(|p| p.respond(rid, allowed).is_ok())
+                    {
+                        log::info!(
+                            "agent {}: a file joined by its path is read without a question",
+                            self.meta.id
+                        );
+                        return;
+                    }
+                }
                 let suggestions = req["permission_suggestions"].clone();
                 let body = if tool == "AskUserQuestion" {
                     notify::question_body(&input)

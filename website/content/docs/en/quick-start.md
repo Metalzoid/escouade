@@ -61,7 +61,7 @@ A new agent starts with the values of Settings › Claude Code: “Default model
 Click in the message field, describe the task (“Describe the task to give to Claude…”), then press `Enter` to send. `Shift+Enter` starts a new line.
 
 - Type `@` followed by a bit of a file name to pick a file of the project, or `/` to pick a command.
-- Paste or drop an image, a PDF or a text file into the field, or click the paperclip, to attach it to the message.
+- Paste or drop any file (an image, a PDF, a text file, but also an archive or a spreadsheet) into the field, or click the paperclip, to attach it to the message.
 
 As soon as you send, the agent’s status changes to “Running” and the conversation says “Claude is working…”. Its tool calls show up as compact rows that you can unfold. You can write to it while it works: it takes your message into account at its next step. To stop it, press `Esc` in the message field or click “■ Stop”.
 
@@ -108,7 +108,7 @@ If the agent works in a worktree, the panel also offers “Merge … → …”,
 
 ## What next
 
-- [Agents](managing-agents) and [the conversation](chat): permission modes, messages, images, search, history.
+- [Agents](managing-agents) and [the conversation](chat): permission modes, messages, attachments, search, history.
 - [Notifications](notifications) and [keeping track of agents](overview): get notified, answer without opening each conversation.
 - [Git and commits](git), [worktrees](worktrees) and [branches](branches): review, commit, isolate agents.
 - [The editor](editor), [terminals](terminals) and [running the project](launch).

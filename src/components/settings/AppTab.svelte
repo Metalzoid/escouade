@@ -19,6 +19,10 @@
   let { tab }: { tab: 'claude' | 'notifications' | 'terminals' | 'network' | 'about' } = $props();
 
   const s = $derived(settingsForm.settings);
+  const bigTextOptions = $derived([
+    { value: 'path' as const, label: t('settings.claude.attachBigTextPath') },
+    { value: 'refuse' as const, label: t('settings.claude.attachBigTextRefuse') },
+  ]);
   let checking = $state(false);
 
   // Where the `claude` of the path is, asked a moment after the path or the distribution changes (a look into WSL
@@ -115,6 +119,41 @@
         min="0"
         aria-label={t('settings.claude.idleStopLabel')}
         bind:value={s.idleStopMinutes}
+      />
+    </Row>
+  </Group>
+  <Group title={t('settings.claude.attachments')} note={t('settings.claude.attachmentsNote')}>
+    <Row label={t('settings.claude.attachMax')} hint={t('settings.claude.attachMaxHint')}>
+      <input
+        class="field mono input short"
+        type="number"
+        min="0"
+        aria-label={t('settings.claude.attachMaxLabel')}
+        bind:value={s.attachMaxMb}
+      />
+    </Row>
+    <Row label={t('settings.claude.attachWarn')} hint={t('settings.claude.attachWarnHint')}>
+      <input
+        class="field mono input short"
+        type="number"
+        min="0"
+        aria-label={t('settings.claude.attachWarnLabel')}
+        bind:value={s.attachWarnMb}
+      />
+    </Row>
+    <Row label={t('settings.claude.attachOrigin')} desc={t('settings.claude.attachOriginDesc')}>
+      <Switch label={t('settings.claude.attachOrigin')} bind:on={s.attachOrigin} />
+    </Row>
+    <Row label={t('settings.claude.attachBigText')} desc={t('settings.claude.attachBigTextDesc')}>
+      <Chips label={t('settings.claude.attachBigText')} options={bigTextOptions} bind:value={s.attachBigText} />
+    </Row>
+    <Row label={t('settings.claude.attachKeep')} hint={t('settings.claude.attachKeepHint')}>
+      <input
+        class="field mono input short"
+        type="number"
+        min="0"
+        aria-label={t('settings.claude.attachKeepLabel')}
+        bind:value={s.attachKeepDays}
       />
     </Row>
   </Group>

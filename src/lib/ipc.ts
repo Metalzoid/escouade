@@ -5,6 +5,7 @@ import type {
   AccountStatus,
   AccountView,
   Agent,
+  AttachedFile,
   Attachment,
   BoardSettings,
   BranchInfo,
@@ -154,7 +155,28 @@ export const api = {
   /** Searches the conversations of a project's agents (all projects' with null), archived agents included or not. */
   searchConversations: (query: string, projectId: string | null, archived: boolean) =>
     invoke<ConvSearchResult>('search_conversations', { query, projectId, archived }),
-  sendMessage: (id: string, text: string, attachments: Attachment[] = []) => invoke<void>('send_message', { id, text, attachments }),
+  /** `files`: those attached by their path (copies the app holds, or the files themselves): their paths go to Claude after the text. */
+  sendMessage: (id: string, text: string, attachments: Attachment[] = [], files: AttachedFile[] = []) =>
+    invoke<void>('send_message', { id, text, attachments, files }),
+  /** Opens a copy to write, for `owner` (an agent's id, or « draft »): the handle of the write. Refused over the maximum size. */
+  attachOpen: (owner: string, name: string, size: number) => invoke<string>('attach_open', { owner, name, size }),
+  /** The next bytes of a copy, raw (not base64 in a JSON): the handle goes in a header. */
+  attachChunk: (handle: string, bytes: Uint8Array) => invoke<void>('attach_chunk', bytes, { headers: { 'x-handle': handle } }),
+  attachFinish: (handle: string) => invoke<AttachedFile>('attach_finish', { handle }),
+  /** Erases a copy half written. */
+  attachCancel: (handle: string) => invoke<void>('attach_cancel', { handle }),
+  /** Erases a copy finished (its chip removed); the backend refuses any file that is not one of `owner`'s copies. */
+  attachDiscard: (owner: string, path: string) => invoke<void>('attach_discard', { owner, path }),
+  /**
+   * A file attached where it is: checked, not copied. `id` is the one `fileOrigin` was asked for: the backend finds the path
+   * itself, from what the host read, and refuses an id it does not know or has given out already. The page never gives a path.
+   */
+  attachOrigin: (owner: string, id: string) => invoke<AttachedFile>('attach_origin', { owner, id }),
+  /**
+   * The path of the file the window gave the WebView under `id` (see `file-origin.ts`); null when it is no file of the disk. The
+   * backend keeps the path for `attachOrigin`: the page has no use for it but to know the file is one of the disk.
+   */
+  fileOrigin: (id: string) => invoke<string | null>('file_origin', { id }),
   /** The image on the system's clipboard as PNG, empty without one: read for WebKitGTK (Linux), which leaves it out of a paste. */
   clipboardImage: () => invoke<ArrayBuffer>('clipboard_image'),
   interrupt: (id: string) => invoke<void>('interrupt', { id }),

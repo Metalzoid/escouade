@@ -39,7 +39,9 @@ When Claude is waiting for an answer to a question or a permission, the field’
 
 ### Attachments
 
-There are three ways to attach a file: paste it (`Ctrl+V`, for example a copied screenshot), drag it onto the field, or click the paperclip (“Attach a file”). A thumbnail or a file name appears above the field; the cross removes it.
+You can attach any file: an image, a PDF or a text file, but also an archive, a spreadsheet, a document, a video, an audio file… There are three ways to attach it: paste it (`Ctrl+V`, for example a copied screenshot), drag it onto the field, or click the paperclip (“Attach a file”). The file dialog has no filter: it shows every file. Each file appears above the field: a thumbnail for an image, otherwise a chip with an icon for its type (archive, spreadsheet, document, video, audio, code, or generic), its name, its size, and a cross that removes it. While a file is being copied (see below), its chip shows a percentage and a progress bar, and “Send” stays grayed out.
+
+Escouade hands a file to Claude in one of two ways. What Claude reads directly stays **in the message**, within these limits:
 
 | Type | Formats | Maximum size |
 |---|---|---|
@@ -47,9 +49,43 @@ There are three ways to attach a file: paste it (`Ctrl+V`, for example a copied 
 | PDF | `.pdf` | 18 MB |
 | Text | Code, configuration, logs, CSV, Markdown, JSON… and files with no known extension such as `Dockerfile` or `.env.local` | 256 KB |
 
-The files of one message don’t exceed 18 MB in all. A rejected file (unknown format, too big, binary) is named in a red message, and the others are attached anyway. In the conversation, the message shows “2 images” and the names of the files.
+The files of one message don’t exceed 18 MB in all.
 
-Attached files don’t go with an answer to a question or a permission: they stay ready for your next message. In the Claude Code view, Escouade’s message field isn’t shown: only an image (a screenshot, for instance) can be attached there, pasted into the terminal; see [the Claude Code view](claude-code-view).
+Everything else goes **by path**: any other format, a readable file that is too big for the message (an image over 5 MB, a PDF over 18 MB, a text file over 256 KB), or whatever would push the message past 18 MB. The message then gives Claude the file’s path: one more line per file, after your text (or alone, if you wrote nothing). Claude reads the file with its tools.
+
+```text
+Attached file: report.xlsx, C:\…\report.xlsx
+```
+
+The line follows the language of the texts written by Claude (`Fichier joint : …` in French, see [Application settings](settings-application)). In WSL, the path is the one Claude Code reads, for example `/mnt/c/…`.
+
+A file is rejected if it exceeds the maximum size you set (none by default), if it’s a text file over 256 KB and you chose to refuse those, or if Escouade can’t read or copy it. It is named in a red message, and the other files are attached anyway. In the conversation, the message shows “2 images” and the names of the files; the lines of the files sent by path are there too, with your text. If Escouade can no longer find a file when you send (moved or deleted in the meantime), the message is refused, with the reason, and goes back to the field.
+
+Attached files don’t go with an answer to a question or a permission: they stay ready for your next message. In the Claude Code view, Escouade’s message field isn’t shown: a file is attached by pasting it into the terminal or dropping it there, and it is always copied; see [the Claude Code view](claude-code-view). In a ticket’s window, files are always copied too; see [the Kanban](board).
+
+### Copy or original file
+
+A file sent by path is either the original file or a copy.
+
+- **The original file** (the default, thanks to the “Attach the original file” setting): nothing is copied, Claude reads the file where it is. Escouade has to know its path, and it only does on Windows: the app itself reads the path of a file on disk dropped or pasted from Explorer, and the window can’t give it any other. A pasted screenshot isn’t a file on disk: it has no path. A path the app didn’t read itself is refused, when attaching as when sending the message, and a file in Escouade’s data folder is never attached by its path: it is refused. On Linux and macOS, there is no original path: files are copied. For a dropped file, Escouade doesn’t give Claude its folder: Claude Code asks for permission to read a file that is in none of its folders, and Escouade answers “allowed” on its own, for that file alone, at its original path, and only to read it (never to write to it). Any other request comes back to you as usual, including one for a tool other than reading (such as `Bash`). Claude reads the file as it is at that moment: if you changed it, it reads the changed version; if you moved or deleted it, it is no longer found. The chip of an original file carries a marker and the tooltip “Original file, read where it is”, so that you don’t take it for a copy.
+- **A copy**: Escouade copies the file under its real name, in chunks of 4 MB at most, into its data folder (`attachments/<agent>/`, see [local data](data)), outside your repository. Claude Code reads that folder without asking. The copy is made when the original path is unknown (on Linux and macOS, and for a screenshot pasted from the clipboard, which isn’t a file on disk), when you turn off “Attach the original file”, for tickets (their agent reads the file later, when the original may have moved or vanished), and for the Claude Code view (its process is launched once, with no way to open one more folder for it).
+
+> [!NOTE]
+> That Claude Code reads the copies’ folder without asking has been checked with the real Claude Code (2.1.301). Escouade allowing an original file has been checked with a fake Claude Code in the automatic tests (the real one does send the message’s exact path in its request); the path translated under WSL has not been tried for real.
+
+### Size, large text files, and settings
+
+- **Size.** No limit by default. A file over 200 MB carries a warning (a “!” mark on its chip, whose tooltip says “Big file: 250 MB, copied to the disk”, or “… attached where it is, not copied” for an original file), but it is attached all the same. So is an empty file. You can set a maximum size: past it, the file is rejected.
+- **Text file over 256 KB.** By default, it goes by path like the other files. You can have it rejected, as before, by setting “Text over 256 KB” to “Refused”; that holds in a ticket’s window and in the Claude Code view too.
+- **Settings.** The five settings of the “Attachments” group (“Largest attached file”, “Warn above”, “Attach the original file”, “Text over 256 KB”, and “Purge copies after”) are in [Settings › Claude Code](settings-claude-code#attachments), with their defaults.
+
+### Deleting attached files
+
+- The cross of a chip deletes the copy, or stops the one in progress. For an original file, it only removes the chip.
+- An agent’s copies go with it when you delete it. A project’s copies go when you delete it for good: closing a project keeps them with its history, and the size of that history (in Settings › Projects) counts them too, like the images of its tickets. A ticket’s copies go with the ticket.
+- If you set the purge, Escouade deletes the copies older than the number of days you chose, at startup and then every hour. By default, nothing is purged.
+- Escouade never deletes an original file.
+- For each agent, Escouade keeps, with it, the list of original files it has allowed that agent to read (200 at most, the most recent). The interface doesn’t show this list yet and doesn’t let you remove a file from it; deleting the agent erases it.
 
 ### Mentioning a file with @
 
@@ -65,7 +101,7 @@ At the very start of a message, `/` opens the list of commands that Claude Code 
 
 ### Drafts
 
-What you write is kept separately for each agent: switching to another agent and coming back finds your text. The text also survives a restart, an update, or a reload of the window (it is saved a moment after your last keystroke). Attachments stay in memory: they disappear on restart. A draft is cleared when the message goes out, or when the agent is deleted. If sending fails, the message comes back into the field and an error is shown.
+What you write is kept separately for each agent: switching to another agent and coming back finds your text. The text also survives a restart, an update, or a reload of the window (it is saved a moment after your last keystroke). Attachments stay in memory: their chips disappear on restart (the copy of a file sent by path stays on disk, with the agent’s other copies). A draft is cleared when the message goes out, or when the agent is deleted. If sending fails, the message comes back into the field and an error is shown.
 
 ### Model, effort, mode, and account
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -72,6 +72,30 @@ describe('TicketCard', () => {
     show(ticket());
     expect(card()).not.toHaveAttribute('aria-describedby');
     expect(card().querySelector('.clip')).toBeNull();
+  });
+
+  it('counts its files in the paperclip too, the images and the files told apart in what it says', () => {
+    fakeBackend();
+    const image = { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' };
+    const files = [
+      { name: 'budget.xlsx', file: 'ab12cd34/budget.xlsx', size: 2048 },
+      { name: 'sources.zip', file: 'ef56ab78/sources.zip', size: 4096 },
+    ];
+    const card = () => screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' });
+    const check = (description: string, count: string) => {
+      expect(card()).toHaveAccessibleDescription(description);
+      const clip = card().querySelector('.clip')!;
+      expect(clip).toHaveAttribute('data-tip', description);
+      expect(clip.querySelector('.mono')).toHaveTextContent(count);
+    };
+    const only = show(ticket({ files }));
+    check('2 fichiers joints', '2');
+    only.unmount();
+    const one = show(doing({ files: files.slice(1) }));
+    check('1 fichier joint', '1');
+    one.unmount();
+    show(ticket({ images: [image], files }));
+    check('1 image jointe, 2 fichiers joints', '3');
   });
 
   it('shows the line its agent reported, with what it does right now, until it reports another', () => {
@@ -305,6 +329,31 @@ describe('TicketCard', () => {
     ])('says it as well, with %i image(s), for a ticket imported from a service', async (count, body) => {
       const external = { service: 'jira' as const, id: 'ATL-1', key: 'ATL-1', container: 'ATL', url: 'https://a.test/ATL-1', error: null };
       expect(await bodyFor(ticket({ images: IMAGES.slice(0, count), external }))).toBe(body);
+    });
+
+    const FILES = [
+      { name: 'budget.xlsx', file: 'ab12cd34/budget.xlsx', size: 2048 },
+      { name: 'sources.zip', file: 'ef56ab78/sources.zip', size: 4096 },
+    ];
+
+    it.each([
+      [[], 1, 'Le ticket, sa description et sa pièce jointe sont supprimés.'],
+      [[], 2, 'Le ticket, sa description et ses 2 pièces jointes sont supprimés.'],
+      // The images and the files count together: they are all attached to it.
+      [IMAGES, 1, 'Le ticket, sa description et ses 3 pièces jointes sont supprimés.'],
+    ])('says as well that the files go with the ticket (case %#)', async (images, count, body) => {
+      expect(await bodyFor(ticket({ images, files: FILES.slice(0, count) }))).toBe(body);
+    });
+
+    it('says it of the files for a ticket imported from a service as well', async () => {
+      const external = { service: 'jira' as const, id: 'ATL-1', key: 'ATL-1', container: 'ATL', url: 'https://a.test/ATL-1', error: null };
+      expect(await bodyFor(ticket({ files: FILES.slice(0, 1), external }))).toBe(
+        'Le ticket, sa description et sa pièce jointe sont supprimés. Il ne sera plus importé depuis Jira.',
+      );
+      cleanup();
+      expect(await bodyFor(ticket({ files: FILES, external }))).toBe(
+        'Le ticket, sa description et ses 2 pièces jointes sont supprimés. Il ne sera plus importé depuis Jira.',
+      );
     });
   });
 
@@ -872,6 +921,24 @@ describe('TicketCard in English', () => {
   it('counts its images in English', () => {
     show(ticket({ images: [{ file: 'a1.png', name: 'capture.png', mediaType: 'image/png' }] }));
     expect(screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' })).toHaveAccessibleDescription('1 image attached');
+  });
+
+  it('counts its files in English, and says they go with the ticket when it is deleted', async () => {
+    const files = [
+      { name: 'budget.xlsx', file: 'ab12cd34/budget.xlsx', size: 2048 },
+      { name: 'sources.zip', file: 'ef56ab78/sources.zip', size: 4096 },
+    ];
+    const image = { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' };
+    const { unmount } = show(ticket({ images: [image], files: files.slice(1) }));
+    expect(screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' })).toHaveAccessibleDescription(
+      '1 image attached, 1 file attached',
+    );
+    unmount();
+    show(ticket({ files }));
+    expect(screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' })).toHaveAccessibleDescription('2 files attached');
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+    menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
+    expect(app.modal).toMatchObject({ body: 'The ticket, its description and its 2 attachments are deleted.' });
   });
 
   it('labels the line its agent reported in English', () => {

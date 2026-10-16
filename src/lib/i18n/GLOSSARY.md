@@ -485,6 +485,18 @@ La liste sous la carte d’un agent et la conversation de chaque sous-agent (`su
 | Ouvrir la conversation d’un sous-agent | Open the conversation of a subagent | le bouton de la pile de points du bandeau « Plan » quand plusieurs sous-agents tournent (il ouvre un menu pour choisir lequel) ; avec un seul, il porte le nom de ce sous-agent (« Ouvrir la conversation du sous-agent … ») |
 | Demande du sous-agent « nom » | Request of the subagent “name” | la ligne au-dessus d’une question ou d’une autorisation qu’un sous-agent a posée |
 
+## F — fichiers joints (ESC-95)
+
+| Français | Anglais | Note |
+|---|---|---|
+| joint par son chemin | attached by its path | un fichier que le message ne porte pas : Claude en reçoit le chemin et le lit avec ses outils |
+| fichier d’origine | original file | le fichier lui-même, joint là où il est, sans copie ; « sans copie » → “not copied” |
+| Fichier d’origine, lu là où il est | Original file, read where it is | la marque (et son infobulle) de la puce d’un fichier joint là où il est, sans copie |
+| copie (d’un fichier joint) | copy | ce qu’Escouade garde sur le disque pour un agent, un projet ou un ticket |
+| Copie de film.mkv | Copying film.mkv | le nom de la barre de progression d’une copie |
+| Gros fichier : 250 Mo, copié sur le disque | Big file: 250 MB, copied to the disk | l’avertissement d’un fichier au-delà du seuil des réglages |
+| Purger les copies après N jours | Purge copies after N days | « 0 = tant que leur propriétaire existe » → “0 = as long as their owner exists” (propriétaire : l’agent, le projet ou le ticket) |
+
 ## B — tâches de fond (ESC-14)
 
 La liste sous la carte d’un agent, la puce de sa carte et la vue de chaque tâche que Claude Code lance en arrière-plan (`bgtasks`). Les titres, commandes, phases, résumés et la sortie des tâches sont les mots de l’agent et de Claude Code : jamais traduits. « tâche de fond » (“background task”) est déjà dans la section L8 ; elle désigne ici toute tâche de la liste : commande, surveillance, workflow, agent distant, coéquipier (les sous-agents ont leur propre liste, voir S).

@@ -45,6 +45,11 @@ export const SETTINGS: Settings = {
   osNotifications: true,
   notifyFor: { questions: true, done: true, errors: true, tickets: true },
   idleStopMinutes: 30,
+  attachMaxMb: 0,
+  attachWarnMb: 200,
+  attachOrigin: true,
+  attachBigText: 'path',
+  attachKeepDays: 0,
   pwshPath: '',
   bashPath: '',
   wslDistro: '',
@@ -220,6 +225,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     model: '',
     effort: '',
     images: [],
+    files: [],
     ...over,
   };
 }

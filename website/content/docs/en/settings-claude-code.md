@@ -1,6 +1,6 @@
 # Settings: Claude Code
 
-The “Claude Code” tab sets the Claude Code executable, the model, effort, and permission mode of new agents, how Claude processes live, remote control for all agents, and the server that lets Claude drive Escouade.
+The “Claude Code” tab sets the Claude Code executable, the model, effort, and permission mode of new agents, how Claude processes live, attachments, remote control for all agents, and the server that lets Claude drive Escouade.
 
 ## Executable
 
@@ -103,6 +103,20 @@ If the agent keeps a list, Escouade shows its progress in the “Plan” banner;
 ### Idle processes
 
 The field is a number of minutes; 0 means never, and an empty field counts as 0. The session of an agent whose process was stopped stays resumable. An agent in remote control is never stopped this way, so that it stays reachable from claude.ai.
+
+## Attachments
+
+This group decides what happens to attached files sent by path (see [attachments](chat#attachments)). It doesn’t touch what Claude reads in the message: images, PDFs, and text files within their limits.
+
+| Setting | Effect | Default |
+|---|---|---|
+| “Largest attached file” (MB, 0 = no limit) | Past it, the file is rejected. | 0 |
+| “Warn above” (MB, 0 = never) | Past it, the file’s chip carries a warning; the file is attached all the same. | 200 |
+| “Attach the original file” | On: a file you drop is attached where it is, without a copy: Claude reads it at its location, when Escouade knows its path (on Windows only: on Linux and macOS, files are always copied). Off: Escouade always keeps a copy. Tickets and the Claude Code view copy in every case. | On |
+| “Text over 256 KB” | “Attached by its path”, like the other files, or “Refused”, as before. | “Attached by its path” |
+| “Purge copies after” (days, 0 = as long as their owner exists) | Copies older than this many days are deleted, along with their empty folders, at startup and then every hour. 0 = they stay as long as their agent, project, or ticket exists. | 0 |
+
+An emptied number field counts as 0. The largest size applies to every file sent by path: in the chat, in the Claude Code view, and in tickets. The warning only shows on a chip (chat and tickets). The purge never deletes an original file. A message’s copies are in `attachments/<agent>/`, a ticket’s in `tickets/<ticket>/files/`, under the [data folder](data).
 
 ## Remote control
 

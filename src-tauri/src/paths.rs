@@ -273,6 +273,10 @@ pub fn migrate_app_folders() {
     }
 }
 
+/// The name of the folder of a ticket's files that are no image, in the ticket's own. No dot in
+/// it: the images of a ticket are files of that folder too, named `<id>.<extension>`.
+pub const TICKET_FILES: &str = "files";
+
 /// Layout of the app's data folder. Injected so tests run on throwaway folders.
 #[derive(Debug, Clone)]
 pub struct DataDir(PathBuf);
@@ -360,6 +364,33 @@ impl DataDir {
         self.tickets().join(if plain { ticket_id } else { "_" })
     }
 
+    /// The folder of the ticket's files that are no image (`<uniq>/<name>` in it), in its own
+    /// folder: it goes with the ticket, and its agent's Claude Code reads it without a question
+    /// (`--add-dir`).
+    pub fn ticket_files(&self, ticket_id: &str) -> PathBuf {
+        self.ticket_dir(ticket_id).join(TICKET_FILES)
+    }
+
+    /// The files joined to messages, a folder each for what owns them: an agent, or the drafts of
+    /// the tickets' forms (`drafts_files`).
+    pub fn attachments(&self) -> PathBuf {
+        self.0.join("attachments")
+    }
+
+    /// The folder of the files joined to the agent's messages (`<uniq>/<name>` in it), readable by
+    /// its Claude Code without a question (`--add-dir`). An id is a name of its own (`new_id`): one
+    /// of a hand-edited state that is not (or that starts with `_`, the drafts' folder's first
+    /// letter) never names the folder of another owner, nor one above it.
+    pub fn agent_files(&self, agent_id: &str) -> PathBuf {
+        let own = is_agent_folder_id(agent_id);
+        self.attachments().join(if own { agent_id } else { "_" })
+    }
+
+    /// The files joined in a ticket's form, before it is saved.
+    pub fn drafts_files(&self) -> PathBuf {
+        self.attachments().join("_drafts")
+    }
+
     /// The configuration folders of the Claude accounts made in the settings (all but Principal's),
     /// one per account: each its `CLAUDE_CONFIG_DIR`.
     pub fn claude_accounts(&self) -> PathBuf {
@@ -400,6 +431,12 @@ impl DataDir {
     pub fn ensure(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(self.conversations())
     }
+}
+
+/// Whether the agent `id` has a folder of its own for its joined files (`DataDir::agent_files`): a
+/// plain id that does not start with `_`.
+pub fn is_agent_folder_id(id: &str) -> bool {
+    is_plain_id(id) && !id.starts_with('_')
 }
 
 /// Whether `id` is a name of its own, as `new_id` makes them: letters, digits, `-` and `_`.
@@ -976,6 +1013,22 @@ mod tests {
                 "{id:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_files_of_a_ticket_are_in_a_folder_of_its_own_that_goes_with_it() {
+        let d = DataDir::new(PathBuf::from("C:/data"));
+        assert_eq!(
+            d.ticket_files("3f2a9c01b7de"),
+            PathBuf::from("C:/data/tickets/3f2a9c01b7de/files")
+        );
+        // A doubtful id has the shared folder's, never one above it.
+        assert_eq!(
+            d.ticket_files("../x").parent(),
+            Some(d.ticket_dir("../x").as_path())
+        );
+        // Not a name an image takes (a name, a dot, an extension): the two do not meet.
+        assert!(!TICKET_FILES.contains('.'));
     }
 
     fn rename(a: &Path, b: &Path) -> std::io::Result<()> {

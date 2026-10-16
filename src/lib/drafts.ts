@@ -1,6 +1,7 @@
 // What is typed in each agent's composer. The text is kept in the local preferences, so that it
 // survives a restart, an update or a reload. Attachments stay in memory: they are heavy, and the
-// files they were read from may have moved by then.
+// files they were read from may have moved by then. A file attached by its path is no more than its
+// chip here: the copy stays on the disk with its agent, but a restart forgets the chip, as the rest.
 
 import type { DraftAttachment } from './attachments';
 import { readPref, removePref, writePref } from './prefs';

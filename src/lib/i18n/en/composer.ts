@@ -26,12 +26,15 @@ export default defineZone('composer', {
     unsupported: '“{name}” can’t be attached. Supported files are images (PNG, JPEG, GIF, WebP), PDFs and text files.',
     tooBig: '{name} is over {max}',
     notText: '{name} isn’t a text file, so it can’t be attached.',
-    totalTooBig: '{name} wasn’t attached: the files of a message are limited to {max} in total.',
     remove: 'Remove {name}',
+    copying: 'Copying {name}',
+    warnCopy: 'Big file: {size}, copied to the disk',
+    warnOrigin: 'Big file: {size}, attached where it is, not copied',
+    original: 'Original file, read where it is',
   },
   attach: {
     label: 'Attach a file',
-    title: 'Attach an image, a PDF or a text file (or paste / drop it)',
+    title: 'Attach a file (or paste / drop it)',
   },
 
   placeholder: {

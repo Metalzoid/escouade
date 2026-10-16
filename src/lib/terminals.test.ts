@@ -151,6 +151,11 @@ function clipboard(o: { text?: string; files?: File[]; types?: string[] }) {
   };
 }
 
+/** What is dragged over a terminal: the same as a clipboard, with the effect the drop is given. */
+function dragged(o: { text?: string; files?: File[] }) {
+  return { ...clipboard(o), dropEffect: 'none' };
+}
+
 describe('what a paste in Claude Code’s interface carries', () => {
   it('leaves text to the terminal', () => {
     expect(pastedContent(clipboard({ text: 'npm test' }))).toEqual({ kind: 'text', text: 'npm test' });
@@ -162,26 +167,26 @@ describe('what a paste in Claude Code’s interface carries', () => {
 
   it('takes a screenshot, an image without text', () => {
     const image = capture();
-    expect(pastedContent(clipboard({ files: [image] }))).toEqual({ kind: 'image', files: [image] });
+    expect(pastedContent(clipboard({ files: [image] }))).toEqual({ kind: 'files', files: [image] });
   });
 
-  it('takes the images among the files copied, by their type or their name, in their order', () => {
+  it('takes every file copied, images and others, in their order', () => {
     const notes = new File(['x'], 'notes.txt', { type: 'text/plain' });
     const photo = new File([new Uint8Array(PNG)], 'photo.JPG', { type: '' });
     const image = capture();
-    expect(pastedContent(clipboard({ files: [photo, notes, image] }))).toEqual({ kind: 'image', files: [photo, image] });
+    expect(pastedContent(clipboard({ files: [photo, notes, image] }))).toEqual({ kind: 'files', files: [photo, notes, image] });
   });
 
-  it('leaves files that are no image to the terminal', () => {
+  it('takes a file that is no image as it takes an image', () => {
     const doc = new File(['%PDF'], 'devis.pdf', { type: 'application/pdf' });
-    expect(pastedContent(clipboard({ files: [doc] }))).toEqual({ kind: 'text', text: '' });
+    expect(pastedContent(clipboard({ files: [doc] }))).toEqual({ kind: 'files', files: [doc] });
   });
 
-  it('takes an empty text, or a blank one beside an image, for none', () => {
+  it('takes an empty text, or a blank one beside a file, for none', () => {
     const image = capture();
-    expect(pastedContent(clipboard({ text: '', files: [image] }))).toEqual({ kind: 'image', files: [image] });
+    expect(pastedContent(clipboard({ text: '', files: [image] }))).toEqual({ kind: 'files', files: [image] });
     // Some applications give a line break with the image they copy.
-    expect(pastedContent(clipboard({ text: '\r\n', files: [image] }))).toEqual({ kind: 'image', files: [image] });
+    expect(pastedContent(clipboard({ text: '\r\n', files: [image] }))).toEqual({ kind: 'files', files: [image] });
     // Alone, a blank is pasted as it is.
     expect(pastedContent(clipboard({ text: ' ' }))).toEqual({ kind: 'text', text: ' ' });
   });
@@ -236,6 +241,22 @@ describe('pasting in Claude Code’s interface', () => {
         fireEvent(field, e);
         return e.defaultPrevented;
       },
+      /** What a drag over the terminal gets: whether the drop is accepted, and with what effect. */
+      dragOver(data: ReturnType<typeof dragged>) {
+        const e = createEvent.dragOver(field, { dataTransfer: data });
+        fireEvent(field, e);
+        return { accepted: e.defaultPrevented, effect: data.dropEffect };
+      },
+      /** Whether the drop was stopped (the WebView would open the file, or xterm.js take the text). */
+      drop(data: ReturnType<typeof dragged>) {
+        const e = createEvent.drop(field, { dataTransfer: data });
+        fireEvent(field, e);
+        return e.defaultPrevented;
+      },
+      dragEnter: (data: ReturnType<typeof dragged>) => void fireEvent(field, createEvent.dragEnter(field, { dataTransfer: data })),
+      dragLeave: (data: ReturnType<typeof dragged>) => void fireEvent(field, createEvent.dragLeave(field, { dataTransfer: data })),
+      /** The veil shown over the terminal while a file is held above it. */
+      veil: () => getXTerm(id)!.host.querySelector<HTMLElement>('.drop-veil')?.style.display,
       xterm: () => xterm,
     };
   }
@@ -373,6 +394,249 @@ describe('pasting in Claude Code’s interface', () => {
     expect(prevented).toBe(false);
     expect(xterm()).toBe(true);
     expect(backend.called('paste_image')).toHaveLength(0);
+    expect(backend.called('attach_open')).toHaveLength(0);
+  });
+
+  const doc = () => new File(['%PDF-1.4'], 'devis.pdf', { type: 'application/pdf' });
+  const zip = () => new File(['PK'], 'sources.zip', { type: 'application/zip' });
+  const copyPath = (name: string) => `/home/jean/.escouade/attachments/a1/4f2a9c1e/${name}`;
+  /** The backend of a copy: the handle is named after the file, and the copy comes back with the path Claude Code reads. */
+  const copying = (over: Record<string, (a: any) => unknown> = {}) => ({
+    agent_terminal: () => info,
+    attach_open: ({ name }: { name: string }) => `h:${name}`,
+    attach_finish: ({ handle }: { handle: string }) => ({
+      name: handle.slice(2),
+      size: 8,
+      origin: false,
+      path: `C:\\Users\\Jean Dupont\\.escouade\\attachments\\a1\\4f2a9c1e\\${handle.slice(2)}`,
+      claudePath: copyPath(handle.slice(2)),
+    }),
+    ...over,
+  });
+
+  describe('a file that is no image', () => {
+    it('is copied to the folder of the agent, and the path Claude Code reads it at is typed', async () => {
+      const backend = fakeBackend(copying());
+      const { prevented, xterm } = await paste(clipboard({ files: [doc()] }));
+      expect(prevented).toBe(true);
+      expect(xterm()).toBe(false);
+      await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf')]));
+      expect(backend.called('attach_open')[0].args).toEqual({ owner: 'a1', name: 'devis.pdf', size: 8 });
+      expect(new TextDecoder().decode(backend.called('attach_chunk')[0].args as unknown as Uint8Array)).toBe('%PDF-1.4');
+      expect(backend.called('attach_finish')).toHaveLength(1);
+      expect(backend.called('paste_image')).toHaveLength(0);
+    });
+
+    it('is always copied: the view of Claude Code cannot be given a folder to read afterwards', async () => {
+      const backend = fakeBackend(copying());
+      app.settings.attachOrigin = true;
+      await paste(clipboard({ files: [doc()] }));
+      await waitFor(() => expect(pasted).toHaveLength(1));
+      expect(backend.called('attach_origin')).toHaveLength(0);
+      expect(backend.called('file_origin')).toHaveLength(0);
+    });
+
+    it('is typed after the image copied with it, each on its own paste, in their order', async () => {
+      const backend = fakeBackend(copying({ paste_image: () => PATH }));
+      await paste(clipboard({ files: [doc(), capture(), new File(['PK'], 'sources.zip', { type: 'application/zip' })] }));
+      await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf'), PATH, copyPath('sources.zip')]));
+      expect(backend.called('paste_image')).toHaveLength(1);
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['devis.pdf', 'sources.zip']);
+    });
+
+    it('has its path typed once Claude Code takes pastes bracketed, as an image’s', async () => {
+      modes.bracketedPasteMode = false;
+      fakeBackend(copying());
+      await paste(clipboard({ files: [doc()] }));
+      await new Promise((r) => setTimeout(r, 200));
+      expect(pasted).toEqual([]);
+      modes.bracketedPasteMode = true;
+      await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf')]));
+    });
+
+    it('keeps the order of the pastes: text pasted while it is copied comes after its path', async () => {
+      let open: (handle: string) => void = () => {};
+      fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+      const field = await terminalField();
+      expect(field.paste(clipboard({ files: [doc()] }))).toBe(true);
+      expect(field.paste(clipboard({ text: ' résume-le' }))).toBe(true);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(pasted).toEqual([]);
+      open('h:devis.pdf');
+      await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf'), ' résume-le']));
+    });
+
+    it('says why when it cannot be copied, and types nothing for it', async () => {
+      const backend = fakeBackend(
+        copying({
+          attach_open: () => Promise.reject('devis.pdf dépasse 100 Mo'),
+        }),
+      );
+      await paste(clipboard({ files: [doc()] }));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'devis.pdf dépasse 100 Mo', kind: 'error' }));
+      expect(pasted).toEqual([]);
+      expect(backend.called('attach_chunk')).toHaveLength(0);
+    });
+
+    it('erases the half-written copy when a chunk fails', async () => {
+      const backend = fakeBackend(copying({ attach_chunk: () => Promise.reject('disque plein') }));
+      await paste(clipboard({ files: [doc()] }));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'disque plein', kind: 'error' }));
+      expect(backend.called('attach_cancel').map((c) => c.args)).toEqual([{ handle: 'h:devis.pdf' }]);
+      expect(pasted).toEqual([]);
+    });
+
+    it('follows the settings for a text over 256 Ko: refused when they say so, copied otherwise', async () => {
+      const backend = fakeBackend(copying());
+      const journal = new File(['x'], 'journal.log', { type: 'text/plain' });
+      Object.defineProperty(journal, 'size', { value: 300 * 1024 });
+      app.settings.attachBigText = 'refuse';
+      await paste(clipboard({ files: [journal] }));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'journal.log dépasse 256 Ko', kind: 'error' }));
+      expect(backend.called('attach_open')).toHaveLength(0);
+      expect(pasted).toEqual([]);
+      app.settings.attachBigText = 'path';
+      await paste(clipboard({ files: [journal] }));
+      await waitFor(() => expect(pasted).toEqual([copyPath('journal.log')]));
+    });
+
+    it('is not held to the 18 MB of an image: a big file is copied by chunks', async () => {
+      const backend = fakeBackend(copying());
+      const film = new File(['x'], 'film.mkv', { type: 'video/x-matroska' });
+      Object.defineProperty(film, 'size', { value: 20 * 1024 * 1024 });
+      await paste(clipboard({ files: [film] }));
+      await waitFor(() => expect(pasted).toEqual([copyPath('film.mkv')]));
+      expect(backend.called('attach_chunk')).toHaveLength(5);
+      expect(app.toasts).toEqual([]);
+    });
+  });
+
+  describe('a file dropped on it', () => {
+    it('accepts a drag that holds a file, as a copy', async () => {
+      fakeBackend(copying());
+      const field = await terminalField();
+      expect(field.dragOver(dragged({ files: [zip()] }))).toEqual({ accepted: true, effect: 'copy' });
+    });
+
+    it('leaves a drag of text alone', async () => {
+      fakeBackend(copying());
+      const field = await terminalField();
+      expect(field.dragOver(dragged({ text: 'npm test' }))).toEqual({ accepted: false, effect: 'none' });
+    });
+
+    it('copies a .zip to the folder of the agent and types the path Claude Code reads it at', async () => {
+      const backend = fakeBackend(copying());
+      const field = await terminalField();
+      expect(field.drop(dragged({ files: [zip()] }))).toBe(true);
+      await waitFor(() => expect(pasted).toEqual([copyPath('sources.zip')]));
+      expect(backend.called('attach_open')[0].args).toEqual({ owner: 'a1', name: 'sources.zip', size: 2 });
+      expect(new TextDecoder().decode(backend.called('attach_chunk')[0].args as unknown as Uint8Array)).toBe('PK');
+      expect(backend.called('attach_finish')).toHaveLength(1);
+      expect(backend.called('paste_image')).toHaveLength(0);
+    });
+
+    it('is always copied, never attached where it is: this view’s process cannot be given another folder to read', async () => {
+      const backend = fakeBackend(copying());
+      app.settings.attachOrigin = true;
+      const field = await terminalField();
+      field.drop(dragged({ files: [zip()] }));
+      await waitFor(() => expect(pasted).toHaveLength(1));
+      expect(backend.called('attach_origin')).toHaveLength(0);
+      expect(backend.called('file_origin')).toHaveLength(0);
+    });
+
+    it('writes a dropped image as a pasted one is, and types its path', async () => {
+      const backend = fakeBackend(copying({ paste_image: () => PATH }));
+      const field = await terminalField();
+      expect(field.drop(dragged({ files: [capture()] }))).toBe(true);
+      await waitFor(() => expect(pasted).toEqual([PATH]));
+      expect(backend.called('paste_image')[0].args).toEqual({ id: 'a1', mediaType: 'image/png', data: btoa(String.fromCharCode(...PNG)) });
+      expect(backend.called('attach_open')).toHaveLength(0);
+    });
+
+    it('types the path of each file on its own paste, in their order: Claude Code takes one path a paste, spaces and all', async () => {
+      const backend = fakeBackend(copying());
+      const field = await terminalField();
+      field.drop(dragged({ files: [doc(), zip()] }));
+      await waitFor(() => expect(pasted).toEqual([copyPath('devis.pdf'), copyPath('sources.zip')]));
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['devis.pdf', 'sources.zip']);
+    });
+
+    it('leaves a drop of text alone: xterm.js and the WebView do what they did', async () => {
+      const backend = fakeBackend(copying());
+      const field = await terminalField();
+      expect(field.drop(dragged({ text: 'npm test' }))).toBe(false);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(pasted).toEqual([]);
+      expect(backend.called('attach_open')).toHaveLength(0);
+      expect(backend.called('paste_image')).toHaveLength(0);
+    });
+
+    it('has its path typed once Claude Code takes pastes bracketed, as a pasted file’s', async () => {
+      modes.bracketedPasteMode = false;
+      fakeBackend(copying());
+      const field = await terminalField();
+      field.drop(dragged({ files: [zip()] }));
+      await new Promise((r) => setTimeout(r, 200));
+      expect(pasted).toEqual([]);
+      modes.bracketedPasteMode = true;
+      await waitFor(() => expect(pasted).toEqual([copyPath('sources.zip')]));
+    });
+
+    it('keeps the order of the pastes: text pasted while it is copied comes after its path', async () => {
+      let open: (handle: string) => void = () => {};
+      fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+      const field = await terminalField();
+      expect(field.drop(dragged({ files: [zip()] }))).toBe(true);
+      expect(field.paste(clipboard({ text: ' décompresse-le' }))).toBe(true);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(pasted).toEqual([]);
+      open('h:sources.zip');
+      await waitFor(() => expect(pasted).toEqual([copyPath('sources.zip'), ' décompresse-le']));
+    });
+
+    it('says why when the backend refuses it, and types nothing for it', async () => {
+      const backend = fakeBackend(copying({ attach_open: () => Promise.reject('sources.zip dépasse 100 Mo') }));
+      const field = await terminalField();
+      field.drop(dragged({ files: [zip()] }));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ text: 'sources.zip dépasse 100 Mo', kind: 'error' }));
+      expect(pasted).toEqual([]);
+      expect(backend.called('attach_chunk')).toHaveLength(0);
+    });
+
+    it('shows a veil over the terminal while a file is held above it, however many elements it crosses', async () => {
+      fakeBackend(copying());
+      const field = await terminalField();
+      expect(field.veil()).toBe('none');
+      const held = dragged({ files: [zip()] });
+      field.dragEnter(held);
+      field.dragEnter(held);
+      expect(field.veil()).toBe('block');
+      field.dragLeave(held);
+      expect(field.veil()).toBe('block');
+      field.dragLeave(held);
+      expect(field.veil()).toBe('none');
+    });
+
+    it('takes the veil off on the drop, and shows none for a drag of text', async () => {
+      fakeBackend(copying());
+      const field = await terminalField();
+      field.dragEnter(dragged({ text: 'npm test' }));
+      expect(field.veil()).toBe('none');
+      field.dragEnter(dragged({ files: [zip()] }));
+      expect(field.veil()).toBe('block');
+      field.drop(dragged({ files: [zip()] }));
+      expect(field.veil()).toBe('none');
+    });
+
+    it('is left to the WebView in a shell’s terminal', async () => {
+      const backend = fakeBackend({ term_spawn: () => ({ ...info, id: 'sh-1', shell: 'pwsh' }) });
+      const field = await terminalField(() => openTerminal('p1', 'pwsh', 'pwsh-1'));
+      expect(field.dragOver(dragged({ files: [zip()] })).accepted).toBe(false);
+      expect(field.drop(dragged({ files: [zip()] }))).toBe(false);
+      expect(backend.called('attach_open')).toHaveLength(0);
+      expect(field.veil()).toBeUndefined();
+    });
   });
 });
 

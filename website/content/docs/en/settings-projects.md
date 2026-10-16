@@ -135,7 +135,7 @@ Closing is refused while an approval of one of the project’s tickets is runnin
 
 ## Closed projects
 
-Until a project has been closed with its history kept, this group doesn’t exist. After that, “Closed projects” lists those projects, from the most recently closed to the oldest, under the note “Their history is kept: adding a project in their folder brings it back.”. Each line gives the project’s color, its name, its folder, the space its history takes on disk, and its last activity (“last activity on …”), with two buttons: “Reopen” and “Erase history…”.
+Until a project has been closed with its history kept, this group doesn’t exist. After that, “Closed projects” lists those projects, from the most recently closed to the oldest, under the note “Their history is kept: adding a project in their folder brings it back.”. Each line gives the project’s color, its name, its folder, the space its history takes on disk (its conversations, its tickets’ images and files, and the files attached to its agents included), and its last activity (“last activity on …”), with two buttons: “Reopen” and “Erase history…”.
 
 “Reopen” opens the “New project” window already on that project’s folder, read right away, with the history found. The history of that line is the one that comes back, even when several closed projects were in the same folder (without “Reopen”, it is the most recently closed one). If you change the path in the window, that history is dropped: the new folder has its own, or none. “Cancel” closes the window without reopening or erasing anything.
 

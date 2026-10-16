@@ -16,6 +16,7 @@ import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
+import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { applyTheme } from './theme';
 import type {
@@ -150,6 +151,11 @@ export interface TicketFormDraft {
   images?: FormImage[];
   /** The files of the ticket's images as the window showed them, those gone from its folder left out; absent: the ticket's. */
   held?: string[];
+  /**
+   * Its other files, the very list of the window (not a copy of it): a copy still being written goes on meanwhile, and the
+   * window back shows where it is. Absent: those of the ticket.
+   */
+  files?: FormFile[];
 }
 
 /** What the window of a new branch had written when the question of the stash took its place. */

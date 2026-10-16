@@ -1,6 +1,7 @@
 //! Tauri commands invoked by the frontend.
 
 use crate::accounts::{AccountStatus, ShareMode};
+use crate::attachfiles::AttachedFile;
 use crate::closed::ClosedProjectInfo;
 use crate::core::{Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
@@ -484,15 +485,71 @@ pub async fn search_conversations(
     .map_err(|e| e.to_string())
 }
 
+/// A message to the agent. `files`: the files joined by their path (`attachfiles`); a window that
+/// does not send any (an older one) sends none.
 #[tauri::command]
 pub async fn send_message(
     core: CoreState<'_>,
     id: String,
     text: String,
     attachments: Vec<Attachment>,
+    files: Option<Vec<AttachedFile>>,
 ) -> Res<()> {
-    let r = core.send_message(&id, text, attachments).await.map_err(err);
+    let r = core
+        .send_message_files(&id, text, attachments, files.unwrap_or_default())
+        .await
+        .map_err(err);
     counted(&core, Event::MessageSent, r)
+}
+
+/// A file to copy for `owner` (an agent's id, or `"draft"`): its handle, for its chunks.
+#[tauri::command(async)]
+pub fn attach_open(core: CoreState, owner: String, name: String, size: u64) -> Res<String> {
+    core.attach_open(&owner, &name, size).map_err(err)
+}
+
+/// The next bytes of a copy, as they are (`invoke('attach_chunk', bytes, { headers: { 'x-handle':
+/// handle } })`: no base64 round trip through JSON).
+#[tauri::command(async)]
+pub fn attach_chunk(core: CoreState, request: tauri::ipc::Request) -> Res<()> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(tr!(
+            "Les octets d’une copie viennent bruts, pas en JSON.",
+            "The bytes of a copy come raw, not as JSON."
+        ));
+    };
+    let handle = request
+        .headers()
+        .get("x-handle")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_default();
+    core.attach_chunk(handle, bytes).map_err(err)
+}
+
+/// The end of a copy: the file, once all its bytes are there.
+#[tauri::command(async)]
+pub fn attach_finish(core: CoreState, handle: String) -> Res<AttachedFile> {
+    core.attach_finish(&handle).map_err(err)
+}
+
+/// A copy given up: what was written goes.
+#[tauri::command(async)]
+pub fn attach_cancel(core: CoreState, handle: String) -> Res<()> {
+    core.attach_cancel(&handle);
+    Ok(())
+}
+
+/// A finished copy removed (its chip removed); never a path out of its owner's folder.
+#[tauri::command(async)]
+pub fn attach_discard(core: CoreState, owner: String, path: String) -> Res<()> {
+    core.attach_discard(&owner, &path).map_err(err)
+}
+
+/// A file of the user's own, joined as it is: checked, nothing copied. `id` is the one the window
+/// asked `file_origin` the path of, never a path: only a path the host itself read is joined.
+#[tauri::command(async)]
+pub fn attach_origin(core: CoreState, owner: String, id: String) -> Res<AttachedFile> {
+    core.attach_origin(&owner, &id).map_err(err)
 }
 
 /// The image on the system's clipboard, as PNG (empty without one), for a paste WebKitGTK leaves

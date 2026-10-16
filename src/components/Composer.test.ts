@@ -1,12 +1,20 @@
 import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversationOf } from '../lib/conversations.svelte';
+import { fileOrigins } from '../lib/file-origin';
 import { setLang } from '../lib/i18n';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
+import type { AttachedFile } from '../lib/types';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
 import Composer from './Composer.svelte';
+
+// Where a file lies on the disk is the system's to say: no file has a known path unless a test gives one.
+vi.mock('../lib/file-origin', () => ({ fileOrigins: vi.fn() }));
+beforeEach(() => {
+  vi.mocked(fileOrigins).mockImplementation(async (files) => files.map(() => null));
+});
 
 function setup(over: Parameters<typeof agent>[0] = {}, items: unknown[] = []) {
   const a = agent({ id: `c${Math.random()}`, ...over });
@@ -302,6 +310,7 @@ describe('Composer', () => {
       id: a.id,
       text: 'Résume ce rapport',
       attachments: [{ name: 'rapport.pdf', mediaType: 'application/pdf', data: btoa('%PDF-1.4') }],
+      files: [],
     });
     expect(screen.queryByText('rapport.pdf')).not.toBeInTheDocument();
   });
@@ -330,31 +339,9 @@ describe('Composer', () => {
     ]);
   });
 
-  it('refuses an unsupported file with a message saying what can be attached', async () => {
+  it('offers every file in the dialog, with no filter on its type', () => {
     setup();
-    // "All files" chosen in the dialog.
-    const user = userEvent.setup({ applyAccept: false });
-    const zip = new File([new Uint8Array([80, 75, 3, 4])], 'sources.zip', { type: 'application/zip' });
-    await user.upload(screen.getByLabelText('Joindre un fichier', { selector: 'input' }), zip);
-    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' }));
-    expect(app.toasts.at(-1)?.text).toMatch(/sources\.zip.*images.*PDF.*texte/);
-    expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
-  });
-
-  it('caps the files of one message at 18 Mo in all', async () => {
-    setup();
-    const pdf = (name: string) => {
-      const f = new File(['%PDF-1.4'], name, { type: 'application/pdf' });
-      Object.defineProperty(f, 'size', { value: 10 * 1024 * 1024 });
-      return f;
-    };
-    const input = screen.getByLabelText('Joindre un fichier', { selector: 'input' });
-    await userEvent.upload(input, pdf('a.pdf'));
-    expect(await screen.findByText('a.pdf')).toBeInTheDocument();
-    await userEvent.upload(input, pdf('b.pdf'));
-    await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/b\.pdf.*18 Mo en tout/));
-    expect(screen.queryByText('b.pdf')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Joindre un fichier', { selector: 'input' })).not.toHaveAttribute('accept');
   });
 
   describe('while a file is being read', () => {
@@ -417,8 +404,9 @@ describe('Composer', () => {
     expect(backend.called('send_message')).toHaveLength(0);
   });
 
-  it('takes a dropped file instead of letting the window open it', async () => {
+  it('takes a dropped file instead of letting the window open it, whatever it is', async () => {
     setup();
+    fakeBackend(copying());
     const composer = screen.getByRole('group');
     const drop = (f: File) => {
       const e = createEvent.drop(composer, { dataTransfer: { files: [f], types: ['Files'] } });
@@ -428,7 +416,8 @@ describe('Composer', () => {
     expect(drop(new File(['a,b'], 'export.csv', { type: '' }))).toBe(true);
     expect(await screen.findByText('export.csv')).toBeInTheDocument();
     expect(drop(new File(['MZ'], 'setup.exe', { type: 'application/x-msdownload' }))).toBe(true);
-    await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/setup\.exe/));
+    expect(await screen.findByText('setup.exe')).toBeInTheDocument();
+    expect(app.toasts).toEqual([]);
   });
 
   describe('pasting', () => {
@@ -469,6 +458,7 @@ describe('Composer', () => {
         id: a.id,
         text: 'Que vois-tu ?',
         attachments: [{ name: 'image.png', mediaType: 'image/png', data: btoa(String.fromCharCode(...png)) }],
+        files: [],
       });
     });
 
@@ -621,10 +611,7 @@ describe('Composer in English', () => {
     const { textarea } = setup({ model: 'opus', effort: 'high', mode: 'plan' });
     expect(textarea).toHaveAttribute('placeholder', 'Describe the task to give to Claude…');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-tip', 'Enter to send · Shift+Enter for a new line');
-    expect(screen.getByRole('button', { name: 'Attach a file' })).toHaveAttribute(
-      'data-tip',
-      'Attach an image, a PDF or a text file (or paste / drop it)',
-    );
+    expect(screen.getByRole('button', { name: 'Attach a file' })).toHaveAttribute('data-tip', 'Attach a file (or paste / drop it)');
     // “Mode” alone: “Model” begins the same.
     await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));
     expect(screen.getByText('Accept edits')).toBeInTheDocument();
@@ -644,22 +631,412 @@ describe('Composer in English', () => {
     expect(screen.getByText('unavailable with Haiku')).toBeInTheDocument();
   });
 
-  it('refuses a file in English, naming the size it is over', async () => {
+  it('refuses a file over the maximum size in English, and attaches any other', async () => {
     setLang('en');
     setup();
-    const user = userEvent.setup({ applyAccept: false });
+    fakeBackend(copying());
+    app.settings.attachMaxMb = 1;
     const input = screen.getByLabelText('Attach a file', { selector: 'input' });
-    await user.upload(input, new File([new Uint8Array([80, 75, 3, 4])], 'sources.zip', { type: 'application/zip' }));
-    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error' }));
-    expect(app.toasts.at(-1)?.text).toBe(
-      '“sources.zip” can’t be attached. Supported files are images (PNG, JPEG, GIF, WebP), PDFs and text files.',
-    );
-    const big = new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' });
-    Object.defineProperty(big, 'size', { value: 18 * 1024 * 1024 + 1 });
-    await user.upload(input, big);
-    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe('rapport.pdf is over 18 MB'));
-    const small = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
-    await user.upload(input, small);
+    await userEvent.upload(input, sized('film.mkv', 2 * MB));
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'film.mkv is over 1 MB' }));
+    expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+    await userEvent.upload(input, new File([new Uint8Array([80, 75, 3, 4])], 'sources.zip', { type: 'application/zip' }));
+    expect(await screen.findByRole('button', { name: 'Remove sources.zip' })).toBeInTheDocument();
+    await userEvent.upload(input, new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
     expect(await screen.findByRole('button', { name: 'Remove a.pdf' })).toBeInTheDocument();
+  });
+});
+
+const MB = 1024 * 1024;
+/** A file that says it has `size` bytes, without holding them. */
+const sized = (name: string, size: number, type = '') => {
+  const f = new File(['x'], name, { type });
+  Object.defineProperty(f, 'size', { value: size });
+  return f;
+};
+/** The file a copy makes, as the backend gives it. */
+const copyOf = (name: string, over: Partial<AttachedFile> = {}): AttachedFile => ({
+  name,
+  size: 4,
+  origin: false,
+  path: `/data/attachments/ag/1f2e3d4c/${name}`,
+  claudePath: `/data/attachments/ag/1f2e3d4c/${name}`,
+  ...over,
+});
+/** The backend of a copy: each file gets its handle, named after it, and comes back as its copy. */
+const copying = (over: Record<string, (a: any) => unknown> = {}) => ({
+  get_conversation: () => [],
+  attach_open: ({ name }: { name: string }) => `h:${name}`,
+  attach_finish: ({ handle }: { handle: string }) => copyOf(handle.slice(2)),
+  ...over,
+});
+
+describe('Composer: files attached by their path', () => {
+  const zip = (name = 'sources.zip') => new File([new Uint8Array([80, 75, 3, 4])], name, { type: 'application/zip' });
+  const input = () => screen.getByLabelText('Joindre un fichier', { selector: 'input' });
+  const drop = (...files: File[]) => {
+    const dataTransfer = { files, types: ['Files'] };
+    const composer = screen.getByRole('group');
+    const e = createEvent.drop(composer, { dataTransfer });
+    fireEvent(composer, e);
+    return { dataTransfer, prevented: e.defaultPrevented };
+  };
+  /** The copy of a big file whose second chunk waits for `release`. */
+  const stalled = () => {
+    let release: () => void = () => {};
+    let chunks = 0;
+    const backend = fakeBackend(copying({ attach_chunk: () => (++chunks === 2 ? new Promise<void>((r) => (release = r)) : undefined) }));
+    // Once the second chunk is asked for, which is the one that waits.
+    const stuck = () => waitFor(() => expect(backend.called('attach_chunk')).toHaveLength(2));
+    return { backend, stuck, release: () => release() };
+  };
+
+  it('copies a .zip dropped on the field to the agent’s folder, shows it as a chip and sends its path with the message', async () => {
+    const { a, textarea } = setup();
+    const backend = fakeBackend(copying());
+    expect(drop(zip()).prevented).toBe(true);
+    expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+    expect(screen.getByText('1 Ko')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    expect(backend.called('attach_open')[0].args).toEqual({ owner: a.id, name: 'sources.zip', size: 4 });
+    expect([...(backend.called('attach_chunk')[0].args as unknown as Uint8Array)]).toEqual([80, 75, 3, 4]);
+    await userEvent.type(textarea, 'Que contient cette archive ?{Enter}');
+    await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+    expect(backend.called('send_message')[0].args).toEqual({
+      id: a.id,
+      text: 'Que contient cette archive ?',
+      attachments: [],
+      files: [copyOf('sources.zip')],
+    });
+    expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+  });
+
+  it('sends a file alone, with no text', async () => {
+    const { a } = setup();
+    const backend = fakeBackend(copying());
+    await userEvent.upload(input(), new File(['PK'], 'budget.xlsx', { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' }));
+    await screen.findByText('budget.xlsx');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+    expect(backend.called('send_message')[0].args).toMatchObject({ id: a.id, text: '', attachments: [], files: [copyOf('budget.xlsx')] });
+  });
+
+  it('sends the files in the message and those by their path together', async () => {
+    setup();
+    const backend = fakeBackend(copying());
+    drop(new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }), zip(), new File(['# Notes'], 'notes.md'));
+    await screen.findByText('notes.md');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+    const { attachments, files } = backend.called('send_message')[0].args;
+    expect(attachments.map((x: { name: string }) => x.name)).toEqual(['rapport.pdf', 'notes.md']);
+    expect(files).toEqual([copyOf('sources.zip')]);
+  });
+
+  it('shows the progress of the copy and does not send before it is done', async () => {
+    const { textarea } = setup();
+    let open: (handle: string) => void = () => {};
+    const backend = fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+    drop(zip());
+    expect(await screen.findByRole('progressbar', { name: 'Copie de sources.zip' })).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+    await userEvent.type(textarea, 'Regarde{Enter}');
+    expect(backend.called('send_message')).toHaveLength(0);
+    expect(textarea).toHaveValue('Regarde');
+    open('h:sources.zip');
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() => expect(backend.called('send_message')[0]?.args.files).toHaveLength(1));
+  });
+
+  it('says how far the copy of a big file went, a chunk at a time', async () => {
+    setup();
+    const { release, stuck } = stalled();
+    drop(sized('film.mkv', 10 * MB, 'video/x-matroska'));
+    const bar = await screen.findByRole('progressbar', { name: 'Copie de film.mkv' });
+    await stuck();
+    expect(bar).toHaveAttribute('aria-valuenow', '40');
+    expect(screen.getByText('40 %')).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+  });
+
+  it('erases the copy when its chip is taken away', async () => {
+    const { a } = setup();
+    const backend = fakeBackend(copying());
+    drop(zip());
+    await screen.findByText('sources.zip');
+    await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
+    expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+    expect(backend.called('attach_discard').map((c) => c.args)).toEqual([{ owner: a.id, path: copyOf('sources.zip').path }]);
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+  });
+
+  it('cancels the copy when its chip is taken away while it goes on, without a word', async () => {
+    setup();
+    const { backend, release, stuck } = stalled();
+    drop(sized('film.mkv', 10 * MB, 'video/x-matroska'));
+    await stuck();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer film.mkv' }));
+    expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+    release();
+    await waitFor(() => expect(backend.called('attach_cancel')).toHaveLength(1));
+    expect(backend.called('attach_cancel')[0].args).toEqual({ handle: 'h:film.mkv' });
+    expect(backend.called('attach_finish')).toHaveLength(0);
+    expect(backend.called('attach_discard')).toHaveLength(0);
+    expect(app.toasts).toEqual([]);
+    expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+  });
+
+  it('takes the chip of a copy that failed away and says why', async () => {
+    setup();
+    fakeBackend(
+      copying({
+        attach_open: () => {
+          throw 'film.mkv dépasse 100 Mo';
+        },
+      }),
+    );
+    drop(sized('film.mkv', 2 * MB));
+    await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'film.mkv dépasse 100 Mo' }));
+    expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
+  });
+
+  it('gives the chip back, its copy kept, when the message is refused', async () => {
+    const { textarea } = setup();
+    const backend = fakeBackend(
+      copying({
+        send_message: () => {
+          throw new Error('Claude Code est introuvable');
+        },
+      }),
+    );
+    drop(zip());
+    await screen.findByText('sources.zip');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled());
+    await userEvent.type(textarea, 'Regarde{Enter}');
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/introuvable/));
+    expect(textarea).toHaveValue('Regarde');
+    expect(screen.getByRole('button', { name: 'Retirer sources.zip' })).toBeInTheDocument();
+    expect(backend.called('attach_discard')).toHaveLength(0);
+    // Taken away after all: the copy goes.
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
+    expect(backend.called('attach_discard')).toHaveLength(1);
+  });
+
+  it('keeps the copy for the agent it was made for, and does not block the one shown meanwhile', async () => {
+    resetApp({ agents: [agent({ id: 'w1' }), agent({ id: 'w2', name: 'autre' })] });
+    let open: (handle: string) => void = () => {};
+    const backend = fakeBackend(copying({ attach_open: () => new Promise((r) => (open = r)) }));
+    const { rerender } = render(Composer, { agent: app.agents.w1 });
+    drop(zip());
+    await screen.findByRole('progressbar');
+    await rerender({ agent: app.agents.w2 });
+    expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox'), 'Pour w2');
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled();
+    open('h:sources.zip');
+    await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+    await rerender({ agent: app.agents.w1 });
+    expect(await screen.findByRole('button', { name: 'Retirer sources.zip' })).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(backend.called('attach_open')[0].args.owner).toBe('w1');
+  });
+
+  it('copies a file pasted from the system’s clipboard, as one dropped', async () => {
+    const { textarea } = setup();
+    const backend = fakeBackend(copying());
+    const clipboardData = { files: [zip()], types: ['Files'] };
+    const e = createEvent.paste(textarea, { clipboardData });
+    fireEvent(textarea, e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(await screen.findByText('sources.zip')).toBeInTheDocument();
+    // Only the files: the page has no data of the drop or the paste to hand over, a path of its own least of all.
+    expect(fileOrigins).toHaveBeenCalledWith(clipboardData.files);
+    await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+  });
+
+  describe('a file the host knows', () => {
+    const original = copyOf('sources.zip', { origin: true, path: '/home/jean/sources.zip', claudePath: '/home/jean/sources.zip' });
+    const originMark = { name: 'Fichier d’origine, lu là où il est' };
+
+    it('is attached where it is by its id, with nothing copied, and its chip says so', async () => {
+      const { a, textarea } = setup();
+      const backend = fakeBackend(copying({ attach_origin: () => original }));
+      vi.mocked(fileOrigins).mockResolvedValue(['8c1f0a52-3b7e-4d49-a1c6-2f9d5e7b0a13']);
+      drop(zip());
+      await screen.findByText('sources.zip');
+      await waitFor(() => expect(backend.called('attach_origin')).toHaveLength(1));
+      expect(fileOrigins).toHaveBeenCalledWith([expect.objectContaining({ name: 'sources.zip' })]);
+      // The backend is given the id the host holds, and finds the path itself.
+      expect(backend.called('attach_origin')[0].args).toEqual({ owner: a.id, id: '8c1f0a52-3b7e-4d49-a1c6-2f9d5e7b0a13' });
+      expect(backend.called('attach_open')).toHaveLength(0);
+      expect(await screen.findByRole('img', originMark)).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled());
+      await userEvent.type(textarea, 'Regarde{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      expect(backend.called('send_message')[0].args.files).toEqual([original]);
+    });
+
+    it('is attached where it is while the others of the same drop are copied, a copy having no mark', async () => {
+      const { a } = setup();
+      const backend = fakeBackend(
+        copying({
+          attach_origin: ({ id }: { id: string }) => copyOf(id === 'id-a' ? 'a.zip' : 'b.zip', { origin: true }),
+        }),
+      );
+      // The host knows the first file alone: the second is copied.
+      vi.mocked(fileOrigins).mockResolvedValue(['id-a', null]);
+      drop(zip('a.zip'), zip('b.zip'));
+      await screen.findByText('b.zip');
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+      expect(backend.called('attach_origin').map((c) => c.args)).toEqual([{ owner: a.id, id: 'id-a' }]);
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['b.zip']);
+      // Only the original file has its mark.
+      expect(screen.getAllByRole('img', originMark)).toHaveLength(1);
+      expect(screen.getByText('a.zip').closest('.file')).toContainElement(screen.getByRole('img', originMark));
+    });
+
+    it('is never erased when its chip is taken away', async () => {
+      setup();
+      const backend = fakeBackend(copying({ attach_origin: () => original }));
+      vi.mocked(fileOrigins).mockResolvedValue(['id-sources']);
+      drop(zip());
+      await screen.findByText('sources.zip');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Envoyer' })).toBeEnabled());
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
+      expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+      expect(backend.called('attach_discard')).toHaveLength(0);
+    });
+
+    it('is copied when the setting says to, and its path is not even looked for', async () => {
+      setup();
+      app.settings.attachOrigin = false;
+      const backend = fakeBackend(copying());
+      drop(zip());
+      await screen.findByText('sources.zip');
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      expect(fileOrigins).not.toHaveBeenCalled();
+      expect(backend.called('attach_origin')).toHaveLength(0);
+    });
+
+    it('is copied when the host does not know it, and its chip has no mark', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      vi.mocked(fileOrigins).mockResolvedValue([null]);
+      drop(zip());
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      expect(backend.called('attach_origin')).toHaveLength(0);
+      await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+      expect(screen.getByText('sources.zip')).toBeInTheDocument();
+      expect(screen.queryByRole('img', originMark)).not.toBeInTheDocument();
+    });
+
+    it('is not looked for what goes in the message anyway: a small PDF is not copied', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      drop(new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' }));
+      await screen.findByText('rapport.pdf');
+      expect(backend.called('attach_open')).toHaveLength(0);
+      expect(backend.called('attach_origin')).toHaveLength(0);
+    });
+
+    it('is said to be refused by the backend (an id it refuses, a file it cannot read), and its chip taken away, nothing copied', async () => {
+      setup();
+      const backend = fakeBackend(
+        copying({
+          attach_origin: () => {
+            throw 'sources.zip est illisible';
+          },
+        }),
+      );
+      vi.mocked(fileOrigins).mockResolvedValue(['id-sources']);
+      drop(zip());
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'sources.zip est illisible' }));
+      expect(screen.queryByText('sources.zip')).not.toBeInTheDocument();
+      expect(backend.called('attach_open')).toHaveLength(0);
+    });
+  });
+
+  describe('what goes by the path and what does not', () => {
+    it('sends by its path the file the message has no more room for, after the first that fits', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      const pdf = (name: string) => sized(name, 10 * MB, 'application/pdf');
+      await userEvent.upload(input(), pdf('a.pdf'));
+      expect(await screen.findByText('a.pdf')).toBeInTheDocument();
+      expect(backend.called('attach_open')).toHaveLength(0);
+      await userEvent.upload(input(), pdf('b.pdf'));
+      expect(await screen.findByText('b.pdf')).toBeInTheDocument();
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['b.pdf']);
+      expect(app.toasts).toEqual([]);
+      await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      const { attachments, files } = backend.called('send_message')[0].args;
+      expect(attachments.map((x: { name: string }) => x.name)).toEqual(['a.pdf']);
+      expect(files.map((x: { name: string }) => x.name)).toEqual(['b.pdf']);
+    });
+
+    it('counts the files dropped together one after the other against the 18 Mo of the message', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      drop(sized('a.pdf', 10 * MB, 'application/pdf'), sized('b.pdf', 10 * MB, 'application/pdf'));
+      await screen.findByText('b.pdf');
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      expect(backend.called('attach_open').map((c) => c.args.name)).toEqual(['b.pdf']);
+    });
+
+    it('sends a text that is none by its path, the file being binary', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      await userEvent.upload(input(), new File([new Uint8Array([0x61, 0, 0x62])], 'binaire.log'));
+      expect(await screen.findByText('binaire.log')).toBeInTheDocument();
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      expect(backend.called('attach_open')[0].args.name).toBe('binaire.log');
+      expect(app.toasts).toEqual([]);
+    });
+
+    it('sends a text over 256 Ko by its path, or refuses it when the setting says so', async () => {
+      setup();
+      const backend = fakeBackend(copying());
+      await userEvent.upload(input(), sized('journal.log', 300 * 1024));
+      expect(await screen.findByText('journal.log')).toBeInTheDocument();
+      await waitFor(() => expect(backend.called('attach_finish')).toHaveLength(1));
+      app.settings.attachBigText = 'refuse';
+      await userEvent.upload(input(), sized('autre.log', 300 * 1024));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'autre.log dépasse 256 Ko' }));
+      expect(screen.queryByText('autre.log')).not.toBeInTheDocument();
+    });
+
+    it('refuses a file over the maximum size without opening a copy', async () => {
+      setup();
+      app.settings.attachMaxMb = 1;
+      const backend = fakeBackend(copying());
+      await userEvent.upload(input(), sized('film.mkv', 2 * MB));
+      await waitFor(() => expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'film.mkv dépasse 1 Mo' }));
+      expect(screen.queryByText('film.mkv')).not.toBeInTheDocument();
+      expect(backend.called('attach_open')).toHaveLength(0);
+    });
+
+    it('warns of a file past the threshold, and still attaches it', async () => {
+      setup();
+      app.settings.attachWarnMb = 1;
+      fakeBackend(copying());
+      await userEvent.upload(input(), sized('film.mkv', 2 * MB));
+      expect(await screen.findByRole('img', { name: 'Gros fichier : 2 Mo, copié sur le disque' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retirer film.mkv' })).toBeInTheDocument();
+      expect(app.toasts).toEqual([]);
+    });
   });
 });

@@ -356,6 +356,9 @@ pub(crate) struct TicketView {
     /// Its images, in its order: pasted in its window or attached by the tools; its agent gets
     /// them with its first message, and `get_ticket_image` gives one back.
     images: Vec<ImageView>,
+    /// How many other files are attached to it, joined in its window; its agent is given their
+    /// paths with its first message.
+    files: usize,
     /// The model and effort of its agent alone (`start_ticket` gave them); left out when it has
     /// none of its own, the board's being its agent's.
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -462,6 +465,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         after: after_keys(t, &keys),
         progress: t.progress.clone(),
         images: images::listed(&core.data.ticket_dir(&t.id), &t.images),
+        files: t.files.len(),
         model: t.model.clone(),
         effort: t.effort.clone(),
         external: t.external.as_ref().map(|e| External {

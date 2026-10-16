@@ -94,6 +94,28 @@ describe('settingsForm', () => {
     expect(backend.called('save_settings')[0].args.settings.idleStopMinutes).toBe(0);
   });
 
+  it('turns the numbers of the attachments into whole numbers, 0 or more, instead of sending null', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    settingsForm.open();
+    Object.assign(settingsForm.settings as any, { attachMaxMb: null, attachWarnMb: -5, attachKeepDays: 2.7 });
+    await settingsForm.save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ attachMaxMb: 0, attachWarnMb: 0, attachKeepDays: 2 });
+  });
+
+  it('sees a change of the attachments in the Claude Code tab, and has none once it is saved', async () => {
+    fakeBackend({ save_settings: () => [] });
+    settingsForm.open();
+    expect(settingsForm.changed('claude')).toBe(false);
+    settingsForm.settings.attachWarnMb = 50;
+    expect(settingsForm.changed('claude')).toBe(true);
+    settingsForm.settings.attachWarnMb = 200;
+    settingsForm.settings.attachBigText = 'refuse';
+    expect(settingsForm.changed('claude')).toBe(true);
+    await settingsForm.save();
+    expect(settingsForm.changed('claude')).toBe(false);
+    expect(app.settings.attachBigText).toBe('refuse');
+  });
+
   it('saves what changed of each project, its board apart, over what the app has now', async () => {
     const backend = fakeBackend({ board_set: (a: any) => ({ ...app.projects.find((p) => p.id === a.projectId), board: a.settings }) });
     settingsForm.open({ projectId: 'p1' });

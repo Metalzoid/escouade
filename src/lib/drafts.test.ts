@@ -56,6 +56,21 @@ describe('drafts', () => {
     expect(getDraft('a1').files).toEqual([file]);
   });
 
+  it('keep a file attached by its path with the others, in memory only, its copy being on the disk', () => {
+    const byPath: DraftAttachment = {
+      kind: 'file',
+      name: 'sources.zip',
+      mediaType: '',
+      data: '',
+      size: 4,
+      file: { name: 'sources.zip', path: '/data/a1/1f2e/sources.zip', claudePath: '/data/a1/1f2e/sources.zip', size: 4, origin: false },
+    };
+    setDraft('a1', { text: '', files: [file, byPath] });
+    vi.advanceTimersByTime(SAVE_DELAY);
+    expect(getDraft('a1').files).toEqual([file, byPath]);
+    expect(localStorage.length).toBe(0);
+  });
+
   it('are cleared at once when the text is emptied, as a message is sent', () => {
     setDraft('a1', { text: 'Un message', files: [] });
     vi.advanceTimersByTime(SAVE_DELAY);

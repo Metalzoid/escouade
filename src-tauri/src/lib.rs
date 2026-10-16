@@ -3,6 +3,9 @@
 mod i18n;
 mod accounts;
 mod agent;
+mod attachfiles;
+#[cfg(test)]
+mod attachfiles_tests;
 mod board;
 #[cfg(test)]
 mod branches_tests;
@@ -17,6 +20,9 @@ mod convsearch;
 mod core;
 #[cfg(test)]
 mod core_tests;
+mod fileorigin;
+#[cfg(test)]
+mod fileorigin_tests;
 mod fsedit;
 mod git;
 mod hub;
@@ -50,6 +56,7 @@ mod stats;
 mod taskout;
 mod telemetry;
 mod testlaunch;
+mod ticketfiles;
 mod ticketimages;
 mod tickets;
 #[cfg(test)]
@@ -178,11 +185,15 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
         url: navigation::home(dev.as_ref(), window.use_https_scheme),
         dev: dev.clone(),
     });
-    navigation::guard(
+    let main = navigation::guard(
         WebviewWindowBuilder::from_config(app.handle(), window)?,
         dev,
     )
     .build()?;
+    // The paths of the files the page hands the window (a reload keeps the WebView, and the listener).
+    let origins = fileorigin::FileOrigins::default();
+    app.manage(origins.clone());
+    fileorigin::install(&main, &origins);
     Ok(())
 }
 
@@ -310,6 +321,13 @@ pub fn run() {
             commands::get_conversation,
             commands::search_conversations,
             commands::send_message,
+            commands::attach_open,
+            commands::attach_chunk,
+            commands::attach_finish,
+            commands::attach_cancel,
+            commands::attach_discard,
+            commands::attach_origin,
+            fileorigin::file_origin,
             commands::clipboard_image,
             commands::interrupt,
             commands::stop_subagent,

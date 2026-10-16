@@ -45,6 +45,7 @@ export default {
     moreSteps: { one: '{count} autre élément', other: '{count} autres éléments' },
     criteriaLabel: 'Critères',
     images: { one: '{count} image jointe', other: '{count} images jointes' },
+    files: { one: '{count} fichier joint', other: '{count} fichiers joints' },
     criteriaMetLabel: 'Critères atteints',
     criteriaMet: { one: '{met}/{total} critère', other: '{met}/{total} critères' },
     todoMeta: { one: '{count} critère · max {max} boucles', other: '{count} critères · max {max} boucles' },
@@ -75,6 +76,15 @@ export default {
       one: 'Le ticket, sa description et son image sont supprimés. Il ne sera plus importé depuis {service}.',
       other: 'Le ticket, sa description et ses {count} images sont supprimés. Il ne sera plus importé depuis {service}.',
     },
+    // A ticket with files (alone or with images): `count` is all its attachments, which go with it.
+    removeBodyFiles: {
+      one: 'Le ticket, sa description et sa pièce jointe sont supprimés.',
+      other: 'Le ticket, sa description et ses {count} pièces jointes sont supprimés.',
+    },
+    removeBodyImportedFiles: {
+      one: 'Le ticket, sa description et sa pièce jointe sont supprimés. Il ne sera plus importé depuis {service}.',
+      other: 'Le ticket, sa description et ses {count} pièces jointes sont supprimés. Il ne sera plus importé depuis {service}.',
+    },
     removeRunningTitle: 'Supprimer le ticket {key} ?',
     removeRunningBody: 'Son agent est archivé, avec son worktree.',
     approveTitle: 'Valider {key} ?',
@@ -99,11 +109,17 @@ export default {
     after: 'Après',
     searchKey: 'Rechercher une clé',
     noMatch: 'Aucun ticket pour cette clé',
+    // The button over the description that attaches any file (an image or not), as pasting and dropping do.
+    attach: 'Joindre un fichier',
+    attachTitle: 'Joindre un fichier (ou colle-le, glisse-le dans la fenêtre)',
+    // The files that are no image of the ticket, as chips under its images: copied at once, kept with the ticket.
+    files: {
+      label: 'Fichiers du ticket',
+      tooMany: "{name} n'est pas ajouté : un ticket prend {max} fichiers au plus.",
+    },
     // The images pasted or dropped in the window, under the description: the formats and limits of the chat.
     images: {
       label: 'Images du ticket',
-      attach: 'Joindre une image',
-      attachTitle: 'Joindre une image PNG, JPEG, GIF ou WebP (ou colle-la, glisse-la dans la fenêtre)',
       // Several images are named with their rank: screenshots are all called image.png.
       ranked: '{name} ({n}/{total})',
       remove: 'Retirer {name}',

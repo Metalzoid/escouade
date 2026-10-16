@@ -4,12 +4,22 @@
 
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { ACCEPT, MAX_TOTAL, clipboardImage, readAttachment, sizeLabel, type DraftAttachment } from '../lib/attachments';
+  import {
+    MAX_TOTAL,
+    attachByPath,
+    clipboardImage,
+    inMessageBytes,
+    planAttachment,
+    planByPath,
+    readForMessage,
+    type DraftAttachment,
+  } from '../lib/attachments';
   import { accountName, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
+  import { fileOrigins } from '../lib/file-origin';
   import { basename, dirname } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
@@ -18,6 +28,7 @@
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
   import type { Agent, QuestionItem } from '../lib/types';
+  import AttachmentChip from './AttachmentChip.svelte';
   import Dropdown from './Dropdown.svelte';
   import { tip } from '../lib/tip';
 
@@ -38,6 +49,8 @@
   let heldFor: string | null = null;
   /** Files being read, not attached yet. */
   let reading = $state(0);
+  /** A file is being copied: its chip is there, but its path is not known yet. */
+  const copying = $derived(files.some((f) => f.copying));
   let dragOver = $state(false);
   let menu = $state<'model' | 'effort' | 'mode' | 'account' | null>(null);
   let width = $state(0);
@@ -236,20 +249,17 @@
   }
 
   // A file that cannot be attached is named in a toast, never silently dropped. Sending waits for
-  // the files being read, and one read while switching agents goes to the draft it was added to.
-  async function addFiles(source: Iterable<File> | Promise<File[]>) {
+  // the files being read or copied, and one read while switching agents goes to the draft it was added to.
+  async function addFiles(source: File[] | Promise<File[]>) {
     const owner = draftFor;
+    // Asked at once, while the files are read: what the host holds for each of them is an id, never a path the page could give.
+    const origins = app.settings.attachOrigin && Array.isArray(source) ? fileOrigins(source) : null;
     reading++;
     try {
-      for (const f of await source) {
+      const list = await source;
+      for (const [i, f] of list.entries()) {
         try {
-          const a = await readAttachment(f);
-          const target = owner === draftFor ? files : getDraft(owner).files;
-          if (target.reduce((n, x) => n + x.size, a.size) > MAX_TOTAL) {
-            throw new Error(t('composer.attachments.totalTooBig', { name: f.name, max: sizeLabel(MAX_TOTAL) }));
-          }
-          if (owner === draftFor) files.push(a);
-          else setDraft(owner, { text: getDraft(owner).text, files: [...target, a] });
+          await attach(f, owner, origins?.then((o) => o[i] ?? null) ?? null);
         } catch (e) {
           failed(e);
         }
@@ -259,6 +269,78 @@
     } finally {
       reading--;
     }
+  }
+
+  const draftFiles = (owner: string) => (owner === draftFor ? files : getDraft(owner).files);
+
+  function add(owner: string, a: DraftAttachment) {
+    if (owner === draftFor) files.push(a);
+    else setDraft(owner, { text: getDraft(owner).text, files: [...getDraft(owner).files, a] });
+  }
+
+  /** Takes an attachment out of the draft of `owner`, if it is still there (a copy that failed). */
+  function leave(owner: string, a: DraftAttachment) {
+    const list = draftFiles(owner);
+    const i = list.indexOf(a);
+    if (i >= 0) list.splice(i, 1);
+  }
+
+  /**
+   * Attaches a file to the draft of `owner`: in the message when Claude reads it and the message has room, else by its path
+   * (the chip is there at once, while the file is copied or its path checked). `origin`: the id the host holds for the file
+   * when it lies on the disk, if it knows it.
+   */
+  async function attach(f: File, owner: string, origin: Promise<string | null> | null) {
+    const settings = app.settings;
+    let plan = planAttachment(f, { settings, messageBytes: inMessageBytes(draftFiles(owner)) });
+    if ('refusal' in plan) throw new Error(plan.refusal);
+    if (plan.kind !== 'file') {
+      const a = await readForMessage(f, plan.kind);
+      // Another file may have taken the room while this one was read.
+      if (a && inMessageBytes(draftFiles(owner)) + a.size <= MAX_TOTAL) return add(owner, a);
+      // Not text after all, or no room left: its path carries it.
+      plan = planByPath(f, settings);
+      if ('refusal' in plan) throw new Error(plan.refusal);
+    }
+    const abort = new AbortController();
+    const chip = $state<DraftAttachment>({
+      kind: 'file',
+      name: f.name,
+      mediaType: '',
+      data: '',
+      size: f.size,
+      warn: plan.warn,
+      copying: true,
+      progress: 0,
+      cancel: () => abort.abort(),
+    });
+    add(owner, chip);
+    // Not waited for: the next files of a drop do not wait for the copy of a big one, and sending waits for the chip itself.
+    void attachChip(f, owner, chip, abort.signal, origin);
+  }
+
+  /** The copy of a file (or the check of its path) that its chip stands for, until its path is known. */
+  async function attachChip(f: File, owner: string, chip: DraftAttachment, signal: AbortSignal, origin: Promise<string | null> | null) {
+    try {
+      chip.file = await attachByPath(f, owner, {
+        origin: await origin,
+        signal,
+        onProgress: (done) => (chip.progress = done / f.size),
+      });
+      chip.copying = false;
+      chip.cancel = undefined;
+    } catch (e) {
+      leave(owner, chip);
+      // Taken away by the user: nothing to say.
+      if (!signal.aborted) failed(e);
+    }
+  }
+
+  /** Takes an attachment away: a copy still going stops, one finished is erased (never a file attached where it is). */
+  function remove(i: number) {
+    const [a] = files.splice(i, 1);
+    if (a.copying) a.cancel?.();
+    else if (a.file && !a.file.origin) api.attachDiscard(draftFor, a.file.path).catch(() => {});
   }
 
   function failed(e: unknown) {
@@ -287,7 +369,7 @@
 
   async function send() {
     const body = text.trim();
-    if ((!body && !files.length) || reading) return;
+    if ((!body && !files.length) || reading || copying) return;
     if (sending) {
       // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
       if (heldFor === agent.id) app.toast(t('composer.send.alreadyWaiting'));
@@ -304,8 +386,8 @@
       !answering && agent.setup
         ? conv.holdMessage({
             text: body,
-            images: prevFiles.filter((f) => f.mediaType.startsWith('image/')).length,
-            files: prevFiles.filter((f) => !f.mediaType.startsWith('image/')).map((f) => f.name),
+            images: prevFiles.filter((f) => f.kind === 'image').length,
+            files: prevFiles.filter((f) => f.kind !== 'image').map((f) => f.name),
           })
         : undefined;
     if (unhold) heldFor = agent.id;
@@ -321,7 +403,8 @@
         await api.sendMessage(
           agent.id,
           body,
-          prevFiles.map(({ name, mediaType, data }) => ({ name, mediaType, data })),
+          prevFiles.filter((f) => f.kind !== 'file').map(({ name, mediaType, data }) => ({ name, mediaType, data })),
+          prevFiles.filter((f) => f.file).map((f) => $state.snapshot(f.file!)),
         );
       }
       if (answering && prevFiles.length) {
@@ -435,18 +518,10 @@
           {#if f.url}
             <div class="img">
               <img src={f.url} alt={f.name} />
-              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => files.splice(i, 1)}
-                >×</button
-              >
+              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => remove(i)}>×</button>
             </div>
           {:else}
-            <div class="file" use:tip={{ text: f.name, cut: true }}>
-              <span aria-hidden="true">📄</span>
-              <span class="fname">{f.name}</span>
-              <button class="rm" aria-label={t('composer.attachments.remove', { name: f.name })} onclick={() => files.splice(i, 1)}
-                >×</button
-              >
-            </div>
+            <AttachmentChip attachment={f} onremove={() => remove(i)} />
           {/if}
         {/each}
       </div>
@@ -523,7 +598,6 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept={ACCEPT}
         multiple
         hidden
         aria-label={t('composer.attach.label')}
@@ -556,7 +630,7 @@
         use:tip={busy && !pendingItem
           ? t('composer.send.titleQueued', { enter: keyLabel('Enter') })
           : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
-        disabled={sending || reading > 0 || (!text.trim() && !files.length)}
+        disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
         onclick={send}
       >
         {t('composer.send.label')}
@@ -624,29 +698,6 @@
     align-items: center;
     gap: 8px;
     padding: 12px 14px 0;
-  }
-  .file {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    max-width: 260px;
-    height: 30px;
-    padding: 0 5px 0 10px;
-    border-radius: 99px;
-    border: 1px solid var(--line2);
-    background: var(--elev2);
-    font-size: 12.5px;
-    color: var(--muted);
-  }
-  .fname {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .file .rm {
-    position: static;
-    flex: none;
   }
   .img {
     position: relative;

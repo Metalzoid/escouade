@@ -61,7 +61,7 @@ Un nouvel agent démarre avec les valeurs de Réglages › Claude Code : « Mod
 Clique dans le champ de message, décris la tâche (« Décris la tâche à confier à Claude… »), puis appuie sur `Entrée` pour envoyer. `Maj+Entrée` va à la ligne.
 
 - Tape `@` suivi d’un bout de nom de fichier pour choisir un fichier du projet, ou `/` pour choisir une commande.
-- Colle ou glisse une image, un PDF ou un fichier texte dans le champ, ou clique sur le trombone, pour le joindre au message.
+- Colle ou glisse n’importe quel fichier (une image, un PDF, un texte, mais aussi une archive ou un tableur) dans le champ, ou clique sur le trombone, pour le joindre au message.
 
 Dès l’envoi, le statut de l’agent passe à « En cours » et la conversation dit « Claude travaille… ». Ses appels d’outils apparaissent en lignes compactes que tu peux déplier. Tu peux lui écrire pendant qu’il travaille : il en tient compte dès sa prochaine étape. Pour l’arrêter, appuie sur `Échap` dans le champ de message ou clique sur « ■ Stop ».
 
@@ -108,7 +108,7 @@ Si l’agent travaille dans un worktree, le panneau propose aussi « Merger …
 
 ## Et ensuite
 
-- [Les agents](managing-agents) et [la conversation](chat) : modes de permission, messages, images, recherche, historique.
+- [Les agents](managing-agents) et [la conversation](chat) : modes de permission, messages, pièces jointes, recherche, historique.
 - [Notifications](notifications) et [suivre ses agents](overview) : être prévenu, répondre sans ouvrir chaque conversation.
 - [Git et commits](git), [les worktrees](worktrees) et [les branches](branches) : relire, commiter, isoler les agents.
 - [L’éditeur](editor), [les terminaux](terminals) et [lancer le projet](launch).
