@@ -78,6 +78,9 @@ export const SETTINGS: Settings = {
   todoTools: true,
   terminalView: false,
   remoteControlAll: false,
+  uiZoom: 100,
+  terminalFontSize: 12.5,
+  editorFontSize: 12.5,
 };
 
 export function project(over: Partial<Project> = {}): Project {
