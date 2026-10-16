@@ -362,6 +362,59 @@ pub async fn inspect_folder(
     })
 }
 
+/// What the new project's assistant checks in a folder before its settings are taken: whether its
+/// tickets can start there (a commit to start from, the target branch), the folders its commands
+/// run in, where its worktrees would go.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupInfo {
+    /// The folder is a repository with a commit: worktrees, so tickets, can start from it.
+    has_commit: bool,
+    /// Its local branches, the checked-out one first.
+    branches: Vec<String>,
+    /// Those of `dirs` (relative to the folder) that are no folder there.
+    missing_dirs: Vec<String>,
+    /// The worktrees folder `worktree_dir` would be one git tracks files in: none can go there.
+    worktrees_tracked: bool,
+}
+
+/// Always `Ok`: an async command that borrows the state must return a `Result`.
+#[tauri::command]
+pub async fn inspect_setup(
+    _core: CoreState<'_>,
+    path: String,
+    worktree_dir: String,
+    dirs: Vec<String>,
+) -> Res<SetupInfo> {
+    let path = path.trim().to_string();
+    let repo = crate::git::toplevel(&path).await.is_some();
+    let missing_dirs = dirs
+        .into_iter()
+        .filter(|d| !std::path::Path::new(&path).join(d.trim()).is_dir())
+        .collect();
+    Ok(SetupInfo {
+        has_commit: repo && crate::git::has_commit(&path).await,
+        branches: if repo {
+            crate::git::branches(&path).await.unwrap_or_default()
+        } else {
+            Vec::new()
+        },
+        missing_dirs,
+        worktrees_tracked: repo
+            && crate::git::worktrees_in_tracked_folder(
+                &path,
+                &crate::paths::worktrees_root(&path, &worktree_dir),
+            )
+            .await,
+    })
+}
+
+/// « Faire un premier commit »: the folder made a repository if need be, with an empty first commit.
+#[tauri::command]
+pub async fn first_commit(_core: CoreState<'_>, path: String) -> Res<()> {
+    crate::git::first_commit(path.trim()).await.map_err(err)
+}
+
 /// `restore`: the history of a project closed in this folder comes back with it (the default);
 /// false starts a project of its own, the history staying among the closed projects.
 /// `history_id`: which of the folder's histories comes back, when it has several (else the latest
@@ -1607,6 +1660,24 @@ pub async fn suggest_run_commands(
     project_id: String,
 ) -> Res<crate::worktrees::RunSuggestion> {
     core.suggest_run_commands(&project_id).await.map_err(err)
+}
+
+/// The same, for the folder of a project not made yet (the new project's assistant).
+#[tauri::command]
+pub async fn suggest_worktree_steps_at(
+    core: CoreState<'_>,
+    path: String,
+) -> Res<crate::worktrees::WorktreeSuggestion> {
+    core.suggest_worktree_steps_at(&path).await.map_err(err)
+}
+
+/// The same, for the folder of a project not made yet (the new project's assistant).
+#[tauri::command]
+pub async fn suggest_run_commands_at(
+    core: CoreState<'_>,
+    path: String,
+) -> Res<crate::worktrees::RunSuggestion> {
+    core.suggest_run_commands_at(&path).await.map_err(err)
 }
 
 /// Looks for a newer release, through the network settings as they are now. `manual`: the user

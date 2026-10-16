@@ -121,6 +121,10 @@ La croix à droite supprime la commande, et « + Ajouter une commande » en aj
 
 « ✦ Remplir automatiquement » fonctionne comme pour les worktrees. Claude lit le projet (manifestes, scripts, docker-compose, README…) et propose les commandes à lancer dans « Commandes de lancement proposées », que « Remplacer les commandes » met à la place de la liste.
 
+## Assistant de configuration
+
+« Ouvrir l’assistant… » remplace les réglages par l’assistant de la fenêtre « Nouveau projet », sur ce projet (« Configurer <projet> »), pour revoir ses réglages étape par étape : « Garder la configuration actuelle » (par défaut), « Copier la configuration d’un projet », « Configuration recommandée » ou « Partir de zéro », puis les mêmes étapes et les mêmes contrôles qu’à la création (voir [Ajouter un projet](quick-start#ajouter-un-projet)). « Enregistrer », au récapitulatif, enregistre ce que l’assistant a réglé ; le reste du brouillon des réglages, s’il y en avait un, n’est pas enregistré. Ses sources liées et ses tickets restent les siens.
+
 ## Zone sensible
 
 | Réglage | Effet |

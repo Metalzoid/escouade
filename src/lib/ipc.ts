@@ -54,6 +54,7 @@ import type {
   UiEvent,
   UiState,
   WorktreeSuggestion,
+  SetupInfo,
 } from './types';
 
 /**
@@ -137,6 +138,10 @@ export const api = {
     restore: boolean;
     historyId?: string;
   }) => invoke<Project>('create_project', a),
+  /** What the new project's assistant checks in the folder: a commit, its branches, the folders `dirs` missing, the worktrees folder tracked. */
+  inspectSetup: (path: string, worktreeDir: string, dirs: string[]) => invoke<SetupInfo>('inspect_setup', { path, worktreeDir, dirs }),
+  /** « Faire un premier commit »: the folder made a repository if need be, with an empty first commit. */
+  firstCommit: (path: string) => invoke<void>('first_commit', { path }),
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
   /** `erase`: its history goes too (conversations, tickets, settings); else it is kept as a closed project. */
@@ -376,6 +381,9 @@ export const api = {
   suggestWorktreeSteps: (projectId: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps', { projectId }),
   /** The launch commands Claude suggests for the project, from what it reads of it, with how many it gave that were refused; nothing is saved. */
   suggestRunCommands: (projectId: string) => invoke<RunSuggestion>('suggest_run_commands', { projectId }),
+  /** The same two, for the folder of a project not made yet (the new project's assistant). */
+  suggestWorktreeStepsAt: (path: string) => invoke<WorktreeSuggestion>('suggest_worktree_steps_at', { path }),
+  suggestRunCommandsAt: (path: string) => invoke<RunSuggestion>('suggest_run_commands_at', { path }),
   /**
    * A newer release, through the network settings (proxy, TLS verification), kept by the backend for its download.
    * `manual`: the user asked, so a failure is always to be shown.

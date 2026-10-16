@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Escouade — assistant « Nouveau projet » (aperçu ESC-94)</title>
+    <link rel="stylesheet" href="../../node_modules/@fontsource/hanken-grotesk/400.css" />
+    <link rel="stylesheet" href="../../node_modules/@fontsource/hanken-grotesk/600.css" />
+    <link rel="stylesheet" href="../../node_modules/@fontsource/hanken-grotesk/700.css" />
+    <link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+    <style>
+      /* The app's tokens (src/app.css), données fictives. Chaque écran s'affiche par #a1, #a2… */
+      :root {
+        --bg: #1b1917; --panel: #211f1c; --elev: #2a2724; --elev2: #34302c; --line: rgba(255,236,214,.08);
+        --line2: rgba(255,236,214,.15); --text: #ede7df; --muted: #a8a095; --dim: #6f685f;
+        --accent: oklch(0.72 0.12 48); --accent-ink: #1b1512; --ok: oklch(0.76 0.12 150);
+        --wait: oklch(0.82 0.13 80); --del: oklch(0.72 0.14 25); --info: oklch(0.74 0.12 235);
+        --ui: 'Hanken Grotesk', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace; --r-sm: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px var(--ui); -webkit-font-smoothing: antialiased; }
+      .screen { display: none; position: fixed; inset: 0; }
+      .screen:target, .screen.first:not(:has(~ .screen:target)) { display: flex; }
+      .app { position: absolute; inset: 0; background: linear-gradient(#1f1d1a 0 34px, var(--bg) 34px); }
+      .app::before { content: 'Escouade   ·   atlas   ·   web-shop'; position: absolute; left: 14px; top: 10px; color: var(--dim); font-size: 12px; }
+      .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(12,10,8,.6); backdrop-filter: blur(3px); }
+      .modal { width: 820px; height: 640px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+      .modal.single { width: 640px; height: 700px; }
+      .head { display: flex; align-items: center; gap: 10px; padding: 18px 18px 0 24px; }
+      .t { font-size: 17px; font-weight: 700; }
+      .sub { color: var(--muted); font-size: 12.5px; }
+      .x { margin-left: auto; color: var(--muted); font-size: 16px; width: 28px; text-align: center; }
+      .main { flex: 1; display: flex; min-height: 0; }
+      .rail { width: 196px; flex: none; padding: 18px 10px 18px 18px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); }
+      .st { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: var(--r-sm); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+      .st .n { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line2); display: grid; place-items: center; font: 10.5px var(--mono); color: var(--dim); flex: none; }
+      .st.done .n { background: color-mix(in oklch, var(--ok) 22%, transparent); border-color: transparent; color: var(--ok); }
+      .st.skip .n { color: var(--dim); } .st.skip { color: var(--dim); }
+      .st.on { background: var(--elev); color: var(--text); } .st.on .n { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+      .st .w { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--wait); }
+      .st .tag { margin-left: auto; font-size: 10.5px; color: var(--dim); font-weight: 400; }
+      .body { flex: 1; overflow: hidden; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+      .h2 { font-size: 15px; font-weight: 700; margin: 0; } .lead { margin: -10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+      .foot { display: flex; align-items: center; gap: 8px; padding: 14px 18px 18px; border-top: 1px solid var(--line); }
+      .btn { display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border: 1px solid var(--line2); border-radius: var(--r-sm); background: var(--elev); color: var(--text); font: 600 12.5px var(--ui); white-space: nowrap; }
+      .btn.primary { border: none; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+      .btn.ghost { background: transparent; } .btn.sm { height: 26px; padding: 0 10px; font-size: 11.5px; }
+      .btn.link { border: none; background: none; color: var(--muted); padding: 0 6px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line2); }
+      .sp { flex: 1; }
+      .field { height: 34px; padding: 0 12px; border-radius: var(--r-sm); border: 1px solid var(--line2); background: var(--bg); color: var(--text); font: 13px var(--ui); display: flex; align-items: center; }
+      .mono { font-family: var(--mono); font-size: 12px; }
+      .lab { font-size: 12px; font-weight: 600; color: var(--muted); }
+      .grp { display: flex; flex-direction: column; gap: 7px; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .git { font: 11px var(--mono); color: var(--ok); display: flex; gap: 7px; align-items: center; }
+      .d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .colors { display: flex; gap: 8px; } .sw { width: 24px; height: 24px; border-radius: 7px; }
+      .cards { display: grid; gap: 8px; }
+      .card { display: flex; gap: 12px; padding: 12px 14px; border: 1px solid var(--line2); border-radius: 9px; background: var(--bg); align-items: flex-start; }
+      .card.on { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 7%, var(--bg)); }
+      .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line2); flex: none; margin-top: 1px; }
+      .card.on .radio { border: 5px solid var(--accent); }
+      .ct { font-weight: 700; font-size: 13px; } .cd { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.45; }
+      .sel { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; border: 1px solid var(--line2); border-radius: var(--r-sm); background: var(--elev); font-weight: 600; font-size: 12px; margin-top: 8px; }
+      .pdot { width: 9px; height: 9px; border-radius: 3px; }
+      .sw-t { width: 36px; height: 20px; border-radius: 10px; padding: 2px; display: flex; background: var(--elev2); flex: none; }
+      .sw-t::after { content: ''; width: 16px; height: 16px; border-radius: 50%; background: #fff; } .sw-t.on { justify-content: flex-end; background: var(--ok); }
+      .set { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+      .set .gh { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--elev); font-weight: 700; font-size: 12.5px; }
+      .set .gh .c { color: var(--dim); font-weight: 400; font-size: 11.5px; }
+      .it { display: grid; grid-template-columns: 18px 170px 1fr; gap: 10px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
+      .ck { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--line2); display: grid; place-items: center; font-size: 10px; }
+      .ck.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 800; }
+      .it .k { color: var(--muted); } .it .v { font: 11.5px var(--mono); display: flex; gap: 8px; align-items: center; min-width: 0; }
+      .it.off .v, .it.off .k { color: var(--dim); text-decoration: line-through; text-decoration-color: var(--dim); }
+      .ok { color: var(--ok); font-family: var(--ui); font-size: 11.5px; } .warn { color: var(--wait); font-family: var(--ui); font-size: 11.5px; } .bad { color: var(--del); font-family: var(--ui); font-size: 11.5px; }
+      .note { font-size: 11.5px; color: var(--dim); }
+      .kv { display: grid; grid-template-columns: 200px 1fr; gap: 10px 14px; align-items: center; }
+      .kv .k { color: var(--muted); font-size: 12.5px; }
+      .seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); }
+      .seg span { height: 24px; padding: 0 9px; display: grid; place-items: center; border-radius: 3px; color: var(--muted); font: 600 11px var(--mono); }
+      .seg span.on { background: var(--elev2); color: var(--text); }
+      .src { font-size: 10.5px; color: var(--info); margin-left: 8px; }
+      .chk { display: flex; gap: 12px; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); align-items: center; }
+      .chk .ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none; }
+      .chk.w { border-color: color-mix(in oklch, var(--wait) 40%, transparent); } .chk.w .ic { background: color-mix(in oklch, var(--wait) 25%, transparent); color: var(--wait); }
+      .chk.e { border-color: color-mix(in oklch, var(--del) 45%, transparent); } .chk.e .ic { background: color-mix(in oklch, var(--del) 25%, transparent); color: var(--del); }
+      .chk.g .ic { background: color-mix(in oklch, var(--ok) 22%, transparent); color: var(--ok); }
+      .chk .tt { font-weight: 700; font-size: 12.5px; } .chk .td { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+      .sum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 12px; }
+      .sum div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--line); padding: 4px 0; }
+      .sum span:first-child { color: var(--muted); } .sum span:last-child { font: 11.5px var(--mono); }
+      .sec { border: 1px solid var(--line); border-radius: 9px; }
+      .sec .sh { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-weight: 700; font-size: 13px; }
+      .sec .sh .s { color: var(--muted); font-weight: 400; font-size: 11.5px; margin-left: auto; font-family: var(--mono); }
+      .sec .sb { padding: 2px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+      .caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 14px; font-size: 12px; color: #fff; background: #000a; }
+    </style>
+  </head>
+  <body>
+    <!-- ───────────── A1 : Départ ───────────── -->
+    <section class="screen first" id="a1"><div class="app"></div><div class="overlay"><div class="modal">
+      <div class="head"><span class="t">Nouveau projet</span><span class="sub">· étape 1 sur 8</span><span class="x">×</span></div>
+      <div class="main">
+        <nav class="rail">
+          <div class="st on"><span class="n">1</span>Départ</div>
+          <div class="st"><span class="n">2</span>Réglages copiés</div>
+          <div class="st"><span class="n">3</span>Worktrees</div>
+          <div class="st"><span class="n">4</span>Lancement</div>
+          <div class="st"><span class="n">5</span>Kanban</div>
+          <div class="st"><span class="n">6</span>Compte et commit</div>
+          <div class="st"><span class="n">7</span>Intégrations<span class="tag">facultatif</span></div>
+          <div class="st"><span class="n">8</span>Récapitulatif</div>
+        </nav>
+        <div class="body">
+          <div class="grp"><span class="lab">Dossier</span>
+            <div class="row"><div class="field mono" style="flex:1">C:\dev\atlas-api</div><span class="btn" style="height:34px;line-height:34px">Parcourir…</span></div>
+            <span class="git"><span class="d"></span>Dépôt git · branche main · propre</span></div>
+          <div class="row" style="gap:16px;align-items:flex-end">
+            <div class="grp" style="flex:1"><span class="lab">Nom</span><div class="field" style="font-weight:600">atlas-api</div></div>
+            <div class="grp"><span class="lab">Couleur</span><div class="colors"><span class="sw" style="background:#d98a4e;box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--text)"></span><span class="sw" style="background:#5fb38a"></span><span class="sw" style="background:#6a9fe0"></span><span class="sw" style="background:#c06fd0"></span><span class="sw" style="background:#d0c060"></span><span class="sw" style="background:#e06a6a"></span><span class="sw" style="background:#5bc0c0"></span></div></div>
+          </div>
+          <div class="grp"><span class="lab">Point de départ</span>
+            <div class="cards">
+              <div class="card on"><span class="radio"></span><div><div class="ct">Copier la configuration d'un projet</div><div class="cd">Worktrees, lancement, Git, Kanban et compte, vérifiés dans ce dépôt. Les intégrations et les tickets ne sont pas copiés.</div>
+                <span class="sel"><span class="pdot" style="background:#5fb38a"></span>web-shop ▾</span></div></div>
+              <div class="card"><span class="radio"></span><div><div class="ct">Configuration recommandée</div><div class="cd">Un worktree par ticket, merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l'agent résout les conflits.</div></div></div>
+              <div class="card"><span class="radio"></span><div><div class="ct">Partir de zéro</div><div class="cd">Les valeurs par défaut d'Escouade, à régler dans les étapes suivantes.</div></div></div>
+            </div></div>
+        </div>
+      </div>
+      <div class="foot"><span class="btn link">Créer sans l'assistant</span><span class="sp"></span><span class="btn ghost">Annuler</span><span class="btn primary">Suivant</span></div>
+    </div></div><div class="caption">A · Assistant en étapes (rail à gauche) — étape 1 : dossier, nom, couleur, point de départ</div></section>
+
+    <!-- ───────────── A2 : Réglages copiés ───────────── -->
+    <section class="screen" id="a2"><div class="app"></div><div class="overlay"><div class="modal">
+      <div class="head"><span class="t">Nouveau projet</span><span class="sub">· étape 2 sur 8</span><span class="x">×</span></div>
+      <div class="main">
+        <nav class="rail">
+          <div class="st done"><span class="n">✓</span>Départ</div>
+          <div class="st on"><span class="n">2</span>Réglages copiés<span class="w"></span></div>
+          <div class="st"><span class="n">3</span>Worktrees</div>
+          <div class="st"><span class="n">4</span>Lancement</div>
+          <div class="st"><span class="n">5</span>Kanban</div>
+          <div class="st"><span class="n">6</span>Compte et commit</div>
+          <div class="st"><span class="n">7</span>Intégrations<span class="tag">facultatif</span></div>
+          <div class="st"><span class="n">8</span>Récapitulatif</div>
+        </nav>
+        <div class="body" style="gap:10px">
+          <h2 class="h2">Copié de <span style="color:#5fb38a">web-shop</span></h2>
+          <p class="lead" style="margin:-4px 0 2px">Décoche ce que tu ne veux pas reprendre. Ce qui dépend du dossier est vérifié dans atlas-api.</p>
+          <div class="set"><div class="gh"><span class="ck on">✓</span>Worktrees<span class="c">5 réglages</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Un worktree par agent</span><span class="v">oui</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Dossier des worktrees</span><span class="v">.claude/worktrees <span class="ok">✓ relatif</span></span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Préfixes des branches</span><span class="v">agent/ · ticket/</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Préparation</span><span class="v">npm ci <span class="warn">⚠ dossier « web » absent ici : la racine</span></span></div>
+          </div>
+          <div class="set"><div class="gh"><span class="ck on">–</span>Lancement<span class="c">2 commandes</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">api</span><span class="v">cargo run <span class="ok">✓ dossier présent</span></span></div>
+            <div class="it off"><span class="ck"></span><span class="k">web</span><span class="v">npm run dev · web/ <span class="warn" style="text-decoration:none">⚠ dossier introuvable</span></span></div>
+          </div>
+          <div class="set"><div class="gh"><span class="ck on">✓</span>Kanban<span class="c">12 réglages</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Action · branche cible</span><span class="v">merge squash → develop <span class="bad">✕ introuvable : main à la place</span></span></div>
+          </div>
+          <div class="set"><div class="gh"><span class="ck on">✓</span>Git et compte<span class="c">2 réglages</span></div>
+            <div class="it"><span class="ck on">✓</span><span class="k">Compte préféré</span><span class="v">ada@atlas.dev <span class="ok">✓ connecté</span></span></div>
+          </div>
+          <span class="note">Pas copiés : les sources liées (Jira, Trello, GitHub, Linear) et les tickets.</span>
+        </div>
+      </div>
+      <div class="foot"><span class="btn link">Créer sans l'assistant</span><span class="sp"></span><span class="btn ghost">Retour</span><span class="btn primary">Suivant</span></div>
+    </div></div><div class="caption">A · étape 2 (seulement en copie) : réglages copiés par groupe, cochables, vérifiés dans le nouveau dépôt</div></section>
+
+    <!-- ───────────── A3 : Kanban ───────────── -->
+    <section class="screen" id="a3"><div class="app"></div><div class="overlay"><div class="modal">
+      <div class="head"><span class="t">Nouveau projet</span><span class="sub">· étape 5 sur 8</span><span class="x">×</span></div>
+      <div class="main">
+        <nav class="rail">
+          <div class="st done"><span class="n">✓</span>Départ</div>
+          <div class="st done"><span class="n">✓</span>Réglages copiés</div>
+          <div class="st done"><span class="n">✓</span>Worktrees</div>
+          <div class="st skip"><span class="n">–</span>Lancement<span class="tag">passé</span></div>
+          <div class="st on"><span class="n">5</span>Kanban</div>
+          <div class="st"><span class="n">6</span>Compte et commit</div>
+          <div class="st"><span class="n">7</span>Intégrations<span class="tag">facultatif</span></div>
+          <div class="st"><span class="n">8</span>Récapitulatif</div>
+        </nav>
+        <div class="body">
+          <h2 class="h2">Kanban</h2>
+          <p class="lead">Ce que fait la validation d'un ticket, et comment ses agents travaillent.</p>
+          <div class="kv">
+            <span class="k">À la validation</span><span><span class="seg"><span class="on">merge</span><span>PR</span><span>push</span><span>garder</span></span><span class="src">copié</span></span>
+            <span class="k">Branche cible</span><span class="row"><span class="field mono" style="height:28px;width:160px">main</span><span class="ok">✓ existe</span></span>
+            <span class="k">Stratégie</span><span><span class="seg"><span>merge</span><span class="on">squash</span><span>rebase</span></span><span class="src">copié</span></span>
+            <span class="k">Supprimer le worktree validé</span><span class="sw-t on"></span>
+            <span class="k">Commits conventionnels</span><span class="sw-t on"></span>
+            <span class="k">Conflit</span><span><span class="seg"><span>demander</span><span class="on">l'agent résout</span><span>annuler</span></span></span>
+            <span class="k">Tests avant la validation</span><span class="row"><span class="sw-t on"></span><span class="field mono" style="height:28px;flex:1">npm test</span></span>
+            <span class="k">En parallèle · pilote auto</span><span class="row"><span class="field mono" style="height:28px;width:48px">3</span><span class="sw-t"></span></span>
+            <span class="k">Modèle · effort · mode</span><span class="row"><span class="seg"><span>haiku</span><span class="on">sonnet</span><span>opus</span></span><span class="seg"><span class="on">medium</span><span>high</span></span><span class="seg"><span class="on">auto</span></span></span>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><span class="btn link">Créer sans l'assistant</span><span class="sp"></span><span class="btn ghost">Retour</span><span class="btn">Passer</span><span class="btn primary">Suivant</span></div>
+    </div></div><div class="caption">A · étape Kanban : « Passer » garde les valeurs copiées ou par défaut ; « copié » repère ce qui vient de l'autre projet</div></section>
+
+    <!-- ───────────── A4 : Récapitulatif ───────────── -->
+    <section class="screen" id="a4"><div class="app"></div><div class="overlay"><div class="modal">
+      <div class="head"><span class="t">Nouveau projet</span><span class="sub">· étape 8 sur 8</span><span class="x">×</span></div>
+      <div class="main">
+        <nav class="rail">
+          <div class="st done"><span class="n">✓</span>Départ</div>
+          <div class="st done"><span class="n">✓</span>Réglages copiés</div>
+          <div class="st done"><span class="n">✓</span>Worktrees</div>
+          <div class="st skip"><span class="n">–</span>Lancement<span class="tag">passé</span></div>
+          <div class="st done"><span class="n">✓</span>Kanban</div>
+          <div class="st done"><span class="n">✓</span>Compte et commit</div>
+          <div class="st skip"><span class="n">–</span>Intégrations<span class="tag">passé</span></div>
+          <div class="st on"><span class="n">8</span>Récapitulatif<span class="w"></span></div>
+        </nav>
+        <div class="body" style="gap:12px">
+          <h2 class="h2">Avant de créer</h2>
+          <div class="chk e"><span class="ic">!</span><div style="flex:1"><div class="tt">Le dépôt n'a aucun commit</div><div class="td">Aucun ticket ne démarre : un worktree part d'un commit.</div></div><span class="btn sm">Faire un premier commit</span></div>
+          <div class="chk w"><span class="ic">!</span><div style="flex:1"><div class="tt">Les worktrees iraient dans un dossier suivi par git</div><div class="td">« wt/ » n'est pas ignoré : chaque worktree apparaîtrait dans les changements.</div></div><span class="btn sm">Ajouter à .gitignore</span></div>
+          <div class="chk g"><span class="ic">✓</span><div style="flex:1"><div class="tt">Claude Code trouvé · compte ada@atlas.dev · branche main</div></div></div>
+          <div class="sum">
+            <div><span>Worktrees</span><span>un par agent · wt/</span></div>
+            <div><span>Préparation</span><span>npm ci</span></div>
+            <div><span>Lancement</span><span>api · cargo run</span></div>
+            <div><span>Validation</span><span>merge squash → main</span></div>
+            <div><span>Conflits</span><span>l'agent résout</span></div>
+            <div><span>Agents</span><span>3 · sonnet medium</span></div>
+            <div><span>Commit</span><span>rédigé par l'agent</span></div>
+            <div><span>Intégrations</span><span>aucune</span></div>
+          </div>
+          <div class="row" style="margin-top:4px"><span class="sw-t on"></span><div><div style="font-weight:700;font-size:13px">Créer un premier agent</div><div class="note" style="color:var(--muted)">Sur sa propre branche, en worktree.</div></div><span class="sp"></span><span class="seg"><span>haiku</span><span class="on">sonnet</span><span>opus</span></span></div>
+        </div>
+      </div>
+      <div class="foot"><span class="btn link">Créer sans l'assistant</span><span class="sp"></span><span class="btn ghost">Retour</span><span class="btn primary">Créer le projet</span></div>
+    </div></div><div class="caption">A · récapitulatif : contrôles dits avec leur correction (bouton), puis « Créer » avec le premier agent facultatif</div></section>
+
+    <!-- ───────────── B : une seule page ───────────── -->
+    <section class="screen" id="b1"><div class="app"></div><div class="overlay"><div class="modal single">
+      <div class="head"><span class="t">Nouveau projet</span><span class="x">×</span></div>
+      <div class="body" style="gap:12px;overflow:hidden">
+        <div class="grp"><span class="lab">Dossier</span><div class="row"><div class="field mono" style="flex:1">C:\dev\atlas-api</div><span class="btn" style="height:34px;line-height:34px">Parcourir…</span></div><span class="git"><span class="d"></span>Dépôt git · branche main · propre</span></div>
+        <div class="row" style="gap:16px"><div class="grp" style="flex:1"><span class="lab">Nom</span><div class="field" style="font-weight:600">atlas-api</div></div>
+          <div class="grp"><span class="lab">Point de départ</span><span class="seg" style="height:34px;align-items:center"><span class="on">copier web-shop ▾</span><span>recommandée</span><span>zéro</span></span></div></div>
+        <div class="chk e" style="padding:8px 12px"><span class="ic">!</span><div style="flex:1"><div class="tt">Le dépôt n'a aucun commit</div><div class="td">Aucun ticket ne démarre.</div></div><span class="btn sm">Faire un premier commit</span></div>
+        <div class="sec"><div class="sh">▾ Worktrees<span class="s">un par agent · .claude/worktrees · npm ci</span></div>
+          <div class="sb"><div class="it" style="border:none;padding:2px 0"><span class="ck on">✓</span><span class="k">Préparation</span><span class="v">npm ci <span class="warn">⚠ « web » absent</span></span></div>
+          <div class="it" style="padding:4px 0"><span class="ck on">✓</span><span class="k">Préfixes</span><span class="v">agent/ · ticket/</span></div></div></div>
+        <div class="sec"><div class="sh">▸ Lancement<span class="s">1 commande sur 2</span></div></div>
+        <div class="sec"><div class="sh">▸ Kanban<span class="s">merge squash → <span style="color:var(--del)">develop ✕</span></span></div></div>
+        <div class="sec"><div class="sh">▸ Compte et commit<span class="s">ada@atlas.dev · rédigé par l'agent</span></div></div>
+        <div class="sec"><div class="sh">▸ Intégrations<span class="s">aucune · facultatif</span></div></div>
+        <div class="row"><span class="sw-t on"></span><span style="font-weight:700">Créer un premier agent</span><span class="sp"></span><span class="seg"><span class="on">sonnet</span><span>opus</span></span></div>
+      </div>
+      <div class="foot"><span class="sp"></span><span class="btn ghost">Annuler</span><span class="btn primary">Créer le projet</span></div>
+    </div></div><div class="caption">B · Une seule page : sections repliables avec leur résumé, contrôles en tête</div></section>
+  </body>
+</html>

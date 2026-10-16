@@ -801,6 +801,8 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   const worktrees = path.join(app.repo, '.claude', 'worktrees');
   await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0)).toBe(1);
   const wt = path.join(worktrees, fs.readdirSync(worktrees)[0]);
+  // The folder is there before git has checked its files out: its file is waited for.
+  await expect.poll(() => fs.existsSync(path.join(wt, 'src', 'app.ts'))).toBe(true);
   fs.writeFileSync(path.join(wt, 'src', 'app.ts'), 'const a = 42;\n');
   await page.getByRole('button', { name: /Fichiers/ }).click();
   // The row's editor button shows on hover.

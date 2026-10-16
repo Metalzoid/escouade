@@ -158,8 +158,12 @@ const LABELS = {
     path: 'C:\\chemin\\vers\\le\\projet',
     repo: /Dépôt git détecté · branche main · propre/,
     firstAgent: 'Créer un premier agent',
-    worktrees: 'Un worktree git par agent',
+    worktrees: 'Un worktree par agent',
     create: 'Créer le projet',
+    without: /^Créer sans l.assistant$/,
+    blank: /^Partir de zéro/,
+    next: 'Suivant',
+    summary: /Récapitulatif/,
   },
   en: {
     addProject: /Add a project/,
@@ -167,8 +171,12 @@ const LABELS = {
     path: 'C:\\path\\to\\the\\project',
     repo: /Git repository detected · branch main · clean/,
     firstAgent: 'Create a first agent',
-    worktrees: 'One git worktree per agent',
+    worktrees: 'One worktree per agent',
     create: 'Create project',
+    without: 'Create without the assistant',
+    blank: /^Start from scratch/,
+    next: 'Next',
+    summary: /Summary/,
   },
 } as const;
 
@@ -332,7 +340,9 @@ export const test = base.extend<{
 
 /**
  * Adds `repo` as a project through the "Nouveau projet" dialog (`lang: 'en'`: "New project"), with a first agent.
- * The dialog is read in the language of the interface the test started in, French unless it says so.
+ * The dialog is read in the language of the interface the test started in, French unless it says so. With Escouade's
+ * defaults: « Créer sans l'assistant », or the assistant from scratch when a worktree per agent or no first agent is
+ * asked for.
  */
 export async function addProject(
   page: Page,
@@ -345,9 +355,18 @@ export async function addProject(
   await dialog.getByPlaceholder(words.path).fill(repo);
   await expect(dialog.getByText(words.repo)).toBeVisible();
   if (opts.name) await dialog.locator('input').nth(1).fill(opts.name);
-  if (opts.firstAgent === false) await dialog.getByRole('switch', { name: words.firstAgent }).click();
-  if (opts.worktrees) await dialog.getByRole('switch', { name: words.worktrees }).click();
-  await dialog.getByRole('button', { name: words.create }).click();
+  if (!opts.worktrees && opts.firstAgent !== false) {
+    await dialog.getByRole('button', { name: words.without }).click();
+  } else {
+    await dialog.getByRole('radio', { name: words.blank }).click();
+    if (opts.worktrees) {
+      await dialog.getByRole('button', { name: words.next, exact: true }).click();
+      await dialog.getByRole('switch', { name: words.worktrees }).click();
+    }
+    await dialog.getByRole('button', { name: words.summary }).click();
+    if (opts.firstAgent === false) await dialog.getByRole('switch', { name: words.firstAgent }).click();
+    await dialog.getByRole('button', { name: words.create }).click();
+  }
   await expect(dialog).toBeHidden();
 }
 

@@ -1,0 +1,142 @@
+<script lang="ts">
+  import { t } from '../../lib/i18n';
+  import { modelOptions } from '../../lib/models';
+  import { app } from '../../lib/state.svelte';
+  import { DEFAULT_WORKTREES } from '../../lib/worktrees';
+  import { validationText } from '../../lib/wizard';
+  import type { WizardForm } from '../../lib/wizard-form.svelte';
+  import Switch from '../settings/Switch.svelte';
+  import Checks from './Checks.svelte';
+
+  // « Récapitulatif »: every check that fails, with its correction, what will be set, and the first agent (new
+  // project only).
+  let { form }: { form: WizardForm } = $props();
+
+  const c = $derived(form.config);
+  const b = $derived(c.board);
+  const rows = $derived([
+    [
+      t('wizard.summary.rows.worktrees'),
+      `${c.worktreePerAgent ? t('wizard.summary.perAgent') : t('wizard.summary.shared')} · ${c.worktreeDir.trim() || DEFAULT_WORKTREES}`,
+    ],
+    [
+      t('wizard.summary.rows.setup'),
+      c.worktreeSetup
+        .map((s) => s.command.trim())
+        .filter(Boolean)
+        .join(' ; ') || t('wizard.summary.noneValue'),
+    ],
+    [
+      t('wizard.summary.rows.launch'),
+      c.runCommands.length ? t('wizard.summary.commands', { count: c.runCommands.length }) : t('wizard.summary.noneValue'),
+    ],
+    [t('wizard.summary.rows.validation'), validationText(b)],
+    [t('wizard.summary.rows.conflicts'), t(`boardSettings.tab.conflicts.${b.conflict}`)],
+    [
+      t('wizard.summary.rows.agents'),
+      [t('wizard.summary.agentsValue', { count: b.maxParallel }), b.model, b.effort].filter(Boolean).join(' · '),
+    ],
+    [t('wizard.summary.rows.commit'), t(`settings.project.commitModes.${c.commitMode}`)],
+    [t('wizard.summary.rows.integrations'), form.integrations.links.map((l) => l.name).join(', ') || t('wizard.summary.noneValue')],
+  ]);
+</script>
+
+<Checks {form} />
+<dl class="sum">
+  {#each rows as [k, v] (k)}
+    <div>
+      <dt>{k}</dt>
+      <dd class="mono">{v}</dd>
+    </div>
+  {/each}
+</dl>
+{#if !form.project}
+  <div class="agent">
+    <Switch label={t('wizard.summary.firstAgent')} bind:on={form.firstAgent} />
+    <div class="tx">
+      <span class="tt">{t('wizard.summary.firstAgent')}</span>
+      <span class="td">{t('wizard.summary.firstAgentDesc')}</span>
+    </div>
+    {#if form.firstAgent}
+      <div class="models" role="group" aria-label={t('common.model')}>
+        {#each modelOptions(app.models) as m (m.value)}
+          <button
+            class="mbtn mono"
+            class:on={form.model === m.value}
+            aria-pressed={form.model === m.value}
+            onclick={() => (form.model = m.value)}>{m.label}</button
+          >
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<style>
+  .sum {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 18px;
+    font-size: 12px;
+  }
+  .sum div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--line);
+    min-width: 0;
+  }
+  dt {
+    color: var(--muted);
+    flex: none;
+  }
+  dd {
+    margin: 0;
+    font-size: 11.5px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .agent {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .tx {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tt {
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .td {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .models {
+    display: flex;
+    gap: 6px;
+  }
+  .mbtn {
+    height: 26px;
+    padding: 0 11px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line2);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .mbtn.on {
+    background: var(--elev2);
+    color: var(--text);
+  }
+</style>

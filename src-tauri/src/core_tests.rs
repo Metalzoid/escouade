@@ -7772,6 +7772,30 @@ async fn claude_reads_the_project_with_read_only_tools_to_suggest_its_worktree_c
 }
 
 #[tokio::test]
+async fn claude_reads_a_folder_not_made_a_project_yet_for_the_new_projects_assistant() {
+    let h = harness("wt-suggest-at");
+    let (_, r) = h.project(false).await;
+    let dir = r.to_string_lossy().to_string();
+    // Its folder alone, written with a separator at the end, as the assistant may have it.
+    let s = h
+        .core
+        .suggest_worktree_steps_at(&format!("{dir}/"))
+        .await
+        .unwrap();
+    assert_eq!((s.setup.len(), s.refused), (2, 1));
+    assert_reads_only(&h.launches(&r).pop().expect("claude run in the folder"));
+    let run = h.core.suggest_run_commands_at(&dir).await.unwrap();
+    assert!(!run.commands.is_empty());
+    let missing = h
+        .core
+        .suggest_run_commands_at(&format!("{dir}-absent"))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(missing.contains("n'existe pas"), "{missing}");
+}
+
+#[tokio::test]
 async fn claude_is_asked_for_the_commands_of_a_project_in_the_language_of_the_texts_for_claude() {
     use crate::i18n::Lang::En;
     use crate::worktrees::{run_suggest_system, suggest_system};

@@ -342,6 +342,13 @@
   <div class="add"><button class="btn" onclick={() => settingsForm.addCommand()}>{t('settings.fields.addCommand')}</button></div>
 </Group>
 
+<Group title={t('wizard.reopen.label')}>
+  <Row label={t('wizard.reopen.label')} desc={t('wizard.reopen.desc')}>
+    <!-- The assistant takes the place of these settings: it saves what it sets itself. -->
+    <button class="btn" onclick={() => (app.modal = { kind: 'newProject', projectId: project.id })}>{t('wizard.reopen.button')}</button>
+  </Row>
+</Group>
+
 <Group title={t('settings.project.danger')}>
   <Row label={t('settings.project.close')} desc={t('settings.project.closeDesc')}>
     <button class="btn danger" onclick={askClose}>{t('settings.project.closeButton')}</button>

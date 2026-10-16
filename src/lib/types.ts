@@ -1393,6 +1393,18 @@ export interface FolderInfo {
   history: ClosedProject | null;
 }
 
+/** What the new project's assistant found in the folder (`inspect_setup`). */
+export interface SetupInfo {
+  /** A repository with a commit: worktrees, so tickets, can start from it. */
+  hasCommit: boolean;
+  /** Its local branches, the checked-out one first. */
+  branches: string[];
+  /** Those of the folders asked about that are no folder there. */
+  missingDirs: string[];
+  /** The worktrees folder is one git tracks files in: none can go there. */
+  worktreesTracked: boolean;
+}
+
 /** A project closed with its history kept: what adding its folder again brings back. */
 export interface ClosedProject {
   id: string;

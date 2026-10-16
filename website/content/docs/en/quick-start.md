@@ -8,19 +8,36 @@ You need Claude Code installed and signed in to your Claude account, and git (se
 
 ## Add a project
 
-A project is a folder of code. On the welcome screen, click “+ Add a project”. Later, the `+` button to the right of the tabs in the title bar does the same. The “New project” window opens:
+A project is a folder of code. On the welcome screen, click “+ Add a project”. Later, the `+` button to the right of the tabs in the title bar does the same. The “New project” window opens: an assistant in steps, listed on the left, that sets everything Escouade’s way of working relies on (agents in worktrees, Kanban tickets, launches, approval) from the first ticket. Each step has “Next” and, except the first one and the summary, “Skip”, which keeps its values as they are; clicking a step in the list goes straight to it.
+
+**1. Start.**
 
 | Field | What it does |
 |---|---|
 | “Folder” | The path of the project. “Browse…” opens the folder picker. Under the field, a line says what Escouade knows about the folder: “Git repository detected · branch main · clean” (or the number of changed files), “No git repository · one will be initialized” or “Folder not found”. |
 | “Name” | Filled in with the folder’s name, which you can change. “Tab preview” shows the tab as it will look. |
 | “Color” | One of the 14 colors offered; the first one no project uses yet is picked for you. It tints the tab and the interface while the project is on screen. |
-| “Create a first agent” | On by default: “Opens a conversation in this project right away”. The “Fable”, “Opus”, “Sonnet” and “Haiku” buttons, each with its version, choose its model; the one of the “Default model” setting is already selected. |
-| “One git worktree per agent” | Off by default: “Keeps each agent’s work apart and shows its changed files separately”. You can turn it on later, see [worktrees](worktrees). |
+| “Starting point” | “Copy a project’s setup” (with the list of open projects, the one on screen first), “Recommended setup” (chosen by default) or “Start from scratch” (Escouade’s defaults). |
 
-Click “Create project” (the button stays grayed out until the folder exists). The project opens in a new tab, with its first agent if you asked for one.
+The recommended setup: a worktree per agent, approval by a squash merge into the current branch, worktree deleted once approved, conventional commits, the agent resolves conflicts, commits written by the agent.
 
-If the folder is the one of a project you closed, the window adds a notice, for example “History found: 1 agent, 3 tickets, last activity on Oct 14, 2026”, and its button becomes “Reopen project”: the project comes back with its history (agents, conversations, tickets, settings). The “Start from a blank project” switch creates a new one instead. See [Settings: Projects](settings-projects#closed-projects).
+**2. Copied settings** (only when copying). The other project’s settings are listed by group (“Worktrees”, “Launch”, “Kanban”, “Git and account”), each with its box, and checked in the new folder: everything is checked except what would not work here, with the reason beside it. A command whose folder is not in the new repository (“folder “web” not found here”) and a worktrees folder written as a full path (the other project’s) are not taken; a target branch not found is replaced by the current branch (“branch not found: main instead”); a preferred account that is off, reserved to other projects or removed falls back to “Automatic”. The linked sources (Jira, Trello, GitHub, Linear) and the tickets are never copied. What is taken shows in the next steps, where you can change it.
+
+**3. Worktrees**: one worktree per agent, worktrees folder, branch prefixes, copied files, setup and teardown commands, with “✦ Fill in automatically”, where Claude reads the folder to suggest them (see [worktrees](worktrees)). **4. Launch**: the commands that launch the project, with “✦ Fill in automatically” too (see [launch](launch)). **5. Kanban**: action on approval, target branch, strategy, worktree removal, conventional commit message, conflicts, test command and “Run the tests again first”, agents in parallel, autopilot, model, effort and mode (see [Settings: Kanban](settings-board)). **6. Account and commits**: preferred account, who writes the commits, remote control. **7. Integrations** (optional): a source to link for each service whose account is connected.
+
+**8. Summary.** What would keep the way of working from working, each with its correction, then what will be set, and “Create a first agent” (with its model):
+
+| Check | Correction |
+|---|---|
+| “The repository has no commit”: no ticket starts, a worktree starts from a commit | “Make a first commit”: an empty commit, no file is added |
+| “The target branch … is not found” | “Take the current branch” |
+| “Worktrees would go in a folder git tracks” | “Use .claude/worktrees” |
+| “No Claude account serves this project” | Switch an account on, or lift its reservation, in Settings › Claude accounts |
+| “Claude Code is not found” | Install it, or give its path in Settings › Claude Code |
+
+Each check is also told in the step it concerns (the first one from “Start”). Click “Create project”: the project opens in a new tab with its settings, then its first agent if you asked for one. “Create without the assistant”, at the bottom left, creates the project at once with Escouade’s defaults and a first agent, as before the assistant. Later, Settings › Projects › “Open the assistant…” opens it again on an existing project (see [Settings: Projects](settings-projects#setup-assistant)).
+
+If the folder is the one of a project you closed, the history comes before the assistant: the window adds a notice, for example “History found: 1 agent, 3 tickets, last activity on Oct 14, 2026”, and its button becomes “Reopen project”: the project comes back with its history (agents, conversations, tickets, settings), with no step. The “Start from a blank project” switch creates a new one instead, through the assistant. See [Settings: Projects](settings-projects#closed-projects).
 
 > [!NOTE]
 > If the folder is not inside a git repository, Escouade runs `git init` to create one: without git, there would be no diff and no commit to review.

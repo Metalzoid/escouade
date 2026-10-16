@@ -174,9 +174,14 @@ test('a blank project leaves the history among the closed projects, where it is 
   await dialog.getByRole('switch', { name: BLANK }).click();
   await expect(dialog.getByRole('switch', { name: BLANK })).toHaveAttribute('aria-checked', 'true');
   await dialog.locator('input').nth(1).fill('demo-vierge');
-  await noFirstAgent(dialog);
-  await dialog.getByRole('button', { name: /^(Rouvrir|Créer) le projet$/ }).click();
-  await expect(dialog).toBeHidden();
+  // Created from scratch, without a first agent: through the assistant's summary.
+  await dialog.getByRole('radio', { name: /^Partir de zéro/ }).click();
+  await dialog.getByRole('button', { name: /Récapitulatif/ }).click();
+  // Past the first step, the folder field is gone: the window is found by its title.
+  const wizard = page.getByRole('dialog', { name: 'Nouveau projet' });
+  await noFirstAgent(wizard);
+  await wizard.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(wizard).toBeHidden();
   await expect(page.locator('.tab', { hasText: 'demo-vierge' })).toHaveClass(/active/);
   await expect(page.locator('.card .name')).toHaveCount(0);
   await page.getByRole('button', { name: /^Kanban/ }).click();
@@ -255,7 +260,7 @@ test('a project closed with its history erased leaves nothing to find', async ({
   const dialog = await typeFolder(page, rewritten(app.repo));
   await expect(dialog.getByText(/Historique retrouvé/)).toHaveCount(0);
   await expect(dialog.getByRole('switch', { name: BLANK })).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+  await dialog.getByRole('button', { name: /^Créer sans l.assistant$/ }).click();
   await expect(dialog).toBeHidden();
   // A new agent, with nothing of the old conversation.
   await expect(page.locator('.card .name')).toHaveCount(1);

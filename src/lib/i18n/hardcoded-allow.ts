@@ -26,6 +26,11 @@ export const ALLOWED: Allowed[] = [
     why: 'un motif de fichiers donné en exemple (le champ dit « un motif par ligne »), le même dans toutes les langues',
   },
   {
+    file: 'src/components/wizard/WorktreesStep.svelte',
+    text: '.env*',
+    why: 'le même motif d’exemple que dans Réglages › Projets, pour le même champ de l’assistant',
+  },
+  {
     file: 'src/components/settings/AppTab.svelte',
     text: '~/.escouade/',
     why: 'un chemin de dossier, pas un texte',

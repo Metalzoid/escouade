@@ -993,31 +993,73 @@ pub async fn exclude_worktrees(repo: &str, root: &Path) -> Result<()> {
             p = root.display()
         ))
     })?;
-    let Some(top) = toplevel(repo).await else {
+    let Some((top, rel)) = folder_in_repo(repo, root).await else {
         return Ok(());
     };
-    let (Ok(real_top), Ok(dir)) = (std::fs::canonicalize(&top), std::fs::canonicalize(root)) else {
-        return Ok(());
-    };
-    let Ok(rel) = dir.strip_prefix(&real_top) else {
-        return Ok(());
-    };
-    let rel: Vec<String> = rel
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect();
-    if rel.is_empty() {
-        return Ok(());
-    }
-    let rel = rel.join("/");
-    let tracked = text(&top, &["ls-files", "--", &format!(":(literal){rel}")]).await?;
-    if !tracked.is_empty() {
+    if tracks_files_in(&top, &rel).await? {
         bail!(tr!(
             "Le dossier des worktrees {rel} contient des fichiers suivis par git : choisis-en un autre dans les réglages du projet.",
             "The worktrees folder {rel} holds files git tracks: pick another one in the project’s settings."
         ));
     }
     ensure_excluded(repo, &exclude_pattern(&rel)).await
+}
+
+/// The repository's root and the folder `dir` from it (with `/`), when `dir` exists and is inside
+/// the repository of `repo` (not its root). Read through links and short names: git gives the
+/// repository's root in its long name.
+async fn folder_in_repo(repo: &str, dir: &Path) -> Option<(String, String)> {
+    let top = toplevel(repo).await?;
+    let (Ok(real_top), Ok(dir)) = (std::fs::canonicalize(&top), std::fs::canonicalize(dir)) else {
+        return None;
+    };
+    let rel: Vec<String> = dir
+        .strip_prefix(&real_top)
+        .ok()?
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    (!rel.is_empty()).then(|| (top, rel.join("/")))
+}
+
+/// Git tracks files in the folder `rel` of the repository at `top`.
+async fn tracks_files_in(top: &str, rel: &str) -> Result<bool> {
+    let tracked = text(top, &["ls-files", "--", &format!(":(literal){rel}")]).await?;
+    Ok(!tracked.is_empty())
+}
+
+/// The worktrees folder `root` of `repo` holds files git tracks: the agents' worktrees can't go
+/// there (`exclude_worktrees` refuses it). False for a folder not there yet, or outside the
+/// repository.
+pub async fn worktrees_in_tracked_folder(repo: &str, root: &Path) -> bool {
+    match folder_in_repo(repo, root).await {
+        Some((top, rel)) => tracks_files_in(&top, &rel).await.unwrap_or(false),
+        None => false,
+    }
+}
+
+/// The repository has a commit: HEAD names one (a new repository's has none, and no worktree can
+/// start from it).
+pub async fn has_commit(repo: &str) -> bool {
+    run(repo, &["rev-parse", "--verify", "--quiet", "HEAD"])
+        .await
+        .is_ok_and(|out| !out.is_empty())
+}
+
+/// Makes the folder a repository if it is none, and gives it a first commit, empty: no file of the
+/// project is committed without the user's say (an `.env` would be), but its worktrees have a
+/// commit to start from.
+pub async fn first_commit(path: &str) -> Result<()> {
+    if toplevel(path).await.is_none() {
+        init_repo(path).await?;
+    }
+    if has_commit(path).await {
+        return Ok(());
+    }
+    let message = tr!("Premier commit", "Initial commit");
+    run_hooks(path, &["commit", "--allow-empty", "-m", &message])
+        .await
+        .map(|_| ())
 }
 
 /// `dir` may take a new worktree: nothing is there, and no agent of the app holds it (`held`: the
@@ -3510,6 +3552,57 @@ mod repo_tests {
             .await
             .unwrap();
         assert!(Path::new(&path).join("résumé.md").exists());
+    }
+
+    #[tokio::test]
+    async fn a_new_repository_has_no_commit_until_its_first_one() {
+        let r = repo("git-has-commit");
+        assert!(has_commit(&r).await);
+        let fresh = crate::paths::test_dir("git-has-commit-new");
+        let fresh = fresh.to_string_lossy().to_string();
+        // Not even a repository: made one, then given an empty commit.
+        assert!(!has_commit(&fresh).await);
+        let g = |args: &[&str]| {
+            assert!(Command::new("git")
+                .arg("-C")
+                .arg(&fresh)
+                .args(args)
+                .status()
+                .unwrap()
+                .success())
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(Path::new(&fresh).join(".env"), "SECRET=1").unwrap();
+        assert!(!has_commit(&fresh).await);
+        first_commit(&fresh).await.unwrap();
+        assert!(has_commit(&fresh).await);
+        // No file of the project went into it.
+        assert_eq!(text(&fresh, &["ls-files"]).await.unwrap(), "");
+        // Once is enough.
+        first_commit(&fresh).await.unwrap();
+        assert_eq!(
+            text(&fresh, &["rev-list", "--count", "HEAD"])
+                .await
+                .unwrap(),
+            "1"
+        );
+    }
+
+    #[tokio::test]
+    async fn worktrees_cannot_go_in_a_folder_git_tracks() {
+        let r = repo("git-wt-tracked");
+        std::fs::create_dir_all(Path::new(&r).join("src")).unwrap();
+        std::fs::write(Path::new(&r).join("src/a.rs"), "").unwrap();
+        git(&r, &["add", "-A"]);
+        git(&r, &["commit", "-qm", "src"]);
+        assert!(worktrees_in_tracked_folder(&r, &Path::new(&r).join("src")).await);
+        // Not there yet, or outside the repository, or with nothing tracked: no trouble.
+        assert!(!worktrees_in_tracked_folder(&r, &Path::new(&r).join(".claude/worktrees")).await);
+        std::fs::create_dir_all(Path::new(&r).join("wt")).unwrap();
+        assert!(!worktrees_in_tracked_folder(&r, &Path::new(&r).join("wt")).await);
+        assert!(!worktrees_in_tracked_folder(&r, &std::env::temp_dir()).await);
     }
 
     #[tokio::test]

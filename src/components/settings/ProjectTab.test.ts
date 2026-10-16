@@ -28,6 +28,14 @@ describe('ProjectTab', () => {
     expect(backend.called('update_project')[0].args.project).not.toHaveProperty('agentsUseEscouade');
   });
 
+  it('opens the setup assistant again on the project (ESC-94)', async () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+    expect(screen.getByText('Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir l’assistant…' }));
+    expect(app.modal).toEqual({ kind: 'newProject', projectId: 'p2' });
+  });
+
   describe('remote control', () => {
     const LABEL = 'Remote control pour les agents de ce projet';
     const REASON = 'Activé pour tous les projets dans Réglages › Claude Code';

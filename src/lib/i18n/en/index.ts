@@ -22,6 +22,7 @@ import settings from './settings';
 import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
+import wizard from './wizard';
 
 export const en = defineCatalog({
   common,
@@ -45,4 +46,5 @@ export const en = defineCatalog({
   plan,
   subagents,
   bgtasks,
+  wizard,
 });

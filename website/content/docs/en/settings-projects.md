@@ -121,6 +121,10 @@ The cross on the right deletes the command, and “+ Add a command” adds one. 
 
 “✦ Fill in automatically” works as it does for worktrees. Claude reads the project (manifests, scripts, docker-compose, README…) and suggests the commands to run under “Suggested launch commands”, which “Replace the commands” puts in place of the list.
 
+## Setup assistant
+
+“Open the assistant…” replaces the settings with the assistant of the “New project” window, on this project (“Set up <project>”), to review its settings step by step: “Keep the current setup” (the default), “Copy a project’s setup”, “Recommended setup” or “Start from scratch”, then the same steps and checks as when creating a project (see [Add a project](quick-start#add-a-project)). “Save”, in the summary, saves what the assistant set; the rest of the settings’ draft, if there was one, is not saved. Its linked sources and tickets stay its own.
+
 ## Danger zone
 
 | Setting | Effect |

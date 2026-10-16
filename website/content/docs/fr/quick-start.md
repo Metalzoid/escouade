@@ -8,19 +8,36 @@ Il te faut Claude Code installé et connecté à ton compte Claude, et git (voir
 
 ## Ajouter un projet
 
-Un projet est un dossier de code. Sur l’écran d’accueil, clique sur « + Ajouter un projet ». Plus tard, le bouton `+` à droite des onglets de la barre de titre fait la même chose. La fenêtre « Nouveau projet » s’ouvre :
+Un projet est un dossier de code. Sur l’écran d’accueil, clique sur « + Ajouter un projet ». Plus tard, le bouton `+` à droite des onglets de la barre de titre fait la même chose. La fenêtre « Nouveau projet » s’ouvre : c’est un assistant en étapes, listées à gauche, qui règle tout ce qui fait marcher la méthode de travail d’Escouade (agents en worktree, tickets du Kanban, lancements, validation) dès le premier ticket. Chaque étape a « Suivant » et, sauf la première et le récapitulatif, « Passer », qui garde ses valeurs telles qu’elles sont ; un clic sur une étape de la liste y va directement.
+
+**1. Départ.**
 
 | Champ | Ce qu’il fait |
 |---|---|
 | « Dossier » | Le chemin du projet. « Parcourir… » ouvre le sélecteur de dossier. Sous le champ, une ligne dit ce qu’Escouade sait du dossier : « Dépôt git détecté · branche main · propre » (ou le nombre de fichiers modifiés), « Aucun dépôt git · un dépôt sera initialisé » ou « Dossier introuvable ». |
 | « Nom » | Rempli avec le nom du dossier, que tu peux changer. « Aperçu de l’onglet » montre l’onglet tel qu’il sera. |
 | « Couleur » | Une des 14 couleurs proposées ; la première qu’aucun projet n’utilise encore est choisie d’office. Elle teinte l’onglet et l’interface quand le projet est affiché. |
-| « Créer un premier agent » | Activé par défaut : « Ouvre directement une conversation dans ce projet ». Des boutons « Fable », « Opus », « Sonnet » et « Haiku », chacun avec sa version, choisissent son modèle ; celui du réglage « Modèle par défaut » est déjà coché. |
-| « Un worktree git par agent » | Désactivé par défaut : « Isole le travail de chaque agent et permet de voir ses fichiers modifiés séparément ». Tu pourras l’activer plus tard, voir les [worktrees](worktrees). |
+| « Point de départ » | « Copier la configuration d’un projet » (avec la liste des projets ouverts, celui affiché d’abord), « Configuration recommandée » (choisie par défaut) ou « Partir de zéro » (les valeurs par défaut d’Escouade). |
 
-Clique sur « Créer le projet » (le bouton reste grisé tant que le dossier n’existe pas). Le projet s’ouvre dans un nouvel onglet, avec son premier agent si tu l’as demandé.
+La configuration recommandée : un worktree par agent, validation par merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l’agent résout les conflits, commits rédigés par l’agent.
 
-Si le dossier est celui d’un projet que tu as fermé, la fenêtre ajoute un encart, par exemple « Historique retrouvé : 1 agent, 3 tickets, dernière activité le 14 octobre 2026 », et son bouton devient « Rouvrir le projet » : le projet revient avec son historique (agents, conversations, tickets, réglages). L’interrupteur « Partir d’un projet vierge » en crée un neuf à la place. Voir [Réglages : Projets](settings-projects#projets-fermes).
+**2. Réglages copiés** (seulement en copie). Les réglages de l’autre projet sont listés par groupe (« Worktrees », « Lancement », « Kanban », « Git et compte »), chacun avec sa case, et vérifiés dans le nouveau dossier : tout est coché sauf ce qui ne marcherait pas ici, avec la raison à côté. Une commande dont le dossier n’existe pas dans le nouveau dépôt (« dossier « web » introuvable ici ») et un dossier des worktrees écrit en chemin complet (celui de l’autre projet) ne sont pas repris ; une branche cible introuvable est remplacée par la branche courante (« branche introuvable : main à la place ») ; un compte préféré inactif, réservé à d’autres projets ou supprimé retombe sur « Automatique ». Les sources liées (Jira, Trello, GitHub, Linear) et les tickets ne sont jamais copiés. Ce qui est repris se retrouve dans les étapes suivantes, où tu peux le changer.
+
+**3. Worktrees** : un worktree par agent, dossier des worktrees, préfixes des branches, fichiers copiés, commandes de préparation et de démontage, avec « ✦ Remplir automatiquement », où Claude lit le dossier pour les proposer (voir [worktrees](worktrees)). **4. Lancement** : les commandes qui lancent le projet, avec « ✦ Remplir automatiquement » aussi (voir [lancement](launch)). **5. Kanban** : action à la validation, branche cible, stratégie, suppression du worktree, message de commit conventionnel, conflits, commande de tests et « Relancer les tests avant », agents en parallèle, pilote auto, modèle, effort et mode (voir [Réglages : Kanban](settings-board)). **6. Compte et commit** : compte préféré, qui écrit les commits, remote control. **7. Intégrations** (facultatif) : une source à lier pour chaque service dont le compte est connecté.
+
+**8. Récapitulatif.** Ce qui empêcherait la méthode de travail de marcher, chaque point avec sa correction, puis ce qui sera réglé et « Créer un premier agent » (avec son modèle) :
+
+| Contrôle | Correction |
+|---|---|
+| « Le dépôt n’a aucun commit » : aucun ticket ne démarre, un worktree part d’un commit | « Faire un premier commit » : un commit vide, aucun fichier n’est ajouté |
+| « La branche cible … est introuvable » | « Prendre la branche courante » |
+| « Les worktrees iraient dans un dossier suivi par git » | « Utiliser .claude/worktrees » |
+| « Aucun compte Claude ne sert ce projet » | Activer un compte, ou retirer sa réservation, dans Réglages › Comptes Claude |
+| « Claude Code est introuvable » | L’installer, ou indiquer son chemin dans Réglages › Claude Code |
+
+Chaque contrôle est aussi dit dans l’étape qu’il concerne (le premier dès « Départ »). Clique sur « Créer le projet » : le projet s’ouvre dans un nouvel onglet avec ses réglages, puis son premier agent si tu l’as demandé. « Créer sans l’assistant », en bas à gauche, crée le projet tout de suite avec les valeurs par défaut d’Escouade et un premier agent, comme avant l’assistant. Plus tard, Réglages › Projets › « Ouvrir l’assistant… » le rouvre sur un projet existant (voir [Réglages : Projets](settings-projects#assistant-de-configuration)).
+
+Si le dossier est celui d’un projet que tu as fermé, l’historique passe avant l’assistant : la fenêtre ajoute un encart, par exemple « Historique retrouvé : 1 agent, 3 tickets, dernière activité le 14 octobre 2026 », et son bouton devient « Rouvrir le projet » : le projet revient avec son historique (agents, conversations, tickets, réglages), sans étape. L’interrupteur « Partir d’un projet vierge » en crée un neuf à la place, par l’assistant. Voir [Réglages : Projets](settings-projects#projets-fermes).
 
 > [!NOTE]
 > Si le dossier n’est pas dans un dépôt git, Escouade lance `git init` pour en créer un : sans git, il n’y aurait ni diff ni commit à relire.

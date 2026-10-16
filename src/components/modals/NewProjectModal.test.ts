@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -35,6 +35,9 @@ const closed = (over: Partial<ClosedProject> = {}): ClosedProject => ({
   ...over,
 });
 
+/** « Créer sans l'assistant »: the project made as before the assistant, with Escouade's defaults. */
+const WITHOUT = /^Créer sans l.assistant$/;
+
 /** Types a path and waits for the folder to be inspected (the modal waits a moment before it asks). */
 async function typePath(path: string) {
   await userEvent.type(screen.getByPlaceholderText(/^C:/), path);
@@ -46,12 +49,26 @@ describe('NewProjectModal', () => {
     app.modal = { kind: 'newProject' };
   });
 
-  it('names the first agent’s models with the version Claude Code runs for them', () => {
+  it('is an assistant in steps, starting from the folder, its name, its color and where its settings start from', () => {
     fakeBackend();
-    app.models = [{ value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' }];
     render(NewProjectModal);
-    expect(screen.getByRole('button', { name: 'Haiku 4.5' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sonnet' })).toBeInTheDocument();
+    const rail = screen.getByRole('navigation', { name: 'Étapes' });
+    expect(
+      within(rail)
+        .getAllByRole('button')
+        .map((b) => b.textContent?.replace(/\s+/g, ' ').trim()),
+    ).toEqual(['1 Départ', '2 Worktrees', '3 Lancement', '4 Kanban', '5 Compte et commit', '6 Intégrations facultatif', '7 Récapitulatif']);
+    expect(screen.getByText('Étape 1 sur 7')).toBeInTheDocument();
+    // The project copied comes first, when there is one to copy; the recommended setup is chosen.
+    expect(screen.getAllByRole('radio').map((r) => r.querySelector('.ct')?.textContent)).toEqual([
+      'Copier la configuration d’un projet',
+      'Configuration recommandée',
+      'Partir de zéro',
+    ]);
+    expect(screen.getByRole('radio', { name: /^Configuration recommandée/ })).toHaveAttribute('aria-checked', 'true');
+    // Nothing goes on before the folder is read.
+    expect(screen.getByRole('button', { name: 'Suivant' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: WITHOUT })).toBeDisabled();
   });
 
   it('asks for the folder first, then says what it holds', async () => {
@@ -61,7 +78,8 @@ describe('NewProjectModal', () => {
     expect(screen.getByText('Choisis le dossier du projet')).toBeInTheDocument();
     await typePath('C:\\code\\demo');
     await waitFor(() => expect(screen.getByText('Dépôt git détecté · branche main · 3 fichiers modifiés')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Créer le projet' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: WITHOUT })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled();
   });
 
   it('says a clean repository, a single change, a folder that is not one and a folder that is missing', async () => {
@@ -116,10 +134,12 @@ describe('NewProjectModal on the folder of a closed project', () => {
     await screen.findByText(/^Historique retrouvé/);
     expect(screen.getByDisplayValue('ancien')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Couleur 4' })).toHaveAttribute('aria-pressed', 'true');
-    expect(switchNamed('Un worktree git par agent')).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByRole('switch', { name: 'Créer un premier agent' })).not.toBeInTheDocument();
+    // Its settings come back with it: no step to go through.
+    expect(screen.queryByRole('button', { name: 'Suivant' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Worktrees/ })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Sonnet' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Créer le projet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: WITHOUT })).not.toBeInTheDocument();
     expect(switchNamed("Partir d'un projet vierge")).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(screen.getByRole('button', { name: 'Rouvrir le projet' }));
     expect(backend.called('create_project')[0].args).toEqual({
@@ -144,14 +164,13 @@ describe('NewProjectModal on the folder of a closed project', () => {
     await userEvent.clear(name);
     await userEvent.type(name, 'renommé');
     await userEvent.click(screen.getByRole('button', { name: 'Couleur 2' }));
-    await userEvent.click(switchNamed('Un worktree git par agent'));
     await userEvent.click(switchNamed("Partir d'un projet vierge"));
     await userEvent.click(switchNamed("Partir d'un projet vierge"));
     await userEvent.click(screen.getByRole('button', { name: 'Rouvrir le projet' }));
     expect(backend.called('create_project')[0].args).toMatchObject({
       name: 'renommé',
       color: PROJECT_COLORS[1],
-      worktreePerAgent: false,
+      worktreePerAgent: true,
       restore: true,
     });
   });
@@ -163,16 +182,14 @@ describe('NewProjectModal on the folder of a closed project', () => {
     await screen.findByText(/^Historique retrouvé/);
     await userEvent.click(switchNamed("Partir d'un projet vierge"));
     expect(switchNamed("Partir d'un projet vierge")).toHaveAttribute('aria-checked', 'true');
-    // The folder's own name, the first color not used, no worktrees, a first agent: as without a history.
+    // The folder's own name, the first color not used, the steps: as without a history.
     expect(screen.getByDisplayValue('demo')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Couleur 2' })).toHaveAttribute('aria-pressed', 'true');
-    expect(switchNamed('Un worktree git par agent')).toHaveAttribute('aria-checked', 'false');
-    expect(switchNamed('Créer un premier agent')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('button', { name: 'Sonnet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Rouvrir le projet' })).not.toBeInTheDocument();
     // The history is still said, so that the switch can be turned off again.
     expect(screen.getByText(/^Historique retrouvé/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await userEvent.click(screen.getByRole('button', { name: WITHOUT }));
     expect(backend.called('create_project')[0].args).toEqual({
       path: 'C:\\code\\demo',
       name: 'demo',
@@ -202,8 +219,8 @@ describe('NewProjectModal on the folder of a closed project', () => {
     await screen.findByText('Dépôt git détecté · branche main · propre');
     expect(screen.queryByText(/^Historique retrouvé/)).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: "Partir d'un projet vierge" })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Créer le projet' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    expect(screen.getByRole('button', { name: WITHOUT })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: WITHOUT }));
     expect(backend.called('create_project')[0].args).toMatchObject({ name: 'demo', firstAgent: 'sonnet', restore: false });
   });
 
@@ -222,7 +239,7 @@ describe('NewProjectModal on the folder of a closed project', () => {
     await typePath('2');
     await waitFor(() => expect(screen.queryByText(/^Historique retrouvé/)).not.toBeInTheDocument());
     expect(screen.getByDisplayValue('autre')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Créer le projet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: WITHOUT })).toBeInTheDocument();
     await typePath('3');
     await screen.findByText(/^Historique retrouvé/);
     expect(screen.getByDisplayValue('neuf')).toBeInTheDocument();
@@ -244,7 +261,7 @@ describe('NewProjectModal on the folder of a closed project', () => {
     expect(screen.getByRole('button', { name: 'Rouvrir le projet' })).toBeDisabled();
     await waitFor(() => expect(answer).toBeDefined());
     answer!(folder({ name: 'demo2' }));
-    const create = await screen.findByRole('button', { name: 'Créer le projet' });
+    const create = await screen.findByRole('button', { name: WITHOUT });
     await waitFor(() => expect(create).toBeEnabled());
     await userEvent.click(create);
     expect(backend.called('create_project')[0].args).toMatchObject({ path: 'C:\\code\\demo2', firstAgent: 'sonnet', restore: false });
@@ -320,7 +337,7 @@ describe('NewProjectModal opened by « Rouvrir » on a closed project', () => {
     expect(backend.called('inspect_folder')[1].args).toEqual({ path: 'C:\\code\\demo2' });
     expect(Object.keys(backend.called('inspect_folder')[1].args)).toEqual(['path']);
     // Another folder, which has no history: a project like any other, sent without a history.
-    const create = await screen.findByRole('button', { name: 'Créer le projet' });
+    const create = await screen.findByRole('button', { name: WITHOUT });
     await waitFor(() => expect(create).toBeEnabled());
     await userEvent.click(create);
     expect(backend.called('create_project')[0].args).toMatchObject({ path: 'C:\\code\\demo2', restore: false });
@@ -343,7 +360,7 @@ describe('NewProjectModal opened by « Rouvrir » on a closed project', () => {
     render(NewProjectModal);
     await screen.findByText(/^Historique retrouvé/);
     await userEvent.click(screen.getByRole('switch', { name: "Partir d'un projet vierge" }));
-    await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+    await userEvent.click(screen.getByRole('button', { name: WITHOUT }));
     expect(backend.called('create_project')[0].args).toMatchObject({ restore: false, historyId: 'p7' });
   });
 
@@ -352,7 +369,7 @@ describe('NewProjectModal opened by « Rouvrir » on a closed project', () => {
     render(NewProjectModal);
     expect(await screen.findByText('Dépôt git détecté · branche main · propre')).toBeInTheDocument();
     expect(screen.queryByText(/^Historique retrouvé/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Créer le projet' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: WITHOUT })).toBeEnabled();
   });
 
   it('closes on « Annuler » without asking anything more', async () => {
@@ -382,11 +399,17 @@ describe('NewProjectModal in English', () => {
     expect(screen.getByText('Tab preview')).toBeInTheDocument();
     expect(screen.getByText('new-project')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Color 1' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Create a first agent' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'One git worktree per agent' })).toBeInTheDocument();
-    expect(screen.getByText('Opens a conversation in this project right away')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Steps' })).toHaveTextContent(
+      /Start.*Worktrees.*Launch.*Kanban.*Account and commits.*Integrations.*optional.*Summary/,
+    );
+    expect(screen.getByText('Step 1 of 7')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Starting point' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Copy a project’s setup/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^Recommended setup/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /^Start from scratch/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create project' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create without the assistant' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
     expect(screen.getByPlaceholderText('C:\\path\\to\\the\\project')).toBeInTheDocument();
   });
 

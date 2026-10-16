@@ -1440,6 +1440,43 @@ fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
     )
 }
 
+/// A project of the folder `path` with the settings a new one starts from, and no id: what
+/// `add_project` fills in, or what the new project's assistant asks Claude about before it is made.
+fn blank_project(path: &str) -> Project {
+    Project {
+        id: String::new(),
+        name: String::new(),
+        path: path.to_string(),
+        color: String::new(),
+        worktree_per_agent: false,
+        created_at: 0,
+        run_commands: Vec::new(),
+        board: BoardSettings::default(),
+        worktree_copy: default_worktree_copy(),
+        worktree_setup: Vec::new(),
+        worktree_teardown: Vec::new(),
+        integrations: ProjectIntegrations::default(),
+        commit_mode: CommitMode::default(),
+        account: String::new(),
+        worktree_dir: String::new(),
+        agent_branch_prefix: crate::model::default_agent_branch_prefix(),
+        ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
+        remote_control: false,
+    }
+}
+
+/// `blank_project` of a folder that must exist: Claude reads it.
+fn unsaved_project(path: &str) -> Result<Project> {
+    let path = path.trim().trim_end_matches(['\\', '/']);
+    if !Path::new(path).is_dir() {
+        bail!(tr!(
+            "Le dossier {path} n'existe pas",
+            "The folder {path} doesn’t exist"
+        ));
+    }
+    Ok(blank_project(path))
+}
+
 /// Claude's answer held no list of commands to read.
 fn no_readable_commands() -> anyhow::Error {
     anyhow!(tr!(
@@ -5062,7 +5099,17 @@ impl<R: Runtime> Core<R> {
     /// The setup and teardown Claude suggests for the project's worktrees, from what it reads of
     /// the project (in its folder, with tools that only read).
     pub async fn suggest_worktree_steps(&self, project_id: &str) -> Result<WorktreeSuggestion> {
-        let project = self.project(project_id)?;
+        self.suggest_worktree_steps_for(&self.project(project_id)?)
+            .await
+    }
+
+    /// The same for a project not made yet (the new project's assistant), from its folder alone.
+    pub async fn suggest_worktree_steps_at(&self, path: &str) -> Result<WorktreeSuggestion> {
+        self.suggest_worktree_steps_for(&unsaved_project(path)?)
+            .await
+    }
+
+    async fn suggest_worktree_steps_for(&self, project: &Project) -> Result<WorktreeSuggestion> {
         let shell = self.default_shell()?;
         let lang = self.lang().claude;
         let prompt = worktrees::suggest_prompt(
@@ -5072,7 +5119,7 @@ impl<R: Runtime> Core<R> {
             isola::configured(&project.path),
         );
         let answer = self
-            .read_project(&project, &worktrees::suggest_system(lang), &prompt)
+            .read_project(project, &worktrees::suggest_system(lang), &prompt)
             .await?;
         let suggestion = worktrees::parse_suggestion(&answer, Path::new(&project.path), &shell.id)
             .ok_or_else(no_readable_commands)?;
@@ -5088,12 +5135,21 @@ impl<R: Runtime> Core<R> {
     /// its developer keeps running), from what it reads of it, each for the default shell. Only
     /// a suggestion: the window shows it in the draft of the settings, nothing is saved here.
     pub async fn suggest_run_commands(&self, project_id: &str) -> Result<RunSuggestion> {
-        let project = self.project(project_id)?;
+        self.suggest_run_commands_for(&self.project(project_id)?)
+            .await
+    }
+
+    /// The same for a project not made yet (the new project's assistant), from its folder alone.
+    pub async fn suggest_run_commands_at(&self, path: &str) -> Result<RunSuggestion> {
+        self.suggest_run_commands_for(&unsaved_project(path)?).await
+    }
+
+    async fn suggest_run_commands_for(&self, project: &Project) -> Result<RunSuggestion> {
         let shell = self.default_shell()?;
         let lang = self.lang().claude;
         let prompt = worktrees::run_suggest_prompt(lang, &shell);
         let answer = self
-            .read_project(&project, &worktrees::run_suggest_system(lang), &prompt)
+            .read_project(project, &worktrees::run_suggest_system(lang), &prompt)
             .await?;
         let suggestion =
             worktrees::parse_run_suggestion(&answer, Path::new(&project.path), &shell.id)
@@ -5126,7 +5182,8 @@ impl<R: Runtime> Core<R> {
             prompt,
             limit: worktrees::SUGGEST_LIMIT,
             agent: None,
-            project: Some(&project.id),
+            // A project not made yet has no account of its own: one outside the projects reads it.
+            project: (!project.id.is_empty()).then_some(project.id.as_str()),
         })
         .await
     }
@@ -5907,22 +5964,10 @@ impl<R: Runtime> Core<R> {
             } else {
                 name.trim().to_string()
             },
-            path: path.clone(),
             color: color.to_string(),
             worktree_per_agent,
             created_at: now_ms(),
-            run_commands: Vec::new(),
-            board: BoardSettings::default(),
-            worktree_copy: default_worktree_copy(),
-            worktree_setup: Vec::new(),
-            worktree_teardown: Vec::new(),
-            integrations: ProjectIntegrations::default(),
-            commit_mode: CommitMode::default(),
-            account: String::new(),
-            worktree_dir: String::new(),
-            agent_branch_prefix: crate::model::default_agent_branch_prefix(),
-            ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
-            remote_control: false,
+            ..blank_project(&path)
         };
         let accounts: Vec<String> = self
             .settings
