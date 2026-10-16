@@ -223,6 +223,8 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
     assert_eq!(required("get_agent_summary"), json!(["agent"]));
     assert_eq!(required("wait_ticket"), json!(["tickets"]));
     assert_eq!(required("get_board"), json!(["project"]));
+    assert_eq!(required("list_background_work"), json!(["agent"]));
+    assert_eq!(required("get_background_output"), json!(["agent", "id"]));
     for name in [
         "list_projects",
         "list_agents",
@@ -246,6 +248,8 @@ async fn the_reading_tools_say_they_only_read_and_what_they_take() {
         "get_agent_summary",
         "wait_ticket",
         "get_board",
+        "list_background_work",
+        "get_background_output",
     ] {
         let s = schema(name);
         for (arg, spec) in s["properties"].as_object().unwrap() {
@@ -372,6 +376,8 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "model": "sonnet",
             "account": "Principal",
             "cost": 0.0,
+            "subagentsRunning": 0,
+            "backgroundTasksRunning": 0,
             "remoteControl": false,
             "remoteSource": null,
             "remoteState": null,
@@ -975,6 +981,8 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "touchedFiles": ["src/app.ts"],
             "requests": 0,
             "waitingFor": [],
+            "subagentsRunning": 0,
+            "backgroundTasksRunning": 0,
             "remoteControl": false,
             "remoteSource": null,
             "remoteState": null,
@@ -1014,6 +1022,7 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
     assert_eq!(
         summary.as_object().unwrap().keys().collect::<Vec<_>>(),
         [
+            "backgroundTasksRunning",
             "id",
             "interfaceRemote",
             "lastMessage",
@@ -1023,6 +1032,7 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "remoteState",
             "requests",
             "status",
+            "subagentsRunning",
             "ticket",
             "touchedFiles",
             "waitingFor"

@@ -2968,6 +2968,36 @@ fn what_runs_in_the_background_is_counted_by_row_subagents_workflows_and_tasks_a
 }
 
 #[test]
+fn the_subagents_and_the_background_tasks_that_run_are_counted_apart_as_the_window_counts_them() {
+    let mut p = PlanState::default();
+    assert_eq!((p.running_subagents(), p.running_background()), (0, 0));
+    // A subagent, in the foreground or the background, is not a background task.
+    p.agents.push(SubAgent::default());
+    p.agents.push(SubAgent {
+        background: true,
+        ..Default::default()
+    });
+    assert_eq!((p.running_subagents(), p.running_background()), (2, 0));
+    // A command and a monitor, then a workflow: « N en fond », whatever their kind.
+    sys(&mut p, bg_started("b1", "c1", "Job", Some(true)));
+    sys(&mut p, bg_started("b2", "c2", "Job 2", Some(true)));
+    p.workflows.push(WorkflowRun::default());
+    assert_eq!((p.running_subagents(), p.running_background()), (2, 3));
+    // What is over is counted in neither, whatever way it ended.
+    p.agents[0].status = RunStatus::Done;
+    p.agents[1].status = RunStatus::Interrupted;
+    p.on_system(&updated("b1", json!({ "status": "completed" })), 9_000);
+    p.workflows[0].status = RunStatus::Failed;
+    assert_eq!((p.running_subagents(), p.running_background()), (0, 1));
+    // Together they are what a restart of the agent's process would kill.
+    p.agents[0].status = RunStatus::Running;
+    assert_eq!(
+        p.running_subagents() + p.running_background(),
+        p.running_count()
+    );
+}
+
+#[test]
 fn the_window_is_told_the_background_tasks_and_a_saved_plan_without_them_is_read_back() {
     let mut p = PlanState::default();
     tool(

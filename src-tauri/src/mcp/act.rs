@@ -75,6 +75,8 @@ const TITLE_MAX: usize = 200;
 const DESCRIPTION_MAX: usize = 10_000;
 const CRITERION_MAX: usize = 500;
 const CRITERIA_MAX: usize = 30;
+/// The longest message `send_message` and `message_subagent` take, in characters.
+const MESSAGE_MAX: usize = 32_000;
 
 /// A guard said no.
 fn refusal(e: anyhow::Error) -> ToolError {
@@ -126,6 +128,27 @@ pub(super) fn own_project_only<R: Runtime>(
 }
 
 // ---------- what is asked ----------
+
+/// The words of a message to an agent or a subagent (`send_message`, `message_subagent`): trimmed,
+/// not blank, `MESSAGE_MAX` characters at most (counted as characters, not bytes). The refusal says
+/// how long they are, never what they say.
+pub(super) fn message_text(asked: &str) -> Result<&str, ToolError> {
+    let text = asked.trim();
+    if text.is_empty() {
+        return Err(ToolError::Failed(tr!(
+            "Écris le message à envoyer.",
+            "Write the message to send."
+        )));
+    }
+    let n = text.chars().count();
+    if n > MESSAGE_MAX {
+        return Err(ToolError::Failed(tr!(
+            "Le message fait {n} caractères : {MESSAGE_MAX} au plus.",
+            "The message is {n} characters long: {MESSAGE_MAX} at most."
+        )));
+    }
+    Ok(text)
+}
 
 /// A title: on one line, not blank, `TITLE_MAX` characters at most.
 fn title(asked: &str) -> Result<String, ToolError> {
@@ -394,7 +417,7 @@ fn not_held<R: Runtime>(core: &Core<R>, project_id: &str) -> Result<(), ToolErro
 /// A message to an agent does not go out while the agent's own account is held back
 /// (`Core::account_hold`): it would spend that account's quota. An agent on another account is not
 /// held by it. The refusal says why, until when, and which account when there are several.
-fn account_not_held<R: Runtime>(
+pub(super) fn account_not_held<R: Runtime>(
     core: &Core<R>,
     agent: &resolve::AgentRef,
 ) -> Result<(), ToolError> {
@@ -1342,7 +1365,7 @@ pub(super) async fn create_agent<R: Runtime>(
 
 /// The agent `asked` names (in the project `project` when given), who is not the caller and,
 /// for an agent calling, is of its project.
-fn other_agent<R: Runtime>(
+pub(super) fn other_agent<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     asked: &str,
@@ -1382,13 +1405,7 @@ pub(super) async fn send_message<R: Runtime>(
             "The agent {name} is archived: it no longer takes messages."
         )));
     }
-    let text = a.text.trim();
-    if text.is_empty() {
-        return Err(ToolError::Failed(tr!(
-            "Écris le message à envoyer.",
-            "Write the message to send."
-        )));
-    }
+    let text = message_text(&a.text)?;
     account_not_held(core, &found)?;
     // A message sent to an agent at work waits for the end of its turn.
     let queued = core

@@ -2240,7 +2240,8 @@ async fn a_message_to_a_subagent_goes_to_its_agent_which_is_asked_to_pass_it_on(
         .answer_permission(&id, "req_subperm", "allow", None)
         .unwrap();
     let call = h.agent(&id).plan.unwrap().agents[0].id.clone();
-    // Nothing to say, or a subagent it never had: refused, nothing sent.
+    // Nothing to say, or a subagent it never had (it does not run, as one that ended does not):
+    // refused, nothing sent.
     let refused = |e: anyhow::Error| e.to_string();
     assert_eq!(
         refused(h.core.message_subagent(&id, &call, "  ").await.unwrap_err()),
@@ -2253,7 +2254,7 @@ async fn a_message_to_a_subagent_goes_to_its_agent_which_is_asked_to_pass_it_on(
                 .await
                 .unwrap_err()
         ),
-        "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire."
+        "Ce sous-agent ne tourne plus."
     );
     h.core
         .message_subagent(&id, &call, "Regarde aussi le port 3001.")
@@ -2327,6 +2328,144 @@ async fn a_message_to_a_subagent_goes_to_its_agent_which_is_asked_to_pass_it_on(
     assert_eq!(sent, 1, "nothing else was sent");
 }
 
+#[tokio::test]
+async fn a_message_to_a_subagent_that_ended_is_refused_whatever_its_end_and_nothing_is_sent() {
+    use crate::plan::RunStatus;
+    let h = harness("esc107-message-over");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "sous-agent long".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the subagent's request", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    h.core
+        .answer_permission(&id, "req_subperm", "allow", None)
+        .unwrap();
+    let call = h.agent(&id).plan.unwrap().agents[0].id.clone();
+    // The messages the process got that ask it to pass something on to a subagent.
+    let passed_on = |h: &Harness| {
+        h.stdin_messages(&r)
+            .iter()
+            .filter(|m| m["message"]["content"].to_string().contains("SendMessage"))
+            .count()
+    };
+    let stands = |status: RunStatus| {
+        h.core
+            .agent(&id)
+            .unwrap()
+            .lock()
+            .meta
+            .plan
+            .as_mut()
+            .unwrap()
+            .agents[0]
+            .status = status;
+    };
+    let prompts = h.agent(&id).prompts;
+    for status in [
+        RunStatus::Done,
+        RunStatus::Stopped,
+        RunStatus::Failed,
+        RunStatus::Interrupted,
+    ] {
+        stands(status);
+        // In the background and with a task told: its end is the only reason.
+        let row = h.agent(&id).plan.unwrap().agents[0].clone();
+        assert!(row.background && row.task_id.is_some(), "{row:?}");
+        // The window's way, and the server's (with an author).
+        let said = [
+            h.core.message_subagent(&id, &call, "Encore").await,
+            h.core
+                .message_subagent_from(&id, &call, "Encore", Some("agent-2"))
+                .await,
+        ]
+        .map(|r| r.unwrap_err().to_string());
+        assert_eq!(
+            said, ["Ce sous-agent ne tourne plus."; 2],
+            "{status:?}: said"
+        );
+    }
+    assert_eq!(passed_on(&h), 0, "nothing was passed on");
+    assert_eq!(h.agent(&id).prompts, prompts, "no turn was spent");
+    // The same row, going on: the message goes through.
+    stands(RunStatus::Running);
+    h.core
+        .message_subagent(&id, &call, "Ça tourne encore")
+        .await
+        .unwrap();
+    h.wait("the message", |h| passed_on(h) == 1).await;
+}
+
+#[tokio::test]
+async fn the_refusals_of_a_message_to_a_subagent_come_in_the_order_archived_view_ended_foreground_task(
+) {
+    use crate::plan::{PlanState, RunStatus, SubAgent};
+    let h = harness("esc107-message-order");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let sub = |call: &str, status: RunStatus, background: bool, task: Option<&str>| SubAgent {
+        id: call.into(),
+        title: call.into(),
+        status,
+        background,
+        task_id: task.map(str::to_string),
+        started_at: 1,
+        ..Default::default()
+    };
+    h.core.agent(&id).unwrap().lock().meta.plan = Some(PlanState {
+        agents: vec![
+            sub("ok", RunStatus::Running, true, Some("t-ok")),
+            // Running in the foreground, with no task told.
+            sub("fg", RunStatus::Running, false, None),
+            // Over, in the foreground and with no task: over comes first.
+            sub("over-fg", RunStatus::Done, false, None),
+            sub("over", RunStatus::Stopped, true, Some("t-over")),
+            sub("notask", RunStatus::Running, true, None),
+        ],
+        ..Default::default()
+    });
+    let said = |call: &'static str| {
+        let (core, id) = (h.core.clone(), id.clone());
+        async move {
+            core.message_subagent(&id, call, "Salut")
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    let over = "Ce sous-agent ne tourne plus.";
+    let foreground = "Ce sous-agent travaille au premier plan : l’agent ne lui transmettrait le message qu’une fois fini.";
+    let no_task =
+        "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire.";
+    for (call, expected) in [
+        ("fg", foreground),
+        ("over", over),
+        ("over-fg", over),
+        ("notask", no_task),
+        // A subagent the plan does not have does not run.
+        ("nobody", over),
+    ] {
+        assert_eq!(said(call).await, expected, "{call}");
+    }
+    // The Claude Code view comes before all of them: the message is typed in its interface.
+    let view = "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code.";
+    h.core.agent(&id).unwrap().lock().meta.terminal = true;
+    for call in ["ok", "over", "fg", "nobody"] {
+        assert_eq!(said(call).await, view, "{call}");
+    }
+    // An archived agent before even that.
+    h.core.agent(&id).unwrap().lock().meta.archived = true;
+    for call in ["ok", "over", "nobody"] {
+        assert_eq!(said(call).await, "L’agent est archivé.", "{call}");
+    }
+    assert_eq!(h.agent(&id).prompts, 0);
+    assert!(h.stdin_messages(&r).is_empty(), "nothing was sent");
+}
+
 #[test]
 fn the_message_that_asks_an_agent_to_pass_words_on_to_its_subagent_is_in_claudes_language() {
     use crate::i18n::Lang;
@@ -2373,6 +2512,467 @@ async fn a_subagent_that_hands_back_its_report_keeps_it_with_its_call() {
         .starts_with("**Cause trouvée**"));
     assert_eq!(call["run"]["tokens"], 4200);
     assert_eq!(call["input"]["subagent_type"], "general-purpose");
+}
+
+// ---------- a subagent's report and a message from an author (ESC-107) ----------
+
+#[tokio::test]
+async fn a_message_to_a_subagent_from_an_author_is_passed_on_under_the_name_of_that_author() {
+    let h = harness("esc107-message-from");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "sous-agent long".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the subagent's request", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    h.core
+        .answer_permission(&id, "req_subperm", "allow", None)
+        .unwrap();
+    let call = h.agent(&id).plan.unwrap().agents[0].id.clone();
+    let sent = |h: &Harness, part: &str| {
+        h.stdin_messages(&r)
+            .into_iter()
+            .map(|m| {
+                m["message"]["content"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .find(|c| c.contains(part))
+    };
+
+    // Nothing to say: refused whoever writes, and the author's name does not make it a message.
+    let empty = h
+        .core
+        .message_subagent_from(&id, &call, "  ", Some("agent-2"))
+        .await
+        .unwrap_err();
+    assert_eq!(empty.to_string(), "Le message est vide.");
+    let before = h.stdin_messages(&r).len();
+
+    // From an author: the agent is asked to pass on his words under his name, never as the user's.
+    h.core
+        .message_subagent_from(&id, &call, "  Regarde le port 3001.  ", Some("agent-2"))
+        .await
+        .unwrap();
+    h.wait("the message", |h| sent(h, "port 3001").is_some())
+        .await;
+    let text = sent(&h, "port 3001").unwrap();
+    assert_eq!(h.stdin_messages(&r).len(), before + 1, "{text}");
+    assert!(
+        text.starts_with(
+            "Transmets ce message au sous-agent « Surveiller le serveur » (agentId fakelong-agent)"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("SendMessage"), "{text}");
+    assert!(
+        text.ends_with("\n\nMessage de agent-2 : Regarde le port 3001."),
+        "{text}"
+    );
+    h.wait("the turn to end", |h| !h.agent(&id).status.is_active())
+        .await;
+
+    // Without one it is what it was: the words as they are.
+    h.core
+        .message_subagent(&id, &call, "Et le port 3002 ?")
+        .await
+        .unwrap();
+    h.wait("the message", |h| sent(h, "port 3002").is_some())
+        .await;
+    let plain = sent(&h, "port 3002").unwrap();
+    assert!(plain.ends_with("\n\nEt le port 3002 ?"), "{plain}");
+    assert!(!plain.contains("Message de"), "{plain}");
+    h.wait("the turn to end", |h| !h.agent(&id).status.is_active())
+        .await;
+    h.core
+        .message_subagent_from(&id, &call, "Et le 3003 ?", None)
+        .await
+        .unwrap();
+    h.wait("the message", |h| sent(h, "3003").is_some()).await;
+    assert!(!sent(&h, "3003").unwrap().contains("Message de"));
+
+    // The refusals are the same with an author: a subagent in the foreground, the Claude Code view.
+    h.wait("the turn to end", |h| !h.agent(&id).status.is_active())
+        .await;
+    let all = h.stdin_messages(&r).len();
+    let refused = |e: anyhow::Error| e.to_string();
+    h.core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .plan
+        .as_mut()
+        .unwrap()
+        .agents[0]
+        .background = false;
+    assert!(refused(
+        h.core
+            .message_subagent_from(&id, &call, "Au premier plan", Some("agent-2"))
+            .await
+            .unwrap_err()
+    )
+    .starts_with("Ce sous-agent travaille au premier plan"));
+    h.core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .plan
+        .as_mut()
+        .unwrap()
+        .agents[0]
+        .background = true;
+    h.core.agent(&id).unwrap().lock().meta.terminal = true;
+    assert_eq!(
+        refused(
+            h.core
+                .message_subagent_from(&id, &call, "En vue Claude Code", Some("agent-2"))
+                .await
+                .unwrap_err()
+        ),
+        "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code."
+    );
+    assert_eq!(h.stdin_messages(&r).len(), all, "nothing else was sent");
+}
+
+/// A message of the assistant in a subagent's transcript, as Claude Code writes it.
+fn sidechain_entry(uuid: &str, blocks: Value) -> String {
+    json!({
+        "isSidechain": true, "type": "assistant", "uuid": uuid,
+        "timestamp": "2026-10-16T10:00:00.000Z",
+        "message": { "role": "assistant", "content": blocks },
+    })
+    .to_string()
+}
+
+/// A subagent's hand-back in a transcript.
+fn handback_entry(uuid: &str, message: &str) -> String {
+    sidechain_entry(
+        uuid,
+        json!([{ "type": "tool_use", "id": format!("hb-{uuid}"), "name": "SubagentHandback", "input": { "message": message } }]),
+    )
+}
+
+/// The call of a subagent in the agent's conversation, as the stream leaves it.
+fn subagent_call(
+    name: &str,
+    call: &str,
+    status: &str,
+    report: Option<&str>,
+    result: Option<&str>,
+) -> Value {
+    let mut item = json!({
+        "kind": "tool", "id": call, "name": name, "status": status,
+        "input": { "description": "Chercher", "prompt": "Cherche." }, "ts": 1,
+    });
+    if let Some(report) = report {
+        item["report"] = json!(report);
+    }
+    if let Some(text) = result {
+        item["result"] = json!({ "isError": status == "error", "text": text });
+    }
+    item
+}
+
+#[tokio::test]
+async fn the_report_of_a_subagent_is_the_one_its_call_keeps_else_the_result_of_one_that_ended_in_the_foreground(
+) {
+    let h = harness("esc107-report");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let launched = "Async agent launched successfully.\nagentId: bg1";
+    for item in [
+        // Its report, trimmed, whatever its result says.
+        subagent_call(
+            "Agent",
+            "c-report",
+            "ok",
+            Some("  **Cause trouvée**\n\nDétails.  "),
+            Some(launched),
+        ),
+        // The call is named `Task` in other versions of Claude Code.
+        subagent_call(
+            "Task",
+            "c-both",
+            "ok",
+            Some("Le rapport"),
+            Some("Le résultat"),
+        ),
+        // A report that says nothing is none: the result of a subagent that ended in the foreground.
+        subagent_call(
+            "Agent",
+            "c-blank",
+            "ok",
+            Some("  \n "),
+            Some("  Le résultat final  "),
+        ),
+        subagent_call("Agent", "c-plain", "ok", None, Some("Le résultat seul")),
+        // The words of a launch in the background are no report.
+        subagent_call(
+            "Agent",
+            "c-launched",
+            "ok",
+            None,
+            Some(&format!("  {launched}")),
+        ),
+        // Nor the result of a call that failed, was interrupted or runs, nor an empty one.
+        subagent_call("Agent", "c-error", "error", None, Some("Boom")),
+        subagent_call("Agent", "c-interrupted", "interrupted", None, Some("Coupé")),
+        subagent_call("Agent", "c-running", "running", None, Some("En cours")),
+        subagent_call("Agent", "c-empty", "ok", None, Some("   ")),
+        subagent_call("Agent", "c-no-result", "ok", None, None),
+        // A call of another tool is no subagent, whatever it holds.
+        subagent_call("Bash", "c-bash", "ok", Some("Pas un sous-agent"), Some("x")),
+    ] {
+        h.core
+            .agent(&id)
+            .unwrap()
+            .lock()
+            .conv
+            .apply(&ConvOp::Append { item });
+    }
+    let report = |call: &str| {
+        let (c, id, call) = (h.core.clone(), id.clone(), call.to_string());
+        async move { c.subagent_report(&id, &call).await.unwrap() }
+    };
+    assert_eq!(
+        report("c-report").await.as_deref(),
+        Some("**Cause trouvée**\n\nDétails.")
+    );
+    assert_eq!(report("c-both").await.as_deref(), Some("Le rapport"));
+    assert_eq!(
+        report("c-blank").await.as_deref(),
+        Some("Le résultat final")
+    );
+    assert_eq!(report("c-plain").await.as_deref(), Some("Le résultat seul"));
+    for none in [
+        "c-launched",
+        "c-error",
+        "c-interrupted",
+        "c-running",
+        "c-empty",
+        "c-no-result",
+        "c-bash",
+        "c-nobody",
+    ] {
+        assert_eq!(report(none).await, None, "{none}");
+    }
+    // An agent that is gone is told.
+    assert!(h.core.subagent_report("nobody", "c-report").await.is_err());
+}
+
+#[tokio::test]
+async fn in_the_claude_code_view_the_report_of_a_subagent_is_the_last_handback_of_its_transcript() {
+    let h = harness("esc107-report-tui");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let handle = h.core.agent(&id).unwrap();
+    // The agent's transcript, and its subagents' beside it.
+    let root = h.dir.join("claude-view");
+    let subs = root.join("s9").join("subagents");
+    std::fs::create_dir_all(&subs).unwrap();
+    std::fs::write(root.join("s9.jsonl"), "").unwrap();
+    let launched = "Async agent launched successfully.\nagentId: bg1";
+    {
+        let mut rt = handle.lock();
+        rt.meta.terminal = true;
+        rt.meta.transcript_read = Some((root.join("s9.jsonl").to_string_lossy().into(), 0));
+        rt.meta.plan = Some(crate::plan::PlanState {
+            agents: ["c1", "c2", "c3", "c4"]
+                .iter()
+                .map(|call| crate::plan::SubAgent {
+                    id: call.to_string(),
+                    title: "Lent".into(),
+                    background: true,
+                    task_id: Some(format!("t-{call}")),
+                    started_at: 1,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        });
+        for (call, report) in [
+            ("c1", None),
+            ("c2", Some("Le rapport de son appel")),
+            ("c3", None),
+        ] {
+            rt.conv.apply(&ConvOp::Append {
+                item: subagent_call("Agent", call, "ok", report, Some(launched)),
+            });
+        }
+    }
+    let write = |task: &str, lines: &[String]| {
+        std::fs::write(
+            subs.join(format!("agent-{task}.jsonl")),
+            lines.join("\n") + "\n",
+        )
+        .unwrap();
+    };
+    let report = |call: &str| {
+        let (c, id, call) = (h.core.clone(), id.clone(), call.to_string());
+        async move { c.subagent_report(&id, &call).await.unwrap() }
+    };
+    // The last hand-back that says something, the ones before it and a blank one after it passed.
+    write(
+        "t-c1",
+        &[
+            sidechain_entry("u0", json!([{ "type": "text", "text": "Je cherche." }])),
+            handback_entry("u1", "Premier rapport"),
+            handback_entry("u2", "  Dernier rapport\n\nAvec des détails.  "),
+            handback_entry("u3", "   "),
+        ],
+    );
+    assert_eq!(
+        report("c1").await.as_deref(),
+        Some("Dernier rapport\n\nAvec des détails.")
+    );
+    // The report its call keeps comes first, as in the window.
+    write("t-c2", &[handback_entry("u1", "Celui du transcript")]);
+    assert_eq!(
+        report("c2").await.as_deref(),
+        Some("Le rapport de son appel")
+    );
+    // A subagent that handed nothing back yet, or whose transcript is not there (yet): none.
+    write(
+        "t-c3",
+        &[sidechain_entry(
+            "u1",
+            json!([{ "type": "text", "text": "Je cherche." }]),
+        )],
+    );
+    assert_eq!(report("c3").await, None);
+    assert_eq!(report("c4").await, None);
+    // Outside that view the transcript is nobody's to read: the stream has the report on the call.
+    handle.lock().meta.terminal = false;
+    assert_eq!(report("c1").await, None);
+    assert_eq!(
+        report("c2").await.as_deref(),
+        Some("Le rapport de son appel")
+    );
+}
+
+/// What Claude Code 2.1.300 wrote of a real subagent the user stopped in its interface (it ends
+/// on the marker of the interruption).
+const STOPPED_SIDECHAIN: &str = include_str!("../../tests/fixtures/real-sidechain.jsonl");
+
+/// An agent in the Claude Code view whose plan has the subagent `c1`, running in the background,
+/// and whose files are `STOPPED_SIDECHAIN`: its id, and the transcript file of the subagent.
+async fn agent_with_a_subagent_stopped_in_the_interface(h: &Harness) -> (String, PathBuf) {
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let handle = h.core.agent(&id).unwrap();
+    let root = h.dir.join("claude-view");
+    let subs = root.join("s9").join("subagents");
+    std::fs::create_dir_all(&subs).unwrap();
+    std::fs::write(root.join("s9.jsonl"), "").unwrap();
+    let file = subs.join("agent-a3c004cb08b483eb9.jsonl");
+    std::fs::write(&file, STOPPED_SIDECHAIN).unwrap();
+    {
+        let mut rt = handle.lock();
+        rt.meta.terminal = true;
+        rt.meta.transcript_read = Some((root.join("s9.jsonl").to_string_lossy().into(), 0));
+        rt.meta.plan = Some(crate::plan::PlanState {
+            agents: vec![crate::plan::SubAgent {
+                id: "c1".into(),
+                title: "Lent".into(),
+                background: true,
+                task_id: Some("a3c004cb08b483eb9".into()),
+                started_at: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        rt.conv.apply(&ConvOp::Append {
+            item: subagent_call(
+                "Agent",
+                "c1",
+                "ok",
+                None,
+                Some("Async agent launched successfully.\nagentId: a3c004cb08b483eb9"),
+            ),
+        });
+    }
+    (id, file)
+}
+
+/// How many times the window was sent the agent `id`.
+fn agent_told(h: &Harness, id: &str) -> usize {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "agent" && e["agent"]["id"] == id)
+        .count()
+}
+
+#[tokio::test]
+async fn reading_the_report_of_a_subagent_changes_nothing_even_when_its_files_show_it_stopped() {
+    use crate::plan::RunStatus;
+    let h = harness("esc107-report-real");
+    let (id, file) = agent_with_a_subagent_stopped_in_the_interface(&h).await;
+    let status = || h.agent(&id).plan.unwrap().agents[0].status;
+    let call = || h.items(&id).into_iter().find(|i| i["id"] == "c1").unwrap();
+    assert_eq!(status(), RunStatus::Running);
+    let told = agent_told(&h, &id);
+    // It handed nothing back, and its files say the user stopped it: the report is none, and its
+    // row stays as it is. Reading changes nothing, the window is told nothing.
+    assert_eq!(h.core.subagent_report(&id, "c1").await.unwrap(), None);
+    assert_eq!(status(), RunStatus::Running);
+    assert!(call()["run"].is_null(), "{}", call());
+    assert_eq!(agent_told(&h, &id), told);
+    // A hand-back after that is its report, and reading it changes nothing either.
+    std::fs::write(
+        &file,
+        format!(
+            "{STOPPED_SIDECHAIN}\n{}\n",
+            handback_entry("u9", "Rapport tardif")
+        ),
+    )
+    .unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            h.core.subagent_report(&id, "c1").await.unwrap().as_deref(),
+            Some("Rapport tardif")
+        );
+    }
+    assert_eq!(status(), RunStatus::Running);
+    assert_eq!(agent_told(&h, &id), told);
+}
+
+#[tokio::test]
+async fn the_windows_read_of_a_subagents_transcript_still_ends_its_row_when_its_files_show_it_stopped(
+) {
+    use crate::agent::sidechain::Ended;
+    use crate::plan::RunStatus;
+    let h = harness("esc107-transcript-real");
+    let (id, _) = agent_with_a_subagent_stopped_in_the_interface(&h).await;
+    let status = || h.agent(&id).plan.unwrap().agents[0].status;
+    // A report read before changes nothing for the window that comes after it.
+    assert_eq!(h.core.subagent_report(&id, "c1").await.unwrap(), None);
+    assert_eq!(status(), RunStatus::Running);
+    let told = agent_told(&h, &id);
+    let read = h
+        .core
+        .subagent_transcript(&id, "c1", None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(read.ended, Some(Ended::Stopped));
+    assert_eq!(status(), RunStatus::Stopped);
+    let call = h.items(&id).into_iter().find(|i| i["id"] == "c1").unwrap();
+    assert_eq!(call["run"]["status"], "stopped");
+    assert_eq!(
+        agent_told(&h, &id),
+        told + 1,
+        "the window is sent the agent"
+    );
+    // Over, the report is read as before.
+    assert_eq!(h.core.subagent_report(&id, "c1").await.unwrap(), None);
+    assert_eq!(agent_told(&h, &id), told + 1);
 }
 
 #[tokio::test]

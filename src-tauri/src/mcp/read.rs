@@ -15,6 +15,7 @@ use crate::model::{
     AgentMeta, AgentStatus, Column, Criterion, PauseReason, PendingView, Project, RateWindow,
     RemoteSource, Service, Ticket, MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
 };
+use crate::plan::PlanState;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -105,6 +106,30 @@ impl RemoteRead {
     }
 }
 
+/// How much an agent has running besides its turn, as the window counts it under its card
+/// (`list_agents`, `get_agent_summary` and `list_background_work` flatten it into their answers).
+/// An agent that finished its turn may still have a command or a subagent going on in the
+/// background.
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct WorkCounts {
+    /// The subagents that run, in the foreground or the background.
+    subagents_running: usize,
+    /// The tasks Claude Code runs in the background (commands, monitors, remote agents, teammates
+    /// and workflows): what the window calls « N en fond ». Never the subagents.
+    background_tasks_running: usize,
+}
+
+impl WorkCounts {
+    /// From the agent's plan: none without one.
+    pub(super) fn of(plan: Option<&PlanState>) -> Self {
+        Self {
+            subagents_running: plan.map_or(0, PlanState::running_subagents),
+            background_tasks_running: plan.map_or(0, PlanState::running_background),
+        }
+    }
+}
+
 #[derive(Serialize, Default)]
 struct ColumnCounts {
     todo: usize,
@@ -191,6 +216,8 @@ struct AgentRow {
     /// In US dollars, its running turn included.
     cost: f64,
     #[serde(flatten)]
+    work: WorkCounts,
+    #[serde(flatten)]
     remote: RemoteRead,
 }
 
@@ -214,6 +241,7 @@ pub(super) fn agents<R: Runtime>(
         .filter(|v| !v.meta.archived)
         .filter(|v| scope.as_ref().is_none_or(|p| v.meta.project_id == p.id))
         .map(|v| AgentRow {
+            work: WorkCounts::of(v.meta.plan.as_ref()),
             remote: RemoteRead::of(&v.meta, v.remote_state.as_deref(), v.interface_remote),
             project: projects
                 .get(&v.meta.project_id)
@@ -683,6 +711,8 @@ struct Summary {
     requests: usize,
     waiting_for: Vec<&'static str>,
     #[serde(flatten)]
+    work: WorkCounts,
+    #[serde(flatten)]
     remote: RemoteRead,
 }
 
@@ -720,6 +750,7 @@ pub(super) fn agent_summary<R: Runtime>(
             touched_files: files[from..].to_vec(),
             requests: asked.len(),
             waiting_for: asked,
+            work: WorkCounts::of(rt.meta.plan.as_ref()),
             remote: RemoteRead::of(
                 &rt.meta,
                 rt.remote_state.as_deref(),

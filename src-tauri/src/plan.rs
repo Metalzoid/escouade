@@ -685,9 +685,23 @@ impl PlanState {
     /// that a restart of the agent's process would kill, counted (`runs_something` is whether
     /// there are any).
     pub fn running_count(&self) -> usize {
+        self.running_subagents() + self.running_background()
+    }
+
+    /// How many subagents run, in the foreground or the background.
+    pub fn running_subagents(&self) -> usize {
+        self.agents
+            .iter()
+            .filter(|a| a.status == RunStatus::Running)
+            .count()
+    }
+
+    /// How many tasks run in the background, as the window counts them (« N en fond »): the
+    /// commands, monitors, remote agents and teammates of `bg_tasks`, and the workflows. Never the
+    /// subagents, which have their own list (`running_subagents`).
+    pub fn running_background(&self) -> usize {
         let running = |status: RunStatus| status == RunStatus::Running;
-        self.agents.iter().filter(|a| running(a.status)).count()
-            + self.workflows.iter().filter(|w| running(w.status)).count()
+        self.workflows.iter().filter(|w| running(w.status)).count()
             + self.bg_tasks.iter().filter(|t| running(t.status)).count()
     }
 

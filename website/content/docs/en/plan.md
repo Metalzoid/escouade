@@ -108,6 +108,8 @@ Claude Code doesn’t let anyone write to a subagent directly. For a subagent th
 
 The field isn’t offered for a subagent in the foreground (the agent waits for it and could only pass the message on once it’s over), nor in the Claude Code view, nor for an archived agent. What you typed is kept when the subagent finishes or when you change view, as long as Escouade stays open; the field then stays, with the send grayed out and a note that the subagent has finished.
 
+Claude can also list an agent’s subagents, read their report, stop a subagent in the background, and write to it through the [MCP server](mcp#an-agent-s-subagents-and-background-tasks), with the same refusals as these buttons, including for a message to a subagent that is no longer running.
+
 ### Afterwards
 
 A finished subagent’s conversation can still be read. Escouade keeps each subagent’s prompt, its report, and its final figures (state, tokens, tools, duration) with the agent’s conversation. The prompt and the report are cut at 16,000 bytes, and a cut text ends with “…”. When a subagent finishes without handing back a report in due form, its last message serves as its report. The report of a subagent in the foreground is the result of its call, cut at 8,000 bytes.
@@ -152,6 +154,8 @@ A workflow, a remote agent, and a teammate don’t write to an output of their o
 ### Stopping a task
 
 “Stop”, at the top right, stops this task alone: the agent goes on. Claude Code then tells the agent about the stop, which costs it a turn like the others (tokens, cost). The button is offered for any task that runs. It has been tried on a command; a monitor, a workflow, a remote agent, or a teammate is stopped by the same request, but that hasn’t been tried on a real stream.
+
+Claude can also list an agent’s background tasks, read the end of their output, and stop them through the [MCP server](mcp#an-agent-s-subagents-and-background-tasks), with the same limits and the same refusals.
 
 ### What stays after the end
 

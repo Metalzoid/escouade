@@ -108,6 +108,13 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__get_board')).toBe('Escouade · Lire les réglages du Kanban');
     expect(toolLabel('mcp__escouade__get_ticket_image')).toBe('Escouade · Lire une image d’un ticket');
     expect(toolLabel('mcp__escouade__set_board')).toBe('Escouade · Régler le Kanban');
+    // The subagents and background tasks of an agent: list, read, stop, write.
+    expect(toolLabel('mcp__escouade__list_background_work')).toBe('Escouade · Lister les sous-agents et tâches de fond d’un agent');
+    expect(toolLabel('mcp__escouade__get_background_output')).toBe(
+      'Escouade · Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
+    );
+    expect(toolLabel('mcp__escouade__stop_background_work')).toBe('Escouade · Arrêter une tâche de fond ou un sous-agent');
+    expect(toolLabel('mcp__escouade__message_subagent')).toBe('Escouade · Écrire à un sous-agent');
     // The flow of the Kanban: approve, send back, resume, conflicts, blocks, delete, wait.
     expect(toolLabel('mcp__escouade__approve_ticket')).toBe('Escouade · Valider un ticket');
     expect(toolLabel('mcp__escouade__reject_ticket')).toBe('Escouade · Renvoyer un ticket');
@@ -144,6 +151,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(arg('get_ticket_image', { ticket: 'DEM-4', index: 1 })).toBe('DEM-4');
     // An agent reading an image of its own ticket names no ticket: nothing to sum up.
     expect(arg('get_ticket_image', { file: 'a1b2c3.png' })).toBe('');
+    // The subagents and background tasks of an agent are summed up by that agent.
+    expect(arg('list_background_work', { agent: 'fix-login' })).toBe('fix-login');
+    expect(arg('stop_background_work', { agent: 'fix-login', id: 'bg1' })).toBe('fix-login');
+    expect(arg('message_subagent', { agent: 'fix-login', subagent: 'toolu_1', text: 'Regarde aussi le port 3001' })).toBe('fix-login');
   });
 
   it('give each argument in clear, in its order: a text as written, a list one item per line, anything else as JSON', () => {
@@ -192,6 +203,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__create_ticket')).toBe('Escouade · Create a ticket');
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Start an agent');
     expect(toolLabel('mcp__escouade__get_ticket_image')).toBe('Escouade · Read a ticket image');
+    expect(toolLabel('mcp__escouade__list_background_work')).toBe('Escouade · List an agent’s subagents and background tasks');
+    expect(toolLabel('mcp__escouade__get_background_output')).toBe('Escouade · Read a background task’s output or a subagent’s report');
+    expect(toolLabel('mcp__escouade__stop_background_work')).toBe('Escouade · Stop a background task or a subagent');
+    expect(toolLabel('mcp__escouade__message_subagent')).toBe('Escouade · Write to a subagent');
     expect(toolLabel('mcp__escouade__approve_ticket')).toBe('Escouade · Approve a ticket');
     expect(toolLabel('mcp__escouade__reject_ticket')).toBe('Escouade · Send a ticket back');
     expect(toolLabel('mcp__escouade__resume_ticket')).toBe('Escouade · Resume a ticket');

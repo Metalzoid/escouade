@@ -29,11 +29,17 @@
 //! `answer_question`), and never for good: a lasting permission rule (« Toujours autoriser ») stays
 //! the user's to give there. `set_board` changes what the window's Kanban settings do, but not what
 //! runs without a question: the mode that asks for no permission at all (`bypassPermissions`) and
-//! the test command stay the user's to give there too. `tests::EXPOSED` lists exactly what the
-//! router holds, so a tool is added knowingly.
+//! the test command stay the user's to give there too. The subagents and background tasks of an
+//! agent (`background`) are listed by anyone (an agent of Escouade is given only an outline of
+//! another project's, a command line may hold a secret), read in its own project, stopped
+//! (`stop_background_work`) and written to (`message_subagent`) as the window's « Arrêter » and
+//! message box do, through the same functions of the core and refused where it refuses; a
+//! message's words never reach the log.
+//! `tests::EXPOSED` lists exactly what the router holds, so a tool is added knowingly.
 
 use super::act;
 use super::activity::{self, Outcome};
+use super::background;
 use super::images;
 use super::read;
 use super::wait;
@@ -302,6 +308,66 @@ pub struct GetAgentSummaryArgs {
         description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
     )]
     pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListBackgroundWorkArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetBackgroundOutputArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The subagent or task to read: its id, as list_background_work gives it (id). A subagent may also be named by its taskId."
+    )]
+    pub id: String,
+    #[schemars(
+        description = "The most bytes of the output to give, its end: 8192 by default, 1 at least and 65536 at most (a task that still runs gives 8192 at most). Not for a subagent's report, which is given whole."
+    )]
+    pub bytes: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct StopBackgroundWorkArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The subagent or task to stop: its id, as list_background_work gives it (id). A subagent may also be named by its taskId."
+    )]
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MessageSubagentArgs {
+    #[schemars(description = "The agent whose subagent it is: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The subagent to write to: its id, as list_background_work gives it (id). It may also be named by its taskId."
+    )]
+    pub subagent: String,
+    #[schemars(
+        description = "The message, 32,000 characters at most. The agent is asked to pass it on to the subagent, which reads it headed by your name (Message from <you>: …), as coming from you and not from the user."
+    )]
+    pub text: String,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -763,7 +829,7 @@ pub struct SendMessageArgs {
     )]
     pub project: Option<String>,
     #[schemars(
-        description = "The message. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user."
+        description = "The message, 32,000 characters at most. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user."
     )]
     pub text: String,
 }
@@ -830,7 +896,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their model, their Claude account, what they cost so far in US dollars, and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -917,7 +983,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), and its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), how many subagents and background tasks it has running (subagentsRunning and backgroundTasksRunning, as list_agents gives them; list_background_work lists them), and its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_agent_summary(
@@ -931,6 +997,43 @@ impl<R: Runtime> Tools<R> {
             ("project", args.project.as_deref()),
         ]);
         ctx.reply("get_agent_summary", &asked, result)
+    }
+
+    #[tool(
+        description = "List what an agent has going on besides its turn, as the window shows it under its card: its subagents and the tasks Claude Code runs for it in the background. For the agent: id, name, status, subagentsRunning and backgroundTasksRunning (how many of each run: list_agents and get_agent_summary give them too). subagents, those running first in the plan's order then the latest ended: id (the call that launched it, which get_background_output, stop_background_work and message_subagent name it by), type (subagent), description, subagentType (Explore…), model, status (running, done, failed, stopped or interrupted), background (it goes on after the agent's turn), startedAt and endedAt (epoch milliseconds), tools used, tokens, doing (what it does now), taskId (Claude Code's id of its task, once a frame told it) and parent (the call of the subagent that launched it); a field that is not known is left out. tasks, those running first from the oldest launched then the latest ended: id (Claude Code's id of the task, which the other tools name it by), type (command, monitor, remote, teammate or workflow), description (what the tool said it was for), command, status, startedAt, endedAt, summary (Claude Code's last words on it), parent (the taskId of the subagent that owns it) and, for a workflow, name, now (its phase) and tools and tokens used. Open to every client, for the agents of every project, but not in full: Claude outside Escouade and an agent of Escouade, for the agents of its own project, are given all of it, whereas an agent of Escouade is given, for an agent of another project, only id, type, status, startedAt and endedAt of each entry (and the agent's id, name, status and counts), without description, command, summary, doing or the rest, since a command line may hold a secret. It never gives the file a task's output is written to: get_background_output reads the output.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_background_work(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ListBackgroundWorkArgs>,
+    ) -> CallToolResult {
+        let result = background::list(&ctx.core, &ctx.caller, &args.agent, args.project.as_deref());
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+        ]);
+        ctx.reply("list_background_work", &asked, result)
+    }
+
+    #[tool(
+        description = "Read the output of a command or a monitor Claude Code runs in the background for an agent, or the report of one of its subagents, as the window shows them (list_background_work gives the ids). agent (id, name), id, type (command, monitor, remote, teammate, workflow or subagent), status, source (process: asked to the running process; file: the end of the file Claude Code writes the output to, the task's own file and no other, never one of another machine; report: what a subagent handed back; none: nothing to read, as for a remote agent, a teammate or a workflow, a task whose file is gone, or a subagent that has not handed anything back yet), output, totalBytes (the size of the whole output) and truncated (the start of the output is not in output). The output is its end, bytes of it at most: 8192 by default, 65536 at most, and a task that still runs gives 8192 at most, as the window does; it is cut at a character. The window itself shows up to 256 KiB of a task that is over: a client cannot ask for that much, because Claude Code refuses an answer of more than about 25,000 tokens. A subagent's report is given whole (16,000 bytes at most) and bytes does not apply to it. Open to every client; an agent of Escouade only reads in its own project.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn get_background_output(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<GetBackgroundOutputArgs>,
+    ) -> CallToolResult {
+        let bytes = args.bytes.map(|b| b.to_string());
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("id", Some(&args.id)),
+            ("bytes", bytes.as_deref()),
+        ]);
+        let result = background::output(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("get_background_output", &asked, result)
     }
 
     #[tool(
@@ -1240,7 +1343,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Send a message to an agent of Escouade. The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
+        description = "Send a message to an agent of Escouade (32,000 characters at most). The agent reads it, and the conversation shows it, headed by your name (Message from <you>: …), as coming from you and not from the user; an agent at work reads it after its current turn. Refused while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when), for an archived agent, and for yourself when you are an agent. It uses the quota. Answers the agent's id and name, and whether the message waits for the end of a turn.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1262,6 +1365,29 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
+        description = "Write to a subagent that works in the background, as the message box of its view in the window does (list_background_work gives the ids; a subagent may also be named by its taskId). The message is 32,000 characters at most. Claude Code lets no host write to a subagent: the agent it belongs to is asked to pass the message on with its SendMessage tool, and does so in a turn of its own, reading it and the subagent reading it headed by your name (Message from <you>: …), as coming from you and not from the user. Refused, as the window refuses, for a subagent that no longer runs, for a subagent in the foreground (the agent waits for it and would only pass the message on once it ended), for a subagent whose task Claude Code has not told yet, for an agent in the Claude Code view (the message is typed in its interface), for an archived agent, for a subagent of yourself when you are an agent, and for an agent of another project when you are an agent; and, once none of those applies, while the agent's own Claude account is held back (past its quota threshold, at its usage limit, or with an agent waiting for its quota: the answer says until when). A refusal that waiting would not change is therefore told before the one that says to try again later. It uses the quota. The activity log keeps the agent and the subagent, never the message. Answers the agent (id, name), the subagent (the call that launched it) and whether the message waits for the end of the agent's turn (queued).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn message_subagent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<MessageSubagentArgs>,
+    ) -> CallToolResult {
+        // Never the words: the log keeps who was written to.
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("subagent", Some(&args.subagent)),
+        ]);
+        let result = background::message(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("message_subagent", &asked, result)
+    }
+
+    #[tool(
         description = "Interrupt an agent's current turn, as the stop button of its conversation does: the agent stays, and can be sent a message after. Refused for yourself when you are an agent. Answers the agent's id and name, and whether a turn was running.",
         annotations(
             read_only_hint = false,
@@ -1280,6 +1406,28 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = act::stop_agent(&ctx.core, &ctx.caller, args).await;
         ctx.reply("stop_agent", &asked, result)
+    }
+
+    #[tool(
+        description = "Stop a subagent that works in the background, or a task Claude Code runs in the background for an agent (a command, a monitor, a remote agent, a teammate or a workflow), as the Stop button of its row in the window does: Claude Code is asked to stop its task (list_background_work gives the ids; a subagent may also be named by its taskId). The row ends with the frames Claude Code sends next, not before this answers: list_background_work shows it. The agent and its turn go on. Refused, as the window refuses, for something that no longer runs, for a subagent in the foreground (the agent waits for it: stop_agent interrupts the agent's turn), for a subagent whose task Claude Code has not told yet, for an agent whose process is not running, for an agent in the Claude Code view (its interface stops them), for an archived agent, for yourself when you are an agent, and for an agent of another project when you are an agent. Answers the agent (id, name), id (the subagent's call, or the task's), type (as list_background_work gives it) and stopped (true).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn stop_background_work(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<StopBackgroundWorkArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+            ("id", Some(&args.id)),
+        ]);
+        let result = background::stop(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("stop_background_work", &asked, result)
     }
 
     #[tool(

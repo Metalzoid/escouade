@@ -958,6 +958,28 @@ fn unknown_bg_task() -> String {
     )
 }
 
+/// Said for a subagent that does not run (any more), or that the agent's plan does not have:
+/// there is nothing to stop and nothing to write to.
+fn subagent_over() -> String {
+    tr!(
+        "Ce sous-agent ne tourne plus.",
+        "This subagent is no longer running."
+    )
+}
+
+/// The message of the last `SubagentHandback` among the `items` of a subagent's thread that says
+/// something, trimmed: what it handed back.
+fn handed_back(items: &[Value]) -> Option<String> {
+    items
+        .iter()
+        .rev()
+        .filter(|i| i["kind"] == "tool" && i["name"] == "SubagentHandback")
+        .filter_map(|i| i["input"]["message"].as_str())
+        .map(str::trim)
+        .find(|m| !m.is_empty())
+        .map(str::to_string)
+}
+
 /// What the agent is told for a message to its subagent `title` (its task `task`, the `agentId`
 /// Claude Code gave it): to pass `text` on with `SendMessage`, as it is.
 pub fn subagent_message(lang: i18n::Lang, title: &str, task: &str, text: &str) -> String {
@@ -3667,53 +3689,85 @@ impl<R: Runtime> Core<R> {
     /// lets no host write to a subagent (`send_task_message` is refused, docs/PROTOCOL.md, « Lui
     /// écrire »): the message goes to the agent, which is asked to pass it on with its
     /// `SendMessage` tool to the subagent's task, as Claude Code tells it it can. Refused for a
-    /// subagent whose task no frame told.
+    /// subagent that does not run any more, whose task no frame told, or that works in the
+    /// foreground (`subagent_target`).
     pub async fn message_subagent(
         self: &Arc<Self>,
         id: &str,
         call: &str,
         text: &str,
     ) -> Result<()> {
+        self.message_subagent_from(id, call, text, None).await
+    }
+
+    /// `message_subagent`, written by someone else than the user (a client of the MCP server):
+    /// with `origin`, the words the agent is to pass on are headed by the author's name (« Message
+    /// de <origin> : … »), as any message from the server is, and never given as the user's own. The
+    /// refusals are the same, and come before the name is put on an empty text.
+    pub async fn message_subagent_from(
+        self: &Arc<Self>,
+        id: &str,
+        call: &str,
+        text: &str,
+        origin: Option<&str>,
+    ) -> Result<()> {
         let text = text.trim();
         if text.is_empty() {
             bail!(tr!("Le message est vide.", "The message is empty."));
         }
-        let (title, task) = {
-            let h = self.agent(id)?;
-            let rt = h.lock();
-            if rt.meta.archived {
-                bail!(tr!("L’agent est archivé.", "The agent is archived."));
-            }
-            if rt.meta.terminal {
-                bail!(tr!(
-                    "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code.",
-                    "In the Claude Code view, a subagent is written to from Claude Code’s interface."
-                ));
-            }
-            let row = rt
-                .meta
-                .plan
-                .as_ref()
-                .and_then(|p| p.agents.iter().find(|a| a.id == call));
-            match row {
-                // In the foreground, the agent waits for it: the message would only reach it
-                // once it ended.
-                Some(a) if !a.background => bail!(tr!(
-                    "Ce sous-agent travaille au premier plan : l’agent ne lui transmettrait le message qu’une fois fini.",
-                    "This subagent works in the foreground: the agent would only pass the message on once it ended."
-                )),
-                Some(a) if a.task_id.is_some() => {
-                    (a.title.clone(), a.task_id.clone().unwrap_or_default())
-                }
-                _ => bail!(tr!(
-                    "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire.",
-                    "Claude Code has not told this subagent’s task: it cannot be written to."
-                )),
-            }
+        let (title, task) = self.subagent_target(id, call)?;
+        let words = match origin {
+            Some(origin) => from_origin(i18n::claude(), origin, text),
+            None => text.to_string(),
         };
-        let message = subagent_message(i18n::claude(), &title, &task, text);
+        let message = subagent_message(i18n::claude(), &title, &task, &words);
         // Not the user's task: it never names the agent.
         self.send_by_app(id, message).await
+    }
+
+    /// The title and the task of the subagent `call` of the agent `id`, if a message can be written
+    /// to it: the guards of `message_subagent`, without sending anything (the one place they are
+    /// said, for whoever wants to know before it goes). Refused, in this order, for an archived
+    /// agent, the Claude Code view (a subagent is written to from its interface), a subagent that
+    /// does not run any more or that the plan does not have, one that works in the foreground (the
+    /// agent waits for it: the message would only reach it once it ended) and one whose task no frame
+    /// told. What waiting would not change comes first, so that a caller is not told to try again
+    /// later for something that will be refused anyway.
+    pub(crate) fn subagent_target(&self, id: &str, call: &str) -> Result<(String, String)> {
+        let h = self.agent(id)?;
+        let rt = h.lock();
+        if rt.meta.archived {
+            bail!(tr!("L’agent est archivé.", "The agent is archived."));
+        }
+        if rt.meta.terminal {
+            bail!(tr!(
+                "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code.",
+                "In the Claude Code view, a subagent is written to from Claude Code’s interface."
+            ));
+        }
+        let row = rt
+            .meta
+            .plan
+            .as_ref()
+            .and_then(|p| p.agents.iter().find(|a| a.id == call))
+            .filter(|a| a.status == crate::plan::RunStatus::Running);
+        let Some(row) = row else {
+            bail!(subagent_over());
+        };
+        // In the foreground, the agent waits for it: the message would only reach it once it ended.
+        if !row.background {
+            bail!(tr!(
+                "Ce sous-agent travaille au premier plan : l’agent ne lui transmettrait le message qu’une fois fini.",
+                "This subagent works in the foreground: the agent would only pass the message on once it ended."
+            ));
+        }
+        let Some(task) = row.task_id.clone() else {
+            bail!(tr!(
+                "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire.",
+                "Claude Code has not told this subagent’s task: it cannot be written to."
+            ));
+        };
+        Ok((row.title.clone(), task))
     }
 
     /// « Arrêter » on a subagent of the agent `id`, `call` being the call that launched it: Claude
@@ -3732,10 +3786,7 @@ impl<R: Runtime> Core<R> {
                 .and_then(|p| p.agents.iter().find(|a| a.id == call))
                 .filter(|a| a.status == crate::plan::RunStatus::Running);
             let Some(row) = row else {
-                bail!(tr!(
-                    "Ce sous-agent ne tourne plus.",
-                    "This subagent is no longer running."
-                ));
+                bail!(subagent_over());
             };
             // In the foreground the agent waits for it, and its own « Arrêter » stops it with its
             // turn; stopping one alone there was never tried on a real stream (docs/PROTOCOL.md).
@@ -3949,9 +4000,27 @@ impl<R: Runtime> Core<R> {
     ///
     /// Its files may say how the subagent ended, which the view's frames never do (stopped in the
     /// interface, an API error: `ended`); its row of the plan, if it still runs, ends so, and the
-    /// window is sent the agent.
+    /// window is sent the agent. That is what opening its view in the window does, and the window's
+    /// alone: whoever only reads it (`subagent_report`) uses `read_sidechain`, which changes
+    /// nothing.
     pub fn subagent_transcript(
         self: &Arc<Self>,
+        id: &str,
+        call: &str,
+        since: Option<crate::agent::sidechain::Cursor>,
+    ) -> Result<Option<crate::agent::sidechain::SidechainRead>> {
+        let read = self.read_sidechain(id, call, since)?;
+        if let Some(how) = read.as_ref().and_then(|r| r.ended) {
+            self.end_subagents(id, &[(call.to_string(), how)]);
+        }
+        Ok(read)
+    }
+
+    /// The transcript of the subagent `call` as `subagent_transcript` reads it, and nothing done
+    /// with what its files say: the plan and the window are left as they are (the path found is
+    /// kept, which nothing outside the core sees).
+    fn read_sidechain(
+        &self,
         id: &str,
         call: &str,
         since: Option<crate::agent::sidechain::Cursor>,
@@ -3993,14 +4062,52 @@ impl<R: Runtime> Core<R> {
                 ended: None,
             }));
         };
-        let read = sidechain::read_changed(&file, call, since).context(tr!(
+        sidechain::read_changed(&file, call, since).context(tr!(
             "Le transcript du sous-agent n’a pas pu être lu",
             "The subagent’s transcript could not be read"
-        ))?;
-        if let Some(how) = read.as_ref().and_then(|r| r.ended) {
-            self.end_subagents(id, &[(call.to_string(), how)]);
+        ))
+    }
+
+    /// What the subagent `call` of the agent `id` handed back, as the window's view of it shows
+    /// it (`subagentInfo`, `SubagentView`): the report its call keeps (`report`, 16 000 bytes at
+    /// most), else the result of a call that ended well, in the foreground (a launch in the
+    /// background answers « Async agent launched… », which is no report), else, in the Claude Code
+    /// view, where the stream has neither, the message of the last `SubagentHandback` of its
+    /// transcript that says something. Trimmed. None while it has handed nothing back, or when
+    /// `call` is no subagent's. The transcript is read like the window's view reads it, off the
+    /// runtime's threads and with no lock of the agent held, but only read: a subagent its files
+    /// show ended is not ended by it (`subagent_transcript` does that, for the window), reading
+    /// a report changes nothing.
+    pub async fn subagent_report(self: &Arc<Self>, id: &str, call: &str) -> Result<Option<String>> {
+        let h = self.agent(id)?;
+        let (kept, terminal) = {
+            let mut rt = h.lock();
+            let terminal = rt.meta.terminal;
+            let item = rt.conv.get(call).filter(|i| {
+                i["kind"] == "tool" && matches!(i["name"].as_str(), Some("Agent" | "Task"))
+            });
+            let said = |v: &Value| {
+                v.as_str()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            let report = item.and_then(|i| said(&i["report"]));
+            let result = item
+                .filter(|i| i["status"] == "ok")
+                .and_then(|i| said(&i["result"]["text"]))
+                .filter(|t| !t.starts_with("Async agent launched"));
+            (report.or(result), terminal)
+        };
+        if kept.is_some() || !terminal {
+            return Ok(kept);
         }
-        Ok(read)
+        let (core, id, call) = (self.clone(), id.to_string(), call.to_string());
+        let read =
+            tauri::async_runtime::spawn_blocking(move || core.read_sidechain(&id, &call, None))
+                .await
+                .map_err(|e| anyhow!("{e}"))??;
+        Ok(read.and_then(|r| handed_back(&r.items)))
     }
 
     /// The transcript of the agent in the Claude Code view, beside which its subagents' are: the

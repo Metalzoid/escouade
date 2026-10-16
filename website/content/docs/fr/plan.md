@@ -108,6 +108,8 @@ Claude Code ne permet pas d’écrire directement à un sous-agent. Pour un sous
 
 Le champ n’est pas proposé pour un sous-agent au premier plan (l’agent l’attend et ne pourrait lui passer le message qu’à sa fin), ni dans la vue Claude Code, ni pour un agent archivé. Ce que tu as tapé est gardé quand le sous-agent finit ou que tu changes de vue, tant qu’Escouade reste ouvert ; le champ reste alors, l’envoi grisé, avec la mention que le sous-agent a fini.
 
+Claude peut aussi lister les sous-agents d’un agent, lire leur rapport, arrêter un sous-agent en arrière-plan et lui écrire par le [serveur MCP](mcp#les-sous-agents-et-les-taches-de-fond-d-un-agent), avec les mêmes refus que ces boutons, y compris pour un message à un sous-agent qui ne tourne plus.
+
 ### Après coup
 
 La conversation d’un sous-agent fini se lit encore. Escouade garde avec la conversation de l’agent la consigne, le rapport et le bilan de chaque sous-agent (état, tokens, outils, durée). La consigne et le rapport sont coupés à 16 000 octets, et le texte coupé se termine par « … ». Quand un sous-agent finit sans rendre de rapport en forme, son dernier message sert de rapport. Le rapport d’un sous-agent au premier plan est le résultat de son appel, coupé à 8 000 octets.
@@ -152,6 +154,8 @@ Un workflow, un agent distant et un coéquipier n’écrivent pas dans une sorti
 ### Arrêter une tâche
 
 « Arrêter », en haut à droite, arrête cette tâche seule : l’agent continue. Claude Code annonce ensuite l’arrêt à l’agent, ce qui lui coûte un tour comme les autres (tokens, coût). Le bouton est proposé pour toute tâche qui tourne. Essayé sur une commande ; une surveillance, un workflow, un agent distant ou un coéquipier s’arrêtent par la même requête, mais cela n’a pas été essayé sur un vrai flux.
+
+Claude peut aussi lister les tâches de fond d’un agent, lire la fin de leur sortie et les arrêter par le [serveur MCP](mcp#les-sous-agents-et-les-taches-de-fond-d-un-agent), avec les mêmes bornes et les mêmes refus.
 
 ### Ce qui reste après la fin
 

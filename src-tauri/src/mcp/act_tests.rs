@@ -119,8 +119,9 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         );
         // And of the board's flow, only an approval and a deletion cannot be taken back.
         let destructive = match *name {
-            "approve_ticket" | "delete_ticket" => Some(true),
-            "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block" => Some(false),
+            "approve_ticket" | "delete_ticket" | "stop_background_work" => Some(true),
+            "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block"
+            | "message_subagent" => Some(false),
             _ => None,
         };
         if let Some(destructive) = destructive {
@@ -151,6 +152,8 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     assert_eq!(required("create_agent"), ["message", "project"]);
     assert_eq!(required("send_message"), ["agent", "text"]);
     assert_eq!(required("stop_agent"), ["agent"]);
+    assert_eq!(required("stop_background_work"), ["agent", "id"]);
+    assert_eq!(required("message_subagent"), ["agent", "subagent", "text"]);
     assert_eq!(required("report_progress"), ["line"]);
     assert_eq!(required("split_ticket"), ["tickets"]);
     assert_eq!(required("reject_ticket"), ["comment", "ticket"]);
@@ -1184,6 +1187,85 @@ async fn a_message_reaches_an_agent_unless_the_autopilot_is_paused_it_is_oneself
         unknown.contains("Aucun agent « zzz »") && unknown.contains(&h.agent(&a.id).name),
         "{unknown}"
     );
+    assert_eq!(h.agent(&a.id).prompts, prompts);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_message_is_32000_characters_at_most_counted_as_characters_and_never_given_back() {
+    let h = harness("mcp-act-send-message-bound");
+    let (p, _) = h.project(false).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let c = external(&h).await;
+    // The end of the words, far past what the log keeps of a call: it is where a leak shows.
+    let end = "FIN-DU-MESSAGE-107";
+    let words = |n: usize| format!("{}{end}", "é".repeat(n - end.chars().count()));
+
+    // 32,000 characters of two bytes each go through, the whitespace around them no part of them.
+    let v = read(
+        &c,
+        "send_message",
+        json!({ "agent": a.id, "text": format!("  {}\n ", words(32_000)) }),
+    )
+    .await;
+    assert_eq!(v["id"], a.id.as_str());
+    turn_over(&h, &a.id).await;
+    let sent = format!("Message de Claude (hors Escouade) : {}", words(32_000));
+    assert!(h
+        .items(&a.id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"] == sent.as_str()));
+    let prompts = h.agent(&a.id).prompts;
+    let user_items = || {
+        h.items(&a.id)
+            .iter()
+            .filter(|i| i["kind"] == "user")
+            .count()
+    };
+    let said_by_user = user_items();
+
+    // One more is told in characters, and the words do not come back anywhere.
+    let said = refused(
+        &c,
+        "send_message",
+        json!({ "agent": a.id, "text": words(32_001) }),
+    )
+    .await;
+    assert_eq!(said, "Le message fait 32001 caractères : 32000 au plus.");
+    let logged = entry(&h);
+    assert_eq!(
+        (
+            logged.tool.as_str(),
+            logged.outcome,
+            logged.message.as_deref()
+        ),
+        ("send_message", "error", Some(said.as_str()))
+    );
+    // The log keeps the start of the words of a call, as it does for any: not their end.
+    assert!(logged.summary.chars().count() < 400, "{}", logged.summary);
+    let log = serde_json::to_string(&h.core.mcp.activity.entries()).unwrap();
+    let told = h
+        .events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "mcpActivity")
+        .map(|e| e.to_string())
+        .collect::<String>();
+    assert!(!said.contains(end) && !log.contains(end) && !told.contains(end));
+    // Nothing was sent: no turn, and the conversation has not got it.
+    assert_eq!(h.agent(&a.id).prompts, prompts);
+    assert_eq!(user_items(), said_by_user);
+    // A blank text is still told as it was, and an enormous one as well (counted, not echoed).
+    let blank = refused(&c, "send_message", json!({ "agent": a.id, "text": "  " })).await;
+    assert_eq!(blank, "Écris le message à envoyer.");
+    let huge = refused(
+        &c,
+        "send_message",
+        json!({ "agent": a.id, "text": words(200_000) }),
+    )
+    .await;
+    assert_eq!(huge, "Le message fait 200000 caractères : 32000 au plus.");
     assert_eq!(h.agent(&a.id).prompts, prompts);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
