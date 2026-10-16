@@ -391,6 +391,29 @@ export interface Ticket {
   model: string;
   /** The effort its agent runs at, over the Kanban's; empty: the Kanban's. */
   effort: string;
+  /** The images pasted or dropped in its form, in their order: its agent gets them with its first message. */
+  images: TicketImage[];
+}
+
+/** An image of a ticket: its content is a file of the ticket's folder, never in the tickets' JSON. */
+export interface TicketImage {
+  name: string;
+  mediaType: string;
+  /** Its file in the ticket's folder. */
+  file: string;
+}
+
+/** An image of a ticket with its content (base64), for its form to show. */
+export interface TicketImageData extends TicketImage {
+  data: string;
+}
+
+/** An image a ticket's form sends: one the ticket has (`file`), or one pasted or dropped (`data`, base64); the other one empty. */
+export interface DraftImage {
+  name: string;
+  mediaType: string;
+  file: string;
+  data: string;
 }
 
 export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
@@ -423,6 +446,8 @@ export interface TicketDraft {
   after: string[];
   /** An existing branch for its agent to take up; absent or empty: the ticket's own. Given again when editing, to keep it. */
   branch?: string;
+  /** Its images, the whole list; absent: they stay as they are. */
+  images?: DraftImage[];
 }
 
 export interface RecipeStep {

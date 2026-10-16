@@ -45,6 +45,7 @@ import type {
   TestRecipe,
   Ticket,
   TicketDraft,
+  TicketImageData,
   UiEvent,
   UiState,
   WorktreeSuggestion,
@@ -244,6 +245,8 @@ export const api = {
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),
   ticketDelete: (id: string) => invoke<void>('ticket_delete', { id }),
+  /** The images of a ticket with their content, for its form; those whose file is gone are left out. */
+  ticketImages: (id: string) => invoke<TicketImageData[]>('ticket_images', { id }),
   ticketPrioritize: (id: string) => invoke<void>('ticket_prioritize', { id }),
   /** "Lancer": starts even with the autopilot off. */
   ticketStart: (id: string) => invoke<void>('ticket_start', { id }),

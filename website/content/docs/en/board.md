@@ -47,6 +47,7 @@ On macOS, `Ctrl` becomes `⌘`.
 |---|---|
 | “Ticket title” | What the ticket does, in one line. “Add” stays disabled while the title is empty. |
 | “Description” | The context, which the agent reads with the title. Optional. |
+| Images (“Attach an image”) | A screenshot of the bug or a mockup: paste it (`Ctrl+V`) or drop it anywhere in the window, or click “Attach an image”. It shows as a thumbnail under the description, and its cross removes it. PNG, JPEG, GIF, and WebP, 5 MB per image and 18 MB in total, like the attachments of the [chat](chat), and 20 images at most. The ticket’s agent gets them with its first message, and they stay in its conversation for the next loops. |
 | “Acceptance criteria” | One criterion per line. The agent checks each one, and the ticket is only done when they are met. With none, Escouade adds two: “Implementation matches the ticket” and “Tests pass” (in the interface language at the time of creation). |
 | “Max loops” | The most loops the agent may run: 3, 5 (the default), or 8. See [the autopilot](autopilot#the-loop). |
 | “Branch” | By default “New branch `ticket/<key>`”: the ticket gets its own branch, made when it starts. “Take up an existing branch…” opens the branch picker (local or remote branches): the agent then works on that branch, which Escouade never deletes, even once the ticket is approved. The Kanban’s target branch and the branch of the project’s folder cannot be picked. |
@@ -78,7 +79,7 @@ Right-click a card › “Delete”.
 
 | Column | What happens |
 |---|---|
-| “To do” | A confirmation, then the ticket and its description are gone. The tickets that were waiting for it no longer wait. For an imported ticket, the confirmation adds that it will no longer be imported from its service: automatic import does not bring it back (you can still import it again by hand). |
+| “To do” | A confirmation, then the ticket, its description, and its images are gone. The tickets that were waiting for it no longer wait. For an imported ticket, the confirmation adds that it will no longer be imported from its service: automatic import does not bring it back (you can still import it again by hand). |
 | “In progress” and “To review” | A confirmation, then the ticket is gone and its agent is archived. |
 | “Done” | The ticket is gone right away, without a confirmation. |
 
@@ -88,7 +89,7 @@ Archiving or deleting the agent of an “In progress” or “To review” ticke
 
 ## What a card shows
 
-Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, and Linear](integrations#failed-syncs)). A ticket that has a model or an effort of its own, given by the [MCP server](mcp) (`start_ticket`), shows them in a tag next to its key (“Opus · Max”): they come before the Kanban’s for its agent. With Haiku (the ticket’s, else the Kanban’s, else the app’s), which takes no effort, the tag shows none.
+Every card has its key, its title and, for an imported ticket, the badge of its service with its key there (a click opens it in the service). A ⚠ flags a sync that failed (see [Jira, Trello, GitHub, and Linear](integrations#failed-syncs)). A ticket that has a model or an effort of its own, given by the [MCP server](mcp) (`start_ticket`), shows them in a tag next to its key (“Opus · Max”): they come before the Kanban’s for its agent. With Haiku (the ticket’s, else the Kanban’s, else the app’s), which takes no effort, the tag shows none. A paperclip followed by a number says how many images the ticket has (“2 images attached” on hover).
 
 | Column | The card shows |
 |---|---|

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -523,6 +523,315 @@ describe('TicketForm', () => {
       await userEvent.keyboard('{Escape}');
       expect(app.modal).toMatchObject({ kind: 'ticket' });
     });
+  });
+});
+
+describe('TicketForm, its images', () => {
+  beforeEach(() => resetApp());
+  afterEach(() => setLang('fr'));
+  const png = [137, 80, 78, 71, 13, 10, 26, 10];
+  const b64 = btoa(String.fromCharCode(...png));
+  const capture = (name = 'capture.png', type = 'image/png') => new File([new Uint8Array(png)], name, { type });
+  const paste = (target: HTMLElement, clipboardData: { files: File[]; types: string[] }) => {
+    const e = createEvent.paste(target, { clipboardData });
+    fireEvent(target, e);
+    return e.defaultPrevented;
+  };
+  const drop = (target: HTMLElement, files: File[]) => {
+    const e = createEvent.drop(target, { dataTransfer: { files, types: ['Files'] } });
+    fireEvent(target, e);
+    return e.defaultPrevented;
+  };
+  const title = () => screen.getByRole('textbox', { name: 'Titre du ticket' });
+  const description = () => screen.getByRole('textbox', { name: 'Description' });
+  /** The images of a ticket that has two, and what the backend reads of them. */
+  const IMAGES = [
+    { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' },
+    { file: 'b2.gif', name: 'schema.gif', mediaType: 'image/gif' },
+  ];
+  const READ = [
+    { ...IMAGES[0], data: b64 },
+    { ...IMAGES[1], data: 'R0lG' },
+  ];
+
+  it('shows an image pasted in the description under it, and adds the ticket with it', async () => {
+    fakeBackend();
+    const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+    await userEvent.type(title(), 'Le bouton');
+    expect(paste(description(), { files: [capture()], types: ['Files'] })).toBe(true);
+    const list = await screen.findByRole('list', { name: 'Images du ticket' });
+    expect(within(list).getByAltText('capture.png')).toHaveAttribute('src', `data:image/png;base64,${b64}`);
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(onsubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Le bouton', images: [{ name: 'capture.png', mediaType: 'image/png', file: '', data: b64 }] }),
+    );
+  });
+
+  it('takes an image pasted in any field of the window, or dropped on it', async () => {
+    const backend = fakeBackend();
+    show();
+    expect(paste(title(), { files: [capture('a.png')], types: ['Files'] })).toBe(true);
+    expect(drop(screen.getByRole('textbox', { name: "Critères d'acceptation" }), [capture('b.gif', 'image/gif')])).toBe(true);
+    expect(await screen.findByAltText('a.png (1/2)')).toBeInTheDocument();
+    expect(await screen.findByAltText('b.gif (2/2)')).toBeInTheDocument();
+    expect(backend.called('clipboard_image')).toHaveLength(0);
+  });
+
+  it('attaches an image picked from the file dialog, which offers the images of the chat alone', async () => {
+    fakeBackend();
+    show();
+    const input = screen.getByLabelText('Joindre une image', { selector: 'input' });
+    expect(input).toHaveAttribute('accept', 'image/png,image/jpeg,image/gif,image/webp');
+    await userEvent.upload(input, capture('maquette.webp', 'image/webp'));
+    expect(await screen.findByAltText('maquette.webp')).toBeInTheDocument();
+  });
+
+  it('leaves the text pasted to its field, even with an image of it (the cells of a spreadsheet)', async () => {
+    const backend = fakeBackend();
+    show();
+    expect(paste(description(), { files: [], types: ['text/plain'] })).toBe(false);
+    expect(paste(description(), { files: [capture()], types: ['Files', 'text/plain', 'text/html'] })).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('list', { name: 'Images du ticket' })).not.toBeInTheDocument();
+    expect(backend.called('clipboard_image')).toHaveLength(0);
+  });
+
+  it('takes an image pasted while the window itself has the focus, or dropped on its head or foot', async () => {
+    fakeBackend();
+    show();
+    const dialog = screen.getByRole('dialog');
+    // A click on a thumbnail or between the fields gives the focus to the window.
+    dialog.focus();
+    expect(paste(dialog, { files: [capture('a.png')], types: ['Files'] })).toBe(true);
+    expect(drop(screen.getByRole('button', { name: 'Annuler' }), [capture('b.png')])).toBe(true);
+    expect(drop(screen.getByText('Nouveau ticket'), [capture('c.png')])).toBe(true);
+    for (const name of ['a.png (1/3)', 'b.png (2/3)', 'c.png (3/3)']) expect(await screen.findByAltText(name)).toBeInTheDocument();
+  });
+
+  it('says which images of the ticket are no longer in its folder', async () => {
+    fakeBackend({ ticket_images: () => READ.slice(0, 1) });
+    show({ ticket: ticket({ images: IMAGES }) });
+    expect(await screen.findByAltText('capture.png')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(app.toasts.at(-1)?.text).toBe("schema.gif n'est plus dans le dossier du ticket : il en est retiré à l'enregistrement."),
+    );
+    expect(screen.queryByRole('img', { name: /schema.gif/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves without asking when only an image gone from the ticket’s folder was dropped: the user changed nothing', async () => {
+    fakeBackend({ ticket_images: () => READ.slice(0, 1) });
+    show({ ticket: ticket({ images: IMAGES }) });
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toContain('schema.gif'));
+    await waitFor(() => expect(screen.queryByRole('img', { name: /schema.gif/ })).not.toBeInTheDocument());
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toBeNull();
+  });
+
+  it('takes an image gone from the ticket’s folder off the ticket at any save, as its toast says', async () => {
+    fakeBackend({ ticket_images: () => READ.slice(0, 1) });
+    const { onsubmit } = show({ ticket: ticket({ images: IMAGES }), onsubmit: vi.fn(() => true) });
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toContain('schema.gif'));
+    await userEvent.type(title(), ' bis');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onsubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ images: [{ name: 'capture.png', mediaType: 'image/png', file: 'a1.png', data: '' }] }),
+    );
+  });
+
+  it('takes the image WebKitGTK leaves out of a paste (Linux) from the system clipboard, and is not added meanwhile', async () => {
+    let give: (png: ArrayBuffer) => void = () => {};
+    fakeBackend({ clipboard_image: () => new Promise((r) => (give = r)) });
+    const { onsubmit } = show();
+    await userEvent.type(title(), 'Le bouton');
+    paste(description(), { files: [], types: [] });
+    expect(screen.getByRole('button', { name: 'Ajouter' })).toBeDisabled();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(onsubmit).not.toHaveBeenCalled();
+    give(new Uint8Array(png).buffer);
+    expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ajouter' })).toBeEnabled();
+  });
+
+  it('refuses a file that is not an image the chat takes, and says why', async () => {
+    fakeBackend();
+    show();
+    expect(drop(description(), [new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' })])).toBe(true);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)?.text).toBe("« rapport.pdf » n'est pas une image : un ticket prend les images PNG, JPEG, GIF et WebP."),
+    );
+    expect(screen.queryByRole('list', { name: 'Images du ticket' })).not.toBeInTheDocument();
+  });
+
+  it('keeps 20 images of a paste of 21, and says the 21st was not added', async () => {
+    fakeBackend();
+    show();
+    paste(description(), { files: Array.from({ length: 21 }, (_, n) => capture(`image-${n + 1}.png`)), types: ['Files'] });
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toBe("image-21.png n'est pas ajoutée : un ticket prend 20 images au plus."));
+    const list = screen.getByRole('list', { name: 'Images du ticket' });
+    expect(within(list).getAllByRole('img')).toHaveLength(20);
+    expect(screen.queryByAltText(/image-21\.png/)).not.toBeInTheDocument();
+  });
+
+  it('gives three rows of the description to its images, so that nothing more shows below them in a short window', async () => {
+    fakeBackend();
+    window.innerHeight = 700;
+    window.dispatchEvent(new Event('resize'));
+    try {
+      show();
+      expect(description()).toHaveAttribute('rows', '10');
+      paste(description(), { files: [capture()], types: ['Files'] });
+      await screen.findByAltText('capture.png');
+      expect(description()).toHaveAttribute('rows', '7');
+      await userEvent.click(screen.getByRole('button', { name: 'Retirer capture.png' }));
+      expect(description()).toHaveAttribute('rows', '10');
+    } finally {
+      window.innerHeight = 768;
+      window.dispatchEvent(new Event('resize'));
+    }
+  });
+
+  it('takes an image away with its cross', async () => {
+    fakeBackend();
+    show();
+    paste(description(), { files: [capture('a.png'), capture('b.png')], types: ['Files'] });
+    await screen.findByAltText('b.png (2/2)');
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer a.png (1/2)' }));
+    expect(screen.queryByAltText(/a\.png/)).not.toBeInTheDocument();
+    expect(screen.getByAltText('b.png')).toBeInTheDocument();
+  });
+
+  it('tells screenshots all named image.png apart by their rank, which goes once only one is left', async () => {
+    fakeBackend();
+    show();
+    paste(description(), { files: [capture('image.png'), capture('image.png')], types: ['Files'] });
+    const list = await screen.findByRole('list', { name: 'Images du ticket' });
+    await waitFor(() => expect(within(list).getAllByRole('img')).toHaveLength(2));
+    expect(
+      within(list)
+        .getAllByRole('img')
+        .map((i) => i.getAttribute('alt')),
+    ).toEqual(['image.png (1/2)', 'image.png (2/2)']);
+    expect(
+      within(list)
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Retirer image.png (1/2)', 'Retirer image.png (2/2)']);
+    // The tooltip names it as well.
+    expect(within(list).getByAltText('image.png (2/2)')).toHaveAttribute('data-tip', 'image.png (2/2)');
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer image.png (1/2)' }));
+    expect(within(list).getByAltText('image.png')).toBeInTheDocument();
+    expect(within(list).getByRole('button', { name: 'Retirer image.png' })).toBeInTheDocument();
+    expect(within(list).queryByAltText(/\(\d\/\d\)/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the focus in the form when an image is taken away: on the next one, else the description', async () => {
+    fakeBackend();
+    const { onsubmit } = show({ onsubmit: vi.fn(() => true) });
+    await userEvent.type(title(), 'Le bouton');
+    paste(description(), { files: [capture('a.png'), capture('b.png')], types: ['Files'] });
+    await screen.findByAltText('b.png (2/2)');
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer a.png (1/2)' }));
+    expect(screen.getByRole('button', { name: 'Retirer b.png' })).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer b.png' }));
+    expect(description()).toHaveFocus();
+    // Ctrl+Enter still adds the ticket.
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(onsubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before leaving a new ticket an image was pasted in', async () => {
+    fakeBackend();
+    show();
+    paste(description(), { files: [capture()], types: ['Files'] });
+    await screen.findByAltText('capture.png');
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+  });
+
+  it('shows the images of a ticket being edited, and saves those kept by their file', async () => {
+    const backend = fakeBackend({ ticket_images: () => READ });
+    const { onsubmit } = show({ ticket: ticket({ images: IMAGES }), onsubmit: vi.fn(() => true) });
+    expect(await screen.findByAltText('capture.png (1/2)')).toHaveAttribute('src', `data:image/png;base64,${b64}`);
+    expect(screen.getByAltText('schema.gif (2/2)')).toHaveAttribute('src', 'data:image/gif;base64,R0lG');
+    expect(backend.called('ticket_images')).toEqual([{ cmd: 'ticket_images', args: { id: 't1' } }]);
+    await userEvent.click(screen.getByRole('button', { name: 'Retirer schema.gif (2/2)' }));
+    paste(description(), { files: [capture('nouvelle.png')], types: ['Files'] });
+    await screen.findByAltText('nouvelle.png (2/2)');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onsubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          { name: 'capture.png', mediaType: 'image/png', file: 'a1.png', data: '' },
+          { name: 'nouvelle.png', mediaType: 'image/png', file: '', data: b64 },
+        ],
+      }),
+    );
+  });
+
+  it('shows the place of the images of a ticket being edited while they are read, and leaves without asking', async () => {
+    fakeBackend({ ticket_images: () => new Promise(() => {}) });
+    show({ ticket: ticket({ images: IMAGES }) });
+    expect(screen.getByRole('img', { name: 'Chargement de capture.png (1/2)…' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Chargement de schema.gif (2/2)…' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toBeNull();
+  });
+
+  it('keeps the images of a ticket saved without touching them, even before they are read', async () => {
+    fakeBackend({ ticket_images: () => new Promise(() => {}) });
+    const { onsubmit } = show({ ticket: ticket({ images: IMAGES }), onsubmit: vi.fn(() => true) });
+    await userEvent.type(title(), ' bis');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(onsubmit).toHaveBeenCalledTimes(1);
+    expect(onsubmit.mock.calls[0][0]).not.toHaveProperty('images');
+  });
+
+  it('asks before leaving a ticket being edited one of whose images was taken away', async () => {
+    fakeBackend({ ticket_images: () => READ });
+    show({ ticket: ticket({ images: IMAGES }) });
+    await userEvent.click(await screen.findByRole('button', { name: 'Retirer capture.png (1/2)' }));
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
+  });
+
+  it('keeps its images while another dialog takes its place, and comes back with them', async () => {
+    fakeBackend();
+    const self = (show(), app.modal);
+    paste(description(), { files: [capture()], types: ['Files'] });
+    await screen.findByAltText('capture.png');
+    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    cleanup();
+    const resume = (self as { resume?: TicketFormDraft }).resume!;
+    expect(resume.images).toEqual([expect.objectContaining({ name: 'capture.png', data: b64 })]);
+    show({ resume });
+    expect(screen.getByAltText('capture.png')).toHaveAttribute('src', `data:image/png;base64,${b64}`);
+  });
+
+  it('still sees no change in an image gone from the ticket’s folder once back from a dialog that took its place', async () => {
+    fakeBackend({ ticket_images: () => READ.slice(0, 1) });
+    const self = (show({ ticket: ticket({ images: IMAGES }) }), app.modal);
+    await waitFor(() => expect(screen.queryByRole('img', { name: /schema\.gif/ })).not.toBeInTheDocument());
+    // « Quitter Escouade ? » takes the window's place, then is cancelled.
+    cleanup();
+    const resume = (self as { resume?: TicketFormDraft }).resume!;
+    show({ ticket: ticket({ images: IMAGES }), resume });
+    expect(screen.getByAltText('capture.png')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toBeNull();
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    fakeBackend({ ticket_images: () => new Promise(() => {}) });
+    show({ ticket: ticket({ images: IMAGES }) });
+    expect(screen.getByLabelText('Attach an image', { selector: 'input' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Ticket images' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Loading capture.png (1/2)…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove capture.png (1/2)' })).toBeInTheDocument();
+    drop(description(), [new File(['%PDF-1.4'], 'rapport.pdf', { type: 'application/pdf' })]);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)?.text).toBe('“rapport.pdf” isn’t an image: a ticket takes PNG, JPEG, GIF and WebP images.'),
+    );
   });
 });
 

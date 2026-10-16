@@ -44,6 +44,7 @@ export default {
     progressLabel: 'Avancement',
     moreSteps: { one: '{count} autre élément', other: '{count} autres éléments' },
     criteriaLabel: 'Critères',
+    images: { one: '{count} image jointe', other: '{count} images jointes' },
     criteriaMetLabel: 'Critères atteints',
     criteriaMet: { one: '{met}/{total} critère', other: '{met}/{total} critères' },
     todoMeta: { one: '{count} critère · max {max} boucles', other: '{count} critères · max {max} boucles' },
@@ -65,6 +66,15 @@ export default {
     removeTitle: 'Supprimer {key} ?',
     removeBody: 'Le ticket et sa description sont supprimés.',
     removeBodyImported: 'Le ticket et sa description sont supprimés. Il ne sera plus importé depuis {service}.',
+    // A ticket with images: they are files of its folder, which go with it.
+    removeBodyImages: {
+      one: 'Le ticket, sa description et son image sont supprimés.',
+      other: 'Le ticket, sa description et ses {count} images sont supprimés.',
+    },
+    removeBodyImportedImages: {
+      one: 'Le ticket, sa description et son image sont supprimés. Il ne sera plus importé depuis {service}.',
+      other: 'Le ticket, sa description et ses {count} images sont supprimés. Il ne sera plus importé depuis {service}.',
+    },
     removeRunningTitle: 'Supprimer le ticket {key} ?',
     removeRunningBody: 'Son agent est archivé, avec son worktree.',
     approveTitle: 'Valider {key} ?',
@@ -89,6 +99,20 @@ export default {
     after: 'Après',
     searchKey: 'Rechercher une clé',
     noMatch: 'Aucun ticket pour cette clé',
+    // The images pasted or dropped in the window, under the description: the formats and limits of the chat.
+    images: {
+      label: 'Images du ticket',
+      attach: 'Joindre une image',
+      attachTitle: 'Joindre une image PNG, JPEG, GIF ou WebP (ou colle-la, glisse-la dans la fenêtre)',
+      // Several images are named with their rank: screenshots are all called image.png.
+      ranked: '{name} ({n}/{total})',
+      remove: 'Retirer {name}',
+      loading: 'Chargement de {name}…',
+      missing: "{name} n'est plus dans le dossier du ticket : il en est retiré à l'enregistrement.",
+      notImage: "« {name} » n'est pas une image : un ticket prend les images PNG, JPEG, GIF et WebP.",
+      totalTooBig: "{name} n'est pas ajoutée : les images d'un ticket sont limitées à {max} en tout.",
+      tooMany: "{name} n'est pas ajoutée : un ticket prend {max} images au plus.",
+    },
   },
 
   // The form that sends a ticket back to its agent.

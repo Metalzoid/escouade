@@ -580,6 +580,22 @@ pub struct Ticket {
     /// tool); empty: the board's.
     pub model: String,
     pub effort: String,
+    /// The images pasted or dropped in its form, in their order: files of its folder
+    /// (`DataDir::ticket_dir`), sent to its agent with its first message.
+    pub images: Vec<TicketImage>,
+}
+
+/// An image of a ticket: its content is a file of the ticket's folder, never in the JSON of the
+/// tickets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TicketImage {
+    /// As it was pasted or dropped (« image.png »).
+    pub name: String,
+    /// One of the image types the API reads.
+    pub media_type: String,
+    /// Its file's name in the ticket's folder.
+    pub file: String,
 }
 
 /// A project's board: what validating a ticket does, and its agents.

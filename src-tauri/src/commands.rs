@@ -1214,9 +1214,27 @@ pub async fn ticket_create(
     counted(&core, Event::TicketCreated, r)
 }
 
-#[tauri::command(async)]
-pub fn ticket_update(core: CoreState, id: String, draft: TicketDraft) -> Res<Ticket> {
-    core.ticket_update(&id, draft).map_err(err)
+/// Its pasted images are written: off the async workers.
+#[tauri::command]
+pub async fn ticket_update(core: CoreState<'_>, id: String, draft: TicketDraft) -> Res<Ticket> {
+    let core = core.inner().clone();
+    tokio::task::spawn_blocking(move || core.ticket_update(&id, draft))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
+}
+
+/// The images of a ticket, with their content, for its form to show: read off the async workers.
+#[tauri::command]
+pub async fn ticket_images(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<Vec<crate::ticketimages::ImageData>> {
+    let core = core.inner().clone();
+    tokio::task::spawn_blocking(move || core.ticket_images(&id))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
 }
 
 #[tauri::command]

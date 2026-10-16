@@ -12,6 +12,7 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `state.json` | Les projets, les agents (avec l’identifiant de leur session Claude Code), les tickets du Kanban, la pause du pilote auto et l’état de l’interface. |
 | `integrations.json` | Les comptes Jira, Trello, GitHub et Linear, sans leurs jetons (voir [Les jetons](#les-jetons)). |
 | `sync-queue.json` | Les synchronisations avec ces services qui attendent d’être retentées. |
+| `tickets/<ticket>/` | Les images collées ou glissées dans la fenêtre d’un ticket, une par fichier : `state.json` n’a que leurs noms. Le dossier n’existe que si le ticket en a ; effacé avec le ticket. |
 | `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent. |
 | `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes Claude : sa connexion et ses conversations. Principal n’en a pas, il utilise celui de ton propre Claude Code. |
 | `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (toujours sous Linux). |

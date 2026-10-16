@@ -305,6 +305,7 @@ pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> Tick
         max_loops,
         after: Vec::new(),
         branch: String::new(),
+        images: None,
     }
 }
 

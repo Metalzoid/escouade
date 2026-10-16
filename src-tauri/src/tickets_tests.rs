@@ -14,8 +14,9 @@ use crate::core_tests::{
     wt_step, Harness,
 };
 use crate::model::*;
-use crate::tickets::{error_reason, TicketDraft};
+use crate::tickets::{error_reason, DraftImage, TicketDraft};
 use crate::usage::Reading;
+use base64::Engine;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -31,7 +32,74 @@ pub(crate) fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDra
         max_loops,
         after: Vec::new(),
         branch: String::new(),
+        images: None,
     }
+}
+
+/// The text of a user message's content: itself, or its text blocks (after the images).
+fn text_of(content: &Value) -> String {
+    match content.as_array() {
+        Some(blocks) => blocks
+            .iter()
+            .filter_map(|b| b["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        None => content.as_str().unwrap_or_default().to_string(),
+    }
+}
+
+/// The start of a PNG: what makes its content one.
+const PNG: &[u8] = b"\x89PNG\r\n\x1a\n-capture";
+
+/// A PNG of `size` bytes.
+fn png_of(size: usize) -> Vec<u8> {
+    let mut bytes = PNG.to_vec();
+    bytes.resize(size, 7);
+    bytes
+}
+
+fn b64(bytes: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// An image pasted in a ticket's form.
+fn new_image(name: &str, media_type: &str, bytes: &[u8]) -> DraftImage {
+    DraftImage {
+        name: name.into(),
+        media_type: media_type.into(),
+        data: b64(bytes),
+        ..Default::default()
+    }
+}
+
+/// An image the ticket has, kept by its form.
+fn kept(image: &TicketImage) -> DraftImage {
+    DraftImage {
+        name: image.name.clone(),
+        media_type: image.media_type.clone(),
+        file: image.file.clone(),
+        ..Default::default()
+    }
+}
+
+/// The names and types of a ticket's images.
+fn named(images: &[TicketImage]) -> Vec<(&str, &str)> {
+    images
+        .iter()
+        .map(|i| (i.name.as_str(), i.media_type.as_str()))
+        .collect()
+}
+
+/// The files of the ticket's folder, by name.
+fn files_of(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map(|d| {
+            d.map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
 }
 
 /// `draft`, coming after the tickets `after`.
@@ -66,10 +134,7 @@ impl Harness {
     }
 
     fn last_sent(&self, dir: &Path) -> String {
-        self.stdin_messages(dir).last().unwrap()["message"]["content"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string()
+        text_of(&self.stdin_messages(dir).last().unwrap()["message"]["content"])
     }
 
     /// The ticket's agent has hit the usage limit and waits for its automatic resume. Whenever the
@@ -178,12 +243,9 @@ impl Harness {
     /// reads: right after a send, it may not have yet).
     pub(crate) async fn wait_sent(&self, dir: &Path, start: &str) {
         self.wait("message read by the agent", |h| {
-            h.stdin_messages(dir).iter().any(|m| {
-                m["message"]["content"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .starts_with(start)
-            })
+            h.stdin_messages(dir)
+                .iter()
+                .any(|m| text_of(&m["message"]["content"]).starts_with(start))
         })
         .await
     }
@@ -398,6 +460,421 @@ async fn a_ticket_to_do_is_edited_prioritized_and_deleted() {
 }
 
 #[tokio::test]
+async fn a_tickets_images_are_files_of_its_folder_out_of_its_json_and_go_with_it() {
+    let h = harness("tk-images");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let png = b"\x89PNG\r\n\x1a\ncapture";
+    let jpg = b"\xff\xd8\xffmaquette";
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![
+                    new_image("capture.png", "image/png", png),
+                    new_image("maquette.jpg", "image/jpeg", jpg),
+                ]),
+                ..draft("Corriger le bouton", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert!(dir.starts_with(h.core.data.tickets()));
+    assert_eq!(
+        named(&t.images),
+        [("capture.png", "image/png"), ("maquette.jpg", "image/jpeg")]
+    );
+    assert_eq!(std::fs::read(dir.join(&t.images[0].file)).unwrap(), png);
+    assert_eq!(std::fs::read(dir.join(&t.images[1].file)).unwrap(), jpg);
+    // The JSON of the tickets names them, without their content.
+    let json = serde_json::to_string(&h.ticket(&t.id)).unwrap();
+    assert!(
+        json.contains("capture.png") && !json.contains(&b64(png)) && !json.contains(&b64(jpg)),
+        "{json}"
+    );
+    // The form of the ticket, edited, shows them.
+    let shown = h.core.ticket_images(&t.id).unwrap();
+    assert_eq!(
+        shown
+            .iter()
+            .map(|i| (
+                i.file.as_str(),
+                i.name.as_str(),
+                i.media_type.as_str(),
+                i.data.as_str()
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                t.images[0].file.as_str(),
+                "capture.png",
+                "image/png",
+                b64(png).as_str()
+            ),
+            (
+                t.images[1].file.as_str(),
+                "maquette.jpg",
+                "image/jpeg",
+                b64(jpg).as_str()
+            ),
+        ]
+    );
+    // Edited without a word of its images (the tools of the MCP server), it keeps them.
+    let same = h
+        .core
+        .ticket_update(&t.id, draft("Corriger le bouton bleu", &[], 5))
+        .unwrap();
+    assert_eq!(same.images, t.images);
+    // Edited in its window: the first one kept, the second taken away, a third one pasted.
+    let gif = b"GIF89a-schema";
+    let edited = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                images: Some(vec![
+                    kept(&t.images[0]),
+                    new_image("schema.gif", "image/gif", gif),
+                ]),
+                ..draft("Corriger le bouton bleu", &[], 5)
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        named(&edited.images),
+        [("capture.png", "image/png"), ("schema.gif", "image/gif")]
+    );
+    assert_eq!(edited.images[0], t.images[0]);
+    assert_eq!(
+        std::fs::read(dir.join(&edited.images[1].file)).unwrap(),
+        gif
+    );
+    let mut left = vec![edited.images[0].file.clone(), edited.images[1].file.clone()];
+    left.sort();
+    assert_eq!(files_of(&dir), left);
+    // All taken away: so is the folder.
+    let bare = h
+        .core
+        .ticket_update(
+            &t.id,
+            TicketDraft {
+                images: Some(vec![]),
+                ..draft("Corriger le bouton bleu", &[], 5)
+            },
+        )
+        .unwrap();
+    assert!(bare.images.is_empty());
+    assert!(!dir.exists());
+    // A ticket deleted takes its images with it.
+    let u = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("capture.png", "image/png", png)]),
+                ..draft("Autre", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let other = h.core.data.ticket_dir(&u.id);
+    assert_eq!(files_of(&other).len(), 1);
+    h.core.ticket_delete(&u.id).await.unwrap();
+    assert!(!other.exists());
+}
+
+#[tokio::test]
+async fn saving_a_tickets_images_lets_go_of_its_own_files_alone() {
+    let h = harness("tk-images-own");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("a.png", "image/png", PNG)]),
+                ..draft("Un", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    // What another save of the same ticket wrote meanwhile, not in its list yet.
+    std::fs::write(dir.join("autre.png"), PNG).unwrap();
+    let with = |images: Vec<DraftImage>| TicketDraft {
+        images: Some(images),
+        ..draft("Un", &[], 5)
+    };
+    // Refused: what it wrote goes, nothing else.
+    assert!(h
+        .core
+        .ticket_update(
+            &t.id,
+            with(vec![
+                new_image("b.png", "image/png", PNG),
+                new_image("c.bmp", "image/bmp", b"BM")
+            ])
+        )
+        .is_err());
+    let mut left = vec![t.images[0].file.clone(), "autre.png".to_string()];
+    left.sort();
+    assert_eq!(files_of(&dir), left);
+    // Saved: the image taken away goes, the other save's file stays.
+    let saved = h
+        .core
+        .ticket_update(&t.id, with(vec![new_image("b.png", "image/png", PNG)]))
+        .unwrap();
+    let mut left = vec![saved.images[0].file.clone(), "autre.png".to_string()];
+    left.sort();
+    assert_eq!(files_of(&dir), left);
+    // Refused once under way: the same.
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    assert!(h.core.ticket_update(&t.id, with(vec![])).is_err());
+    assert_eq!(files_of(&dir), left);
+}
+
+#[tokio::test]
+async fn a_tickets_images_have_the_formats_and_limits_of_the_chats_attachments() {
+    const MB: usize = 1024 * 1024;
+    let h = harness("tk-images-limits");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let refused = |images: Vec<DraftImage>| {
+        let (core, id) = (h.core.clone(), p.id.clone());
+        async move {
+            core.ticket_create(
+                &id,
+                TicketDraft {
+                    images: Some(images),
+                    ..draft("Refusé", &[], 5)
+                },
+            )
+            .await
+            .unwrap_err()
+            .to_string()
+        }
+    };
+    // The formats the API reads, and no other file.
+    let e = refused(vec![new_image("plan.bmp", "image/bmp", b"BM")]).await;
+    assert!(
+        e.contains("« plan.bmp »") && e.contains("PNG, JPEG, GIF"),
+        "{e}"
+    );
+    let e = refused(vec![new_image("notes.pdf", "application/pdf", b"%PDF")]).await;
+    assert!(e.contains("« notes.pdf »"), "{e}");
+    // 5 MB an image, 18 MB in all.
+    let e = refused(vec![new_image(
+        "photo.png",
+        "image/png",
+        &png_of(5 * MB + 1),
+    )])
+    .await;
+    assert_eq!(e, "photo.png dépasse 5 Mo");
+    let four = (0..4)
+        .map(|i| new_image(&format!("{i}.png"), "image/png", &png_of(5 * MB)))
+        .collect();
+    let e = refused(four).await;
+    assert!(e.contains("18 Mo en tout"), "{e}");
+    // Content that is not base64.
+    let e = refused(vec![DraftImage {
+        name: "abime.png".into(),
+        media_type: "image/png".into(),
+        data: "pas du base64 !".into(),
+        ..Default::default()
+    }])
+    .await;
+    assert!(e.contains("abime.png"), "{e}");
+    // None of them used a key up, nor left a file.
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("photo.png", "image/png", &png_of(5 * MB))]),
+                ..draft("Accepté", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(t.key, "DEM-1");
+    assert_eq!(
+        files_of(&h.core.data.tickets()),
+        std::slice::from_ref(&t.id)
+    );
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert_eq!(files_of(&dir), [t.images[0].file.clone()]);
+    // An edit refused leaves the ticket's images as they were, and no file behind.
+    let with = |images: Vec<DraftImage>| TicketDraft {
+        images: Some(images),
+        ..draft("Accepté", &[], 5)
+    };
+    assert!(h
+        .core
+        .ticket_update(
+            &t.id,
+            with(vec![
+                kept(&t.images[0]),
+                new_image("a.bmp", "image/bmp", b"BM")
+            ])
+        )
+        .is_err());
+    let e = h
+        .core
+        .ticket_update(
+            &t.id,
+            with(
+                (0..3)
+                    .map(|i| new_image(&format!("{i}.png"), "image/png", &png_of(5 * MB)))
+                    .chain([kept(&t.images[0])])
+                    .collect(),
+            ),
+        )
+        .unwrap_err();
+    assert!(e.to_string().contains("18 Mo en tout"), "{e}");
+    h.core
+        .edit_ticket(&t.id, |t| {
+            t.column = Column::Review;
+            Ok(())
+        })
+        .unwrap();
+    assert!(h
+        .core
+        .ticket_update(&t.id, with(vec![new_image("b.png", "image/png", PNG)]))
+        .is_err());
+    assert_eq!(h.ticket(&t.id).images, t.images);
+    assert_eq!(files_of(&dir), [t.images[0].file.clone()]);
+}
+
+#[tokio::test]
+async fn a_ticket_takes_twenty_images_at_most_and_a_refusal_uses_no_key() {
+    let h = harness("tk-images-count");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let small = |n: usize| -> Vec<DraftImage> {
+        (0..n)
+            .map(|i| new_image(&format!("{i}.png"), "image/png", PNG))
+            .collect()
+    };
+    let with = |images: Vec<DraftImage>, title: &str| TicketDraft {
+        images: Some(images),
+        ..draft(title, &[], 5)
+    };
+    let e = h
+        .core
+        .ticket_create(&p.id, with(small(21), "Trop"))
+        .await
+        .unwrap_err();
+    assert_eq!(e.to_string(), "Un ticket prend 20 images au plus.");
+    // Neither a ticket, nor a folder, nor a key.
+    assert!(h.core.tickets.read().is_empty());
+    let tickets = h.core.data.tickets();
+    assert!(files_of(&tickets).is_empty(), "{:?}", files_of(&tickets));
+    let t = h
+        .core
+        .ticket_create(&p.id, with(small(20), "Vingt"))
+        .await
+        .unwrap();
+    assert_eq!(t.key, "DEM-1");
+    assert_eq!(t.images.len(), 20);
+    // An edit past 20 is refused, the ticket keeps its images and no file comes of it.
+    let dir = h.core.data.ticket_dir(&t.id);
+    let before = files_of(&dir);
+    let more: Vec<DraftImage> = t.images.iter().map(kept).chain(small(1)).collect();
+    let e = h
+        .core
+        .ticket_update(&t.id, with(more, "Vingt"))
+        .unwrap_err();
+    assert_eq!(e.to_string(), "Un ticket prend 20 images au plus.");
+    assert_eq!(h.ticket(&t.id).images, t.images);
+    assert_eq!(files_of(&dir), before);
+}
+
+#[tokio::test]
+async fn a_deleted_tickets_folder_goes_once_the_state_without_it_is_saved() {
+    let h = harness("tk-images-delete-saved");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("a.png", "image/png", PNG)]),
+                ..draft("Avec image", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.core.save_now();
+    let state = || std::fs::read_to_string(h.core.data.state_file()).unwrap();
+    assert!(state().contains(&t.id), "{}", state());
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert!(dir.exists());
+    h.core.ticket_delete(&t.id).await.unwrap();
+    // No wait for the background save: a crash now must not bring the ticket back without them.
+    assert!(!state().contains(&t.id), "the saved state still has it");
+    assert!(!dir.exists());
+    // One without images leaves the save to the background.
+    let bare = h
+        .core
+        .ticket_create(&p.id, draft("Sans image", &[], 5))
+        .await
+        .unwrap();
+    h.core.save_now();
+    h.core.ticket_delete(&bare.id).await.unwrap();
+    assert!(state().contains(&bare.id));
+}
+
+#[tokio::test]
+async fn images_that_cannot_be_written_use_no_key_up_and_leave_no_folder() {
+    let h = harness("tk-images-key");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let with_image = |title: &str| TicketDraft {
+        images: Some(vec![new_image("a.png", "image/png", PNG)]),
+        ..draft(title, &[], 5)
+    };
+    let tickets = h.core.data.tickets();
+    // Refused once the images are written (no branch to target on a detached HEAD): they go.
+    git(&r, &["checkout", "-q", "--detach"]);
+    let e = h
+        .core
+        .ticket_create(&p.id, with_image("Sans branche"))
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("aucune branche"), "{e}");
+    assert!(files_of(&tickets).is_empty(), "{:?}", files_of(&tickets));
+    git(&r, &["checkout", "-q", "main"]);
+    // The tickets' folder is a file: nothing can be written in it.
+    let _ = std::fs::remove_dir_all(&tickets);
+    std::fs::write(&tickets, b"x").unwrap();
+    let e = h
+        .core
+        .ticket_create(&p.id, with_image("Refusé"))
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("a.png"), "{e}");
+    assert!(h.core.tickets.read().is_empty());
+    std::fs::remove_file(&tickets).unwrap();
+    // No key went with it.
+    let t = h
+        .core
+        .ticket_create(&p.id, with_image("Accepté"))
+        .await
+        .unwrap();
+    assert_eq!(t.key, "DEM-1");
+    assert_eq!(files_of(&tickets), std::slice::from_ref(&t.id));
+}
+
+#[tokio::test]
 async fn the_board_settings_stay_within_bounds_and_keep_the_tickets_key() {
     let h = harness("tk-settings");
     let (p, r) = h.project(false).await;
@@ -485,11 +962,21 @@ async fn closing_a_project_drops_its_tickets() {
     h.set_board(&p.id, |s| s.autopilot = false);
     let t = h
         .core
-        .ticket_create(&p.id, draft("Un", &[], 5))
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("capture.png", "image/png", PNG)]),
+                ..draft("Un", &[], 5)
+            },
+        )
         .await
         .unwrap();
+    let dir = h.core.data.ticket_dir(&t.id);
+    assert!(dir.exists());
     h.core.remove_project(&p.id).await.unwrap();
     assert!(h.core.ticket(&t.id).is_err());
+    // Its images with it.
+    assert!(!dir.exists());
     assert!(h
         .events
         .lock()
@@ -872,6 +1359,116 @@ async fn a_ticket_gets_an_agent_on_its_own_branch_and_loops_until_its_criteria_a
     );
     // Titled with the project's name.
     assert!(alerts.contains(&"demo | DEM-1 prêt à tester".to_string()));
+}
+
+#[tokio::test]
+async fn a_tickets_agent_gets_its_images_as_image_blocks_with_its_first_message_only() {
+    let h = harness("tk-images-first");
+    let (p, _) = h.project(false).await;
+    let (png, webp) = (
+        b"\x89PNG\r\n\x1a\ncapture".as_slice(),
+        b"RIFF\0\0\0\0WEBPVP8 maquette".as_slice(),
+    );
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![
+                    new_image("capture.png", "image/png", png),
+                    new_image("maquette.webp", "image/webp", webp),
+                ]),
+                ..draft("Corriger le bouton", &["Il est bleu", "Il est rond"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    let sent = h.stdin_messages(&h.worktree_of(&t.id));
+    let first = sent[0]["message"]["content"].as_array().unwrap();
+    assert_eq!(
+        first[..2],
+        [
+            json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": b64(png) } }),
+            json!({ "type": "image", "source": { "type": "base64", "media_type": "image/webp", "data": b64(webp) } }),
+        ]
+    );
+    assert_eq!(first.len(), 3);
+    let text = first[2]["text"].as_str().unwrap();
+    assert!(
+        text.starts_with("Ticket DEM-1 : Corriger le bouton"),
+        "{first:?}"
+    );
+    // The message says what they are for.
+    assert!(
+        text.contains("Les 2 images jointes illustrent le ticket."),
+        "{text}"
+    );
+    // They stay in its session: the next loop is its text alone.
+    assert!(
+        sent[1]["message"]["content"]
+            .as_str()
+            .is_some_and(|m| m.starts_with("Boucle 2/5.")),
+        "{sent:?}"
+    );
+    // The conversation shows them with the message.
+    let agent = h.agent_of(&t.id).id;
+    let user = h
+        .items(&agent)
+        .into_iter()
+        .find(|i| i["kind"] == "user")
+        .unwrap();
+    assert_eq!(user["images"], 2);
+}
+
+#[tokio::test]
+async fn an_image_gone_from_the_tickets_folder_is_told_to_its_agent_by_name() {
+    let h = harness("tk-images-missing");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let (png, webp) = (
+        b"\x89PNG\r\n\x1a\ncapture".as_slice(),
+        b"RIFF\0\0\0\0WEBPVP8 maquette".as_slice(),
+    );
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![
+                    new_image("capture.png", "image/png", png),
+                    new_image("maquette.webp", "image/webp", webp),
+                ]),
+                ..draft("Corriger le bouton [ok]", &["Il est bleu"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    // One of the files goes before the start (the folder cleaned by hand, say).
+    let dir = h.core.data.ticket_dir(&t.id);
+    std::fs::remove_file(dir.join(&t.images[0].file)).unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "ticket to test", |t| t.column == Column::Review)
+        .await;
+    let sent = h.stdin_messages(&h.worktree_of(&t.id));
+    let first = sent[0]["message"]["content"].as_array().unwrap();
+    // The image still there is attached, the other one is not.
+    assert_eq!(
+        first[..1],
+        [
+            json!({ "type": "image", "source": { "type": "base64", "media_type": "image/webp", "data": b64(webp) } }),
+        ]
+    );
+    assert_eq!(first.len(), 2, "{first:?}");
+    // The agent is told it is one image, and which one it lacks.
+    let text = first[1]["text"].as_str().unwrap();
+    assert!(
+        text.starts_with("Ticket DEM-1 : Corriger le bouton")
+            && text.contains("L’image jointe illustre le ticket.")
+            && text.contains("Image absente du dossier du ticket, non jointe : capture.png."),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -1956,6 +2553,7 @@ async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_it() {
             &p.id,
             TicketDraft {
                 description: "Contexte : l'API publique.".into(),
+                images: Some(vec![new_image("schema.png", "image/png", PNG)]),
                 ..draft("Limiter", &["5 essais par IP"], 5)
             },
         )
@@ -1985,6 +2583,13 @@ async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_it() {
         first.contains("Contexte : l'API publique.")
             && first.contains("1. 5 essais par IP")
             && first.contains("Boucle 1/5"),
+        "{first}"
+    );
+    // With its images, and what they are for.
+    let content = h.stdin_messages(&r).last().unwrap()["message"]["content"].clone();
+    assert_eq!(content[0]["source"]["data"], b64(PNG), "{content}");
+    assert!(
+        first.contains("L’image jointe illustre le ticket."),
         "{first}"
     );
 }
@@ -2052,6 +2657,67 @@ async fn archiving_or_deleting_the_agent_of_a_ticket_sends_it_back_to_do() {
         (Column::Todo, None, None)
     );
     assert!(t.criteria.iter().all(|c| !c.ok));
+}
+
+#[tokio::test]
+async fn a_ticket_sent_back_to_do_and_started_again_gives_its_images_to_its_new_agent() {
+    let h = harness("tk-images-again");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                images: Some(vec![new_image("capture.png", "image/png", PNG)]),
+                ..draft("Corriger le bouton [ok]", &["Il est bleu"], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let first_agent = h.ticket(&t.id).agent_id.unwrap();
+    // The first agent got the image with its first message.
+    let wt = h.worktree_of(&t.id);
+    let content = h.stdin_messages(&wt)[0]["message"]["content"].clone();
+    assert_eq!(content[0]["source"]["data"], b64(PNG), "{content}");
+    let sent_before = h.stdin_messages(&wt).len();
+    // Its agent deleted, the ticket is back to do with its images as it had them.
+    let images = h.ticket(&t.id).images;
+    assert_eq!(images.len(), 1);
+    h.core.delete_agent(&first_agent, true).await.unwrap();
+    let back = h.ticket(&t.id);
+    assert_eq!((back.column, back.agent_id.clone()), (Column::Todo, None));
+    assert_eq!(back.images, images);
+    assert_eq!(
+        files_of(&h.core.data.ticket_dir(&t.id)),
+        [images[0].file.clone()]
+    );
+    // Started again: a new agent, which gets the image with its first message as well.
+    h.core.ticket_start(&t.id).unwrap();
+    h.wait_ticket(&t.id, "to test again", |t| {
+        t.column == Column::Review && t.agent_id.as_deref() != Some(first_agent.as_str())
+    })
+    .await;
+    let again = h.worktree_of(&t.id);
+    // The fake CLI logs by folder: the new agent's worktree may be the first one's.
+    let skip = if again == wt { sent_before } else { 0 };
+    let sent = h.stdin_messages(&again);
+    let content = sent[skip]["message"]["content"].clone();
+    assert_eq!(
+        content[0],
+        json!({ "type": "image", "source": { "type": "base64", "media_type": "image/png", "data": b64(PNG) } }),
+        "{content}"
+    );
+    assert_eq!(content.as_array().map(Vec::len), Some(2), "{content}");
+    let text = content[1]["text"].as_str().unwrap();
+    assert!(
+        text.starts_with("Ticket DEM-1 : Corriger le bouton")
+            && text.contains("L’image jointe illustre le ticket."),
+        "{text}"
+    );
 }
 
 #[tokio::test]

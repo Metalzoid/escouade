@@ -440,6 +440,7 @@ pub(super) async fn create_ticket<R: Runtime>(
         after: after_ids(core, &project, a.after.as_deref().unwrap_or_default())?,
         // Its own branch: the tools do not name an existing one.
         branch: String::new(),
+        images: None,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -495,6 +496,8 @@ pub(super) fn update_ticket<R: Runtime>(
         },
         // Not the tools' to change: the ticket keeps the branch the window gave it.
         branch: t.branch.clone(),
+        // Nor its images.
+        images: None,
     };
     let updated = core.ticket_update(&t.id, draft).map_err(refusal)?;
     json(&ticket_view(core, &updated))
@@ -1737,6 +1740,7 @@ fn sub_draft<R: Runtime>(
         max_loops: 0,
         after,
         branch: String::new(),
+        images: None,
     })
 }
 

@@ -332,6 +332,22 @@ impl DataDir {
         self.0.join("conversations")
     }
 
+    /// The tickets' files, a folder each: the images pasted in their form.
+    pub fn tickets(&self) -> PathBuf {
+        self.0.join("tickets")
+    }
+
+    /// The folder of the ticket's files; there only while it has some. An id is a name of its own
+    /// (`new_id`): one of a hand-edited state that is not never names the folder of all the
+    /// tickets, nor one above it, which go with the ticket.
+    pub fn ticket_dir(&self, ticket_id: &str) -> PathBuf {
+        let plain = !ticket_id.is_empty()
+            && ticket_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        self.tickets().join(if plain { ticket_id } else { "_" })
+    }
+
     /// The configuration folders of the Claude accounts made in the settings (all but Principal's),
     /// one per account: each its `CLAUDE_CONFIG_DIR`.
     pub fn claude_accounts(&self) -> PathBuf {
@@ -840,6 +856,26 @@ mod tests {
             d.sync_queue_file(),
             PathBuf::from("C:/data/sync-queue.json")
         );
+        assert_eq!(
+            d.ticket_dir("3f2a9c01b7de"),
+            PathBuf::from("C:/data/tickets/3f2a9c01b7de")
+        );
+    }
+
+    #[test]
+    fn a_tickets_folder_is_one_of_its_own_whatever_its_id() {
+        // An id of a hand-edited state: its folder (removed with the ticket) is neither the one of
+        // all the tickets nor one above it.
+        let d = DataDir::new(PathBuf::from("C:/data"));
+        for id in ["", ".", "..", "../..", "a/b", "..\\x", "C:"] {
+            let dir = d.ticket_dir(id);
+            assert_eq!(dir.parent(), Some(d.tickets().as_path()), "{id:?}");
+            assert_ne!(dir, d.tickets(), "{id:?}");
+            assert!(
+                dir.file_name().is_some_and(|n| n != ".." && n != "."),
+                "{id:?}"
+            );
+        }
     }
 
     fn rename(a: &Path, b: &Path) -> std::io::Result<()> {

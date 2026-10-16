@@ -47,6 +47,7 @@ Sous macOS, `Ctrl` devient `⌘`.
 |---|---|
 | « Titre du ticket » | Ce que fait le ticket, en une ligne. « Ajouter » reste grisé tant que le titre est vide. |
 | « Description » | Le contexte, que l’agent lira avec le titre. Facultative. |
+| Images (« Joindre une image ») | Une capture du bug ou une maquette : colle-la (`Ctrl+V`) ou glisse-la n’importe où dans la fenêtre, ou clique sur « Joindre une image ». Elle apparaît en vignette sous la description, et sa croix la retire. PNG, JPEG, GIF et WebP, 5 Mo par image et 18 Mo en tout, comme les pièces jointes du [chat](chat), et 20 images au plus. L’agent du ticket les reçoit avec son premier message, et elles restent dans sa conversation pour les boucles suivantes. |
 | « Critères d’acceptation » | Un critère par ligne. L’agent vérifie chacun, et le ticket n’est fini que quand ils sont atteints. Sans critère, Escouade en met deux : « Implémentation conforme au ticket » et « Tests verts » (dans la langue de l’interface au moment de la création). |
 | « Boucles max » | Le nombre maximal de boucles de l’agent : 3, 5 (par défaut) ou 8. Voir [le pilote auto](autopilot#la-boucle). |
 | « Branche » | Par défaut « Nouvelle branche `ticket/<clé>` » : le ticket a sa propre branche, créée à son démarrage. « Reprendre une branche existante… » ouvre le sélecteur de branches (locales ou distantes) : l’agent travaille alors sur cette branche, qu’Escouade ne supprime jamais, même une fois le ticket validé. La branche cible du Kanban et celle du dossier du projet ne peuvent pas être choisies. |
@@ -78,7 +79,7 @@ Clic droit sur une carte › « Supprimer ».
 
 | Colonne | Ce qui se passe |
 |---|---|
-| « À faire » | Une confirmation, puis le ticket et sa description disparaissent. Les tickets qui l’attendaient ne l’attendent plus. Pour un ticket importé, la confirmation ajoute qu’il ne sera plus importé depuis son service : l’import automatique ne le ramène pas (tu peux toujours le réimporter à la main). |
+| « À faire » | Une confirmation, puis le ticket, sa description et ses images disparaissent. Les tickets qui l’attendaient ne l’attendent plus. Pour un ticket importé, la confirmation ajoute qu’il ne sera plus importé depuis son service : l’import automatique ne le ramène pas (tu peux toujours le réimporter à la main). |
 | « En cours » et « À tester » | Une confirmation, puis le ticket disparaît et son agent est archivé. |
 | « Terminé » | Le ticket disparaît tout de suite, sans confirmation. |
 
@@ -88,7 +89,7 @@ Archiver ou supprimer l’agent d’un ticket « En cours » ou « À tester�
 
 ## Ce que montre une carte
 
-Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub et Linear](integrations#synchronisations-qui-echouent)). Un ticket qui a son propre modèle ou son propre effort, donnés par le [serveur MCP](mcp) (`start_ticket`), les montre dans une étiquette à côté de sa clé (« Opus · Max ») : ils passent avant ceux du Kanban pour son agent. Avec Haiku (celui du ticket, sinon du Kanban, sinon de l’app), qui ne gère pas l’effort, l’étiquette n’en affiche pas.
+Toutes les cartes ont leur clé, leur titre et, pour un ticket importé, la pastille de son service avec sa clé chez lui (un clic l’ouvre dans le service). Un ⚠ signale une synchronisation qui a échoué (voir [Jira, Trello, GitHub et Linear](integrations#synchronisations-qui-echouent)). Un ticket qui a son propre modèle ou son propre effort, donnés par le [serveur MCP](mcp) (`start_ticket`), les montre dans une étiquette à côté de sa clé (« Opus · Max ») : ils passent avant ceux du Kanban pour son agent. Avec Haiku (celui du ticket, sinon du Kanban, sinon de l’app), qui ne gère pas l’effort, l’étiquette n’en affiche pas. Un trombone suivi d’un nombre dit combien d’images le ticket a (« 2 images jointes » au survol).
 
 | Colonne | La carte montre |
 |---|---|

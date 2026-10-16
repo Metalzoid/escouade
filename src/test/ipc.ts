@@ -210,6 +210,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     branch: '',
     model: '',
     effort: '',
+    images: [],
     ...over,
   };
 }

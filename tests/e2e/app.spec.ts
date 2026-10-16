@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Locator } from '@playwright/test';
 import { addProject, expect, send, test } from './fixture';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
@@ -977,6 +978,91 @@ test('a ticket is written in a large window, a long description included, and ad
   await page.keyboard.press('Escape');
   await expect(edit).toBeHidden();
   await expect(page.getByRole('button', { name: /DEM-2/ })).toBeFocused();
+});
+
+test('an image pasted or dropped in a ticket is kept in its folder, shown on its card, and reaches its agent with its first message', async ({
+  app,
+}) => {
+  const { page } = app;
+  // The window of the CI runners: the images do not make the form scroll.
+  await page.setViewportSize({ width: 1028, height: 779 });
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  // Nothing starts before « Lancer ».
+  await page.getByRole('switch', { name: 'Pilote auto' }).click();
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau ticket' });
+  await dialog.getByRole('textbox', { name: 'Titre du ticket' }).fill('Corriger le bouton [ok]');
+  const png = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13];
+  const gif = [71, 73, 70, 56, 57, 97];
+  // As WebView2 gives them: a screenshot pasted is a PNG file; a file dropped comes with the drop.
+  const give = (field: Locator, kind: 'paste' | 'drop', file: { name: string; type: string; bytes: number[] }) =>
+    field.evaluate(
+      (el, { kind, name, type, bytes }) => {
+        const data = new DataTransfer();
+        data.items.add(new File([new Uint8Array(bytes)], name, { type }));
+        const init = { bubbles: true, cancelable: true };
+        el.dispatchEvent(
+          kind === 'paste'
+            ? new ClipboardEvent('paste', { ...init, clipboardData: data })
+            : new DragEvent('drop', { ...init, dataTransfer: data }),
+        );
+      },
+      { kind, ...file },
+    );
+  await give(dialog.getByRole('textbox', { name: 'Description' }), 'paste', { name: 'image.png', type: 'image/png', bytes: png });
+  await give(dialog.getByRole('textbox', { name: "Critères d'acceptation" }), 'drop', {
+    name: 'maquette.gif',
+    type: 'image/gif',
+    bytes: gif,
+  });
+  const images = dialog.getByRole('list', { name: 'Images du ticket' });
+  await expect(images.getByRole('img', { name: 'image.png' })).toBeVisible();
+  await expect(images.getByRole('img', { name: 'maquette.gif' })).toBeVisible();
+  expect(await dialog.locator('.body').evaluate((body) => body.scrollHeight - body.clientHeight)).toBeLessThanOrEqual(1);
+  await dialog.getByRole('button', { name: 'Retirer maquette.gif' }).click();
+  await expect(images.getByRole('img')).toHaveCount(1);
+  await page.keyboard.press('Control+Enter');
+  await expect(dialog).toBeHidden();
+
+  // The card says it has one; the image is a file of the ticket's folder, out of the JSON of the tickets.
+  const card = page.getByRole('button', { name: 'DEM-1 Corriger le bouton [ok]', exact: true });
+  await expect(card).toHaveAccessibleDescription('1 image jointe');
+  await expect(card.locator('.clip')).toBeVisible();
+  const folders = path.join(app.data, 'tickets');
+  await expect.poll(() => fs.existsSync(folders) && fs.readdirSync(folders).length).toBe(1);
+  const folder = path.join(folders, fs.readdirSync(folders)[0]);
+  const files = fs.readdirSync(folder);
+  expect(files).toHaveLength(1);
+  expect([...fs.readFileSync(path.join(folder, files[0]))]).toEqual(png);
+  const base64 = Buffer.from(png).toString('base64');
+  await expect.poll(() => fs.readFileSync(path.join(app.data, 'state.json'), 'utf8')).toContain(files[0]);
+  expect(fs.readFileSync(path.join(app.data, 'state.json'), 'utf8')).not.toContain(base64);
+
+  // Opened again, it shows it.
+  await card.click();
+  const edit = page.getByRole('dialog', { name: 'Modifier DEM-1' });
+  await expect(edit.getByRole('img', { name: 'image.png' })).toHaveAttribute('src', `data:image/png;base64,${base64}`);
+  await page.keyboard.press('Escape');
+  await expect(edit).toBeHidden();
+
+  // Its agent gets it before the text of its first message.
+  await card.getByRole('button', { name: 'Lancer' }).click();
+  const stdin = path.join(path.dirname(app.data), 'fake-claude.stdin.jsonl');
+  const first = () =>
+    fs.existsSync(stdin)
+      ? fs
+          .readFileSync(stdin, 'utf8')
+          .trim()
+          .split('\n')
+          .map((l) => JSON.parse(l))
+          .find((m) => Array.isArray(m.message?.content))?.message.content
+      : undefined;
+  await expect.poll(first, { timeout: 30_000 }).toBeTruthy();
+  const content = first();
+  expect(content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } });
+  expect(content[1].text).toMatch(/^Ticket DEM-1 : Corriger le bouton \[ok\]/);
+  await expect(card).toHaveAccessibleDescription('1 image jointe');
 });
 
 test.describe('the first start', () => {

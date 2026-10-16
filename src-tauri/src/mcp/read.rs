@@ -288,6 +288,9 @@ pub(crate) struct TicketView {
     after: Vec<String>,
     /// The features in place so far, as its agent last listed them.
     progress: Vec<String>,
+    /// How many images are attached to it, pasted in its window; its agent gets them with its
+    /// first message.
+    images: usize,
     /// The model and effort of its agent alone (`start_ticket` gave them); left out when it has
     /// none of its own, the board's being its agent's.
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -392,6 +395,7 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         column: t.column,
         after: after_keys(t, &keys),
         progress: t.progress.clone(),
+        images: t.images.len(),
         model: t.model.clone(),
         effort: t.effort.clone(),
         external: t.external.as_ref().map(|e| External {

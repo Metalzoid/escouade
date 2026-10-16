@@ -12,6 +12,7 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `state.json` | The projects, the agents (with the ID of their Claude Code session), the Kanban tickets, the autopilot’s pause, and the interface state. |
 | `integrations.json` | The Jira, Trello, GitHub, and Linear accounts, without their tokens (see [Tokens](#tokens)). |
 | `sync-queue.json` | The syncs with those services that are waiting to be retried. |
+| `tickets/<ticket>/` | The images pasted or dropped in a ticket’s window, one per file: `state.json` only has their names. The folder only exists when the ticket has some; deleted with the ticket. |
 | `conversations/<agent>.jsonl` | The log of each conversation, named after the agent’s ID, one operation (an item added or corrected) per line. Deleted with the agent. |
 | `claude/<account>/` | The Claude Code configuration folder of each account added in Settings › Claude accounts: its sign-in and its conversations. Main has none; it uses your own Claude Code’s folder. |
 | `mcp-token.json` | The MCP server’s token for Claude outside Escouade, only when the system keychain refuses it (always on Linux). |

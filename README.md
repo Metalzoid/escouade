@@ -71,6 +71,7 @@ Tout est stocké dans `~/.escouade/` (anciennement `~/.claude-code-manager/`, d�
 | `integrations.json` | comptes Jira, Trello, GitHub et Linear, sans leurs jetons (dans le trousseau du système) |
 | `sync-queue.json` | synchros avec Jira, Trello, GitHub ou Linear qui attendent d'être retentées |
 | `conversations/<agent>.jsonl` | journal de chaque conversation |
+| `tickets/<ticket>/` | images collées dans la fenêtre d'un ticket, effacées avec lui |
 | `claude/<compte>/` | dossier de configuration de Claude Code de chaque compte ajouté (sa connexion, ses conversations) |
 | `mcp-token.json` | jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse |
 | `mcp/<agent>.json` | config MCP d'un agent d'Escouade, avec son jeton, effacée à l'arrêt de l'app |

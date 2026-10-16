@@ -51,6 +51,9 @@ export function sizeLabel(bytes: number): string {
   return bytes >= MB ? fBytes(Math.floor(bytes / MB) * MB) : t('composer.attachments.kilobytes', { n: Math.floor(bytes / KB) });
 }
 
+/** For the filter of a file dialog that takes images alone (a ticket's). */
+export const IMAGE_ACCEPT = [...IMAGE_TYPES].join(',');
+
 /** For the file dialog's filter. */
 export const ACCEPT = [...IMAGE_TYPES, 'application/pdf', '.pdf', 'text/*', ...[...TEXT_EXTENSIONS].map((e) => '.' + e)].join(',');
 

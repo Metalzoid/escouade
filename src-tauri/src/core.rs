@@ -435,13 +435,15 @@ impl Attachment {
 /// The only image formats the API reads.
 const IMAGE_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const KB: usize = 1024;
-const MB: usize = 1024 * KB;
+pub(crate) const MB: usize = 1024 * KB;
 /// Past this, a text file alone would fill Claude's context (~4 bytes a token).
 const MAX_TEXT: usize = 256 * KB;
 /// All the files of a message: sent in base64 (4/3 bigger), under the API's 32 MB a request.
-const MAX_TOTAL: usize = 18 * MB;
+pub(crate) const MAX_TOTAL: usize = 18 * MB;
+/// An image, as the API takes it.
+pub(crate) const MAX_IMAGE: usize = 5 * MB;
 
-fn size_label(lang: i18n::Lang, bytes: usize) -> String {
+pub(crate) fn size_label(lang: i18n::Lang, bytes: usize) -> String {
     if bytes >= MB {
         tr_in!(lang, "{n} Mo", "{n} MB", n = bytes / MB)
     } else {
@@ -496,7 +498,7 @@ fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
         t if IMAGE_TYPES.contains(&t) => (
             json!({ "type": "image", "source": { "type": "base64", "media_type": t, "data": a.data } }),
             decoded,
-            5 * MB,
+            MAX_IMAGE,
         ),
         "application/pdf" => (
             json!({

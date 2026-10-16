@@ -46,6 +46,7 @@ mod shellenv;
 mod stats;
 mod telemetry;
 mod testlaunch;
+mod ticketimages;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
@@ -365,6 +366,7 @@ pub fn run() {
             commands::ticket_create,
             commands::ticket_update,
             commands::ticket_delete,
+            commands::ticket_images,
             commands::ticket_prioritize,
             commands::ticket_start,
             commands::ticket_resume,

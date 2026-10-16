@@ -15,6 +15,7 @@ import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { testCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
+import type { FormImage } from './ticket-images';
 import { applyTheme } from './theme';
 import type {
   AccountView,
@@ -128,6 +129,10 @@ export interface TicketFormDraft {
   maxLoops: number;
   after: string[];
   branch: string;
+  /** Absent: those of the ticket. */
+  images?: FormImage[];
+  /** The files of the ticket's images as the window showed them, those gone from its folder left out; absent: the ticket's. */
+  held?: string[];
 }
 
 /** What the window of a new branch had written when the question of the stash took its place. */

@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { onDestroy, tick, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { IMAGE_ACCEPT, clipboardImage } from '../../lib/attachments';
   import { cycleRefusal, ticketBranch } from '../../lib/board';
   import { t } from '../../lib/i18n';
+  import { api } from '../../lib/ipc';
+  import { draftImages, imagesChanged, readTicketImage, shownImage, type FormImage } from '../../lib/ticket-images';
   import { menu } from '../../lib/menu.svelte';
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { ariaEnter } from '../../lib/shortcuts';
@@ -35,6 +38,7 @@
     maxLoops: ticket?.maxLoops ?? 5,
     after: ticket?.after ?? [],
     branch: ticket?.branch ?? '',
+    images: ticket?.images.map((i) => i.file) ?? [],
   }));
   const uid = $props.id();
 
@@ -51,8 +55,31 @@
   let query = $state('');
   /** Why the last ticket checked was refused (it waits for this one already). */
   let refusal = $state<string | null>(null);
+  /**
+   * Its images, pasted or dropped in the window, or picked: under the description. Those the ticket has show once read
+   * (`onMount`), their place meanwhile.
+   */
+  let images = $state<FormImage[]>(
+    untrack(
+      () =>
+        resume?.images?.map((i) => ({ ...i })) ??
+        (ticket?.images ?? []).map((i) => ({ name: i.name, mediaType: i.mediaType, file: i.file, data: '', url: '', size: 0 })),
+    ),
+  );
+  /**
+   * The files of the ticket's images as the window shows them, what leaving it compares `images` to: `start.images` less
+   * those the backend could not read (their file is gone), which the window drops by itself. That is no change of the user's.
+   */
+  let held = $state(untrack(() => [...(resume?.held ?? start.images)]));
+  /** Files being read: the ticket waits for them before it is added or saved. */
+  let reading = $state(0);
+  let dragOver = $state(false);
+  let fileInput = $state<HTMLInputElement>();
+  let form = $state<HTMLDivElement>();
+  let imageList = $state<HTMLUListElement>();
+  let descriptionField = $state<HTMLTextAreaElement>();
   let busy = $state(false);
-  const ready = $derived(title.trim().length > 0 && !busy);
+  const ready = $derived(title.trim().length > 0 && !busy && !reading);
   const changed = $derived(
     title !== start.title ||
       description !== start.description ||
@@ -60,7 +87,8 @@
       maxLoops !== start.maxLoops ||
       branch !== start.branch ||
       after.length !== start.after.length ||
-      after.some((id) => !start.after.includes(id)),
+      after.some((id) => !start.after.includes(id)) ||
+      imagesChanged(images, held),
   );
   /** What it may come after: the other tickets of the project not done yet, oldest first. */
   const candidates = $derived(
@@ -81,8 +109,121 @@
    */
   const self = untrack(() => app.modal);
   onDestroy(() => {
-    if (self?.kind === 'ticket') self.resume = { title, description, criteria, maxLoops, after: [...after], branch };
+    if (self?.kind === 'ticket')
+      self.resume = {
+        title,
+        description,
+        criteria,
+        maxLoops,
+        after: [...after],
+        branch,
+        images: images.map((i) => ({ ...i })),
+        held: [...held],
+      };
   });
+
+  /** The ticket's images not read yet. Those whose file is gone are not the ticket's any more: they go from the list. */
+  onMount(() => {
+    if (!ticket || !images.some((i) => i.file && !i.url)) return;
+    api
+      .ticketImages(ticket.id)
+      .then((read) => {
+        for (const r of read) {
+          const i = images.find((x) => x.file === r.file);
+          if (i) Object.assign(i, shownImage(r));
+        }
+        // Gone from its folder: the ticket lets go of it once saved, which the window says.
+        const lost = images.filter((i) => i.file && !i.url);
+        for (const i of lost) app.toast(t('board.form.images.missing', { name: i.name }), 'error');
+        images = images.filter((i) => !i.file || i.url);
+        // Not a change of the user's, but any save sends the images (`submit`, against `start.images`) to take it off the ticket.
+        held = held.filter((file) => !lost.some((i) => i.file === file));
+      })
+      .catch(failed);
+  });
+
+  /**
+   * The whole window of the ticket takes them: its fields, its head and foot, and the window itself, which has the focus
+   * once a thumbnail or the space between the fields is clicked.
+   */
+  onMount(() => {
+    const dialog = form?.closest<HTMLElement>('[role="dialog"]');
+    if (!dialog) return;
+    const over = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      dragOver = true;
+    };
+    const leave = () => (dragOver = false);
+    dialog.addEventListener('paste', onPaste);
+    dialog.addEventListener('dragover', over);
+    dialog.addEventListener('dragleave', leave);
+    dialog.addEventListener('drop', onDrop);
+    return () => {
+      dialog.removeEventListener('paste', onPaste);
+      dialog.removeEventListener('dragover', over);
+      dialog.removeEventListener('dragleave', leave);
+      dialog.removeEventListener('drop', onDrop);
+    };
+  });
+
+  // A file that cannot be added is named in a toast, never left out without a word.
+  async function addImages(source: Iterable<File> | Promise<File[]>) {
+    reading++;
+    try {
+      for (const f of await source) {
+        try {
+          images.push(await readTicketImage(f, images));
+        } catch (e) {
+          failed(e);
+        }
+      }
+    } catch (e) {
+      failed(e);
+    } finally {
+      reading--;
+    }
+  }
+
+  /**
+   * Its cross goes with it: the focus moves to the cross of the next image, else of the one before, else to the description.
+   * It stays in the form, where Ctrl+Enter adds the ticket.
+   */
+  async function removeImage(i: number) {
+    images.splice(i, 1);
+    await tick();
+    const crosses = imageList?.querySelectorAll<HTMLButtonElement>('.rm') ?? [];
+    (crosses[Math.min(i, crosses.length - 1)] ?? descriptionField)?.focus();
+  }
+
+  function failed(e: unknown) {
+    app.toast(e instanceof Error ? e.message : String(e), 'error');
+  }
+
+  /**
+   * The files pasted are images for the ticket. Text stays text, even with an image beside it: the cells of a spreadsheet
+   * come with an image of themselves.
+   */
+  function onPaste(e: ClipboardEvent) {
+    if (e.clipboardData?.types.includes('text/plain')) return;
+    const list = [...(e.clipboardData?.files ?? [])];
+    if (list.length) {
+      e.preventDefault();
+      addImages(list);
+    } else {
+      addImages(clipboardImage().then((f) => (f ? [f] : [])));
+    }
+  }
+
+  function onDrop(e: DragEvent) {
+    dragOver = false;
+    const list = [...(e.dataTransfer?.files ?? [])];
+    if (list.length) {
+      // Left to the WebView, a dropped file would replace the app.
+      e.preventDefault();
+      addImages(list);
+    }
+  }
 
   /** What the ticket does when there is no branch to take up: its own, named after its key once it has one. */
   const prefix = $derived(app.projects.find((p) => p.id === projectId)?.ticketBranchPrefix ?? DEFAULT_TICKET_PREFIX);
@@ -162,6 +303,9 @@
         after: [...after],
         // Said only when it matters: a branch taken up, or the one of an edited ticket given up (empty).
         ...(branch || start.branch ? { branch } : {}),
+        // Only when they changed from what the ticket had (not `held`: one gone from its folder is taken off at any save);
+        // those of an edited ticket may not be read yet.
+        ...(imagesChanged(images, start.images) ? { images: draftImages(images) } : {}),
       });
     } finally {
       busy = false;
@@ -181,7 +325,10 @@
     if (!e.repeat) void submit();
   }
 
-  /** The height of the window of the app: a short one gets two rows less in each big field, for the rest of the form to show. */
+  /**
+   * The height of the window of the app: a short one gets two rows less in each big field, for the rest of the form to show.
+   * The images take three rows of the description (their height) for the same reason.
+   */
   let viewHeight = $state(window.innerHeight);
   const short = $derived(viewHeight < 820);
 
@@ -198,7 +345,7 @@
 <svelte:window bind:innerHeight={viewHeight} />
 
 <Modal title={ticket ? t('board.form.editTitle', { key: ticket.key }) : t('board.form.newTitle')} width={760} tall onclose={leave}>
-  <div class="form" class:short role="presentation" onkeydown={chord}>
+  <div class="form" class:short class:drag={dragOver} role="presentation" bind:this={form} onkeydown={chord}>
     <!-- svelte-ignore a11y_autofocus -->
     <input
       class="title"
@@ -209,15 +356,62 @@
       onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
     />
     <div class="grp">
-      <label class="lab" for="{uid}-description">{t('board.form.description')}</label>
+      <div class="lab-row">
+        <label class="lab" for="{uid}-description">{t('board.form.description')}</label>
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          multiple
+          hidden
+          aria-label={t('board.form.images.attach')}
+          onchange={(e) => {
+            // Copied first: the list is the input's own, emptied with its value below, before `addImages` reads it.
+            addImages([...(e.currentTarget.files ?? [])]);
+            e.currentTarget.value = '';
+          }}
+        />
+        <button class="attach" use:tip={t('board.form.images.attachTitle')} onclick={() => fileInput?.click()}>
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
+          >{t('board.form.images.attach')}
+        </button>
+      </div>
       <textarea
+        bind:this={descriptionField}
         id="{uid}-description"
         class="description"
-        rows={short ? 10 : 12}
+        rows={(short ? 10 : 12) - (images.length ? 3 : 0)}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
         use:grow={description}
       ></textarea>
+      {#if images.length}
+        <ul class="imgs" bind:this={imageList} aria-label={t('board.form.images.label')}>
+          {#each images as img, i (i)}
+            {@const label =
+              images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
+            <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
+            <li class="img">
+              {#if img.url}
+                <img src={img.url} alt={label} use:tip={{ text: label, cut: true }} />
+              {:else}
+                <span class="wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
+              {/if}
+              <button class="rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}>×</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
     <div class="grp">
       <label class="lab" for="{uid}-criteria">{t('board.form.criteria')}</label>
@@ -294,11 +488,18 @@
 {/if}
 
 <style>
+  /* The whole body of the window: an image is dropped anywhere in it. */
   .form {
+    flex: 1 0 auto;
     display: flex;
     flex-direction: column;
     gap: 16px;
     min-width: 0;
+    border-radius: var(--r-sm);
+  }
+  .form.drag {
+    outline: 1px dashed var(--accent);
+    outline-offset: 8px;
   }
   .title,
   textarea {
@@ -328,6 +529,73 @@
     font-size: 12px;
     font-weight: 600;
     color: var(--muted);
+  }
+  /* The description's label, and on its right what attaches an image to the ticket. */
+  .lab-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .attach {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 6px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .attach:hover {
+    background: var(--elev2);
+    color: var(--text);
+  }
+  /* The images under the description, as the chat shows its attachments. */
+  .imgs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .img {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    border: 1px solid var(--line2);
+  }
+  .img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .img .wait {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: var(--elev2);
+  }
+  .rm {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
   }
   textarea {
     resize: vertical;

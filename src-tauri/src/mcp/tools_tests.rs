@@ -527,6 +527,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
         "column": "doing",
         "after": ["DEM-1"],
         "progress": ["Fichier écrit"],
+        "images": 0,
         "external": {
             "service": "jira",
             "key": "ATL-12",

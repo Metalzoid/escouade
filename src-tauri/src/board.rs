@@ -832,12 +832,56 @@ fn numbered(t: &Ticket) -> String {
         .join("\n")
 }
 
-/// The first message of a ticket's agent.
+/// The first message of a ticket's agent, with no image (the tests': a start has `_with`).
+#[cfg(test)]
 pub fn first_message(lang: Lang, t: &Ticket) -> String {
+    first_message_with(lang, t, 0, &[])
+}
+
+/// `first_message`, saying what the `attached` images that go with it are for, and which of the
+/// ticket's images (`missing`, by name) couldn't be attached.
+pub fn first_message_with(lang: Lang, t: &Ticket, attached: usize, missing: &[String]) -> String {
     let (key, title) = (&t.key, &t.title);
     let mut s = tr_in!(lang, "Ticket {key} : {title}\n", "Ticket {key}: {title}\n");
     if !t.description.trim().is_empty() {
         s.push_str(&format!("\n{}\n", t.description.trim()));
+    }
+    // Said what the images are for, and which one is lacking: the agent can't know either.
+    match attached {
+        0 => {}
+        1 => s.push_str(&format!(
+            "\n{}\n",
+            tr_in!(
+                lang,
+                "L’image jointe illustre le ticket.",
+                "The attached image illustrates the ticket."
+            )
+        )),
+        n => s.push_str(&format!(
+            "\n{}\n",
+            tr_in!(
+                lang,
+                "Les {n} images jointes illustrent le ticket.",
+                "The {n} attached images illustrate the ticket."
+            )
+        )),
+    }
+    if !missing.is_empty() {
+        let names = missing.join(", ");
+        let said = if missing.len() == 1 {
+            tr_in!(
+                lang,
+                "Image absente du dossier du ticket, non jointe : {names}.",
+                "Image missing from the ticket’s folder, not attached: {names}."
+            )
+        } else {
+            tr_in!(
+                lang,
+                "Images absentes du dossier du ticket, non jointes : {names}.",
+                "Images missing from the ticket’s folder, not attached: {names}."
+            )
+        };
+        s.push_str(&format!("\n{said}\n"));
     }
     s.push_str(&tr_in!(
         lang,
@@ -2802,6 +2846,54 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_first_message_says_what_its_images_are_for_and_which_one_is_missing() {
+        let mut t = ticket(1, 5);
+        let head = "Ticket ATL-42 : Limiter les tentatives\n\n";
+        let tail = "Critères d'acceptation :\n1. critère 1\n\nBoucle 1/5. Travaille jusqu'à atteindre tous les critères, puis termine par le bilan.";
+        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let plain = t.clone();
+        let msg = |attached, missing: &[&str]| {
+            first_message_with(Lang::Fr, &plain, attached, &names(missing))
+        };
+        // None attached, none missing: the message as it was.
+        assert_eq!(msg(0, &[]), format!("{head}{tail}"));
+        assert_eq!(first_message(Lang::Fr, &plain), msg(0, &[]));
+        assert_eq!(
+            msg(1, &[]),
+            format!("{head}L’image jointe illustre le ticket.\n\n{tail}")
+        );
+        assert_eq!(
+            msg(2, &[]),
+            format!("{head}Les 2 images jointes illustrent le ticket.\n\n{tail}")
+        );
+        assert_eq!(
+            msg(0, &["a.png"]),
+            format!("{head}Image absente du dossier du ticket, non jointe : a.png.\n\n{tail}")
+        );
+        assert_eq!(
+            msg(0, &["a.png", "b.png"]),
+            format!(
+                "{head}Images absentes du dossier du ticket, non jointes : a.png, b.png.\n\n{tail}"
+            )
+        );
+        // One attached and one missing: both said, each in a block of its own.
+        assert_eq!(
+            msg(1, &["b.png"]),
+            format!(
+                "{head}L’image jointe illustre le ticket.\n\nImage absente du dossier du ticket, non jointe : b.png.\n\n{tail}"
+            )
+        );
+        // With a description, right after it and before the criteria.
+        t.description = "Contexte : l'API publique.".into();
+        assert_eq!(
+            first_message_with(Lang::Fr, &t, 2, &names(&["c.png"])),
+            format!(
+                "{head}Contexte : l'API publique.\n\nLes 2 images jointes illustrent le ticket.\n\nImage absente du dossier du ticket, non jointe : c.png.\n\n{tail}"
+            )
+        );
+    }
+
     /// `ticket`, written in English (what an English text is checked against has no French).
     fn ticket_en(n: usize, max: u32) -> Ticket {
         Ticket {
@@ -2871,6 +2963,34 @@ mod tests {
         for (text, expected) in &sent {
             assert_eq!(text, expected);
             assert_eq!(french_in(text), None, "{text}");
+        }
+        // What the images of a ticket are for, and the one that is missing, in English.
+        let t = ticket_en(1, 5);
+        let head = "Ticket ATL-42: Limit the retries\n\n";
+        let tail = "Acceptance criteria:\n1. criterion 1\n\nLoop 1/5. Work until every criterion is met, then end with the report.";
+        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        for (attached, missing, said) in [
+            (1, &[][..], "The attached image illustrates the ticket."),
+            (2, &[][..], "The 2 attached images illustrate the ticket."),
+            (
+                0,
+                &["a.png"][..],
+                "Image missing from the ticket’s folder, not attached: a.png.",
+            ),
+            (
+                0,
+                &["a.png", "b.png"][..],
+                "Images missing from the ticket’s folder, not attached: a.png, b.png.",
+            ),
+            (
+                1,
+                &["b.png"][..],
+                "The attached image illustrates the ticket.\n\nImage missing from the ticket’s folder, not attached: b.png.",
+            ),
+        ] {
+            let text = first_message_with(En, &t, attached, &names(missing));
+            assert_eq!(text, format!("{head}{said}\n\n{tail}"));
+            assert_eq!(french_in(&text), None, "{text}");
         }
         // A loop asked for by the end of a turn, and the report asked for again, in English.
         let mut t = ticket_en(2, 5);

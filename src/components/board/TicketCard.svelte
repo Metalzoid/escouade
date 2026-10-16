@@ -18,6 +18,8 @@
   import RejectForm from './RejectForm.svelte';
   import { tip } from '../../lib/tip';
 
+  const uid = $props.id();
+
   /** Items of the agent's progress a ticket under way shows: the last ones. */
   const SHOWN = 3;
 
@@ -120,14 +122,20 @@
     if (gone) delete app.tickets[ticket.id];
   }
 
-  /** A ticket « À faire » goes with its description, and an imported one is not brought back by the next import. */
+  /**
+   * A ticket « À faire » goes with its description and its images, which the confirmation says; an imported one is not
+   * brought back by the next import.
+   */
   function confirmRemove() {
+    const count = ticket.images.length;
+    const service = ticket.external ? shortName(ticket.external.service) : null;
+    let body: string;
+    if (service === null) body = count ? t('board.card.removeBodyImages', { count }) : t('board.card.removeBody');
+    else body = count ? t('board.card.removeBodyImportedImages', { count, service }) : t('board.card.removeBodyImported', { service });
     app.modal = {
       kind: 'confirm',
       title: t('board.card.removeTitle', { key: ticket.key }),
-      body: ticket.external
-        ? t('board.card.removeBodyImported', { service: shortName(ticket.external.service) })
-        : t('board.card.removeBody'),
+      body,
       confirm: t('common.delete'),
       danger: true,
       onConfirm: remove,
@@ -217,6 +225,7 @@
   role="button"
   tabindex="0"
   aria-label={`${ticket.key} ${ticket.title}`}
+  aria-describedby={ticket.images.length ? `${uid}-images` : undefined}
   onclick={open}
   onkeydown={key}
   oncontextmenu={contextMenu}
@@ -243,6 +252,24 @@
         >{/if}
     {/if}
     <span class="key mono">{ticket.key}</span>
+    {#if ticket.images.length}
+      <!-- The images pasted in its form, which its agent gets with its first message. -->
+      {@const said = t('board.card.images', { count: ticket.images.length })}
+      <span class="clip" id="{uid}-images" use:tip={said}
+        ><svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
+        ><span class="mono" aria-hidden="true">{ticket.images.length}</span><span class="sr">{said}</span></span
+      >
+    {/if}
     {#if own}<span class="own mono" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
     <div style="flex:1"></div>
     {#if ticket.column === 'doing'}<span class="loop mono"
@@ -437,6 +464,13 @@
     gap: 8px;
   }
   .key {
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+  .clip {
+    display: flex;
+    align-items: center;
+    gap: 3px;
     font-size: 10.5px;
     color: var(--dim);
   }

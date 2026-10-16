@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Ajouts
+
+- Une capture du bug ou une maquette se colle (`Ctrl+V`) ou se glisse dans la fenêtre d'un ticket, nouveau ou « À faire » : elle apparaît en vignette sous la description, retirable d'un clic sur sa croix. « Joindre une image » ouvre aussi le choix d'un fichier. Les formats et les limites sont ceux des pièces jointes du chat : PNG, JPEG, GIF et WebP, 5 Mo par image et 18 Mo en tout, 20 images au plus par ticket. Les images sont gardées en fichiers à part, dans le dossier du ticket, et effacées avec lui. L'agent du ticket les reçoit avec son premier message, comme des images jointes, avec une phrase qui dit qu'elles illustrent le ticket (et le nom de celle dont le fichier a disparu) ; elles restent dans sa session pour les boucles suivantes. La carte du Kanban montre un trombone et leur nombre, la suppression d'un ticket dit que ses images partent avec lui, et `get_ticket` du serveur MCP dit combien il en a. Plusieurs captures, toutes nommées image.png, se distinguent par leur rang (« image.png (2/3) »).
+
 ## [1.7.9] — 2026-10-16
 
 ### Ajouts

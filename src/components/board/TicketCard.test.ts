@@ -51,6 +51,29 @@ describe('TicketCard', () => {
     expect(items[1]).toHaveTextContent('○Tests verts');
   });
 
+  it('shows a paperclip and the number of its images, in every column, and nothing without any', () => {
+    fakeBackend();
+    const images = [
+      { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' },
+      { file: 'b2.gif', name: 'schema.gif', mediaType: 'image/gif' },
+    ];
+    const card = () => screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' });
+    const { unmount } = show(ticket({ images }));
+    // The card is a button named after its key and title: the count is its description, for a screen reader to say it.
+    expect(card()).toHaveAccessibleDescription('2 images jointes');
+    const clip = card().querySelector('.clip')!;
+    expect(clip).toHaveAttribute('data-tip', '2 images jointes');
+    expect(clip.querySelector('svg')).not.toBeNull();
+    expect(clip.querySelector('.mono')).toHaveTextContent('2');
+    unmount();
+    const under = show(doing({ images: images.slice(1) }));
+    expect(card()).toHaveAccessibleDescription('1 image jointe');
+    under.unmount();
+    show(ticket());
+    expect(card()).not.toHaveAttribute('aria-describedby');
+    expect(card().querySelector('.clip')).toBeNull();
+  });
+
   it('shows the line its agent reported, with what it does right now, until it reports another', () => {
     resetApp({ agents: [agent({ status: 'running', activity: 'Lit src/db.ts', progressLine: 'Écrit les tests du parseur' })] });
     fakeBackend();
@@ -253,6 +276,36 @@ describe('TicketCard', () => {
     expect(backend.called('ticket_delete')).toEqual([]);
     await (app.modal as any).onConfirm(false);
     expect(backend.called('ticket_delete')).toEqual([{ cmd: 'ticket_delete', args: { id: 't1' } }]);
+  });
+
+  describe('deleting a ticket that has images', () => {
+    const IMAGES = [
+      { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' },
+      { file: 'b2.gif', name: 'schema.gif', mediaType: 'image/gif' },
+    ];
+    /** The body of the confirmation the menu's « Supprimer » opens for this ticket. */
+    async function bodyFor(t: Ticket) {
+      fakeBackend();
+      show(t);
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+      menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
+      return (app.modal as { body: string }).body;
+    }
+
+    it.each([
+      [1, 'Le ticket, sa description et son image sont supprimés.'],
+      [2, 'Le ticket, sa description et ses 2 images sont supprimés.'],
+    ])('says with %i image(s) that they go with the ticket', async (count, body) => {
+      expect(await bodyFor(ticket({ images: IMAGES.slice(0, count) }))).toBe(body);
+    });
+
+    it.each([
+      [1, 'Le ticket, sa description et son image sont supprimés. Il ne sera plus importé depuis Jira.'],
+      [2, 'Le ticket, sa description et ses 2 images sont supprimés. Il ne sera plus importé depuis Jira.'],
+    ])('says it as well, with %i image(s), for a ticket imported from a service', async (count, body) => {
+      const external = { service: 'jira' as const, id: 'ATL-1', key: 'ATL-1', container: 'ATL', url: 'https://a.test/ATL-1', error: null };
+      expect(await bodyFor(ticket({ images: IMAGES.slice(0, count), external }))).toBe(body);
+    });
   });
 
   it('deletes a finished ticket from its menu without asking', async () => {
@@ -816,6 +869,11 @@ describe('TicketCard in English', () => {
     expect(screen.getByText('Thinking')).toBeInTheDocument();
   });
 
+  it('counts its images in English', () => {
+    show(ticket({ images: [{ file: 'a1.png', name: 'capture.png', mediaType: 'image/png' }] }));
+    expect(screen.getByRole('button', { name: 'DEM-1 Ajouter le fichier' })).toHaveAccessibleDescription('1 image attached');
+  });
+
   it('labels the line its agent reported in English', () => {
     resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', progressLine: 'Writes the parser tests' })] });
     show(doing());
@@ -891,6 +949,31 @@ describe('TicketCard in English', () => {
     menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
     expect(app.modal).toMatchObject({
       body: 'The ticket and its description are deleted. It will no longer be imported from Jira.',
+    });
+  });
+
+  it('says in English that the images of a deleted ticket go with it, imported or not', async () => {
+    const images = [
+      { file: 'a1.png', name: 'capture.png', mediaType: 'image/png' },
+      { file: 'b2.gif', name: 'schema.gif', mediaType: 'image/gif' },
+    ];
+    const external = { service: 'jira' as const, id: 'ATL-1', key: 'ATL-1', container: 'ATL', url: 'https://a.test/ATL-1', error: null };
+    const deleteIt = async () => {
+      await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
+      menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
+    };
+    const one = show(ticket({ images: images.slice(0, 1) }));
+    await deleteIt();
+    expect(app.modal).toMatchObject({ body: 'The ticket, its description and its image are deleted.' });
+    one.unmount();
+    const two = show(ticket({ images }));
+    await deleteIt();
+    expect(app.modal).toMatchObject({ body: 'The ticket, its description and its 2 images are deleted.' });
+    two.unmount();
+    show(ticket({ images, external }));
+    await deleteIt();
+    expect(app.modal).toMatchObject({
+      body: 'The ticket, its description and its 2 images are deleted. It will no longer be imported from Jira.',
     });
   });
 
