@@ -602,6 +602,18 @@ export interface Agent {
   terminal: boolean;
   /** The terminal of that interface while it runs. */
   terminalId: string | null;
+  /** How the last run of that interface ended; null until it ended (the backend puts it back to null when it starts one). */
+  tuiExit: TuiExit | null;
+}
+
+/** The end of Claude Code's interface (« Vue Claude Code »), as the backend saw it. */
+export interface TuiExit {
+  /** The exit code of its process (null: none, it was killed). */
+  code: number | null;
+  /** It stopped less than 20 s after it started: something is wrong, it is not the user quitting. */
+  quick: boolean;
+  /** Claude Code found no conversation for the session to resume: the backend already replaced it with a new one. */
+  sessionLost: boolean;
 }
 
 /** Where a plan's task list comes from: the agent's task tools (what the stream tells), or a plan file of its folder. */

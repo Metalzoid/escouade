@@ -269,16 +269,19 @@ pub async fn set_agent_view(core: CoreState<'_>, id: String, terminal: bool) -> 
 }
 
 /// The agent's Claude Code interface, in an interactive terminal (written to, resized and killed
-/// as the others: `term_write`, `term_resize`, `term_kill`).
+/// as the others: `term_write`, `term_resize`, `term_kill`). `manual`: the user asked for it
+/// (« Relancer »), as opposed to the window opening the view: an automatic start is refused once
+/// the interface stopped as soon as it started twice in a row.
 #[tauri::command]
 pub async fn agent_terminal(
     core: CoreState<'_>,
     id: String,
     cols: u16,
     rows: u16,
+    manual: Option<bool>,
     output: Channel<InvokeResponseBody>,
 ) -> Res<TermInfo> {
-    core.open_agent_terminal(&id, (cols, rows), move |bytes| {
+    core.open_agent_terminal(&id, (cols, rows), manual.unwrap_or(false), move |bytes| {
         let _ = output.send(InvokeResponseBody::Raw(bytes));
     })
     .await

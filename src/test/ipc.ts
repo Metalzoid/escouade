@@ -148,6 +148,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     setup: null,
     terminal: false,
     terminalId: null,
+    tuiExit: null,
     isola: false,
     ...over,
   };

@@ -255,9 +255,10 @@ export function openAccountLogin(accountId: string): Promise<TermInfo> {
 /**
  * Claude Code's interface for the agent (« Vue Claude Code »): its session resumed in a terminal. Its full-screen interface
  * draws on the rows of its pseudo-console and nowhere else, so it starts at the size of `room`, where it will be shown.
+ * `manual`: the user asked for it (« Relancer »), not the view of its own accord.
  */
-export async function openAgentTerminal(agentId: string, room?: Room | null): Promise<TermInfo> {
-  const info = await interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData), room);
+export async function openAgentTerminal(agentId: string, room?: Room | null, manual = false): Promise<TermInfo> {
+  const info = await interactive((cols, rows, onData) => api.agentTerminal(agentId, cols, rows, onData, manual), room);
   pasteImages(xterms.get(info.id)!, agentId);
   return info;
 }

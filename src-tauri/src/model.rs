@@ -924,11 +924,27 @@ pub struct AgentView {
     pub activity: Option<String>,
     /// The terminal of Claude Code's interface running for it (« Vue Claude Code »).
     pub terminal_id: Option<String>,
+    /// How the last interface it ran ended, until the next one starts (not saved).
+    pub tui_exit: Option<TuiExit>,
     /// The setup of its new worktree under way: the command running ("npm ci (1/2)").
     pub setup: Option<String>,
     /// isola runs its worktree's services (installed, and an `.isola.toml` in the worktree): its
     /// test launches go through it, with no recipe nor reserved ports.
     pub isola: bool,
+}
+
+/// How Claude Code's interface of an agent ended (« Vue Claude Code »), as the window reads it to
+/// decide whether to start it again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TuiExit {
+    /// Its exit code; None when it was killed.
+    pub code: Option<u32>,
+    /// It stopped soon after it started, and not by the user's wish (`/exit`, code 0).
+    pub quick: bool,
+    /// Claude Code refused the session to resume (« No conversation found »), at once: the agent's
+    /// session was given up, its next start is a new one.
+    pub session_lost: bool,
 }
 
 /// How many of the last lines of the step running a worktree's setup keeps for the window.

@@ -294,6 +294,12 @@ if (argv[0] === 'mcp') {
 // Bash first and goes on once the next Enter comes; "lent" makes the turn wait for Escape, which
 // interrupts it; "/exit" ends the process. A pasted path to an image file is the image, as Claude
 // Code takes it (« [Image #1] »): its path and content (base64) are added to <dir>/fake-tui-images.jsonl.
+// As Claude Code does, it writes no transcript before its first message (a session that never got one cannot be resumed), and
+// a `--resume=<id>` of a session absent from every <dir>/projects/* folder (or named `missing…`) fails as an unknown one does:
+// "No conversation found with session ID: <id>" on stderr, exit code 1, a moment after (the pseudo-console flushes its
+// output). While a <dir>/fake-no-conversation file is there, every `--resume` fails so, the session known or not (a
+// transcript that Claude Code does not see); while a <dir>/fake-tui-crash file is there, it writes
+// "fake-claude-tui: crashed" on stderr and exits with code 1 at once, whatever it was asked.
 // Like Claude Code's interface (a raw-mode terminal that echoes nothing itself), it draws the prompt line again at each key
 // it reads: `\r ESC[2K > ` and what is typed so far; a typed character is added to it, Backspace (\x7f) takes the last one off,
 // Ctrl+U (\x15) clears the line, a submitted prompt leaves an empty one. Inside a bracketed paste it draws nothing until the
@@ -301,9 +307,29 @@ if (argv[0] === 'mcp') {
 function tuiSession() {
   const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
   const flag = (name) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
-  const sessionId = flag('--session-id') ?? flag('--resume') ?? `sess-${process.pid}`;
+  // It quits as Claude Code does, once what it wrote has reached the terminal.
+  const quit = (text) => {
+    try {
+      fs.writeSync(2, text);
+    } catch {
+      process.stderr.write(text);
+    }
+    setTimeout(() => process.exit(1), 150);
+  };
+  if (configDir && fs.existsSync(path.join(configDir, 'fake-tui-crash'))) {
+    quit('fake-claude-tui: crashed\r\n');
+    return;
+  }
+  const resume = flag('--resume');
+  if (
+    resume &&
+    (resume.startsWith('missing') || (configDir && (fs.existsSync(path.join(configDir, 'fake-no-conversation')) || !sessionKept(resume))))
+  ) {
+    quit(`No conversation found with session ID: ${resume}\r\n`);
+    return;
+  }
+  const sessionId = flag('--session-id') ?? resume ?? `sess-${process.pid}`;
   const file = sessionFile(sessionId);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
   const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
   const ts = () => new Date().toISOString();
   const write = (entry) => fs.appendFileSync(file, JSON.stringify({ ...entry, sessionId, timestamp: ts() }) + '\n');
@@ -339,6 +365,14 @@ function tuiSession() {
   // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC). Pastes come bracketed
   // (ESC[200~ … ESC[201~), as Claude Code asks for them.
   process.stdout.write('\x1b[?2004hfake-claude-tui\r\n');
+  // The session's file is made with its first message, not before.
+  let begun = false;
+  const begin = () => {
+    if (begun) return;
+    begun = true;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
+  };
   // The size of its terminal, as Claude Code's interface reads it to draw (ink: process.stdout.rows): each one it had is added
   // to <dir>/fake-tui-size.jsonl. Read from the console itself, not from the 'resize' event, which a pseudo-console may not send.
   let size = '';
@@ -346,13 +380,15 @@ function tuiSession() {
     const [cols, rows] = process.stdout.getWindowSize?.() ?? [process.stdout.columns, process.stdout.rows];
     if (`${cols}x${rows}` === size) return;
     size = `${cols}x${rows}`;
+    // The account's folder may not be there yet: the session's file is made with its first message.
+    fs.mkdirSync(configDir, { recursive: true });
     fs.appendFileSync(path.join(configDir, 'fake-tui-size.jsonl'), JSON.stringify({ cols, rows }) + '\n');
   };
   reportSize();
   setInterval(reportSize, 50).unref();
-  write({ type: 'permission-mode', permissionMode: argv[argv.indexOf('--permission-mode') + 1] ?? 'default' });
   const turn = async (prompt) => {
     if (prompt === '/exit') process.exit(0);
+    begin();
     await hook('UserPromptSubmit', { prompt });
     write({ type: 'user', uuid: `u-${process.pid}-${n++}`, origin: { kind: 'human' }, message: { role: 'user', content: prompt } });
     if (prompt.includes('permission')) {
@@ -409,6 +445,7 @@ function tuiSession() {
           .replace(/^"(.*)"$/, '$1');
         if (/\.(png|jpe?g|gif|webp)$/i.test(file) && fs.existsSync(file)) {
           const data = fs.readFileSync(file).toString('base64');
+          fs.mkdirSync(configDir, { recursive: true });
           fs.appendFileSync(path.join(configDir, 'fake-tui-images.jsonl'), JSON.stringify({ path: file, data }) + '\n');
           line = line.slice(0, pasteStart) + `[Image #${++images}]`;
         }

@@ -181,10 +181,14 @@ export const api = {
   duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),
   archiveAgent: (id: string, archived: boolean) => invoke<void>('archive_agent', { id, archived }),
   setAgentView: (id: string, terminal: boolean) => invoke<void>('set_agent_view', { id, terminal }),
-  agentTerminal: (id: string, cols: number, rows: number, onData: (d: ArrayBuffer) => void) => {
+  /**
+   * Starts the agent's Claude Code interface. `manual`: the user asked for it (« Relancer »); the backend refuses one that is
+   * not, after two stops in a row as soon as it started.
+   */
+  agentTerminal: (id: string, cols: number, rows: number, onData: (d: ArrayBuffer) => void, manual = false) => {
     const output = new Channel<ArrayBuffer>();
     output.onmessage = onData;
-    return invoke<TermInfo>('agent_terminal', { id, cols, rows, output });
+    return invoke<TermInfo>('agent_terminal', { id, cols, rows, output, manual });
   },
   /** An image pasted in the agent's Claude Code view (base64), written to a file: the path to type there, as its `claude` reads it. */
   pasteImage: (id: string, mediaType: string, data: string) => invoke<string>('paste_image', { id, mediaType, data }),

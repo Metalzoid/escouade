@@ -35,6 +35,11 @@ export default {
   terminal: {
     starting: 'Démarrage de Claude Code…',
     exited: 'Claude Code s’est arrêté.',
+    /** It stopped as soon as it started (ESC-106): the reason is in its output, above. `{code}`: its exit code. */
+    exitedAtOnce: 'Claude Code s’est arrêté dès son lancement (code {code}). Regarde sa sortie ci-dessus, puis relance-le.',
+    exitedAtOnceNoCode: 'Claude Code s’est arrêté dès son lancement. Regarde sa sortie ci-dessus, puis relance-le.',
+    /** It found no conversation to resume: the interface starts again, on a new session. */
+    sessionLost: 'Session Claude introuvable : l’interface repart en nouvelle session.',
     restart: 'Relancer',
     failed: 'Claude Code n’a pas démarré : {error}',
     imageTooBig: '{name} dépasse {max} : Claude Code ne la recevra pas.',

@@ -38,12 +38,22 @@ impl AgentRt {
         self.live.clear();
         self.tui_usage.clear();
         self.tui_error = None;
+        self.tui_exit = None;
         self.forget_turn();
         self.interrupted = false;
         self.queued = 0;
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.interrupt_plan();
+    }
+
+    /// Claude Code could not find the session the agent was to resume (or the original's, for a
+    /// copy): it is given up, and the next start is a new session.
+    pub(crate) fn forget_session(&mut self) {
+        self.meta.session_id = None;
+        self.meta.last_entry = None;
+        self.meta.fork_of = None;
+        self.meta.fork_at = None;
     }
 
     /// One entry of the transcript its Claude Code interface writes.

@@ -194,6 +194,22 @@ describe('what a paste in Claude Code’s interface carries', () => {
   });
 });
 
+describe('starting Claude Code’s interface', () => {
+  it('tells the backend whether the user asked for it (« Relancer »): not unless said', async () => {
+    resetApp();
+    let n = 0;
+    const backend = fakeBackend({ agent_terminal: () => ({ id: `tui-start-${++n}`, projectId: '', name: 'agent', shell: 'claude' }) });
+    await openAgentTerminal('a1');
+    await openAgentTerminal('a1', null, true);
+    await openAgentTerminal('a1', null, false);
+    expect(backend.called('agent_terminal').map((c) => ({ id: c.args.id, manual: c.args.manual }))).toEqual([
+      { id: 'a1', manual: false },
+      { id: 'a1', manual: true },
+      { id: 'a1', manual: false },
+    ]);
+  });
+});
+
 describe('pasting in Claude Code’s interface', () => {
   const info = { id: 'tui-1', projectId: '', name: 'agent', shell: 'claude' };
   const PATH = 'C:\\Users\\Jean Dupont\\.escouade\\tui\\pastes\\4f2a.png';

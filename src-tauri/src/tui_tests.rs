@@ -18,7 +18,7 @@ async fn agent_in_tui(h: &Harness) -> String {
     let sink = screen.clone();
     let info = h
         .core
-        .open_agent_terminal(&id, (100, 30), move |b| {
+        .open_agent_terminal(&id, (100, 30), false, move |b| {
             sink.lock().push_str(&String::from_utf8_lossy(&b))
         })
         .await
@@ -284,7 +284,7 @@ async fn an_interface_killed_and_replaced_by_relancer_leaves_the_new_one_its_hoo
     h.core.pty.kill(&old_term);
     let info = h
         .core
-        .open_agent_terminal(&id, (100, 30), |_| {})
+        .open_agent_terminal(&id, (100, 30), true, |_| {})
         .await
         .unwrap();
     let (new_gen, new_term) = run(&h);
@@ -507,6 +507,430 @@ async fn the_images_pasted_go_with_their_agent_and_old_ones_at_the_next_start() 
     let (_reloaded, _rx) = crate::core::Core::load(app.handle().clone(), h.core.data.clone());
     assert!(!old.exists());
     assert!(other.exists());
+}
+
+/// Starts the agent's interface as the window does, on a screen of its own.
+async fn open_tui(
+    h: &Harness,
+    id: &str,
+    manual: bool,
+) -> anyhow::Result<(crate::pty::TermInfo, Arc<parking_lot::Mutex<String>>)> {
+    let screen = Arc::new(parking_lot::Mutex::new(String::new()));
+    let sink = screen.clone();
+    let info = h
+        .core
+        .open_agent_terminal(id, (100, 30), manual, move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
+        .await?;
+    Ok((info, screen))
+}
+
+/// Waits until `done` is true of what the interface drew (its text, with no escape sequence) and of
+/// the harness. The pseudo-console (Windows) asks where the cursor is before it runs anything:
+/// answered, as xterm.js does in the window.
+async fn until(
+    h: &Harness,
+    term: &str,
+    screen: &Arc<parking_lot::Mutex<String>>,
+    what: &str,
+    done: impl Fn(&Harness, &str) -> bool,
+) {
+    let start = std::time::Instant::now();
+    let mut answered = false;
+    loop {
+        if done(h, &plain_text(&screen.lock())) {
+            return;
+        }
+        if !answered && screen.lock().contains("\x1b[6n") {
+            let _ = h.core.pty.write(term, b"\x1b[1;1R");
+            answered = true;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(60),
+            "{what} not in {:?}",
+            screen.lock()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+}
+
+/// The interface is up: it drew its first screen.
+async fn alive(h: &Harness, term: &str, screen: &Arc<parking_lot::Mutex<String>>) {
+    until(
+        h,
+        term,
+        screen,
+        "the interface's first screen",
+        |_, text| text.contains("fake-claude-tui"),
+    )
+    .await;
+}
+
+/// The interface is over, and the agent knows how it ended.
+async fn over(
+    h: &Harness,
+    id: &str,
+    term: &str,
+    screen: &Arc<parking_lot::Mutex<String>>,
+) -> TuiExit {
+    until(h, term, screen, "the interface's end", |h, _| {
+        let agent = h.core.agent(id).unwrap();
+        let rt = agent.lock();
+        rt.tui.is_none() && rt.tui_exit.is_some()
+    })
+    .await;
+    let exit = h.core.agent(id).unwrap().lock().tui_exit.clone();
+    exit.unwrap()
+}
+
+/// The notices of the agent's conversation at `level`.
+fn notices(h: &Harness, id: &str, level: &str) -> Vec<String> {
+    h.items(id)
+        .iter()
+        .filter(|i| i["kind"] == "notice" && i["level"] == level)
+        .map(|i| i["text"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+/// The arguments of each interface the fake `claude` launched in the agent's folder (not its streams).
+fn interface_launches(h: &Harness, id: &str) -> Vec<Vec<String>> {
+    let cwd = std::path::PathBuf::from(h.agent(id).cwd);
+    h.launch_log(&cwd)
+        .into_iter()
+        .filter(|l| !l["argv"].to_string().contains("stream-json"))
+        .map(|l| {
+            l["argv"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|a| a.as_str().map(str::to_string))
+                .collect()
+        })
+        .collect()
+}
+
+fn session_args(launches: &[Vec<String>], arg: &str) -> bool {
+    launches.iter().any(|l| l.iter().any(|a| a == arg))
+}
+
+/// An agent of the account "pro", in the Claude Code view and its interface not started, which
+/// has `meta` changed by `f`.
+async fn agent_to_open(h: &Harness, p: &Project, f: impl FnOnce(&mut AgentMeta)) -> String {
+    let id = agent_on(h, p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    f(&mut h.core.agent(&id).unwrap().lock().meta);
+    id
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_with_no_transcript_is_given_up_and_the_interface_starts_a_new_one() {
+    // An agent that never sent a message has a session id (set at its first start) and no
+    // transcript: Claude Code quits on `--resume` of it, and the window looped (ESC-106).
+    let h = harness("tui-session-missing");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    struct Case {
+        session: Option<&'static str>,
+        /// The session of the original, for a copy that has none of its own yet.
+        original: Option<&'static str>,
+        /// How many messages it sent.
+        prompts: u32,
+        /// The notice its conversation is told, if any.
+        told: Option<fn() -> String>,
+    }
+    let cases = [
+        Case {
+            session: Some("aaaaaaaa-0000-4000-8000-000000000001"),
+            original: None,
+            prompts: 0,
+            told: None,
+        },
+        Case {
+            session: Some("aaaaaaaa-0000-4000-8000-000000000002"),
+            original: None,
+            prompts: 3,
+            told: Some(crate::tui::session_lost_notice),
+        },
+        // A copy always has a conversation to lose: its original's.
+        Case {
+            session: None,
+            original: Some("aaaaaaaa-0000-4000-8000-000000000003"),
+            prompts: 0,
+            told: Some(crate::tui::original_lost_notice),
+        },
+    ];
+    for Case {
+        session,
+        original,
+        prompts,
+        told,
+    } in cases
+    {
+        let id = agent_to_open(&h, &p, |m| {
+            m.session_id = session.map(str::to_string);
+            m.fork_of = original.map(str::to_string);
+            m.fork_at = original.map(|_| "e1".to_string());
+            m.prompts = prompts;
+        })
+        .await;
+        let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+        alive(&h, &info.id, &screen).await;
+        let a = h.agent(&id);
+        let new = a.session_id.clone().expect("a session of its own");
+        let old = session.or(original).unwrap();
+        assert_ne!(new, old);
+        assert_eq!((a.fork_of, a.fork_at, a.last_entry), (None, None, None));
+        let launches = interface_launches(&h, &id);
+        assert!(session_args(&launches, &format!("--session-id={new}")));
+        for arg in [format!("--resume={old}"), "--fork-session".to_string()] {
+            assert!(!session_args(&launches, &arg), "{arg} in {launches:?}");
+        }
+        // Nothing is said of a session there was nothing to lose of.
+        assert_eq!(
+            notices(&h, &id, "warn"),
+            told.map(|text| text()).into_iter().collect::<Vec<_>>()
+        );
+        assert!(notices(&h, &id, "info").is_empty());
+        assert_eq!(h.agent(&id).session_id.as_deref(), Some(new.as_str()));
+        assert!(h.core.agent(&id).unwrap().lock().tui_exit.is_none());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_left_in_another_accounts_folder_is_copied_and_resumed() {
+    let h = harness("tui-session-other-account");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let third = Account {
+        id: "third".into(),
+        name: "Tiers".into(),
+        config_dir: h.dir.join("claude-third").to_string_lossy().into(),
+        ..Default::default()
+    };
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(third.clone());
+    h.core.save_settings(s).unwrap();
+    let session = "bbbbbbbb-0000-4000-8000-000000000001";
+    let left = h
+        .dir
+        .join("claude-third")
+        .join("projects")
+        .join("-work-demo");
+    std::fs::create_dir_all(&left).unwrap();
+    std::fs::write(
+        left.join(format!("{session}.jsonl")),
+        "{\"type\":\"summary\"}\n",
+    )
+    .unwrap();
+
+    let id = agent_to_open(&h, &p, |m| {
+        m.session_id = Some(session.into());
+        m.prompts = 2;
+    })
+    .await;
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+
+    // Copied into the agent's account, and resumed: the same session, told.
+    let copied = h
+        .dir
+        .join("claude-pro")
+        .join("projects")
+        .join("-work-demo")
+        .join(format!("{session}.jsonl"));
+    assert_eq!(
+        std::fs::read_to_string(&copied).unwrap(),
+        "{\"type\":\"summary\"}\n"
+    );
+    assert!(left.join(format!("{session}.jsonl")).exists());
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session));
+    assert!(session_args(
+        &interface_launches(&h, &id),
+        &format!("--resume={session}")
+    ));
+    assert!(notices(&h, &id, "warn").is_empty());
+    let told = notices(&h, &id, "info");
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert!(
+        told[0].contains("Tiers") && told[0].contains("Pro"),
+        "{told:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_that_cannot_be_copied_from_another_account_is_given_up_with_its_reason() {
+    let h = harness("tui-session-not-copied");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let third = Account {
+        id: "third".into(),
+        name: "Tiers".into(),
+        config_dir: h.dir.join("claude-third").to_string_lossy().into(),
+        ..Default::default()
+    };
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(third);
+    h.core.save_settings(s).unwrap();
+    let session = "bbbbbbbb-0000-4000-8000-000000000002";
+    let left = h
+        .dir
+        .join("claude-third")
+        .join("projects")
+        .join("-work-demo");
+    std::fs::create_dir_all(&left).unwrap();
+    std::fs::write(left.join(format!("{session}.jsonl")), "{}\n").unwrap();
+    // A file where the copy needs a folder: it cannot be written.
+    std::fs::create_dir_all(h.dir.join("claude-pro")).unwrap();
+    std::fs::write(h.dir.join("claude-pro").join("projects"), "in the way").unwrap();
+
+    let id = agent_to_open(&h, &p, |m| {
+        m.session_id = Some(session.into());
+        m.prompts = 2;
+    })
+    .await;
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+
+    let new = h.agent(&id).session_id.expect("a session of its own");
+    assert_ne!(new, session);
+    let warns = notices(&h, &id, "warn");
+    assert_eq!(warns.len(), 1, "{warns:?}");
+    assert!(
+        warns[0].contains("Tiers") && warns[0].contains("Pro"),
+        "{warns:?}"
+    );
+    assert!(!session_args(
+        &interface_launches(&h, &id),
+        &format!("--resume={session}")
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_quits_on_a_session_it_does_not_find_gives_it_up_and_the_next_start_is_new(
+) {
+    // The check before the start found the transcript, and Claude Code does not see it (a
+    // transcript it cannot read, another way of naming the folder): the interface says so and
+    // quits at once. The agent reads that from its output.
+    let h = harness("tui-session-refused");
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "bonjour").await;
+    let session = h.agent(&id).session_id.unwrap();
+    let prompts = h.agent(&id).prompts;
+    let term = |h: &Harness| h.core.agent(&id).unwrap().lock().view().terminal_id;
+
+    // Left by its user (/exit, code 0) a few seconds after it started: no quick exit.
+    h.core.pty.write(&term(&h).unwrap(), b"/exit\r").unwrap();
+    h.wait("the interface's end", |h| {
+        h.core.agent(&id).unwrap().lock().tui_exit.is_some()
+    })
+    .await;
+    let exit = h.core.agent(&id).unwrap().lock().view().tui_exit.unwrap();
+    assert_eq!(
+        exit,
+        TuiExit {
+            code: Some(0),
+            quick: false,
+            session_lost: false
+        }
+    );
+    assert!(term(&h).is_none());
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+
+    // Started again, the fake refuses every `--resume` (the marker), the session being there.
+    std::fs::write(h.dir.join("claude-pro").join("fake-no-conversation"), "").unwrap();
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    let exit = over(&h, &id, &info.id, &screen).await;
+    assert_eq!(
+        exit,
+        TuiExit {
+            code: Some(1),
+            quick: true,
+            session_lost: true
+        }
+    );
+    assert!(session_args(
+        &interface_launches(&h, &id),
+        &format!("--resume={session}")
+    ));
+    let a = h.agent(&id);
+    assert_eq!((a.session_id, a.fork_of, a.last_entry), (None, None, None));
+    assert_eq!(a.prompts, prompts, "its conversation stays");
+    assert_eq!(
+        notices(&h, &id, "warn"),
+        [crate::tui::session_lost_notice()]
+    );
+    // The window reads it from the agent's view.
+    let view = h.core.agent(&id).unwrap().lock().view();
+    assert_eq!(view.tui_exit, Some(exit));
+    assert!(view.terminal_id.is_none());
+
+    // Started again (once, as the window does): a new session, which lives.
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    let new = h.agent(&id).session_id.expect("a session of its own");
+    assert_ne!(new, session);
+    assert!(session_args(
+        &interface_launches(&h, &id),
+        &format!("--session-id={new}")
+    ));
+    assert!(h.core.agent(&id).unwrap().lock().view().tui_exit.is_none());
+    assert_eq!(notices(&h, &id, "warn").len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_that_crashes_as_it_starts_is_not_started_again_by_itself_more_than_once() {
+    let h = harness("tui-crash-loop");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let id = agent_to_open(&h, &p, |_| {}).await;
+    std::fs::create_dir_all(h.dir.join("claude-pro")).unwrap();
+    let crash = h.dir.join("claude-pro").join("fake-tui-crash");
+    std::fs::write(&crash, "").unwrap();
+    let quick_exits = || h.core.agent(&id).unwrap().lock().tui_quick_exits;
+
+    // The window opens the view, and starts the interface (automatic); it stops as soon as it started.
+    for n in 1..=2 {
+        let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+        let exit = over(&h, &id, &info.id, &screen).await;
+        assert_eq!(
+            exit,
+            TuiExit {
+                code: Some(1),
+                quick: true,
+                session_lost: false
+            }
+        );
+        assert_eq!(quick_exits(), n);
+    }
+    // The third is refused, and says why; nothing is started.
+    let launched = interface_launches(&h, &id).len();
+    let refused = open_tui(&h, &id, false).await.unwrap_err().to_string();
+    assert!(refused.contains('2'), "{refused}");
+    assert!(
+        refused.contains("Relancer") || refused.contains("Restart"),
+        "{refused}"
+    );
+    assert_eq!(interface_launches(&h, &id).len(), launched);
+    assert!(h.core.agent(&id).unwrap().lock().tui.is_none());
+
+    // « Relancer » goes through, and begins the count again.
+    let (info, screen) = open_tui(&h, &id, true).await.unwrap();
+    over(&h, &id, &info.id, &screen).await;
+    assert_eq!(quick_exits(), 1);
+    // Fixed since: the window's start goes, and the interface lives.
+    std::fs::remove_file(&crash).unwrap();
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    // Switching to the view starts the count over too.
+    h.core.pty.kill(&info.id);
+    h.wait("the interface gone", |h| {
+        h.core.agent(&id).unwrap().lock().tui.is_none()
+    })
+    .await;
+    h.core.set_agent_view(&id, false).await.unwrap();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    assert_eq!(quick_exits(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -914,7 +1338,8 @@ async fn the_end_of_a_turn_ends_the_background_subagents_the_user_stopped_in_the
         .unwrap()
         .config_dir
         .clone();
-    // The interface wrote its transcript at start; its subagents' are beside it.
+    // The interface writes its transcript with its first message (as Claude Code does); its subagents' are beside it.
+    say_in_tui(&h, &id, "bonjour").await;
     h.wait("the transcript", |_| {
         crate::tui::find_transcript(std::path::Path::new(&pro), &session).is_some()
     })

@@ -165,6 +165,150 @@ pub fn find_transcript(config_dir: &Path, session: &str) -> Option<PathBuf> {
         .map(|(_, path)| path)
 }
 
+/// An interface that stops sooner than this after it started, other than by its user's wish
+/// (`/exit`, code 0), stopped « as soon as it started ».
+pub(crate) const QUICK_EXIT: Duration = Duration::from_secs(20);
+/// An automatic start is refused once this many interfaces in a row stopped as soon as they
+/// started.
+const QUICK_EXITS_MAX: u32 = 2;
+/// How much of an interface's first output is kept, to read what it said when it stopped at once.
+const OUTPUT_KEPT: usize = 8 << 10;
+/// What Claude Code says, before it quits, of a session to resume that its folder does not have.
+const NO_CONVERSATION: &str = "No conversation found";
+
+/// What the check before a start found of the session the interface is to resume.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionCheck {
+    /// None to resume: the interface starts a session of its own.
+    Fresh,
+    /// Its transcript is in the account's folder: resumed.
+    Found,
+    /// Not in the account's folder, but in the folder of another account (its name, its folder).
+    InOtherAccount { account: String, dir: PathBuf },
+    /// Nowhere: Claude Code would refuse it.
+    Missing,
+}
+
+/// The session whose transcript Claude Code must find to start the interface: the agent's own,
+/// else the original's of a copy that has not started its own yet (`tui_args`).
+fn session_to_resume(m: &AgentMeta) -> Option<&str> {
+    m.session_id.as_deref().or(m.fork_of.as_deref())
+}
+
+/// Whether the session the interface is to resume (`m`) is where Claude Code will look for it, in
+/// the account's folder `config_dir`, or else in the folder of one of the `others` (looked for
+/// only then: their name and folder). Claude Code quits at once on a session it does not find.
+pub fn check_session(
+    m: &AgentMeta,
+    config_dir: &Path,
+    others: impl FnOnce() -> Vec<(String, PathBuf)>,
+) -> SessionCheck {
+    let Some(session) = session_to_resume(m) else {
+        return SessionCheck::Fresh;
+    };
+    if find_transcript(config_dir, session).is_some() {
+        return SessionCheck::Found;
+    }
+    others()
+        .into_iter()
+        .find(|(_, dir)| find_transcript(dir, session).is_some())
+        .map_or(SessionCheck::Missing, |(account, dir)| {
+            SessionCheck::InOtherAccount { account, dir }
+        })
+}
+
+/// The accounts a session may be found in, other than `own`: the name and the folder of each,
+/// those of the same side as `own` only (`in_wsl`: Claude Code finds a session by the folder it
+/// runs in, which WSL names in its own way, so a session does not go from Windows to WSL, nor
+/// back), and none that shares `own`'s folder.
+pub fn other_accounts(
+    settings: &Settings,
+    own: &Account,
+    in_wsl: impl Fn(&Account) -> bool,
+) -> Vec<(String, PathBuf)> {
+    let (own_dir, side) = (accounts::config_dir(own, settings), in_wsl(own));
+    settings
+        .accounts
+        .iter()
+        .filter(|a| a.id != own.id && in_wsl(a) == side)
+        .map(|a| {
+            (
+                accounts::name_in(crate::i18n::ui(), a),
+                accounts::config_dir(a, settings),
+            )
+        })
+        .filter(|(_, dir)| *dir != own_dir)
+        .collect()
+}
+
+/// `bytes` added to the output kept of an interface, up to `OUTPUT_KEPT`: its first lines, which
+/// say why it stopped at once.
+fn keep_output(kept: &mut Vec<u8>, bytes: &[u8]) {
+    let room = OUTPUT_KEPT.saturating_sub(kept.len());
+    kept.extend_from_slice(&bytes[..bytes.len().min(room)]);
+}
+
+/// Whether the output says Claude Code could not find the session it was told to resume.
+fn says_no_conversation(output: &[u8]) -> bool {
+    String::from_utf8_lossy(output).contains(NO_CONVERSATION)
+}
+
+/// How an interface that ran for `elapsed` ended with `code` (None: killed), having written
+/// `output`. Quick: soon after it started, and not by its user's wish (`/exit` ends with code 0).
+/// The session is lost when it was quick and the output says Claude Code did not find it.
+pub fn classify_exit(elapsed: Duration, code: Option<u32>, output: &[u8]) -> TuiExit {
+    let quick = elapsed < QUICK_EXIT && code != Some(0);
+    TuiExit {
+        code,
+        quick,
+        session_lost: quick && says_no_conversation(output),
+    }
+}
+
+/// Whether a start is refused: it is automatic (`manual`: the user asked for it), and the
+/// interface stopped as soon as it started `quick_exits` times in a row.
+fn starts_too_fast(manual: bool, quick_exits: u32) -> bool {
+    !manual && quick_exits >= QUICK_EXITS_MAX
+}
+
+/// What an interface wrote, once its last bytes are in: the terminal's reader may still be behind
+/// when the exit is told. Waits a moment for more while it has not said the session was not
+/// found, and its output still grows.
+fn settled_output(kept: &Mutex<Vec<u8>>) -> Vec<u8> {
+    let mut seen = None;
+    for _ in 0..12 {
+        let len = {
+            let output = kept.lock();
+            if says_no_conversation(&output) {
+                break;
+            }
+            output.len()
+        };
+        if seen == Some(len) {
+            break;
+        }
+        seen = Some(len);
+        std::thread::sleep(Duration::from_millis(40));
+    }
+    kept.lock().clone()
+}
+
+/// Why the interface starts a new session: Claude Code could not find the one it was to resume.
+pub(crate) fn session_lost_notice() -> String {
+    tr!(
+        "Session Claude introuvable : l’interface repart en nouvelle session.",
+        "Claude session not found: the interface starts a new session."
+    )
+}
+
+/// The same, for a copy: it is its original's session that is gone.
+pub(crate) fn original_lost_notice() -> String {
+    tr!(
+        "La session de l’original est introuvable : la copie repart en nouvelle session.",
+        "The original’s session was not found: the copy starts a new session."
+    )
+}
+
 /// The complete lines of `path` from `offset` on (a line still being written waits for the next
 /// read), and the offset after them.
 pub fn read_lines(path: &Path, offset: u64) -> std::io::Result<(Vec<Value>, u64)> {
@@ -318,6 +462,9 @@ impl<R: Runtime> Core<R> {
             let stopped = {
                 let mut rt = h.lock();
                 rt.meta.terminal = true;
+                // The user chose this view: the interface it starts is a fresh try.
+                rt.tui_quick_exits = 0;
+                rt.tui_exit = None;
                 rt.detach()
             };
             if let Some(p) = stopped {
@@ -330,6 +477,7 @@ impl<R: Runtime> Core<R> {
                 let mut fx = Effects::default();
                 let mut rt = h.lock();
                 rt.meta.terminal = false;
+                rt.tui_exit = None;
                 rt.gen += 1;
                 let term = rt.tui.as_ref().map(|t| t.term_id.clone());
                 rt.stop_tui(&mut fx);
@@ -350,10 +498,19 @@ impl<R: Runtime> Core<R> {
 
     /// Claude Code's interface for the agent, in a terminal the window shows (`on_data`): its
     /// session resumed, or started. One it had already stops first.
+    ///
+    /// The session to resume is looked for first, where Claude Code will look (`settle_session`):
+    /// found in another account's folder, it is copied into the agent's; found nowhere, it is given
+    /// up and a new one starts, instead of an interface that quits at once.
+    ///
+    /// `manual`: the user asked for it (« Relancer »). The window's own start (it opened the view)
+    /// is refused once the interface stopped as soon as it started twice in a row: it would only
+    /// loop. A manual start always goes, and begins the count again.
     pub async fn open_agent_terminal(
         self: &Arc<Self>,
         id: &str,
         size: (u16, u16),
+        manual: bool,
         on_data: impl Fn(Vec<u8>) + Send + 'static,
     ) -> Result<TermInfo> {
         let h = self.agent(id)?;
@@ -363,7 +520,7 @@ impl<R: Runtime> Core<R> {
             bail!(crate::core::quitting_refusal());
         }
         {
-            let rt = h.lock();
+            let mut rt = h.lock();
             if !rt.meta.terminal {
                 bail!(tr!(
                     "L’agent n’est pas en vue Claude Code.",
@@ -375,6 +532,16 @@ impl<R: Runtime> Core<R> {
             }
             if rt.meta.archived {
                 bail!(tr!("L’agent est archivé.", "The agent is archived."));
+            }
+            if starts_too_fast(manual, rt.tui_quick_exits) {
+                bail!(tr!(
+                    "Claude Code s’arrête dès son lancement ({n} fois de suite) : regarde sa sortie, puis clique sur « Relancer ».",
+                    "Claude Code stops as soon as it starts ({n} times in a row): read its output, then click “Restart”.",
+                    n = rt.tui_quick_exits
+                ));
+            }
+            if manual {
+                rt.tui_quick_exits = 0;
             }
         }
         // Never two processes on one session.
@@ -400,6 +567,8 @@ impl<R: Runtime> Core<R> {
         std::fs::create_dir_all(&dir)?;
         let settings_file = dir.join(format!("{id}.json"));
         let config_dir = accounts::config_dir(&account, &settings);
+        self.settle_session(id, &settings, &account, &program, &config_dir)
+            .await;
         let started = now_ms();
         let (args, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();
@@ -486,6 +655,19 @@ impl<R: Runtime> Core<R> {
             info.id.clone(),
             access.token().map(str::to_string),
         );
+        // Its first output is kept: what it says when it stops at once (a session it does not
+        // find) is read from it, by its exit.
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let kept = output.clone();
+        let on_data = move |bytes: Vec<u8>| {
+            {
+                let mut kept = kept.lock();
+                if kept.len() < OUTPUT_KEPT {
+                    keep_output(&mut kept, &bytes);
+                }
+            }
+            on_data(bytes);
+        };
         let spawned = self.pty.spawn_program(
             info.clone(),
             &program,
@@ -501,7 +683,7 @@ impl<R: Runtime> Core<R> {
                     if let Some(t) = &granted {
                         c.mcp.release_agent(&agent, t);
                     }
-                    c.on_tui_exit(&agent, gen, &term, code);
+                    c.on_tui_exit(&agent, gen, &term, code, &output);
                 }
             },
         );
@@ -517,6 +699,7 @@ impl<R: Runtime> Core<R> {
             rt.tui = Some(TuiRun {
                 term_id: info.id.clone(),
                 gen,
+                started: now_ms(),
                 transcript: transcript.0,
                 offset: transcript.1,
                 program,
@@ -767,8 +950,17 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// The agent's interface `gen` ended (`/exit`, closed, killed).
-    fn on_tui_exit(self: &Arc<Self>, id: &str, gen: u64, term: &str, code: Option<u32>) {
+    /// The agent's interface `gen` ended (`/exit`, closed, killed), having written `output` (its
+    /// first bytes). How it ended is told to the window (`AgentView::tui_exit`): one that quit at
+    /// once because Claude Code did not find the session to resume gives that session up.
+    fn on_tui_exit(
+        self: &Arc<Self>,
+        id: &str,
+        gen: u64,
+        term: &str,
+        code: Option<u32>,
+        output: &Mutex<Vec<u8>>,
+    ) {
         self.hub.emit(UiEvent::TerminalExit {
             id: term.to_string(),
             code,
@@ -777,28 +969,165 @@ impl<R: Runtime> Core<R> {
             return;
         }
         log::info!("agent {id}: Claude Code's interface exited (code {code:?})");
-        if self
-            .agent(id)
-            .is_ok_and(|h| h.lock().tui.as_ref().is_some_and(|t| t.gen == gen))
-        {
-            self.read_transcript(id);
-            self.tui_ended(id, gen);
+        let started = self.agent(id).ok().and_then(|h| {
+            let rt = h.lock();
+            rt.tui.as_ref().filter(|t| t.gen == gen).map(|t| t.started)
+        });
+        let Some(started) = started else { return };
+        self.read_transcript(id);
+        let elapsed = Duration::from_millis((now_ms() - started).max(0) as u64);
+        // Only what a quick exit may have said is read, and waited for.
+        let said = if elapsed < QUICK_EXIT && code != Some(0) {
+            settled_output(output)
+        } else {
+            Vec::new()
+        };
+        let exit = classify_exit(elapsed, code, &said);
+        if exit.session_lost {
+            log::info!("agent {id}: Claude Code did not find the session to resume");
         }
+        self.tui_ended_with(id, gen, Some(exit));
     }
 
     /// The interface `gen` of the agent is over: its hooks' token is refused and the agent's run of
     /// it ends, only if, under the agent's lock, it is still the one running. A newer one, which
     /// takes its place under that lock before it is given a token, keeps its own (« Relancer » kills
     /// a live interface just before the next one starts, and the old one's exit may come after).
+    #[cfg(test)]
     pub(crate) fn tui_ended(self: &Arc<Self>, id: &str, gen: u64) {
+        self.tui_ended_with(id, gen, None);
+    }
+
+    /// `tui_ended`, with how the interface ended when it is known (`exit`): the agent keeps it for
+    /// its view, counts the quick exits in a row, and gives its session up when Claude Code did not
+    /// find it (its next start is a new session).
+    fn tui_ended_with(self: &Arc<Self>, id: &str, gen: u64, exit: Option<TuiExit>) {
         let _ = self.with_agent(id, |rt, fx| {
             if rt.tui.as_ref().is_some_and(|t| t.gen == gen) {
                 self.hooks.revoke(id);
                 rt.stop_tui(fx);
+                if let Some(exit) = exit {
+                    if exit.session_lost {
+                        rt.forget_session();
+                        rt.notice("warn", session_lost_notice(), fx);
+                    }
+                    rt.tui_quick_exits = if exit.quick {
+                        rt.tui_quick_exits + 1
+                    } else {
+                        0
+                    };
+                    rt.tui_exit = Some(exit);
+                }
                 fx.save = true;
             }
             Ok(())
         });
+    }
+
+    /// Before the agent's interface starts: the session it is to resume is looked for where Claude
+    /// Code will look, in the account's folder (`check_session`).
+    /// - In another account's folder only (the agent changed account, its session was left
+    ///   behind): copied into this one's, resumed, and the conversation says so.
+    /// - Nowhere (the agent never sent a message, so there is no transcript; the transcript is
+    ///   gone; a copy whose original is): given up, and the interface starts a new session, which
+    ///   the conversation says when the agent had a conversation to lose.
+    ///
+    /// Nobody writes the session meanwhile: the agent's processes are stopped, and the interface is
+    /// not started yet.
+    async fn settle_session(
+        self: &Arc<Self>,
+        id: &str,
+        settings: &Settings,
+        account: &Account,
+        program: &crate::claude::Program,
+        config_dir: &Path,
+    ) {
+        let Ok(h) = self.agent(id) else { return };
+        let meta = h.lock().meta.clone();
+        let Some(session) = session_to_resume(&meta).map(str::to_string) else {
+            return;
+        };
+        // A `claude` of WSL: its folder is read through the distribution, which may not answer
+        // (not running): then nothing is known of the session, and Claude Code is left to tell.
+        if program.wsl().is_some() && !config_dir.is_dir() {
+            return;
+        }
+        let (all, own, dir, m) = (
+            settings.clone(),
+            account.clone(),
+            config_dir.to_path_buf(),
+            meta.clone(),
+        );
+        let checked = tokio::task::spawn_blocking(move || {
+            check_session(&m, &dir, || {
+                let in_wsl =
+                    |a: &Account| accounts::program(a, &all).is_some_and(|p| p.wsl().is_some());
+                other_accounts(&all, &own, in_wsl)
+            })
+        })
+        .await;
+        let Ok(check) = checked else { return };
+        let is_copy = meta.session_id.is_none();
+        // A conversation to lose: messages sent, or entries of it read.
+        let had_conversation = meta.prompts > 0 || meta.last_entry.is_some();
+        let to = accounts::name_in(crate::i18n::ui(), account);
+        let lost = |notice: Option<String>| {
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.forget_session();
+                fx.save = true;
+                if let Some(text) = notice {
+                    rt.notice("warn", text, fx);
+                }
+                Ok(())
+            });
+        };
+        match check {
+            SessionCheck::Fresh | SessionCheck::Found => {}
+            SessionCheck::Missing => {
+                log::info!("agent {id}: session {session} not found in any account's folder");
+                let notice = if is_copy {
+                    Some(original_lost_notice())
+                } else {
+                    had_conversation.then(session_lost_notice)
+                };
+                lost(notice);
+            }
+            SessionCheck::InOtherAccount { account: from, dir } => {
+                log::info!("agent {id}: session {session} found in the folder of account {from}");
+                let (target, sid) = (config_dir.to_path_buf(), session.clone());
+                let copied = tokio::task::spawn_blocking(move || {
+                    accounts::copy_session(&dir, &target, &sid)
+                })
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|r| r);
+                match copied {
+                    Ok(()) => {
+                        let _ = self.with_agent(id, |rt, fx| {
+                            let text = tr!(
+                                "La session était dans le dossier du compte « {from} » : elle a été copiée dans celui de « {to} » pour être reprise.",
+                                "The session was in the folder of the “{from}” account: it was copied into the one of “{to}” to be resumed.",
+                                from = from,
+                                to = to
+                            );
+                            rt.notice("info", text, fx);
+                            Ok(())
+                        });
+                    }
+                    Err(e) => {
+                        log::warn!("agent {id}: session {session} not copied from {from}: {e:#}");
+                        let text = tr!(
+                            "La session est dans le dossier du compte « {from} », mais elle n’a pas pu être copiée dans celui de « {to} » ({error}) : l’interface repart en nouvelle session.",
+                            "The session is in the folder of the “{from}” account, but it could not be copied into the one of “{to}” ({error}): the interface starts a new session.",
+                            from = from,
+                            to = to,
+                            error = format!("{e:#}")
+                        );
+                        lost(Some(text));
+                    }
+                }
+            }
+        }
     }
 
     /// A message for an agent in the Claude Code view: typed in its interface, as pasted text
@@ -1068,5 +1397,250 @@ mod tests {
         assert!(before(&e, at + 1));
         assert!(!before(&e, at));
         assert!(!before(&json!({}), at));
+    }
+
+    /// An account's folder with the transcript of each session in `sessions`.
+    fn folder_with(name: &str, sessions: &[&str]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("escouade-tui-{name}-{}", new_id()));
+        let project = dir.join("projects").join("-work-demo");
+        std::fs::create_dir_all(&project).unwrap();
+        for s in sessions {
+            std::fs::write(project.join(format!("{s}.jsonl")), "{}\n").unwrap();
+        }
+        dir
+    }
+
+    fn nobody_else() -> Vec<(String, PathBuf)> {
+        panic!("the other accounts are looked at only when the session is not in the agent's own")
+    }
+
+    #[test]
+    fn an_agent_with_no_session_starts_a_fresh_one_without_looking_anywhere() {
+        let own = folder_with("fresh", &[]);
+        assert_eq!(
+            check_session(&meta(), &own, nobody_else),
+            SessionCheck::Fresh
+        );
+    }
+
+    #[test]
+    fn a_session_whose_transcript_is_in_the_accounts_folder_is_resumed() {
+        let own = folder_with("found", &["s1"]);
+        let m = AgentMeta {
+            session_id: Some("s1".into()),
+            ..meta()
+        };
+        assert_eq!(check_session(&m, &own, nobody_else), SessionCheck::Found);
+    }
+
+    #[test]
+    fn a_session_in_another_accounts_folder_is_told_with_that_account() {
+        let own = folder_with("own", &[]);
+        let nothing = folder_with("nothing", &["s0"]);
+        let there = folder_with("there", &["s1"]);
+        let also = folder_with("also", &["s1"]);
+        let m = AgentMeta {
+            session_id: Some("s1".into()),
+            ..meta()
+        };
+        let others = || {
+            vec![
+                ("Rien".to_string(), nothing.clone()),
+                ("Là".to_string(), there.clone()),
+                ("Aussi".to_string(), also.clone()),
+            ]
+        };
+        assert_eq!(
+            check_session(&m, &own, others),
+            SessionCheck::InOtherAccount {
+                account: "Là".into(),
+                dir: there.clone()
+            }
+        );
+    }
+
+    #[test]
+    fn a_session_found_nowhere_is_missing() {
+        let own = folder_with("own-m", &["other"]);
+        let elsewhere = folder_with("else-m", &["another"]);
+        let m = AgentMeta {
+            session_id: Some("s1".into()),
+            // The session's own comes first: the original is not asked for.
+            fork_of: Some("another".into()),
+            ..meta()
+        };
+        assert_eq!(
+            check_session(&m, &own, || vec![("Autre".to_string(), elsewhere.clone())]),
+            SessionCheck::Missing
+        );
+        // A folder that is not even there.
+        let gone = std::env::temp_dir().join(format!("escouade-tui-gone-{}", new_id()));
+        assert_eq!(check_session(&m, &gone, Vec::new), SessionCheck::Missing);
+    }
+
+    #[test]
+    fn a_copy_is_checked_by_its_originals_transcript() {
+        let own = folder_with("copy-own", &["s0"]);
+        let there = folder_with("copy-there", &["s9"]);
+        let copy = |original: &str| AgentMeta {
+            session_id: None,
+            fork_of: Some(original.into()),
+            fork_at: Some("e1".into()),
+            ..meta()
+        };
+        assert_eq!(
+            check_session(&copy("s0"), &own, nobody_else),
+            SessionCheck::Found
+        );
+        assert_eq!(
+            check_session(&copy("s9"), &own, || vec![(
+                "Là".to_string(),
+                there.clone()
+            )]),
+            SessionCheck::InOtherAccount {
+                account: "Là".into(),
+                dir: there.clone()
+            }
+        );
+        assert_eq!(
+            check_session(&copy("s7"), &own, || vec![(
+                "Là".to_string(),
+                there.clone()
+            )]),
+            SessionCheck::Missing
+        );
+    }
+
+    #[test]
+    fn a_session_given_up_is_replaced_by_a_new_one_in_the_arguments() {
+        let f = Path::new("/data/tui/a1.json");
+        for lost in [
+            AgentMeta {
+                session_id: Some("s1".into()),
+                last_entry: Some("e9".into()),
+                ..meta()
+            },
+            // A copy whose original's session is gone.
+            AgentMeta {
+                fork_of: Some("s0".into()),
+                fork_at: Some("e1".into()),
+                ..meta()
+            },
+        ] {
+            let dir = std::env::temp_dir().join(format!("escouade-tui-forget-{}", new_id()));
+            let mut rt = crate::agent::AgentRt::new(lost, &dir);
+            rt.forget_session();
+            let a = tui_args(&rt.meta, Some("s-new"), f);
+            assert!(a.contains(&"--session-id=s-new".to_string()), "{a:?}");
+            assert!(
+                !a.iter()
+                    .any(|x| x.starts_with("--resume") || x == "--fork-session"),
+                "{a:?}"
+            );
+            assert_eq!(
+                (
+                    &rt.meta.session_id,
+                    &rt.meta.last_entry,
+                    &rt.meta.fork_of,
+                    &rt.meta.fork_at
+                ),
+                (&None, &None, &None, &None)
+            );
+        }
+    }
+
+    #[test]
+    fn an_exit_is_quick_when_it_comes_soon_and_is_no_wish_of_the_user() {
+        let said = b"\x1b[31mNo conversation found with session ID: s1\x1b[0m\r\n";
+        let secs = Duration::from_secs;
+        // /exit (code 0) at once: the user's wish, nothing to hold against the interface.
+        let ok = classify_exit(secs(3), Some(0), said);
+        assert_eq!(
+            ok,
+            TuiExit {
+                code: Some(0),
+                quick: false,
+                session_lost: false
+            }
+        );
+        // Stopped at once with an error, and nothing about a session.
+        let crashed = classify_exit(secs(3), Some(1), b"boom");
+        assert_eq!(
+            crashed,
+            TuiExit {
+                code: Some(1),
+                quick: true,
+                session_lost: false
+            }
+        );
+        // Killed (no code) at once: quick too.
+        assert!(classify_exit(secs(3), None, b"").quick);
+        // The same after a long while: it lived, whatever it said.
+        let late = classify_exit(secs(30), Some(1), said);
+        assert_eq!((late.quick, late.session_lost), (false, false));
+        // The session refused, at once.
+        let lost = classify_exit(secs(3), Some(1), said);
+        assert_eq!((lost.quick, lost.session_lost), (true, true));
+        // The limit itself: QUICK_EXIT is the first moment that is no longer quick.
+        assert!(classify_exit(QUICK_EXIT - Duration::from_millis(1), Some(1), b"").quick);
+        assert!(!classify_exit(QUICK_EXIT, Some(1), b"").quick);
+    }
+
+    #[test]
+    fn the_first_bytes_of_the_output_are_kept_up_to_a_cap() {
+        let mut kept = Vec::new();
+        keep_output(&mut kept, b"hello ");
+        keep_output(&mut kept, &vec![b'x'; OUTPUT_KEPT]);
+        assert_eq!(kept.len(), OUTPUT_KEPT);
+        assert!(kept.starts_with(b"hello xxx"));
+        keep_output(&mut kept, b"more");
+        assert_eq!(kept.len(), OUTPUT_KEPT);
+    }
+
+    #[test]
+    fn an_automatic_start_is_refused_after_two_quick_exits_in_a_row_a_manual_one_never() {
+        assert!(!starts_too_fast(false, 0));
+        assert!(!starts_too_fast(false, 1));
+        assert!(starts_too_fast(false, 2));
+        assert!(starts_too_fast(false, 7));
+        assert!(!starts_too_fast(true, 7));
+    }
+
+    #[test]
+    fn a_session_is_looked_for_in_the_accounts_of_the_same_side_only() {
+        let (own_dir, a_dir, b_dir) = (
+            folder_with("o-own", &[]),
+            folder_with("o-a", &[]),
+            folder_with("o-b", &[]),
+        );
+        let account = |id: &str, name: &str, dir: &Path| crate::model::Account {
+            id: id.into(),
+            name: name.into(),
+            config_dir: dir.to_string_lossy().into(),
+            ..Default::default()
+        };
+        let own = account("own", "Propre", &own_dir);
+        let settings = Settings {
+            accounts: vec![
+                accounts::principal(),
+                own.clone(),
+                account("a", "A", &a_dir),
+                account("b", "B (WSL)", &b_dir),
+                // The same folder as the agent's own: nothing to copy from it.
+                account("twin", "Jumeau", &own_dir),
+            ],
+            claude_path: crate::core_tests::fake_cli(),
+            ..Default::default()
+        };
+        let others = other_accounts(&settings, &own, |a| a.id == "b" || a.id == "x");
+        let names: Vec<&str> = others.iter().map(|(n, _)| n.as_str()).collect();
+        // Principal (Windows side) and A; not B (WSL while the agent's account is not), nor itself.
+        assert_eq!(names.len(), 2, "{names:?}");
+        assert!(names.contains(&"A"), "{names:?}");
+        assert!(others.iter().any(|(n, d)| n == "A" && *d == a_dir));
+        // The agent's account in WSL: only the accounts there are candidates.
+        let in_wsl = other_accounts(&settings, &own, |a| a.id == "own" || a.id == "b");
+        let names: Vec<&str> = in_wsl.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["B (WSL)"], "{names:?}");
     }
 }

@@ -6,6 +6,9 @@ import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/** The interfaces of Claude Code started (« Vue Claude Code »). */
+const tui = vi.hoisted(() => ({ opened: 0 }));
+
 // "▶ Tester" starts test launches, which have logs (xterm.js): none in jsdom.
 vi.mock('../lib/terminals', () => ({
   launchLog: () => ({
@@ -14,7 +17,10 @@ vi.mock('../lib/terminals', () => ({
   }),
   disposeLog() {},
   // « Vue Claude Code »: its interface, not drawn in jsdom.
-  openAgentTerminal: async () => ({ id: 't1', projectId: '', name: 'x', shell: 'claude' }),
+  openAgentTerminal: async () => {
+    tui.opened += 1;
+    return { id: 't1', projectId: '', name: 'x', shell: 'claude' };
+  },
   getXTerm: () => undefined,
   roomOf: () => null,
   mountTerminal() {},
@@ -1826,6 +1832,29 @@ describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
     await userEvent.click(within(banner()!).getByRole('button', { name: 'Relancer' }));
     expect(b.called('restart_agent_process')).toHaveLength(0);
     expect(app.relaunched[a.id]).toBe(1);
+  });
+
+  // ESC-106: the app replaces the agent by a new object with each update of it, the end of its interface among them.
+  it('in the Claude Code view, starts no other interface when the agent is replaced after its interface stopped', async () => {
+    setLang('fr');
+    const a = agent({ id: 'tui1', status: 'done', terminal: true, terminalId: null });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    tui.opened = 0;
+    const r = render(Conversation, { agent: a, project: project() });
+    await waitFor(() => expect(tui.opened).toBe(1));
+    // The terminal stopped (as it does, the session not found), then the agent that says so, replaced by a new object.
+    app.exitedTerms['t1'] = 1;
+    for (let i = 0; i < 5; i++) {
+      await r.rerender({
+        agent: { ...a, terminalId: null, tokens: i, tuiExit: { code: 1, quick: true, sessionLost: false } },
+        project: project(),
+      });
+      await new Promise((done) => setTimeout(done, 10));
+    }
+    expect(tui.opened).toBe(1);
+    expect(await screen.findByText(/Claude Code s’est arrêté dès son lancement \(code 1\)/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Relancer' })).toBeInTheDocument();
   });
 
   it('is written in English when the interface is', () => {

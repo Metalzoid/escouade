@@ -192,6 +192,12 @@ pub struct AgentRt {
     /// The entries of its transcript written before then (ms) are not read: the history of a
     /// session its interface resumed or forked with no read kept, which its view already has.
     pub(crate) tui_since: Option<i64>,
+    /// How its last interface ended, until the next one starts (not saved): the window starts it
+    /// again, or not, from this.
+    pub(crate) tui_exit: Option<TuiExit>,
+    /// How many of its interfaces in a row stopped soon after they started (not saved): an
+    /// automatic start is refused from the second on, so that one that cannot run does not loop.
+    pub(crate) tui_quick_exits: u32,
     /// Haiku was asked to name it since the app started (not saved): asked once, at the first
     /// message that gives a text to name it from (`naming_text`).
     pub(crate) naming_asked: bool,
@@ -215,6 +221,8 @@ pub struct TuiRun {
     /// Which of the agent's interfaces it is: what the terminal's exit and the reads of the
     /// transcript check, so that an older one's are ignored.
     pub gen: u64,
+    /// When it started (ms): an exit soon after is a quick one (`tui::QUICK_EXIT`).
+    pub started: i64,
     /// The transcript it writes, once known, and how far it was read (bytes).
     pub transcript: Option<std::path::PathBuf>,
     pub offset: u64,
@@ -349,6 +357,8 @@ impl AgentRt {
             tui_error: None,
             tui_prompt: None,
             tui_since: None,
+            tui_exit: None,
+            tui_quick_exits: 0,
             naming_asked: false,
             unprompted: None,
             without_escouade: false,
@@ -402,6 +412,7 @@ impl AgentRt {
             alive: self.proc.is_some() || self.tui.is_some(),
             escouade_next: self.escouade_next && (self.proc.is_some() || self.tui.is_some()),
             terminal_id: self.tui.as_ref().map(|t| t.term_id.clone()),
+            tui_exit: self.tui_exit.clone(),
             pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),
             requests: self.pending.iter().map(|p| p.view.clone()).collect(),
             context_tokens: self.context_tokens,
@@ -969,11 +980,8 @@ impl AgentRt {
         let lost = if self.saw_init || resume_failed {
             None
         } else if stderr.contains("No conversation found") {
-            self.meta.session_id = None;
-            self.meta.last_entry = None;
             // A copy whose original's session is gone: the same, a new session.
-            self.meta.fork_of = None;
-            self.meta.fork_at = None;
+            self.forget_session();
             Some(session_lost)
         } else if self.meta.fork_at.is_some()
             && stderr.contains("No message found with message.uuid")

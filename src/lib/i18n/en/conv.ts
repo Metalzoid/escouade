@@ -32,6 +32,9 @@ export default defineZone('conv', {
   terminal: {
     starting: 'Starting Claude Code…',
     exited: 'Claude Code stopped.',
+    exitedAtOnce: 'Claude Code stopped as soon as it started (code {code}). Read its output above, then restart it.',
+    exitedAtOnceNoCode: 'Claude Code stopped as soon as it started. Read its output above, then restart it.',
+    sessionLost: 'Claude session not found: the interface restarts in a new session.',
     restart: 'Restart',
     failed: 'Claude Code didn’t start: {error}',
     imageTooBig: '{name} is over {max}: Claude Code won’t get it.',
