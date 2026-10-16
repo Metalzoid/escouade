@@ -12,8 +12,8 @@ use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
 use crate::git;
 use crate::model::{
-    AgentStatus, Column, Criterion, PauseReason, PendingView, Project, RateWindow, Service, Ticket,
-    MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
+    AgentMeta, AgentStatus, Column, Criterion, PauseReason, PendingView, Project, RateWindow,
+    RemoteSource, Service, Ticket, MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -46,6 +46,63 @@ struct ProjectRow {
     /// Not archived.
     agents: usize,
     tickets: ColumnCounts,
+    /// The project's Remote Control setting (« Remote control pour les agents de ce projet »).
+    remote_control: bool,
+    /// The global one (« Remote control pour tous les agents »), the same on every row. Read
+    /// only: no tool changes either.
+    remote_control_all: bool,
+}
+
+/// Where the Remote Control of an agent comes from, as the tools say it: the three sources
+/// (`RemoteSource`) while it is in force, `Off` for an agent the user set apart by hand.
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum RemoteFrom {
+    Hand,
+    Project,
+    Global,
+    Off,
+}
+
+/// An agent's Remote Control as the window has it, read only (`list_agents` and
+/// `get_agent_summary` flatten it into their answers).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteRead {
+    /// In force now: the session is reachable from claude.ai.
+    remote_control: bool,
+    /// What turned it on while it is; `off` when the user set the agent apart (no setting gives it
+    /// Remote Control again until they turn it on by hand); None otherwise.
+    remote_source: Option<RemoteFrom>,
+    /// The link's state Claude Code reports ("ready", "connected", "unavailable"), None without
+    /// one.
+    remote_state: Option<String>,
+    /// In the Claude Code view, its interface runs and was started with Remote Control (so it is
+    /// linked to claude.ai until its next launch, whatever the agent's Remote Control says now);
+    /// false: it runs without; None: none runs.
+    interface_remote: Option<bool>,
+}
+
+impl RemoteRead {
+    /// From what the window reads of the agent: its saved state (`AgentMeta`), the link state of
+    /// its process and whether its interface (if one runs) was started with Remote Control.
+    fn of(meta: &AgentMeta, state: Option<&str>, interface: Option<bool>) -> Self {
+        let source = if meta.remote_control {
+            meta.remote_source.map(|s| match s {
+                RemoteSource::Hand => RemoteFrom::Hand,
+                RemoteSource::Project => RemoteFrom::Project,
+                RemoteSource::Global => RemoteFrom::Global,
+            })
+        } else {
+            meta.remote_off.then_some(RemoteFrom::Off)
+        };
+        Self {
+            remote_control: meta.remote_control,
+            remote_source: source,
+            remote_state: state.map(str::to_string),
+            interface_remote: interface,
+        }
+    }
 }
 
 #[derive(Serialize, Default)]
@@ -71,6 +128,8 @@ impl ColumnCounts {
 pub(super) async fn projects<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     // One lock at a time (the order is projects before tickets, see `Core`).
     let projects = core.projects.read().clone();
+    // The settings' lock after the projects' one is released: never two at a time.
+    let remote_all = core.settings.read().remote_control_all;
     let mut tickets: HashMap<String, ColumnCounts> = HashMap::new();
     for t in core.tickets.read().iter() {
         tickets
@@ -101,6 +160,8 @@ pub(super) async fn projects<R: Runtime>(core: &Core<R>) -> Result<String, ToolE
             branch: branch.filter(|b| !b.is_empty() && b != "(detached)"),
             agents: agents.get(&p.id).copied().unwrap_or(0),
             tickets: tickets.remove(&p.id).unwrap_or_default(),
+            remote_control: p.remote_control,
+            remote_control_all: remote_all,
             id: p.id,
             name: p.name,
             path: p.path,
@@ -129,6 +190,8 @@ struct AgentRow {
     account: String,
     /// In US dollars, its running turn included.
     cost: f64,
+    #[serde(flatten)]
+    remote: RemoteRead,
 }
 
 /// `list_agents`: the agents not archived, oldest first, of every project or of `project`.
@@ -151,6 +214,7 @@ pub(super) fn agents<R: Runtime>(
         .filter(|v| !v.meta.archived)
         .filter(|v| scope.as_ref().is_none_or(|p| v.meta.project_id == p.id))
         .map(|v| AgentRow {
+            remote: RemoteRead::of(&v.meta, v.remote_state.as_deref(), v.interface_remote),
             project: projects
                 .get(&v.meta.project_id)
                 .cloned()
@@ -614,6 +678,8 @@ struct Summary {
     /// order they came.
     requests: usize,
     waiting_for: Vec<&'static str>,
+    #[serde(flatten)]
+    remote: RemoteRead,
 }
 
 /// `get_agent_summary`: the agent `agent` names (in `project` when given), summed up.
@@ -650,6 +716,11 @@ pub(super) fn agent_summary<R: Runtime>(
             touched_files: files[from..].to_vec(),
             requests: asked.len(),
             waiting_for: asked,
+            remote: RemoteRead::of(
+                &rt.meta,
+                rt.remote_state.as_deref(),
+                rt.tui.as_ref().map(|t| t.remote),
+            ),
         };
         (summary, rt.meta.ticket_id.clone())
     };

@@ -76,6 +76,8 @@ Les deux dernières entrées apparaissent dès que l’adresse de la session est
 
 Ce que tu envoies à l’agent depuis claude.ai ou l’app Claude s’affiche aussi dans la conversation d’Escouade, dans une bulle comme les tiennes, avec la mention « depuis claude.ai » (son infobulle dit : « Envoyé depuis claude.ai ou l’app Claude (remote control) »).
 
+Claude, hors d’Escouade ou dans un agent, peut lire cet état par le [serveur MCP](mcp) sans pouvoir le changer : `list_agents` et `get_agent_summary` disent, pour chaque agent, si le remote control est en vigueur, ce qui l’a allumé et l’état du lien, et `list_projects` donne les deux réglages. Aucun outil ne l’allume ni ne l’éteint : cela reste ta décision, dans la fenêtre.
+
 ## Combien de temps l’agent reste joignable
 
 - **Tant qu’Escouade tourne.** L’agent reste joignable quand tu fermes la fenêtre : elle se cache et l’app continue dans la zone de notification (voir [les agents](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)). Si tu quittes l’app avec « Quitter », les agents s’arrêtent et ne sont plus joignables.

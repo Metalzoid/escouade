@@ -821,7 +821,7 @@ pub struct SplitTicketArgs {
 #[tool_router(vis = "pub(crate)")]
 impl<R: Runtime> Tools<R> {
     #[tool(
-        description = "List Escouade's projects, in the app's order: for each one its id, name, folder, current git branch (null when none), number of agents (archived ones left out) and number of tickets in each column of its Kanban board (todo, doing, review, done).",
+        description = "List Escouade's projects, in the app's order: for each one its id, name, folder, current git branch (null when none), number of agents (archived ones left out), number of tickets in each column of its Kanban board (todo, doing, review, done), and its Remote Control settings: remoteControl (the project's own, which makes its agents reachable from claude.ai) and remoteControlAll (the global one, the same on every row, which covers every agent of every project). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_projects(&self, ctx: ToolCtx<R>) -> CallToolResult {
@@ -830,7 +830,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their model, their Claude account and what they cost so far in US dollars.",
+        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their model, their Claude account, what they cost so far in US dollars, and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -917,7 +917,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan).",
+        description = "Sum up an agent without reading its conversation: its id, name, status, the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), and its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_agent_summary(

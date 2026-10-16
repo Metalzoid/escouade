@@ -21,6 +21,8 @@ pub(crate) mod install;
 mod install_tests;
 mod read;
 #[cfg(test)]
+mod remote_tests;
+#[cfg(test)]
 mod requests_tests;
 mod resolve;
 #[cfg(test)]

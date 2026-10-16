@@ -76,6 +76,8 @@ The last two entries appear as soon as the session’s address is known. The rig
 
 What you send to the agent from claude.ai or the Claude app also shows in Escouade’s conversation, in a bubble like yours, with the note “from claude.ai” (its tooltip says: “Sent from claude.ai or the Claude app (remote control)”).
 
+Claude, outside Escouade or inside an agent, can read this state through the [MCP server](mcp) but cannot change it: `list_agents` and `get_agent_summary` say, for each agent, whether remote control is in effect, what turned it on and the state of the link, and `list_projects` gives the two settings. No tool turns it on or off: that stays your decision, in the window.
+
 ## How long the agent stays reachable
 
 - **As long as Escouade runs.** The agent stays reachable when you close the window: it hides and the app goes on in the notification area (see [agents](managing-agents#closing-the-window-quitting-and-restarting)). If you quit the app with “Quit”, the agents stop and are no longer reachable.

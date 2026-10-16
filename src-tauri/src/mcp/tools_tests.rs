@@ -293,6 +293,8 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             // The archived one left out.
             "agents": 1,
             "tickets": { "todo": 2, "doing": 1, "review": 0, "done": 1 },
+            "remoteControl": false,
+            "remoteControlAll": false,
         })
     );
     assert_eq!(projects.as_array().unwrap().len(), 2);
@@ -370,6 +372,10 @@ async fn the_agents_are_listed_with_what_waits_their_ticket_model_account_and_co
             "model": "sonnet",
             "account": "Principal",
             "cost": 0.0,
+            "remoteControl": false,
+            "remoteSource": null,
+            "remoteState": null,
+            "interfaceRemote": null,
         })
     );
     assert_eq!(
@@ -968,6 +974,10 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
             "touchedFiles": ["src/app.ts"],
             "requests": 0,
             "waitingFor": [],
+            "remoteControl": false,
+            "remoteSource": null,
+            "remoteState": null,
+            "interfaceRemote": null,
         })
     );
     assert_eq!(
@@ -1004,8 +1014,12 @@ async fn an_agents_summary_gives_its_last_message_cut_cleanly_and_the_files_it_e
         summary.as_object().unwrap().keys().collect::<Vec<_>>(),
         [
             "id",
+            "interfaceRemote",
             "lastMessage",
             "name",
+            "remoteControl",
+            "remoteSource",
+            "remoteState",
             "requests",
             "status",
             "ticket",
