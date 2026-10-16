@@ -12,6 +12,7 @@
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
   import { planView } from '../lib/plan';
+  import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
@@ -39,6 +40,14 @@
   /** The branch picker is open, to choose the branch of a new agent. */
   let pickingBranch = $state(false);
   let renaming = $state<string | null>(null);
+  /** The finished subagents of an agent, unfolded by the reader (folded by default: there can be many). */
+  let finishedOpen = $state<Record<string, boolean>>({});
+  /** The subagents of an agent beyond the first ones of a list, unrolled by the reader: the running, the finished. */
+  let runningAll = $state<Record<string, boolean>>({});
+  let finishedAll = $state<Record<string, boolean>>({});
+  /** How many subagents a list shows before it asks to unroll the others: it never scrolls by itself, inside the list of the agents. */
+  const RUNNING_SHOWN = 5;
+  const FINISHED_SHOWN = 10;
   let renameValue = $state('');
 
   const git = $derived(app.git[project.id]);
@@ -236,6 +245,40 @@
   }
 </script>
 
+<!-- A subagent of the agent `a` under its card: a click opens its conversation in place of the agent's. -->
+{#snippet subRow(a: Agent, s: SubRow)}
+  {@const on = app.subView[a.id] === s.id && a.id === selectedAgentId && !otherView}
+  <li>
+    <button
+      class="sub"
+      class:on
+      aria-current={on ? 'page' : undefined}
+      style:--depth={s.depth}
+      use:tip={{ text: s.title, cut: true }}
+      onclick={() => app.openSubagent(a.id, s.id)}
+    >
+      <span class="sdot {s.status}" aria-hidden="true"></span>
+      <span class="stext">
+        <span class="sline">
+          <span class="stitle">{s.title}</span>
+          {#if s.model}<span class="smodel mono">{modelLabel(s.model, app.models)}</span>{/if}
+          {#if s.status !== 'running'}<span class="sstate">{t(`subagents.status.${s.status}`)}</span>{/if}
+        </span>
+        {#if s.status === 'running' && s.doing}<span class="sdoing">{s.doing}</span>{/if}
+      </span>
+    </button>
+  </li>
+{/snippet}
+
+<!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
+{#snippet moreRows(all: boolean, label: string, onclick: () => void)}
+  <li>
+    <button class="more-toggle" aria-expanded={all} {onclick}>
+      <span class="chev" aria-hidden="true">{all ? '▾' : '▸'}</span>{all ? t('subagents.lessList') : label}
+    </button>
+  </li>
+{/snippet}
+
 {#snippet browse()}
   <button class="browse" onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}>{t('common.browse')}</button>
 {/snippet}
@@ -371,6 +414,60 @@
           <div class="ticket-tag mono">▸ {tag}</div>
         {/if}
       </div>
+      {@const subs = sidebarSubs(a)}
+      {#if subs}
+        <!-- Under the card, not in it (the card is a button): its subagents, unfolded while one runs. -->
+        {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
+        {@const doneOpen = finishedOpen[a.id] ?? false}
+        <div class="subs" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
+          <button class="subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
+            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <span class="lbl">{t('subagents.title')}</span>
+            {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
+            {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
+          </button>
+          {#if open}
+            <!-- The role is said again: a list with no bullets is a list no more for the web views of macOS. -->
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each runningAll[a.id] ? subs.running : subs.running.slice(0, RUNNING_SHOWN) as s (s.id)}
+                {@render subRow(a, s)}
+              {/each}
+              {#if subs.running.length > RUNNING_SHOWN}
+                {@render moreRows(
+                  runningAll[a.id] ?? false,
+                  t('subagents.moreRunning', { count: subs.running.length - RUNNING_SHOWN }),
+                  () => (runningAll[a.id] = !runningAll[a.id]),
+                )}
+              {/if}
+              {#if subs.finished.length}
+                <li class="finished">
+                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
+                    <span class="chev" aria-hidden="true">{doneOpen ? '▾' : '▸'}</span>{t('subagents.finishedToggle', {
+                      count: subs.finished.length,
+                    })}
+                  </button>
+                  {#if doneOpen}
+                    <!-- svelte-ignore a11y_no_redundant_roles -->
+                    <ul class="sub-list done" role="list">
+                      {#each finishedAll[a.id] ? subs.finished : subs.finished.slice(0, FINISHED_SHOWN) as s (s.id)}
+                        {@render subRow(a, s)}
+                      {/each}
+                      {#if subs.finished.length > FINISHED_SHOWN}
+                        {@render moreRows(
+                          finishedAll[a.id] ?? false,
+                          t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
+                          () => (finishedAll[a.id] = !finishedAll[a.id]),
+                        )}
+                      {/if}
+                    </ul>
+                  {/if}
+                </li>
+              {/if}
+            </ul>
+          {/if}
+        </div>
+      {/if}
     {:else}
       <div class="empty">
         {t('nav.sidebar.empty')}<br />
@@ -738,6 +835,150 @@
   .plan-text {
     font-size: 10.5px;
     color: var(--muted);
+    white-space: nowrap;
+  }
+  /* The subagents under a card: a line that folds them, then their rows, indented like the card's lines. A list shows its
+     first rows and a button unrolls the others: it never scrolls inside the list of the agents, which scrolls already. */
+  .subs {
+    margin: -2px 0 4px 29px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .subs-toggle,
+  .done-toggle,
+  .more-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 24px;
+    padding: 0 6px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .subs-toggle:hover,
+  .done-toggle:hover,
+  .more-toggle:hover {
+    color: var(--text);
+    background: color-mix(in oklch, var(--elev) 55%, transparent);
+  }
+  .subs-toggle .lbl {
+    font-weight: 600;
+  }
+  .chev {
+    width: 9px;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .cnt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+  .cnt.run {
+    color: var(--ok);
+  }
+  .sub-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .sub-list.done {
+    margin-left: 10px;
+  }
+  .finished {
+    display: flex;
+    flex-direction: column;
+  }
+  .sub {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 6px 5px calc(6px + var(--depth, 0) * 12px);
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .sub:hover:not(.on) {
+    background: color-mix(in oklch, var(--elev) 55%, transparent);
+  }
+  .sub.on {
+    background: var(--elev);
+    border-color: var(--line2);
+  }
+  .sub:focus-visible,
+  .subs-toggle:focus-visible,
+  .done-toggle:focus-visible,
+  .more-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .sdot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--dim);
+  }
+  .sdot.running {
+    background: var(--ok);
+  }
+  .sdot.failed {
+    background: var(--del);
+  }
+  .sdot.stopped,
+  .sdot.interrupted {
+    background: var(--wait);
+  }
+  .stext {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+  }
+  .sline {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+  }
+  .stitle {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .smodel,
+  .sstate {
+    flex: none;
+    font-size: 10.5px;
+    color: var(--dim);
+  }
+  .sdoing {
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .ticket-tag {

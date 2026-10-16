@@ -1,0 +1,50 @@
+import { defineZone } from '../types';
+
+// The subagents of an agent (ESC-13): their list under its card in the sidebar, and each one's conversation in its
+// own view, with its breadcrumb, its head and its report. Their titles, what they do, their prompts and their reports
+// are the agent’s own words: shown as they come, never translated.
+export default defineZone('subagents', {
+  title: 'Subagents',
+  toggle: 'Subagents of {name}',
+  runningCount: { one: '{count} running', other: '{count} running' },
+  finishedCount: { one: '{count} finished', other: '{count} finished' },
+  finishedToggle: { one: '{count} finished subagent', other: '{count} finished subagents' },
+  moreRunning: { one: '{count} more running', other: '{count} more running' },
+  moreFinished: { one: '{count} more', other: '{count} more' },
+  lessList: 'Show fewer',
+  openRow: 'Open the conversation of the subagent {name}',
+  openAny: 'Open the conversation of a subagent',
+  status: {
+    running: 'Running',
+    done: 'Done',
+    failed: 'Failed',
+    stopped: 'Stopped',
+    interrupted: 'Interrupted',
+    unknown: 'Launched',
+  },
+  crumbs: 'Breadcrumb',
+  back: 'Back to the conversation of {name}',
+  facts: { kind: 'Type', model: 'Model', tokens: 'Tokens', tools: 'Tools', duration: 'Duration' },
+  prompt: 'Prompt',
+  promptMore: 'Show the whole prompt',
+  promptLess: 'Shorten the prompt',
+  report: 'Report',
+  noReport: 'This subagent handed back no report.',
+  empty: 'No message from this subagent yet.',
+  working: 'The subagent is working…',
+  gone: 'This subagent is no longer in the agent’s conversation.',
+  terminal: 'Read-only: its transcript, as Claude Code writes it. This subagent is acted on in Claude Code’s own interface.',
+  terminalError: 'This subagent’s transcript could not be read: {error}',
+  stop: 'Stop',
+  stopHint: 'Stop this subagent alone: the agent goes on.',
+  stopLater: 'Claude Code has not told this subagent’s task yet: it cannot be stopped on its own yet.',
+  write: 'Write to it, through {name}',
+  writePlaceholder: 'Message for the subagent…',
+  writeHint:
+    'Claude Code lets nobody write to a subagent directly: your message goes to {name}, which passes it on with the SendMessage tool.',
+  writeSend: 'Send to {name}',
+  writeSent: 'Message sent to {name}, which passes it on to the subagent.',
+  writeEnded: 'This subagent has finished: your draft is kept, but it can no longer be sent to it.',
+  asks: 'Request of the subagent “{name}”',
+  open: 'Open its conversation',
+});

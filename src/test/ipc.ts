@@ -284,6 +284,10 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.selectedTerm = {};
   app.filesOpen = false;
   app.planOpen = {};
+  app.subView = {};
+  app.subDrafts = {};
+  app.subFocus = { from: null, back: null };
+  app.subsOpen = {};
   app.filesScope = 'agent';
   app.panelTab = 'files';
   app.diffSplit = false;

@@ -1101,3 +1101,228 @@ describe('Sidebar in English', () => {
     expect(app.toasts.at(-1)).toMatchObject({ text: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.', kind: 'error' });
   });
 });
+
+describe('Sidebar subagents of an agent', () => {
+  const sub = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    title: `sous-agent ${id}`,
+    status: 'running',
+    background: true,
+    tools: 0,
+    startedAt: 1,
+    ...over,
+  });
+  const withSubs = (agents: unknown[]) => ({ source: null, tasks: [], agents, launched: agents.length, workflows: [] }) as never;
+  const group = (name = 'Sous-agents de refacto-auth') => screen.getByRole('group', { name });
+  const fold = () => within(group()).getByRole('button', { name: /^Sous-agents/ });
+
+  it('unfolds under the card those running, with their model and what they do, then how many finished', async () => {
+    resetApp({
+      agents: [
+        agent({
+          plan: withSubs([
+            sub('s1', { title: 'Chercher la cause', model: 'haiku', doing: 'Lit src/a.ts' }),
+            sub('s2', { title: 'Relire', model: 'sonnet' }),
+            sub('s3', { title: 'Vieux', status: 'done', endedAt: 5 }),
+          ]),
+        }),
+        agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    // Under the card, not in it.
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(card).not.toContainElement(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'true');
+    expect(fold()).toHaveTextContent('Sous-agents 2 en cours 1 fini');
+    const list = within(group()).getByRole('list');
+    const first = within(list).getByRole('button', { name: /Chercher la cause/ });
+    expect(first).toHaveTextContent('Chercher la cause');
+    expect(first).toHaveTextContent('Haiku');
+    expect(first).toHaveTextContent('Lit src/a.ts');
+    expect(within(list).getByRole('button', { name: /Relire/ })).toBeInTheDocument();
+    // The finished ones are counted, folded.
+    expect(within(list).queryByRole('button', { name: /Vieux/ })).not.toBeInTheDocument();
+    const finished = within(list).getByRole('button', { name: '1 sous-agent fini' });
+    expect(finished).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(finished);
+    expect(finished).toHaveAttribute('aria-expanded', 'true');
+    const old = within(list).getByRole('button', { name: /Vieux/ });
+    expect(old).toHaveTextContent('Terminé');
+    // An agent without subagents has no fold.
+    expect(screen.queryByRole('group', { name: 'Sous-agents de tests-e2e' })).not.toBeInTheDocument();
+  });
+
+  it('is folded when none runs, and the chevron unfolds it', async () => {
+    resetApp({
+      agents: [
+        agent({
+          plan: withSubs([sub('s1', { status: 'stopped', endedAt: 3 }), sub('s2', { status: 'interrupted', endedAt: 4 })]),
+        }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+    expect(fold()).toHaveTextContent('2 finis');
+    expect(fold()).not.toHaveTextContent('en cours');
+    expect(within(group()).queryByRole('list')).not.toBeInTheDocument();
+    await userEvent.click(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(screen.getByRole('button', { name: '2 sous-agents finis' }));
+    expect(screen.getByRole('button', { name: /sous-agent s1/ })).toHaveTextContent('Arrêté');
+    expect(screen.getByRole('button', { name: /sous-agent s2/ })).toHaveTextContent('Interrompu');
+    // Folded again by the reader, it stays so.
+    await userEvent.click(fold());
+    expect(fold()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens a subagent’s conversation in place of the agent’s, and says which is open', async () => {
+    resetApp({
+      agents: [agent({ plan: withSubs([sub('s1', { title: 'Chercher' })]) }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })],
+    });
+    app.ui.selectedAgent = { p1: 'a2' };
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const row = screen.getByRole('button', { name: /Chercher/ });
+    expect(row).not.toHaveAttribute('aria-current');
+    await userEvent.click(row);
+    expect(app.ui.selectedAgent.p1).toBe('a1');
+    expect(app.subView.a1).toBe('s1');
+    expect(row).toHaveAttribute('aria-current', 'page');
+    // The card of the agent goes back to its own conversation.
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(app.subView.a1).toBeNull();
+    expect(row).not.toHaveAttribute('aria-current');
+  });
+
+  it('indents a subagent’s subagent', () => {
+    resetApp({ agents: [agent({ plan: withSubs([sub('s1'), sub('s2', { parent: 's1' })]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(screen.getByRole('button', { name: /sous-agent s1/ }).style.getPropertyValue('--depth')).toBe('0');
+    expect(screen.getByRole('button', { name: /sous-agent s2/ }).style.getPropertyValue('--depth')).toBe('1');
+  });
+
+  it('speaks English', async () => {
+    setLang('en');
+    resetApp({ agents: [agent({ plan: withSubs([sub('s1'), sub('s2', { status: 'failed', endedAt: 2 })]) })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const toggle = within(screen.getByRole('group', { name: 'Subagents of refacto-auth' })).getByRole('button', { name: /^Subagents/ });
+    expect(toggle).toHaveTextContent('Subagents 1 running 1 finished');
+    await userEvent.click(screen.getByRole('button', { name: '1 finished subagent' }));
+    expect(screen.getByRole('button', { name: /sous-agent s2/ })).toHaveTextContent('Failed');
+  });
+
+  describe('when there are many', () => {
+    const many = (count: number, over: Record<string, unknown> = {}, from = 1) =>
+      Array.from({ length: count }, (_, i) => sub(`s${from + i}`, { ...over, ...(over.status ? { endedAt: 1000 - i } : {}) }));
+    /** The rows of subagents (not the buttons that fold and unroll). */
+    const subRows = () => [...group().querySelectorAll<HTMLElement>('.sub')];
+    const unrollFinished = () => userEvent.click(screen.getByRole('button', { name: /sous-agents? finis?$/ }));
+
+    it('shows five of those running, then a button for the others that unrolls them', async () => {
+      resetApp({ agents: [agent({ plan: withSubs(many(12)) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(fold()).toHaveTextContent('12 en cours');
+      expect(subRows().map((r) => r.textContent?.trim())).toEqual(['s1', 's2', 's3', 's4', 's5'].map((s) => `sous-agent ${s}`));
+      const more = within(group()).getByRole('button', { name: '7 autres en cours' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      // The button comes after the rows it hides.
+      expect(more.compareDocumentPosition(subRows()[4]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+      await userEvent.click(more);
+      expect(subRows()).toHaveLength(12);
+      expect(subRows()[11]).toHaveTextContent('sous-agent s12');
+      // The same button, still there to fold them back: the focus does not go with it.
+      expect(more).toBeInTheDocument();
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      expect(more).toHaveTextContent('Réduire');
+      expect(more).toHaveFocus();
+      await userEvent.click(more);
+      expect(subRows()).toHaveLength(5);
+      expect(more).toHaveTextContent('7 autres en cours');
+    });
+
+    it('has no button for five running, and says one other in the singular for six', () => {
+      resetApp({ agents: [agent({ plan: withSubs(many(5)) })] });
+      fakeBackend();
+      const { unmount } = render(Sidebar, { project: project() });
+      expect(subRows()).toHaveLength(5);
+      expect(within(group()).queryByRole('button', { name: /autres? en cours/ })).not.toBeInTheDocument();
+      unmount();
+      resetApp({ agents: [agent({ plan: withSubs(many(6)) })] });
+      render(Sidebar, { project: project() });
+      expect(subRows()).toHaveLength(5);
+      expect(within(group()).getByRole('button', { name: '1 autre en cours' })).toBeInTheDocument();
+    });
+
+    it('shows ten of those finished once unfolded, then a button for the rest that unrolls them', async () => {
+      resetApp({ agents: [agent({ plan: withSubs(many(15, { status: 'done' })) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(fold());
+      await unrollFinished();
+      // The latest ended first.
+      expect(subRows()).toHaveLength(10);
+      expect(subRows()[0]).toHaveTextContent('sous-agent s1');
+      const more = within(group()).getByRole('button', { name: '5 de plus' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      await userEvent.click(more);
+      expect(subRows()).toHaveLength(15);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      await userEvent.click(more);
+      expect(subRows()).toHaveLength(10);
+    });
+
+    it('has no button for ten finished', async () => {
+      resetApp({ agents: [agent({ plan: withSubs(many(10, { status: 'done' })) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(fold());
+      await unrollFinished();
+      expect(subRows()).toHaveLength(10);
+      expect(within(group()).queryByRole('button', { name: /de plus/ })).not.toBeInTheDocument();
+    });
+
+    it('caps the running and the finished lists on their own', async () => {
+      resetApp({ agents: [agent({ plan: withSubs([...many(8), ...many(12, { status: 'done' }, 100)]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await unrollFinished();
+      // Five running and ten finished, each list with its button.
+      expect(subRows()).toHaveLength(15);
+      expect(within(group()).getByRole('button', { name: '3 autres en cours' })).toBeInTheDocument();
+      expect(within(group()).getByRole('button', { name: '2 de plus' })).toBeInTheDocument();
+      await userEvent.click(within(group()).getByRole('button', { name: '2 de plus' }));
+      expect(subRows()).toHaveLength(17);
+    });
+
+    it('unrolls the list of one agent, not of the others', async () => {
+      resetApp({
+        agents: [agent({ plan: withSubs(many(8)) }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, plan: withSubs(many(8, {}, 50)) })],
+      });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(within(group()).getByRole('button', { name: '3 autres en cours' }));
+      expect(subRows()).toHaveLength(8);
+      const other = screen.getByRole('group', { name: 'Sous-agents de tests-e2e' });
+      expect(other.querySelectorAll('.sub')).toHaveLength(5);
+      expect(within(other).getByRole('button', { name: '3 autres en cours' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('speaks English', async () => {
+      setLang('en');
+      resetApp({ agents: [agent({ plan: withSubs([...many(7), ...many(11, { status: 'done' }, 100)]) })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const more = within(group('Subagents of refacto-auth')).getByRole('button', { name: '2 more running' });
+      await userEvent.click(more);
+      expect(more).toHaveTextContent('Show fewer');
+      await userEvent.click(screen.getByRole('button', { name: '11 finished subagents' }));
+      expect(within(group('Subagents of refacto-auth')).getByRole('button', { name: '1 more' })).toBeInTheDocument();
+    });
+  });
+});

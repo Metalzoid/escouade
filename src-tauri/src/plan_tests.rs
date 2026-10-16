@@ -1838,3 +1838,85 @@ fn an_empty_todo_list_with_subagents_is_a_plan_with_no_tasks() {
     assert_eq!(p.set_files(demo_files()), Change::Saved);
     assert_eq!(p.source, Some(PlanSource::Plan));
 }
+
+#[test]
+fn a_subagent_launched_by_a_subagent_names_the_one_that_launched_it() {
+    let mut p = PlanState::default();
+    launch(&mut p, "a1", json!({ "description": "Chef", "prompt": "" }));
+    // Its call comes from the first one's thread.
+    let change = p.on_tool_use(
+        Some("a1"),
+        "a2",
+        "Agent",
+        &json!({ "description": "Aide", "prompt": "" }),
+        T0,
+    );
+    assert_eq!(change, Change::Saved);
+    assert_eq!(row(&p, "a1").parent, None);
+    assert_eq!(row(&p, "a2").parent.as_deref(), Some("a1"));
+    // Seen first by its task, its parent's task names the parent.
+    sys(&mut p, started("bg1", "a1"));
+    let nested = json!({ "type": "system", "subtype": "task_started", "task_id": "bg3",
+        "tool_use_id": "a3", "description": "Petit", "task_type": "local_agent",
+        "parent_task_id": "bg1" });
+    assert_eq!(sys(&mut p, nested), Change::Saved);
+    assert_eq!(row(&p, "a3").parent.as_deref(), Some("a1"));
+    // An unknown parent task names nothing.
+    let orphan = json!({ "type": "system", "subtype": "task_started", "task_id": "bg4",
+        "tool_use_id": "a4", "description": "Seul", "task_type": "local_agent",
+        "parent_task_id": "nobody" });
+    sys(&mut p, orphan);
+    assert_eq!(row(&p, "a4").parent, None);
+}
+
+#[test]
+fn the_window_is_told_the_task_of_a_subagent_which_stops_it_and_not_before_it_is_known() {
+    let mut p = PlanState::default();
+    launch(
+        &mut p,
+        "a1",
+        json!({ "description": "Tests", "prompt": "" }),
+    );
+    let sent = serde_json::to_value(&p).unwrap();
+    assert!(sent["agents"][0].get("taskId").is_none());
+    sys(&mut p, started("bg1", "a1"));
+    let sent = serde_json::to_value(&p).unwrap();
+    assert_eq!(sent["agents"][0]["taskId"], "bg1");
+    // Kept with the plan: read back, it is still there.
+    let back: PlanState = serde_json::from_value(sent).unwrap();
+    assert_eq!(back.agents[0].task_id.as_deref(), Some("bg1"));
+}
+
+#[test]
+fn a_subagent_stopped_by_stop_task_ends_stopped_as_a_real_claude_code_tells_it() {
+    // What Claude Code 2.1.300 sent for `stop_task` on a running subagent (measured, docs/PROTOCOL.md):
+    // the task killed, then its notification « stopped », with no usage.
+    let mut p = PlanState::default();
+    launch(
+        &mut p,
+        "toolu_1",
+        json!({ "description": "Slow sleeper", "subagent_type": "general-purpose", "model": "haiku", "prompt": "…" }),
+    );
+    sys(
+        &mut p,
+        json!({ "type": "system", "subtype": "task_started", "task_id": "a3c0",
+        "tool_use_id": "toolu_1", "description": "Slow sleeper", "subagent_type": "general-purpose",
+        "is_backgrounded": true, "spawn_depth": 1, "task_type": "local_agent", "prompt": "…" }),
+    );
+    let progress = json!({ "type": "system", "subtype": "task_progress", "task_id": "a3c0",
+        "tool_use_id": "toolu_1", "description": "Running sleep",
+        "usage": { "total_tokens": 27_068, "tool_uses": 3, "duration_ms": 6_406 }, "last_tool_name": "Bash" });
+    sys(&mut p, progress);
+    let killed = json!({ "type": "system", "subtype": "task_updated", "task_id": "a3c0",
+        "patch": { "status": "killed", "end_time": 1_792_064_308_799_i64 } });
+    assert_eq!(p.on_system(&killed, 9_000), Change::Saved);
+    let stopped = json!({ "type": "system", "subtype": "task_notification", "task_id": "a3c0",
+        "tool_use_id": "toolu_1", "status": "stopped", "output_file": "x.output", "summary": "Slow sleeper" });
+    assert_eq!(p.on_system(&stopped, 9_001), Change::None);
+    let a = row(&p, "toolu_1");
+    assert_eq!(a.status, RunStatus::Stopped);
+    assert_eq!(
+        (a.tools, a.tokens, a.ended_at),
+        (3, Some(27_068), Some(9_000))
+    );
+}

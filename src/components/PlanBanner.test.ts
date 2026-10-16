@@ -1,16 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
+import { menu } from '../lib/menu.svelte';
 import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import type { Agent, PlanState, PlanTask, SubAgent } from '../lib/types';
 import '../test/pointer';
 import { agent, resetApp, ticket } from '../test/ipc';
+import ContextMenu from './ContextMenu.svelte';
 import PlanBanner from './PlanBanner.svelte';
 
 const task = (id: string, status: PlanTask['status'], over: Partial<PlanTask> = {}): PlanTask => ({
@@ -71,12 +73,15 @@ const list = () => document.querySelector<HTMLElement>('.list')!;
 const rows = () => [...document.querySelectorAll<HTMLElement>('.list .row')];
 const segs = () => [...document.querySelectorAll<HTMLElement>('.seg')];
 const toggle = () => screen.getByRole('button', { name: /^Plan ?: / });
+/** The name of the button of the stack of dots when several subagents run. */
+const ANY = 'Ouvrir la conversation d’un sous-agent';
 const grip = () => screen.getByRole('separator');
 const setWindowHeight = (h: number) => Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: h });
 const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
 
 beforeEach(() => {
   localStorage.clear();
+  menu.close();
   setWindowHeight(900);
   Element.prototype.setPointerCapture = vi.fn();
   defineLayout('clientHeight', function () {
@@ -161,25 +166,214 @@ describe('PlanBanner', () => {
       expect(within(toggle()).getByText('Le plan')).toHaveAttribute('data-tip', 'Le plan');
     });
 
-    it('shows the subagents running as a stack of dots, six at most, and counts them', () => {
+    it('shows the subagents running as a stack of dots, six at most, all in one button, and counts them', () => {
       const agents = Array.from({ length: 8 }, (_, i) => sub(`s${i}`, { title: `agent-${i}` }));
       agents.push(sub('gone', { title: 'fini', status: 'done' }));
       show(agentOf(FIVE(), {}, { agents }));
-      const dots = [...document.querySelectorAll('.dots .dot')];
+      const stack = screen.getByRole('button', { name: ANY });
+      const dots = [...stack.querySelectorAll('.dot')];
       expect(dots).toHaveLength(6);
-      expect(dots.map((d) => d.getAttribute('data-tip'))).toEqual(['agent-0', 'agent-1', 'agent-2', 'agent-3', 'agent-4', 'agent-5']);
-      expect(within(toggle()).getByText('8 sous-agents actifs')).toBeInTheDocument();
-      expect(document.querySelector('.dots')).toHaveAttribute('aria-hidden', 'true');
+      // The circles are drawings: the button names them all, and holds no other button.
+      expect(dots.every((d) => d.tagName === 'SPAN' && d.getAttribute('aria-hidden') === 'true')).toBe(true);
+      expect(stack.querySelector('button')).toBeNull();
+      // The count is beside the stack and the fold button, not in them.
+      expect(screen.getByText('8 sous-agents actifs')).toBeInTheDocument();
+      expect(stack).not.toHaveTextContent('sous-agents actifs');
+      expect(toggle()).not.toHaveTextContent('sous-agents actifs');
     });
 
     it('says one subagent in the singular, and shows no stack when none runs', () => {
       const { unmount } = show(agentOf(FIVE(), {}, { agents: [sub('s1')] }));
-      expect(within(toggle()).getByText('1 sous-agent actif')).toBeInTheDocument();
-      expect(document.querySelectorAll('.dots .dot')).toHaveLength(1);
+      expect(screen.getByText('1 sous-agent actif')).toBeInTheDocument();
+      expect(document.querySelectorAll('.subs button .dot')).toHaveLength(1);
       unmount();
       show(agentOf(FIVE(), {}, { agents: [sub('s1', { status: 'done' })], launched: 1 }));
-      expect(document.querySelector('.dots')).toBeNull();
+      expect(document.querySelector('.subs')).toBeNull();
       expect(screen.queryByText(/sous-agent/)).toBeNull();
+    });
+
+    describe('the stack of dots of the subagents running', () => {
+      const stackOf = () => document.querySelector<HTMLButtonElement>('.subs > button')!;
+      const three = () => [
+        sub('s1', { title: 'Explore', planTask: '3', model: 'haiku' }),
+        sub('s2', { title: 'Revue' }),
+        sub('s3', { title: 'Tests', status: 'done' }),
+      ];
+      const alone = () => [sub('s1', { title: 'Explore', planTask: '3' }), sub('s3', { title: 'Tests', status: 'done' })];
+      /** The real menu, which the window draws once for all. */
+      const withMenu = (a: Agent) => {
+        const r = show(a);
+        render(ContextMenu);
+        app.ui.selectedAgent = { p1: 'a1' };
+        return r;
+      };
+
+      it('is one button for all of them, outside the one that folds the banner: no button in a button', () => {
+        show(agentOf(FIVE(), {}, { title: 'Le plan', agents: three() }));
+        expect(document.querySelectorAll('.subs button')).toHaveLength(1);
+        const stack = screen.getByRole('button', { name: ANY });
+        expect(stack).toBe(stackOf());
+        expect(stack).toHaveAttribute('type', 'button');
+        expect(toggle().querySelector('button')).toBeNull();
+        expect(toggle()).not.toContainElement(stack);
+        // The fold button keeps its name, whatever runs beside it.
+        expect(toggle()).toHaveAccessibleName('Plan : Le plan');
+      });
+
+      describe('with one subagent running', () => {
+        it('is named after it, has its name for the tooltip and opens its conversation at once', async () => {
+          show(agentOf(FIVE(), { id: 'a1' }, { agents: alone() }));
+          app.ui.selectedAgent = { p1: 'a1' };
+          const stack = screen.getByRole('button', { name: 'Ouvrir la conversation du sous-agent Explore' });
+          expect(stack).toBe(stackOf());
+          expect(stack).toHaveAttribute('data-tip', 'Explore');
+          expect(stack).not.toHaveAttribute('aria-haspopup');
+          // What the conversation looks for when the view of the subagent is left (Conversation.test.ts).
+          expect(stack).toHaveAttribute('data-open-sub', 's1');
+          expect(stack).toHaveAttribute('data-open-from', 'dots');
+          await userEvent.click(stack);
+          expect(menu.open).toBeNull();
+          expect(app.subView.a1).toBe('s1');
+          // The banner stays as it was.
+          expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+          expect(list()).toBeInTheDocument();
+        });
+
+        it('opens it with Enter, reached from the keyboard after the button that folds', async () => {
+          show(agentOf(FIVE(), { id: 'a1' }, { agents: alone() }));
+          app.ui.selectedAgent = { p1: 'a1' };
+          await userEvent.tab();
+          expect(toggle()).toHaveFocus();
+          await userEvent.tab();
+          expect(stackOf()).toHaveFocus();
+          await userEvent.keyboard('{Enter}');
+          expect(app.subView.a1).toBe('s1');
+          expect(app.subFocus.from).toMatchObject({ agentId: 'a1', call: 's1', opener: 'dots' });
+          expect(app.subFocus.from?.el).toBe(stackOf());
+        });
+      });
+
+      describe('with several running', () => {
+        it('is named for any of them, with the same words for its tooltip, and offers a menu', () => {
+          show(agentOf(FIVE(), {}, { agents: three() }));
+          const stack = screen.getByRole('button', { name: ANY });
+          expect(stack).toBe(stackOf());
+          expect(stack).toHaveAttribute('data-tip', ANY);
+          expect(stack).toHaveAttribute('aria-haspopup', 'menu');
+          expect(stack).toHaveAttribute('data-open-from', 'dots');
+          // It stands for no call in particular.
+          expect(stack).not.toHaveAttribute('data-open-sub');
+        });
+
+        it('opens a menu of the subagents running, in the order of the plan, with their models, and opens none by itself', async () => {
+          show(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+          app.ui.selectedAgent = { p1: 'a1' };
+          await userEvent.click(screen.getByRole('button', { name: ANY }));
+          // The one that ended is not in it.
+          expect(menu.open?.items.map((i) => i.label)).toEqual(['Explore', 'Revue']);
+          expect(menu.open?.items.map((i) => i.hint)).toEqual(['Haiku', undefined]);
+          // Opened from an element: the focus goes into it, and comes back.
+          expect(menu.open?.keyboard).toBe(true);
+          expect(app.subView.a1).toBeFalsy();
+        });
+
+        it('lists those past the sixth dot too', async () => {
+          const agents = Array.from({ length: 8 }, (_, i) => sub(`s${i}`, { title: `agent-${i}` }));
+          show(agentOf(FIVE(), {}, { agents }));
+          await userEvent.click(screen.getByRole('button', { name: ANY }));
+          expect(menu.open?.items.map((i) => i.label)).toEqual(agents.map((s) => s.title));
+          expect(stackOf().querySelectorAll('.dot')).toHaveLength(6);
+        });
+
+        it('opens the conversation of the entry chosen, one linked to a task or not, and does not fold the banner', async () => {
+          withMenu(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+          await userEvent.click(screen.getByRole('button', { name: ANY }));
+          const entries = await screen.findAllByRole('menuitem');
+          expect(entries.map((e) => e.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Explore Haiku', 'Revue']);
+          await userEvent.click(screen.getByRole('menuitem', { name: /^Revue/ }));
+          await waitFor(() => expect(app.subView.a1).toBe('s2'));
+          expect(menu.open).toBeNull();
+          await userEvent.click(screen.getByRole('button', { name: ANY }));
+          await userEvent.click(await screen.findByRole('menuitem', { name: /^Explore/ }));
+          await waitFor(() => expect(app.subView.a1).toBe('s1'));
+          expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+          expect(list()).toBeInTheDocument();
+        });
+
+        it('is worked from the keyboard, and the focus is on it again when the view of the subagent opens', async () => {
+          withMenu(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+          await userEvent.tab();
+          expect(toggle()).toHaveFocus();
+          await userEvent.tab();
+          expect(stackOf()).toHaveFocus();
+          await userEvent.keyboard('{Enter}');
+          await waitFor(() => expect(screen.getByRole('menuitem', { name: /^Explore/ })).toHaveFocus());
+          await userEvent.keyboard('{ArrowDown}{Enter}');
+          await waitFor(() => expect(app.subView.a1).toBe('s2'));
+          // The place to come back to is the stack, which has the focus again by then, not the entry that went with the menu.
+          expect(stackOf()).toHaveFocus();
+          expect(app.subFocus.from?.el).toBe(stackOf());
+          expect(app.subFocus.from).toMatchObject({ agentId: 'a1', call: 's2', opener: 'dots' });
+        });
+
+        it('is the place to come back to even when a click did not give it the focus (the web view of macOS)', async () => {
+          withMenu(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+          await fireEvent.click(screen.getByRole('button', { name: ANY }));
+          expect(stackOf()).not.toHaveFocus();
+          await userEvent.click(await screen.findByRole('menuitem', { name: /^Revue/ }));
+          await waitFor(() => expect(app.subView.a1).toBe('s2'));
+          expect(app.subFocus.from?.el).toBe(stackOf());
+          expect(app.subFocus.from?.opener).toBe('dots');
+          expect(stackOf()).toHaveFocus();
+        });
+
+        it('closes on Escape without opening anything, the focus back on it', async () => {
+          withMenu(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+          await userEvent.click(screen.getByRole('button', { name: ANY }));
+          await waitFor(() => expect(screen.getByRole('menuitem', { name: /^Explore/ })).toHaveFocus());
+          await userEvent.keyboard('{Escape}');
+          expect(menu.open).toBeNull();
+          await waitFor(() => expect(stackOf()).toHaveFocus());
+          expect(app.subView.a1).toBeFalsy();
+        });
+      });
+
+      it('stays while the banner is folded, and the button still folds and unfolds', async () => {
+        show(agentOf(FIVE(), {}, { agents: three() }));
+        await userEvent.click(toggle());
+        expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+        expect(document.querySelector('.list')).toBeNull();
+        expect(stackOf().querySelectorAll('.dot')).toHaveLength(2);
+        await userEvent.click(toggle());
+        expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+        expect(list()).toBeInTheDocument();
+      });
+
+      it('follows the subagents that come and go: from several to one, the button opens that one', async () => {
+        const { rerender } = show(agentOf(FIVE(), { id: 'a1' }, { agents: three() }));
+        app.ui.selectedAgent = { p1: 'a1' };
+        expect(stackOf()).toHaveAttribute('aria-haspopup', 'menu');
+        await rerender({ agent: agentOf(FIVE(), { id: 'a1' }, { agents: alone() }) });
+        expect(stackOf()).toHaveAccessibleName('Ouvrir la conversation du sous-agent Explore');
+        expect(stackOf()).not.toHaveAttribute('aria-haspopup');
+        await userEvent.click(stackOf());
+        expect(app.subView.a1).toBe('s1');
+      });
+
+      it('is named in English', async () => {
+        setLang('en');
+        const { unmount } = show(agentOf(FIVE(), {}, { agents: alone() }));
+        expect(stackOf()).toHaveAccessibleName('Open the conversation of the subagent Explore');
+        unmount();
+        show(agentOf(FIVE(), {}, { agents: three() }));
+        expect(stackOf()).toHaveAccessibleName('Open the conversation of a subagent');
+        expect(stackOf()).toHaveAttribute('data-tip', 'Open the conversation of a subagent');
+        await userEvent.click(stackOf());
+        expect(menu.open?.items.map((i) => [i.label, i.hint])).toEqual([
+          ['Explore', 'Haiku'],
+          ['Revue', undefined],
+        ]);
+      });
     });
 
     it('is a button that folds and unfolds the list', async () => {
@@ -394,6 +588,16 @@ describe('PlanBanner', () => {
       expect(second.querySelector('.step')).toHaveTextContent('Écrit la doc');
     });
 
+    it('opens the subagent’s conversation in place of the agent’s', async () => {
+      const a = agentOf([task('1', 'inProgress')], { id: 'a1' }, { agents: [sub('s1', { title: 'visuel-produit', planTask: '1' })] });
+      show(a);
+      app.ui.selectedAgent = { p1: 'a1' };
+      const tag = screen.getByRole('button', { name: /↳ visuel-produit/ });
+      expect(tag).toHaveAttribute('data-tip', 'Ouvrir la conversation du sous-agent visuel-produit');
+      await userEvent.click(tag);
+      expect(app.subView.a1).toBe('s1');
+    });
+
     it('names the model as Claude Code runs it', () => {
       const a = agentOf([task('1', 'inProgress')], {}, { agents: [sub('s1', { model: 'haiku', planTask: '1' })] });
       resetApp({ agents: [a] });
@@ -440,7 +644,8 @@ describe('PlanBanner', () => {
       expect(rows()[0].querySelector('.rt')).toHaveTextContent(bad);
       expect(rows()[0].querySelector('.step')).toHaveTextContent(bad);
       expect(rows()[0].querySelector('.subtag')).toHaveTextContent(`↳ ${bad}`);
-      expect(document.querySelector('.dots .dot')).toHaveAttribute('data-tip', bad);
+      expect(document.querySelector('.subs > button')).toHaveAttribute('data-tip', bad);
+      expect(document.querySelector('.subs > button')).toHaveAccessibleName(`Ouvrir la conversation du sous-agent ${bad}`);
     });
 
     it('cuts a long title and keeps all of it for the tooltip', () => {
@@ -683,13 +888,33 @@ describe('PlanBanner', () => {
       show(agentOf([], {}, { agents: [sub('s1', { title: 'Explore' }), sub('s2', { title: 'Revue' })], launched: 3 }));
       const head = screen.getByText('Sous-agents').closest('.head')!;
       expect(head).toHaveTextContent('2 sous-agents actifs');
-      expect([...head.querySelectorAll('.dot')].map((d) => d.getAttribute('data-tip'))).toEqual(['Explore', 'Revue']);
+      // The dots are drawn as they are under a plan, in one button.
+      expect(head.querySelectorAll('.subs > button > .dot')).toHaveLength(2);
       expect(head).not.toHaveTextContent('tâche');
       expect(head).not.toHaveTextContent('%');
-      expect(screen.queryByRole('button')).toBeNull();
+      // No fold button: the stack of dots is the only button.
+      expect(screen.queryByRole('button', { name: /^Plan ?: / })).toBeNull();
+      expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([ANY]);
       expect(screen.queryByRole('progressbar')).toBeNull();
       expect(screen.queryByRole('list')).toBeNull();
       expect(screen.queryByRole('separator')).toBeNull();
+    });
+
+    it('opens the conversation of a subagent from its stack of dots: at once for one, from a menu for several', async () => {
+      const { unmount } = show(agentOf([], { id: 'a1' }, { agents: [sub('s1', { title: 'Explore' })] }));
+      app.ui.selectedAgent = { p1: 'a1' };
+      const alone = screen.getByRole('button', { name: 'Ouvrir la conversation du sous-agent Explore' });
+      expect(alone).toHaveAttribute('data-tip', 'Explore');
+      await userEvent.click(alone);
+      expect(app.subView.a1).toBe('s1');
+      unmount();
+      show(agentOf([], { id: 'a1' }, { agents: [sub('s1', { title: 'Explore' }), sub('s2', { title: 'Revue' })] }));
+      render(ContextMenu);
+      app.ui.selectedAgent = { p1: 'a1' };
+      await userEvent.click(screen.getByRole('button', { name: ANY }));
+      expect(app.subView.a1).toBeFalsy();
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Revue' }));
+      await waitFor(() => expect(app.subView.a1).toBe('s2'));
     });
 
     it('gives the agent’s name as the title, and goes when the subagents have ended', async () => {
@@ -703,7 +928,7 @@ describe('PlanBanner', () => {
     it('turns into the plan when a task comes', async () => {
       const a = agentOf([], {}, { agents: [sub('s1')] });
       const { rerender } = show(a);
-      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Plan ?: / })).toBeNull();
       await rerender({ agent: agentOf([task('1', 'inProgress')], {}, { agents: [sub('s1')] }) });
       expect(toggle()).toBeInTheDocument();
       expect(screen.queryByText('Sous-agents')).toBeNull();
@@ -757,7 +982,7 @@ describe('PlanBanner', () => {
       expect(toggle()).toHaveAccessibleName('Plan: Hero redesign');
       expect(within(toggle()).getByText('2/5 tasks')).toBeInTheDocument();
       expect(within(toggle()).getByText('50%')).toBeInTheDocument();
-      expect(within(toggle()).getByText('1 subagent running')).toBeInTheDocument();
+      expect(screen.getByText('1 subagent running')).toBeInTheDocument();
       expect(screen.getByRole('list', { name: 'Plan tasks' })).toBeInTheDocument();
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '2/5 tasks');
       const [, , blocked, , todo] = rows();
@@ -799,7 +1024,8 @@ describe('PlanBanner', () => {
       flushSync();
       expect(toggle()).toHaveAccessibleName('Plan: Le plan');
       expect(within(toggle()).getByText('2/5 tasks')).toBeInTheDocument();
-      expect(within(toggle()).getByText('1 subagent running')).toBeInTheDocument();
+      expect(screen.getByText('1 subagent running')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open the conversation of the subagent sous-agent s1' })).toBeInTheDocument();
       expect(screen.getByRole('list', { name: 'Plan tasks' })).toBeInTheDocument();
       expect(rows()[0].querySelector('.ico .sr')).toHaveTextContent('Done');
       expect(grip()).toHaveAccessibleName('Height of the task list');

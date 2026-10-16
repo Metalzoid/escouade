@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
+  import { callTitle, isSubagentCall } from '../../lib/subagents';
   import { hasDiff, isQuietTool, toolArg, toolLabel, toolResultSummary } from '../../lib/tools';
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Markdown from './Markdown.svelte';
@@ -8,17 +9,20 @@
   import Self from './ToolRow.svelte';
   import { tip } from '../../lib/tip';
 
-  // `onOpenFile`: opens a file the tool edited (its path) in the editor, at a line.
+  // `onOpenFile`: opens a file the tool edited (its path) in the editor, at a line. `onOpenSub`: opens the conversation
+  // of the subagent a call launched (by the call's id), in place of the agent's.
   let {
     item,
     cwd,
     childrenOf = () => [],
     onOpenFile,
+    onOpenSub,
   }: {
     item: ToolItem;
     cwd: string;
     childrenOf?: (id: string) => ConvItem[];
     onOpenFile?: (abs: string, line: number | null) => void;
+    onOpenSub?: (call: string) => void;
   } = $props();
   let open = $state(false);
 
@@ -37,6 +41,7 @@
     onOpenFile && FILE_TOOLS.has(item.name) && typeof item.input?.file_path === 'string' ? (item.input.file_path as string) : null,
   );
   const firstLine = $derived(firstChangedLine(item.result?.patch));
+  const sub = $derived(!!onOpenSub && isSubagentCall(item));
   const toggle = () => expandable && (open = !open);
 </script>
 
@@ -83,6 +88,19 @@
       <span class="res">{res}</span>
     {/if}
     {#if subTools.length}<span class="res">{t('conv.tool.subTools', { count: subTools.length })}</span>{/if}
+    {#if sub}
+      <button
+        class="open-sub"
+        data-open-sub={item.id}
+        data-open-from="call"
+        aria-label={t('subagents.openRow', { name: callTitle(item) })}
+        use:tip={t('subagents.openRow', { name: callTitle(item) })}
+        onclick={(e) => {
+          e.stopPropagation();
+          onOpenSub?.(item.id);
+        }}><span aria-hidden="true">↗</span></button
+      >
+    {/if}
   </div>
   {#if open}
     <div class="detail">
@@ -101,7 +119,7 @@
         <div class="sub">
           {#if item.input.prompt}<div class="prompt">{item.input.prompt}</div>{/if}
           {#each subTools as c (c.id)}
-            <Self item={c} {cwd} {childrenOf} {onOpenFile} />
+            <Self item={c} {cwd} {childrenOf} {onOpenFile} {onOpenSub} />
           {/each}
           {#if subText}<div class="subtext"><Markdown text={subText.text} streaming={subText.streaming} /></div>{/if}
         </div>
@@ -215,6 +233,25 @@
   }
   .err .res {
     color: var(--del);
+  }
+  .open-sub {
+    flex: none;
+    height: 20px;
+    padding: 0 7px;
+    border: 1px solid var(--line2);
+    border-radius: 3px;
+    background: var(--elev);
+    color: var(--accent);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .open-sub:hover {
+    border-color: var(--accent);
+  }
+  .open-sub:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .spin {
     width: 11px;

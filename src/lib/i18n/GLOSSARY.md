@@ -464,3 +464,22 @@ Ce qu’Escouade dit à Claude ou lui fait écrire suit « Langue des textes ré
 | Rouvrir | Reopen | la ligne d’un projet fermé (Réglages › Projets) : ouvre la fenêtre d’ajout sur son dossier et sur cet historique-là |
 | Historique illisible | Unreadable history | un fichier de projet fermé que l’app ne sait pas lire : seul « Effacer » (“Erase”) est proposé |
 | {nom} (fermé) | {name} (closed) | un projet fermé auquel un compte reste réservé (Réglages › Comptes Claude) |
+
+## S — sous-agents
+
+La liste sous la carte d’un agent et la conversation de chaque sous-agent (`subagents`). Les titres, consignes et rapports des sous-agents sont les mots de l’agent : jamais traduits.
+
+| Français | Anglais | Note |
+|---|---|---|
+| Sous-agents de <agent> | Subagents of <agent> | le groupe sous la carte d’un agent : « Sous-agents de agent-2 » → “Subagents of agent-2” (son nom pour un lecteur d’écran ; le titre visible est « Sous-agents » → “Subagents”) |
+| N en cours / N finis | N running / N finished | les comptes du groupe ; « 3 sous-agents finis » → “3 finished subagents” |
+| N autres en cours / N de plus / Réduire | N more running / N more / Show fewer | ce qui reste d’une liste de sous-agents (5 en cours, 10 finis), et le bouton qui la replie |
+| Lancé / En cours / Terminé / Échoué / Arrêté / Interrompu | Launched / Running / Done / Failed / Stopped / Interrupted | l’état d’un sous-agent ; « Lancé » : lancé en arrière-plan, rien d’autre n’en est connu |
+| consigne (d’un sous-agent) | prompt | ce qu’on lui a demandé (le `prompt` de son appel) : « Voir toute la consigne » → “Show the whole prompt” ; « consignes » (données à Claude) reste “instructions” |
+| Rapport | Report | ce qu’un sous-agent rend à l’agent à la fin ; « Ce sous-agent n’a pas rendu de rapport. » → “This subagent handed back no report.” |
+| Fil d’Ariane | Breadcrumb | « agent › sous-agent », en haut de la conversation d’un sous-agent |
+| Arrêter (un sous-agent) | Stop | arrête ce sous-agent seul ; l’infobulle dit pourquoi il est grisé |
+| Lui écrire, par <agent> | Write to it, through <agent> | le champ qui envoie un message à l’agent, pour qu’il le transmette au sous-agent ; « Envoyer à agent-2 » → “Send to agent-2” |
+| Ouvrir sa conversation | Open its conversation | le bouton au-dessus d’une demande d’un sous-agent, et le bouton ↗ de la ligne de son appel (« Ouvrir la conversation du sous-agent … » → “Open the conversation of the subagent …”) |
+| Ouvrir la conversation d’un sous-agent | Open the conversation of a subagent | le bouton de la pile de points du bandeau « Plan » quand plusieurs sous-agents tournent (il ouvre un menu pour choisir lequel) ; avec un seul, il porte le nom de ce sous-agent (« Ouvrir la conversation du sous-agent … ») |
+| Demande du sous-agent « nom » | Request of the subagent “name” | la ligne au-dessus d’une question ou d’une autorisation qu’un sous-agent a posée |

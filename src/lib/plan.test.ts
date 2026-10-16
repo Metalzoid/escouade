@@ -65,7 +65,7 @@ describe('planView', () => {
       expect(v.rows).toEqual([]);
       expect(v.focusId).toBeNull();
       expect(v.subsRunning).toBe(1);
-      expect(v.subDots).toEqual([{ name: 'Explore' }]);
+      expect(v.subDots).toEqual([{ id: 's1', name: 'Explore' }]);
       expect(v.percent).toBe(0);
       // The card of the agent has its line only for a plan with tasks.
       expect(v.mini).toBeNull();
@@ -237,14 +237,14 @@ describe('planView', () => {
       const v = view(tasks, {
         agents: [sub('s1', { title: 'visuel-produit', model: 'sonnet', planTask: '1', doing: 'Édite src/Hero.tsx' })],
       });
-      expect(v.rows[0].sub).toEqual({ name: 'visuel-produit', model: 'sonnet' });
+      expect(v.rows[0].sub).toEqual({ id: 's1', name: 'visuel-produit', model: 'sonnet' });
       expect(v.rows[0].step).toBe('Édite src/Hero.tsx');
       expect(v.rows[1].sub).toBeUndefined();
     });
 
     it('gives no model when the call named none', () => {
       const v = view(tasks, { agents: [sub('s1', { planTask: '1' })] });
-      expect(v.rows[0].sub).toEqual({ name: 'sous-agent s1' });
+      expect(v.rows[0].sub).toEqual({ id: 's1', name: 'sous-agent s1' });
       expect(v.rows[0].sub).not.toHaveProperty('model');
     });
 
@@ -289,7 +289,27 @@ describe('planView', () => {
         launched: 4,
       });
       expect(v.subsRunning).toBe(2);
-      expect(v.subDots).toEqual([{ name: 'A' }, { name: 'B' }]);
+      // By their calls, which open their conversations.
+      expect(v.subDots).toEqual([
+        { id: 's1', name: 'A' },
+        { id: 's2', name: 'B' },
+      ]);
+    });
+
+    it('gives the model of a subagent running when its call named one, in the order of the plan', () => {
+      const v = view(tasks, {
+        agents: [
+          sub('s1', { title: 'A', model: 'haiku' }),
+          sub('s2', { title: 'B' }),
+          sub('s3', { title: 'C', model: 'sonnet', status: 'done' }),
+        ],
+        launched: 3,
+      });
+      expect(v.subDots).toEqual([
+        { id: 's1', name: 'A', model: 'haiku' },
+        { id: 's2', name: 'B' },
+      ]);
+      expect(v.subDots[1]).not.toHaveProperty('model');
     });
   });
 

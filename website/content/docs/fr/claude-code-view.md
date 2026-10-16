@@ -29,9 +29,18 @@ Grâce à cela, un agent en vue Claude Code garde :
 - **sa conversation** : ce qui se passe dans l’interface s’écrit aussi dans la conversation d’Escouade, que tu retrouves en revenant à la « Vue Escouade » ;
 - **la recherche** (`Ctrl+K`, voir [suivre ses agents](overview#rechercher-dans-les-conversations)) ;
 - **le bandeau « Plan »** (voir [l’avancée d’un plan](plan)) ;
+- **ses sous-agents** : leur liste dans la barre latérale et, en lecture seule, leur conversation (voir [plus bas](#les-sous-agents)) ;
 - **ses statistiques et son coût** (voir [les statistiques](stats)). L’interface ne donne pas le coût de chaque tour : Escouade l’estime d’après les tarifs publics.
 
 Quand l’agent attend une réponse, c’est dans le terminal que tu la donnes : la [vue d’ensemble](overview) le rappelle (« Attend ta réponse dans l’interface de Claude Code ») et son bouton « Répondre » ouvre l’agent.
+
+## Les sous-agents
+
+Les sous-agents d’un agent en vue Claude Code sont listés comme ailleurs, sous sa carte dans la barre latérale et dans le bandeau « Plan » (voir [les sous-agents dans la barre latérale](plan#les-sous-agents-dans-la-barre-laterale)). Un clic sur l’un d’eux ouvre sa conversation à la place du terminal ; le fil d’Ariane, ou `Échap`, ramène à l’agent.
+
+Cette conversation est en **lecture seule**. Escouade la lit dans le transcript que Claude Code tient pour ce sous-agent, à côté de celui de l’agent : elle est lue à l’ouverture de la vue, relue toutes les 2 secondes tant que le sous-agent tourne, puis une dernière fois quand il finit. La vue le dit en haut (« Lecture seule : son transcript, tel que Claude Code l’écrit. On agit sur ce sous-agent dans l’interface de Claude Code. »). Il n’y a ni « Arrêter » ni « Lui écrire » : pour arrêter un sous-agent ou lui écrire, passe par l’interface de Claude Code, dans le terminal. Si Escouade ne trouve pas ce transcript (Claude Code ne l’a pas encore écrit, ou le range ailleurs), la vue dit « Pas encore de message de ce sous-agent. »
+
+Dans cette vue, aucun signal ne dit à Escouade qu’un sous-agent en arrière-plan a fini. Escouade le déduit de ce que Claude Code rejoue à l’agent dans son transcript : le rapport que le sous-agent lui rend, ou la notification de sa fin. Tant que ce message n’est pas arrivé, la ligne du sous-agent reste « En cours ». Son rapport est celui qu’il a rendu à l’agent.
 
 ## Écrire à un agent dans cette vue
 

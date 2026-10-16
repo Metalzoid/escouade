@@ -42,11 +42,12 @@ export function ariaEnter(shift = false, mac = IS_MAC): string {
 /**
  * Where a waiting request is answered from the keyboard: the conversation (`.conv`, with its
  * message field), or the page itself when nothing has the focus. A terminal and the editor keep
- * their keys, and so does a dialog.
+ * their keys, and so does a dialog, and a field of the conversation whose keys are its own
+ * (`data-own-keys`: « Lui écrire » of a subagent, where Ctrl+Entrée sends the message).
  */
 export function answersHere(target: EventTarget | null): boolean {
   if (app.modal || !(target instanceof Element)) return false;
-  if (target.closest('.xterm, .cm-editor')) return false;
+  if (target.closest('.xterm, .cm-editor, [data-own-keys]')) return false;
   return target === document.body || !!target.closest('.conv');
 }
 

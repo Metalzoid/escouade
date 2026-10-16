@@ -14,7 +14,13 @@ const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target
 const FAKE = path.join(ROOT, 'tests', 'fixtures', 'fake-claude.cmd');
 
 export interface App {
+  /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
   page: Page;
+  /**
+   * Stops the app and starts it again on the same data folder, with the same environment: what the app finds again when it is
+   * started anew (the projects, the agents and their conversations, as it saved them). Gives the new window, also in `app.page`.
+   */
+  restart: () => Promise<Page>;
   /** A git repository with one commit, ready to be added as a project. */
   repo: string;
   data: string;
@@ -55,6 +61,39 @@ function tail(file: string, lines = 40): string {
   if (!fs.existsSync(file)) return `(no ${path.basename(file)})`;
   const text = fs.readFileSync(file, 'utf8').trimEnd();
   return text ? text.split('\n').slice(-lines).join('\n') : `(${path.basename(file)} is empty)`;
+}
+
+/** A launch of the app: its process, why it ended (null while it runs) and, once attached, its WebView2. */
+interface Instance {
+  child: ChildProcess;
+  stopped: string | null;
+  browser: Browser | null;
+}
+
+/** Starts the app with `env`; its stderr is appended to `stderr` (a restart keeps what the launch before wrote). */
+function startApp(env: NodeJS.ProcessEnv, stderr: string): Instance {
+  const errFd = fs.openSync(stderr, 'a');
+  const child = spawn(EXE, [], { env, stdio: ['ignore', 'ignore', errFd] });
+  fs.closeSync(errFd);
+  const instance: Instance = { child, stopped: null, browser: null };
+  child.on('exit', (code, signal) => {
+    instance.stopped = signal ? `killed by ${signal}` : `exit code ${code} (0x${((code ?? 0) >>> 0).toString(16)})`;
+  });
+  child.on('error', (e) => (instance.stopped = `could not start: ${e.message}`));
+  return instance;
+}
+
+/** Ends the app and its whole process tree (the fake CLIs, the WebView2); the port it listened on may still answer a moment. */
+async function killApp(instance: Instance) {
+  await instance.browser?.close().catch(() => {});
+  instance.browser = null;
+  if (instance.child.pid) {
+    try {
+      execFileSync('taskkill', ['/PID', String(instance.child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } catch {
+      // already gone
+    }
+  }
 }
 
 async function connect(port: number, stopped: () => string | null): Promise<{ browser: Browser; page: Page }> {
@@ -136,6 +175,9 @@ const LABELS = {
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
 
+/** How long `restart()` leaves the app to write its state before it ends it. */
+const SAVE_MS = 1500;
+
 export const test = base.extend<{
   app: App;
   appEnv: Record<string, string>;
@@ -184,38 +226,32 @@ export const test = base.extend<{
     const repo = makeRepo(root);
     const log = path.join(root, 'fake-claude.jsonl');
     const stderr = path.join(root, 'app-stderr.log');
-    const errFd = fs.openSync(stderr, 'w');
-    const child: ChildProcess = spawn(EXE, [], {
-      env: {
-        ...process.env,
-        ESCOUADE_DATA_DIR: data,
-        FAKE_CLAUDE_LOG: log,
-        // Sent "from claude.ai" to an agent once its Remote Control is on.
-        FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
-        WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
-        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
-        // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
-        // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
-        CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
-        // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
-        FAKE_CLAUDE_HOME: path.join(root, 'home'),
-        CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
-        ESCOUADE_USAGE_API: NO_USAGE_API,
-        ...appEnv,
-      },
-      stdio: ['ignore', 'ignore', errFd],
-    });
-    fs.closeSync(errFd);
-    let stopped: string | null = null;
-    child.on('exit', (code, signal) => {
-      stopped = signal ? `killed by ${signal}` : `exit code ${code} (0x${((code ?? 0) >>> 0).toString(16)})`;
-    });
-    child.on('error', (e) => (stopped = `could not start: ${e.message}`));
-    let browser: Browser | null = null;
-    try {
-      let page: Page;
+    // The same for every start of the test, `restart()`'s included: the data folder is what the app finds again.
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      ESCOUADE_DATA_DIR: data,
+      FAKE_CLAUDE_LOG: log,
+      // Sent "from claude.ai" to an agent once its Remote Control is on.
+      FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
+      WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
+      // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
+      CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+      // The fake `claude mcp …` keeps its servers in a folder of the test's, never in the user's home.
+      FAKE_CLAUDE_HOME: path.join(root, 'home'),
+      CLAUDE_SECURESTORAGE_CONFIG_DIR: undefined,
+      ESCOUADE_USAGE_API: NO_USAGE_API,
+      ...appEnv,
+    };
+    // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
+    let instance = startApp(env, stderr);
+    // Attaches Playwright to the WebView2 of a launch.
+    const attach = async (launch: Instance): Promise<Page> => {
       try {
-        ({ browser, page } = await connect(port, () => stopped));
+        const { browser, page } = await connect(port, () => launch.stopped);
+        launch.browser = browser;
+        return page;
       } catch (e) {
         const appLog = tail(path.join(data, 'app.log'));
         const errLog = tail(stderr);
@@ -225,23 +261,9 @@ export const test = base.extend<{
             `--- WebView2 ---\n${webviewDiagnostics(root)}`,
         );
       }
-      // What the app showed and logged, for a failure on CI (annotations are all we get there).
-      const state = async () => {
-        const shown = await Promise.race([
-          page
-            .evaluate(() =>
-              JSON.stringify({ ready: document.readyState, url: location.href, text: document.body?.innerText.slice(0, 300) }),
-            )
-            .catch((e) => `page unreachable: ${(e as Error).message.split('\n')[0]}`),
-          new Promise<string>((r) => setTimeout(() => r('page not answering'), 5000)),
-        ]);
-        return `--- page ---\n${shown}\n--- app (${stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
-      };
-      try {
-        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible();
-      } catch (e) {
-        throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
-      }
+    };
+    try {
+      const page = await attach(instance);
       const launches = () =>
         fs.existsSync(log)
           ? fs
@@ -251,17 +273,46 @@ export const test = base.extend<{
               .filter(Boolean)
               .map((l) => JSON.parse(l))
           : [];
-      await use({ page, repo, data, root, claudeJson: path.join(root, 'claude', '.claude.json'), launches });
+      const app: App = {
+        page,
+        repo,
+        data,
+        root,
+        claudeJson: path.join(root, 'claude', '.claude.json'),
+        launches,
+        restart: async () => {
+          // The app saves what it shows a moment after a change: not killed in the middle of it.
+          await new Promise((r) => setTimeout(r, SAVE_MS));
+          await killApp(instance);
+          if (!(await waitForPortToClose(port))) {
+            throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
+          }
+          instance = startApp(env, stderr);
+          app.page = await attach(instance);
+          return app.page;
+        },
+      };
+      // What the app showed and logged, for a failure on CI (annotations are all we get there).
+      const state = async () => {
+        const shown = await Promise.race([
+          app.page
+            .evaluate(() =>
+              JSON.stringify({ ready: document.readyState, url: location.href, text: document.body?.innerText.slice(0, 300) }),
+            )
+            .catch((e) => `page unreachable: ${(e as Error).message.split('\n')[0]}`),
+          new Promise<string>((r) => setTimeout(() => r('page not answering'), 5000)),
+        ]);
+        return `--- page ---\n${shown}\n--- app (${instance.stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
+      };
+      try {
+        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible();
+      } catch (e) {
+        throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
+      }
+      await use(app);
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
     } finally {
-      await browser?.close().catch(() => {});
-      if (child.pid) {
-        try {
-          execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-        } catch {
-          // already gone
-        }
-      }
+      await killApp(instance);
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);

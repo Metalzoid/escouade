@@ -42,11 +42,13 @@ import type {
   SlashCommand,
   StatesView,
   StatsView,
+  SubagentRead,
   TermInfo,
   TestRecipe,
   Ticket,
   TicketDraft,
   TicketImageData,
+  TranscriptCursor,
   UiEvent,
   UiState,
   WorktreeSuggestion,
@@ -155,6 +157,13 @@ export const api = {
   /** The image on the system's clipboard as PNG, empty without one: read for WebKitGTK (Linux), which leaves it out of a paste. */
   clipboardImage: () => invoke<ArrayBuffer>('clipboard_image'),
   interrupt: (id: string) => invoke<void>('interrupt', { id }),
+  /** « Arrêter » on a subagent of the agent `id` (`call`: the call that launched it), by Claude Code's `stop_task`. */
+  stopSubagent: (id: string, call: string) => invoke<void>('stop_subagent', { id, call }),
+  /** The conversation of a subagent in the Claude Code view, read from the transcript Claude Code keeps of it (read-only; no items while there is none). `cursor` is the one the read before gave: null back when its files did not change since. */
+  subagentTranscript: (id: string, call: string, cursor: TranscriptCursor | null = null) =>
+    invoke<SubagentRead | null>('subagent_transcript', { id, call, cursor }),
+  /** A message to a subagent of the agent `id`: the agent is asked to pass it on (Claude Code lets no host write to a subagent). */
+  messageSubagent: (id: string, call: string, text: string) => invoke<void>('message_subagent', { id, call, text }),
   answerQuestion: (id: string, requestId: string, answers: Record<string, string>) =>
     invoke<void>('answer_question', { id, requestId, answers }),
   answerPermission: (id: string, requestId: string, decision: 'allow' | 'always' | 'deny', message: string | null = null) =>

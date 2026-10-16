@@ -397,6 +397,24 @@ describe('App layout', () => {
     await expect.poll(() => screen.queryByRole('region', { name: 'À faire' })).toBeNull();
   });
 
+  it('shows a subagent’s conversation in place of its agent’s, and the agent’s again from its breadcrumb', async () => {
+    const plan = {
+      source: null,
+      tasks: [],
+      agents: [{ id: 'c1', title: 'Chercher', status: 'running', background: true, tools: 0, startedAt: 1, taskId: 't1' }],
+      launched: 1,
+      workflows: [],
+    };
+    start('', { agents: [agent({ plan: plan as never })] });
+    expect(await screen.findByRole('main')).toBeInTheDocument();
+    app.openSubagent('a1', 'c1');
+    const crumbs = await screen.findByRole('navigation', { name: 'Fil d’Ariane' });
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    await userEvent.click(within(crumbs).getByRole('button', { name: 'refacto-auth' }));
+    await expect.poll(() => screen.queryByRole('navigation', { name: 'Fil d’Ariane' })).toBeNull();
+    expect(screen.getByRole('main')).toBeInTheDocument();
+  });
+
   it('opens the board settings from the board header', async () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();

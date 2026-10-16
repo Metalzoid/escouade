@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { t } from '../lib/i18n';
+  import { menu } from '../lib/menu.svelte';
   import { modelLabel } from '../lib/models';
   import { planView, type PlanRow, type PlanRowState } from '../lib/plan';
   import { readPref, removePref, writePref } from '../lib/prefs';
@@ -18,7 +19,7 @@
 
   /** A window this tall opens the list of a plan whose banner the reader has not folded or unfolded. */
   const TALL = 800;
-  /** Dots of subagents drawn in the stack; the count says the rest. */
+  /** Dots of subagents drawn in the stack; the count says the rest, and the menu of the stack lists them all. */
   const DOTS = 6;
   /** After the reader scrolled the list, it is left alone this long. */
   const QUIET_MS = 6000;
@@ -145,15 +146,52 @@
   /** The segment of a task: whole for a task done, to do, or not measured (faint); as far as it is otherwise. */
   const segWidth = (row: PlanRow) => (row.state === 'run' || row.state === 'block' ? (row.percent ?? 100) : 100);
   const titleTip = $derived(view ? (view.file ? `${view.title}\n${t('plan.source', { file: view.file })}` : view.title) : '');
+
+  /**
+   * The stack of dots opens the conversation of the one subagent that runs; of several, it opens a menu of them, whose entry
+   * opens that one. The menu gives the focus back to the stack when it closes, but not in a web view that gives none to a button
+   * a click presses; and `openSubagent` notes the element that has the focus as the place to come back to (the stack, by
+   * `data-open-from`: `Conversation` finds it again, drawn anew). So the entry waits for the menu to be gone, and the stack takes
+   * the focus.
+   */
+  function openFromStack(stack: HTMLElement) {
+    const dots = view?.subDots ?? [];
+    if (dots.length === 1) return app.openSubagent(agent.id, dots[0].id);
+    if (!dots.length) return;
+    menu.showAt(
+      stack,
+      dots.map((dot) => ({
+        label: dot.name,
+        ...(dot.model ? { hint: modelLabel(dot.model, app.models) } : {}),
+        onClick: async () => {
+          await tick();
+          stack.focus();
+          app.openSubagent(agent.id, dot.id);
+        },
+      })),
+    );
+  }
 </script>
 
 <svelte:window onresize={() => (tall = window.innerHeight >= TALL)} />
 
+<!-- The subagents running: a stack of a dot for each, in one button, and their count. The button opens the conversation of the
+     subagent in place of the agent's, or a menu of them to pick one when several run. The dots are drawings. -->
 {#snippet subs()}
   {#if view && view.subsRunning > 0}
+    {@const dots = view.subDots}
+    {@const only = dots.length === 1 ? dots[0] : null}
     <span class="subs">
-      <span class="dots" aria-hidden="true"
-        >{#each view.subDots.slice(0, DOTS) as dot, i (i)}<span class="dot" use:tip={dot.name}></span>{/each}</span
+      <button
+        type="button"
+        class="stack"
+        data-open-sub={only?.id}
+        data-open-from="dots"
+        aria-haspopup={only ? undefined : 'menu'}
+        aria-label={only ? t('subagents.openRow', { name: only.name }) : t('subagents.openAny')}
+        use:tip={only ? only.name : t('subagents.openAny')}
+        onclick={(e) => openFromStack(e.currentTarget)}
+        >{#each dots.slice(0, DOTS) as dot (dot.id)}<span class="dot" aria-hidden="true"></span>{/each}</button
       >{t('plan.subsRunning', { count: view.subsRunning })}
     </span>
   {/if}
@@ -163,21 +201,25 @@
   <div class="plan" bind:this={root}>
     <div class="inner">
       {#if hasTasks}
-        <button
-          type="button"
-          class="head"
-          aria-expanded={open}
-          aria-controls={open ? listId : undefined}
-          aria-label={t('plan.toggle', { title: view.title })}
-          onclick={toggle}
-        >
-          <span class="badge">{t('plan.badge')}</span>
-          <span class="title" use:tip={titleTip}>{view.title}</span>
+        <!-- The subagents are beside the button that folds the banner, not in it (no button in a button): the button
+             spans the row, they sit above it, where they stood inside it. -->
+        <div class="head tasks" class:has-subs={view.subsRunning > 0}>
+          <button
+            type="button"
+            class="fold"
+            aria-expanded={open}
+            aria-controls={open ? listId : undefined}
+            aria-label={t('plan.toggle', { title: view.title })}
+            onclick={toggle}
+          >
+            <span class="badge">{t('plan.badge')}</span>
+            <span class="title" use:tip={titleTip}>{view.title}</span>
+            <span class="count mono">{t('plan.tasks', { done: view.done, count: view.total })}</span>
+            <span class="pct mono">{t('plan.percent', { percent: view.percent })}</span>
+            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          </button>
           {@render subs()}
-          <span class="count mono">{t('plan.tasks', { done: view.done, count: view.total })}</span>
-          <span class="pct mono">{t('plan.percent', { percent: view.percent })}</span>
-          <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
-        </button>
+        </div>
         <div
           class="segs"
           role="progressbar"
@@ -230,10 +272,16 @@
                   <span class="rt" use:tip={{ text: row.title, cut: true }}>{row.title}</span>
                   <span class="meta">
                     {#if row.sub}
-                      <span class="subtag mono"
-                        >{t('plan.subOn', { name: row.sub.name })}{#if row.sub.model}<span class="model"
-                            >{modelLabel(row.sub.model, app.models)}</span
-                          >{/if}</span
+                      {@const sub = row.sub}
+                      <!-- Its conversation opens in place of the agent's. -->
+                      <button
+                        class="subtag mono"
+                        data-open-sub={sub.id}
+                        data-open-from="task"
+                        use:tip={t('subagents.openRow', { name: sub.name })}
+                        onclick={() => app.openSubagent(agent.id, sub.id)}
+                        >{t('plan.subOn', { name: sub.name })}{#if sub.model}<span class="model">{modelLabel(sub.model, app.models)}</span
+                          >{/if}</button
                       >
                     {/if}
                     {#if row.step}<span class="step" use:tip={{ text: row.step, cut: true }}>{row.step}</span>{/if}
@@ -252,7 +300,7 @@
           </ul>
         {/if}
       {:else}
-        <!-- Subagents work, but no task list: who works is all there is to tell. -->
+        <!-- Subagents work, but no task list: who works is all there is to tell, and each one opens. -->
         <div class="head static">
           <span class="badge">{t('plan.badgeSubs')}</span>
           <span class="title" use:tip={{ text: view.title, cut: true }}>{view.title}</span>
@@ -303,6 +351,23 @@
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  /* With tasks: a grid, so that the subagents sit between the title and the count while the button that folds the banner
+     (the whole row, in the subgrid below) holds everything else. A named line is a column; without subagents the
+     count's line is the subagents' (no column, no gap). */
+  .head.tasks {
+    display: grid;
+    grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs] auto [count] auto [pct] auto [chev] auto;
+  }
+  .head.tasks:not(.has-subs) {
+    grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs count] auto [pct] auto [chev] auto;
+  }
+  .fold {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
     padding: 0;
     border: none;
     background: transparent;
@@ -311,10 +376,26 @@
     text-align: left;
     cursor: pointer;
   }
-  .head.static {
-    cursor: default;
+  .fold > .badge {
+    grid-column: badge;
   }
-  .head:focus-visible {
+  .fold > .title {
+    grid-column: title;
+  }
+  .fold > .count {
+    grid-column: count;
+  }
+  .fold > .pct {
+    grid-column: pct;
+  }
+  .fold > .chev {
+    grid-column: chev;
+  }
+  .head.tasks > .subs {
+    grid-column: subs;
+    grid-row: 1;
+  }
+  .fold:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
     border-radius: 3px;
@@ -348,17 +429,41 @@
     color: var(--muted);
     white-space: nowrap;
   }
-  .dots {
+  /* One button for the whole stack: it opens the conversation of the subagent, or a menu of them. Its target is 24 px
+     square at least (WCAG 2.5.8); the circles are drawn in it as they were when each was a button, 16 px each over the
+     4 px of the one before, and the margins give back the room the padding takes, so that the circles and the count keep
+     their place. */
+  .stack {
+    flex: none;
     display: flex;
+    align-items: center;
+    min-width: 24px;
+    min-height: 24px;
+    margin: -4px -4px -4px -8px;
+    padding: 4px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
   }
   .dot {
-    display: inline-block;
+    flex: none;
     width: 16px;
     height: 16px;
-    margin-left: -4px;
     border-radius: 50%;
     border: 2px solid var(--panel);
     background: var(--accent-soft);
+  }
+  .dot + .dot {
+    margin-left: -4px;
+  }
+  .stack:hover .dot,
+  .stack:focus-visible .dot {
+    background: var(--accent);
+  }
+  .stack:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
   }
   .count {
     flex: none;
@@ -540,6 +645,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* A button: it opens the subagent's conversation. */
+  button.subtag {
+    border: 1px solid transparent;
+    font-family: var(--mono);
+    cursor: pointer;
+  }
+  button.subtag:hover {
+    border-color: var(--accent);
+  }
+  button.subtag:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
   .model {
     color: var(--muted);
   }
@@ -587,6 +705,10 @@
     .rbar,
     .head:not(.static) .subs {
       display: none;
+    }
+    /* The subagents' column goes with them. */
+    .head.tasks {
+      grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs count] auto [pct] auto [chev] auto;
     }
   }
   @media (prefers-reduced-motion: reduce) {

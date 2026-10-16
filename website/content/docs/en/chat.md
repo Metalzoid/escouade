@@ -96,7 +96,7 @@ A click on the line (or `Enter` when it has focus) unfolds it:
 - **File edit** (`Edit`, `Write`, `MultiEdit`): the diff, with numbered lines, in green and red. It’s unified or side by side depending on the choice you made in the diff viewer (“Unified” or “Side by side”, see [git](git)). Past 400 lines, it stops at “… N more lines”. The file’s path is a link: it opens the file in the editor, at the first changed line.
 - **Command** (`Bash`, `PowerShell`): the command after `$`, then its output.
 - **Task list** (`TodoWrite`): the tasks with ☐, ◐ (in progress), and ☑.
-- **Subagent** (`Agent`): what it was asked, its own tool calls (nested lines, which you can unfold too), and its last text. The line says how many tools it used.
+- **Subagent** (`Agent`): what it was asked, its own tool calls (nested lines, which you can unfold too), and its last text. The line says how many tools it used, and its ↗ button opens the subagent’s conversation in full size, in place of the agent’s (see [a subagent’s conversation](plan#the-conversation-of-a-subagent)).
 - **Other tools**: their result, otherwise the call’s parameters.
 
 Tools that only reread the task list (`TaskList`, `TaskGet`) are displayed in softer shades. The tools of Escouade’s MCP server carry an “Escouade · …” badge (see [the MCP server](mcp)).
@@ -122,6 +122,8 @@ Short lines, outside the messages, report what happens to the session: “Contex
 ## Questions and permissions
 
 When Claude needs you, the conversation shows an amber card, the agent goes to “Question”, and you’re notified (see [notifications](notifications)). You answer with the mouse, the keyboard, or by writing in the field.
+
+When the request comes from a subagent, the card is headed by “Request of the subagent” and its name, with an “Open its conversation” button. You can answer it here or in the subagent’s conversation, where the same card appears (see [a subagent’s conversation](plan#the-conversation-of-a-subagent)); the answer holds on both sides.
 
 ### Questions
 

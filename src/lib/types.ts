@@ -645,6 +645,35 @@ export interface SubAgent {
   doing?: string;
   /** The id of the task it works on, when it can be told. */
   planTask?: string;
+  /** The call of the subagent that launched it, when one did (a subagent's subagent). */
+  parent?: string;
+  /** Claude Code's id of its task, once a frame told it: what « Arrêter » stops and what the agent writes to. */
+  taskId?: string;
+}
+
+/** What the conversation keeps of a subagent once it ended, on the item of its call: the plan forgets its row (30 at most, none after a reset). */
+export interface SubagentRun {
+  status: RunStatus;
+  tokens?: number;
+  tools: number;
+  startedAt: number;
+  endedAt?: number | null;
+}
+
+/** How a subagent's files stood when its transcript was last read (Claude Code view): the transcript's size in bytes, and when it last changed in ms (the later of it and its meta file). Given back to the next read, which answers `null` while nothing changed. */
+export interface TranscriptCursor {
+  len: number;
+  mtime: number;
+}
+
+/** What a read of a subagent's transcript gives in the Claude Code view (`subagent_transcript`; `null` instead when the cursor given is still current). */
+export interface SubagentRead {
+  /** Its whole thread, which replaces the one shown. */
+  items: ConvItem[];
+  /** The cursor to give back; null while there is no file yet (the next read looks for it again). */
+  cursor: TranscriptCursor | null;
+  /** How its files say it ended, which the view's frames never do (stopped in Claude Code's interface, an API error): the backend has ended its row of the plan then, if it still ran, and sent the agent. */
+  ended: 'stopped' | 'failed' | null;
 }
 
 /** A workflow of Claude Code the agent runs. */
@@ -964,10 +993,16 @@ export interface ToolItem extends Base {
   status: 'running' | 'ok' | 'error' | 'interrupted';
   result?: ToolResult;
   ts: number;
+  /** The call of a subagent (`Agent` / `Task`): the report it handed back (`handback_report`, else the `summary` of a notification with no hand-back), 16 000 bytes of UTF-8 at most. */
+  report?: string;
+  /** The call of a subagent: what it was once it ended. */
+  run?: SubagentRun;
 }
 export interface QuestionItem extends Base {
   kind: 'question';
   toolUseId: string;
+  /** Asked by a subagent: the call that launched it. Shown in the agent's conversation and in the subagent's. */
+  sub?: string;
   questions: Question[];
   answers: Record<string, string> | null;
   /** Who answered, when it was a client of the MCP server and not the user in the window (an agent's name, « Claude (hors Escouade) »). */
@@ -978,6 +1013,8 @@ export interface QuestionItem extends Base {
 export interface PermissionItem extends Base {
   kind: 'permission';
   toolUseId: string;
+  /** Asked by a subagent: the call that launched it. Shown in the agent's conversation and in the subagent's. */
+  sub?: string;
   toolName: string;
   title?: string | null;
   description?: string | null;

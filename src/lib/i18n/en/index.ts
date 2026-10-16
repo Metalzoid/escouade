@@ -20,6 +20,7 @@ import runs from './runs';
 import settings from './settings';
 import shell from './shell';
 import stats from './stats';
+import subagents from './subagents';
 
 export const en = defineCatalog({
   common,
@@ -41,4 +42,5 @@ export const en = defineCatalog({
   mcp,
   branches,
   plan,
+  subagents,
 });

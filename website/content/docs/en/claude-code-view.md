@@ -29,9 +29,18 @@ Thanks to this, an agent in the Claude Code view keeps:
 - **its conversation**: what happens in the interface is also written to Escouade’s conversation, which you find again when you return to the “Escouade view”;
 - **search** (`Ctrl+K`, see [keeping track of your agents](overview#searching-conversations));
 - **the “Plan” banner** (see [plan progress](plan));
+- **its subagents**: their list in the sidebar and, read-only, their conversation (see [below](#subagents));
 - **its statistics and its cost** (see [statistics](stats)). The interface doesn’t give the cost of each turn: Escouade estimates it from public prices.
 
 When the agent is waiting for an answer, you give it in the terminal: the [overview](overview) reminds you (“Waiting for your answer in Claude Code’s interface”) and its “Reply” button opens the agent.
+
+## Subagents
+
+The subagents of an agent in the Claude Code view are listed as elsewhere, under its card in the sidebar and in the “Plan” banner (see [subagents in the sidebar](plan#subagents-in-the-sidebar)). A click on one opens its conversation in place of the terminal; the breadcrumb, or `Esc`, takes you back to the agent.
+
+This conversation is **read-only**. Escouade reads it in the transcript Claude Code keeps for this subagent, next to the agent’s: it’s read when the view opens, read again every 2 seconds while the subagent runs, then one last time when it finishes. The view says so at the top (“Read-only: its transcript, as Claude Code writes it. This subagent is acted on in Claude Code’s own interface.”). There’s no “Stop” and no “Write to it”: to stop a subagent or write to it, use Claude Code’s interface, in the terminal. If Escouade can’t find that transcript (Claude Code hasn’t written it yet, or keeps it elsewhere), the view says “No message from this subagent yet.”
+
+In this view, no signal tells Escouade that a background subagent has finished. It works it out from what Claude Code replays to the agent in its transcript: the report the subagent hands back to it, or the notification of its end. Until that message has arrived, the subagent’s line stays “Running”. Its report is the one it handed back to the agent.
 
 ## Writing to an agent in this view
 

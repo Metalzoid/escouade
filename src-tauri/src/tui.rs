@@ -747,6 +747,8 @@ impl<R: Runtime> Core<R> {
         };
         self.apply(id, &pid, &name, fx, view);
         if out.stopped {
+            // A background subagent the user stopped in the interface says so only in its files.
+            self.end_stopped_subagents(id);
             // The transcript tells the end of the turn right after the hook; if it still did not
             // after a moment (a version that does not write it), the turn ends here.
             let (c, id) = (self.clone(), id.to_string());

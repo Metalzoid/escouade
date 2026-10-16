@@ -673,6 +673,9 @@ pub struct Core<R: Runtime = Wry> {
     toplevels: Mutex<HashMap<String, Option<String>>>,
     /// How the look at the files of each agent's plan stands, by agent (`ask_plan_scan`).
     plan_scans: Mutex<HashMap<String, PlanScan>>,
+    /// Where the transcripts of the subagents were found, in the Claude Code view
+    /// (`subagent_transcript`): the meta files are not looked through at each read.
+    pub(crate) sidechains: Mutex<crate::agent::sidechain::Found>,
     dirty: AtomicBool,
     waiting: AtomicUsize,
     pub quitting: AtomicBool,
@@ -865,6 +868,20 @@ fn read_settings(path: &Path) -> Settings {
         settings.claude_language = "ui".into();
     }
     settings
+}
+
+/// What the agent is told for a message to its subagent `title` (its task `task`, the `agentId`
+/// Claude Code gave it): to pass `text` on with `SendMessage`, as it is.
+pub fn subagent_message(lang: i18n::Lang, title: &str, task: &str, text: &str) -> String {
+    tr_in!(
+        lang,
+        "Transmets ce message au sous-agent « {title} » (agentId {task}) avec l’outil SendMessage, tel quel, puis reprends ce que tu faisais :
+
+{text}",
+        "Pass this message on to the subagent “{title}” (agentId {task}) with the SendMessage tool, as it is, then go back to what you were doing:
+
+{text}"
+    )
 }
 
 const CLAUDE_BASE_ARGS: &[&str] = &[
@@ -1530,6 +1547,7 @@ impl<R: Runtime> Core<R> {
             sync_locks: Mutex::default(),
             toplevels: Mutex::default(),
             plan_scans: Mutex::default(),
+            sidechains: Mutex::default(),
             dirty: AtomicBool::new(false),
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
@@ -3128,6 +3146,306 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    /// A message to a subagent of the agent `id` (`call`, the call that launched it). Claude Code
+    /// lets no host write to a subagent (`send_task_message` is refused, docs/PROTOCOL.md, « Lui
+    /// écrire »): the message goes to the agent, which is asked to pass it on with its
+    /// `SendMessage` tool to the subagent's task, as Claude Code tells it it can. Refused for a
+    /// subagent whose task no frame told.
+    pub async fn message_subagent(
+        self: &Arc<Self>,
+        id: &str,
+        call: &str,
+        text: &str,
+    ) -> Result<()> {
+        let text = text.trim();
+        if text.is_empty() {
+            bail!(tr!("Le message est vide.", "The message is empty."));
+        }
+        let (title, task) = {
+            let h = self.agent(id)?;
+            let rt = h.lock();
+            if rt.meta.archived {
+                bail!(tr!("L’agent est archivé.", "The agent is archived."));
+            }
+            if rt.meta.terminal {
+                bail!(tr!(
+                    "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code.",
+                    "In the Claude Code view, a subagent is written to from Claude Code’s interface."
+                ));
+            }
+            let row = rt
+                .meta
+                .plan
+                .as_ref()
+                .and_then(|p| p.agents.iter().find(|a| a.id == call));
+            match row {
+                // In the foreground, the agent waits for it: the message would only reach it
+                // once it ended.
+                Some(a) if !a.background => bail!(tr!(
+                    "Ce sous-agent travaille au premier plan : l’agent ne lui transmettrait le message qu’une fois fini.",
+                    "This subagent works in the foreground: the agent would only pass the message on once it ended."
+                )),
+                Some(a) if a.task_id.is_some() => {
+                    (a.title.clone(), a.task_id.clone().unwrap_or_default())
+                }
+                _ => bail!(tr!(
+                    "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire.",
+                    "Claude Code has not told this subagent’s task: it cannot be written to."
+                )),
+            }
+        };
+        let message = subagent_message(i18n::claude(), &title, &task, text);
+        // Not the user's task: it never names the agent.
+        self.send_by_app(id, message).await
+    }
+
+    /// « Arrêter » on a subagent of the agent `id`, `call` being the call that launched it: Claude
+    /// Code's `stop_task` on its task (docs/PROTOCOL.md, « Arrêter un sous-agent »). Its end comes
+    /// with the frames that follow (the task killed, its notification « stopped »), as any end.
+    /// Refused for a subagent that does not run, or whose task no frame told (nothing to name), or
+    /// with no process to ask (in the Claude Code view, its interface does it).
+    pub async fn stop_subagent(self: &Arc<Self>, id: &str, call: &str) -> Result<()> {
+        let h = self.agent(id)?;
+        let (proc, task) = {
+            let rt = h.lock();
+            let row = rt
+                .meta
+                .plan
+                .as_ref()
+                .and_then(|p| p.agents.iter().find(|a| a.id == call))
+                .filter(|a| a.status == crate::plan::RunStatus::Running);
+            let Some(row) = row else {
+                bail!(tr!(
+                    "Ce sous-agent ne tourne plus.",
+                    "This subagent is no longer running."
+                ));
+            };
+            // In the foreground the agent waits for it, and its own « Arrêter » stops it with its
+            // turn; stopping one alone there was never tried on a real stream (docs/PROTOCOL.md).
+            if !row.background {
+                bail!(tr!(
+                    "Ce sous-agent travaille au premier plan : l’agent l’attend, et « Arrêter » de l’agent l’arrête avec son tour.",
+                    "This subagent works in the foreground: the agent waits for it, and the agent’s « Stop » stops it with its turn."
+                ));
+            }
+            let Some(task) = row.task_id.clone() else {
+                bail!(tr!(
+                    "Claude Code n’a pas encore donné la tâche de ce sous-agent : il ne peut pas être arrêté seul.",
+                    "Claude Code has not told this subagent’s task yet: it cannot be stopped on its own."
+                ));
+            };
+            if rt.tui.is_some() {
+                bail!(tr!(
+                    "En vue Claude Code, un sous-agent s’arrête depuis son interface.",
+                    "In the Claude Code view, a subagent is stopped from its interface."
+                ));
+            }
+            (rt.proc.clone(), task)
+        };
+        let Some(p) = proc else {
+            bail!(tr!(
+                "Le processus de l’agent ne tourne pas.",
+                "The agent’s process is not running."
+            ));
+        };
+        p.control(
+            json!({ "subtype": "stop_task", "task_id": task }),
+            Duration::from_secs(15),
+        )
+        .await
+        .context(tr!(
+            "Claude Code n’a pas arrêté le sous-agent",
+            "Claude Code did not stop the subagent"
+        ))?;
+        Ok(())
+    }
+
+    /// The conversation of the subagent `call` launched, in the Claude Code view, where the stream
+    /// does not tell it: read from the transcript of its own that Claude Code writes beside the
+    /// agent's (`agent::sidechain`). `since` is the cursor of the read before: None back when its
+    /// files are as that read left them (the window asks every 2 s). No items and no cursor while
+    /// there is no file. Refused for an agent that is not in that view (its subagents' threads are
+    /// in its conversation then).
+    ///
+    /// Its files may say how the subagent ended, which the view's frames never do (stopped in the
+    /// interface, an API error: `ended`); its row of the plan, if it still runs, ends so, and the
+    /// window is sent the agent.
+    pub fn subagent_transcript(
+        self: &Arc<Self>,
+        id: &str,
+        call: &str,
+        since: Option<crate::agent::sidechain::Cursor>,
+    ) -> Result<Option<crate::agent::sidechain::SidechainRead>> {
+        use crate::agent::sidechain;
+        let h = self.agent(id)?;
+        // What is read is known under the agent's lock; the files are read out of it.
+        let (read, session, account, task) = {
+            let rt = h.lock();
+            if !rt.meta.terminal {
+                bail!(tr!(
+                    "Hors vue Claude Code, la conversation d’un sous-agent est dans celle de l’agent.",
+                    "Outside the Claude Code view, a subagent’s conversation is in the agent’s."
+                ));
+            }
+            let task = rt
+                .meta
+                .plan
+                .as_ref()
+                .and_then(|p| p.agents.iter().find(|a| a.id == call))
+                .and_then(|a| a.task_id.clone());
+            (
+                rt.meta
+                    .transcript_read
+                    .as_ref()
+                    .map(|(file, _)| PathBuf::from(file)),
+                rt.meta.session_id.clone(),
+                rt.meta.account.clone(),
+                task,
+            )
+        };
+        let file = self.find_sidechain(id, call, task.as_deref(), || {
+            self.agent_transcript(read, session, &account)
+        });
+        let Some(file) = file else {
+            return Ok(Some(sidechain::SidechainRead {
+                items: Vec::new(),
+                cursor: None,
+                ended: None,
+            }));
+        };
+        let read = sidechain::read_changed(&file, call, since).context(tr!(
+            "Le transcript du sous-agent n’a pas pu être lu",
+            "The subagent’s transcript could not be read"
+        ))?;
+        if let Some(how) = read.as_ref().and_then(|r| r.ended) {
+            self.end_subagents(id, &[(call.to_string(), how)]);
+        }
+        Ok(read)
+    }
+
+    /// The transcript of the agent in the Claude Code view, beside which its subagents' are: the
+    /// one Escouade reads (`read`), else its session's in the folder of its account.
+    fn agent_transcript(
+        &self,
+        read: Option<PathBuf>,
+        session: Option<String>,
+        account: &str,
+    ) -> Option<PathBuf> {
+        read.or_else(|| {
+            let settings = self.settings.read().clone();
+            let account = accounts::get(&settings, account);
+            crate::tui::find_transcript(&accounts::config_dir(&account, &settings), &session?)
+        })
+    }
+
+    /// The transcript of the subagent `call` of the agent `id`: the path found before, while it is
+    /// still what was found, else looked for beside the agent's own transcript (`main`, asked for
+    /// only then) and kept. A path that is gone is forgotten.
+    fn find_sidechain(
+        &self,
+        id: &str,
+        call: &str,
+        task: Option<&str>,
+        main: impl FnOnce() -> Option<PathBuf>,
+    ) -> Option<PathBuf> {
+        use crate::agent::sidechain;
+        let kept = self.sidechains.lock().get(id, call);
+        if let Some(file) = kept {
+            if sidechain::still_found(&file) {
+                return Some(file);
+            }
+            self.sidechains.lock().forget(id, call);
+        }
+        let file = sidechain::sidechain_file(&main()?, call, task)?;
+        self.sidechains.lock().remember(id, call, file.clone());
+        Some(file)
+    }
+
+    /// The paths of the transcripts of the agent `id`'s subagents are not kept any more (it is
+    /// deleted).
+    pub(crate) fn forget_sidechains(&self, id: &str) {
+        self.sidechains.lock().forget_agent(id);
+    }
+
+    /// The subagents of the agent `id` that `ends` names (the call that launched each, and how it
+    /// ended) ended as their files show: the row of each that runs still ends so (the plan never
+    /// opens an ended one again), with `run` written on its call, and the window is sent the agent
+    /// when something changed.
+    fn end_subagents(
+        self: &Arc<Self>,
+        id: &str,
+        ends: &[(String, crate::agent::sidechain::Ended)],
+    ) {
+        let Ok(h) = self.agent(id) else { return };
+        let mut fx = Effects::default();
+        let (pid, name, view) = {
+            let mut rt = h.lock();
+            for (call, how) in ends {
+                rt.end_subagent(call, *how, &mut fx);
+            }
+            (
+                rt.meta.project_id.clone(),
+                rt.meta.name.clone(),
+                fx.agent_changed.then(|| rt.view()),
+            )
+        };
+        self.apply(id, &pid, &name, fx, view);
+    }
+
+    /// The end of a turn of the agent's Claude Code interface (its `Stop` hook): the subagents in
+    /// the background that run still, in its plan, are looked at once. One the user stopped in the
+    /// interface is told only by its meta file (`stoppedByUser`): no frame, and the agent's
+    /// transcript does not always replay its notification. Their rows end, as `subagent_transcript`
+    /// ends one, for the sidebar not to say « En cours » while its view is not open. A small file
+    /// for each row, `MAX_WATCHED` at most, read out of the agent's lock.
+    pub(crate) fn end_stopped_subagents(self: &Arc<Self>, id: &str) {
+        use crate::agent::sidechain;
+        /// The most rows looked at.
+        const MAX_WATCHED: usize = 30;
+        let Ok(h) = self.agent(id) else { return };
+        let (rows, read, session, account) = {
+            let rt = h.lock();
+            let rows: Vec<(String, Option<String>)> = rt
+                .meta
+                .plan
+                .iter()
+                .flat_map(|p| p.agents.iter())
+                .filter(|a| a.status == crate::plan::RunStatus::Running && a.background)
+                .take(MAX_WATCHED)
+                .map(|a| (a.id.clone(), a.task_id.clone()))
+                .collect();
+            (
+                rows,
+                rt.meta
+                    .transcript_read
+                    .as_ref()
+                    .map(|(file, _)| PathBuf::from(file)),
+                rt.meta.session_id.clone(),
+                rt.meta.account.clone(),
+            )
+        };
+        if rows.is_empty() {
+            return;
+        }
+        let main = std::cell::OnceCell::new();
+        let ends: Vec<_> = rows
+            .into_iter()
+            .filter_map(|(call, task)| {
+                let file = self.find_sidechain(id, &call, task.as_deref(), || {
+                    main.get_or_init(|| {
+                        self.agent_transcript(read.clone(), session.clone(), &account)
+                    })
+                    .clone()
+                })?;
+                let meta = sidechain::read_meta(&sidechain::meta_file(&file))?;
+                Some((call, sidechain::how_it_ended(Some(&meta), "")?))
+            })
+            .collect();
+        if !ends.is_empty() {
+            self.end_subagents(id, &ends);
+        }
+    }
+
     pub(crate) fn with_agent<T>(
         self: &Arc<Self>,
         id: &str,
@@ -4401,6 +4719,7 @@ impl<R: Runtime> Core<R> {
         self.stop_setup(id).await;
         let _ = std::fs::remove_file(self.data.setup_log(id));
         self.forget_pastes(id);
+        self.forget_sidechains(id);
         {
             let mut ui = self.ui.write();
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
@@ -5015,6 +5334,7 @@ impl<R: Runtime> Core<R> {
                 s.task.abort();
             }
             self.forget_pastes(&aid);
+            self.forget_sidechains(&aid);
             // Its test launches are the project's terminals too (killed below all the same):
             // none is kept for it. isola's services of its worktree stop too.
             self.stop_test_runs(&aid);

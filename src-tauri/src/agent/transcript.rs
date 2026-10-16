@@ -20,8 +20,9 @@ pub struct HookOutcome {
     pub stopped: bool,
 }
 
-/// The texts Claude Code writes as the user's when a turn is interrupted.
-const INTERRUPTED: &[&str] = &[
+/// The texts Claude Code writes as the user's when a turn is interrupted (also in a subagent's
+/// transcript: `sidechain`).
+pub(super) const INTERRUPTED: &[&str] = &[
     "[Request interrupted by user",
     "[Request interrupted by user for tool use",
 ];

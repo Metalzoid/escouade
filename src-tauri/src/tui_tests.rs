@@ -524,3 +524,468 @@ async fn removing_the_project_stops_its_agents_interfaces_and_clears_their_paste
         "Claude Code's interface still runs"
     );
 }
+
+/// What Claude Code 2.1.300 wrote of a real subagent (`tests/fixtures`), and its call and task.
+const SIDECHAIN: &str = include_str!("../../tests/fixtures/real-sidechain.jsonl");
+const SIDECHAIN_META: &str = include_str!("../../tests/fixtures/real-sidechain.meta.json");
+const SUB_CALL: &str = "toolu_01SdqbgNzZvBJ1FgjQC3Gg6L";
+const SUB_TASK: &str = "a3c004cb08b483eb9";
+
+/// The folder where Claude Code keeps a session's subagents' transcripts, next to its own, written
+/// in the account `config_dir` (`projects/<folder>/<session>/subagents`); the transcript itself empty.
+fn subagents_folder(config_dir: &str, session: &str) -> std::path::PathBuf {
+    let folder = std::path::Path::new(config_dir)
+        .join("projects")
+        .join("-work-demo");
+    let subs = folder.join(session).join("subagents");
+    std::fs::create_dir_all(&subs).unwrap();
+    std::fs::write(folder.join(format!("{session}.jsonl")), "").unwrap();
+    subs
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_conversation_of_a_subagent_is_read_from_its_own_transcript_in_the_claude_code_view() {
+    let h = harness("tui-sidechain");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    // The stream view has the thread in its conversation: nothing to read there.
+    assert!(h.core.subagent_transcript(&id, SUB_CALL, None).is_err());
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let session = "55555555-2222-3333-4444-555555555555";
+    h.core.agent(&id).unwrap().lock().meta.session_id = Some(session.into());
+
+    // No file yet: nothing, not an error (and no cursor: the next read looks for it again).
+    let none = h.core.subagent_transcript(&id, SUB_CALL, None);
+    let none = none.unwrap().unwrap();
+    assert!(none.items.is_empty() && none.cursor.is_none() && none.ended.is_none());
+
+    // Found by the meta file that names its call, in the account's folder.
+    let subs = subagents_folder(&pro.config_dir, session);
+    std::fs::write(subs.join(format!("agent-{SUB_TASK}.jsonl")), SIDECHAIN).unwrap();
+    std::fs::write(
+        subs.join(format!("agent-{SUB_TASK}.meta.json")),
+        SIDECHAIN_META,
+    )
+    .unwrap();
+    let items = thread(&h, &id, SUB_CALL);
+    assert_eq!(items.len(), 4);
+    assert!(items.iter().all(|i| i["parent"] == SUB_CALL));
+    assert_eq!(items[0]["name"], "Write");
+    assert_eq!(items[0]["status"], "ok");
+    assert_eq!(thread(&h, &id, "toolu_nobody").len(), 0);
+    assert!(h
+        .core
+        .subagent_transcript("nobody", SUB_CALL, None)
+        .is_err());
+
+    // Found by its task, which the row of the plan tells, without a meta file. (The path found
+    // before is kept: forgotten here, for it to be looked for again.)
+    std::fs::remove_file(subs.join(format!("agent-{SUB_TASK}.meta.json"))).unwrap();
+    h.core.forget_sidechains(&id);
+    assert!(thread(&h, &id, SUB_CALL).is_empty());
+    h.core.agent(&id).unwrap().lock().meta.plan = Some(crate::plan::PlanState {
+        agents: vec![crate::plan::SubAgent {
+            id: SUB_CALL.into(),
+            task_id: Some(SUB_TASK.into()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+    assert_eq!(thread(&h, &id, SUB_CALL).len(), 4);
+
+    // The transcript the interface is read from is the one it looks beside, wherever it is.
+    let elsewhere = h.dir.join("elsewhere");
+    let there = elsewhere.join("s9").join("subagents");
+    std::fs::create_dir_all(&there).unwrap();
+    std::fs::write(elsewhere.join("s9.jsonl"), "").unwrap();
+    std::fs::write(
+        there.join(format!("agent-{SUB_TASK}.jsonl")),
+        SIDECHAIN.lines().take(4).collect::<Vec<_>>().join("\n"),
+    )
+    .unwrap();
+    h.core.agent(&id).unwrap().lock().meta.transcript_read =
+        Some((elsewhere.join("s9.jsonl").to_string_lossy().into(), 0));
+    h.core.forget_sidechains(&id);
+    assert_eq!(thread(&h, &id, SUB_CALL).len(), 1);
+}
+
+/// What a first read (no cursor) of the thread of `call` gives: it always gives something.
+fn thread(h: &Harness, id: &str, call: &str) -> Vec<serde_json::Value> {
+    h.core
+        .subagent_transcript(id, call, None)
+        .unwrap()
+        .expect("a first read gives the thread")
+        .items
+}
+
+/// An agent in the Claude Code view whose transcript is `<h.dir>/<name>/s9.jsonl`, and the folder
+/// of its subagents' beside it.
+async fn agent_with_subagents(h: &Harness, name: &str) -> (String, std::path::PathBuf) {
+    let (p, _) = h.project(false).await;
+    second_account(h);
+    let id = agent_on(h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let root = h.dir.join(name);
+    let subs = root.join("s9").join("subagents");
+    std::fs::create_dir_all(&subs).unwrap();
+    std::fs::write(root.join("s9.jsonl"), "").unwrap();
+    h.core.agent(&id).unwrap().lock().meta.transcript_read =
+        Some((root.join("s9.jsonl").to_string_lossy().into(), 0));
+    (id, subs)
+}
+
+/// The agent's plan has a row for each of `rows` (call, task, background), running, and its
+/// conversation the call of each.
+fn run_subagents(h: &Harness, id: &str, rows: &[(&str, Option<&str>, bool)]) {
+    let handle = h.core.agent(id).unwrap();
+    let mut rt = handle.lock();
+    for (call, ..) in rows {
+        rt.conv.apply(&ConvOp::Append {
+            item: serde_json::json!({
+                "kind": "tool", "id": call, "name": "Agent", "status": "ok",
+                "input": { "description": "Lent", "prompt": "Attends." }, "ts": 1,
+            }),
+        });
+    }
+    rt.meta.plan = Some(crate::plan::PlanState {
+        agents: rows
+            .iter()
+            .map(|(call, task, background)| crate::plan::SubAgent {
+                id: call.to_string(),
+                title: "Lent".into(),
+                task_id: task.map(str::to_string),
+                background: *background,
+                started_at: 1,
+                ..Default::default()
+            })
+            .collect(),
+        launched: rows.len() as u32,
+        ..Default::default()
+    });
+}
+
+/// The status of the row of `call` in the agent's plan.
+fn row_status(h: &Harness, id: &str, call: &str) -> crate::plan::RunStatus {
+    h.agent(id)
+        .plan
+        .unwrap()
+        .agents
+        .iter()
+        .find(|a| a.id == call)
+        .unwrap()
+        .status
+}
+
+/// How many times the window was sent the agent `id`.
+fn agent_events(h: &Harness, id: &str) -> usize {
+    h.events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "agent" && e["agent"]["id"] == id)
+        .count()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_transcript_is_read_again_only_when_it_changed_and_the_path_found_is_kept() {
+    let h = harness("tui-sidechain-cursor");
+    let (id, subs) = agent_with_subagents(&h, "cursor").await;
+    let file = subs.join(format!("agent-{SUB_TASK}.jsonl"));
+    let meta = subs.join(format!("agent-{SUB_TASK}.meta.json"));
+    let lines: Vec<&str> = SIDECHAIN.lines().collect();
+    std::fs::write(&file, lines[..6].join("\n") + "\n").unwrap();
+    std::fs::write(&meta, format!(r#"{{"toolUseId":"{SUB_CALL}"}}"#)).unwrap();
+    let read = |since| h.core.subagent_transcript(&id, SUB_CALL, since).unwrap();
+
+    // The first read, which finds it by its meta file: all of it, and the cursor to give back.
+    let first = read(None).unwrap();
+    assert_eq!(first.items.len(), 2);
+    let cursor = first.cursor.unwrap();
+    assert_eq!(cursor.len, std::fs::metadata(&file).unwrap().len());
+    // Nothing changed since: nothing to say.
+    assert!(read(first.cursor).is_none());
+
+    // The path is kept: the meta files are not looked at again, whatever becomes of them.
+    std::fs::write(&meta, "{}").unwrap();
+    assert_eq!(read(None).unwrap().items.len(), 2);
+    std::fs::rename(&meta, subs.join("elsewhere.json")).unwrap();
+    assert_eq!(read(None).unwrap().items.len(), 2);
+    assert_eq!(h.core.sidechains.lock().len(), 1);
+
+    // It grows: the new items, and the cursor of what was read.
+    let mut text = std::fs::read_to_string(&file).unwrap();
+    text.push_str(&(lines[6..10].join("\n") + "\n"));
+    std::fs::write(&file, text).unwrap();
+    let grown = read(first.cursor).unwrap();
+    let names: Vec<_> = grown
+        .items
+        .iter()
+        .map(|i| i["name"].as_str().unwrap_or("-"))
+        .collect();
+    assert_eq!(names, ["Write", "Bash", "-", "Bash"]);
+    assert!(grown.cursor.unwrap().len > cursor.len);
+    assert!(read(grown.cursor).is_none());
+
+    // The file is gone: nothing (and no cursor), until it is found again, where it is now.
+    std::fs::remove_file(&file).unwrap();
+    let gone = read(grown.cursor).unwrap();
+    assert!(gone.items.is_empty() && gone.cursor.is_none());
+    assert_eq!(
+        h.core.sidechains.lock().len(),
+        0,
+        "the path it had is forgotten"
+    );
+    std::fs::write(subs.join("agent-other.jsonl"), first_four()).unwrap();
+    std::fs::write(
+        subs.join("agent-other.meta.json"),
+        format!(r#"{{"toolUseId":"{SUB_CALL}"}}"#),
+    )
+    .unwrap();
+    let moved = read(grown.cursor).unwrap();
+    assert_eq!(moved.items.len(), 1);
+    assert_eq!(h.core.sidechains.lock().len(), 1);
+}
+
+fn first_four() -> String {
+    SIDECHAIN.lines().take(4).collect::<Vec<_>>().join("\n") + "\n"
+}
+
+/// An agent whose subagent `SUB_CALL` was read once, so that its path is kept.
+async fn agent_with_a_path_kept(h: &Harness, name: &str) -> String {
+    let (id, subs) = agent_with_subagents(h, name).await;
+    std::fs::write(subs.join(format!("agent-{SUB_TASK}.jsonl")), first_four()).unwrap();
+    std::fs::write(
+        subs.join(format!("agent-{SUB_TASK}.meta.json")),
+        SIDECHAIN_META,
+    )
+    .unwrap();
+    assert_eq!(thread(h, &id, SUB_CALL).len(), 1);
+    assert!(h.core.sidechains.lock().has(&id, SUB_CALL));
+    id
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_path_kept_of_a_subagent_goes_with_its_agent() {
+    let h = harness("tui-sidechain-path-agent");
+    let id = agent_with_a_path_kept(&h, "path-agent").await;
+    h.core.delete_agent(&id, false).await.unwrap();
+    assert_eq!(h.core.sidechains.lock().len(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_path_kept_of_a_subagent_goes_with_its_project() {
+    let h = harness("tui-sidechain-path-project");
+    let id = agent_with_a_path_kept(&h, "path-project").await;
+    let project = h.agent(&id).project_id;
+    h.core.remove_project(&project, false).await.unwrap();
+    assert_eq!(h.core.sidechains.lock().len(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_subagent_stopped_in_the_interface_ends_its_row_when_its_transcript_is_read() {
+    use crate::agent::sidechain::Ended;
+    use crate::plan::RunStatus;
+    let h = harness("tui-sidechain-ended");
+    let (id, subs) = agent_with_subagents(&h, "ended").await;
+    run_subagents(&h, &id, &[(SUB_CALL, Some(SUB_TASK), true)]);
+    let file = subs.join(format!("agent-{SUB_TASK}.jsonl"));
+    // Not over: its meta file does not say, and its transcript ends on a tool's result.
+    std::fs::write(
+        &file,
+        SIDECHAIN.lines().take(10).collect::<Vec<_>>().join("\n") + "\n",
+    )
+    .unwrap();
+    std::fs::write(
+        subs.join(format!("agent-{SUB_TASK}.meta.json")),
+        format!(r#"{{"toolUseId":"{SUB_CALL}"}}"#),
+    )
+    .unwrap();
+    let running = h
+        .core
+        .subagent_transcript(&id, SUB_CALL, None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(running.ended, None);
+    assert_eq!(row_status(&h, &id, SUB_CALL), RunStatus::Running);
+    let sent = agent_events(&h, &id);
+
+    // The user stops it in the interface: the interruption comes in its transcript.
+    std::fs::write(&file, SIDECHAIN).unwrap();
+    let read = h
+        .core
+        .subagent_transcript(&id, SUB_CALL, running.cursor)
+        .unwrap()
+        .unwrap();
+    assert_eq!(read.ended, Some(Ended::Stopped));
+    let row = h.agent(&id).plan.unwrap().agents[0].clone();
+    assert_eq!(row.status, RunStatus::Stopped);
+    assert!(row.ended_at.is_some_and(|at| at >= row.started_at));
+    // What it was is kept with its call, and the window is sent the agent: the sidebar changes.
+    let call = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["id"] == SUB_CALL)
+        .unwrap();
+    assert_eq!(call["run"]["status"], "stopped");
+    assert_eq!(agent_events(&h, &id), sent + 1);
+    assert!(h.events.lock().iter().any(|e| e["type"] == "agent"
+        && e["agent"]["id"] == id.as_str()
+        && e["agent"]["plan"]["agents"][0]["status"] == "stopped"));
+    // Read again: nothing changed, nothing sent.
+    assert!(h
+        .core
+        .subagent_transcript(&id, SUB_CALL, read.cursor)
+        .unwrap()
+        .is_none());
+    assert_eq!(agent_events(&h, &id), sent + 1);
+    // And once it ended, however it is read, nothing more is sent.
+    h.core
+        .subagent_transcript(&id, SUB_CALL, None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(agent_events(&h, &id), sent + 1);
+
+    // One that failed: the API gave up on it.
+    let mut failed: serde_json::Value =
+        serde_json::from_str(SIDECHAIN.lines().nth(7).unwrap()).unwrap();
+    failed["isApiErrorMessage"] = serde_json::json!(true);
+    std::fs::write(
+        subs.join("agent-late.jsonl"),
+        format!("{}\n{failed}\n", first_four().trim_end()),
+    )
+    .unwrap();
+    std::fs::write(
+        subs.join("agent-late.meta.json"),
+        r#"{"toolUseId":"toolu_late"}"#,
+    )
+    .unwrap();
+    run_subagents(
+        &h,
+        &id,
+        &[(SUB_CALL, Some(SUB_TASK), true), ("toolu_late", None, true)],
+    );
+    let read = h
+        .core
+        .subagent_transcript(&id, "toolu_late", None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(read.ended, Some(Ended::Failed));
+    assert_eq!(row_status(&h, &id, "toolu_late"), RunStatus::Failed);
+    assert_eq!(
+        row_status(&h, &id, SUB_CALL),
+        RunStatus::Running,
+        "not that one"
+    );
+
+    // A row that ended otherwise (its hand-back came first) stays as it was; the window is told nothing.
+    let sent = agent_events(&h, &id);
+    h.core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .plan
+        .as_mut()
+        .unwrap()
+        .agents[0]
+        .status = RunStatus::Done;
+    let read = h
+        .core
+        .subagent_transcript(&id, SUB_CALL, None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(read.ended, Some(Ended::Stopped));
+    assert_eq!(row_status(&h, &id, SUB_CALL), RunStatus::Done);
+    assert_eq!(agent_events(&h, &id), sent);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_end_of_a_turn_ends_the_background_subagents_the_user_stopped_in_the_interface() {
+    use crate::plan::RunStatus;
+    let h = harness("tui-sidechain-stop-hook");
+    let id = agent_in_tui(&h).await;
+    let session = h.agent(&id).session_id.unwrap();
+    let pro = h
+        .core
+        .settings
+        .read()
+        .accounts
+        .last()
+        .unwrap()
+        .config_dir
+        .clone();
+    // The interface wrote its transcript at start; its subagents' are beside it.
+    h.wait("the transcript", |_| {
+        crate::tui::find_transcript(std::path::Path::new(&pro), &session).is_some()
+    })
+    .await;
+    let main = crate::tui::find_transcript(std::path::Path::new(&pro), &session).unwrap();
+    let subs = main.parent().unwrap().join(&session).join("subagents");
+    std::fs::create_dir_all(&subs).unwrap();
+    // A subagent's files: its transcript, and its meta file that says whether the user stopped it.
+    let files = |task: &str, stopped: bool| {
+        std::fs::write(subs.join(format!("agent-{task}.jsonl")), first_four()).unwrap();
+        std::fs::write(
+            subs.join(format!("agent-{task}.meta.json")),
+            format!(r#"{{"toolUseId":"call-{task}","stoppedByUser":{stopped}}}"#),
+        )
+        .unwrap();
+    };
+    files("stopped", true);
+    files("running", false);
+    files("foreground", true);
+    files("over", true);
+    // One whose task is not told yet, found by its meta file; one with no file at all.
+    files("notask", true);
+    run_subagents(
+        &h,
+        &id,
+        &[
+            ("call-stopped", Some("stopped"), true),
+            ("call-running", Some("running"), true),
+            ("call-foreground", Some("foreground"), false),
+            ("call-over", Some("over"), true),
+            ("call-notask", None, true),
+            ("call-nofile", Some("nofile"), true),
+        ],
+    );
+    h.core
+        .agent(&id)
+        .unwrap()
+        .lock()
+        .meta
+        .plan
+        .as_mut()
+        .unwrap()
+        .agents[3]
+        .status = RunStatus::Done;
+    let sent = agent_events(&h, &id);
+
+    // Not at any hook: at the end of a turn.
+    h.core.on_tui_hook(
+        &id,
+        serde_json::json!({ "hook_event_name": "PostToolUse", "session_id": session }),
+    );
+    assert_eq!(row_status(&h, &id, "call-stopped"), RunStatus::Running);
+    h.core.on_tui_hook(
+        &id,
+        serde_json::json!({ "hook_event_name": "Stop", "session_id": session }),
+    );
+    let status = |call: &str| row_status(&h, &id, call);
+    assert_eq!(status("call-stopped"), RunStatus::Stopped);
+    assert_eq!(status("call-notask"), RunStatus::Stopped);
+    assert_eq!(status("call-running"), RunStatus::Running);
+    // A subagent in the foreground ends with the turn of its agent, as it always did.
+    assert_eq!(status("call-foreground"), RunStatus::Running);
+    assert_eq!(status("call-over"), RunStatus::Done);
+    assert_eq!(status("call-nofile"), RunStatus::Running);
+    let call = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["id"] == "call-stopped")
+        .unwrap();
+    assert_eq!(call["run"]["status"], "stopped");
+    assert!(agent_events(&h, &id) > sent);
+    // The paths found are kept, for the next end of a turn.
+    assert!(h.core.sidechains.lock().len() >= 2);
+}

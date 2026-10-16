@@ -48,6 +48,10 @@
 // its workspace removed, then "Plan terminé". "plan superpowers sans liste": the same without any task tool, so that the
 // plan file and the ledger are all there is to read; "interrompu" in the message cuts the turn in
 // the middle of the first implementer.
+// "sous-agent long" and "sous-agent fini" launch a subagent in the background as Claude Code 2.1.300 does (ESC-13): its
+// own thread asks a permission (`can_use_tool` with its `agent_id`, request "req_subperm"); "sous-agent long" then runs
+// until a `stop_task` of its task ("fakelong-agent", logged to <log>.control.jsonl), "sous-agent fini" hands back its
+// report (`handback_report`) once the permission is answered.
 // Asked to prepare a test launch (« Prépare le lancement… Ports réservés : <base> », “Prepare the test
 // launch… Ports reserved: <base>”), any agent answers with a recipe whose process listens on <base + 1>.
 // In one-shot mode, asked for a ticket's commit message, it answers `feat: travail du faux claude
@@ -450,6 +454,8 @@ function startSession() {
   let slowTimer = null;
   let floodTimer = null;
   let asked = false;
+  // The subagent of "sous-agent long" while it runs, until a `stop_task` of its task: { task, call, description }.
+  let longAgent = null;
   const replay = argv.includes('--replay-user-messages');
   const appended = argv.includes('--append-system-prompt') ? (argv[argv.indexOf('--append-system-prompt') + 1] ?? '') : '';
   // What a copy of an agent is told of its folder is no ticket's protocol: it plays a plain agent.
@@ -1066,6 +1072,174 @@ function startSession() {
     });
   }
 
+  // ---------- "sous-agent long", "sous-agent fini" ----------
+
+  // A subagent in the background, as Claude Code 2.1.300 runs one (measured, docs/PROTOCOL.md): its call, its
+  // `task_started`, its launch's result, and the agent's turn ends there. Then its own thread (its frames carry the id of
+  // the call and the `agent_id` of its task): a text, then a command it asks permission for (`can_use_tool` with
+  // `agent_id`). "sous-agent long" then runs until a `stop_task` of its task (see stopTask); "sous-agent fini", once the
+  // permission is answered, hands back its report (`task_notification` with `handback_report`), and Claude Code opens a
+  // turn of its own.
+  function subagentRun(long) {
+    const call = `toolu_sub${++msg}`;
+    const task = long ? 'fakelong-agent' : 'fakedone-agent';
+    const input = long
+      ? {
+          description: 'Surveiller le serveur',
+          subagent_type: 'Explore',
+          model: 'haiku',
+          prompt: 'Surveille le serveur de dev\net dis-moi quand il répond.',
+        }
+      : {
+          description: 'Chercher la cause',
+          subagent_type: 'general-purpose',
+          model: 'sonnet',
+          prompt: 'Cherche pourquoi les PDF sont refusés.',
+        };
+    const sysFrame = (o) => out({ type: 'system', session_id: sessionId, ...o });
+    assistant({ type: 'tool_use', id: call, name: 'Agent', input });
+    sysFrame({
+      subtype: 'task_started',
+      task_id: task,
+      tool_use_id: call,
+      description: input.description,
+      subagent_type: input.subagent_type,
+      is_backgrounded: true,
+      spawn_depth: 1,
+      task_type: 'local_agent',
+      prompt: input.prompt,
+    });
+    toolResult(call, `Async agent launched successfully.\nagentId: ${task} (internal ID)`, {
+      tool_use_result: {
+        isAsync: true,
+        status: 'async_launched',
+        agentId: task,
+        description: input.description,
+        resolvedModel: `claude-${input.model}-5-5`,
+        prompt: input.prompt,
+        canContinueAgent: true,
+      },
+    });
+    streamText('Sous-agent lancé.');
+    result();
+    setTimeout(() => {
+      const thread = (block) =>
+        out({
+          type: 'assistant',
+          message: { id: `msg_${process.pid}_${++msg}`, role: 'assistant', content: [block] },
+          parent_tool_use_id: call,
+          agent_id: task,
+          session_id: sessionId,
+        });
+      thread({ type: 'text', text: long ? 'Je regarde le serveur.' : 'Je lis le filtre des pièces jointes.' });
+      const tuid = `${call}_bash`;
+      const cmd = long
+        ? { command: 'curl localhost:3000', description: 'Interroge le serveur' }
+        : { command: 'grep -n pdf src/filter.ts', description: 'Cherche le filtre' };
+      thread({ type: 'tool_use', id: tuid, name: 'Bash', input: cmd });
+      sysFrame({
+        subtype: 'task_progress',
+        task_id: task,
+        tool_use_id: call,
+        description: `Running ${cmd.description}`,
+        usage: { total_tokens: 1800, tool_uses: 1, duration_ms: 300 },
+        last_tool_name: 'Bash',
+      });
+      pendingAnswer = { id: 'req_subperm', tuid, kind: 'subagent', call, task, long, thread, sysFrame };
+      out({
+        type: 'control_request',
+        request_id: 'req_subperm',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'Bash',
+          display_name: 'Bash',
+          input: cmd,
+          description: cmd.description,
+          tool_use_id: tuid,
+          agent_id: task,
+        },
+      });
+      if (long) longAgent = { task, call, description: input.description, sysFrame };
+    }, 150);
+  }
+
+  // The answer to the permission a subagent asked for: its thread goes on.
+  function subagentAnswered(p, r) {
+    const allowed = r.behavior === 'allow';
+    out({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: p.tuid, content: allowed ? 'HTTP 200' : `Refusé : ${r.message}`, is_error: !allowed },
+        ],
+      },
+      parent_tool_use_id: p.call,
+      agent_id: p.task,
+      session_id: sessionId,
+    });
+    if (p.long) {
+      p.thread({ type: 'text', text: allowed ? 'Le serveur répond, je continue de surveiller.' : 'Je ne peux pas interroger le serveur.' });
+      return;
+    }
+    const report =
+      '**Cause trouvée** : le filtre de `src/filter.ts` refuse les PDF.\n\nCorrection proposée : ajouter `application/pdf` à la liste.';
+    p.thread({ type: 'text', text: 'Trouvé : le filtre refuse les PDF.' });
+    p.thread({ type: 'tool_use', id: `${p.call}_hb`, name: 'SubagentHandback', input: { message: report } });
+    p.sysFrame({ subtype: 'task_updated', task_id: p.task, patch: { status: 'completed', end_time: Date.now() } });
+    p.sysFrame({
+      subtype: 'task_notification',
+      task_id: p.task,
+      tool_use_id: p.call,
+      status: 'completed',
+      summary: "This agent's report was delivered to you as a message.",
+      usage: { total_tokens: 4200, tool_uses: 3, duration_ms: 2500 },
+      handback: 'send',
+      handback_report: { text: report },
+      uuid: `notif-${p.call}`,
+    });
+    // Claude Code opens a turn of its own with the report.
+    out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    streamText('Rapport reçu.');
+    result();
+  }
+
+  // `stop_task`, as Claude Code 2.1.300 answers it (measured): the task killed and its notification « stopped », then
+  // the answer, then the end of the subagent's thread; Claude Code opens a turn of its own about it. A task it does not
+  // run is an error. A permission the subagent still waits for is cancelled first (measured on 2.1.300 too).
+  function stopTask(id, task) {
+    if (!longAgent || longAgent.task !== task) {
+      return out({ type: 'control_response', response: { subtype: 'error', request_id: id, error: `No task found with ID: ${task}` } });
+    }
+    const { call, description, sysFrame } = longAgent;
+    longAgent = null;
+    if (pendingAnswer?.kind === 'subagent') {
+      out({ type: 'control_cancel_request', request_id: pendingAnswer.id });
+      pendingAnswer = null;
+    }
+    sysFrame({ subtype: 'task_updated', task_id: task, patch: { status: 'killed', end_time: Date.now() } });
+    sysFrame({
+      subtype: 'task_notification',
+      task_id: task,
+      tool_use_id: call,
+      status: 'stopped',
+      output_file: `${task}.output`,
+      summary: description,
+      uuid: `stopped-${task}`,
+    });
+    ok(id);
+    out({
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] },
+      parent_tool_use_id: call,
+      agent_id: task,
+      session_id: sessionId,
+    });
+    out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
+    streamText('Le sous-agent a été arrêté.');
+    result();
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
     if (text.includes('[ferme-lentement]')) slowClose = true;
@@ -1178,6 +1352,18 @@ function startSession() {
       }, 400);
       return;
     }
+    // Escouade asks the agent to pass a message on to its subagent (« Lui écrire »): it does, with SendMessage.
+    const passOn =
+      /(?:Transmets ce message au sous-agent|Pass this message on to the subagent) .*?\(agentId (\S+)\)[^\n]*\n\n([\s\S]*)$/.exec(text);
+    if (passOn) {
+      const tuid = `toolu_m${msg}`;
+      assistant({ type: 'tool_use', id: tuid, name: 'SendMessage', input: { to: passOn[1], message: passOn[2] } });
+      toolResult(tuid, `Message sent to ${passOn[1]}.`);
+      streamText('Message transmis au sous-agent.');
+      result();
+      return;
+    }
+    if (text.includes('sous-agent long') || text.includes('sous-agent fini')) return subagentRun(text.includes('sous-agent long'));
     if (text.includes('sous-agent')) {
       // A background subagent: launched, then its report and the end of its task are passed on
       // to Claude by Claude Code itself (replayed with their origin), as mid-turn.
@@ -1295,6 +1481,7 @@ function startSession() {
     const p = pendingAnswer;
     pendingAnswer = null;
     const r = resp.response ?? {};
+    if (p.kind === 'subagent') return subagentAnswered(p, r);
     if (p.kind === 'question') {
       const answers = r.updatedInput?.answers ?? {};
       toolResult(p.tuid, `Réponses : ${JSON.stringify(answers)}`, { tool_use_result: { answers } });
@@ -1362,6 +1549,9 @@ function startSession() {
           return result({ isError: true, subtype: 'error_during_execution' });
         case 'remote_control':
           return remoteControl(m.request_id, r);
+        case 'stop_task':
+          fs.appendFileSync(logFile.replace(/\.jsonl$/, '') + '.control.jsonl', JSON.stringify(r) + '\n');
+          return stopTask(m.request_id, r.task_id);
         default:
           return ok(m.request_id);
       }

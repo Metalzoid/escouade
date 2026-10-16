@@ -19,8 +19,8 @@ export interface PlanRow {
   steps?: [done: number, total: number];
   /** What a task under way does now, in the agent's words (a subagent's last tool, else the task's own). */
   step?: string;
-  /** The subagent running on it. */
-  sub?: { name: string; model?: string };
+  /** The subagent running on it: its call (`id`), which opens its conversation. */
+  sub?: { id: string; name: string; model?: string };
   /** The ranks of the tasks it waits for ("03, 05"). */
   after?: string;
   /** The one to look at: the list centres on it. */
@@ -36,8 +36,8 @@ export interface PlanViewModel {
   /** The whole plan's, 0 to 100. */
   percent: number;
   subsRunning: number;
-  /** The subagents running, by their titles. */
-  subDots: { name: string }[];
+  /** The subagents running, by their titles and the model their call named; their calls (`id`) open their conversations. */
+  subDots: { id: string; name: string; model?: string }[];
   rows: PlanRow[];
   focusId: string | null;
   /** The line of the agent's card; none without tasks. */
@@ -84,7 +84,7 @@ export function planView(agent: Agent, ticket?: Ticket): PlanViewModel | null {
     const percent = state === 'done' ? 100 : state === 'todo' ? 0 : measured(x.steps);
     const row: PlanRow = { n: rank(i), id: x.id, title: x.title, state, percent, focus: false };
     if (x.steps) row.steps = x.steps;
-    if (sub) row.sub = { name: sub.title, ...(sub.model ? { model: sub.model } : {}) };
+    if (sub) row.sub = { id: sub.id, name: sub.title, ...(sub.model ? { model: sub.model } : {}) };
     // The words of a blocked task are the window's: it waits for an answer.
     if (state === 'run') {
       const step = worded(sub?.doing) ?? worded(x.active);
@@ -115,7 +115,7 @@ export function planView(agent: Agent, ticket?: Ticket): PlanViewModel | null {
     total: rows.length,
     percent,
     subsRunning: running.length,
-    subDots: running.map((s) => ({ name: s.title })),
+    subDots: running.map((s) => ({ id: s.id, name: s.title, ...(s.model ? { model: s.model } : {}) })),
     rows,
     focusId: focus?.id ?? null,
     mini: rows.length ? { done, total: rows.length, subs: running.length, percent } : null,

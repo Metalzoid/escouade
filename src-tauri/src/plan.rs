@@ -118,9 +118,12 @@ pub struct SubAgent {
     /// The id of the task it works on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan_task: Option<String>,
-    /// Claude Code's id of its task, once a frame told it.
-    #[serde(skip)]
-    pub(crate) task_id: Option<String>,
+    /// The call of the subagent that launched it, when one did (a subagent's subagent).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Claude Code's id of its task, once a frame told it: what « Arrêter » stops (`stop_task`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -356,9 +359,9 @@ fn end_workflow(run: &mut WorkflowRun, status: RunStatus, at: i64) -> bool {
 }
 
 /// The totals Claude Code gives of a subagent's work replace the count made on the way. Kept
-/// without a word: the window shows neither the tools nor the tokens of a subagent, and each
-/// progress frame would send it the whole agent for nothing (they go out with the next change of
-/// what it shows).
+/// without a word: each progress frame would send the window the whole agent, and they go out
+/// with the next change of what it shows (what the subagent does, which changes with each tool it
+/// calls), soon enough for the head of its view.
 fn set_totals(row: &mut SubAgent, tools: Option<u64>, tokens: Option<u64>) {
     if let Some(n) = tools.map(|n| n.min(u32::MAX as u64) as u32) {
         row.tools = n;
@@ -590,7 +593,7 @@ impl PlanState {
             }
         }
         match name {
-            _ if agent_call => self.open_agent(id, name, input, now),
+            _ if agent_call => self.open_agent(parent, id, name, input, now),
             "TodoWrite" if list_call => self.todo_write(input),
             "TaskCreate" if list_call => self.task_create(id, input),
             "TaskUpdate" if list_call => self.task_update(input),
@@ -881,11 +884,19 @@ impl PlanState {
     }
 
     /// A `Task` / `Agent` call: a subagent starts (or one its `task_started` opened is completed).
-    fn open_agent(&mut self, id: &str, name: &str, input: &Value, now: i64) -> Change {
+    /// `parent`: the call of the subagent whose thread it comes from.
+    fn open_agent(
+        &mut self,
+        parent: Option<&str>,
+        id: &str,
+        name: &str,
+        input: &Value,
+        now: i64,
+    ) -> Change {
         let description = input["description"].as_str().unwrap_or_default();
         let (kind, model) = (words(&input["subagent_type"]), words(&input["model"]));
         let background = input["run_in_background"] == true;
-        // The prompt is read to find the task, never kept.
+        // The prompt is read to find the task, never kept here (its call's item keeps it).
         let plan_task = self.link_task(input["prompt"].as_str().unwrap_or_default(), description);
         if let Some(row) = self.agents.iter_mut().find(|a| a.id == id) {
             let mut change = Change::None;
@@ -903,6 +914,10 @@ impl PlanState {
             }
             if row.plan_task.is_none() && plan_task.is_some() {
                 row.plan_task = plan_task;
+                change = Change::Saved;
+            }
+            if row.parent.is_none() && parent.is_some() {
+                row.parent = parent.map(str::to_string);
                 change = Change::Saved;
             }
             return change;
@@ -924,6 +939,7 @@ impl PlanState {
             background,
             started_at: now,
             plan_task,
+            parent: parent.map(str::to_string),
             ..SubAgent::default()
         });
         self.trim_agents();
@@ -994,6 +1010,13 @@ impl PlanState {
             .find_map(words)
             .unwrap_or_else(|| "Agent".to_string());
         let plan_task = self.link_task(f["prompt"].as_str().unwrap_or_default(), description);
+        // Launched by a subagent: the task of that one names its row.
+        let parent = f["parent_task_id"].as_str().and_then(|t| {
+            self.agents
+                .iter()
+                .find(|a| a.task_id.as_deref() == Some(t))
+                .map(|a| a.id.clone())
+        });
         self.launched += 1;
         self.agents.push(SubAgent {
             id: id.to_string(),
@@ -1002,6 +1025,7 @@ impl PlanState {
             background,
             started_at: now,
             plan_task,
+            parent,
             task_id: Some(task.to_string()),
             ..SubAgent::default()
         });

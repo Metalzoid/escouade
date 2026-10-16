@@ -495,6 +495,40 @@ pub async fn interrupt(core: CoreState<'_>, id: String) -> Res<()> {
     core.interrupt(&id).await.map_err(err)
 }
 
+/// A message to a subagent of the agent `id`, by the agent (`call`: the call that launched it).
+#[tauri::command]
+pub async fn message_subagent(
+    core: CoreState<'_>,
+    id: String,
+    call: String,
+    text: String,
+) -> Res<()> {
+    core.message_subagent(&id, &call, &text).await.map_err(err)
+}
+
+/// « Arrêter » on a subagent of the agent `id`, `call` the call that launched it.
+#[tauri::command]
+pub async fn stop_subagent(core: CoreState<'_>, id: String, call: String) -> Res<()> {
+    core.stop_subagent(&id, &call).await.map_err(err)
+}
+
+/// The conversation of a subagent of the agent `id` in the Claude Code view (`call` launched it),
+/// read from its transcript: a file read, off the async workers. `cursor` is the one the read
+/// before gave: null back when its files did not change since.
+#[tauri::command]
+pub async fn subagent_transcript(
+    core: CoreState<'_>,
+    id: String,
+    call: String,
+    cursor: Option<crate::agent::sidechain::Cursor>,
+) -> Res<Option<crate::agent::sidechain::SidechainRead>> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || core.subagent_transcript(&id, &call, cursor))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn answer_question(core: CoreState, id: String, request_id: String, answers: Value) -> Res<()> {
     core.answer_question(&id, &request_id, answers).map_err(err)

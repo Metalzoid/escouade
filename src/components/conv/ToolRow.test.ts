@@ -294,3 +294,35 @@ describe('ToolRow in English', () => {
     expect(screen.getByText('no results')).toBeInTheDocument();
   });
 });
+
+describe('ToolRow of a subagent’s call', () => {
+  const agentCall = (over: Partial<ToolItem> = {}) =>
+    tool({ id: 'c1', name: 'Agent', input: { description: 'Chercher', prompt: 'Cherche.' }, ...over });
+
+  it('opens the subagent’s conversation, without unfolding the row', async () => {
+    const onOpenSub = vi.fn();
+    render(ToolRow, { item: agentCall(), cwd: CWD, onOpenSub });
+    const open = screen.getByRole('button', { name: 'Ouvrir la conversation du sous-agent Chercher' });
+    await userEvent.click(open);
+    expect(onOpenSub).toHaveBeenCalledWith('c1');
+    expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
+  });
+
+  it('opens it for a `Task` call too, but for no other tool, nor without a way to open it', () => {
+    const onOpenSub = vi.fn();
+    const { unmount } = render(ToolRow, { item: agentCall({ name: 'Task' }), cwd: CWD, onOpenSub });
+    expect(screen.getByRole('button', { name: 'Ouvrir la conversation du sous-agent Chercher' })).toBeInTheDocument();
+    unmount();
+    const bash = render(ToolRow, { item: tool({ input: { command: 'ls' } }), cwd: CWD, onOpenSub });
+    expect(screen.queryByRole('button', { name: 'Ouvrir la conversation du sous-agent Chercher' })).not.toBeInTheDocument();
+    bash.unmount();
+    render(ToolRow, { item: agentCall(), cwd: CWD });
+    expect(screen.queryByRole('button', { name: 'Ouvrir la conversation du sous-agent Chercher' })).not.toBeInTheDocument();
+  });
+
+  it('says it in English', () => {
+    setLang('en');
+    render(ToolRow, { item: agentCall(), cwd: CWD, onOpenSub: () => {} });
+    expect(screen.getByRole('button', { name: 'Open the conversation of the subagent Chercher' })).toBeInTheDocument();
+  });
+});

@@ -1350,6 +1350,245 @@ fn has_agent(plan: &Value, holds: impl Fn(&Value) -> bool) -> bool {
 }
 
 #[tokio::test]
+async fn arreter_stops_a_subagent_by_stop_task_on_its_task_and_its_request_is_answered_in_its_view()
+{
+    use crate::plan::RunStatus;
+    let h = harness("esc13-stop-subagent");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "sous-agent long".into(), vec![])
+        .await
+        .unwrap();
+    // It asks for a permission from its thread: the request is its own.
+    h.wait("the subagent's request", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    let row = h.agent(&id).plan.unwrap().agents[0].clone();
+    assert_eq!(row.status, RunStatus::Running);
+    assert_eq!(row.task_id.as_deref(), Some("fakelong-agent"));
+    let request = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["kind"] == "permission")
+        .unwrap();
+    assert_eq!(request["sub"], row.id.as_str());
+    h.core
+        .answer_permission(&id, "req_subperm", "allow", None)
+        .unwrap();
+    h.wait("its thread going on", |h| {
+        h.items(&id).iter().any(|i| {
+            i["parent"] == row.id.as_str()
+                && i["text"] == "Le serveur répond, je continue de surveiller."
+        })
+    })
+    .await;
+
+    // A subagent the agent does not run, or no longer runs, cannot be stopped; nor one in the
+    // foreground (the agent waits for it; stopping one alone there was never tried): nothing is sent.
+    let refused = |e: anyhow::Error| e.to_string();
+    assert_eq!(
+        refused(h.core.stop_subagent(&id, "toolu_nobody").await.unwrap_err()),
+        "Ce sous-agent ne tourne plus."
+    );
+    let background = |h: &Harness, on: bool| {
+        let handle = h.core.agent(&id).unwrap();
+        handle.lock().meta.plan.as_mut().unwrap().agents[0].background = on;
+    };
+    background(&h, false);
+    assert_eq!(
+        refused(h.core.stop_subagent(&id, &row.id).await.unwrap_err()),
+        "Ce sous-agent travaille au premier plan : l’agent l’attend, et « Arrêter » de l’agent l’arrête avec son tour."
+    );
+    background(&h, true);
+    h.core.stop_subagent(&id, &row.id).await.unwrap();
+    let sent = h.fake_log(&r, "control");
+    let stops: Vec<_> = sent
+        .iter()
+        .filter(|c| c["subtype"] == "stop_task")
+        .collect();
+    assert_eq!(stops.len(), 1);
+    assert_eq!(stops[0]["task_id"], "fakelong-agent");
+    h.wait("the subagent stopped", |h| {
+        h.agent(&id)
+            .plan
+            .is_some_and(|p| p.agents[0].status == RunStatus::Stopped)
+    })
+    .await;
+    // What it was is kept with its call.
+    let call = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["id"] == row.id.as_str())
+        .unwrap();
+    assert_eq!(call["run"]["status"], "stopped");
+    assert_eq!(
+        refused(h.core.stop_subagent(&id, &row.id).await.unwrap_err()),
+        "Ce sous-agent ne tourne plus."
+    );
+    assert_eq!(
+        h.fake_log(&r, "control")
+            .iter()
+            .filter(|c| c["subtype"] == "stop_task")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn a_message_to_a_subagent_goes_to_its_agent_which_is_asked_to_pass_it_on() {
+    let h = harness("esc13-message-subagent");
+    let (p, r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "sous-agent long".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the subagent's request", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    h.core
+        .answer_permission(&id, "req_subperm", "allow", None)
+        .unwrap();
+    let call = h.agent(&id).plan.unwrap().agents[0].id.clone();
+    // Nothing to say, or a subagent it never had: refused, nothing sent.
+    let refused = |e: anyhow::Error| e.to_string();
+    assert_eq!(
+        refused(h.core.message_subagent(&id, &call, "  ").await.unwrap_err()),
+        "Le message est vide."
+    );
+    assert_eq!(
+        refused(
+            h.core
+                .message_subagent(&id, "toolu_nobody", "Salut")
+                .await
+                .unwrap_err()
+        ),
+        "Claude Code n’a pas donné la tâche de ce sous-agent : on ne peut pas lui écrire."
+    );
+    h.core
+        .message_subagent(&id, &call, "Regarde aussi le port 3001.")
+        .await
+        .unwrap();
+    h.wait("the message", |h| {
+        h.stdin_messages(&r)
+            .iter()
+            .any(|m| m["message"]["content"].to_string().contains("port 3001"))
+    })
+    .await;
+    let sent = h
+        .stdin_messages(&r)
+        .into_iter()
+        .find(|m| m["message"]["content"].to_string().contains("port 3001"))
+        .unwrap();
+    let text = sent["message"]["content"].to_string();
+    for part in [
+        "SendMessage",
+        "fakelong-agent",
+        "« Surveiller le serveur »",
+        "Regarde aussi le port 3001.",
+    ] {
+        assert!(text.contains(part), "{part} in {text}");
+    }
+
+    // A subagent in the foreground would get it only once it ended: refused.
+    let foreground = |h: &Harness, background: bool| {
+        let handle = h.core.agent(&id).unwrap();
+        let mut rt = handle.lock();
+        rt.meta.plan.as_mut().unwrap().agents[0].background = background;
+    };
+    foreground(&h, false);
+    assert_eq!(
+        refused(
+            h.core
+                .message_subagent(&id, &call, "Au premier plan")
+                .await
+                .unwrap_err()
+        ),
+        "Ce sous-agent travaille au premier plan : l’agent ne lui transmettrait le message qu’une fois fini."
+    );
+    foreground(&h, true);
+    // Nor in the Claude Code view (its interface does it), nor to an archived agent's.
+    h.core.agent(&id).unwrap().lock().meta.terminal = true;
+    assert_eq!(
+        refused(
+            h.core
+                .message_subagent(&id, &call, "En vue Claude Code")
+                .await
+                .unwrap_err()
+        ),
+        "En vue Claude Code, on écrit à un sous-agent depuis l’interface de Claude Code."
+    );
+    h.core.agent(&id).unwrap().lock().meta.terminal = false;
+    h.core.archive_agent(&id, true).await.unwrap();
+    assert_eq!(
+        refused(
+            h.core
+                .message_subagent(&id, &call, "Archivé")
+                .await
+                .unwrap_err()
+        ),
+        "L’agent est archivé."
+    );
+    let sent = h
+        .stdin_messages(&r)
+        .iter()
+        .filter(|m| m["message"]["content"].to_string().contains("SendMessage"))
+        .count();
+    assert_eq!(sent, 1, "nothing else was sent");
+}
+
+#[test]
+fn the_message_that_asks_an_agent_to_pass_words_on_to_its_subagent_is_in_claudes_language() {
+    use crate::i18n::Lang;
+    let fr = crate::core::subagent_message(Lang::Fr, "Chercher", "a1b2", "Et les PDF ?");
+    assert!(fr.starts_with("Transmets ce message au sous-agent « Chercher »"));
+    assert!(fr.contains("a1b2") && fr.ends_with("Et les PDF ?"));
+    let en = crate::core::subagent_message(Lang::En, "Search", "a1b2", "And the PDFs?");
+    assert!(en.starts_with("Pass this message on to the subagent “Search”"));
+    assert!(en.contains("SendMessage") && en.ends_with("And the PDFs?"));
+}
+
+#[tokio::test]
+async fn a_subagent_that_hands_back_its_report_keeps_it_with_its_call() {
+    use crate::plan::RunStatus;
+    let h = harness("esc13-report");
+    let (p, _r) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core
+        .send_message(&id, "sous-agent fini".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the subagent's request", |h| {
+        h.agent(&id).status == AgentStatus::Waiting
+    })
+    .await;
+    h.core
+        .answer_permission(&id, "req_subperm", "allow", None)
+        .unwrap();
+    h.wait("its end", |h| {
+        h.agent(&id)
+            .plan
+            .is_some_and(|p| p.agents[0].status == RunStatus::Done)
+    })
+    .await;
+    let row = h.agent(&id).plan.unwrap().agents[0].clone();
+    let call = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["id"] == row.id.as_str())
+        .unwrap();
+    assert!(call["report"]
+        .as_str()
+        .unwrap()
+        .starts_with("**Cause trouvée**"));
+    assert_eq!(call["run"]["tokens"], 4200);
+    assert_eq!(call["input"]["subagent_type"], "general-purpose");
+}
+
+#[tokio::test]
 async fn a_superpowers_run_with_a_task_list_goes_from_pending_tasks_to_done_with_its_subagents() {
     use crate::plan::{PlanSource, RunStatus, TaskStatus::*};
     let h = harness("p4-run");

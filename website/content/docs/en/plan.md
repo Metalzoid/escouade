@@ -1,6 +1,6 @@
 # Plan progress
 
-When an agent follows a task list or works with subagents, Escouade shows where it stands in a “Plan” banner above the conversation, and in a line on its card. This page explains where the list comes from, what the banner shows, and how to use it.
+When an agent follows a task list or works with subagents, Escouade shows where it stands in a “Plan” banner above the conversation, on its card, and in the list of its subagents. This page explains where the list comes from, what the banner shows, and how to read a subagent.
 
 ## When the banner appears
 
@@ -32,7 +32,7 @@ The list underneath gives one line per task, numbered (01, 02…):
 |---|---|
 | Icon | ✓ for “Done”, a spinning circle for “In progress”, `!` for “Blocked”, a dash for “To do” |
 | Title | The agent’s words, as they are |
-| `↳ name` and the model | The subagent working on this task |
+| `↳ name` and the model | The subagent working on this task; a click on `↳ name` opens its conversation (see [a subagent’s conversation](#the-conversation-of-a-subagent)) |
 | Gray text | What the task is doing right now, in the agent’s words (the subagent’s last tool, otherwise the task’s own “in progress” form) |
 | “after 03, 05” | For a task to do, the numbers of the tasks it waits for that aren’t finished |
 | Bar and percentage | The task’s progress: 100% when it’s done, 0% when it’s to do. For a task in progress in a plan file, it’s computed from its ticked steps (hover over the percentage to see “2/3 steps”). While no step is ticked, or nothing counts them, the line shows the state’s word instead (“In progress”, “Blocked”). |
@@ -45,20 +45,74 @@ When the agent is waiting for an answer to a question or a permission (“Questi
 
 ## Subagents
 
-A subagent is an agent that Claude starts itself for part of the work. While it runs, it counts in “N subagents running” and has its dot in the banner’s header (up to six dots; hover over a dot to read the subagent’s title). If it works on a task of the list, the task’s line names it and says what it’s doing.
+A subagent is an agent that Claude starts itself for part of the work. While it runs, it counts in “N subagents running” and has its dot in the banner’s header (up to six dots, stacked, the others are only counted). The stack of dots is a single button. If only one subagent runs, a click on the button opens its conversation (hover over it to read the subagent’s title), whether it works on a task or not. If several run, the button opens a menu that lists them all, including those whose dot isn’t drawn, each with its title and its model: pick one to open its conversation. If it works on a task of the list, the task’s line names it and says what it’s doing.
 
-When an agent has **no** task list but subagents are running, the banner is called “Subagents”: it gives the title, the dots, and the count, with no list and no folding. It goes away when the last subagent has finished.
+When an agent has **no** task list but subagents are running, the banner is called “Subagents”: it gives the title, the stack of dots, and the count, with no list and no folding. It goes away when the last subagent has finished.
 
-The detail of a subagent’s calls is read in the conversation, in the line of the `Agent` tool (see [the conversation](chat#tool-calls)).
+What a subagent says and does is read in its own conversation (see below), and in short in the agent’s conversation, on the line of the `Agent` tool (see [the conversation](chat#tool-calls)).
 
 ## Folding, unfolding, resizing
 
-- A click on the top line folds or unfolds the list. By default, it’s unfolded when the window is at least 800 px tall, folded otherwise. Your choice is kept for that agent until you close Escouade.
+- A click on the top line (outside the subagents’ stack of dots, which opens their conversation) folds or unfolds the list. By default, it’s unfolded when the window is at least 800 px tall, folded otherwise. Your choice is kept for that agent until you close Escouade.
 - A handle under the list can be dragged up or down to change its height; a double-click puts it back to the default height. The chosen height is used for all plans and is kept from one launch to the next. The messages always keep at least 160 px.
 
 ## The card’s line
 
-In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line.
+In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line, but its subagents have their group under the card (see below).
+
+## Subagents in the sidebar
+
+Under the card of an agent that has subagents, a “Subagents” group lists them, even when the agent has no tasks. A click on its title unfolds or folds it. By default it’s unfolded while a subagent runs and folded otherwise; your choice is kept until you close Escouade.
+
+Unfolded, the group first shows the subagents that are running, each with its title, its model, and what it’s doing right now (“Editing src/a.ts”). It shows five; “N more running” unrolls the rest. Below, an “N finished subagents” line unfolds the ones that have finished, from the last to finish to the first, each with its state (Done, Failed, Stopped, or Interrupted): ten at most, then “N more” for the rest. A subagent started by another is indented one step. The group doesn’t scroll: the sidebar already does.
+
+The sidebar only keeps an agent’s 30 latest subagents: those running, then the latest finished. The count of finished subagents counts those; the older ones can still be read in the agent’s conversation (see below).
+
+## The conversation of a subagent
+
+Each subagent has its own conversation, which you read in full size, in place of the agent’s.
+
+### Opening it
+
+One click is enough, on any of these:
+
+- the subagent’s line in the sidebar;
+- the stack of dots in the “Plan” banner: in one click for a single subagent that runs, through a menu of all those that run when there are several (whether they work on a task or not);
+- the `↳ name` of a task;
+- the ↗ button at the right of the line of its call (the `Agent` tool), in the agent’s conversation;
+- “Open its conversation”, above a permission request or a question it asked.
+
+At the top, a breadcrumb “agent › subagent” tells you where you are. For a subagent started by another, it shows the whole chain, and each link opens the subagent it names. A click on the agent’s name, or `Esc`, takes you back to its conversation, and the focus returns to where you clicked (for the banner’s stack of dots, on its button, even if you chose the subagent in its menu); a click on the agent’s card in the sidebar brings you back too. `Esc` does nothing while a field holds text you typed: a draft isn’t lost to a key.
+
+### What the view shows
+
+- **The state** of the subagent, next to the breadcrumb: Running, Done, Failed, Stopped, Interrupted, or “Launched” when nothing says more.
+- **Its sheet**: its type, its model, its tokens, the tools it used, and its duration (which runs while it does). Below, its prompt, that is what it was asked, folded when it’s long (“Show the whole prompt”).
+- **Its conversation**: what it says, its thinking, its tool calls (which unfold, as in the agent’s conversation), and its permission requests and questions. You answer them as usual, with the button or the keyboard (see [the conversation](chat#questions-and-permissions)). These requests also stay in the agent’s conversation, headed by “Request of the subagent” and its name.
+- **Its end**: “The subagent is working…” while it runs, then its report, rendered as Markdown, or “This subagent handed back no report.”
+
+Titles, prompts, and reports are the agent’s words, as they are: Escouade doesn’t translate them.
+
+### Stopping it
+
+“Stop”, at the top right, is only for a subagent that runs **in the background**. It stops this subagent alone: the agent goes on. Claude Code then gives the agent a turn to notice the stop, and that turn counts like the others (tokens, cost). While Claude Code hasn’t told the subagent’s task, the button stays there, grayed out, and its tooltip says why it can’t act yet.
+
+A subagent in the foreground has no button: the agent waits for it, and the agent’s own “Stop” stops it along with its turn. Stopping one alone has never been tried on a real stream, so Escouade doesn’t offer it. There’s no button in [the Claude Code view](claude-code-view#subagents) either.
+
+### Writing to it
+
+Claude Code doesn’t let anyone write to a subagent directly. For a subagent that runs **in the background**, a “Write to it, through” field followed by the agent’s name appears at the bottom of the view. Your message is sent to the agent, with the request to pass it on as it is to the subagent through Claude Code’s `SendMessage` tool; the field says so under the text area. `Ctrl+Enter` sends the message, and answers no request that is waiting.
+
+> [!NOTE]
+> The message goes through the agent. It appears in its conversation as that request, it costs it a turn, and the subagent only receives it at its next tool. The agent is only asked to pass it on: nothing forces it to. In the test done on Claude Code 2.1.300, it did, and the subagent took it into account.
+
+The field isn’t offered for a subagent in the foreground (the agent waits for it and could only pass the message on once it’s over), nor in the Claude Code view, nor for an archived agent. What you typed is kept when the subagent finishes or when you change view, as long as Escouade stays open; the field then stays, with the send grayed out and a note that the subagent has finished.
+
+### Afterwards
+
+A finished subagent’s conversation can still be read. Escouade keeps each subagent’s prompt, its report, and its final figures (state, tokens, tools, duration) with the agent’s conversation. The prompt and the report are cut at 16,000 bytes, and a cut text ends with “…”. When a subagent finishes without handing back a report in due form, its last message serves as its report. The report of a subagent in the foreground is the result of its call, cut at 8,000 bytes.
+
+Its conversation can therefore be read after Escouade restarts, and even when the sidebar no longer has its line (beyond 30 subagents, or once the plan has started over): the ↗ button on the line of its call, in the agent’s conversation, still opens it. A subagent that was running when Escouade closed is shown as “Interrupted”.
 
 ## When the plan goes away
 

@@ -409,6 +409,10 @@ describe('answersHere', () => {
     expect(answersHere(mount('<main class="conv"><div class="xterm"><textarea id="t"></textarea></div></main>'))).toBe(false);
   });
 
+  it('keeps out of a field of the conversation that has keys of its own (« Lui écrire » of a subagent)', () => {
+    expect(answersHere(mount('<main class="conv"><form data-own-keys><textarea id="t"></textarea></form></main>'))).toBe(false);
+  });
+
   it('keeps out of the rest of the window', () => {
     expect(answersHere(mount('<nav><button id="t">Nouvel agent</button></nav><main class="conv"></main>'))).toBe(false);
     expect(answersHere(null)).toBe(false);

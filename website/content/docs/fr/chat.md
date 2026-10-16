@@ -96,7 +96,7 @@ Un clic sur la ligne (ou `Entrée` quand elle a le focus) la déplie :
 - **Modification de fichier** (`Edit`, `Write`, `MultiEdit`) : le diff, avec les lignes numérotées, en vert et en rouge. Il est unifié ou côte à côte selon le choix que tu as fait dans la visionneuse de diff (« Unifié » ou « Côte à côte », voir [git](git)). Au-delà de 400 lignes, il s’arrête à « … N lignes de plus ». Le chemin du fichier est un lien : il ouvre le fichier dans l’éditeur, à la première ligne modifiée.
 - **Commande** (`Bash`, `PowerShell`) : la commande après `$`, puis sa sortie.
 - **Liste de tâches** (`TodoWrite`) : les tâches avec ☐, ◐ (en cours) et ☑.
-- **Sous-agent** (`Agent`) : ce qu’on lui a demandé, ses propres appels d’outils (des lignes imbriquées, que tu peux déplier aussi) et son dernier texte. La ligne dit combien d’outils il a utilisés.
+- **Sous-agent** (`Agent`) : ce qu’on lui a demandé, ses propres appels d’outils (des lignes imbriquées, que tu peux déplier aussi) et son dernier texte. La ligne dit combien d’outils il a utilisés, et son bouton ↗ ouvre la conversation du sous-agent en grand, à la place de celle de l’agent (voir [la conversation d’un sous-agent](plan#la-conversation-d-un-sous-agent)).
 - **Les autres outils** : leur résultat, sinon les paramètres de l’appel.
 
 Les outils qui ne font que relire la liste des tâches (`TaskList`, `TaskGet`) sont affichés en teintes plus douces. Les outils du serveur MCP d’Escouade portent un badge « Escouade · … » (voir [le serveur MCP](mcp)).
@@ -122,6 +122,8 @@ De courtes lignes, en dehors des messages, signalent ce qui arrive à la session
 ## Questions et autorisations
 
 Quand Claude a besoin de toi, la conversation affiche une carte ambre, l’agent passe en « Question », et tu es prévenu (voir [les notifications](notifications)). Tu réponds à la souris, au clavier ou en écrivant dans le champ.
+
+Quand la demande vient d’un sous-agent, la carte est précédée de « Demande du sous-agent » et de son nom, avec un bouton « Ouvrir sa conversation ». Tu peux y répondre ici ou dans la conversation du sous-agent, où la même carte apparaît (voir [la conversation d’un sous-agent](plan#la-conversation-d-un-sous-agent)) ; la réponse vaut des deux côtés.
 
 ### Les questions
 
