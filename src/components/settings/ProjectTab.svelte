@@ -2,7 +2,7 @@
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
-  import { anyCan } from '../../lib/engines';
+  import { anyCan, choosesEngine, engineOptions } from '../../lib/engines';
   import { accountName, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { joinPath, tildify } from '../../lib/format';
@@ -182,6 +182,16 @@
       {/each}
     </div>
   </Row>
+  <!-- From two harnesses found on: the one of its new agents and tickets (none chosen: Claude Code). -->
+  {#if choosesEngine()}
+    <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')}>
+      <Chips
+        label={t('settings.project.engine')}
+        options={engineOptions(draft.engine)}
+        bind:value={() => draft.engine ?? 'claude', (v) => (draft.engine = v)}
+      />
+    </Row>
+  {/if}
   {#if app.settings.accounts.length > 1}
     <Row label={t('accounts.project.label')} desc={t('accounts.project.desc')}>
       <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={draft.account} />

@@ -293,6 +293,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.autopilotPause = null;
   app.claudePathFound = true;
   app.engines = [CLAUDE_ENGINE];
+  app.enginesFound = ['claude'];
   app.projectPauses = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
@@ -366,4 +367,10 @@ export const BARE_ENGINE: EngineDecl = {
     todoTools: false,
     defaultRefusal: false,
   },
+  install: { windows: 'npm install -g @openai/codex', unix: 'npm install -g @openai/codex' },
+  models: [
+    { id: 'gpt-5.5', label: 'GPT-5.5', effort: false, auto: false },
+    { id: 'gpt-5.5-mini', label: 'GPT-5.5 mini', effort: false, auto: false },
+  ],
+  efforts: [],
 };

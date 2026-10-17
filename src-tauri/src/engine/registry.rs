@@ -132,6 +132,29 @@ pub struct Tested {
     pub newest: &'static str,
 }
 
+/// The command that installs a harness, as « Aucun harness trouvé » gives it: on Windows, and on
+/// macOS and Linux.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Install {
+    pub windows: &'static str,
+    pub unix: &'static str,
+}
+
+/// A model the composer's menu offers for a harness, by the id its harness takes (`opus`), with
+/// what it takes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDecl {
+    pub id: &'static str,
+    /// Its name in the menu, until the harness tells which version it runs (`Opus`).
+    pub label: &'static str,
+    /// It takes an effort (`Engine::supports_effort`).
+    pub effort: bool,
+    /// It takes the mode `auto` (`Engine::supports_auto`).
+    pub auto: bool,
+}
+
 /// A version number (`2.1.301`), compared number by number (a missing one counts as 0).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version(Vec<u64>);
@@ -237,6 +260,12 @@ pub struct EngineDecl {
     pub name: &'static str,
     pub tested: Tested,
     pub caps: EngineCaps,
+    /// How to install it (« Aucun harness trouvé »).
+    pub install: Install,
+    /// The models of the composer's menu, in its order.
+    pub models: Vec<ModelDecl>,
+    /// The efforts of the composer's menu, in its order (empty when `caps.effort` is false).
+    pub efforts: Vec<&'static str>,
 }
 
 pub fn declared() -> Vec<EngineDecl> {
@@ -247,6 +276,9 @@ pub fn declared() -> Vec<EngineDecl> {
             name: e.name(),
             tested: e.tested(),
             caps: e.caps(),
+            install: e.install(),
+            models: e.models(),
+            efforts: e.efforts().to_vec(),
         })
         .collect()
 }

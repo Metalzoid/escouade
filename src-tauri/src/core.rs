@@ -4247,7 +4247,9 @@ impl<R: Runtime> Core<R> {
 
     /// A new agent in a worktree on the existing branch `branch` (a local one, or a remote one
     /// such as `origin/feat`), selected in the sidebar. Refused for the branch of the project's
-    /// folder and for one another worktree has (`IN_WORKTREE` for an agent's).
+    /// folder and for one another worktree has (`IN_WORKTREE` for an agent's). The command, which
+    /// also names a harness, goes through `create_agent_with`.
+    #[cfg(test)]
     pub async fn create_agent_on_branch(
         self: &Arc<Self>,
         project_id: &str,

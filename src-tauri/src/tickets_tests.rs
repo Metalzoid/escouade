@@ -35,6 +35,7 @@ pub(crate) fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDra
         branch: String::new(),
         images: None,
         files: None,
+        engine: None,
     }
 }
 

@@ -5,7 +5,7 @@
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
   import { canSwitchView, copyRemoteLink, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
-  import { can, canFork, showsCost } from '../lib/engines';
+  import { can, canFork, choosesEngine, engineOptions, showsCost } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { runIn } from '../lib/launch-actions';
   import { ticketTag } from '../lib/board';
@@ -22,6 +22,7 @@
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import type { Agent, AgentStatus, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
+  import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
@@ -237,7 +238,15 @@
 
   function newAgentMenu() {
     if (!moreBtn) return;
+    // From two harnesses found on, one entry each, the project's first: « Nouvel agent » alone goes on the project's.
+    const own = project.engine ?? 'claude';
+    const engines = choosesEngine() ? engineOptions().sort((a, b) => Number(b.value === own) - Number(a.value === own)) : [];
     menu.showAt(moreBtn, [
+      ...engines.map((e) => ({
+        label: t('nav.sidebar.newAgentOn', { engine: e.label }),
+        onClick: () => app.newAgent(project.id, e.value),
+      })),
+      ...(engines.length ? [{ label: '', separator: true }] : []),
       {
         label: t('branches.agent.onBranch'),
         // Once the menu is gone and has given the focus back to its button: the picker gives it back there in turn.
@@ -423,6 +432,7 @@
           {:else}
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
           {/if}
+          <EngineMark engine={a.engine} />
           {#if inBg > 0}
             <!-- What runs in the background for the agent: the list is under the card. -->
             <span

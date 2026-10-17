@@ -23,8 +23,8 @@
   import { basename, dirname } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
-  import { EFFORTS, MODES, modelOptions, supportsAuto, supportsEffort } from '../lib/models';
-  import { can, capsOf, modesOf } from '../lib/engines';
+  import { EFFORTS, MODES, modelOptions } from '../lib/models';
+  import { can, capsOf, effortsOf, modelsOf, modelTakes, modesOf } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
@@ -82,12 +82,13 @@
   const conv = $derived(conversationOf(agent.id));
   const pendingItem = $derived(agent.pending.length ? conv.items.find((i) => i.id === agent.pending[0]) : undefined);
   const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
-  const effortOk = $derived(supportsEffort(agent.model));
+  // The menus are those of the agent's harness: its models, its efforts, its modes.
+  const effortOk = $derived(modelTakes(agent, agent.model, 'effort'));
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));
   const modeOptions = $derived(
     modesOf(agent, MODES).map((md) => {
-      const unavailable = md.value === 'auto' && !supportsAuto(agent.model);
+      const unavailable = md.value === 'auto' && !modelTakes(agent, agent.model, 'auto');
       const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? md.title;
       return {
         value: md.value,
@@ -573,7 +574,7 @@
       <Dropdown
         caption={t('common.model')}
         value={agent.model}
-        options={modelOptions(app.models)}
+        options={modelOptions(app.models, modelsOf(agent))}
         open={menu === 'model'}
         showCaption={!tight}
         onToggle={() => toggleMenu('model')}
@@ -596,7 +597,7 @@
         <Dropdown
           caption={t('composer.bar.effort')}
           value={effortOk ? agent.effort : ''}
-          options={EFFORTS.map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
+          options={effortsOf(agent, EFFORTS).map((ef) => ({ value: ef.value, label: ef.label, detail: ef.title }))}
           open={menu === 'effort'}
           showCaption={!tight}
           disabled={!effortOk}

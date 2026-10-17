@@ -141,7 +141,7 @@ La fenêtre reçoit les déclarations au démarrage (`InitialState.engines`, `En
 
 ### Version et état
 
-`registry::state_of` donne l'état d'un moteur : `absent` (programme introuvable), `tooOld` (version plus ancienne que la plage : refusée), `notConnected` (aucun compte connecté), `untested` (plus récente : utilisée, avec un avertissement), `ready`. Une version qu'il ne dit pas est prise telle quelle. La commande `engines` le rend pour chaque moteur (`EngineInfo` : programme, version, plage, état, texte, capacités) ; Réglages › Claude Code l'affiche sous le chemin de l'exécutable.
+`registry::state_of` donne l'état d'un moteur : `absent` (programme introuvable), `tooOld` (version plus ancienne que la plage : refusée), `notConnected` (aucun compte connecté), `untested` (plus récente : utilisée, avec un avertissement), `ready`. Une version qu'il ne dit pas est prise telle quelle. La commande `engines` le rend pour chaque moteur (`EngineInfo` : programme, version, plage, état, texte, capacités) ; Réglages › Harness l’affiche avec son état (voir « L’interface »).
 
 Le refus est fait au démarrage du process d'un agent, en vue Escouade comme en vue Claude Code (`registry::check`, après `accounts::program`) : « Claude Code 2.0.14 est trop ancien pour Escouade, qui demande au moins la version 2.1.283 : … Mets-le à jour (claude update). » L'avertissement : « Claude Code 2.1.400 n'a pas été testé avec Escouade (testé jusqu'à la 2.1.301) : il est utilisé quand même, et ce qu'Escouade ne reconnaît pas de lui est ignoré. »
 
@@ -152,6 +152,36 @@ Un champ inconnu est ignoré, une frame, un événement, un bloc ou un delta inc
 ### Les schémas des versions testées
 
 Le schéma de la plus récente version testée est gardé dans le dépôt : `tests/fixtures/engines/claude-code-<version>.schema.json`, les frames de Claude Code et leurs champs, relevés dans ses flux réels enregistrés (`tests/fixtures/real-run-*.jsonl`) et, pour ce qu'aucun enregistrement n'a, dans docs/PROTOCOL.md. Deux tests le tiennent : chaque champ qu'Escouade lit y est (`claude_code_frames_read_by_escouade_are_in_the_schema`), et chaque champ des flux enregistrés aussi. Passer `tested().newest` à une version nouvelle demande son schéma. Pour Codex, ce sera la sortie de `codex app-server generate-json-schema` ; pour Copilot, le schéma du protocole de son SDK ; pour Cursor, celui d'ACP et la liste des extensions `cursor/*`.
+
+## L'interface (ESC-29)
+
+Ce que l'utilisateur voit des moteurs, toujours appelés « Harness » à l'écran. Avec Claude Code seul, rien ne change à l'écran, hors l'onglet renommé et l'écran de premier lancement.
+
+### Ce que chaque moteur déclare de plus
+
+`EngineDecl` (ce que la fenêtre reçoit au démarrage) porte, en plus de ses capacités :
+
+| Champ | Méthode de `Engine` | Ce que l'interface en fait | Claude Code |
+|---|---|---|---|
+| `install` (`windows`, `unix`) | `install()` | La commande qui l'installe, sur l'écran « Aucun harness trouvé » et dans Réglages › Harness quand il est introuvable. | `irm https://claude.ai/install.ps1 \| iex`, `curl -fsSL https://claude.ai/install.sh \| bash` |
+| `models` (`id`, `label`, `effort`, `auto`) | `models()` | Le menu « Modèle » du composer, dans son ordre ; chaque modèle dit s'il prend un effort et le mode `auto` (`supports_effort`, `supports_auto`, un test vérifie l'accord). Le nom affiché devient la version que le moteur dit faire tourner (`ModelInfo`, `initialize`) quand il l'a dite. | les alias `fable`, `opus`, `sonnet`, `haiku` (Haiku sans effort ni `auto`) |
+| `efforts` | `efforts()` | Le menu « Effort », vide (et masqué) sans `caps.effort`. | `low` à `max` |
+
+`InitialState.enginesFound` (et la commande `claude_found`, relue quand le chemin est enregistré) liste les moteurs dont le programme est trouvé (`Core::engines_found` ; pour Claude Code, sur le compte où partent les nouveaux agents). C'est la seule liste que l'interface propose : un moteur absent n'apparaît que dans Réglages › Harness.
+
+### Où chaque chose se montre
+
+Tout passe par `src/lib/engines.ts`, jamais par le nom du moteur :
+
+| Fonction | Ce qu'elle dit | Où |
+|---|---|---|
+| `offered()`, `choosesEngine()`, `engineOptions(actuel)` | Les moteurs trouvés ; s'il y a un choix (deux ou plus) ; les options d'un menu « Harness » (celui d'un ticket ou d'un projet reste listé même s'il n'est plus trouvé). | Réglages › Projets « Harness par défaut », menu « ▾ » de « Nouvel agent » (« Nouvel agent sur … », celui du projet en premier), champ « Harness » de la fenêtre d'un ticket (« Celui du projet (…) » par défaut). Tous masqués avec un seul moteur trouvé. |
+| `showsMark()`, `EngineMark.svelte` | La marque du moteur d'un agent (son premier mot : « Claude », « Codex »…), dès que les agents non archivés tournent sur deux moteurs. | Carte de l'agent (barre latérale), vue d'ensemble, en-tête de sa conversation, carte de son ticket. |
+| `modelsOf`, `effortsOf`, `modelTakes`, `modesOf` | Les menus du composer : modèles, efforts, et ce qu'un modèle prend ; les modes avec leur sens (`ModeCap.meaning`). Les commandes `/` viennent du process de l'agent, et ne sont proposées que si son moteur en a (`slashCommands`). | `Composer.svelte` |
+
+Réglages › Harness (`AppTab.svelte`, onglet `claude`) : un groupe par moteur déclaré, avec son exécutable (le champ du chemin pour le moteur par défaut, le seul qui ait un réglage de chemin tant que chaque moteur n'a pas le sien ; « Trouvé : … » pour les autres), sa version et son état (`EngineInfo`, commande `engines`), et « Se connecter… », qui ouvre la connexion du compte où partent les nouveaux agents (la fenêtre « Se connecter au compte », qui revient ensuite à l'onglet). Un moteur introuvable y donne sa commande d'installation.
+
+La fenêtre d'un ticket envoie `engine` (null : celui du projet) ; `TicketDraft.engine` est absent pour les outils MCP et les imports, qui laissent au ticket le sien. `create_agent` et `create_agent_on_branch` prennent `engine` (null : celui du ticket, puis du projet, voir « Les données »).
 
 ## Ajouter un moteur (ébauche)
 

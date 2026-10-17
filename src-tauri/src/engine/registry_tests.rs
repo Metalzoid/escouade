@@ -147,6 +147,42 @@ fn claude_code_declares_what_it_does_today_as_the_window_tests_take_it() {
     assert!(caps.todo_tools && caps.default_refusal && caps.resume_other_account);
 }
 
+/// What the interface takes from the registry (ESC-29): how to install each harness, and the
+/// models and efforts of its composer, each model saying what it takes as the harness does.
+#[test]
+fn every_harness_declares_its_installer_and_its_composers_models_and_efforts() {
+    for (e, decl) in all().into_iter().zip(declared()) {
+        assert!(!decl.install.windows.is_empty() && !decl.install.unix.is_empty());
+        assert!(!decl.models.is_empty(), "{} has no model", e.name());
+        for m in &decl.models {
+            assert_eq!(m.effort, e.supports_effort(m.id), "{}", m.id);
+            assert_eq!(m.auto, e.supports_auto(m.id), "{}", m.id);
+        }
+        assert_eq!(decl.efforts.is_empty(), !decl.caps.effort, "{}", e.name());
+    }
+    // Claude Code's, as the composer offered them before.
+    let claude = &declared()[0];
+    let models: Vec<(&str, &str, bool)> = claude
+        .models
+        .iter()
+        .map(|m| (m.id, m.label, m.effort))
+        .collect();
+    assert_eq!(
+        models,
+        [
+            ("fable", "Fable", true),
+            ("opus", "Opus", true),
+            ("sonnet", "Sonnet", true),
+            ("haiku", "Haiku", false)
+        ]
+    );
+    assert_eq!(claude.efforts, ["low", "medium", "high", "xhigh", "max"]);
+    assert_eq!(
+        claude.install.windows,
+        "irm https://claude.ai/install.ps1 | iex"
+    );
+}
+
 /// A program that prints `text` for its version, in a folder of its own.
 fn printing(name: &str, text: &str) -> Program {
     let dir = std::env::temp_dir().join(format!("escouade-registry-{name}-{}", std::process::id()));

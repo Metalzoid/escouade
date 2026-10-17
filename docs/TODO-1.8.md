@@ -490,7 +490,7 @@ Lots, dans l'ordre :
 1. **Interface « moteur »** : extraction de Claude Code, sans changement de comportement (voir « Un moteur par agent »).
 2. **Données** : moteur de l'agent, du ticket et du projet ; colonne `engine` des stats. Fait (ESC-27), voir docs/ENGINES.md, « Les données ».
 3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ». Fait (ESC-28), voir docs/ENGINES.md, « Le registre ».
-4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »).
+4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »). Fait (ESC-29), voir docs/ENGINES.md, « L'interface ».
 5. **Comptes et quotas par moteur** (voir « Comptes et quotas », « Coût, tokens, stats »).
 6. **Textes et consignes** indépendants du moteur (voir « Textes »).
 7. **Textes rédigés** par moteur (voir « Textes rédigés par un modèle »).
@@ -535,12 +535,12 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Cursor se met à jour seul : une version non testée peut arriver sans que l'utilisateur ait rien fait. L'avertissement le dit, et la lecture tolérante de l'inconnu compte d'autant plus.
 
 ### Choisir le moteur
-- [ ] **Réglages › « Moteurs »** (aujourd'hui l'onglet « Claude ») : pour chaque moteur, l'exécutable (comme `claude_path`), la version trouvée, son état (absent, non connecté, prêt, version non testée) et « Se connecter… » (un terminal intégré avec la commande de connexion). Un moteur absent n'apparaît nulle part ailleurs.
-- [ ] **Premier lancement** : Escouade marche dès qu'un moteur est installé. « Claude Code introuvable » devient « Aucun moteur trouvé », avec la commande d'installation de chacun.
-- [ ] **Projet** : « Moteur par défaut ». Par défaut, Claude Code, ou le seul moteur installé.
-- [ ] **Nouvel agent** : un menu « Moteur », réglé d'abord sur celui du projet.
-- [ ] **Ticket** : un champ « Moteur » (par défaut, celui du projet), que le pilote auto suit.
-- [ ] **Marque du moteur** sur la carte de l'agent, dans la barre latérale, la vue d'ensemble et l'onglet, dès que plus d'un moteur sert.
+- [x] **Réglages › « Moteurs »** (« Harness », ESC-29 ; l'onglet « Claude Code » d'avant) : pour chaque moteur, l'exécutable (comme `claude_path`), la version trouvée, son état (absent, non connecté, prêt, version non testée) et « Se connecter… » (un terminal intégré avec la commande de connexion). Un moteur absent n'apparaît nulle part ailleurs.
+- [x] **Premier lancement** (ESC-29) : Escouade marche dès qu'un moteur est installé. « Claude Code introuvable » devient « Aucun moteur trouvé », avec la commande d'installation de chacun.
+- [x] **Projet** : « Moteur par défaut » (« Harness par défaut », ESC-29, dès deux harness trouvés). Par défaut, Claude Code ; « ou le seul moteur installé » reste à faire avec le premier autre moteur.
+- [x] **Nouvel agent** : un menu « Moteur », réglé d'abord sur celui du projet (ESC-29 : « Nouvel agent » part sur celui du projet, le menu « ▾ » propose « Nouvel agent sur … » pour chacun).
+- [x] **Ticket** : un champ « Moteur » (par défaut, celui du projet), que le pilote auto suit (ESC-29).
+- [x] **Marque du moteur** (ESC-29) sur la carte de l'agent, dans la barre latérale, la vue d'ensemble et l'onglet, dès que plus d'un moteur sert.
 
 ### Composer : modèles, effort, modes
 - [ ] **Modèles** : le menu liste ceux du moteur de l'agent.

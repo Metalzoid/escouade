@@ -1,10 +1,25 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { anyCan, can, canFork, capsOf, engineOf, modesOf, showsCost } from './engines';
-import { MODES } from './models';
+import {
+  anyCan,
+  can,
+  canFork,
+  capsOf,
+  choosesEngine,
+  effortsOf,
+  engineOf,
+  engineOptions,
+  modelsOf,
+  modelTakes,
+  modesOf,
+  offered,
+  showsCost,
+  showsMark,
+} from './engines';
+import { EFFORTS, MODES } from './models';
 import { app } from './state.svelte';
-import { BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
 
 describe('the capabilities of a harness', () => {
   beforeEach(() => {
@@ -40,6 +55,52 @@ describe('the capabilities of a harness', () => {
     expect(anyCan('remoteControl')).toBe(true);
     app.engines = [BARE_ENGINE];
     expect(anyCan('remoteControl')).toBe(false);
+  });
+});
+
+describe('the harnesses offered (ESC-29)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('are the harnesses found: a harness that is not found is offered nowhere', () => {
+    app.enginesFound = ['claude'];
+    expect(offered().map((e) => e.id)).toEqual(['claude']);
+    expect(choosesEngine()).toBe(false);
+    app.enginesFound = ['claude', 'codex'];
+    expect(choosesEngine()).toBe(true);
+    expect(engineOptions()).toEqual([
+      { value: 'claude', label: 'Claude Code' },
+      { value: 'codex', label: 'Harness nu' },
+    ]);
+    // The one a ticket or a project has stays listed, though it is not found any more.
+    app.enginesFound = ['claude'];
+    expect(engineOptions('codex').map((o) => o.value)).toEqual(['claude', 'codex']);
+  });
+
+  it('show their brand only once agents run on two of them, archived ones aside', () => {
+    resetApp({ agents: [agent({ id: 'a1' }), agent({ id: 'a2' })] });
+    expect(showsMark()).toBe(false);
+    resetApp({ agents: [agent({ id: 'a1' }), agent({ id: 'a2', engine: 'codex', archived: true })] });
+    expect(showsMark()).toBe(false);
+    resetApp({ agents: [agent({ id: 'a1' }), agent({ id: 'a2', engine: 'codex' })] });
+    expect(showsMark()).toBe(true);
+  });
+
+  it('give the composer the models and efforts of the harness, each model with what it takes', () => {
+    const claude = { engine: 'claude' as const };
+    const bare = { engine: 'codex' as const };
+    expect(modelsOf(claude).map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
+    expect(modelsOf(bare).map((m) => m.id)).toEqual(['gpt-5.5', 'gpt-5.5-mini']);
+    expect(effortsOf(claude, EFFORTS).map((e) => e.value)).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(effortsOf(bare, EFFORTS)).toEqual([]);
+    // As Claude Code's rule: all but Haiku, its full ids too; a model it does not declare takes them.
+    expect(modelTakes(claude, 'opus', 'effort')).toBe(true);
+    expect(modelTakes(claude, 'haiku', 'effort')).toBe(false);
+    expect(modelTakes(claude, 'claude-haiku-4-5-20251001', 'auto')).toBe(false);
+    expect(modelTakes(claude, 'claude-opus-5-5', 'auto')).toBe(true);
+    expect(modelTakes(bare, 'gpt-5.5', 'effort')).toBe(false);
   });
 });
 

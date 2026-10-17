@@ -6,7 +6,9 @@ mod process;
 
 pub(crate) use process::{ClaudeProcess, SpawnOpts};
 
-use super::registry::{CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, QuotaKind, Tested};
+use super::registry::{
+    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
+};
 #[cfg(test)]
 use super::Program;
 use super::{
@@ -34,6 +36,24 @@ pub const TESTED: Tested = Tested {
     oldest: "2.1.283",
     newest: "2.1.301",
 };
+
+/// Its installers (claude.ai), as the Welcome screen gave the one of Windows.
+const INSTALL: Install = Install {
+    windows: "irm https://claude.ai/install.ps1 | iex",
+    unix: "curl -fsSL https://claude.ai/install.sh | bash",
+};
+
+/// The aliases the composer offers: Claude Code runs the latest model of the family it knows
+/// (`MODELS` of `src/lib/models.ts`, which names them once it has told which version).
+const MODELS: [(&str, &str); 4] = [
+    ("fable", "Fable"),
+    ("opus", "Opus"),
+    ("sonnet", "Sonnet"),
+    ("haiku", "Haiku"),
+];
+
+/// The efforts it takes (`--effort`).
+const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 /// What Claude Code does, as Escouade drives it today.
 pub fn caps() -> EngineCaps {
@@ -308,6 +328,26 @@ impl Engine for Claude {
 
     fn caps(&self) -> EngineCaps {
         caps()
+    }
+
+    fn install(&self) -> Install {
+        INSTALL
+    }
+
+    fn models(&self) -> Vec<ModelDecl> {
+        MODELS
+            .iter()
+            .map(|&(id, label)| ModelDecl {
+                id,
+                label,
+                effort: supports_effort(id),
+                auto: supports_auto(id),
+            })
+            .collect()
+    }
+
+    fn efforts(&self) -> &'static [&'static str] {
+        &EFFORTS
     }
 
     fn supports_effort(&self, model: &str) -> bool {

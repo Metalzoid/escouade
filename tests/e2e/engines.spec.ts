@@ -7,7 +7,7 @@ import { addProject, expect, send, test } from './fixture';
 async function claudeSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Claude Code' }).click();
+  await dialog.getByRole('tab', { name: 'Harness' }).click();
   return dialog;
 }
 

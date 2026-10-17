@@ -116,7 +116,7 @@ describe('Sidebar', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a4', name: 'agent-3', createdAt: 4 }) });
     render(Sidebar, { project: project() });
     await userEvent.click(screen.getByRole('button', { name: /Nouvel agent/ }));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null });
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null });
     expect(app.agent?.id).toBe('a4');
   });
 
@@ -148,7 +148,12 @@ describe('Sidebar', () => {
       const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
       expect(within(picker).queryByRole('button', { name: /Nouvelle branche/ })).toBeNull();
       await userEvent.click(await within(picker).findByText('origin/hotfix'));
-      expect(backend.called('create_agent_on_branch')[0].args).toEqual({ projectId: 'p1', branch: 'origin/hotfix', model: null });
+      expect(backend.called('create_agent_on_branch')[0].args).toEqual({
+        projectId: 'p1',
+        branch: 'origin/hotfix',
+        model: null,
+        engine: null,
+      });
       await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
       expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull();
     });
@@ -2232,5 +2237,50 @@ describe('Sidebar of agents on harnesses that do not all do the same', () => {
       expect(items()).not.toContain(label);
     }
     expect(items()).toContain('Renommer');
+  });
+});
+
+describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
+  const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
+
+  it('offers « Nouvel agent sur … » for each harness found, from two on, the project’s first', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const backend = fakeBackend({ create_agent: (a: any) => agent({ id: 'a7', engine: a.engine, createdAt: 7 }) });
+    render(Sidebar, { project: project({ engine: 'codex' }) });
+    // One harness found: as before.
+    await userEvent.click(more());
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…']);
+    menu.close();
+    app.enginesFound = ['claude', 'codex'];
+    await userEvent.click(more());
+    expect(menu.open!.items.map((i) => i.label)).toEqual([
+      'Nouvel agent sur Harness nu',
+      'Nouvel agent sur Claude Code',
+      '',
+      'Nouvel agent sur une branche…',
+    ]);
+    menu.open!.items[1].onClick!();
+    menu.close();
+    await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude' });
+  });
+
+  it('shows the brand of each agent’s harness only once agents run on two', () => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'alpha' }), agent({ id: 'a2', name: 'beta', createdAt: 2 })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    fakeBackend();
+    const { unmount } = render(Sidebar, { project: project() });
+    expect(screen.queryByRole('img', { name: /^Harness :/ })).toBeNull();
+    unmount();
+    resetApp({ agents: [agent({ id: 'a1', name: 'alpha' }), agent({ id: 'a2', name: 'beta', engine: 'codex', createdAt: 2 })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    render(Sidebar, { project: project() });
+    expect(within(screen.getByRole('button', { name: /alpha/ })).getByRole('img', { name: 'Harness : Claude Code' })).toHaveTextContent(
+      'Claude',
+    );
+    expect(within(screen.getByRole('button', { name: /beta/ })).getByRole('img', { name: 'Harness : Harness nu' })).toHaveTextContent(
+      'Harness',
+    );
   });
 });

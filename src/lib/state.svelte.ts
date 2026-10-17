@@ -31,6 +31,7 @@ import type {
   LaunchState,
   ModelInfo,
   EngineDecl,
+  EngineId,
   Project,
   Resources,
   Settings,
@@ -100,7 +101,8 @@ export type Modal =
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
-  | { kind: 'account'; accountId?: string }
+  /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
+  | { kind: 'account'; accountId?: string; back?: SettingsTab }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs. */
@@ -150,6 +152,8 @@ export interface TicketFormDraft {
   maxLoops: number;
   after: string[];
   branch: string;
+  /** Its harness (null: the project's); absent: the ticket's. */
+  engine?: EngineId | null;
   /** Absent: those of the ticket. */
   images?: FormImage[];
   /** The files of the ticket's images as the window showed them, those gone from its folder left out; absent: the ticket's. */
@@ -247,6 +251,8 @@ class AppState {
   models = $state<ModelInfo[]>([]);
   /** What each harness declares (its capabilities), as the backend gave it at the start. */
   engines = $state.raw<EngineDecl[]>([]);
+  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
+  enginesFound = $state.raw<EngineId[]>([]);
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -496,6 +502,7 @@ class AppState {
     this.version = s.version;
     this.models = s.models;
     this.engines = s.engines ?? [];
+    this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     // Not answered yet (closed without a choice: asked again at the next start).
@@ -1139,10 +1146,11 @@ class AppState {
     if (status === 'crashed') this.toast(t('runs.launch.crashed', { name: l.name, code: code ?? '?' }), 'error');
   }
 
-  async newAgent(projectId = this.ui.activeProject) {
+  /** A new agent of the project, on `engine` (« Nouvel agent sur … »), else on the project's harness. */
+  async newAgent(projectId = this.ui.activeProject, engine: EngineId | null = null) {
     if (!projectId) return;
     try {
-      const a = await api.createAgent(projectId);
+      const a = await api.createAgent(projectId, null, engine);
       this.agents[a.id] = a;
       // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
       this.closeEditor(projectId);

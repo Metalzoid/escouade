@@ -541,7 +541,7 @@ pub struct CreateTicketArgs {
     )]
     pub images: Option<Vec<ImageArg>>,
     #[schemars(
-        description = "Other files to attach, of any format (a spreadsheet, an archive, a log, a PDF…; 20 at most, each no bigger than the size the settings allow, Settings › Claude Code › Attachments), whose paths the ticket's agent gets with its first message. Leave them out for none."
+        description = "Other files to attach, of any format (a spreadsheet, an archive, a log, a PDF…; 20 at most, each no bigger than the size the settings allow, Settings › Harness › Attachments), whose paths the ticket's agent gets with its first message. Leave them out for none."
     )]
     pub files: Option<Vec<FileArg>>,
 }
@@ -1172,7 +1172,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. You may attach images (screenshots, mock-ups) with images, each given by its content in base64 (data, with a name) or by the full path of a file on this computer (path; an agent of Escouade can only give a file of its working folder): PNG, JPEG, GIF or WebP, read from their content, 5 MB each, 18 MB in all, 20 at most. The ticket's agent gets them with its first message. You may also attach other files of any format (a spreadsheet, an archive, a log, a PDF…) with files, given the same two ways (by content in base64 for a small one, a request weighing 32 MiB at most; by path otherwise, the file then copied): 20 at most, each no bigger than the size the settings allow (Settings › Claude Code › Attachments, as in the window); the ticket's agent gets their paths with its first message. An image or a file that is refused refuses the whole call, and nothing is created. Answers the ticket as get_ticket does.",
+        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. You may attach images (screenshots, mock-ups) with images, each given by its content in base64 (data, with a name) or by the full path of a file on this computer (path; an agent of Escouade can only give a file of its working folder): PNG, JPEG, GIF or WebP, read from their content, 5 MB each, 18 MB in all, 20 at most. The ticket's agent gets them with its first message. You may also attach other files of any format (a spreadsheet, an archive, a log, a PDF…) with files, given the same two ways (by content in base64 for a small one, a request weighing 32 MiB at most; by path otherwise, the file then copied): 20 at most, each no bigger than the size the settings allow (Settings › Harness › Attachments, as in the window); the ticket's agent gets their paths with its first message. An image or a file that is refused refuses the whole call, and nothing is created. Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,

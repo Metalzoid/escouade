@@ -3,7 +3,7 @@
 use crate::accounts::{AccountStatus, ShareMode};
 use crate::attachfiles::AttachedFile;
 use crate::closed::ClosedProjectInfo;
-use crate::core::{Attachment, Core, NotOnBase, SyncOp};
+use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
 use crate::fsedit;
 use crate::i18n::{self, Lang};
 use crate::integrations::{
@@ -76,6 +76,8 @@ pub struct InitialState {
     models: Vec<ModelInfo>,
     /// What each harness declares: its capabilities, which the window reads to show a function.
     engines: Vec<crate::engine::registry::EngineDecl>,
+    /// The harnesses whose program is found: the only ones the interface offers.
+    engines_found: Vec<crate::model::EngineId>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
     /// Why no ticket of a project that goes to any account starts for now (a quota, a usage
@@ -150,6 +152,7 @@ pub fn subscribe(
         version,
         models,
         engines: crate::engine::registry::declared(),
+        engines_found: core.engines_found(),
         board_issues,
         autopilot_pause,
         project_pauses,
@@ -203,6 +206,7 @@ pub fn claude_locate(path: String, wsl_distro: String) -> crate::engine::Located
 pub struct ClaudeFound {
     claude_found: bool,
     claude_path_found: bool,
+    engines_found: Vec<crate::model::EngineId>,
 }
 
 #[tauri::command(async)]
@@ -212,6 +216,7 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
     let settings = core.settings.read().clone();
     ClaudeFound {
         claude_found: core.claude_found(),
+        engines_found: core.engines_found(),
         claude_path_found: crate::engine::default()
             .locate(&settings.claude_path, &settings.wsl_distro)
             .is_some(),
@@ -508,8 +513,20 @@ pub async fn create_agent(
     core: CoreState<'_>,
     project_id: String,
     model: Option<String>,
+    engine: Option<crate::model::EngineId>,
 ) -> Res<AgentView> {
-    let agent = core.create_agent(&project_id, model).await.map_err(err)?;
+    let agent = core
+        .create_agent_with(
+            &project_id,
+            AgentOptions {
+                model,
+                engine,
+                select: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .map_err(err)?;
     core.telemetry.track(Event::AgentCreated {
         worktree: agent.meta.worktree.is_some(),
     });
@@ -951,9 +968,19 @@ pub async fn create_agent_on_branch(
     project_id: String,
     branch: String,
     model: Option<String>,
+    engine: Option<crate::model::EngineId>,
 ) -> Res<AgentView> {
     let agent = core
-        .create_agent_on_branch(&project_id, &branch, model)
+        .create_agent_with(
+            &project_id,
+            AgentOptions {
+                model,
+                engine,
+                select: true,
+                branch: Some(branch),
+                ..Default::default()
+            },
+        )
         .await
         .map_err(branch_err)?;
     core.telemetry.track(Event::AgentCreated {

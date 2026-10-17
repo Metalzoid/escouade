@@ -229,6 +229,12 @@ pub trait Engine: Send + Sync {
     fn version_args(&self) -> &'static [&'static str];
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;
+    /// The command that installs it (« Aucun harness trouvé »).
+    fn install(&self) -> registry::Install;
+    /// The models the composer offers, in its menu's order.
+    fn models(&self) -> Vec<registry::ModelDecl>;
+    /// The efforts the composer offers, in its menu's order (none without `caps().effort`).
+    fn efforts(&self) -> &'static [&'static str];
 
     /// Whether `model` takes an effort.
     fn supports_effort(&self, model: &str) -> bool;

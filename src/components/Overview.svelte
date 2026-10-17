@@ -14,6 +14,7 @@
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
   import type { Agent, PendingRequest, Project } from '../lib/types';
+  import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
   import { tip } from '../lib/tip';
 
@@ -281,6 +282,7 @@
       <span class="agent">
         <StatusDot status={a.status} size={8} />
         <span class="name" id={`ov-a-${a.id}`} use:tip={{ text: a.name, cut: true }}>{a.name}</span>
+        <EngineMark engine={a.engine} />
         {#if p}<span class="proj"><span class="swatch" style:background={p.color}></span>{p.name}</span>{/if}
         {#if tag}<span class="tag mono">▸ {tag}</span>{/if}
       </span>

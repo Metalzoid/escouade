@@ -1337,6 +1337,21 @@ impl<R: Runtime> Core<R> {
         program(&get(&settings, &current), &settings).is_some()
     }
 
+    /// The harnesses whose program is found, in the registry's order: those the interface offers
+    /// (a harness that is not found shows nowhere but in Réglages › Harness).
+    pub fn engines_found(&self) -> Vec<crate::model::EngineId> {
+        let settings = self.settings.read().clone();
+        engine::registry::all()
+            .into_iter()
+            .filter(|h| match h.id() {
+                // The accounts are Claude Code's until each harness has its own (lot 5).
+                crate::model::EngineId::Claude => self.claude_found(),
+                _ => h.locate("", &settings.wsl_distro).is_some(),
+            })
+            .map(|h| h.id())
+            .collect()
+    }
+
     /// Whether the account is signed in, and with which email.
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;

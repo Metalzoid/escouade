@@ -47,3 +47,62 @@ export function modesOf<T extends { value: string }>(who: { engine: EngineId | n
 export function anyCan(flag: Flag): boolean {
   return app.engines.some((e) => e.caps[flag]);
 }
+
+/** The harnesses offered (menus « Harness », brand): those declared whose program is found, in the backend's order. */
+export function offered(): EngineDecl[] {
+  return app.engines.filter((e) => app.enginesFound.includes(e.id));
+}
+
+/** Whether there is a harness to choose: the menus « Harness » show from two harnesses found on. */
+export function choosesEngine(): boolean {
+  return offered().length > 1;
+}
+
+/** The harnesses offered, as the options of a menu « Harness »; `current` stays listed even if it is not found any more. */
+export function engineOptions(current?: EngineId | null): { value: EngineId; label: string }[] {
+  const list = offered();
+  const kept = current && !list.some((e) => e.id === current) ? app.engines.filter((e) => e.id === current) : [];
+  return [...list, ...kept].map((e) => ({ value: e.id, label: e.name }));
+}
+
+/** The name of a harness as the interface says it (its id when the backend does not know it). */
+export function engineName(engine: EngineId | null | undefined): string {
+  return engineOf(engine)?.name ?? engine ?? '';
+}
+
+/** The harnesses the agents run on (archived ones aside). */
+export function enginesInUse(): Set<EngineId> {
+  return new Set(
+    Object.values(app.agents)
+      .filter((a) => !a.archived)
+      .map((a) => a.engine ?? 'claude'),
+  );
+}
+
+/** Whether the brand of an agent's harness shows (its card, the sidebar, the overview, its header): once agents run on two. */
+export function showsMark(): boolean {
+  return enginesInUse().size > 1;
+}
+
+/** The models of the composer's menu for the harness of `who` (none for a harness the backend does not know). */
+export function modelsOf(who: { engine: EngineId | null | undefined }): { id: string; label: string }[] {
+  return engineOf(who.engine)?.models ?? [];
+}
+
+/** The efforts of the harness of `who`, among `all` (in their order): none when it takes none. */
+export function effortsOf<T extends { value: string }>(who: { engine: EngineId | null | undefined }, all: T[]): T[] {
+  const decl = engineOf(who.engine);
+  if (!decl?.caps.effort) return [];
+  return all.filter((e) => decl.efforts.includes(e.value));
+}
+
+/**
+ * Whether `model` takes an effort or the mode `auto` on the harness of `who`, as its declaration says: by its id, else by
+ * the declared model its full id holds (`claude-haiku-4-5` is Haiku). A model it does not declare takes them.
+ */
+export function modelTakes(who: { engine: EngineId | null | undefined }, model: string, what: 'effort' | 'auto'): boolean {
+  const m = model.toLowerCase();
+  const models = engineOf(who.engine)?.models ?? [];
+  const decl = models.find((x) => x.id === m) ?? models.find((x) => m.includes(x.id));
+  return decl ? decl[what] : true;
+}

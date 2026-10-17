@@ -334,12 +334,27 @@ export interface EngineTested {
   newest: string;
 }
 
+/** A model of the composer's menu for a harness, by the id its harness takes, and what it takes. */
+export interface ModelDecl {
+  id: string;
+  /** Its name in the menu until the harness tells which version it runs. */
+  label: string;
+  effort: boolean;
+  auto: boolean;
+}
+
 /** What a harness declares, as the window gets it at its start. */
 export interface EngineDecl {
   id: EngineId;
   name: string;
   tested: EngineTested;
   caps: EngineCaps;
+  /** The command that installs it, on Windows and elsewhere (« Aucun harness trouvé »). */
+  install: { windows: string; unix: string };
+  /** The models of the composer's menu, in its order. */
+  models: ModelDecl[];
+  /** The efforts of the composer's menu, in its order (empty without `caps.effort`). */
+  efforts: string[];
 }
 
 /** A harness with what is found of it here (Réglages). */
@@ -599,6 +614,8 @@ export interface TicketDraft {
   images?: DraftImage[];
   /** Its other files, the whole list; absent: they stay as they are. */
   files?: DraftFile[];
+  /** Its harness (« Harness »), null for the project's; absent: it stays as it is. */
+  engine?: EngineId | null;
 }
 
 export interface RecipeStep {
@@ -1410,6 +1427,8 @@ export interface InitialState {
   models: ModelInfo[];
   /** What each harness declares: its capabilities. */
   engines: EngineDecl[];
+  /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
+  enginesFound?: EngineId[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
   boardIssues?: Record<string, string>;
   /** Why no ticket of a project that goes to any account starts for now (none: they may). */

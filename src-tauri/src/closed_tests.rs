@@ -27,6 +27,7 @@ fn draft(title: &str) -> TicketDraft {
         branch: String::new(),
         images: None,
         files: None,
+        engine: None,
     }
 }
 

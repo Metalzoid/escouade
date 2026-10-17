@@ -1074,3 +1074,22 @@ describe('Composer of an agent on another harness', () => {
     expect(screen.queryByText('/compact')).toBeNull();
   });
 });
+
+describe('Composer: the menus come from the agent’s harness (ESC-29)', () => {
+  it('lists the models its harness declares, and Claude Code’s aliases for an agent on Claude Code, as before', async () => {
+    const a = agent({ id: 'cc', model: 'opus' });
+    const b = agent({ id: 'cx', engine: 'codex', model: 'gpt-5.5' });
+    resetApp({ agents: [a, b] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    fakeBackend({ get_conversation: () => [] });
+    const { unmount } = render(Composer, { agent: app.agents.cc });
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['Fable', '✓ Opus', 'Sonnet', 'Haiku']);
+    await userEvent.click(screen.getByRole('button', { name: /^Effort/ }));
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(5);
+    unmount();
+    render(Composer, { agent: app.agents.cx });
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['✓ GPT-5.5', 'GPT-5.5 mini']);
+  });
+});

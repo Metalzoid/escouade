@@ -265,3 +265,65 @@ async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
     let agent = h.ticket(&theirs.id).agent_id.unwrap();
     assert_eq!(h.agent(&agent).engine, EngineId::Opencode);
 }
+
+// ---------- Choosing the harness (ESC-29) ----------
+
+/// The form of a ticket sends its « Harness » field: null for the project's. The tools of the MCP
+/// server and the imports send none, and the ticket keeps its own.
+#[tokio::test]
+async fn a_tickets_form_sets_its_harness_and_a_draft_without_one_keeps_it() {
+    let h = harness("esc29-ticket-form");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let form = |engine: Value| -> crate::tickets::TicketDraft {
+        let d = json!({
+            "title": "Le sien", "description": "", "criteria": [], "maxLoops": 5, "after": [],
+            "branch": "", "engine": engine
+        });
+        serde_json::from_value(d).unwrap()
+    };
+    // As the window sends it: its harness, or null.
+    let t = h
+        .core
+        .ticket_create(&p.id, form(json!("codex")))
+        .await
+        .unwrap();
+    assert_eq!(t.engine, Some(EngineId::Codex));
+    let none = h
+        .core
+        .ticket_create(&p.id, form(json!(null)))
+        .await
+        .unwrap();
+    assert_eq!(none.engine, None);
+    // A draft without the field (the MCP tools): the ticket keeps it.
+    let without: crate::tickets::TicketDraft =
+        serde_json::from_value(json!({ "title": "Renommé", "maxLoops": 5 })).unwrap();
+    assert_eq!(without.engine, None);
+    let kept = h.core.ticket_update(&t.id, without).unwrap();
+    assert_eq!(
+        (kept.title.as_str(), kept.engine),
+        ("Renommé", Some(EngineId::Codex))
+    );
+    // Null: back to the project's.
+    let back = h.core.ticket_update(&t.id, form(json!(null))).unwrap();
+    assert_eq!(back.engine, None);
+    let other = h.core.ticket_update(&t.id, form(json!("cursor"))).unwrap();
+    assert_eq!(other.engine, Some(EngineId::Cursor));
+}
+
+/// Only a harness whose program is found is offered (`engines_found`): with none, the first start
+/// says « Aucun harness trouvé ».
+#[tokio::test]
+async fn the_harnesses_offered_are_those_whose_program_is_found() {
+    let h = harness("esc29-found");
+    assert_eq!(h.core.engines_found(), [EngineId::Claude]);
+    let absent = h.dir.join("absent.cmd").to_string_lossy().to_string();
+    let mut s = h.core.settings.read().clone();
+    s.claude_path = absent;
+    h.core.save_settings(s).unwrap();
+    assert!(h.core.engines_found().is_empty());
+    let mut s = h.core.settings.read().clone();
+    s.claude_path = crate::core_tests::fake_cli();
+    h.core.save_settings(s).unwrap();
+    assert_eq!(h.core.engines_found(), [EngineId::Claude]);
+}
