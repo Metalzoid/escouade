@@ -1,0 +1,13 @@
+$git log --oneline -1
+
+
+┃┃┃┃Build·gpt-oss 20b (32k)Ollama (local)╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ ■⬝⬝⬝⬝⬝⬝⬝  esc interrupt                                                                10.7K (33%)  ctrl+p commands┃┃  ⠋ git log --oneline -1┃▣ Build · gpt-oss 20b (32k)■■⬝⬝⬝⬝⬝⬝┃  cffc2ad fix add┃▣ Build · gpt-oss 20b (32k)$ ■■■⬝⬝⬝⬝⬝■■■■⬝⬝⬝⬝■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■⬝⬝⬝⬝■■■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝■■  ▣ Build · gpt-oss 20b (32k)cffc2ad fix⬝⬝⬝⬝⬝■■■ add⬝⬝⬝⬝■■■■⬝⬝⬝■■■■■⬝⬝■■■■■■8⬝■■■■■■⬝■■■■■■⬝⬝■■■■■⬝⬝⬝ · 4.4sC:\Users\user\AppData\Local\Temp\esc25\wt-agent1Dis seulement : coucou depuis l'interface   + Thought: 634ms
+┃┃  $ git status --short┃┃  ?? test_calc.py
+   ?? test_calc.py
+   ▣  Build · gpt-oss 20b (32k) · 7.1s┃┃  Avec l'outil bash, lance `git log --oneline -1` et recopie la sortie.┃┃┃$ git lg --oneline -1┃┃  cffc2ad fix add
+   cffc2ad fix add
+   ▣  Build · gpt-oss 20b (32k) · 4.4s┃┃  Dis seulement : coucou depuis l'interface┃▣ Build · gpt-oss 20b (32k)■⬝⬝⬝⬝⬝⬝⬝  esc interrupt■■⬝⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝■■■■⬝⬝⬝⬝■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■■⬝⬝⬝■■■■■⬝⬝⬝⬝■■■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝■■■⬝⬝⬝⬝■■■■⬝⬝⬝■■■■■⬝⬝■■■■■■⬝■■■■■■⬝■■■■■■⬝⬝■■■■■⬝⬝⬝■■■■⬝⬝⬝⬝■■■⬝⬝⬝⬝⬝■■⬝⬝⬝⬝⬝⬝■⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝┃┃  $ git status --short?? test_calc.py     
+   ?? test_calc.py▣  Build · gpt-oss 20b (32k) · 7.1s┃┃  Avec l'outil bash, lance `git log --oneline -1` et recopie la sortie.
+┃┃  $ git log --oneline -1cffc2ad fix add       
+   cffc2ad fix add▣  Build · gpt-oss 20b (32k) · 4.4s┃┃  Dis seulement : coucou depuis l'interface
+Coucou depuis l'interface.⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝⬝
