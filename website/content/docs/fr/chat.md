@@ -119,25 +119,25 @@ La dictée s’arrête d’elle-même après dix minutes, quand le micro est dé
 
 Le bouton **Conversation**, à gauche du micro, fait une conversation à voix haute avec l’agent, sans toucher au clavier :
 
-1. tu parles ; quand tu te tais, ce que tu as dit **part seul** à l’agent après un court silence (« Délai avant l’envoi », 1,2 s par défaut) ;
+1. tu parles ; quand tu te tais, ce que tu as dit **part seul** à l’agent après un court silence (« Délai avant l’envoi », 1,2 s par défaut) ;
 2. l’agent travaille et répond comme d’habitude, dans la conversation ;
-3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« 🔊 Lu à voix haute ») et le **lit à voix haute** ;
+3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« 🔊 Lu à voix haute ») et le **lit à voix haute** ;
 4. puis l’écoute reprend.
 
-Pendant la conversation, **elle occupe toute la fenêtre d’Escouade** : au centre, une orbe lumineuse qui suit le son, la voix de l’agent quand il parle (son bord respire et son halo grandit avec le niveau du son lu) et ton micro quand il t’écoute, avec un arc qui tourne pendant la transcription et pendant que l’agent travaille ; en dessous, l’état (« À l’écoute », « Transcription sur ta machine… », « Alice travaille… », « Alice te répond »). En bas, **des sous-titres** comme au cinéma : ce que tu as dit, dès que c’est transcrit, puis ce que dit l’agent, phrase par phrase, au rythme de la lecture. L’historique complet reste dans la conversation. `Échap` ou « Arrêter » quitte le mode et ferme le micro.
+Pendant la conversation, **elle occupe toute la fenêtre d’Escouade** : au centre, une orbe lumineuse qui suit le son, la voix de l’agent quand il parle (son bord respire et son halo grandit avec le niveau du son lu) et ton micro quand il t’écoute, avec un arc qui tourne pendant la transcription et pendant que l’agent travaille ; en dessous, l’état (« À l’écoute », « Transcription sur ta machine… », « Alice travaille… », « Alice te répond »). En bas, **des sous-titres** comme au cinéma : ce que tu as dit, dès que c’est transcrit, puis ce que dit l’agent, phrase par phrase, au rythme de la lecture. L’historique complet reste dans la conversation. `Échap` ou « Arrêter » quitte le mode et ferme le micro.
 
 - **Couper la parole** : parle pendant la lecture, elle s’arrête aussitôt et Escouade t’écoute. Le micro n’entend pas la voix de l’agent pour une phrase de toi : pendant la lecture, il sert seulement à savoir si tu parles par-dessus, au-dessus de l’écho des haut-parleurs. Un casque reste le plus confortable.
-- **Questions et permissions** : quand l’agent pose une question ou demande une permission, Escouade la lit, puis ta réponse dite y répond : « oui », « d’accord » ou « vas-y » autorisent, « non » refuse, « toujours » autorise toujours ; une option se dit par son nom ou son rang (« la deuxième »). Si Escouade ne comprend pas, ou si la question demande plusieurs choix, la conversation se met **en pause** et le dit : réponds dans la fenêtre, puis « Reprendre ».
+- **Questions et permissions** : quand l’agent pose une question ou demande une permission, Escouade la lit, puis ta réponse dite y répond : « oui », « d’accord » ou « vas-y » autorisent, « non » refuse, « toujours » autorise toujours ; une option se dit par son nom ou son rang (« la deuxième »). Si Escouade ne comprend pas, ou si la question demande plusieurs choix, la conversation se met **en pause** et le dit : réponds dans la fenêtre, puis « Reprendre ».
 
 Tout se passe **sur ta machine** : la transcription par Whisper, comme la dictée, et la voix par **Piper**, liée à Escouade. À la première conversation, Escouade propose de télécharger la voix (environ 60 Mo, une seule fois, depuis Hugging Face, sa somme de contrôle vérifiée). La conversation se tient en français ou en anglais : la langue parlée des réglages, sinon celle de l’interface.
 
 Dans **Réglages › Voix › Conversation** :
 
-- la **voix** de chaque langue, parmi celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque (6 voix en français, 29 en anglais). Pour chacune, sa qualité, sa taille, son locuteur s’il y en a plusieurs, « ▶ Écouter », « Télécharger » ou « Effacer », sa licence et le crédit qu’elle demande ;
+- la **voix** de chaque langue, parmi celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque (6 voix en français, 29 en anglais). Pour chacune, sa qualité, sa taille, son locuteur s’il y en a plusieurs, « ▶ Écouter », « Télécharger » ou « Effacer », sa licence et le crédit qu’elle demande ;
 - la **vitesse** et le **volume** de la lecture ;
 - le **délai avant l’envoi** : le silence après lequel ce que tu as dit part (de 0,5 à 3 s).
 
-Les crédits de Piper, eSpeak NG, ONNX Runtime et de chaque voix sont dans Réglages › À propos › « Crédits et licences ».
+Les crédits de Piper, eSpeak NG, ONNX Runtime et de chaque voix sont dans Réglages › À propos › « Crédits et licences ».
 
 ### Mentionner un fichier avec @
 

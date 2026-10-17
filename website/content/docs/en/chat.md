@@ -133,11 +133,11 @@ Everything happens **on your machine**: the transcription by Whisper, as for dic
 
 In **Settings › Voice › Conversation**:
 
-- the **voice** of each language, among those whose licence allows it: free model and dataset, no voice of a character, a known person or a brand (6 voices in French, 29 in English). For each one, its quality, its size, its speaker when it has several, “▶ Listen”, “Download” or “Delete”, its licence and the credit it asks for;
+- the **voice** of each language, among those whose license allows it: free model and dataset, no voice of a character, a known person or a brand (6 voices in French, 29 in English). For each one, its quality, its size, its speaker when it has several, “▶ Listen”, “Download” or “Delete”, its license and the credit it asks for;
 - the **speed** and **volume** of the reading;
 - the **delay before sending**: the silence after which what you said goes (0.5 to 3 s).
 
-The credits of Piper, eSpeak NG, ONNX Runtime and each voice are in Settings › About › “Credits and licences”.
+The credits of Piper, eSpeak NG, ONNX Runtime and each voice are in Settings › About › “Credits and licenses”.
 
 ### Mentioning a file with @
 
