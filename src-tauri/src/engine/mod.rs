@@ -17,7 +17,10 @@ pub use mcp::Escouade;
 pub use program::{Located, Program};
 
 #[cfg(test)]
-pub(crate) use claude::{all_tools as claude_all_tools, claude_args, ClaudeProcess, SpawnOpts};
+pub(crate) use claude::{
+    all_tools as claude_all_tools, claude_args, escaped_len, ClaudeProcess, SpawnOpts,
+    PROTOCOL_BUDGET,
+};
 
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
@@ -191,6 +194,14 @@ pub struct OneShot<'a> {
     pub limit: Duration,
 }
 
+/// The room of the instructions added to an agent (`Engine::instructions_room`): at most `max`,
+/// each text weighing what `weigh` says (its weight once passed, escaped, to the process).
+#[derive(Clone, Copy)]
+pub struct Room {
+    pub max: usize,
+    pub weigh: fn(&str) -> usize,
+}
+
 /// Why a process that never got going stopped, as the engine read it from what it said.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartLost {
@@ -206,6 +217,21 @@ pub trait Engine: Send + Sync {
     fn id(&self) -> EngineId;
     /// Its name, as the interface says it (`Claude Code`).
     fn name(&self) -> &'static str;
+    /// The name of its agents as the texts speak of them (« Claude attend ta réponse »): `Claude`.
+    fn speaker(&self) -> &'static str;
+
+    /// What the instructions added to an agent (`Spawn.append_prompt`: a ticket's protocol) may
+    /// weigh as it passes them; None when they are not bounded.
+    fn instructions_room(&self) -> Option<Room>;
+    /// What the agent is told, in `lang`, to pass `text` on to its subagent `title` (its task
+    /// `task`, as the engine named it); None when its subagents cannot be written to so.
+    fn subagent_relay(
+        &self,
+        lang: crate::i18n::Lang,
+        title: &str,
+        task: &str,
+        text: &str,
+    ) -> Option<String>;
 
     /// Its program, from the path of a setting (empty: where it usually is) and the distribution
     /// of WSL of the settings.

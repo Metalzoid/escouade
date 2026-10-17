@@ -83,7 +83,7 @@ export default {
     uiLanguage: 'Langue de l’interface',
     /** The system's language, named in the interface's: « Système (Français) ». */
     system: 'Système ({lang})',
-    claudeLanguage: 'Langue des textes rédigés par Claude',
+    claudeLanguage: 'Langue des textes rédigés par les agents',
     sameAsUi: 'Comme l’interface (par défaut)',
     claudeLanguageHelp:
       'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub et Linear, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
@@ -131,9 +131,9 @@ export default {
     processes: 'Processus',
     autoResume: 'Reprise automatique après la limite d’usage',
     autoResumeDesc: '« continue » envoyé une fois le quota réinitialisé',
-    idleStop: 'Arrêter les processus Claude inactifs après',
+    idleStop: 'Arrêter les processus des agents inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
-    idleStopLabel: 'Arrêter les processus Claude inactifs après (minutes)',
+    idleStopLabel: 'Arrêter les processus des agents inactifs après (minutes)',
     terminalView: 'Ouvrir les nouveaux agents dans l’interface de Claude Code',
     terminalViewDesc:
       'Un nouvel agent tourne dans un terminal avec l’interface de Claude Code elle-même plutôt que dans la conversation d’Escouade. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.',
@@ -142,7 +142,7 @@ export default {
       'Donne aux agents l’outil de liste de tâches de Claude Code : s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan » (le modèle n’est pas obligé de s’en servir). S’applique aux agents lancés ensuite.',
     attachments: 'Pièces jointes',
     attachmentsNote:
-      'Les images, les PDF et les textes dans leurs limites partent dans le message. Tout autre fichier, ou un fichier trop gros pour le message, est joint par son chemin : Claude le lit avec ses outils.',
+      'Les images, les PDF et les textes dans leurs limites partent dans le message. Tout autre fichier, ou un fichier trop gros pour le message, est joint par son chemin : l’agent le lit avec ses outils.',
     attachMax: 'Taille maximale d’un fichier joint',
     attachMaxHint: 'Mo, 0 = aucune limite',
     attachMaxLabel: 'Taille maximale d’un fichier joint (Mo)',
@@ -151,7 +151,7 @@ export default {
     attachWarnLabel: 'Avertir pour un fichier joint de plus de (Mo)',
     attachOrigin: 'Joindre le fichier d’origine',
     attachOriginDesc:
-      'Un fichier déposé est joint là où il est, sans copie : Claude le lit à son emplacement. Désactivé, Escouade en garde toujours une copie. Les tickets et la vue Claude Code copient toujours.',
+      'Un fichier déposé est joint là où il est, sans copie : l’agent le lit à son emplacement. Désactivé, Escouade en garde toujours une copie. Les tickets et la vue Claude Code copient toujours.',
     attachBigText: 'Texte de plus de 256 Ko',
     attachBigTextDesc: 'Un fichier texte trop gros pour le message est joint par son chemin, ou refusé.',
     attachBigTextPath: 'Joint par son chemin',
@@ -183,7 +183,7 @@ export default {
     systemLabel: 'Notifications système',
     sound: 'Son',
     soundOn: 'Son activé',
-    soundOnDesc: 'Question de Claude, fin de tour',
+    soundOnDesc: 'Question d’un agent, fin de tour',
     soundTest: 'Tester le son',
     soundTestButton: '▶ Tester',
   },

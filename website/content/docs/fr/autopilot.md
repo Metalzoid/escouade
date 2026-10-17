@@ -44,7 +44,7 @@ Quand un ticket démarre, Escouade :
 4. attend la préparation du worktree : fichiers `.env*` copiés, commandes de préparation du projet (la carte dit « Prépare le worktree · … »). Si une commande échoue, l’agent en est informé avec son premier message, pour y remédier ;
 5. envoie à l’agent son premier message : la clé et le titre, la description, les critères numérotés, et la consigne de travailler jusqu’à les atteindre puis de terminer par le bilan.
 
-Ce message, comme les suivants, est écrit dans « Langue des textes rédigés par Claude » (Réglages › Application, voir [Réglages de l’application](settings-application)).
+Ce message, comme les suivants, est écrit dans « Langue des textes rédigés par les agents » (Réglages › Application, voir [Réglages de l’application](settings-application)).
 
 À chaque démarrage, Escouade ajoute aussi à la consigne système de l’agent un protocole qui survit au compactage et aux reprises : travailler seul, vérifier soi-même chaque critère (tests, exécution) avant de le déclarer atteint, ne pas commiter les fichiers copiés du projet, poser ses questions par l’outil de question quand une décision manque, et terminer chaque réponse par le bilan des critères. Escouade réserve en plus au ticket un bloc de ports, et le protocole demande à l’agent comment lancer son travail pour le tester (voir [Tester et valider un ticket](testing)).
 

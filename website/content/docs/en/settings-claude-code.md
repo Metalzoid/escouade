@@ -97,7 +97,7 @@ Permission requests and how to answer them are described in [the conversation](c
 | “Resume a ticket’s agent stopped by the usage limit on another account” | Otherwise it waits for its account to reset. Absent while there is only one account. | Off |
 | “Open new agents in Claude Code’s interface” | A new agent runs in the Claude Code view rather than in Escouade’s conversation. | Off |
 | “Agents keep a task list” | Agents get Claude Code’s task list tool. | On |
-| “Stop idle Claude processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay. | 30 |
+| “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay. | 30 |
 
 ### Auto-resume
 

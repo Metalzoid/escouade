@@ -1,6 +1,7 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { onDestroy } from 'svelte';
+  import { engineName } from '../../lib/engines';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
   import { isolaApproved, openAddress, recipeApproved, revealHidden } from '../../lib/recipe';
@@ -124,14 +125,14 @@
       <p class="notice changed" role="status">{t('runs.testLaunch.changed')}</p>
     {/if}
     {#if agent.isola && isolaConfig !== undefined}
-      <p class="notice">{t('runs.testLaunch.isolaNotice', { name: agent.name })}</p>
+      <p class="notice">{t('runs.testLaunch.isolaNotice', { name: agent.name, harness: engineName(agent.engine) })}</p>
       <section>
         <h3 class="section-label">{t('runs.testLaunch.isolaConfig')}</h3>
         <pre class="cmd mono">{revealHidden(isolaConfig)}</pre>
       </section>
     {:else if agent.recipe}
       {@const recipe = agent.recipe}
-      <p class="notice">{t('runs.testLaunch.recipeNotice', { name: agent.name })}</p>
+      <p class="notice">{t('runs.testLaunch.recipeNotice', { name: agent.name, harness: engineName(agent.engine) })}</p>
       {#if recipe.prepare.length}
         <section>
           <h3 class="section-label">{t('runs.testLaunch.prepare')}</h3>

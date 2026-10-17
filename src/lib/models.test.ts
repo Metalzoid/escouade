@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { app } from './state.svelte';
+import { BARE_ENGINE, CLAUDE_ENGINE } from '../test/ipc';
 import { setLang } from './i18n';
-import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, supportsAuto, supportsEffort } from './models';
+import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, modeTitle, supportsAuto, supportsEffort } from './models';
+
+beforeEach(() => {
+  app.engines = [CLAUDE_ENGINE];
+});
 import type { ModelInfo } from './types';
 
 /** What Claude Code 2.1.284 answers to `initialize` (abridged): Fable only by its full id. */
@@ -92,6 +98,16 @@ describe('EFFORTS and MODES', () => {
     expect(EFFORTS.map((e) => e.label)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
     expect(MODES.map((m) => m.label)).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     expect(MODES.find((m) => m.value === 'default')?.title).toBe('Claude asks for your approval before each sensitive action');
+  });
+
+  it('name the agents of a mode as their harness does, those of the default harness in the settings', () => {
+    expect(modeTitle('plan', 'Claude')).toBe('Claude analyse et propose un plan sans rien modifier');
+    expect(modeTitle('default', 'Codex')).toBe('Codex demande ton accord avant chaque action sensible');
+    // A mode whose words name no agent keeps them.
+    expect(modeTitle('acceptEdits', 'Codex')).toBe(MODES.find((m) => m.value === 'acceptEdits')?.title);
+    expect(MODES.find((m) => m.value === 'plan')?.title).toBe('Claude analyse et propose un plan sans rien modifier');
+    app.engines = [BARE_ENGINE, CLAUDE_ENGINE];
+    expect(MODES.find((m) => m.value === 'plan')?.title).toBe('Nu analyse et propose un plan sans rien modifier');
   });
 
   it('keep their values, which are the CLI’s', () => {

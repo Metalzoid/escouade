@@ -57,7 +57,7 @@ Tout le reste part **par chemin** : un autre format, un fichier lisible mais tro
 Fichier joint : rapport.xlsx, C:\…\rapport.xlsx
 ```
 
-La ligne suit la langue des textes rédigés par Claude (`Attached file: …` en anglais, voir [Réglages › Application](settings-application)). Sous WSL, le chemin est celui que lit Claude Code, par exemple `/mnt/c/…`.
+La ligne suit la langue des textes rédigés par les agents (`Attached file: …` en anglais, voir [Réglages › Application](settings-application)). Sous WSL, le chemin est celui que lit Claude Code, par exemple `/mnt/c/…`.
 
 Un fichier est refusé s’il dépasse la taille maximale que tu as fixée (aucune par défaut), si c’est un texte de plus de 256 Ko et que tu as choisi de les refuser, ou si Escouade ne peut pas le lire ou le copier. Il est nommé dans un message rouge, et les autres fichiers sont joints quand même. Dans la conversation, le message affiche « 2 images » et le nom des fichiers ; les lignes des fichiers envoyés par chemin y sont aussi, avec ton texte. Si Escouade ne retrouve plus un fichier au moment d’envoyer (déplacé ou supprimé entre-temps), le message est refusé, avec la raison, et revient dans le champ.
 

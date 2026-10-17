@@ -70,7 +70,7 @@ C’est le comportement par défaut. « Commit… » envoie un message à l’
 
 « Commit tout… » demande à l’agent choisi de commiter toutes les modifications en cours du dépôt, regroupées en commits cohérents. Il faut donc qu’un agent soit sélectionné.
 
-Le message est envoyé dans la langue réglée par « Langue des textes rédigés par Claude » (voir [les réglages de l’application](settings-application)).
+Le message est envoyé dans la langue réglée par « Langue des textes rédigés par les agents » (voir [les réglages de l’application](settings-application)).
 
 ### Commiter toi-même, avec un message proposé
 
@@ -88,7 +88,7 @@ Ce que tu dois savoir :
 - Si Haiku ne propose rien, la fenêtre dit « Pas de proposition : … » et tu écris le message.
 - « Cet agent » commite le worktree de l’agent, ou les fichiers qu’il a modifiés dans le dossier du projet. « Tout le projet » commite le dossier du projet seul : le worktree d’un agent se commite depuis « Cet agent ».
 - Les fichiers que le projet copie dans ses worktrees (les `.env*`, par défaut) ne sont jamais commités. La fenêtre le dit (« Jamais commité : .env (copié dans les worktrees). ») et leur contenu n’est pas montré à Haiku.
-- Par défaut, le message proposé reprend la langue des derniers commits du dépôt. Si tu règles « Langue des textes rédigés par Claude », c’est cette langue qui est demandée.
+- Par défaut, le message proposé reprend la langue des derniers commits du dépôt. Si tu règles « Langue des textes rédigés par les agents », c’est cette langue qui est demandée.
 - Fermer la fenêtre avec un message que tu as écrit ou modifié demande confirmation (« Abandonner le message ? »).
 
 ## Historique et git graph

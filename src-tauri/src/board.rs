@@ -1398,10 +1398,6 @@ fn one_line(s: &str, max: usize) -> String {
     )
 }
 
-/// What the protocol may weigh as a command-line argument, once escaped (see `escaped_len`).
-/// cmd.exe takes 8191 characters for the whole command line; the rest goes to the other arguments.
-pub(crate) const PROTOCOL_BUDGET: usize = 6000;
-
 /// What goes between two criteria of the protocol, with the punctuation of `lang`.
 fn between(lang: Lang) -> &'static str {
     match lang {
@@ -1416,20 +1412,6 @@ fn more(lang: Lang) -> &'static str {
         Lang::Fr => " ; …",
         Lang::En => "; …",
     }
-}
-
-/// What `s` weighs as an argument of a `.cmd`: Rust escapes it for cmd.exe, where `%` becomes a
-/// longer sequence (8 characters) and `"` is doubled, as are the backslashes just before it (and
-/// those ending the argument). Every backslash counts 2, the safe bound of those runs. Other
-/// characters count their UTF-8 bytes, which is never less than their UTF-16 units.
-pub(crate) fn escaped_len(s: &str) -> usize {
-    s.chars()
-        .map(|c| match c {
-            '%' => 8,
-            '"' | '\\' => 2,
-            c => c.len_utf8(),
-        })
-        .sum()
 }
 
 /// The protocol around `criteria`, already joined, in `lang`: with the reserved ports and the
@@ -1500,19 +1482,45 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
     p
 }
 
-/// The ticket's protocol, appended to Claude Code's system prompt (`--append-system-prompt`), so
-/// that it outlives compaction and resumes. On one line: it is a command-line argument, which a
-/// `.cmd` (npm's claude.cmd) cannot take with line breaks. Once escaped for cmd.exe it weighs at
-/// most `PROTOCOL_BUDGET`: the criteria that do not fit are replaced by a "…". In French here
-/// (most tests read it so); `protocol_prompt_for` writes it in any language.
+/// The ticket's protocol, the instructions added to its agent (`Spawn.append_prompt`), which its
+/// harness passes on its own way (Claude Code: `--append-system-prompt`), so that it outlives
+/// compaction and resumes. It names no tool of a harness. On one line, and within the room its
+/// harness gives it (`Engine::instructions_room`): the criteria that do not fit are replaced by
+/// a "…". For Claude Code and in French here (most tests read it so); `protocol_prompt_for`
+/// writes it in any language, for any harness.
 #[cfg(test)]
 pub fn protocol_prompt(t: &Ticket, ports: Option<u16>) -> String {
-    protocol_prompt_for(Lang::Fr, t, ports, false)
+    use crate::engine::Engine;
+    protocol_prompt_for(
+        Lang::Fr,
+        t,
+        ports,
+        false,
+        crate::engine::CLAUDE.instructions_room(),
+    )
 }
 
-/// `protocol_prompt` in `lang`, for a worktree whose services isola runs when `isola`.
-pub fn protocol_prompt_for(lang: Lang, t: &Ticket, ports: Option<u16>, isola: bool) -> String {
-    let room = PROTOCOL_BUDGET.saturating_sub(escaped_len(&protocol(lang, t, "", ports, isola)));
+/// `protocol_prompt` in `lang`, for a worktree whose services isola runs when `isola`, within
+/// `room` (none: all the criteria).
+pub fn protocol_prompt_for(
+    lang: Lang,
+    t: &Ticket,
+    ports: Option<u16>,
+    isola: bool,
+    room: Option<crate::engine::Room>,
+) -> String {
+    let Some(crate::engine::Room { max, weigh }) = room else {
+        let all = t
+            .criteria
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{}) {}", i + 1, one_line(&c.text, 200)))
+            .collect::<Vec<_>>()
+            .join(between(lang));
+        return protocol(lang, t, &all, ports, isola);
+    };
+    let escaped_len = weigh;
+    let room = max.saturating_sub(escaped_len(&protocol(lang, t, "", ports, isola)));
     let mut criteria = String::new();
     let mut used = 0;
     for (i, c) in t.criteria.iter().enumerate() {
@@ -1542,6 +1550,18 @@ pub fn protocol_prompt_for(lang: Lang, t: &Ticket, ports: Option<u16>, isola: bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::{escaped_len, Engine, PROTOCOL_BUDGET};
+
+    /// The protocol as Claude Code is given it, within its room.
+    fn protocol_for_claude(lang: Lang, t: &Ticket, ports: Option<u16>, isola: bool) -> String {
+        protocol_prompt_for(
+            lang,
+            t,
+            ports,
+            isola,
+            crate::engine::CLAUDE.instructions_room(),
+        )
+    }
 
     fn ticket(n: usize, max: u32) -> Ticket {
         Ticket {
@@ -3035,7 +3055,7 @@ mod tests {
         use Lang::{En, Fr};
         let t = ticket_en(2, 5);
         for (ports, isola) in [(None, false), (Some(4120), false), (None, true)] {
-            let en = protocol_prompt_for(En, &t, ports, isola);
+            let en = protocol_for_claude(En, &t, ports, isola);
             assert_eq!(french_in(&en), None, "{en}");
             assert!(!en.contains('\n') && en.contains("```escouade"), "{en}");
             assert!(
@@ -3046,12 +3066,12 @@ mod tests {
             // The same keys as the French protocol asks for: the board reads them back.
             assert_eq!(
                 json_keys(&en),
-                json_keys(&protocol_prompt_for(Fr, &t, ports, isola)),
+                json_keys(&protocol_for_claude(Fr, &t, ports, isola)),
                 "{en}"
             );
             assert!(escaped_len(&en) <= PROTOCOL_BUDGET);
         }
-        let ports = protocol_prompt_for(En, &t, Some(4120), false);
+        let ports = protocol_for_claude(En, &t, Some(4120), false);
         assert!(
             ports.contains("Ports reserved for this worktree: 4120 to 4129")
                 && ports.contains("http://localhost:4121"),
@@ -3195,7 +3215,7 @@ mod tests {
     #[test]
     fn with_isola_the_protocol_asks_for_the_address_to_open_and_reserves_no_port() {
         let mut t = ticket(2, 5);
-        let p = protocol_prompt_for(Lang::Fr, &t, None, true);
+        let p = protocol_for_claude(Lang::Fr, &t, None, true);
         assert!(!p.contains('\n') && !p.contains("Ports réservés"), "{p}");
         assert!(
             p.contains("isola up") && p.contains("isola ls --json"),
@@ -3205,7 +3225,7 @@ mod tests {
         assert!(p.contains("Critères d'acceptation (2) : 1) critère 1 ; 2) critère 2."));
         // Without isola, the same as before.
         assert_eq!(
-            protocol_prompt_for(Lang::Fr, &t, Some(4120), false),
+            protocol_for_claude(Lang::Fr, &t, Some(4120), false),
             protocol_prompt(&t, Some(4120))
         );
         // The criteria still give way to the budget, in each language (the fixed part of the
@@ -3218,7 +3238,7 @@ mod tests {
             .collect();
         for lang in [Lang::Fr, Lang::En] {
             for ports in [None, Some(4120)] {
-                let p = protocol_prompt_for(lang, &t, ports, true);
+                let p = protocol_for_claude(lang, &t, ports, true);
                 assert!(
                     escaped_len(&p) <= PROTOCOL_BUDGET
                         && p.contains(more(lang).trim())
@@ -3293,7 +3313,7 @@ mod tests {
         ];
         for (lang, count, more) in langs {
             for ports in [None, Some(4100)] {
-                let p = protocol_prompt_for(lang, &t, ports, false);
+                let p = protocol_for_claude(lang, &t, ports, false);
                 assert!(!p.contains('\n') && !p.contains('\r'));
                 // cmd.exe takes 8191 characters for the whole command line; the protocol keeps
                 // to 6000 of them and leaves the rest to the other arguments.
@@ -3313,7 +3333,7 @@ mod tests {
             })
             .collect();
         for (lang, _, _) in langs {
-            assert!(escaped_weight(&protocol_prompt_for(lang, &t, Some(4100), false)) <= 6000);
+            assert!(escaped_weight(&protocol_for_claude(lang, &t, Some(4100), false)) <= 6000);
         }
         // A short list is kept whole.
         let mut t = ticket(30, 5);
@@ -3340,7 +3360,7 @@ mod tests {
             assert!(weight <= 6000, "{ports:?}: {weight}");
             assert!(p.contains("Critères d'acceptation (50) : 1) "), "{ports:?}");
             assert!(p.contains(" ; …"), "{ports:?}");
-            let en = protocol_prompt_for(Lang::En, &t, ports, false);
+            let en = protocol_for_claude(Lang::En, &t, ports, false);
             assert!(escaped_weight(&en) <= 6000, "{ports:?}");
             assert!(en.contains("Acceptance criteria (50): 1) ") && en.contains("; …"));
         }
@@ -3352,7 +3372,7 @@ mod tests {
             })
             .collect();
         assert!(escaped_weight(&protocol_prompt(&t, Some(4100))) <= 6000);
-        assert!(escaped_weight(&protocol_prompt_for(Lang::En, &t, Some(4100), false)) <= 6000);
+        assert!(escaped_weight(&protocol_for_claude(Lang::En, &t, Some(4100), false)) <= 6000);
     }
 
     #[test]
@@ -3706,6 +3726,123 @@ mod tests {
             );
             assert!(!p.contains('\n') && escaped_len(&p) <= PROTOCOL_BUDGET);
         }
+    }
+
+    /// The tools of Claude Code, and its options, that a text for any harness must not name.
+    const CLAUDE_CODE_WORDS: [&str; 22] = [
+        "AskUserQuestion",
+        "TodoWrite",
+        "TaskCreate",
+        "TaskUpdate",
+        "ExitPlanMode",
+        "EnterPlanMode",
+        "SendMessage",
+        "SubagentHandback",
+        "Bash",
+        "PowerShell",
+        "Edit",
+        "MultiEdit",
+        "Write",
+        "Read",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "NotebookEdit",
+        "Skill",
+        "--append-system-prompt",
+        "Claude",
+    ];
+
+    /// The words of `CLAUDE_CODE_WORDS` that `text` holds, as whole words.
+    fn claude_code_words(text: &str) -> Vec<&'static str> {
+        let words: HashSet<&str> = text
+            .split(|c: char| !(c.is_alphanumeric() || c == '-'))
+            .collect();
+        CLAUDE_CODE_WORDS
+            .into_iter()
+            .filter(|w| words.contains(w))
+            .collect()
+    }
+
+    #[test]
+    fn the_protocol_and_the_autopilots_messages_name_no_tool_of_claude_code() {
+        // The oracle finds what it looks for.
+        assert_eq!(
+            claude_code_words("Pose-la avec AskUserQuestion, puis Bash."),
+            ["AskUserQuestion", "Bash"]
+        );
+        let mut t = ticket(3, 5);
+        t.description = "Une description.".into();
+        t.criteria[1].ok = true;
+        t.criteria[2].note = "reste".into();
+        let commands = [RunCommand {
+            name: "web".into(),
+            command: "npm run dev".into(),
+            cwd: "web".into(),
+            ..Default::default()
+        }];
+        for lang in [Lang::Fr, Lang::En] {
+            let mut texts = vec![
+                reminder(lang),
+                first_message(lang, &t),
+                first_message_with(lang, &t, 2, &["a.png".to_string()]),
+                with_setup_failure(lang, loop_message(lang, &t), Some("npm ci a échoué.")),
+                resume_message(lang, &t.key),
+                restart_message(lang, &t.key),
+                reject_message(lang, &t.key, "le bouton ne répond pas"),
+                tests_failed_message(lang, "npm test", "1 failed"),
+                conflict_message(lang, "main", &[]),
+                conflict_message(lang, "main", &["a.rs".to_string()]),
+                rebase_message(lang, "main"),
+                prepare_message(lang, 4100, &commands),
+            ];
+            for (ports, isola) in [(None, false), (Some(4100), false), (None, true)] {
+                texts.push(protocol_for_claude(lang, &t, ports, isola));
+                texts.push(protocol_prompt_for(lang, &t, ports, isola, None));
+            }
+            for text in texts {
+                assert_eq!(claude_code_words(&text), Vec::<&str>::new(), "{text}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_protocol_fits_the_room_its_harness_gives_it_and_keeps_every_criterion_without_one() {
+        let many = Ticket {
+            criteria: (1..=200)
+                .map(|i| Criterion {
+                    text: format!("critère numéro {i} assez long pour peser"),
+                    ..Default::default()
+                })
+                .collect(),
+            ..ticket(1, 5)
+        };
+        // Claude Code's room: the cmd.exe line of a `.cmd`, the criteria past it cut to a "…".
+        let room = crate::engine::CLAUDE.instructions_room().unwrap();
+        assert_eq!(room.max, PROTOCOL_BUDGET);
+        let claude = protocol_for_claude(Lang::Fr, &many, Some(4100), false);
+        assert!((room.weigh)(&claude) <= room.max);
+        assert!(claude.contains(" ; …") && !claude.contains("critère numéro 200"));
+        // A smaller room cuts sooner, with the weight that room gives.
+        let small = crate::engine::Room {
+            max: 2500,
+            weigh: |s| s.chars().count(),
+        };
+        let cut = protocol_prompt_for(Lang::Fr, &many, None, false, Some(small));
+        assert!(cut.chars().count() <= 2500 && cut.len() < claude.len());
+        // No room: every criterion, on one line.
+        let all = protocol_prompt_for(Lang::En, &many, Some(4100), false, None);
+        assert!(
+            all.contains("1) critère numéro 1 assez") && all.contains("; 200) critère numéro 200")
+        );
+        assert!(!all.contains('\n') && !all.contains("; …"));
+        // A ticket short enough is the same whatever the room.
+        let t = ticket(2, 5);
+        assert_eq!(
+            protocol_for_claude(Lang::En, &t, Some(4100), false),
+            protocol_prompt_for(Lang::En, &t, Some(4100), false, None)
+        );
     }
 
     #[test]

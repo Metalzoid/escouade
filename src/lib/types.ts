@@ -347,6 +347,8 @@ export interface ModelDecl {
 export interface EngineDecl {
   id: EngineId;
   name: string;
+  /** Its agents' name, as the texts speak of them (« Claude attend ta réponse »): `Claude`, `Codex`. */
+  speaker: string;
   tested: EngineTested;
   caps: EngineCaps;
   /** The command that installs it, on Windows and elsewhere (« Aucun harness trouvé »). */

@@ -492,7 +492,7 @@ Lots, dans l'ordre :
 3. **Registre des moteurs** : détection, versions testées, capacités déclarées (`EngineCaps`), que l'interface lit au lieu de tester « claude ». Fait (ESC-28), voir docs/ENGINES.md, « Le registre ».
 4. **Interface** : Réglages › Moteurs, choix du moteur, marque sur les cartes, menus du composer fournis par le moteur (voir « Choisir le moteur », « Composer »). Fait (ESC-29), voir docs/ENGINES.md, « L'interface ».
 5. **Comptes et quotas par moteur** (voir « Comptes et quotas », « Coût, tokens, stats »).
-6. **Textes et consignes** indépendants du moteur (voir « Textes »).
+6. **Textes et consignes** indépendants du moteur (voir « Textes »). Fait (ESC-31), voir docs/ENGINES.md, « Les textes et les consignes ».
 7. **Textes rédigés** par moteur (voir « Textes rédigés par un modèle »).
 8. **Serveur MCP** par moteur (voir « Serveur MCP d'Escouade »). Fait (ESC-33), voir docs/ENGINES.md, « Le serveur MCP d'Escouade » : l'interface et Claude Code ; Codex suit avec ESC-38 et ESC-50.
 9. **Vue terminal générique** et commande `escouade-hook` (voir « Vue terminal de chaque moteur »).
@@ -758,11 +758,11 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
 - [ ] La copie d'un agent se fait au dernier tour (Codex, `thread/fork` avec `lastTurnId`, essayé), au dernier événement (Copilot) ou au dernier message (OpenCode), qui est le même point que celui de Claude. Pour Cursor, selon le point 0 ; s'il ne sait pas copier, « Dupliquer la conversation » est masqué pour ses agents.
 
 ### Textes
-- [ ] Environ 100 « Claude » par catalogue (fr et en).
+- [x] Environ 100 « Claude » par catalogue (fr et en) (ESC-31 ; une trentaine parlaient de l'agent, les autres de Claude lui-même ou de ce qui n'existe que chez Claude Code).
   - Ceux qui parlent de l'agent prennent le nom du moteur : « {engine} attend ta réponse ».
   - Ceux qui parlent de Claude lui-même restent (comptes Claude, Remote Control).
   - « Langue des textes rédigés par Claude » devient « … par les agents ».
-- [ ] Consignes ajoutées et invites du pilote auto :
+- [x] Consignes ajoutées et invites du pilote auto (ESC-31 : par `Spawn.append_prompt` et `Engine::instructions_room` ; ce que chaque moteur en fait vient avec son adaptateur) :
   - Codex : `developerInstructions` de `thread/start` (essayé). Codex les garde dans le rollout : une reprise n'a pas à les redonner, et ses sous-agents les reçoivent aussi (le protocole du ticket doit donc rester valable pour un sous-agent, ou le dire).
   - Copilot : le message système de la session (point 0).
   - Cursor : une règle passée au process, ou un préambule au premier message (point 0).

@@ -74,8 +74,8 @@ export default defineZone('stats', {
     deny: 'Deny',
     readInConversation: 'Read it in the conversation before answering.',
     tooLong: 'Too long to read here: read it and answer in the conversation.',
-    proposesPlan: 'Claude suggests a plan',
-    waitsForAnswer: 'Claude is waiting for your answer',
+    proposesPlan: '{engine} suggests a plan',
+    waitsForAnswer: '{engine} is waiting for your answer',
     waitsInTerminal: 'Waiting for your answer in Claude Code’s interface',
   },
 });

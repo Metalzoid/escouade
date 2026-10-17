@@ -11,7 +11,7 @@
   import { fDur, fInt, fNum, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
-  import { engineName, showsCost } from '../lib/engines';
+  import { engineName, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { subagentInfo } from '../lib/subagents';
   import { editsByTurn } from '../lib/tools';
@@ -676,7 +676,7 @@
         {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
           <div class="empty">
             <span class="t">{t('conv.empty.title')}</span>
-            <span class="s"><Rich k="conv.empty.hint">{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
+            <span class="s"><Rich k="conv.empty.hint" engine={speakerOf(agent.engine)}>{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
             {#if !app.enginesFound.includes(agent.engine ?? 'claude')}
               <span class="warn">{t('conv.empty.engineMissing', { engine: engineName(agent.engine) })}</span>
             {/if}
@@ -698,7 +698,7 @@
                 {#if injected}
                   <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
                 {:else}
-                  <UserMessage {item} />
+                  <UserMessage {item} engine={agent.engine} />
                 {/if}
               {:else if item.kind === 'event'}
                 <EventMessage source={item.source} text={item.text} label={labels.get(item.from ?? '')} />
@@ -746,11 +746,11 @@
           {/if}
         {/each}
         {#each conv.waiting as item (item.id)}
-          <UserMessage {item} waiting />
+          <UserMessage {item} waiting engine={agent.engine} />
         {/each}
         {#if running}
           <div class="working">
-            <span class="dots"><span></span><span></span><span></span></span>{t('conv.working')}
+            <span class="dots"><span></span><span></span><span></span></span>{t('conv.working', { engine: speakerOf(agent.engine) })}
           </div>
         {/if}
         {#if agent.setup}
@@ -777,7 +777,7 @@
       </div>
     {:else}
       {#if agent.status === 'error'}
-        <div class="banner err">{t('conv.stopped')}</div>
+        <div class="banner err">{t('conv.stopped', { engine: speakerOf(agent.engine) })}</div>
       {/if}
       {@render nextStart()}
       <Composer {agent} />

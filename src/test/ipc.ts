@@ -346,6 +346,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
 export const BARE_ENGINE: EngineDecl = {
   id: 'codex',
   name: 'Harness nu',
+  speaker: 'Nu',
   tested: { oldest: '0.160.0', newest: '0.163.0' },
   caps: {
     modes: [

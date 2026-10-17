@@ -69,7 +69,7 @@ export default defineZone('settings', {
     language: 'Language',
     uiLanguage: 'Interface language',
     system: 'System ({lang})',
-    claudeLanguage: 'Language of texts written by Claude',
+    claudeLanguage: 'Language of texts written by the agents',
     sameAsUi: 'Same as the interface (default)',
     claudeLanguageHelp:
       'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, and Linear, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
@@ -113,9 +113,9 @@ export default defineZone('settings', {
     processes: 'Processes',
     autoResume: 'Auto-resume after the usage limit',
     autoResumeDesc: '“continue” is sent once the quota has reset',
-    idleStop: 'Stop idle Claude processes after',
+    idleStop: 'Stop idle agent processes after',
     idleStopHint: 'minutes, 0 = never',
-    idleStopLabel: 'Stop idle Claude processes after (minutes)',
+    idleStopLabel: 'Stop idle agent processes after (minutes)',
     terminalView: 'Open new agents in Claude Code’s interface',
     terminalViewDesc:
       'A new agent runs in a terminal with Claude Code’s own interface rather than in Escouade’s conversation. Each agent switches views from its header; ticket agents stay in Escouade’s view.',
@@ -124,7 +124,7 @@ export default defineZone('settings', {
       'Gives agents Claude Code’s task list tool: if they keep a list, Escouade shows their progress in the “Plan” banner (the model does not have to use it). Applies to agents started afterwards.',
     attachments: 'Attachments',
     attachmentsNote:
-      'Images, PDFs and text files within their limits go in the message. Any other file, or one too big for the message, is attached by its path: Claude reads it with its tools.',
+      'Images, PDFs and text files within their limits go in the message. Any other file, or one too big for the message, is attached by its path: the agent reads it with its tools.',
     attachMax: 'Largest attached file',
     attachMaxHint: 'MB, 0 = no limit',
     attachMaxLabel: 'Largest attached file (MB)',
@@ -133,7 +133,7 @@ export default defineZone('settings', {
     attachWarnLabel: 'Warn for an attached file over (MB)',
     attachOrigin: 'Attach the original file',
     attachOriginDesc:
-      'A file you drop is attached where it is, without a copy: Claude reads it at its location. When off, Escouade always keeps a copy. Tickets and the Claude Code view always copy.',
+      'A file you drop is attached where it is, without a copy: the agent reads it at its location. When off, Escouade always keeps a copy. Tickets and the Claude Code view always copy.',
     attachBigText: 'Text over 256 KB',
     attachBigTextDesc: 'A text file too big for the message is attached by its path, or refused.',
     attachBigTextPath: 'Attached by its path',
@@ -160,7 +160,7 @@ export default defineZone('settings', {
     systemLabel: 'System notifications',
     sound: 'Sound',
     soundOn: 'Sound on',
-    soundOnDesc: 'When Claude asks a question or a turn ends',
+    soundOnDesc: 'When an agent asks a question or a turn ends',
     soundTest: 'Test the sound',
     soundTestButton: '▶ Test',
   },

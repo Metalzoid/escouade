@@ -171,6 +171,25 @@ fn attachment_block(a: &Attachment) -> Result<(Value, usize)> {
     Ok((block, size))
 }
 
+/// What the added instructions (`--append-system-prompt`) may weigh as a command-line argument,
+/// once escaped (see `escaped_len`). cmd.exe takes 8191 characters for the whole command line of
+/// a `.cmd` launcher (npm's claude.cmd); the rest goes to the other arguments.
+pub(crate) const PROTOCOL_BUDGET: usize = 6000;
+
+/// What `s` weighs as an argument of a `.cmd`: Rust escapes it for cmd.exe, where `%` becomes a
+/// longer sequence (8 characters) and `"` is doubled, as are the backslashes just before it (and
+/// those ending the argument). Every backslash counts 2, the safe bound of those runs. Other
+/// characters count their UTF-8 bytes, which is never less than their UTF-16 units.
+pub(crate) fn escaped_len(s: &str) -> usize {
+    s.chars()
+        .map(|c| match c {
+            '%' => 8,
+            '"' | '\\' => 2,
+            c => c.len_utf8(),
+        })
+        .sum()
+}
+
 const CLAUDE_BASE_ARGS: &[&str] = &[
     "--output-format",
     "stream-json",
@@ -294,6 +313,32 @@ impl Engine for Claude {
 
     fn name(&self) -> &'static str {
         "Claude Code"
+    }
+
+    fn speaker(&self) -> &'static str {
+        "Claude"
+    }
+
+    fn instructions_room(&self) -> Option<super::Room> {
+        // `--append-system-prompt`, on a command line that may be a `.cmd`'s.
+        Some(super::Room {
+            max: PROTOCOL_BUDGET,
+            weigh: escaped_len,
+        })
+    }
+
+    fn subagent_relay(&self, lang: Lang, title: &str, task: &str, text: &str) -> Option<String> {
+        // Claude Code lets no host write to a subagent: its agent passes the message on with its
+        // `SendMessage` tool, to the `agentId` Claude Code gave the subagent.
+        Some(tr_in!(
+            lang,
+            "Transmets ce message au sous-agent « {title} » (agentId {task}) avec l’outil SendMessage, tel quel, puis reprends ce que tu faisais :
+
+{text}",
+            "Pass this message on to the subagent “{title}” (agentId {task}) with the SendMessage tool, as it is, then go back to what you were doing:
+
+{text}"
+        ))
     }
 
     fn locate(&self, configured: &str, wsl_distro: &str) -> Option<super::Program> {
@@ -818,6 +863,32 @@ mod tests {
     }
 
     #[test]
+    fn claude_codes_agents_are_claude_and_its_added_instructions_go_on_its_command_line() {
+        use crate::engine::Engine;
+        // « Claude attend ta réponse », as before the other harnesses.
+        assert_eq!(CLAUDE.speaker(), "Claude");
+        // Its room: a `.cmd` argument's, weighed as cmd.exe escapes it.
+        let room = CLAUDE.instructions_room().unwrap();
+        assert_eq!(room.max, PROTOCOL_BUDGET);
+        assert_eq!((room.weigh)("a%\"\\é"), 1 + 8 + 2 + 2 + 2);
+        // The instructions of a spawn reach the process as `--append-system-prompt`.
+        let spawn = Spawn::of(
+            &AgentMeta {
+                append_prompt: Some("Protocole du ticket".into()),
+                ..Default::default()
+            },
+            Program::Native(std::path::PathBuf::new()),
+            Vec::new(),
+        );
+        let args = conversation_args(&spawn);
+        let at = args
+            .iter()
+            .position(|a| a == "--append-system-prompt")
+            .unwrap();
+        assert_eq!(args[at + 1], "Protocole du ticket");
+    }
+
+    #[test]
     fn the_protocol_is_appended_to_the_system_prompt_on_one_line() {
         let m = AgentMeta {
             model: "sonnet".into(),
@@ -873,17 +944,14 @@ mod tests {
     }
 
     /// The command line of a `.cmd` launcher (npm's claude.cmd) is cmd.exe's, which takes 8191
-    /// characters in all: every argument counts as Rust escapes it (`board::escaped_len`) between
+    /// characters in all: every argument counts as Rust escapes it (`escaped_len`) between
     /// its quotes, with a space before it, behind the launcher's path and cmd.exe's own prefix.
     fn command_line_weight(program: &str, args: &[String]) -> usize {
         const CMD_PREFIX: &str = "C:\\Windows\\System32\\cmd.exe /e:ON /v:OFF /d /c \"";
         CMD_PREFIX.len()
             + program.len()
             + 2
-            + args
-                .iter()
-                .map(|a| 1 + 2 + crate::board::escaped_len(a))
-                .sum::<usize>()
+            + args.iter().map(|a| 1 + 2 + escaped_len(a)).sum::<usize>()
     }
 
     #[test]
@@ -930,7 +998,7 @@ mod tests {
             // The criteria are cut where they stop fitting, which leaves some of the protocol's
             // budget unused: with all of it used, the line must still fit.
             let protocol = m.append_prompt.as_deref().unwrap();
-            let unused = crate::board::PROTOCOL_BUDGET - crate::board::escaped_len(protocol);
+            let unused = PROTOCOL_BUDGET - escaped_len(protocol);
             println!(
                 "worst-case command line, ports {ports:?}: {weight} of 8191, {} with the whole protocol budget used",
                 weight + unused

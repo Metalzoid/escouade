@@ -2476,11 +2476,18 @@ async fn the_refusals_of_a_message_to_a_subagent_come_in_the_order_archived_view
 
 #[test]
 fn the_message_that_asks_an_agent_to_pass_words_on_to_its_subagent_is_in_claudes_language() {
+    use crate::engine::Engine;
     use crate::i18n::Lang;
-    let fr = crate::core::subagent_message(Lang::Fr, "Chercher", "a1b2", "Et les PDF ?");
+    // The engine says it, its own tool named: Claude Code's SendMessage.
+    let relay = |lang, title, text| {
+        crate::engine::CLAUDE
+            .subagent_relay(lang, title, "a1b2", text)
+            .unwrap()
+    };
+    let fr = relay(Lang::Fr, "Chercher", "Et les PDF ?");
     assert!(fr.starts_with("Transmets ce message au sous-agent « Chercher »"));
     assert!(fr.contains("a1b2") && fr.ends_with("Et les PDF ?"));
-    let en = crate::core::subagent_message(Lang::En, "Search", "a1b2", "And the PDFs?");
+    let en = relay(Lang::En, "Search", "And the PDFs?");
     assert!(en.starts_with("Pass this message on to the subagent “Search”"));
     assert!(en.contains("SendMessage") && en.ends_with("And the PDFs?"));
 }

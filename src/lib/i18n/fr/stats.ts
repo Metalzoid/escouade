@@ -79,8 +79,8 @@ export default {
     deny: 'Refuser',
     readInConversation: 'À lire dans la conversation avant de répondre.',
     tooLong: 'Trop long pour être lu ici : lis-la et réponds dans la conversation.',
-    proposesPlan: 'Claude propose un plan',
-    waitsForAnswer: 'Claude attend ta réponse',
+    proposesPlan: '{engine} propose un plan',
+    waitsForAnswer: '{engine} attend ta réponse',
     waitsInTerminal: 'Attend ta réponse dans l’interface de Claude Code',
   },
 } as const satisfies Tree;

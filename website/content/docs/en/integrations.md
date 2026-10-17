@@ -113,7 +113,7 @@ The last column, “Comment”, chooses the columns whose arrival writes a comme
 
 ### The language of comments
 
-Comments are published for your team: they are written in the “Language of texts written by Claude” (Settings › Application, see [Application settings](settings-application)), not in the interface’s language. The outcome of a done ticket is quoted there in that same language.
+Comments are published for your team: they are written in the “Language of texts written by the agents” (Settings › Application, see [Application settings](settings-application)), not in the interface’s language. The outcome of a done ticket is quoted there in that same language.
 
 ## Failed syncs
 

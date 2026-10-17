@@ -1,4 +1,4 @@
-| `supports_effort(modèle)`, `supports_auto(modèle)` | Ce que prend un modèle (par modèle ; ce que prend le moteur est dans ses capacités, « Le registre »). |# Moteurs (harness) — l'interface entre Escouade et les CLI qui font tourner ses agents
+# Moteurs (harness) — l'interface entre Escouade et les CLI qui font tourner ses agents
 
 Un **moteur** fait tourner les agents d'Escouade : Claude Code aujourd'hui, puis Codex, Copilot CLI, Cursor CLI et OpenCode (docs/TODO-1.8.md, chapitre 1). L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
 
@@ -27,6 +27,9 @@ Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` d
 | Méthode | Ce qu'elle fait | Claude Code |
 |---|---|---|
 | `id()`, `name()` | Son id dans les données (`claude`) et son nom (`Claude Code`). | |
+| `speaker()` | Le nom de ses agents dans les textes (« Claude attend ta réponse », voir « Les textes et les consignes »). | `Claude` |
+| `instructions_room()` | La place des consignes ajoutées (`Spawn.append_prompt`) : un poids maximal et la façon de peser un texte, ou aucune borne. | 6 000, pesés comme cmd.exe échappe un argument de `.cmd` |
+| `subagent_relay(langue, titre, tâche, texte)` | Ce que l'agent reçoit pour transmettre un message à un de ses sous-agents ; aucun s'il ne sait pas. | « … avec l'outil SendMessage … » |
 | `locate(réglage, distribution)` | Son programme, du chemin d'un réglage (vide : là où il est d'habitude) ; un `Program` du système ou de WSL. | `resolve_binary` |
 | `supports_effort(modèle)`, `supports_auto(modèle)` | Ce que prend un modèle (ce que prend le moteur, lui, est dans ses capacités : « Le registre »). | tous sauf Haiku |
 | `spawn(Spawn, on_frame, on_exit)` | **Lancer, reprendre, copier** : le process d'un agent, d'une conversation neuve, reprise ou copiée selon `Spawn.start`. | `claude --output-format stream-json …` |
@@ -88,7 +91,6 @@ L'extraction s'est arrêtée là où d'autres lots reprennent :
 
 - **La vue Claude Code** : `tui.rs` (les arguments et réglages de l'interface de `claude`, ses hooks), `agent/transcript.rs` et `agent/sidechain.rs` (son transcript). Lot 9, vue terminal générique.
 - **Les comptes et le quota** : `accounts.rs` (comptes Claude, `CLAUDE_CONFIG_DIR`, connexion), `usage.rs` (fenêtres du quota, point d'accès OAuth). Lot 5. `Program::launch` traduit encore `CLAUDE_CONFIG_DIR` et les options de chemin de Claude Code pour WSL (`PATH_OPTIONS`).
-- **Les consignes et les textes** : le protocole du ticket (`board::protocol_prompt`), les textes qui disent « Claude ». Lots 6 et 7.
 - **Les modèles** : `ModelInfo::list` lit la liste de `initialize` de Claude Code. Avec les menus du composer (lot 4).
 
 ## Les données (ESC-27)
@@ -203,6 +205,25 @@ Donner le serveur MCP d'Escouade au process d'un agent, le lui refuser, et le d�
 **Les noms des outils.** Chaque moteur nomme le serveur `escouade` (`mcp::SERVER`), et chaque adaptateur nomme un appel d'outil MCP par `mcp::tool_name(serveur, outil)`, `mcp__<serveur>__<outil>` : les appels d'Escouade sont `mcp__escouade__<outil>` quel que soit le moteur, et la carte de permission, les libellés (`tools.ts`), la ligne d'activité et la recherche marchent tels quels. Codex (ESC-38) y viendra par `-c mcp_servers.escouade.url=…` et `bearer_token_env_var`, le jeton dans une variable du process (`grant_file` à `None`), et `-c mcp_servers.escouade.enabled=false` pour le refus ; sa déclaration (ESC-50) par son `config.toml`.
 
 Tests : `mcp/agents_tests.rs` (`no_engine_puts_the_token_on_the_command_line` vérifie la règle du jeton pour chaque moteur de `registry::all()`, et `keeps_the_token_off_the_command_line` resservira au banc de conformité ; le lancement réel, flux et vue Claude Code, n'a jamais le jeton sur sa ligne de commande), `mcp/install_tests.rs` (déclaration par le moteur), `PermissionCard.test.ts` (même carte pour un agent d'un autre harness).
+
+## Les textes et les consignes (ESC-31)
+
+### Les textes
+
+Un texte qui parle d'un agent le nomme comme son moteur, par `Engine::speaker` (« Claude » pour Claude Code) :
+
+- dans la fenêtre, le paramètre `{engine}` des catalogues, que `speakerOf(agent.engine)` de `src/lib/engines.ts` remplit depuis la déclaration (`EngineDecl.speaker`) : « {engine} attend ta réponse », « {engine} travaille… », « {engine} demande une autorisation », « {engine} propose un plan », le placeholder et la file d'attente du composer, le sens des modes « Demander » et « Plan » (`modeTitle` de `src/lib/models.ts` ; le menu des réglages nomme le moteur par défaut), la vue d'ensemble. `{harness}` (`engineName`) nomme le moteur lui-même : « la session {harness} reste sur le disque », « hors du mode de permission de {harness} » ;
+- dans le backend : la notification d'une question sans texte (`notify::question_body`), « {speaker} ne tourne plus pour cet agent », la session ou le point de copie perdus, et le nom du moteur (`name()`) dans « … s'est arrêté (code N) », « … n'a pas pu démarrer », « … introuvable ».
+
+Un texte qui vaut pour tous les agents dit « les agents » : « Langue des textes rédigés par les agents », « Arrêter les processus des agents inactifs après », « 2 agents · 1,5 Go · 12 % CPU » dans la barre d'état. Restent « Claude » ou « Claude Code » : les comptes Claude et leurs quotas (lot 5), le Remote Control, la vue Claude Code (lot 9), les tâches de fond et les sous-agents (propres à Claude Code, masqués par les capacités), le serveur MCP (lot 8) et les textes rédigés par un one-shot (« Claude lit le projet… », lot 7).
+
+### Les consignes
+
+Le protocole du ticket (`board::protocol_prompt_for`) et les messages du pilote auto (premier message, boucles, reprise, retour de test, tests en échec, conflits, préparation du lancement) ne nomment aucun outil propre à Claude Code : « pose la question avec l'outil de question », pas `AskUserQuestion`. Un test le vérifie dans les deux langues (`board.rs`, `the_protocol_and_the_autopilots_messages_name_no_tool_of_claude_code`).
+
+Le protocole est une consigne ajoutée : le pilote auto le met dans `AgentOptions.append_prompt`, que `Spawn.append_prompt` porte au moteur, qui le passe à sa façon (Claude Code : `--append-system-prompt` ; Codex : `developerInstructions` de `thread/start`). Sa longueur suit le moteur du ticket (`Engine::instructions_room`) : pour Claude Code, la ligne de commande d'un `.cmd` (6 000, pesés par `escaped_len`), les critères qui n'y tiennent pas remplacés par « … » ; sans borne, tous les critères.
+
+Ce qui nomme un outil d'un moteur passe par lui : le message transmis à un sous-agent (`Engine::subagent_relay`, l'outil `SendMessage` de Claude Code).
 
 ## Ajouter un moteur (ébauche)
 

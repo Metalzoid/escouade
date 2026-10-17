@@ -70,6 +70,15 @@ export function engineName(engine: EngineId | null | undefined): string {
   return engineOf(engine)?.name ?? engine ?? '';
 }
 
+/**
+ * The name of the agents of a harness as the texts speak of them (« {engine} attend ta réponse »): `Claude` for Claude Code,
+ * as it declares it (null: the default harness's); its name when it does not say one.
+ */
+export function speakerOf(engine: EngineId | null | undefined): string {
+  const decl = engineOf(engine);
+  return decl?.speaker || decl?.name || engine || '';
+}
+
 /** The harnesses the agents run on (archived ones aside). */
 export function enginesInUse(): Set<EngineId> {
   return new Set(

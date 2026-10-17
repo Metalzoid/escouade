@@ -23,7 +23,7 @@ describe('StatusBar', () => {
     app.now = Date.UTC(2026, 8, 27, 20, 0, 0);
   });
 
-  it('shows the running Claude processes with their memory and CPU, each agent in the tooltip', () => {
+  it('shows the running agent processes with their memory and CPU, each agent in the tooltip', () => {
     fakeBackend();
     const GB = 1024 ** 3;
     app.agents.a4 = { ...app.agents.a4, name: 'tests-e2e' };
@@ -37,8 +37,8 @@ describe('StatusBar', () => {
       ],
     };
     render(StatusBar);
-    const item = screen.getByText(/2 Claude/).closest('.it')!;
-    expect(item).toHaveTextContent('2 Claude · 1,5 Go · 12 % CPU');
+    const item = screen.getByText(/2 agents/).closest('.it')!;
+    expect(item).toHaveTextContent('2 agents · 1,5 Go · 12 % CPU');
     const title = item.getAttribute('data-tip')!;
     // The biggest first.
     expect(title.split('\n').slice(1)).toEqual(['tests-e2e : 1 Go · 10 %', 'refacto-auth : 512 Mo · 2 %']);
@@ -47,7 +47,7 @@ describe('StatusBar', () => {
   it('says nothing about processes when none runs', () => {
     fakeBackend();
     render(StatusBar);
-    expect(screen.queryByText(/Claude ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/agents? ·/)).not.toBeInTheDocument();
   });
 
   it('shows when the weekly quota resets too', () => {
@@ -389,7 +389,7 @@ describe('StatusBar in English', () => {
     expect(screen.getByRole('meter', { name: '7-day quota' })).toHaveAttribute('aria-valuetext', 'Quota unavailable');
   });
 
-  it('writes the Claude processes with their sizes in English, each agent in the tooltip', () => {
+  it('writes the agent processes with their sizes in English, each agent in the tooltip', () => {
     fakeBackend();
     const GB = 1024 ** 3;
     app.resources = {
@@ -399,9 +399,9 @@ describe('StatusBar in English', () => {
       agents: [{ id: 'a1', memory: 0.5 * GB, cpu: 2.4 }],
     };
     render(StatusBar);
-    const item = screen.getByText(/2 Claude/).closest('.it')!;
-    expect(item).toHaveTextContent('2 Claude · 1.5 GB · 12% CPU');
-    expect(item.getAttribute('data-tip')!.split('\n')[0]).toBe('Running Claude processes (with the tools and MCP servers they start)');
+    const item = screen.getByText(/2 agents/).closest('.it')!;
+    expect(item).toHaveTextContent('2 agents · 1.5 GB · 12% CPU');
+    expect(item.getAttribute('data-tip')!.split('\n')[0]).toBe('Running agent processes (with the tools and MCP servers they start)');
     expect(item.getAttribute('data-tip')!.split('\n')[1]).toBe('refacto-auth: 512 MB · 2%');
   });
 
@@ -411,7 +411,7 @@ describe('StatusBar in English', () => {
     render(StatusBar);
     expect(screen.getByText(/Today/)).toHaveAttribute(
       'data-tip',
-      'Estimate (public prices) while Claude works; exact cost at the end of the turn',
+      'Estimate (public prices) during the turn; exact cost at its end',
     );
     expect(screen.getByText('≈ $0.50')).toBeInTheDocument();
   });

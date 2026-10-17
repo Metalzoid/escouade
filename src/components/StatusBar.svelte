@@ -137,7 +137,7 @@
     {#if procs.instances}
       <span class="vsep"></span>
       <span class="it procs" use:tip={procsTitle}
-        ><Rich k="shell.status.procs" instances={procs.instances}
+        ><Rich k="shell.status.procs" count={procs.instances}
           >{#snippet memory()}<span class="v">{fBytes(procs.memory)}</span>{/snippet}{#snippet cpu()}<span class="v">{fPct(procs.cpu)}</span
             >{/snippet}</Rich
         ></span

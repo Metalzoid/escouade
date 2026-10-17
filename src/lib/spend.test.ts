@@ -35,9 +35,9 @@ describe('contextUse', () => {
 
 describe('what is said of the spending', () => {
   it('says why a cost is an estimate, in the language of the interface', () => {
-    expect(estimateHint()).toBe('Estimation (tarifs publics) pendant que Claude travaille ; coût exact à la fin du tour');
+    expect(estimateHint()).toBe('Estimation (tarifs publics) pendant le tour ; coût exact à sa fin');
     setLang('en');
-    expect(estimateHint()).toBe('Estimate (public prices) while Claude works; exact cost at the end of the turn');
+    expect(estimateHint()).toBe('Estimate (public prices) during the turn; exact cost at its end');
   });
 
   it('writes how full the context is in English, with the numbers of the language', () => {

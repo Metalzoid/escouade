@@ -97,7 +97,7 @@ Les demandes d’autorisation et leur traitement sont décrits dans [la conversa
 | « Reprendre sur un autre compte un agent de ticket arrêté par la limite » | Sinon il attend la remise à zéro de son compte. Absent tant qu’il n’y a qu’un compte. | Désactivé |
 | « Ouvrir les nouveaux agents dans l’interface de Claude Code » | Un nouvel agent tourne dans la vue Claude Code plutôt que dans la conversation d’Escouade. | Désactivé |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
-| « Arrêter les processus Claude inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |
+| « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |
 
 ### Reprise automatique
 

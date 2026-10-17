@@ -1034,7 +1034,10 @@ impl AgentRt {
         by: Option<&str>,
         fx: &mut Effects,
     ) -> Result<()> {
-        let proc = self.proc.clone().ok_or_else(not_running)?;
+        let proc = self
+            .proc
+            .clone()
+            .ok_or_else(|| not_running(engine::of(&self.meta).speaker()))?;
         let Some(p) = self.take_pending(request_id) else {
             bail!(if self.was_answered(request_id) {
                 already_answered()
@@ -1068,7 +1071,10 @@ impl AgentRt {
         by: Option<&str>,
         fx: &mut Effects,
     ) -> Result<()> {
-        let proc = self.proc.clone().ok_or_else(not_running)?;
+        let proc = self
+            .proc
+            .clone()
+            .ok_or_else(|| not_running(engine::of(&self.meta).speaker()))?;
         let Some(p) = self.take_pending(request_id) else {
             bail!(if self.was_answered(request_id) {
                 already_answered()
@@ -1147,8 +1153,9 @@ impl AgentRt {
         // it): the card tells the failure, with « Revenir sur … ».
         let resume_failed = !self.saw_init && self.meta.moved_from.is_some();
         // Gone before it started: what it was to resume could not be.
-        let [session_lost, fork_point_lost] = exit_notices(i18n::ui());
-        let cause = engine::of(&self.meta).start_lost(stderr);
+        let harness = engine::of(&self.meta);
+        let [session_lost, fork_point_lost] = exit_notices(i18n::ui(), harness.speaker());
+        let cause = harness.start_lost(stderr);
         let lost = if self.saw_init || resume_failed {
             None
         } else if cause == Some(StartLost::Session) {
@@ -1178,7 +1185,7 @@ impl AgentRt {
                 format!("\n\n{}", truncate(stderr.trim(), 2000))
             };
             let code = code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
-            let reason = stopped(i18n::ui(), &code);
+            let reason = stopped(i18n::ui(), harness.name(), &code);
             if resume_failed {
                 // What the process said, else that it stopped: the card says it as the error.
                 let said = if stderr.trim().is_empty() {
@@ -1679,36 +1686,37 @@ fn already_answered() -> String {
 }
 
 /// Refused: the agent's process is gone, nothing can be answered.
-fn not_running() -> anyhow::Error {
+fn not_running(speaker: &str) -> anyhow::Error {
     anyhow!(tr!(
-        "Claude ne tourne plus pour cet agent",
-        "Claude is no longer running for this agent"
+        "{speaker} ne tourne plus pour cet agent",
+        "{speaker} is no longer running for this agent"
     ))
 }
 
-/// What the agent's conversation is told when Claude Code went before it started: the session to
-/// resume is gone, the point of the original's session a copy starts from is gone.
-fn exit_notices(lang: Lang) -> [String; 2] {
+/// What the agent's conversation is told when its harness (its agents named `speaker`) went before
+/// it started: the session to resume is gone, the point of the original's session a copy starts
+/// from is gone.
+fn exit_notices(lang: Lang, speaker: &str) -> [String; 2] {
     [
         tr_in!(
             lang,
-            "Session Claude introuvable : une nouvelle session sera démarrée au prochain message.",
-            "Claude session not found: a new session will start with your next message."
+            "Session {speaker} introuvable : une nouvelle session sera démarrée au prochain message.",
+            "{speaker} session not found: a new session will start with your next message."
         ),
         tr_in!(
             lang,
-            "Point de copie introuvable dans la session de l'original : Claude reprend toute sa conversation, jusqu'à maintenant.",
-            "Copy point not found in the original’s session: Claude picks up its whole conversation, up to now."
+            "Point de copie introuvable dans la session de l'original : {speaker} reprend toute sa conversation, jusqu'à maintenant.",
+            "Copy point not found in the original’s session: {speaker} picks up its whole conversation, up to now."
         ),
     ]
 }
 
-/// Why the agent's turn ended in an error, when Claude Code stopped with `code`.
-fn stopped(lang: Lang, code: &str) -> String {
+/// Why the agent's turn ended in an error, when its harness `name` stopped with `code`.
+fn stopped(lang: Lang, name: &str, code: &str) -> String {
     tr_in!(
         lang,
-        "Claude Code s'est arrêté (code {code})",
-        "Claude Code stopped (code {code})"
+        "{name} s'est arrêté (code {code})",
+        "{name} stopped (code {code})"
     )
 }
 
@@ -2972,14 +2980,29 @@ mod tests {
             [Some("Replying".to_string()), Some("Thinking".to_string())]
         );
         assert_eq!(
-            exit_notices(En),
+            exit_notices(En, "Claude"),
             [
                 "Claude session not found: a new session will start with your next message.",
                 "Copy point not found in the original’s session: Claude picks up its whole conversation, up to now.",
             ]
         );
-        assert_eq!(stopped(En, "3"), "Claude Code stopped (code 3)");
-        assert_eq!(stopped(Fr, "3"), "Claude Code s'est arrêté (code 3)");
+        assert_eq!(
+            stopped(En, "Claude Code", "3"),
+            "Claude Code stopped (code 3)"
+        );
+        assert_eq!(
+            stopped(Fr, "Claude Code", "3"),
+            "Claude Code s'est arrêté (code 3)"
+        );
+        // Another harness, its own name.
+        assert_eq!(stopped(Fr, "Codex", "3"), "Codex s'est arrêté (code 3)");
+        assert_eq!(
+            exit_notices(Fr, "Codex"),
+            [
+                "Session Codex introuvable : une nouvelle session sera démarrée au prochain message.",
+                "Point de copie introuvable dans la session de l'original : Codex reprend toute sa conversation, jusqu'à maintenant."
+            ]
+        );
         // The count of a to-do list, as the conversation's card writes it (`conv.tools.tasks`).
         let todos = |n: usize, lang| {
             tool_arg_in(

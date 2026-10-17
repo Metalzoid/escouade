@@ -4,6 +4,7 @@
   import { api } from '../../lib/ipc';
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer, optionAnswer } from '../../lib/shortcuts';
+  import { speakerOf } from '../../lib/engines';
   import { app } from '../../lib/state.svelte';
   import type { Question, QuestionItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
@@ -18,6 +19,8 @@
   let cursor = $state(0);
 
   const keys = $derived(pending && current);
+  // « Claude attend ta réponse », its agent named as its harness names it.
+  const waiting = $derived(t('composer.question.waiting', { engine: speakerOf(app.agents[agentId]?.engine) }));
   const needsConfirm = $derived(item.questions.length > 1 || item.questions.some((q) => q.multiSelect));
   const answered = (q: Question) => (picks[q.question] ?? []).length > 0;
   const complete = $derived(item.questions.every(answered));
@@ -82,8 +85,8 @@
 </script>
 
 {#if pending}
-  <div class="card pending" data-testid="question-pending" role="group" aria-label={t('composer.question.waiting')} bind:this={card}>
-    <div class="title"><span class="pulse" style="width:8px;height:8px"></span>{t('composer.question.waiting')}</div>
+  <div class="card pending" data-testid="question-pending" role="group" aria-label={waiting} bind:this={card}>
+    <div class="title"><span class="pulse" style="width:8px;height:8px"></span>{waiting}</div>
     {#each item.questions as q, qi (qi)}
       <div class="q">
         {#if q.header && item.questions.length > 1}<span class="chip">{q.header}</span>{/if}

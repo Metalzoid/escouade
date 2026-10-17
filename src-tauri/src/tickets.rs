@@ -1414,7 +1414,7 @@ impl<R: Runtime> Core<R> {
         let s = &project.board;
         let target = self.target_of(project).await;
         let settings = self.settings.read().clone();
-        // What its Claude is told, from its protocol to its first message.
+        // What it is told, from its protocol to its first message.
         let lang = self.lang().claude;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
         let (model, effort, mode) = ticket_agent_options(t, s, &settings);
@@ -1450,7 +1450,15 @@ impl<R: Runtime> Core<R> {
                     mode: Some(mode),
                     name: Some(board::agent_name(&t.key, &t.title)),
                     worktree: new_branch,
-                    append_prompt: Some(board::protocol_prompt_for(lang, t, ports, isola)),
+                    // Within the room its harness gives it.
+                    append_prompt: Some(board::protocol_prompt_for(
+                        lang,
+                        t,
+                        ports,
+                        isola,
+                        crate::engine::by_id(t.engine.unwrap_or(project.engine()))
+                            .instructions_room(),
+                    )),
                     ticket_id: Some(t.id.clone()),
                     port_base: ports,
                     select: false,

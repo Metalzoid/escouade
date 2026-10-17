@@ -16,6 +16,7 @@ import {
   offered,
   showsCost,
   showsMark,
+  speakerOf,
 } from './engines';
 import { EFFORTS, MODES } from './models';
 import { app } from './state.svelte';
@@ -101,6 +102,25 @@ describe('the harnesses offered (ESC-29)', () => {
     expect(modelTakes(claude, 'claude-haiku-4-5-20251001', 'auto')).toBe(false);
     expect(modelTakes(claude, 'claude-opus-5-5', 'auto')).toBe(true);
     expect(modelTakes(bare, 'gpt-5.5', 'effort')).toBe(false);
+  });
+});
+
+describe('the name of the agents of a harness (ESC-31)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('is the one it declares: Claude for Claude Code, the default harness’s for what has none', () => {
+    expect(speakerOf('claude')).toBe('Claude');
+    expect(speakerOf(null)).toBe('Claude');
+    expect(speakerOf('codex')).toBe('Nu');
+  });
+
+  it('is its name when it declares none, its id when the backend does not know it', () => {
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, speaker: '' }];
+    expect(speakerOf('codex')).toBe('Harness nu');
+    expect(speakerOf('opencode')).toBe('opencode');
   });
 });
 

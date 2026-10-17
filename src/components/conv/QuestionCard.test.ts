@@ -6,7 +6,7 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { QuestionItem } from '../../lib/types';
 import { answerClock, conversationHost, settle } from '../../test/conversation';
-import { fakeBackend, resetApp } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import QuestionCard from './QuestionCard.svelte';
 
 const item = (over: Partial<QuestionItem> = {}): QuestionItem => ({
@@ -40,6 +40,18 @@ describe('QuestionCard', () => {
     expect(backend.called('answer_question')).toEqual([
       { cmd: 'answer_question', args: { id: 'a1', requestId: 'req-1', answers: { 'Quelle base de données ?': 'SQLite' } } },
     ]);
+  });
+
+  it('names the agent as its harness does: Claude for Claude Code, another one its own', () => {
+    fakeBackend();
+    resetApp({ agents: [agent({ id: 'a1', engine: 'claude' }), agent({ id: 'a2', engine: 'codex' })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const { unmount } = render(QuestionCard, { item: item(), agentId: 'a1', pending: true });
+    expect(screen.getByRole('group', { name: 'Claude attend ta réponse' })).toBeInTheDocument();
+    unmount();
+    render(QuestionCard, { item: item(), agentId: 'a2', pending: true });
+    expect(screen.getByRole('group', { name: 'Nu attend ta réponse' })).toBeInTheDocument();
+    expect(screen.queryByText(/Claude/)).not.toBeInTheDocument();
   });
 
   it('collects several answers before validating, multi-select joined with commas', async () => {

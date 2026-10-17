@@ -9,7 +9,7 @@
   import { modelLabel } from '../lib/models';
   import { keyLabel } from '../lib/platform';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
-  import { showsCost } from '../lib/engines';
+  import { showsCost, speakerOf } from '../lib/engines';
   import { app } from '../lib/state.svelte';
   import { revealHidden } from '../lib/recipe';
   import { SUMMED_UP, toolLabel } from '../lib/tools';
@@ -356,10 +356,10 @@
               req?.kind === 'question'
                 ? req.questions.map((q) => q.question).join(' · ')
                 : req
-                  ? t('stats.overview.proposesPlan')
+                  ? t('stats.overview.proposesPlan', { engine: speakerOf(a.engine) })
                   : a.terminal
                     ? t('stats.overview.waitsInTerminal')
-                    : t('stats.overview.waitsForAnswer')}
+                    : t('stats.overview.waitsForAnswer', { engine: speakerOf(a.engine) })}
             <span class="ask" use:tip={{ text: text, cut: true }}>{text}</span>
             <span class="acts"><button class="opt primary" onclick={(e) => answer(e, a)}>{t('common.reply')}</button></span>
           {/if}

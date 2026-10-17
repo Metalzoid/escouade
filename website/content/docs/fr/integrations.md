@@ -113,7 +113,7 @@ La dernière colonne, « Commenter », choisit les colonnes dont l’arrivée 
 
 ### La langue des commentaires
 
-Les commentaires sont publiés pour ton équipe : ils sont écrits dans la « Langue des textes rédigés par Claude » (Réglages › Application, voir [Réglages de l’application](settings-application)), pas dans celle de l’interface. L’issue d’un ticket terminé y est citée dans cette même langue.
+Les commentaires sont publiés pour ton équipe : ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Application, voir [Réglages de l’application](settings-application)), pas dans celle de l’interface. L’issue d’un ticket terminé y est citée dans cette même langue.
 
 ## Synchronisations qui échouent
 

@@ -6,6 +6,7 @@
   import { keyLabel } from '../../lib/platform';
   import { revealHidden } from '../../lib/recipe';
   import { answersHere, ariaEnter, enterAnswer } from '../../lib/shortcuts';
+  import { speakerOf } from '../../lib/engines';
   import { app } from '../../lib/state.svelte';
   import { escouadeArgs, isEscouadeTool, toolArg, toolLabel } from '../../lib/tools';
   import type { PermissionItem, ToolItem } from '../../lib/types';
@@ -25,7 +26,9 @@
   const isPlan = $derived(item.toolName === 'ExitPlanMode');
   // A request Claude Code would refuse by default: the refusal is its main button, and only a click allows it.
   const keys = $derived(pending && current && !item.defaultNo);
-  const title = $derived(isPlan ? t('composer.permission.titlePlan') : t('composer.permission.title'));
+  // Its agent named as its harness names it (« Claude demande une autorisation »).
+  const engine = $derived(speakerOf(app.agents[agentId]?.engine));
+  const title = $derived(isPlan ? t('composer.permission.titlePlan', { engine }) : t('composer.permission.title', { engine }));
   const summary = $derived(
     toolArg({ kind: 'tool', id: item.id, name: item.toolName, input: item.input, status: 'running', ts: 0 } as ToolItem, cwd),
   );

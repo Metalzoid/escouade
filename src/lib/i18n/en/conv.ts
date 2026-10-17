@@ -52,17 +52,17 @@ export default defineZone('conv', {
   loadError: 'Couldn’t load the conversation: {error}',
   empty: {
     title: 'Agent ready',
-    hint: 'Describe the task to give to Claude. The agent works in {cwd}.',
+    hint: 'Describe the task to give to {engine}. The agent works in {cwd}.',
     engineMissing: '{engine} couldn’t be found on this machine: install it or set its path in Settings › Harness (⚙).',
   },
   older: {
     show: { one: 'Show the previous message', other: 'Show the previous {n} messages' },
     drawn: { one: '{n} previous message shown', other: '{n} previous messages shown' },
   },
-  working: 'Claude is working…',
+  working: '{engine} is working…',
   newMessages: 'New messages',
   archived: { text: 'Agent archived.', restore: 'Restore' },
-  stopped: 'The agent stopped. Send a message to restart Claude on the same session.',
+  stopped: 'The agent stopped. Send a message to restart {engine} on the same session.',
 
   search: {
     title: 'Search conversations',
@@ -91,7 +91,7 @@ export default defineZone('conv', {
     images: { one: '{count} image', other: '{count} images' },
     waiting: 'Waiting for the setup…',
     queued: 'sent during the turn',
-    queuedHint: 'Claude takes it into account at its next step',
+    queuedHint: '{engine} takes it into account at its next step',
     remote: 'from claude.ai',
     remoteHint: 'Sent from claude.ai or the Claude app (remote control)',
   },

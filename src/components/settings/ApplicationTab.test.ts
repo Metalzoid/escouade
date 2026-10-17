@@ -18,7 +18,7 @@ const choice = (setting: string, name: string) =>
   within(within(panel()).getByRole('group', { name: setting })).getByRole('button', { name });
 
 const UI = 'Langue de l’interface';
-const CLAUDE = 'Langue des textes rédigés par Claude';
+const CLAUDE = 'Langue des textes rédigés par les agents';
 
 describe('the « Application » tab', () => {
   beforeEach(() => {
@@ -86,7 +86,7 @@ describe('the « Application » tab', () => {
     expect(within(panel()).getByRole('spinbutton', { name: 'Editor text size' })).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'Language' })).toBeInTheDocument();
     expect(choices('Interface language')).toEqual(['System (French)', 'English', 'Français']);
-    expect(choices('Language of texts written by Claude')).toEqual(['Same as the interface (default)', 'English', 'Français']);
+    expect(choices('Language of texts written by the agents')).toEqual(['Same as the interface (default)', 'English', 'Français']);
     expect(panel()).toHaveTextContent(
       'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, and Linear, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     );

@@ -57,7 +57,7 @@ Everything else goes **by path**: any other format, a readable file that is too 
 Attached file: report.xlsx, C:\…\report.xlsx
 ```
 
-The line follows the language of the texts written by Claude (`Fichier joint : …` in French, see [Application settings](settings-application)). In WSL, the path is the one Claude Code reads, for example `/mnt/c/…`.
+The line follows the language of the texts written by the agents (`Fichier joint : …` in French, see [Application settings](settings-application)). In WSL, the path is the one Claude Code reads, for example `/mnt/c/…`.
 
 A file is rejected if it exceeds the maximum size you set (none by default), if it’s a text file over 256 KB and you chose to refuse those, or if Escouade can’t read or copy it. It is named in a red message, and the other files are attached anyway. In the conversation, the message shows “2 images” and the names of the files; the lines of the files sent by path are there too, with your text. If Escouade can no longer find a file when you send (moved or deleted in the meantime), the message is refused, with the reason, and goes back to the field.
 

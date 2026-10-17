@@ -65,7 +65,7 @@ Both choices take effect as soon as you save, with no restart: the window, the a
 | Setting | Effect | Default |
 |---|---|---|
 | “Interface language” | The language of the window, the app’s menus, and the messages Escouade shows. | “System” |
-| “Language of texts written by Claude” | The language of what Claude writes for you: commits, pull requests, comments, instructions to agents. | “Same as the interface (default)” |
+| “Language of texts written by the agents” | The language of what Claude writes for you: commits, pull requests, comments, instructions to agents. | “Same as the interface (default)” |
 
 ### Interface language
 
@@ -77,7 +77,7 @@ Three choices, each written in its own language so you can find yours whatever l
 
 The change also reaches the app’s native menus and the tooltip of the taskbar icon.
 
-### Language of texts written by Claude
+### Language of texts written by the agents
 
 This choice decides which language Escouade asks Claude to use for what leaves the app:
 

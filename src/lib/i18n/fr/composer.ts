@@ -13,13 +13,13 @@ export default {
   /** The permission modes offered (`lib/models.ts`). */
   mode: {
     auto: { label: 'Auto', title: 'Un classifieur approuve les actions sûres et demande pour le reste' },
-    default: { label: 'Demander', title: 'Claude demande ton accord avant chaque action sensible' },
-    plan: { label: 'Plan', title: 'Claude analyse et propose un plan sans rien modifier' },
+    default: { label: 'Demander', title: '{engine} demande ton accord avant chaque action sensible' },
+    plan: { label: 'Plan', title: '{engine} analyse et propose un plan sans rien modifier' },
     acceptEdits: { label: 'Édits auto', title: 'Les modifications de fichiers sont acceptées sans demander' },
     bypassPermissions: { label: 'Bypass', title: 'Aucune demande de permission (à réserver aux environnements sûrs)' },
     autoUnavailableDetail: 'indisponible avec Haiku',
     autoUnavailableTitle: "Le mode Auto n'est pas disponible avec Haiku",
-    bypassToast: 'Mode Bypass : Claude agira sans aucune demande de permission.',
+    bypassToast: 'Mode Bypass : {engine} agira sans aucune demande de permission.',
   },
 
   /** Files attached to a message (`lib/attachments.ts`). */
@@ -45,10 +45,10 @@ export default {
   },
 
   placeholder: {
-    denyPermission: 'Explique à Claude quoi faire à la place (refuse la demande)…',
+    denyPermission: 'Explique à {engine} quoi faire à la place (refuse la demande)…',
     answerQuestion: 'Réponds à la question ou écris une réponse libre…',
     sendTo: 'Envoyer un message à {name}…',
-    describe: 'Décris la tâche à confier à Claude…',
+    describe: 'Décris la tâche à confier à {engine}…',
   },
 
   /** The bar under the field: the menus, stop. */
@@ -64,7 +64,7 @@ export default {
   send: {
     label: 'Envoyer',
     /** `{enter}`: the Enter key as written on this keyboard. */
-    titleQueued: 'Claude en tiendra compte dès sa prochaine étape · {enter} pour envoyer',
+    titleQueued: '{engine} en tiendra compte dès sa prochaine étape · {enter} pour envoyer',
     title: '{enter} pour envoyer · {newline} pour aller à la ligne',
     alreadyWaiting: 'Un message attend déjà la fin de la préparation.',
     filesKept: "Les fichiers joints n'accompagnent pas une réponse : ils restent prêts pour ton prochain message.",
@@ -72,8 +72,8 @@ export default {
 
   /** The card of a request for permission, pending or answered. */
   permission: {
-    title: 'Claude demande une autorisation',
-    titlePlan: 'Claude propose un plan',
+    title: '{engine} demande une autorisation',
+    titlePlan: '{engine} propose un plan',
     /** What Claude is told when the plan is refused. */
     keepPlanningMessage: 'Continue à planifier : le plan ne me convient pas encore.',
     allow: 'Autoriser',
@@ -94,7 +94,7 @@ export default {
 
   /** The card of a question Claude asks, pending or answered. */
   question: {
-    waiting: 'Claude attend ta réponse',
+    waiting: '{engine} attend ta réponse',
     orWrite: 'ou réponds librement dans le champ ci-dessous',
     submit: 'Valider',
     unanswered: 'Question restée sans réponse',

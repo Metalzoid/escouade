@@ -59,7 +59,7 @@ This group sets what happens before the action chosen above, and after it.
 | “Generated commit message” | On, Haiku writes the message in the Conventional Commits form; if its answer isn’t usable, the message is `feat: <title> [<key>]`. Off, the message is `<key> <title>`. An example appears under the setting, with your project’s key. | On |
 | “On conflict” | What a merge that hits a conflict does. See below. | “Ask me” |
 
-The commit message is used to commit what the agent left in the worktree, and as the squash’s message; a merge commit keeps git’s message. Its language follows “Language of texts written by Claude” (in the [“Application”](settings-application) tab).
+The commit message is used to commit what the agent left in the worktree, and as the squash’s message; a merge commit keeps git’s message. Its language follows “Language of texts written by the agents” (in the [“Application”](settings-application) tab).
 
 ### On conflict
 

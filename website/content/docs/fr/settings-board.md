@@ -59,7 +59,7 @@ Ce groupe règle ce qui se passe avant l’action choisie plus haut, et après e
 | « Message de commit généré » | Activé, Haiku écrit le message au format Conventional Commits ; si sa réponse n’est pas utilisable, le message est `feat: <titre> [<clé>]`. Désactivé, le message est `<clé> <titre>`. Un exemple s’affiche sous le réglage, avec la clé de ton projet. | Activé |
 | « En cas de conflit » | Ce que fait un merge qui tombe sur un conflit. Voir plus bas. | « Me demander » |
 
-Le message de commit sert à commiter ce que l’agent a laissé dans le worktree, et de message au squash ; un merge commit garde le message de git. Sa langue suit « Langue des textes rédigés par Claude » (onglet [« Application »](settings-application)).
+Le message de commit sert à commiter ce que l’agent a laissé dans le worktree, et de message au squash ; un merge commit garde le message de git. Sa langue suit « Langue des textes rédigés par les agents » (onglet [« Application »](settings-application)).
 
 ### En cas de conflit
 

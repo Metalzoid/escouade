@@ -13,7 +13,7 @@ describe('Welcome', () => {
   it('invites to add a project, which opens the window for it', async () => {
     fakeBackend();
     render(Welcome);
-    expect(screen.getByText(/^Ajoute un projet pour y lancer des agents Claude Code/)).toBeInTheDocument();
+    expect(screen.getByText(/^Ajoute un projet pour y lancer des agents, suivre/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '+ Ajouter un projet' }));
     expect(app.modal).toEqual({ kind: 'newProject' });
   });
@@ -51,7 +51,7 @@ describe('Welcome in English', () => {
     fakeBackend();
     app.enginesFound = [];
     render(Welcome);
-    expect(screen.getByText(/^Add a project to run Claude Code agents, follow/)).toBeInTheDocument();
+    expect(screen.getByText(/^Add a project to run agents, follow/)).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'No harness found' })).toHaveTextContent(
       'Install one of them, then set its path in Settings › Harness if it isn’t on the PATH:',
     );

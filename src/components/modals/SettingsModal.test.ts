@@ -181,7 +181,7 @@ describe('SettingsModal', () => {
     const resume = screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
     expect(resume).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(resume);
-    await userEvent.clear(screen.getByRole('spinbutton', { name: /Arrêter les processus Claude inactifs/ }));
+    await userEvent.clear(screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ }));
     await save();
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({
       defaultModel: 'opus',
@@ -1169,7 +1169,7 @@ describe('SettingsModal in English', () => {
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
-    expect(screen.getByRole('spinbutton', { name: 'Stop idle Claude processes after (minutes)' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Stop idle agent processes after (minutes)' })).toBeInTheDocument();
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
     expect(tab('Harness')).toHaveClass('changed');
     expect(tab('Harness')).toHaveAccessibleDescription('Modified, not saved yet');

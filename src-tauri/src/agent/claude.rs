@@ -823,7 +823,7 @@ impl AgentRt {
                 }
                 let suggestions = req["permission_suggestions"].clone();
                 let body = if tool == "AskUserQuestion" {
-                    notify::question_body(&input)
+                    notify::question_body(crate::engine::of(&self.meta).speaker(), &input)
                 } else {
                     notify::permission_body(&tool, &input, &self.meta.cwd)
                 };

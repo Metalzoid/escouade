@@ -127,7 +127,7 @@ To avoid reaching the limit, the [autopilot](autopilot) pauses before, at the �
 
 **Cause.** The agent’s Claude Code process ended on its own. The message it left usually says why (sign-in, proxy, version…).
 
-**Fix.** Send a message: Escouade restarts Claude on the same session. A process stopped on purpose isn’t an error: Escouade stops idle processes after a delay (Settings › Harness, “Stop idle Claude processes after”, 30 minutes by default, 0 for never) and restarts them at the next action.
+**Fix.** Send a message: Escouade restarts Claude on the same session. A process stopped on purpose isn’t an error: Escouade stops idle processes after a delay (Settings › Harness, “Stop idle agent processes after”, 30 minutes by default, 0 for never) and restarts them at the next action.
 
 ### Claude session not found
 

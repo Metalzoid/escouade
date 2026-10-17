@@ -1,7 +1,13 @@
 import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
+import { app } from '../../lib/state.svelte';
+import { BARE_ENGINE, CLAUDE_ENGINE } from '../../test/ipc';
 import UserMessage from './UserMessage.svelte';
+
+beforeEach(() => {
+  app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+});
 
 const item = (queued: boolean) => ({ kind: 'user' as const, id: 'u1', text: 'Ajoute aussi les tests', images: 0, ts: 1, queued });
 
@@ -10,6 +16,14 @@ describe('UserMessage', () => {
     render(UserMessage, { item: item(true) });
     expect(screen.getByText('transmis pendant le tour')).toBeInTheDocument();
     expect(screen.queryByText(/en file/)).not.toBeInTheDocument();
+  });
+
+  it('names the harness of its agent in the note of a message sent during a turn', () => {
+    const { unmount } = render(UserMessage, { item: item(true), engine: 'claude' });
+    expect(screen.getByText('transmis pendant le tour')).toHaveAttribute('data-tip', 'Claude en tient compte dès sa prochaine étape');
+    unmount();
+    render(UserMessage, { item: item(true), engine: 'codex' });
+    expect(screen.getByText('transmis pendant le tour')).toHaveAttribute('data-tip', 'Nu en tient compte dès sa prochaine étape');
   });
 
   it('shows nothing more for a message sent between turns', () => {

@@ -107,9 +107,9 @@ export default {
     changed: 'La recette vient de changer : relis-la avant de lancer.',
     /** `{name}`: the agent. */
     isolaNotice:
-      'isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de Claude Code. {name} peut l’avoir écrit ou modifié.',
+      'isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de {harness}. {name} peut l’avoir écrit ou modifié.',
     isolaConfig: 'Configuration isola (.isola.toml)',
-    recipeNotice: 'Ces commandes ont été écrites par {name}. Elles tournent dans ton shell, hors du mode de permission de Claude Code.',
+    recipeNotice: 'Ces commandes ont été écrites par {name}. Elles tournent dans ton shell, hors du mode de permission de {harness}.',
     prepare: 'Préparation',
     launch: 'Lancement',
     root: 'la racine du worktree',

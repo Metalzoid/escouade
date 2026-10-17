@@ -34,7 +34,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
-import { agent, fakeBackend, project, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../test/ipc';
 import { openTerminal } from '../lib/terminals';
 import Conversation from './Conversation.svelte';
 import ContextMenu from './ContextMenu.svelte';
@@ -1714,6 +1714,24 @@ describe('Conversation in English', () => {
     first.unmount();
     setup({ status: 'idle' }, many(81));
     expect(await screen.findByRole('button', { name: 'Show the previous message' })).toBeInTheDocument();
+  });
+
+  it('names the agent as its harness does: Claude for Claude Code, another one its own', async () => {
+    setLang('en');
+    const first = setup({ status: 'idle', engine: 'claude' });
+    expect(await screen.findByText(/^Describe the task to give to Claude. The agent works in/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Describe the task to give to Claude…')).toBeInTheDocument();
+    first.unmount();
+    const second = setup({ status: 'idle', engine: 'codex' });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    expect(await screen.findByText(/^Describe the task to give to Nu. The agent works in/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Describe the task to give to Nu…')).toBeInTheDocument();
+    second.unmount();
+    setup({ status: 'running', engine: 'codex' });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    await tick();
+    expect(screen.getByText('Nu is working…')).toBeInTheDocument();
+    expect(screen.queryByText('Claude is working…')).not.toBeInTheDocument();
   });
 
   it('follows a change of language while it is open', async () => {

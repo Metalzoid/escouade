@@ -1,6 +1,7 @@
 {
   "id": "claude",
   "name": "Claude Code",
+  "speaker": "Claude",
   "tested": {
     "oldest": "2.1.283",
     "newest": "2.1.301"

@@ -11,13 +11,13 @@ export default defineZone('composer', {
   },
   mode: {
     auto: { label: 'Auto', title: 'A classifier approves safe actions and asks about the rest' },
-    default: { label: 'Ask', title: 'Claude asks for your approval before each sensitive action' },
-    plan: { label: 'Plan', title: 'Claude analyzes and proposes a plan without changing anything' },
+    default: { label: 'Ask', title: '{engine} asks for your approval before each sensitive action' },
+    plan: { label: 'Plan', title: '{engine} analyzes and proposes a plan without changing anything' },
     acceptEdits: { label: 'Accept edits', title: 'File edits are accepted without asking' },
     bypassPermissions: { label: 'Bypass', title: 'No permission requests (only for safe environments)' },
     autoUnavailableDetail: 'unavailable with Haiku',
     autoUnavailableTitle: 'Auto mode isn’t available with Haiku',
-    bypassToast: 'Bypass mode: Claude will act without any permission request.',
+    bypassToast: 'Bypass mode: {engine} will act without any permission request.',
   },
 
   attachments: {
@@ -38,10 +38,10 @@ export default defineZone('composer', {
   },
 
   placeholder: {
-    denyPermission: 'Tell Claude what to do instead (this denies the request)…',
+    denyPermission: 'Tell {engine} what to do instead (this denies the request)…',
     answerQuestion: 'Answer the question or write a free answer…',
     sendTo: 'Send a message to {name}…',
-    describe: 'Describe the task to give to Claude…',
+    describe: 'Describe the task to give to {engine}…',
   },
 
   bar: {
@@ -55,15 +55,15 @@ export default defineZone('composer', {
 
   send: {
     label: 'Send',
-    titleQueued: 'Claude takes it into account at its next step · {enter} to send',
+    titleQueued: '{engine} takes it into account at its next step · {enter} to send',
     title: '{enter} to send · {newline} for a new line',
     alreadyWaiting: 'A message is already waiting for the setup to finish.',
     filesKept: 'Attached files don’t go with an answer: they stay ready for your next message.',
   },
 
   permission: {
-    title: 'Claude is asking for permission',
-    titlePlan: 'Claude proposes a plan',
+    title: '{engine} is asking for permission',
+    titlePlan: '{engine} proposes a plan',
     keepPlanningMessage: 'Keep planning: the plan doesn’t work for me yet.',
     allow: 'Allow',
     approvePlan: 'Approve the plan',
@@ -81,7 +81,7 @@ export default defineZone('composer', {
   },
 
   question: {
-    waiting: 'Claude is waiting for your answer',
+    waiting: '{engine} is waiting for your answer',
     orWrite: 'or answer freely in the field below',
     submit: 'Submit',
     unanswered: 'Question left unanswered',

@@ -22,6 +22,8 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | Jira, Trello, GitHub, GitHub Issues | Jira, Trello, GitHub, GitHub Issues |
 | isola | isola |
 
+Un texte qui parle d’un agent le nomme comme son harness (ESC-31) : `{engine}`, le nom de ses agents (« {engine} attend ta réponse », `speakerOf` de `lib/engines.ts` : « Claude » pour Claude Code), ou `{harness}`, le nom du harness lui-même (« la session {harness} », `engineName`). Un texte qui vaut pour tous les agents dit « les agents » (« Langue des textes rédigés par les agents »). « Claude » écrit tel quel ne reste que pour Claude lui-même : comptes Claude, Remote Control, vue Claude Code et ce qui n’existe que chez lui (tâches de fond, sous-agents).
+
 ## Mots de l’app
 
 | Français | Anglais | Note |
@@ -130,7 +132,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 |---|---|---|
 | Application | Application | onglet des réglages |
 | Langue de l’interface | Interface language | |
-| Langue des textes rédigés par Claude | Language of texts written by Claude | |
+| Langue des textes rédigés par les agents | Language of texts written by the agents | |
 | Système (Français) | System (French) | la langue du système, nommée dans celle de l’interface |
 | Comme l’interface | Same as the interface | |
 | Français, English | Français, English | une langue proposée est écrite dans elle-même (`LANG_NAMES`) |
@@ -179,7 +181,7 @@ Chaque tâche ajoute ses mots **dans sa section** (en bas), pour que les tâches
 | introuvable | not found | un shell, un exécutable |
 | Sous-dossier | Subfolder | le dossier, dans le worktree ou le projet, où une commande tourne |
 | Me prévenir pour / Canaux | Notify me about / Channels | notifications |
-| Processus (inactifs) | Processes (idle) | « Arrêter les processus Claude inactifs » → “Stop idle Claude processes” |
+| Processus (inactifs) | Processes (idle) | « Arrêter les processus des agents inactifs » → “Stop idle agent processes” |
 | Ignorer la vérification des certificats TLS | Skip TLS certificate verification | |
 | Exclusions (du proxy) | Exclusions | la liste NO_PROXY |
 | Données locales | Local data | |

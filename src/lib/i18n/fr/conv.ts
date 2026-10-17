@@ -64,7 +64,7 @@ export default {
   empty: {
     title: 'Agent prêt',
     /** `{cwd}`: the folder the agent works in, in code style. */
-    hint: "Décris la tâche à confier à Claude. L'agent travaille dans {cwd}.",
+    hint: "Décris la tâche à confier à {engine}. L'agent travaille dans {cwd}.",
     /** `{engine}`: the agent's harness. */
     engineMissing: '{engine} est introuvable sur ce poste : installe-le ou indique son chemin dans Réglages › Harness (⚙).',
   },
@@ -73,10 +73,10 @@ export default {
     show: { one: 'Afficher le précédent', other: 'Afficher les {n} précédents' },
     drawn: { one: '{n} message précédent affiché', other: '{n} messages précédents affichés' },
   },
-  working: 'Claude travaille…',
+  working: '{engine} travaille…',
   newMessages: 'Nouveaux messages',
   archived: { text: 'Agent archivé.', restore: 'Restaurer' },
-  stopped: "L'agent s'est arrêté. Envoie un message pour relancer Claude sur la même session.",
+  stopped: "L'agent s'est arrêté. Envoie un message pour relancer {engine} sur la même session.",
 
   /** « Rechercher dans les conversations » (Ctrl+K). */
   search: {
@@ -106,7 +106,7 @@ export default {
     images: { one: '{count} image', other: '{count} images' },
     waiting: 'En attente de la préparation…',
     queued: 'transmis pendant le tour',
-    queuedHint: 'Claude en tient compte dès sa prochaine étape',
+    queuedHint: '{engine} en tient compte dès sa prochaine étape',
     remote: 'depuis claude.ai',
     remoteHint: 'Envoyé depuis claude.ai ou l’app Claude (remote control)',
   },

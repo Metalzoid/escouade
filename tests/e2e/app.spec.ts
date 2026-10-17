@@ -153,12 +153,12 @@ test('a PDF attached to a message reaches Claude as a document', async ({ app })
   ]);
 });
 
-test('the status bar counts the running Claude processes, with their memory and CPU', async ({ app }) => {
+test('the status bar counts the running agent processes, with their memory and CPU', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   // The first agent's process starts with the project.
-  const procs = page.locator('footer .it', { hasText: 'Claude ·' });
-  await expect(procs).toHaveText(/^1 Claude · \d+ Mo · \d+ % CPU$/);
+  const procs = page.locator('footer .it', { hasText: /agents? ·/ });
+  await expect(procs).toHaveText(/^1 agent · \d+ Mo · \d+ % CPU$/);
   // Measured: the fake CLI is cmd.exe running node.
   const memory = Number((await procs.textContent())!.match(/(\d+) Mo/)![1]);
   expect(memory).toBeGreaterThan(10);
@@ -170,13 +170,13 @@ test('the tooltip of the resources is the app’s: its look, one agent a line, a
 }) => {
   const { page } = app;
   await addProject(page, app.repo);
-  const procs = page.locator('footer .it', { hasText: 'Claude ·' });
-  await expect(procs).toHaveText(/^1 Claude/);
+  const procs = page.locator('footer .it', { hasText: /agents? ·/ });
+  await expect(procs).toHaveText(/^1 agent ·/);
   // No `title` left for the system to show its own.
   await expect(procs).not.toHaveAttribute('title');
   await procs.hover();
   const tip = page.getByRole('tooltip');
-  await expect(tip).toHaveText(/^Processus Claude en cours[^\n]*\n[^\n]+ : \d+ Mo · \d+ %$/);
+  await expect(tip).toHaveText(/^Processus des agents en cours[^\n]*\n[^\n]+ : \d+ Mo · \d+ %$/);
   const look = await tip.evaluate((el) => {
     const probe = document.createElement('div');
     probe.style.background = 'var(--elev)';

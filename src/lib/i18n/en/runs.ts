@@ -107,9 +107,9 @@ export default defineZone('runs', {
     changed: 'The recipe just changed: read it again before running.',
     /** `{name}`: the agent. */
     isolaNotice:
-      'isola runs the commands in this file in your shell, outside Claude Code’s permission mode. {name} may have written or edited it.',
+      'isola runs the commands in this file in your shell, outside {harness}’s permission mode. {name} may have written or edited it.',
     isolaConfig: 'isola configuration (.isola.toml)',
-    recipeNotice: 'These commands were written by {name}. They run in your shell, outside Claude Code’s permission mode.',
+    recipeNotice: 'These commands were written by {name}. They run in your shell, outside {harness}’s permission mode.',
     prepare: 'Setup',
     launch: 'Launch',
     root: 'the worktree root',

@@ -10,7 +10,7 @@ export default defineZone('shell', {
     newAgent: 'New agent',
   },
   welcome: {
-    intro: 'Add a project to run Claude Code agents, follow their questions, and open terminals.',
+    intro: 'Add a project to run agents, follow their questions, and open terminals.',
     /** `{command}`: the command that installs it, in code style. */
     noEngine: 'No harness found',
     noEngineDesc: 'Install one of them, then set its path in Settings › Harness if it isn’t on the PATH:',
@@ -101,7 +101,7 @@ export default defineZone('shell', {
   },
   /** What an agent has spent. */
   spend: {
-    estimateHint: 'Estimate (public prices) while Claude works; exact cost at the end of the turn',
+    estimateHint: 'Estimate (public prices) during the turn; exact cost at its end',
     /** `{pct}`: written as a percentage; `{used}` and `{size}`: counts of tokens. */
     context: 'Context: {pct} of the model’s window ({used} tokens of {size})',
   },
@@ -112,9 +112,9 @@ export default defineZone('shell', {
     done: { one: '{count} done', other: '{count} done' },
     /** `{key}`: the shortcut. */
     nextWaiting: 'Go to the next agent that is waiting or needs a look ({key})',
-    procsTitle: 'Running Claude processes (with the tools and MCP servers they start)',
+    procsTitle: 'Running agent processes (with the tools and MCP servers they start)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
-    procs: '{instances} Claude · {memory} · {cpu} CPU',
+    procs: { one: '{count} agent · {memory} · {cpu} CPU', other: '{count} agents · {memory} · {cpu} CPU' },
     procRow: '{name}: {memory} · {cpu}',
     today: 'Today',
     /** The branch against its remote. */

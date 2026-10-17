@@ -103,7 +103,7 @@ Quand tu lies une source, Escouade préremplit les menus d’après le nom des s
 
 L’interrupteur « Commenter » d’une colonne ajoute un commentaire sur le ticket externe quand un ticket arrive dans la colonne. Il vaut pour toutes les sources du projet. Par défaut, il est activé pour « À tester » et « Terminé », désactivé pour « À faire » et « En cours ».
 
-Le commentaire est écrit dans la langue de « Langue des textes rédigés par Claude » (onglet [« Application »](settings-application)) :
+Le commentaire est écrit dans la langue de « Langue des textes rédigés par les agents » (onglet [« Application »](settings-application)) :
 
 | Colonne | Commentaire |
 |---|---|

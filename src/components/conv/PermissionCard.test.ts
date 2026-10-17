@@ -34,6 +34,17 @@ describe('PermissionCard', () => {
     expect(backend.called('answer_permission')[0].args).toEqual({ id: 'a1', requestId: 'req-2', decision: 'allow', message: null });
   });
 
+  it('names the agent as its harness does, in its title', () => {
+    fakeBackend();
+    resetApp({ agents: [agent({ id: 'a1', engine: 'claude' }), agent({ id: 'a2', engine: 'codex' })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const { unmount } = render(PermissionCard, { item: item(), agentId: 'a1', pending: true, cwd: 'C:\code' });
+    expect(screen.getByText('Claude demande une autorisation')).toBeInTheDocument();
+    unmount();
+    render(PermissionCard, { item: item(), agentId: 'a2', pending: true, cwd: 'C:\code' });
+    expect(screen.getByText('Nu demande une autorisation')).toBeInTheDocument();
+  });
+
   it('offers "always" only when Claude suggests a rule', async () => {
     const backend = fakeBackend();
     const { unmount } = render(PermissionCard, { item: item(), agentId: 'a1', pending: true, cwd: 'C:\\code' });

@@ -90,12 +90,13 @@ fn permission_body_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> Strin
     framed(&clip(&target, room))
 }
 
-/// The text of the question Claude asks (the first, when it asks several), in 120 characters.
-pub fn question_body(input: &Value) -> String {
-    question_body_in(i18n::ui(), input)
+/// The text of the question an agent asks (the first, when it asks several), in 120 characters;
+/// without one, that it waits, named `speaker` as its harness names its agents (`Claude`).
+pub fn question_body(speaker: &str, input: &Value) -> String {
+    question_body_in(i18n::ui(), speaker, input)
 }
 
-fn question_body_in(lang: Lang, input: &Value) -> String {
+fn question_body_in(lang: Lang, speaker: &str, input: &Value) -> String {
     let text = input["questions"][0]["question"]
         .as_str()
         .map(|q| {
@@ -109,8 +110,8 @@ fn question_body_in(lang: Lang, input: &Value) -> String {
     if text.is_empty() {
         tr_in!(
             lang,
-            "Claude attend ta réponse",
-            "Claude is waiting for your answer"
+            "{speaker} attend ta réponse",
+            "{speaker} is waiting for your answer"
         )
     } else {
         clip(&text, MAX_BODY)
@@ -638,10 +639,11 @@ mod tests {
             { "question": "Quelle base de données ?", "header": "Base", "options": [] },
             { "question": "Et le cache ?", "options": [] },
         ] });
-        assert_eq!(question_body(&input), "Quelle base de données ?");
+        assert_eq!(question_body("Claude", &input), "Quelle base de données ?");
         // On several lines, or dressed in Markdown: one plain line.
         assert_eq!(
             question_body(
+                "Claude",
                 &json!({ "questions": [{ "question": "Garder **`auth.ts`** ?\nOu le refaire ?" }] })
             ),
             "Garder auth.ts ? Ou le refaire ?"
@@ -651,7 +653,7 @@ mod tests {
     #[test]
     fn a_long_question_is_cut_to_120_characters() {
         let long = format!("Que faire de {} ?", "tous ces fichiers ".repeat(20));
-        let body = question_body(&json!({ "questions": [{ "question": long }] }));
+        let body = question_body("Claude", &json!({ "questions": [{ "question": long }] }));
         assert_eq!(body.chars().count(), 120);
         assert!(body.starts_with("Que faire de tous ces fichiers"), "{body}");
         assert!(body.ends_with('…'), "{body}");
@@ -660,10 +662,13 @@ mod tests {
     #[test]
     fn a_question_without_text_keeps_the_old_words() {
         assert_eq!(
-            question_body(&json!({ "questions": [] })),
+            question_body("Claude", &json!({ "questions": [] })),
             "Claude attend ta réponse"
         );
-        assert_eq!(question_body(&json!({})), "Claude attend ta réponse");
+        assert_eq!(
+            question_body("Claude", &json!({})),
+            "Claude attend ta réponse"
+        );
     }
 
     #[test]
@@ -725,7 +730,10 @@ mod tests {
             "Reste ouvert et gras"
         );
         assert_eq!(
-            question_body(&json!({ "questions": [{ "question": "Garder `*.tmp` ?" }] })),
+            question_body(
+                "Claude",
+                &json!({ "questions": [{ "question": "Garder `*.tmp` ?" }] })
+            ),
             "Garder *.tmp ?"
         );
     }
@@ -801,8 +809,17 @@ mod tests {
             "{long}"
         );
         assert_eq!(
-            question_body_in(En, &json!({})),
+            question_body_in(En, "Claude", &json!({})),
             "Claude is waiting for your answer"
+        );
+        // Another harness: its agents' name.
+        assert_eq!(
+            question_body_in(En, "Codex", &json!({})),
+            "Codex is waiting for your answer"
+        );
+        assert_eq!(
+            question_body_in(Lang::Fr, "Codex", &json!({})),
+            "Codex attend ta réponse"
         );
         assert_eq!(done_body_in(En, "---"), "Task done");
         assert_eq!(error_body_in(En, "API Error: 500"), "Error: API Error: 500");

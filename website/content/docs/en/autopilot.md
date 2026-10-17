@@ -44,7 +44,7 @@ When a ticket starts, Escouade:
 4. waits for the worktree setup: copied `.env*` files, the project’s setup commands (the card says “Setting up the worktree · …”). If a command fails, the agent is told with its first message, so that it can sort it out;
 5. sends the agent its first message: the key and title, the description, the numbered criteria, and the instruction to work until it meets them, then end with the report.
 
-This message, like the following ones, is written in “Language of texts written by Claude” (Settings › Application, see [Application settings](settings-application)).
+This message, like the following ones, is written in “Language of texts written by the agents” (Settings › Application, see [Application settings](settings-application)).
 
 On every start, Escouade also adds to the agent’s system prompt a protocol that outlives compaction and resumes: work alone, check each criterion yourself (tests, runs) before declaring it met, don’t commit the files copied from the project, ask questions with the question tool when a decision is missing, and end every answer with the criteria report. Escouade also reserves a block of ports for the ticket, and the protocol asks the agent how to launch its work to test it (see [Reviewing and approving a ticket](testing)).
 

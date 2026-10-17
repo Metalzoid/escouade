@@ -1,6 +1,7 @@
 // Model / effort / permission-mode catalogs used by the composer and the settings.
 
 import { t } from './i18n';
+import { speakerOf } from './engines';
 import type { ModelInfo } from './types';
 
 /** The aliases offered: Claude Code runs the latest model of the family it knows. */
@@ -52,6 +53,21 @@ export const EFFORTS = [
   ),
 ];
 
+/**
+ * What a mode means, its agents named `engine` as their harness names them (« Claude demande ton accord… »). The menu
+ * of the settings names the default harness's.
+ */
+export function modeTitle(mode: string, engine: string): string {
+  switch (mode) {
+    case 'default':
+      return t('composer.mode.default.title', { engine });
+    case 'plan':
+      return t('composer.mode.plan.title', { engine });
+    default:
+      return MODES.find((m) => m.value === mode)?.title ?? '';
+  }
+}
+
 export const MODES = [
   choice(
     'auto',
@@ -61,12 +77,12 @@ export const MODES = [
   choice(
     'default',
     () => t('composer.mode.default.label'),
-    () => t('composer.mode.default.title'),
+    () => modeTitle('default', speakerOf(null)),
   ),
   choice(
     'plan',
     () => t('composer.mode.plan.label'),
-    () => t('composer.mode.plan.title'),
+    () => modeTitle('plan', speakerOf(null)),
   ),
   choice(
     'acceptEdits',

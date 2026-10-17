@@ -390,7 +390,10 @@ impl AgentRt {
                 self.tui_wait(body, fx);
             }
             "PreToolUse" if tool == "AskUserQuestion" => {
-                let body = notify::question_body(&h["tool_input"]);
+                let body = notify::question_body(
+                    crate::engine::of(&self.meta).speaker(),
+                    &h["tool_input"],
+                );
                 self.tui_wait(body, fx);
             }
             "Notification" if h["notification_type"] == "elicitation_dialog" => {

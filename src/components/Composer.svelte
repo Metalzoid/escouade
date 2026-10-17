@@ -23,8 +23,8 @@
   import { basename, dirname } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
-  import { EFFORTS, MODES, modelOptions } from '../lib/models';
-  import { can, capsOf, effortsOf, modelsOf, modelTakes, modesOf } from '../lib/engines';
+  import { EFFORTS, MODES, modeTitle, modelOptions } from '../lib/models';
+  import { can, capsOf, effortsOf, modelsOf, modelTakes, modesOf, speakerOf } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
@@ -89,7 +89,7 @@
   const modeOptions = $derived(
     modesOf(agent, MODES).map((md) => {
       const unavailable = md.value === 'auto' && !modelTakes(agent, agent.model, 'auto');
-      const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? md.title;
+      const meaning = caps?.modes.find((m) => m.id === md.value)?.meaning ?? modeTitle(md.value, speakerOf(agent.engine));
       return {
         value: md.value,
         label: md.label,
@@ -126,11 +126,11 @@
   const placeholder = $derived(
     pendingItem
       ? pendingItem.kind === 'permission'
-        ? t('composer.placeholder.denyPermission')
+        ? t('composer.placeholder.denyPermission', { engine: speakerOf(agent.engine) })
         : t('composer.placeholder.answerQuestion')
       : conv.items.length
         ? t('composer.placeholder.sendTo', { name: agent.name })
-        : t('composer.placeholder.describe'),
+        : t('composer.placeholder.describe', { engine: speakerOf(agent.engine) }),
   );
 
   // Reused for another agent (the id itself changed): switch drafts.
@@ -501,7 +501,7 @@
   function setOption(o: { model?: string; effort?: string; mode?: string }) {
     const a = app.agents[agent.id];
     if (a) Object.assign(a, o);
-    if (o.mode === 'bypassPermissions') app.toast(t('composer.mode.bypassToast'), 'info');
+    if (o.mode === 'bypassPermissions') app.toast(t('composer.mode.bypassToast', { engine: speakerOf(agent.engine) }), 'info');
     app.run(api.setAgentOptions(agent.id, o));
   }
 </script>
@@ -660,7 +660,7 @@
       <button
         class="btn primary"
         use:tip={busy && !pendingItem
-          ? t('composer.send.titleQueued', { enter: keyLabel('Enter') })
+          ? t('composer.send.titleQueued', { engine: speakerOf(agent.engine), enter: keyLabel('Enter') })
           : t('composer.send.title', { enter: keyLabel('Enter'), newline: keyLabel('Shift+Enter') })}
         disabled={sending || reading > 0 || copying || (!text.trim() && !files.length)}
         onclick={send}

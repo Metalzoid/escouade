@@ -5,7 +5,7 @@
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
   import { canSwitchView, copyRemoteLink, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
-  import { can, canFork, choosesEngine, engineOptions, showsCost } from '../lib/engines';
+  import { can, canFork, choosesEngine, engineName, engineOptions, showsCost, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { runIn } from '../lib/launch-actions';
   import { ticketTag } from '../lib/board';
@@ -214,7 +214,7 @@
       kind: 'confirm',
       title: t('nav.sidebar.deleteTitle', { name: a.name }),
       body:
-        t('nav.sidebar.deleteBody') +
+        t('nav.sidebar.deleteBody', { engine: speakerOf(a.engine), harness: engineName(a.engine) }) +
         // The files of its worktree, open in the editor: an agent without one edits the project's, which stay.
         lossNotice(buffers.unsavedIn(a.projectId, a.id)),
       confirm: t('common.delete'),

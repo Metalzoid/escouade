@@ -258,6 +258,8 @@ pub struct EngineInfo {
 pub struct EngineDecl {
     pub id: crate::model::EngineId,
     pub name: &'static str,
+    /// Its agents' name, as the texts speak of them (« Claude attend ta réponse »).
+    pub speaker: &'static str,
     pub tested: Tested,
     pub caps: EngineCaps,
     /// How to install it (« Aucun harness trouvé »).
@@ -274,6 +276,7 @@ pub fn declared() -> Vec<EngineDecl> {
         .map(|e| EngineDecl {
             id: e.id(),
             name: e.name(),
+            speaker: e.speaker(),
             tested: e.tested(),
             caps: e.caps(),
             install: e.install(),

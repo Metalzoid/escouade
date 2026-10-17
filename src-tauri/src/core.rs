@@ -42,15 +42,17 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Runtime, Wry};
 use tokio::sync::mpsc;
 
-/// The Claude process exited while starting; the exit handler recorded why in the conversation.
+/// The process of an agent (of the harness named) exited while starting; the exit handler recorded
+/// why in the conversation.
 #[derive(Debug)]
-pub struct StartupFailure;
+pub struct StartupFailure(pub &'static str);
 
 impl std::fmt::Display for StartupFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = self.0;
         f.write_str(&tr!(
-            "Claude Code n'a pas pu démarrer : voir le détail dans la conversation.",
-            "Claude Code couldn’t start: see the details in the conversation."
+            "{name} n'a pas pu démarrer : voir le détail dans la conversation.",
+            "{name} couldn’t start: see the details in the conversation."
         ))
     }
 }
@@ -897,20 +899,6 @@ fn handed_back(items: &[Value]) -> Option<String> {
         .map(str::trim)
         .find(|m| !m.is_empty())
         .map(str::to_string)
-}
-
-/// What the agent is told for a message to its subagent `title` (its task `task`, the `agentId`
-/// Claude Code gave it): to pass `text` on with `SendMessage`, as it is.
-pub fn subagent_message(lang: i18n::Lang, title: &str, task: &str, text: &str) -> String {
-    tr_in!(
-        lang,
-        "Transmets ce message au sous-agent « {title} » (agentId {task}) avec l’outil SendMessage, tel quel, puis reprends ce que tu faisais :
-
-{text}",
-        "Pass this message on to the subagent “{title}” (agentId {task}) with the SendMessage tool, as it is, then go back to what you were doing:
-
-{text}"
-    )
 }
 
 /// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
@@ -2478,16 +2466,17 @@ impl<R: Runtime> Core<R> {
         // session.
         self.after_quit(id).await;
         let settings = self.settings.read().clone();
-        // Its account's Claude Code, where its session is kept.
+        // Its account's harness, where its session is kept.
+        let harness = engine::of(&h.lock().meta);
         let account = accounts::get(&settings, &h.lock().meta.account);
         let program = accounts::program(&account, &settings).ok_or_else(|| {
+            let name = harness.name();
             anyhow!(tr!(
-                "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "Claude Code not found. Install it or give its path in the settings."
+                "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
+                "{name} not found. Install it or give its path in the settings."
             ))
         })?;
         // A version older than the tested ones is refused, with its reason.
-        let harness = engine::of(&h.lock().meta);
         engine::registry::check(harness, &program).await?;
         let (mut spawn, gen, engine) = {
             let mut rt = h.lock();
@@ -2589,7 +2578,7 @@ impl<R: Runtime> Core<R> {
             }
             Err(_) if !proc.is_alive() => {
                 log::warn!("agent {id}: {} exited while starting", engine.name());
-                return Err(StartupFailure.into());
+                return Err(StartupFailure(engine.name()).into());
             }
             Err(e) => log::warn!(
                 "agent {id}: initialize failed after {} ms: {e}",
@@ -3468,9 +3457,10 @@ impl<R: Runtime> Core<R> {
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
         }
+        let name = engine::of(&h.lock().meta).name();
         bail!(tr!(
-            "Claude Code s'est arrêté pendant l'envoi du message : voir le détail dans la conversation.",
-            "Claude Code stopped while the message was being sent: see the details in the conversation."
+            "{name} s'est arrêté pendant l'envoi du message : voir le détail dans la conversation.",
+            "{name} stopped while the message was being sent: see the details in the conversation."
         ))
     }
 
@@ -3574,7 +3564,20 @@ impl<R: Runtime> Core<R> {
             Some(origin) => from_origin(i18n::claude(), origin, text),
             None => text.to_string(),
         };
-        let message = subagent_message(i18n::claude(), &title, &task, &words);
+        let harness = self
+            .agents
+            .read()
+            .get(id)
+            .map(|h| engine::of(&h.lock().meta))
+            .unwrap_or_else(engine::default);
+        let message = harness
+            .subagent_relay(i18n::claude(), &title, &task, &words)
+            .ok_or_else(|| {
+                anyhow!(tr!(
+                    "Son harness ne permet pas d’écrire à un sous-agent.",
+                    "Its harness lets no one write to a subagent."
+                ))
+            })?;
         // Not the user's task: it never names the agent.
         self.send_by_app(id, message).await
     }

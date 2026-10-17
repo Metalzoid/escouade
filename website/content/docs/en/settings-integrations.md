@@ -103,7 +103,7 @@ When you link a source, Escouade pre-fills the menus from the statuses’ names:
 
 A column’s “Comment” switch adds a comment on the external ticket when a ticket reaches the column. It applies to all of the project’s sources. By default it’s on for “To review” and “Done”, and off for “To do” and “In progress”.
 
-The comment is written in the language of “Language of texts written by Claude” (in the [“Application”](settings-application) tab):
+The comment is written in the language of “Language of texts written by the agents” (in the [“Application”](settings-application) tab):
 
 | Column | Comment |
 |---|---|

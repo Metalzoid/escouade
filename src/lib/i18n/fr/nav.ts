@@ -82,7 +82,7 @@ export default {
     archiveConfirm: 'Archiver',
     deleteTitle: "Supprimer l'agent « {name} » ?",
     deleteBody:
-      'Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque).',
+      'Le processus de {engine} est arrêté et la conversation est retirée de l’application (la session {harness} reste sur le disque).',
     deleteWorktree: 'Supprimer aussi le worktree et la branche {branch}',
   },
 

@@ -10,7 +10,7 @@ export default {
     newAgent: 'Nouvel agent',
   },
   welcome: {
-    intro: 'Ajoute un projet pour y lancer des agents Claude Code, suivre leurs questions et ouvrir des terminaux.',
+    intro: 'Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux.',
     /** No harness found: the first start lists each one with the command that installs it. */
     noEngine: 'Aucun harness trouvé',
     noEngineDesc: 'Installe l’un d’eux, puis indique son chemin dans Réglages › Harness s’il n’est pas dans le PATH :',
@@ -103,7 +103,7 @@ export default {
   },
   /** What an agent has spent. */
   spend: {
-    estimateHint: 'Estimation (tarifs publics) pendant que Claude travaille ; coût exact à la fin du tour',
+    estimateHint: 'Estimation (tarifs publics) pendant le tour ; coût exact à sa fin',
     /** `{pct}`: written as a percentage; `{used}` and `{size}`: counts of tokens. */
     context: 'Contexte : {pct} de la fenêtre du modèle ({used} tokens sur {size})',
   },
@@ -114,9 +114,9 @@ export default {
     done: { one: '{count} terminé', other: '{count} terminés' },
     /** `{key}`: the shortcut. */
     nextWaiting: 'Aller au prochain agent en attente ou à voir ({key})',
-    procsTitle: 'Processus Claude en cours (avec les outils et serveurs MCP qu’ils lancent)',
+    procsTitle: 'Processus des agents en cours (avec les outils et serveurs MCP qu’ils lancent)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
-    procs: '{instances} Claude · {memory} · {cpu} CPU',
+    procs: { one: '{count} agent · {memory} · {cpu} CPU', other: '{count} agents · {memory} · {cpu} CPU' },
     /** One line of the tooltip: `{name}`: the agent; `{memory}` and `{cpu}`: the amounts. */
     procRow: '{name} : {memory} · {cpu}',
     today: "Aujourd'hui",

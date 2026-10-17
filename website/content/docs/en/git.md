@@ -70,7 +70,7 @@ This is the default behavior. “Commit…” sends the agent a message: it must
 
 “Commit all…” asks the selected agent to commit all the repository’s current changes, grouped into coherent commits. An agent must therefore be selected.
 
-The message is sent in the language set by “Language of texts written by Claude” (see [the application settings](settings-application)).
+The message is sent in the language set by “Language of texts written by the agents” (see [the application settings](settings-application)).
 
 ### Committing yourself, with a suggested message
 
@@ -88,7 +88,7 @@ What to know:
 - If Haiku suggests nothing, the window says “No suggestion: …” and you write the message.
 - “This agent” commits the agent’s worktree, or the files it changed in the project folder. “Whole project” commits the project folder alone: an agent’s worktree is committed from “This agent”.
 - The files the project copies into its worktrees (`.env*` by default) are never committed. The window says so (“Never committed: .env (copied into the worktrees).”) and their contents are not shown to Haiku.
-- By default, the suggested message follows the language of the repository’s latest commits. If you set “Language of texts written by Claude”, that language is requested.
+- By default, the suggested message follows the language of the repository’s latest commits. If you set “Language of texts written by the agents”, that language is requested.
 - Closing the window with a message you wrote or edited asks for confirmation (“Discard the message?”).
 
 ## History and the git graph

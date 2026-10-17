@@ -11,7 +11,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   const footer = page.locator('footer');
 
   // The welcome screen, before any project.
-  await expect(page.getByText(/^Add a project to run Claude Code agents, follow their questions, and open terminals\./)).toBeVisible();
+  await expect(page.getByText(/^Add a project to run agents, follow their questions, and open terminals\./)).toBeVisible();
 
   // A project with one agent, which answers.
   await addProject(page, app.repo, { lang: 'en' });
@@ -35,7 +35,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByRole('meter', { name: '7-day quota' })).toBeVisible();
   // The percentage is in a tooltip over the bar. The processes' item comes with the first sample of the resources (every
   // 2 s) and pushes the quota 190 px to the right: hovered before it, the pointer would rest on it, and show its tooltip.
-  await expect(footer).toContainText('1 Claude ·');
+  await expect(footer).toContainText('1 agent ·');
   await quota.hover();
   await expect(page.getByRole('tooltip')).toContainText(/^12%/);
 
@@ -46,7 +46,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(dialog.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
   const ui = dialog.getByRole('group', { name: 'Interface language' });
   await expect(ui.getByRole('button', { name: 'English', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog.getByRole('group', { name: 'Language of texts written by Claude' })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Language of texts written by the agents' })).toBeVisible();
 
   // « Français »: saved, and the same words are French at once.
   await ui.getByRole('button', { name: 'Français', exact: true }).click();

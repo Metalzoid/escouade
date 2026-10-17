@@ -65,7 +65,7 @@ Les deux choix prennent effet dès l’enregistrement, sans redémarrer : la fen
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Langue de l’interface » | La langue de la fenêtre, des menus de l’app et des messages qu’Escouade affiche. | « Système » |
-| « Langue des textes rédigés par Claude » | La langue de ce que Claude écrit pour toi : commits, pull requests, commentaires, consignes aux agents. | « Comme l’interface (par défaut) » |
+| « Langue des textes rédigés par les agents » | La langue de ce que Claude écrit pour toi : commits, pull requests, commentaires, consignes aux agents. | « Comme l’interface (par défaut) » |
 
 ### Langue de l’interface
 
@@ -77,7 +77,7 @@ Trois choix, chacun écrit dans sa propre langue pour que tu retrouves la tienne
 
 Le changement touche aussi les menus natifs de l’app et l’info-bulle de l’icône de la barre des tâches.
 
-### Langue des textes rédigés par Claude
+### Langue des textes rédigés par les agents
 
 Ce choix décide dans quelle langue Escouade demande à Claude d’écrire ce qui sort de l’app :
 

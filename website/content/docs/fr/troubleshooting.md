@@ -127,7 +127,7 @@ Pour ne pas arriver à la limite, le [pilote auto](autopilot) se met en pause av
 
 **Cause.** Le processus Claude Code de l’agent s’est terminé de lui-même. Le message qu’il a laissé dit le plus souvent pourquoi (connexion, proxy, version…).
 
-**Solution.** Envoie un message : Escouade relance Claude sur la même session. Un processus arrêté exprès n’est pas une erreur : Escouade arrête les processus inactifs après un délai (Réglages › Harness, « Arrêter les processus Claude inactifs après », 30 minutes par défaut, 0 pour jamais) et les relance à la prochaine action.
+**Solution.** Envoie un message : Escouade relance Claude sur la même session. Un processus arrêté exprès n’est pas une erreur : Escouade arrête les processus inactifs après un délai (Réglages › Harness, « Arrêter les processus des agents inactifs après », 30 minutes par défaut, 0 pour jamais) et les relance à la prochaine action.
 
 ### Session Claude introuvable
 
