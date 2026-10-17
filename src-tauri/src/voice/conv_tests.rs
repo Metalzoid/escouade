@@ -411,7 +411,8 @@ fn a_voice_or_a_language_changed_during_the_conversation_is_loaded_and_taken() {
     hear(h, 0.3, 0.0);
     wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
     assert_eq!(c.engine.loads.lock().len(), 2, "read in the voice loaded ahead");
-    hear(h, 0.3, 0.0);
+    // Longer than the tail after a reading, which hears nothing: the room's noise is learnt from what comes after.
+    hear(h, 0.6, 0.0);
     hear(h, 1.0, 0.3);
     hear(h, 1.0, 0.0);
     wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
