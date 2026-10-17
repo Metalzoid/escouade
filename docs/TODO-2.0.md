@@ -24,9 +24,12 @@ L'implémentation a ensuite été repoussée à la 2.0, avec ce fichier et les a
   - plan qui se plie ;
   - Lancement › Front, Terminaux › PowerShell ;
   - Kanban › DEM-4 › Tester, puis Lancer ;
-  - Éditeur, Vue d'ensemble, Stats, réglages (Ctrl+,).
-- **Chaque écran par son adresse** : `index.html#board`, `#plan-closed`, `#git`, `#history`, `#terminal`, `#run`, `#test`, `#test-run`, `#editor`, `#overview`, `#stats`, `#settings`, `#settings-<onglet>` (`app`, `claude`, `accounts`, `notifications`, `projects`, `board`, `integrations`, `terminals`, `network`, `about`).
-- **Les captures** : `design/app-redesign/*.png`, refaites par `node design/app-redesign/render.mjs [nom…]`. Elles sont prises à 1440×900, la taille par défaut de l'app ; celles en `-small` à 1028×779, la fenêtre de la CI.
+  - Éditeur, Vue d'ensemble, Stats, réglages (Ctrl+,) ;
+  - depuis le lot 0 : la flèche de « Nouvel agent », le mode du champ, les jauges de la barre d'état, « … » de l'en-tête (ou clic droit sur une carte), le micro (ou Ctrl+Espace), la conversation, « + » d'une colonne du Kanban, Réglages › Comptes › Ajouter un compte (Codex), Réglages › Projets › Ouvrir l'assistant.
+- **Chaque écran par son adresse** : `index.html#board`, `#plan-closed`, `#git`, `#history`, `#terminal`, `#run`, `#test`, `#test-run`, `#editor`, `#overview`, `#stats`, `#settings`, `#settings-<onglet>` (`app`, `claude` pour Harness, `accounts`, `voice`, `notifications`, `projects`, `board`, `integrations`, `mcp`, `terminals`, `network`, `about`).
+- **Les écrans du lot 0** (ESC-116, les fonctionnalités venues après l'aperçu) : `#new-agent`, `#codex`, `#modes`, `#handover`, `#agent-menu`, `#quota`, `#account-codex`, `#terminal-view`, `#welcome`, `#dictation`, `#dictation-offer`, `#voice`, `#voice-question`, `#attachments`, `#drop`, `#ticket`, `#subagent`, `#task`, `#wizard`, `#wizard-summary`, `#telemetry`, `#update`, `#update-failed`, `#hosts`. Avec `?lang=en` avant le `#`, les libellés anglais (ceux du catalogue `src/lib/i18n/en` quand il les a), par exemple `index.html?lang=en#modes`.
+- **Les notes d'UX du lot 0** : `design/app-redesign/UX-NOTES.md`. Pour chaque fonctionnalité, ce qui est mal pensé aujourd'hui et ce que l'aperçu propose ; les libellés anglais vérifiés ; les choix qui engagent le produit, tous validés par l'utilisateur le 2026-10-17.
+- **Les captures** : `design/app-redesign/*.png`, refaites par `node design/app-redesign/render.mjs [nom…]` (le rendu échoue si un écran lève une erreur). Elles sont prises à 1440×900, la taille par défaut de l'app ; celles en `-small` à 1028×779, la fenêtre de la CI ; celles en `-en` en anglais.
 - **Le contrat de direction** : `.impeccable/surfaces/src-app-svelte.md`. La commande `impeccable surface-brief read src/App.svelte` le relit.
 - **Le produit** : `PRODUCT.md`.
 
@@ -107,6 +110,38 @@ Les couleurs de projet échouent au contrôle : ce sont celles du produit, donc 
   - Lignes à filets : nom, explication, contrôle à droite. Interrupteurs, cases et boutons radio dans la couleur du projet.
   - Projet choisi par pastilles. Commandes de lancement sur une grille (nom, commande, sous-dossier, shell).
 
+Puis les écrans du lot 0 (ESC-116), validés par l'utilisateur le 2026-10-17 avec les 13 choix de `design/app-redesign/UX-NOTES.md` (le détail et les raisons y sont) : c'est le design à suivre par les lots, pas une proposition. Les harness sont Claude Code et Codex, eux seuls ; aucun autre n'apparaît dans l'interface.
+
+- **Harness.**
+  - La marque d'un harness est un mot dans un filet (« Claude », « Codex »), la même sur la carte, l'en-tête (sur la ligne du chemin), le ticket, les menus et le Kanban ; jamais une couleur.
+  - « Nouvel agent » en bouton divisé : `Ctrl N` sur le harness du projet ; la flèche ouvre le menu « Harness » (modèle, mode et raccourci de chacun ; Claude Code ou Codex pas installé, grisé avec où le régler ; « Harness par défaut du projet… »).
+  - Un agent Codex porte « Bac à sable » dans son en-tête. Le menu des modes dit le sens de chaque mode sur son harness ; les cinq modes restent aux mêmes places.
+  - Réglages › Harness : un groupe par harness (état, version, exécutable, nouveaux agents), puis « Tous les harness ». Ce qu'un harness ne fait pas est dit en une ligne, à l'endroit du réglage.
+  - Premier démarrage sans harness : la fenêtre vide, les commandes d'installation à copier, « Chercher à nouveau ».
+- **Passation (ESC-88).** La carte du quota épuisé, le séparateur « Suite sur Codex · … », le dossier de passation replié, les tours marqués de leur harness. « Revenir sur Claude Code » dans une bande au-dessus du champ, jamais pris seul. Le menu de l'agent s'ouvre aussi par « … » dans l'en-tête.
+- **Comptes et quotas.**
+  - Barre d'état : un groupe de jauges par harness qui travaille ; le total du jour prend « ≈ » dès qu'il contient de l'estimé.
+  - Panneau des comptes groupé par harness : fenêtres de 5 h, 7 j, ou 30 j (offre gratuite de Codex), coût du jour « ≈ … estimé » pour Codex, seuil de pause.
+  - Réglages › Comptes : un groupe par harness, puis « Quand un quota est épuisé » (autre compte, harness suivant, ordre, modèle de passation). Ajouter un compte : le harness d'abord, puis la connexion dans un terminal.
+- **Vue terminal.** Deux segments « Escouade | Codex » dans l'en-tête. La question de confiance du dossier de Codex est dite au-dessus du terminal, et l'agent passe en tête de la liste.
+- **Voix.**
+  - Barre du champ : modèle, effort et mode à gauche ; joindre, dicter et converser en icônes à droite, avant Stop et Envoyer.
+  - Dictée dans le champ (niveau, durée, touches) ; l'offre du modèle et sa progression au même endroit.
+  - Conversation plein écran (direction A) : orbe, phase, sous-titres, choix d'une question tels qu'ils se disent, Pause, Arrêter. « Dit à voix haute » et « Lu à voix haute » dans la conversation.
+  - Réglages › Voix : Dictée (micro, raccourci, langue, modèles) puis Conversation (voix par langue, licences, exception de Fuze, vitesse, délai).
+- **Pièces jointes.** Une rangée de puces au message comme au ticket : vignette ou icône, taille, ce qui arrive au fichier, gros fichier en ambre, copie en cours. Glisser entoure le champ. Trombone et nombre sur la carte du Kanban ; champ « Harness » du ticket.
+- **Sous-agents et tâches de fond.**
+  - Deux compteurs sur la carte ; la liste n'est dépliée que pour l'agent ouvert.
+  - Leurs vues : fil d'Ariane, faits, consigne ou sortie suivie, Arrêter, « Lui écrire, par … ».
+  - À 820 px de haut et moins, Lancement et Terminaux se replient sur leur titre ; un plantage reste dit.
+- **Assistant « Nouveau projet ».** Rail des étapes ; le récapitulatif met d'abord ce qui empêcherait la méthode de marcher, avec sa correction. Projets fermés dans Réglages › Projets.
+- **Serveur MCP.** Un onglet « Serveur MCP » (Système) : interrupteur, déclaration, journal. « via Escouade » à côté de l'auteur dans la conversation.
+- **Remote control, statistiques, mise à jour.**
+  - Remote control « Claude Code seulement », icône teal quand une session est connectée.
+  - Question des statistiques au premier démarrage.
+  - Mise à jour prête dans la barre d'état ; son échec reste écrit dans À propos.
+- **Après la 2.0.** La place des PR, de la CI et des déploiements : un onglet « PR et CI » du panneau git, et la ligne « PR → main » de la carte du ticket.
+
 ## Nouveautés (en TDD)
 
 Ce qui suit ne se fait pas aujourd'hui :
@@ -124,16 +159,27 @@ Organisation prévue :
 
 Lots, dans l'ordre :
 1. **Fondations** : Inter (`@fontsource-variable/inter`), jetons de `src/app.css`, teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
+   - Nouveau : `EngineMark`, la marque du harness, partout.
 2. **Coque** : `App.svelte`, `TitleBar`, `StatusBar`, `QuotaMeter`, `AccountsPanel`, `Toasts`, `Welcome`.
+   - Lot 0 : jauges par harness (`StatusBar`), panneau des comptes groupé par harness (`AccountsPanel`), coût estimé, mise à jour prête dans la barre d'état, `Welcome` sans harness.
 3. **Barre latérale** : `Sidebar`, `RunsSection`, terminaux, `StatusDot`, et les deux nouveautés.
+   - Lot 0 : « Nouvel agent » et son menu « Harness », compteurs de sous-agents et de tâches de fond, liste dépliée de l'agent ouvert, icône du remote control, menu de l'agent, Lancement et Terminaux repliés en petite hauteur.
 4. **Conversation** : `Conversation`, `Composer`, `conv/*` (`TurnCard`, `ToolRow`, `PatchView`, `UserMessage`, `Thinking`, `Markdown`, `EventMessage`, `Notice`, `SetupProgress`, `CriteriaReport`, `PermissionCard`, `QuestionCard`).
-5. **Plan** : `PlanBanner`.
+   - Nouveaux : `conv/Handover`, `AttachmentChip`, `MicButton`, `ConversationButton`, `ConversationOverlay`, `SubagentView`, `TaskView`.
+   - Lot 0 : en-tête (marque, bac à sable, bascule de vue, « … »), barre du champ réordonnée, « via Escouade » dans `PermissionCard` et `QuestionCard`, « Dit à voix haute » dans `UserMessage`, harness des tours dans `TurnCard`.
+5. **Plan** : `PlanBanner`, dont les sous-agents mènent à leur vue.
 6. **Kanban** : `board/*`, `ImportModal`.
+   - Lot 0 : marque et trombone sur `TicketCard` ; champ « Harness » et pièces jointes en une rangée dans `TicketForm`.
 7. **Git** : `SidePanel`, `FilesPanel`, `FileDiff`, `DiffView`, `DiffModal`, `GitGraph`, `branches/*`, `CommitModal`.
+   - Lot 0 : garder la place de l'onglet « PR et CI » (ESC-53 à 70, après la 2.0), sans le coder.
 8. **Terminaux et lancements** : `TerminalView`, `RunView`, `AgentTerminal` (thème xterm), `TestLaunchModal`.
+   - Lot 0 : la bande de confiance du dossier de Codex dans `AgentTerminal`.
 9. **Éditeur et recherches** : `editor/*`, thème de CodeMirror (`src/lib/editor/theme.ts`), `QuickOpen`, `ConvSearch`.
-10. **Vue d'ensemble et stats** : `Overview`, `Stats`.
+10. **Vue d'ensemble et stats** : `Overview`, `Stats`, avec la marque du harness et les coûts estimés.
 11. **Fenêtres et réglages** : `Modal`, `ConfirmModal`, `UpdateModal`, `NewProjectModal`, `AccountModal`, `SettingsModal`, `settings/*`, `ContextMenu`, `Dropdown`, `Splitter`.
+    - Nouveaux : `modals/TelemetryModal`, `wizard/*` (`AccountStep`, `Checks`, `CopiedStep`, `IntegrationsStep`, `KanbanStep`, `LaunchStep`, `SummaryStep`, `WorktreesStep`), `settings/ClosedProjects`, `settings/VoiceTab`, `settings/SpeechSettings`.
+    - Lot 0 : Réglages › Harness en un groupe par harness ; « Quand un quota est épuisé » dans Comptes ; un onglet « Serveur MCP » (`McpSection`) ; Voix ; Projets (harness par défaut, assistant, projets fermés) ; À propos (statistiques, échec de mise à jour).
+    - Ce lot a presque doublé : le couper en deux (fenêtres, puis réglages) est à décider avec le Kanban.
 
 **Méthode.**
 - Impeccable, chemin code-led : le contrat de direction est déjà écrit et l'aperçu tient lieu de comp de référence. Relire le contrat et les captures avant chaque lot.
@@ -145,8 +191,8 @@ Lots, dans l'ordre :
 ## À décider ou à vérifier pendant le chantier
 
 - [ ] **macOS** : l'aperçu dessine les boutons de fenêtre de Windows ; sous macOS, les feux restent à gauche, et la barre de titre doit leur laisser la place.
-- [ ] **Anglais** : l'aperçu n'existe qu'en français. Les libellés anglais doivent tenir dans l'en-tête, la barre d'état et les réglages.
-- [ ] **Hauteur** : à 779px, les sections Lancement et Terminaux ne laissent que deux ou trois agents visibles. Les rendre repliables ou les réduire quand elles sont vides.
+- [ ] **Anglais** : l'aperçu a un mode anglais (`?lang=en`) pour ce qui est serré, vérifié à 1028×779 pour le lot 0 (voir `UX-NOTES.md`). Le reste (Kanban, git, éditeur, vue d'ensemble, stats) reste à vérifier en anglais dans l'app.
+- [ ] **Hauteur** : à 779px, les sections Lancement et Terminaux ne laissaient que deux ou trois agents visibles. Décidé avec le lot 0 (validé le 2026-10-17) : repliées sur leur titre à 820 px de haut et moins, un plantage toujours dit.
 - [ ] **Signalements du détecteur** laissés sur l'aperçu, à rejuger dans l'app :
   - petits textes de métadonnées (11 à 11,5px) ;
   - points animés de l'activité ;

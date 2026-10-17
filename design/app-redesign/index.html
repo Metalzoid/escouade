@@ -3913,7 +3913,7 @@
         font-weight: 550;
       }
       .acct .k {
-        width: 70px;
+        width: 90px;
         flex: none;
         color: var(--muted);
         font-size: 12px;
@@ -4099,6 +4099,1686 @@
           background: none;
         }
       }
+
+      /*
+       * ---------- Lot 0 (ESC-116): what came after the first preview ----------
+       * Harness, accounts per harness, handover, the harness's own terminal, voice, attachments, subagents and
+       * background tasks, the new project's assistant, the MCP server, remote control, telemetry, updates.
+       */
+
+      /* The harness of an agent, said in a word: the same mark on its card, its header, its ticket, its menus. */
+      .emark {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        height: 16px;
+        padding: 0 5px;
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--soft);
+        font-size: 10.5px;
+        font-weight: 560;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+      }
+      .emark.lg {
+        height: 20px;
+        padding: 0 7px;
+        font-size: 11.5px;
+      }
+      .est {
+        color: var(--muted);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+
+      /* « Nouvel agent » and its harness menu. */
+      .new-split {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin: 12px 0 8px;
+      }
+      .new-split .new-agent {
+        flex: 1;
+        margin: 0;
+      }
+      .new-more {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 32px;
+        border-radius: 8px;
+        color: var(--muted);
+      }
+      .new-more:hover,
+      .new-more[aria-expanded='true'] {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .menu {
+        position: absolute;
+        z-index: 30;
+        display: grid;
+        min-width: 280px;
+        padding: 5px;
+        border-radius: 11px;
+        background: var(--raise-2);
+        box-shadow:
+          inset 0 0 0 1px var(--line-2),
+          0 18px 48px -10px rgba(0, 0, 0, 0.8);
+        animation: rise 0.25s var(--ease);
+      }
+      .menu-h {
+        padding: 7px 9px 5px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .menu-sep {
+        height: 1px;
+        margin: 5px 4px;
+        background: var(--line);
+      }
+      .mi {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+        padding: 6px 9px;
+        border-radius: 7px;
+        text-align: left;
+      }
+      .mi.no-mark {
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+      }
+      .mi:hover,
+      .mi.kb {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .mi .ml {
+        display: grid;
+        gap: 1px;
+        min-width: 0;
+      }
+      .mi .ml b {
+        font-weight: 550;
+      }
+      .mi .ml .d {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .mi[aria-checked='true'] .ml b::after {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-left: 7px;
+        border-radius: 50%;
+        background: var(--p-ink);
+        vertical-align: 2px;
+      }
+      .mi.danger b {
+        color: var(--del);
+      }
+      .mi[aria-disabled='true'] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .mi .ic {
+        color: var(--muted);
+      }
+      .new-split .menu {
+        top: 36px;
+        left: 0;
+        width: 360px;
+      }
+      .head .h-title .row {
+        min-width: 0;
+      }
+      .head .h-title h1 {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .a-top .bg-chip {
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* The sandbox of a harness, said in the header where it matters (Codex). */
+      .sbx {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--soft);
+        font-size: 11.5px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .sbx svg {
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .fig dd .est {
+        margin-left: 3px;
+      }
+
+      /* The mode menu of the composer: each mode with what it means on this harness. */
+      .composer {
+        position: relative;
+      }
+      .composer .menu.modes {
+        bottom: calc(100% - 38px);
+        left: 150px;
+        width: 420px;
+      }
+      .menu.modes .mi {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+      }
+      .menu.modes .mi .ml .d {
+        white-space: normal;
+      }
+      .menu .foot-note {
+        padding: 8px 9px 6px;
+        border-top: 1px solid var(--line);
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.45;
+      }
+
+      /* A turn stopped by the quota, and the handover to another harness. */
+      .limit {
+        display: grid;
+        gap: 10px;
+        margin: 4px 0;
+        padding: 13px 14px;
+        border-radius: 11px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .limit .lt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .limit .lt svg {
+        color: var(--wait);
+      }
+      .limit p {
+        margin: 0;
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .limit .row-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .limit.answered {
+        background: none;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .limit.answered .lt svg {
+        color: var(--muted);
+      }
+      .limit .done-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .ho-sep {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 14px 0 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .ho-sep::before,
+      .ho-sep::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--line-2);
+      }
+      .ho-sep b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .fold {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 9px 12px;
+        border-radius: 9px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        text-align: left;
+      }
+      .fold:hover {
+        background: var(--hover);
+      }
+      .fold .d {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .fold .grow {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ai-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip.ic {
+        width: 30px;
+        padding: 0;
+        justify-content: center;
+      }
+      .c-sep {
+        width: 1px;
+        height: 18px;
+        margin: 0 4px;
+        background: var(--line-2);
+      }
+      .vseg button[aria-pressed='false'] .lbl {
+        display: none;
+      }
+      .crumbs .emark {
+        margin-right: 2px;
+      }
+      .crumbs .sbx {
+        flex: none;
+        height: 18px;
+        margin-left: 4px;
+        font-size: 11px;
+      }
+      .crumbs .emark,
+      .crumbs .proj-name {
+        flex: none;
+      }
+      #h-branch {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .back-hint {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: min(780px, 100% - 64px);
+        margin: 0 auto 8px;
+        padding: 8px 10px 8px 12px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.035);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .back-hint .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .back-hint .btn {
+        height: 28px;
+      }
+
+      /* What another agent did through Escouade's MCP server. */
+      .via {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 5px;
+        background: color-mix(in oklch, var(--brand) 12%, transparent);
+        color: oklch(0.86 0.08 190);
+        font-size: 11px;
+        font-weight: 560;
+        white-space: nowrap;
+      }
+      .req-card {
+        display: grid;
+        gap: 9px;
+        padding: 12px 14px;
+        border-radius: 11px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .req-card .rt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .req-card .cmdl {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .req-card .by {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .req-card .by b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .req-card .opts-r {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .req-card .opt-r {
+        display: inline-flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 9px;
+        border-radius: 7px;
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .req-card .opt-r.picked {
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent);
+        color: var(--text);
+      }
+      .from-agent {
+        display: grid;
+        gap: 6px;
+        justify-self: end;
+        max-width: 640px;
+      }
+      .from-agent .who {
+        justify-self: end;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      /* The accounts' quotas: per harness in the status bar, all of them in the panel above it. */
+      .sb-q {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 22px;
+        padding: 0 7px;
+        margin: 0 -3px;
+        border-radius: 6px;
+      }
+      .sb-q:hover,
+      .sb-q[aria-expanded='true'] {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .sb-q .hn {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .sb-q .meter {
+        width: 30px;
+      }
+      .sb-q + .sb-q {
+        margin-left: 2px;
+      }
+      .qpanel {
+        position: fixed;
+        z-index: 25;
+        right: 120px;
+        bottom: 36px;
+        width: 440px;
+        padding: 6px 0 4px;
+        border-radius: 13px;
+        background: var(--raise);
+        box-shadow:
+          inset 0 0 0 1px var(--line-2),
+          0 24px 64px -12px rgba(0, 0, 0, 0.75);
+        animation: rise 0.3s var(--ease);
+      }
+      .qpanel h3 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 10px 16px 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .qpanel h3 + .qa {
+        border-top: 0;
+      }
+      .qa {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+        padding: 9px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .qa .qn {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        font-weight: 560;
+      }
+      .qa .qn .cur {
+        color: var(--run);
+        font-size: 11.5px;
+        font-weight: 500;
+      }
+      .qa .qn .over {
+        color: var(--wait);
+        font-size: 11.5px;
+        font-weight: 500;
+      }
+      .qa .qt {
+        color: var(--muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .qa .qw {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .qw .w {
+        display: grid;
+        gap: 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .qw .w .top {
+        display: flex;
+        justify-content: space-between;
+      }
+      .qw .w b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .qw .w .meter {
+        width: 100%;
+      }
+      .meter.hot i {
+        background: var(--wait) !important;
+      }
+      .qpanel .qnote {
+        padding: 8px 16px 10px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* The harness's own interface in a terminal, and the switch between the two views. */
+      .vseg {
+        display: inline-flex;
+        padding: 2px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .vseg button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .vseg button[aria-pressed='true'] {
+        background: rgba(255, 255, 255, 0.09);
+        color: var(--text);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .trust {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 10px 14px 0;
+        padding: 9px 12px;
+        border-radius: 10px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .trust svg {
+        color: var(--wait);
+      }
+      .trust .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .term .sel {
+        color: #08090a;
+        background: #c8ccd2;
+      }
+
+      /* Dictation, inside the composer. */
+      .dict {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 8px 8px 0;
+        padding: 9px 12px;
+        border-radius: 10px;
+        background: color-mix(in oklch, var(--p) 10%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent);
+        font-size: 12.5px;
+      }
+      .dict .lvl {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        height: 18px;
+      }
+      .dict .lvl i {
+        width: 3px;
+        border-radius: 2px;
+        background: var(--p-ink);
+      }
+      .dict b {
+        font-weight: 600;
+      }
+      .dict .hint {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .dict.offer {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+        align-items: start;
+        background: rgba(255, 255, 255, 0.035);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .dict.offer p {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .dl {
+        display: grid;
+        gap: 5px;
+        min-width: 180px;
+        font-size: 11.5px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .dl .meter {
+        width: 100%;
+      }
+      .chip.live {
+        color: var(--p-ink);
+        background: color-mix(in oklch, var(--p) 14%, transparent);
+      }
+      .chip.live b {
+        color: var(--text);
+      }
+
+      /* The voice conversation: the whole window, an orb, captions. */
+      .vo {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: grid;
+        grid-template-rows: auto 1fr auto auto;
+        background:
+          radial-gradient(700px 520px at 50% 40%, color-mix(in oklch, var(--p) 16%, transparent), transparent 70%),
+          color-mix(in oklch, var(--p) 6%, #070809);
+        animation: fade 0.3s ease-out;
+      }
+      .vo-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 22px;
+        color: var(--muted);
+      }
+      .vo-top b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .vo-top .esc {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .vo-mid {
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 26px;
+      }
+      .orb {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 38% 32%, color-mix(in oklch, var(--p) 55%, white) 0, transparent 46%),
+          radial-gradient(circle at 60% 70%, color-mix(in oklch, var(--p) 80%, black), transparent 60%),
+          color-mix(in oklch, var(--p) 70%, #0b0c0e);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 80px 10px color-mix(in oklch, var(--p) 30%, transparent);
+        animation: breathe 3.2s var(--ease) infinite;
+      }
+      .orb::after {
+        content: '';
+        position: absolute;
+        inset: -18px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);
+      }
+      @keyframes breathe {
+        50% {
+          transform: scale(1.04);
+        }
+      }
+      .phase {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--soft);
+        font-size: 15px;
+        font-weight: 550;
+      }
+      .caps {
+        display: grid;
+        gap: 10px;
+        width: min(720px, 100% - 64px);
+        margin: 0 auto 18px;
+        font-size: 15px;
+        line-height: 1.55;
+      }
+      .caps .you {
+        color: var(--muted);
+      }
+      .caps .you b,
+      .caps .ag b {
+        margin-right: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .caps .ag {
+        color: var(--text);
+      }
+      .caps .ag .tail {
+        color: var(--dim);
+      }
+      .vo-bar {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        padding: 0 0 30px;
+      }
+      .vo-bar .btn {
+        height: 36px;
+        padding: 0 14px;
+      }
+      .vo-bar .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .vo-opts {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* Files attached to a message or a ticket. */
+      .atts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 10px 0;
+      }
+      .att {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 260px;
+        height: 40px;
+        padding: 0 6px 0 6px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        font-size: 12px;
+      }
+      .att .th {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #2b3a4a, #46536a 45%, #c9a46a 46%, #8f6b3a);
+      }
+      .att .th.f {
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--soft);
+      }
+      .att .nm2 {
+        display: grid;
+        min-width: 0;
+        line-height: 1.25;
+      }
+      .att .nm2 b {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 550;
+      }
+      .att .nm2 span {
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .att .x {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        color: var(--muted);
+      }
+      .att .x:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .att.warn {
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .att.warn .nm2 span {
+        color: var(--wait);
+      }
+      .att.bad {
+        box-shadow: inset 0 0 0 1px oklch(0.74 0.14 22 / 0.45);
+      }
+      .att.bad .nm2 span {
+        color: var(--del);
+      }
+      .att .prog {
+        position: absolute;
+      }
+      .att.copying {
+        position: relative;
+        overflow: hidden;
+      }
+      .att.copying::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 46%;
+        height: 2px;
+        background: var(--p-ink);
+      }
+      .att .orig {
+        color: var(--muted);
+      }
+      .composer.dragging {
+        box-shadow:
+          inset 0 0 0 1.5px var(--p-ink),
+          0 0 0 4px color-mix(in oklch, var(--p) 18%, transparent);
+      }
+      .drop {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: color-mix(in oklch, var(--p) 14%, rgba(10, 11, 13, 0.86));
+        color: var(--text);
+        font-weight: 550;
+      }
+      .drop span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .drop small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-weight: 450;
+        text-align: center;
+      }
+      .msg-user.with {
+        display: grid;
+        gap: 10px;
+      }
+      .msg-user .atts {
+        padding: 0;
+      }
+      .msg-user .att {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .aloud {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .user-meta {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin: -6px 0 0;
+      }
+
+      /* Subagents and background tasks: under their agent's card, and each one's own view. */
+      .subl {
+        display: grid;
+        gap: 1px;
+        margin: -1px 0 4px 18px;
+        padding-left: 8px;
+        border-left: 1px solid var(--line-2);
+      }
+      .subl .sh {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 6px 3px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .subl .sh .n {
+        font-weight: 500;
+      }
+      .subl .sr2 {
+        display: grid;
+        grid-template-columns: 8px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        height: 26px;
+        padding: 0 6px;
+        border-radius: 6px;
+        color: var(--soft);
+        font-size: 12px;
+        text-align: left;
+      }
+      .subl .sr2:hover {
+        background: var(--hover);
+      }
+      .subl .sr2[aria-current='true'] {
+        background: rgba(255, 255, 255, 0.06);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--text);
+      }
+      .subl .sr2 i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--run);
+      }
+      .subl .sr2 i.off {
+        background: none;
+        box-shadow: inset 0 0 0 1.5px var(--done);
+      }
+      .subl .sr2 .nm {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .subl .sr2 .st {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .subl .more {
+        height: 24px;
+        padding: 0 6px;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 11.5px;
+        text-align: left;
+      }
+      .subl .more:hover {
+        background: var(--hover);
+      }
+      .bg-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--muted);
+      }
+      .crumbs2 {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .crumbs2 a,
+      .crumbs2 button {
+        color: var(--muted);
+      }
+      .crumbs2 button:hover {
+        color: var(--text);
+      }
+      .crumbs2 svg {
+        width: 12px;
+        height: 12px;
+      }
+      .crumbs2 b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .sv {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        height: 100%;
+        min-height: 0;
+      }
+      .sv-head {
+        display: grid;
+        gap: 10px;
+        padding: 14px 22px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .sv-head .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .sv-head h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 620;
+      }
+      .sv-head .row .btn {
+        margin-left: auto;
+      }
+      .facts-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 22px;
+        margin: 0;
+        font-size: 12px;
+      }
+      .facts-row div {
+        display: grid;
+        gap: 1px;
+      }
+      .facts-row dt {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .facts-row dd {
+        margin: 0;
+        color: var(--soft);
+        font-weight: 550;
+        font-variant-numeric: tabular-nums;
+      }
+      .prompt {
+        display: grid;
+        gap: 6px;
+        width: min(780px, 100% - 64px);
+        margin: 14px auto 0;
+        padding: 11px 14px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .prompt .ph {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .prompt .ph button {
+        margin-left: auto;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .prompt p {
+        margin: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .write-hint {
+        width: min(780px, 100% - 64px);
+        margin: 0 auto 6px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .out {
+        margin: 0;
+        min-height: 0;
+        overflow: auto;
+      }
+      .out-h {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 22px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .out-h b {
+        color: var(--soft);
+        font-weight: 600;
+      }
+      .out-h .chk {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .out-h .chk .cb {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* The harness missing: the welcome lists each with its install command. */
+      .welcome {
+        display: grid;
+        place-items: center;
+        height: 100%;
+        padding: 40px;
+      }
+      .welcome .wbox {
+        display: grid;
+        gap: 18px;
+        width: min(560px, 100%);
+      }
+      .welcome h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 640;
+        letter-spacing: -0.015em;
+      }
+      .welcome p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .hinst {
+        display: grid;
+        gap: 0;
+        border-top: 1px solid var(--line);
+      }
+      .hinst > div {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .hinst b {
+        font-weight: 600;
+      }
+      .hinst .cmd {
+        padding: 6px 9px;
+      }
+
+      /* Windows of the lot: account, ticket, assistant, telemetry, update. */
+      .modal.wide {
+        width: min(760px, 100vw - 48px);
+      }
+      .modal.xwide {
+        width: min(900px, 100vw - 48px);
+      }
+      .fld {
+        display: grid;
+        align-content: start;
+        gap: 6px;
+      }
+      .fld > label,
+      .fld > .lb {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .fld .inp {
+        width: 100%;
+      }
+      .fld .inp.area {
+        height: auto;
+        min-height: 78px;
+        align-items: start;
+        padding-top: 8px;
+        white-space: normal;
+        line-height: 1.5;
+      }
+      .fgrid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .fld .select {
+        width: 100%;
+        height: 32px;
+        justify-content: flex-start;
+      }
+      .fld .select svg {
+        margin-left: auto;
+      }
+      .fgrid .fld .inp {
+        height: 32px;
+      }
+      .fld .help {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .mini-term {
+        margin: 0;
+        height: 150px;
+        padding: 10px 12px;
+        border-radius: 9px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line);
+        font: 12px/1.55 var(--mono);
+        color: var(--soft);
+        overflow: hidden;
+        white-space: pre-wrap;
+      }
+      .mini-term .dim {
+        color: var(--dim);
+      }
+      .mini-term .g {
+        color: var(--add);
+      }
+      .mini-term .cy {
+        color: oklch(0.8 0.1 210);
+      }
+      .waitline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .spin {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 1.5px solid var(--line-3);
+        border-top-color: var(--p-ink);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .clip-n {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .clip-n svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* The new project's assistant, form A: the steps on a rail. */
+      .wiz {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        min-height: 0;
+        flex: 1;
+      }
+      .rail {
+        display: grid;
+        align-content: start;
+        gap: 2px;
+        padding: 14px 10px;
+        border-right: 1px solid var(--line);
+        margin: 0;
+        list-style: none;
+      }
+      .rail li {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .rail li .k {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 1px var(--line-3);
+        font-size: 10.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .rail li.ok {
+        color: var(--soft);
+      }
+      .rail li.ok .k {
+        background: color-mix(in oklch, var(--p) 30%, transparent);
+        box-shadow: none;
+        color: var(--text);
+      }
+      .rail li[aria-current='step'] {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font-weight: 550;
+      }
+      .rail li[aria-current='step'] .k {
+        box-shadow: inset 0 0 0 1.5px var(--p-ink);
+        color: var(--text);
+      }
+      .rail .tag {
+        margin-left: 4px;
+        color: var(--dim);
+        font-size: 11px;
+        font-weight: 450;
+      }
+      .wiz .m-body {
+        align-content: start;
+      }
+      .wiz-lead {
+        margin: -6px 0 0;
+        color: var(--muted);
+      }
+      .checks2 {
+        display: grid;
+        gap: 8px;
+      }
+      .ck {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: start;
+        padding: 11px 13px;
+        border-radius: 10px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .ck.bad {
+        background: oklch(0.74 0.14 22 / 0.06);
+        box-shadow: inset 0 0 0 1px oklch(0.74 0.14 22 / 0.35);
+      }
+      .ck.bad > svg {
+        color: var(--del);
+      }
+      .ck.ok > svg {
+        color: var(--add);
+      }
+      .ck b {
+        font-weight: 600;
+      }
+      .ck p {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .sum {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        margin: 0;
+        border-top: 1px solid var(--line);
+      }
+      .sum dt,
+      .sum dd {
+        margin: 0;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 12.5px;
+      }
+      .sum dt {
+        color: var(--muted);
+      }
+      .sum dd {
+        color: var(--soft);
+      }
+
+      /* Settings of the lot. */
+      .hg {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .hg h2 {
+        flex: none;
+      }
+      .hstate {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .hstate i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--run);
+      }
+      .hstate.warn {
+        color: var(--wait);
+      }
+      .hstate.warn i {
+        background: var(--wait);
+      }
+      .hstate.bad {
+        color: var(--del);
+      }
+      .hstate.bad i {
+        background: var(--del);
+      }
+      .hg .btn {
+        margin-left: auto;
+      }
+      .model-list {
+        display: grid;
+        margin-top: 6px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .mrow {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .mrow .rd {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 1.5px #4d5259;
+      }
+      .mrow .rd[aria-checked='true'] {
+        box-shadow: inset 0 0 0 5px color-mix(in oklch, var(--p) 75%, white);
+      }
+      .mrow .mn {
+        display: grid;
+        gap: 1px;
+        min-width: 0;
+      }
+      .mrow .mn b {
+        font-weight: 550;
+      }
+      .mrow .mn span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .mrow .ok {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--add);
+        font-size: 12px;
+      }
+      .mrow .exc {
+        color: var(--wait);
+      }
+      .log {
+        display: grid;
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .log li {
+        display: grid;
+        grid-template-columns: 52px 150px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 12px;
+      }
+      .log .tm {
+        color: var(--dim);
+        font-variant-numeric: tabular-nums;
+      }
+      .log .who {
+        color: var(--soft);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .log .wh {
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .log .wh b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .log .res {
+        font-size: 11.5px;
+        color: var(--add);
+      }
+      .log .res.refused {
+        color: var(--wait);
+      }
+      .log .res.error {
+        color: var(--del);
+      }
+      .closed {
+        display: grid;
+        grid-template-columns: 10px minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .closed i {
+        width: 8px;
+        height: 8px;
+        border-radius: 3px;
+      }
+      .closed .cn {
+        display: grid;
+        min-width: 0;
+      }
+      .closed .cn span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .only {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* Remote control on a card; the agent's menu. */
+      .rc {
+        display: inline-flex;
+        color: var(--muted);
+      }
+      .rc svg {
+        width: 13px;
+        height: 13px;
+      }
+      .rc.on {
+        color: oklch(0.82 0.09 190);
+      }
+      .agent-menu {
+        top: 300px;
+        left: 200px;
+        min-width: 300px;
+      }
+      .sub-menu {
+        top: 388px;
+        left: 588px;
+        min-width: 320px;
+      }
+      #acct-modal,
+      #wiz-modal {
+        z-index: 22;
+      }
+      .sb-upd {
+        color: var(--p-ink);
+      }
+      .sb-upd b {
+        color: var(--text);
+      }
+
+      .statusbar {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .statusbar:has(#sb-upd:not([hidden])) .sb-hide {
+        display: none;
+      }
+
+      /* A short window (779px): Lancement and Terminaux fold to their headers, a crash still said; the agents get the room. */
+      .sec-bad {
+        display: none;
+        color: var(--del);
+        font-weight: 500;
+      }
+      @media (max-height: 820px) {
+        .sidebar .sec .row-item,
+        .sidebar .sec #test-group {
+          display: none;
+        }
+        .sidebar .sec-bad {
+          display: inline;
+        }
+        .sidebar .sec-h {
+          white-space: nowrap;
+        }
+        .sidebar .sec-h .mini-btn {
+          display: none;
+        }
+        .sidebar .sec {
+          padding-bottom: 2px;
+        }
+      }
+
+      /* The first start, no project and no harness yet: the panel alone. */
+      .app.first .body {
+        grid-template-columns: 1fr;
+        padding-left: 8px;
+      }
+      .app.first .sidebar,
+      .app.first .tabs .tab,
+      .app.first #btn-overview,
+      .app.first .titlebar [data-go='editor'],
+      .app.first #btn-stats,
+      .app.first .search,
+      .app.first .statusbar > :not(#btn-settings) {
+        display: none;
+      }
+      .app.first .statusbar {
+        justify-content: flex-end;
+      }
+
+      /* What comes after the redesign (code hosts): its place, not its detail. */
+      .later {
+        display: grid;
+        gap: 10px;
+        margin: 16px;
+        padding: 18px;
+        border-radius: 11px;
+        border: 1px dashed var(--line-3);
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .later b {
+        color: var(--soft);
+        font-weight: 600;
+      }
+      .later ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .utabs .soon {
+        color: var(--dim);
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      @container conv (max-width: 1000px) {
+        .vseg .lbl {
+          display: none;
+        }
+        .crumbs .sbx {
+          font-size: 0;
+          gap: 0;
+        }
+      }
+      @media (max-width: 1240px) {
+        .kb-head .slots {
+          display: none;
+        }
+        .kb-head .select,
+        .kb-head .switch {
+          white-space: nowrap;
+        }
+        .sb-q .pct2 {
+          display: none;
+        }
+        .qpanel {
+          right: 12px;
+        }
+        .composer .menu.modes {
+          left: 40px;
+        }
+        .agent-menu {
+          left: 150px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -4149,6 +5829,20 @@
         <symbol id="i-min" viewBox="0 0 16 16"><path d="M3 8.5h10" /></symbol>
         <symbol id="i-max" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="0.5" /></symbol>
         <symbol id="i-close" viewBox="0 0 16 16"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></symbol>
+        <symbol id="i-mic" viewBox="0 0 16 16"><rect x="5.75" y="2.25" width="4.5" height="7.5" rx="2.25" /><path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25v1.5" /></symbol>
+        <symbol id="i-wave" viewBox="0 0 16 16"><path d="M2.75 7v2M5.25 5v6M7.75 3v10M10.25 5.5v5M12.75 7v2" /></symbol>
+        <symbol id="i-image" viewBox="0 0 16 16"><rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><circle cx="6" cy="6.5" r="1.1" /><path d="M2.5 11.25l3.25-3 2.5 2.25 2-1.75 3.25 2.75" /></symbol>
+        <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 2.25h5l3 3v8.5H4z" /><path d="M9 2.25v3h3M6 8.5h4M6 10.75h4" /></symbol>
+        <symbol id="i-remote" viewBox="0 0 16 16"><circle cx="8" cy="9" r="1.25" /><path d="M5.6 6.6a3.4 3.4 0 0 1 4.8 0M3.7 4.7a6 6 0 0 1 8.6 0M8 10.25v3" /></symbol>
+        <symbol id="i-swap" viewBox="0 0 16 16"><path d="M3 5.25h9.5M10 2.75l2.5 2.5L10 7.75M13 10.75H3.5M6 8.25l-2.5 2.5L6 13.25" /></symbol>
+        <symbol id="i-sub" viewBox="0 0 16 16"><path d="M4 2.75v5.5c0 1.1.9 2 2 2h6.25M9.75 7.75l2.5 2.5-2.5 2.5" /></symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.75" /><path d="M8 5v3.25l2.25 1.5" /></symbol>
+        <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.75v7.5M5 7.5l3 3 3-3M3 12.75h10" /></symbol>
+        <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.75 4v8M10.25 4v8" /></symbol>
+        <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.75" cy="8" r=".9" fill="currentColor" /><circle cx="8" cy="8" r=".9" fill="currentColor" /><circle cx="12.25" cy="8" r=".9" fill="currentColor" /></symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.25" y="7" width="9.5" height="6.5" rx="1.5" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" /></symbol>
+        <symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" /></symbol>
+        <symbol id="i-gift" viewBox="0 0 16 16"><path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" /></symbol>
       </defs>
     </svg>
 
@@ -4202,17 +5896,41 @@
             <button role="tab" aria-selected="false" data-view="board"><svg class="i s14"><use href="#i-kanban" /></svg>Kanban <span class="count">7</span></button>
           </div>
 
-          <button class="new-agent">
-            <span class="plus"><svg class="i s14"><use href="#i-plus" /></svg></span><span>Nouvel agent</span><kbd>Ctrl N</kbd>
-          </button>
+          <!-- Nouvel agent: Ctrl N on the project's harness; the menu beside it picks another one (from two harnesses found). -->
+          <div class="new-split">
+            <button class="new-agent">
+              <span class="plus"><svg class="i s14"><use href="#i-plus" /></svg></span><span>Nouvel agent</span><kbd>Ctrl N</kbd>
+            </button>
+            <button class="new-more" id="new-more" aria-haspopup="menu" aria-expanded="false" aria-controls="new-menu" aria-label="Nouvel agent sur un autre harness">
+              <svg class="i s14"><use href="#i-down" /></svg>
+            </button>
+            <div class="menu" id="new-menu" role="menu" aria-label="Harness du nouvel agent" hidden>
+              <div class="menu-h">Harness</div>
+              <button class="mi kb" role="menuitemradio" aria-checked="true">
+                <span class="emark">Claude</span><span class="ml"><b>Claude Code</b><span class="d">Celui du projet · Opus 5.5 · Auto</span></span><kbd>Ctrl N</kbd>
+              </button>
+              <button class="mi" role="menuitemradio" aria-checked="false">
+                <span class="emark">Codex</span><span class="ml"><b>Codex</b><span class="d">GPT-5.5-Codex · Demander · bac à sable</span></span><kbd>Ctrl Maj N</kbd>
+              </button>
+              <div class="menu-sep"></div>
+              <button class="mi no-mark" role="menuitem">
+                <svg class="i s14 ic"><use href="#i-sliders" /></svg><span class="ml"><b>Harness par défaut du projet…</b></span>
+              </button>
+            </div>
+          </div>
 
           <div class="agents" id="agents">
             <!-- Qui attend passe devant. -->
+            <button class="agent waiting" id="ag-search" hidden>
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">search-index</span><span class="a-state">Question</span></div>
+              <div class="a-meta"><span class="emark">Codex</span><span>GPT-5.5-Codex</span><span class="sep">·</span><span>Vue Codex</span></div>
+              <div class="a-act"><svg class="i s14" style="color: var(--wait)"><use href="#i-term" /></svg><span class="tgt">Confiance du dossier : réponds dans son terminal</span></div>
+            </button>
             <div class="agent waiting" id="ask-agent" tabindex="0">
               <div class="a-top">
                 <i class="state-dot"></i><span class="a-name">tests-e2e</span><span class="a-state" id="ask-state">Question</span>
               </div>
-              <div class="a-meta"><span>Sonnet 5.5</span><span class="sep">·</span><span class="num">8m 04s</span></div>
+              <div class="a-meta"><span class="emark">Claude</span><span>Sonnet 5.5</span><span class="sep">·</span><span class="num">8m 04s</span></div>
               <div class="a-ask" id="ask-body">
                 <p>Lancer toute la suite e2e (38 tests) ?</p>
                 <div class="opts">
@@ -4225,40 +5943,47 @@
               </div>
             </div>
 
-            <button class="agent">
-              <div class="a-top"><i class="state-dot"></i><span class="a-name">refacto-auth</span><span class="a-state">En cours</span></div>
+            <button class="agent" id="ag-refacto">
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">refacto-auth</span><span class="rc on" role="img" aria-label="Remote control : connecté depuis claude.ai"><svg class="i"><use href="#i-remote" /></svg></span><span class="a-state">En cours</span></div>
               <div class="a-meta">
-                <span>Opus 5.5</span><span class="sep">·</span><span class="num">12m 40s</span><span class="sep">·</span
+                <span class="emark">Claude</span><span>Opus 5.5</span><span class="sep">·</span><span class="num">12m 40s</span><span class="sep">·</span
                 ><span class="plan-mini">Plan 3/7 <span class="bar"><i></i></span></span>
               </div>
               <div class="a-act"><b>Edit</b><span class="tgt mono">src/auth/jwt.ts</span><span class="spend">184 k · 2,41 $</span></div>
             </button>
 
-            <button class="agent" aria-current="true">
-              <div class="a-top"><i class="state-dot"></i><span class="a-name">pagination-users</span><span class="a-state">En cours</span></div>
+            <button class="agent" aria-current="true" id="ag-pag">
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">pagination-users</span><span class="bg-chip" id="bg-chip" role="img" aria-label="1 sous-agent en cours, 1 tâche de fond en cours"><svg class="i" style="width: 12px; height: 12px"><use href="#i-sub" /></svg>1<svg class="i" style="width: 12px; height: 12px; margin-left: 4px"><use href="#i-clock" /></svg>1</span><span class="a-state">En cours</span></div>
               <div class="a-meta">
-                <span>Sonnet 5.5</span><span class="sep">·</span><span class="num">3m 15s</span><span class="sep">·</span
-                ><svg class="i" style="width: 12px; height: 12px"><use href="#i-branch" /></svg><span class="branch">pagination-users</span>
+                <span class="emark">Claude</span><span>Sonnet 5.5</span><span class="sep">·</span><span class="num">3m 15s</span>
               </div>
               <div class="a-act"><b>Bash</b><span class="tgt mono">npm test</span><span class="spend">12,4 k · 0,14 $</span></div>
             </button>
+            <!-- Its subagents and background tasks: folded into the chip of its card, unfolded here. -->
+            <div class="subl" id="subl" hidden>
+              <div class="sh">Sous-agents <span class="n">1 en cours · 2 finis</span></div>
+              <button class="sr2" id="sub-row" data-go="sub"><i></i><span class="nm">test-writer</span><span class="st">Haiku 4.5</span></button>
+              <button class="more">2 sous-agents finis</button>
+              <div class="sh">Tâches de fond <span class="n">1 en cours</span></div>
+              <button class="sr2" id="task-row" data-go="task"><i></i><span class="nm mono">npm run test:watch</span><span class="st">2m 10s</span></button>
+            </div>
 
             <button class="agent">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">dem-5-export-csv-des-factures</span><span class="a-state">En cours</span></div>
               <div class="a-meta">
-                <span class="ticket-chip">DEM-5</span><span>boucle 1/5</span
-                ><span class="loops"><i class="on"></i><i></i><i></i><i></i><i></i></span><span class="sep">·</span><span>Opus 5.5</span>
+                <span class="emark">Claude</span><span class="ticket-chip">DEM-5</span><span>boucle 1/5</span
+                ><span class="loops"><i class="on"></i><i></i><i></i><i></i><i></i></span>
               </div>
               <div class="a-act"><b>Read</b><span class="tgt mono">src/billing/invoices.ts</span><span class="spend">38 k · 0,41 $</span></div>
             </button>
 
-            <button class="agent">
+            <button class="agent" id="ag-dem6">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">dem-6-limiter-les-tentatives</span><span class="a-state">En cours</span></div>
               <div class="a-meta">
-                <span class="ticket-chip">DEM-6</span><span>boucle 2/5</span
-                ><span class="loops"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span class="sep">·</span><span>Opus 5.5</span>
+                <span class="emark">Codex</span><span class="ticket-chip">DEM-6</span><span>boucle 2/5</span
+                ><span class="loops"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span>
               </div>
-              <div class="a-act"><b>Edit</b><span class="tgt mono">src/auth/limiter.ts</span><span class="spend">41 k · 0,52 $</span></div>
+              <div class="a-act"><b>Edit</b><span class="tgt mono">src/auth/limiter.ts</span><span class="spend">41 k · ≈ 0,52 $</span></div>
             </button>
 
             <button class="agent done">
@@ -4268,13 +5993,13 @@
 
             <button class="agent idle">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">fix-login</span><span class="a-state">Prêt</span></div>
-              <div class="a-meta"><span>Fable 5.1</span><span class="sep">·</span><span>Aucun message</span></div>
+              <div class="a-meta"><span class="emark">Claude</span><span>Fable 5.1</span><span class="sep">·</span><span>Aucun message</span></div>
             </button>
           </div>
 
           <section class="sec" aria-label="Lancement">
             <div class="sec-h">
-              Lancement <span class="n">2/3</span>
+              Lancement <span class="n">2/3</span><span class="sec-bad">1 planté</span>
               <span class="acts">
                 <button class="mini-btn">Tout arrêter</button>
                 <button class="icon-btn" aria-label="Commandes de lancement…"><svg class="i s14"><use href="#i-sliders" /></svg></button>
@@ -4340,11 +6065,11 @@
             <div class="head">
               <div class="h-title">
                 <div class="row">
-                  <h1>pagination-users</h1>
-                  <span class="pill"><i></i>En cours</span>
+                  <h1 id="h-name">pagination-users</h1>
+                  <span class="pill" id="h-pill"><i></i>En cours</span>
                 </div>
                 <div class="crumbs">
-                  <span class="proj-name">demo-api</span><span>/</span><span class="mono">escouade/pagination-users</span>
+                  <span class="emark" id="h-mark" role="img" aria-label="Harness : Claude Code">Claude Code</span><span class="proj-name">demo-api</span><span>/</span><span class="mono" id="h-branch">escouade/pagination-users</span><span class="sbx" id="h-sbx" aria-label="Bac à sable : écriture dans le dossier de l’agent, réseau coupé" hidden><svg class="i"><use href="#i-lock" /></svg>Bac à sable</span>
                 </div>
               </div>
               <dl class="figures">
@@ -4354,13 +6079,17 @@
                   <div class="ctx-meter"><i></i></div>
                 </div>
                 <div class="fig opt-fig"><dt>Tokens</dt><dd>12,4 k</dd></div>
-                <div class="fig"><dt>Coût</dt><dd>0,14 $</dd></div>
+                <div class="fig"><dt>Coût</dt><dd id="fig-cost">0,14 $</dd></div>
                 <div class="fig opt-fig"><dt>Fichiers</dt><dd>3</dd></div>
                 <div class="fig opt-fig2"><dt>Durée</dt><dd>3m 15s</dd></div>
               </dl>
               <div class="actions">
-                <button class="btn" data-go="editor" aria-label="Éditeur"><svg class="i s14"><use href="#i-code" /></svg><span class="lbl">Éditeur</span></button>
                 <button class="btn" aria-label="Préparer le lancement"><svg class="i s14"><use href="#i-play" /></svg><span class="lbl">Préparer le lancement</span></button>
+                <div class="vseg" role="group" aria-label="Vue de l’agent" id="vseg">
+                  <button aria-pressed="true" id="v-rich" aria-label="Vue Escouade"><svg class="i s14"><use href="#i-agents" /></svg><span class="lbl">Escouade</span></button>
+                  <button aria-pressed="false" id="v-term" aria-label="Vue Claude Code : l’interface du harness dans un terminal"><svg class="i s14"><use href="#i-term" /></svg><span class="lbl" id="v-term-n">Claude Code</span></button>
+                </div>
+                <button class="btn icon" id="h-more" aria-haspopup="menu" aria-label="Actions de l’agent"><svg class="i s14"><use href="#i-more" /></svg></button>
                 <div class="layout-seg" role="group" aria-label="Disposition">
                   <button aria-pressed="true" aria-label="Disposition classique" id="lay-classic"><svg class="i s14"><use href="#i-lay-1" /></svg></button>
                   <button aria-pressed="false" aria-label="Conversation et fichiers côte à côte" id="lay-split"><svg class="i s14"><use href="#i-lay-2" /></svg></button>
@@ -4426,7 +6155,7 @@
             </div>
 
             <div class="scroll">
-              <div class="thread">
+              <div class="thread" id="th-main">
                 <div class="msg-user">Ajoute une pagination par curseur sur <span class="mono">/users</span>, 50 par page par défaut, et garde la réponse rétrocompatible.</div>
 
                 <div class="msg-ai">
@@ -4473,16 +6202,125 @@
 
                 <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Claude travaille…</span></div>
               </div>
+
+              <!-- dem-6 on Codex: the same conversation, its harness said where it differs (sandbox, estimated cost);
+                   another agent acted on it through Escouade's MCP server. -->
+              <div class="thread" id="th-codex" hidden>
+                <div class="msg-user">Limite les tentatives de connexion : au-delà de 5 échecs en 15 min, refuse, et dis quand réessayer.</div>
+                <div class="msg-ai">
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">rg -n "login" src/auth</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>12 résultats</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-edit" /></svg></span><span class="verb">Edit</span><span class="tgt mono">src/auth/limiter.ts</span><span class="res"><span class="add">+38</span> <span class="del">−4</span></span></button>
+                  </div>
+                  <p>Le limiteur compte les échecs par compte et par adresse. Il me faut lancer la suite d’intégration, qui ouvre le réseau : c’est hors du bac à sable.</p>
+                  <div class="req-card">
+                    <div class="rt"><svg class="i s14" style="color: var(--muted)"><use href="#i-lock" /></svg>Codex demande à sortir du bac à sable</div>
+                    <div class="cmdl"><span class="badge" style="color: var(--muted); font-size: 12px">Bash</span><span class="mono" style="color: var(--soft)">npm run test:integration -- auth</span></div>
+                    <div class="by"><svg class="i s14" style="color: var(--add)"><use href="#i-check" /></svg><span><b>Autorisé pour cette session</b> par <b>chef-escouade</b></span><span class="via">via Escouade</span><span>· 14:21</span></div>
+                  </div>
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">npm run test:integration -- auth</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>17 tests</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-kanban" /></svg></span><span class="verb">Escouade</span><span class="tgt">Donner son avancement</span><span class="res">« 2 critères sur 3 »</span></button>
+                  </div>
+                  <div class="req-card">
+                    <div class="rt"><svg class="i s14" style="color: var(--muted)"><use href="#i-agents" /></svg>Codex t’a posé une question</div>
+                    <span style="color: var(--soft)">Le message d’erreur donne-t-il l’heure exacte ou un délai ?</span>
+                    <div class="opts-r"><span class="opt-r picked">Un délai (« dans 12 min »)</span><span class="opt-r">L’heure exacte</span></div>
+                    <div class="by"><svg class="i s14" style="color: var(--add)"><use href="#i-check" /></svg><span>Répondu par <b>Claude (hors Escouade)</b></span><span class="via">via Escouade</span><span>· 14:24</span></div>
+                  </div>
+                  <p>Le message dit maintenant « Réessaie dans 12 min ». J’écris le test du délai.</p>
+                </div>
+                <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Codex travaille…</span></div>
+              </div>
+
+              <!-- refacto-auth: Claude Code's quota spent, the agent goes on on Codex by a handover file. -->
+              <div class="thread" id="th-handover" hidden>
+                <div class="msg-ai">
+                  <p>Les jetons de rafraîchissement tournent à chaque usage ; il reste à migrer les sessions existantes.</p>
+                </div>
+                <div class="limit answered">
+                  <div class="lt"><svg class="i s14"><use href="#i-clock" /></svg>Quota Claude Code épuisé jusqu’à 18:00 · Principal et Client Acme</div>
+                  <div class="done-line"><svg class="i s14" style="color: var(--add)"><use href="#i-check" /></svg>Continué sur Codex à 15:42 · choisi par toi</div>
+                </div>
+                <div class="ho-sep"><span><b>Suite sur Codex</b> · quota Claude Code épuisé jusqu’à 18:00</span></div>
+                <button class="fold" aria-expanded="false">
+                  <svg class="i s14"><use href="#i-right" /></svg><span class="emark">Codex</span><b style="font-weight: 600">Dossier de passation</b><span class="grow d">Écrit par Escouade depuis la conversation : le premier message de l’agent sur Codex · 3,1 k tokens</span>
+                </button>
+                <div class="msg-ai">
+                  <div class="ai-head"><span class="emark">Codex</span>GPT-5.5-Codex · Demander</div>
+                  <p>J’ai repris depuis le dossier : la rotation est faite, il reste la migration des sessions. Je relis <code>src/auth/session.ts</code>.</p>
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-read" /></svg></span><span class="verb">Read</span><span class="tgt mono">src/auth/session.ts</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>132 lignes</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-edit" /></svg></span><span class="verb">Edit</span><span class="tgt mono">src/auth/migrate-sessions.ts</span><span class="res"><span class="add">+56</span> <span class="del">−0</span></span></button>
+                  </div>
+                </div>
+                <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Codex travaille…</span></div>
+              </div>
+
+              <!-- pagination-users: a message with files, one said aloud; the files kept with it. -->
+              <div class="thread" id="th-att" hidden>
+                <div class="msg-user with">
+                  <span>La liste doit ressembler à la maquette ; le contrat de l’API est dans le PDF.</span>
+                  <div class="atts">
+                    <span class="att"><span class="th" role="img" aria-label="Aperçu de maquette-liste.png"></span><span class="nm2"><b>maquette-liste.png</b><span>212 Ko</span></span></span>
+                    <span class="att"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>contrat-api.pdf</b><span>1,4 Mo</span></span></span>
+                    <span class="att"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>export-users.csv</b><span class="orig">Fichier d’origine, lu là où il est</span></span></span>
+                  </div>
+                </div>
+                <div class="msg-ai"><p>Je lis la maquette et le contrat, puis je compare avec la réponse actuelle de <code>/users</code>.</p></div>
+                <div class="msg-user">Garde 50 par page, mais monte à 100 si le client le demande.</div>
+                <div class="user-meta"><span class="aloud"><svg class="i s14"><use href="#i-wave" /></svg>Dit à voix haute</span></div>
+                <div class="msg-ai"><p>Entendu : 50 par défaut, 100 au plus. <span class="aloud" style="margin-left: 6px"><svg class="i s14"><use href="#i-sound" /></svg>Lu à voix haute</span></p></div>
+              </div>
             </div>
 
-            <div class="composer">
-              <textarea rows="1" placeholder="Envoyer un message à pagination-users…" aria-label="Message"></textarea>
+            <!-- The quota of Claude Code came back while the agent goes on on Codex: the way back, never taken by itself. -->
+            <div class="back-hint" id="back-hint" hidden>
+              <svg class="i s14" style="color: var(--run)"><use href="#i-swap" /></svg>
+              <span class="grow">Le quota <b>Claude Code</b> est revenu. L’agent reste sur Codex tant que tu ne le ramènes pas.</span>
+              <button class="btn">Revenir sur Claude Code</button>
+              <button class="icon-btn" aria-label="Masquer"><svg class="i s14"><use href="#i-close" /></svg></button>
+            </div>
+            <div class="composer" id="composer">
+              <!-- Dropped files: the whole field takes them. -->
+              <div class="drop" id="drop" hidden><div><span><svg class="i"><use href="#i-clip" /></svg>Dépose pour joindre à ton message</span><small>Images, PDF et textes partent dans le message ; le reste, par son chemin</small></div></div>
+              <!-- Dictation: listening, in the field itself; the text lands where the cursor is. -->
+              <div class="dict" id="dict" hidden role="status">
+                <span class="lvl" role="meter" aria-label="Niveau du micro" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100"><i style="height: 6px"></i><i style="height: 12px"></i><i style="height: 17px"></i><i style="height: 10px"></i><i style="height: 14px"></i><i style="height: 7px"></i><i style="height: 4px"></i></span>
+                <b>À l’écoute</b><span style="color: var(--muted)">0:07</span>
+                <span class="hint"><kbd>Ctrl Espace</kbd> pour finir · <kbd>Échap</kbd> pour annuler</span>
+              </div>
+              <!-- Its first use: the model, downloaded once, on this machine. -->
+              <div class="dict offer" id="dict-offer" hidden>
+                <svg class="i s14" style="color: var(--p-ink); margin-top: 2px"><use href="#i-mic" /></svg>
+                <div><b>Télécharger le modèle de transcription ?</b><p>La dictée se fait sur ta machine avec Whisper, modèle « small » (466 Mo). Une seule fois ; rien de ce que tu dis ne quitte ta machine.</p></div>
+                <div class="dl"><span style="display: flex; justify-content: space-between"><span>Téléchargement</span><b style="color: var(--soft)">212 / 466 Mo</b></span><span class="meter"><i style="width: 45%"></i></span><button class="mini-btn" style="justify-self: end">Annuler</button></div>
+              </div>
+              <div class="atts" id="c-atts" hidden>
+                <span class="att"><span class="th" role="img" aria-label="Aperçu de maquette-liste.png"></span><span class="nm2"><b>maquette-liste.png</b><span>212 Ko</span></span><button class="x" aria-label="Retirer maquette-liste.png"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+                <span class="att"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>contrat-api.pdf</b><span>1,4 Mo · dans le message</span></span><button class="x" aria-label="Retirer contrat-api.pdf"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+                <span class="att warn"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>export-users.csv</b><span>Gros fichier : 48 Mo, joint là où il est</span></span><button class="x" aria-label="Retirer export-users.csv"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+                <span class="att copying"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>dump.sql</b><span>Copie… 9 / 21 Mo</span></span><button class="x" aria-label="Annuler la copie de dump.sql"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+              </div>
+              <textarea rows="1" placeholder="Envoyer un message à pagination-users…" aria-label="Message" id="c-text"></textarea>
+              <div class="menu modes" id="mode-menu" role="menu" aria-label="Mode de permission" hidden>
+                <div class="menu-h">Mode · Codex</div>
+                <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Auto</b><span class="d">Un relecteur automatique de Codex décide des demandes à ta place. Bac à sable : écriture dans le dossier de l’agent, réseau coupé.</span></span></button>
+                <button class="mi kb" role="menuitemradio" aria-checked="true"><span class="ml"><b>Demander</b><span class="d">Bac à sable : écriture dans le dossier de l’agent, réseau coupé. Une commande qui en sort demande, git add et git commit compris.</span></span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Plan</b><span class="d">Codex étudie et propose un plan sans rien modifier (bac à sable en lecture seule). Ses questions arrivent dans ce mode.</span></span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Édits auto</b><span class="d">Bac à sable : écriture dans le dossier de l’agent, réseau coupé. git add et git commit acceptés d’office dans son worktree ; le reste demande.</span></span></button>
+                <button class="mi danger" role="menuitemradio" aria-checked="false"><span class="ml"><b>Bypass</b><span class="d">Codex ne demande rien et sort du bac à sable : tout le disque et le réseau.</span></span></button>
+                <div class="foot-note">Les cinq modes de Claude Code, aux mêmes places ; sur Codex, chacun dit son bac à sable. <kbd>Maj Tab</kbd> passe au suivant.</div>
+              </div>
               <div class="c-bar">
-                <button class="chip"><span class="cap">Modèle</span> <b>Sonnet 5.5</b><svg class="i cv"><use href="#i-down" /></svg></button>
-                <button class="chip"><span class="cap">Effort</span> <b>Élevé</b><svg class="i cv"><use href="#i-down" /></svg></button>
-                <button class="chip"><span class="cap">Mode</span> <b>Auto</b><svg class="i cv"><use href="#i-down" /></svg></button>
-                <button class="chip" aria-label="Joindre un fichier"><svg class="i s14"><use href="#i-clip" /></svg></button>
+                <button class="chip" id="chip-model"><span class="cap">Modèle</span> <b>Sonnet 5.5</b><svg class="i cv"><use href="#i-down" /></svg></button>
+                <button class="chip" id="chip-effort"><span class="cap">Effort</span> <b>Élevé</b><svg class="i cv"><use href="#i-down" /></svg></button>
+                <button class="chip" id="chip-mode" aria-haspopup="menu" aria-expanded="false"><span class="cap">Mode</span> <b>Auto</b><svg class="i cv"><use href="#i-down" /></svg></button>
                 <div class="end">
+                  <button class="chip ic" aria-label="Joindre un fichier (ou colle / glisse-le)"><svg class="i s14"><use href="#i-clip" /></svg></button>
+                  <button class="chip ic" id="chip-mic" aria-label="Dicter (Ctrl+Espace)" aria-pressed="false"><svg class="i s14"><use href="#i-mic" /></svg></button>
+                  <button class="chip ic" id="chip-voice" aria-label="Conversation vocale avec l’agent (Ctrl+Maj+Espace)"><svg class="i s14"><use href="#i-wave" /></svg></button>
+                  <span class="c-sep" aria-hidden="true"></span>
                   <button class="btn stop"><svg class="i s14"><use href="#i-stop" /></svg>Stop <kbd>Échap</kbd></button>
                   <button class="btn primary send">Envoyer <kbd>↵</kbd></button>
                 </div>
@@ -4493,6 +6331,7 @@
               <div class="utabs" role="tablist">
                 <button role="tab" aria-selected="true" data-side="files">Non commités <span class="n">3</span></button>
                 <button role="tab" aria-selected="false" data-side="history">Historique</button>
+                <button role="tab" aria-selected="false" data-side="hosts">PR et CI <span class="soon">après la 2.0</span></button>
               </div>
 
               <div class="side-pane" id="side-files">
@@ -4578,6 +6417,19 @@
                   </div>
                 </div>
               </div>
+              <!-- After the redesign (ESC-53 to 70): its place, not its detail. -->
+              <div class="side-pane" id="side-hosts" hidden>
+                <div class="later">
+                  <b>PR, CI et déploiements de la branche de l’agent</b>
+                  <span>Ici, après la 2.0 : l’hébergeur du dépôt (GitHub, GitLab, Bitbucket, Gitea) dit ce que devient la branche.</span>
+                  <ul>
+                    <li>la pull request ouverte, ses revues et ses commentaires ;</li>
+                    <li>les vérifications de la CI, leur log, relancer ;</li>
+                    <li>les déploiements de prévisualisation et leur adresse.</li>
+                  </ul>
+                  <span>Sur la carte du ticket, la ligne « PR #41 → main » d’aujourd’hui, avec l’état de la CI.</span>
+                </div>
+              </div>
             </aside>
           </section>
 
@@ -4599,10 +6451,10 @@
               <div class="col" style="--tone: #6c717a">
                 <div class="col-h">
                   <i class="ring"></i>À faire <span class="n">1</span>
-                  <button class="add-t" aria-label="Nouveau ticket"><svg class="i s14"><use href="#i-plus" /></svg></button>
+                  <button class="add-t" id="add-ticket" aria-label="Nouveau ticket"><svg class="i s14"><use href="#i-plus" /></svg></button>
                 </div>
                 <button class="card">
-                  <div class="card-top"><span>DEM-7</span></div>
+                  <div class="card-top"><span>DEM-7</span><span class="clip-n" role="img" aria-label="2 pièces jointes"><svg class="i"><use href="#i-clip" /></svg>2</span></div>
                   <h2>Journal d’audit des connexions</h2>
                   <ul class="crit">
                     <li><svg class="i"><use href="#i-circle" /></svg>Chaque connexion, réussie ou non, est journalisée</li>
@@ -4617,7 +6469,7 @@
                 <div class="col-h"><i class="ring half"></i>En cours <span class="n">2</span></div>
                 <button class="card">
                   <div class="card-top">
-                    <span>DEM-5</span><span class="loop">Boucle 1/5 <span class="loops"><i class="on"></i><i></i><i></i><i></i><i></i></span></span>
+                    <span>DEM-5</span><span class="emark">Claude</span><span class="clip-n" role="img" aria-label="1 pièce jointe"><svg class="i"><use href="#i-clip" /></svg>1</span><span class="loop">Boucle 1/5 <span class="loops"><i class="on"></i><i></i><i></i><i></i><i></i></span></span>
                   </div>
                   <h2>Export CSV des factures</h2>
                   <ul class="crit">
@@ -4629,7 +6481,7 @@
                 </button>
                 <button class="card">
                   <div class="card-top">
-                    <span>DEM-6</span><span class="loop">Boucle 2/5 <span class="loops"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></span>
+                    <span>DEM-6</span><span class="emark">Codex</span><span class="loop">Boucle 2/5 <span class="loops"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></span>
                   </div>
                   <h2>Limiter les tentatives de connexion</h2>
                   <ul class="crit">
@@ -4637,7 +6489,7 @@
                     <li><svg class="i"><use href="#i-circle" /></svg>Le message d’erreur dit quand réessayer</li>
                     <li><svg class="i"><use href="#i-circle" /></svg>Tests verts</li>
                   </ul>
-                  <div class="card-act"><i class="dot"></i><span class="grow"><b>Edit</b> <span class="mono">src/auth/limiter.ts</span></span><span class="num">0,52 $</span></div>
+                  <div class="card-act"><i class="dot"></i><span class="grow"><b>Edit</b> <span class="mono">src/auth/limiter.ts</span></span><span class="num">≈ 0,52 $</span></div>
                 </button>
               </div>
 
@@ -4799,6 +6651,137 @@
                 <div class="ed-status">
                   <span>Ln 9, Col 47</span><span>TypeScript</span><span>UTF-8</span><span>LF</span><span>Espaces : 2</span>
                   <span class="end">worktree · <span class="mono">pagination-users</span></span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- A subagent's conversation: its breadcrumb back to its agent, its facts, its prompt, its thread. -->
+          <section class="view" id="view-sub" aria-label="Sous-agent">
+            <div class="sv-head">
+              <nav class="crumbs2" aria-label="Fil d’Ariane">
+                <button data-go="agents" aria-label="Revenir à la conversation de pagination-users">pagination-users</button><svg class="i"><use href="#i-right" /></svg><span>Sous-agents</span><svg class="i"><use href="#i-right" /></svg><b>test-writer</b>
+              </nav>
+              <div class="row">
+                <h1>Écrire les tests de la pagination</h1><span class="pill"><i></i>En cours</span><span class="emark lg">Claude Code</span>
+                <button class="btn danger" aria-describedby="stop-sub-hint"><svg class="i s14"><use href="#i-stop" /></svg>Arrêter</button>
+              </div>
+              <dl class="facts-row">
+                <div><dt>Type</dt><dd>test-writer</dd></div>
+                <div><dt>Modèle</dt><dd>Haiku 4.5</dd></div>
+                <div><dt>Tokens</dt><dd>18,2 k</dd></div>
+                <div><dt>Outils</dt><dd>14</dd></div>
+                <div><dt>Durée</dt><dd>2m 05s</dd></div>
+                <div><dt>Tâche du plan</dt><dd>04 · 2/4 étapes</dd></div>
+              </dl>
+              <span id="stop-sub-hint" hidden>Arrêter ce sous-agent seul : l’agent continue.</span>
+            </div>
+            <div class="scroll">
+              <div class="prompt">
+                <div class="ph">Consigne<button>Voir toute la consigne</button></div>
+                <p>Écris les tests de paginate() et de la route /users : premier appel sans curseur, page suivante, dernier curseur, limite au-delà de 100, ancien format sans cursor. Utilise vitest et les fixtures de tests/fixtures/users.ts.</p>
+              </div>
+              <div class="thread">
+                <div class="msg-ai">
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-read" /></svg></span><span class="verb">Read</span><span class="tgt mono">tests/fixtures/users.ts</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>210 lignes</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-edit" /></svg></span><span class="verb">Write</span><span class="tgt mono">tests/paginate.test.ts</span><span class="res"><span class="add">+74</span></span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">npx vitest run paginate</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>9 tests</span></button>
+                  </div>
+                  <p>Les cas du premier appel et de la page suivante passent. J’écris celui du dernier curseur : <code>next</code> doit être absent.</p>
+                </div>
+                <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Le sous-agent travaille…</span></div>
+              </div>
+            </div>
+            <p class="write-hint">Claude Code ne permet pas d’écrire directement à un sous-agent : ton message va à <b>pagination-users</b>, qui le lui transmet.</p>
+            <div class="composer">
+              <textarea rows="1" placeholder="Message pour le sous-agent…" aria-label="Lui écrire, par pagination-users"></textarea>
+              <div class="c-bar"><div class="end"><button class="btn primary send">Envoyer à pagination-users <kbd>↵</kbd></button></div></div>
+            </div>
+          </section>
+
+          <!-- A background task: its facts, its command, its output followed live. -->
+          <section class="view" id="view-task" aria-label="Tâche de fond">
+            <div class="sv-head">
+              <nav class="crumbs2" aria-label="Fil d’Ariane">
+                <button data-go="agents" aria-label="Revenir à la conversation de pagination-users">pagination-users</button><svg class="i"><use href="#i-right" /></svg><span>Tâches de fond</span><svg class="i"><use href="#i-right" /></svg><b>Commande en fond</b>
+              </nav>
+              <div class="row">
+                <h1 class="mono" style="font-size: 14px">npm run test:watch -- users</h1><span class="pill"><i></i>En cours</span>
+                <button class="btn danger"><svg class="i s14"><use href="#i-stop" /></svg>Arrêter</button>
+              </div>
+              <dl class="facts-row">
+                <div><dt>Type</dt><dd>Commande en fond</dd></div>
+                <div><dt>État</dt><dd>En cours</dd></div>
+                <div><dt>Durée</dt><dd>2m 10s</dd></div>
+                <div><dt>Lancée par</dt><dd>pagination-users</dd></div>
+              </dl>
+            </div>
+            <div class="out-h"><b>Sortie</b><span>lue dans le fichier de sortie</span><span class="chk"><span class="cb" role="checkbox" aria-checked="true" aria-label="Suivre la fin"></span>Suivre la fin</span></div>
+            <pre class="term" aria-label="Sortie de npm run test:watch, en lecture seule"><span class="dim"> DEV  v3.2.4 C:/Users/guill/dev/demo-api/.claude/worktrees/pagination-users</span>
+
+ <span class="g">✓</span> tests/users.test.ts <span class="dim">(14 tests)</span> <span class="y">231ms</span>
+ <span class="g">✓</span> tests/paginate.test.ts <span class="dim">(9 tests)</span> <span class="y">92ms</span>
+
+ <span class="dim">Test Files</span>  <span class="g b">2 passed</span> <span class="dim">(2)</span>
+      <span class="dim">Tests</span>  <span class="g b">23 passed</span> <span class="dim">(23)</span>
+
+ <span class="b">PASS</span>  <span class="dim">Waiting for file changes...</span>
+       <span class="dim">press</span> h <span class="dim">to show help,</span> q <span class="dim">to quit</span>
+<span class="dim">14:31:07</span> <span class="cy">change</span> <span class="dim">tests/paginate.test.ts</span>
+ <span class="r">✗</span> tests/paginate.test.ts &gt; dernier curseur &gt; next est absent
+   <span class="r">AssertionError: expected 'u_0050' to be undefined</span></pre>
+          </section>
+
+          <!-- « Vue Codex »: the harness's own interface, in a terminal; its folder-trust question said above it. -->
+          <section class="view" id="view-tterm" aria-label="Vue Codex">
+            <div class="head">
+              <div class="h-title">
+                <div class="row"><h1>search-index</h1><span class="pill" style="--tone: var(--wait)"><i></i>Question</span><span class="emark lg">Codex</span></div>
+                <div class="crumbs"><span class="proj-name">demo-api</span><span>/</span><span class="mono">escouade/search-index</span></div>
+              </div>
+              <div class="actions">
+                <div class="vseg" role="group" aria-label="Vue de l’agent">
+                  <button aria-pressed="false" aria-label="Vue Escouade"><svg class="i s14"><use href="#i-agents" /></svg><span class="lbl">Escouade</span></button>
+                  <button aria-pressed="true" aria-label="Vue Codex : l’interface du harness dans un terminal"><svg class="i s14"><use href="#i-term" /></svg><span class="lbl">Codex</span></button>
+                </div>
+                <button class="btn icon" aria-label="Actions de l’agent"><svg class="i s14"><use href="#i-more" /></svg></button>
+              </div>
+            </div>
+            <div class="trust" role="status">
+              <svg class="i s14"><use href="#i-shield" /></svg>
+              <span class="grow"><b>Codex demande s’il peut faire confiance au dossier de l’agent.</b> Réponds dans le terminal : sans confiance, il s’arrête. Escouade a déjà approuvé ses hooks pour ce seul process.</span>
+            </div>
+            <pre class="term" style="margin-top: 10px"><span class="b">&gt;_ OpenAI Codex</span> <span class="dim">(v0.163.0)</span>
+
+<span class="dim">model:</span>     gpt-5.5-codex   <span class="dim">/model to change</span>
+<span class="dim">directory:</span> ~\dev\demo-api\.claude\worktrees\search-index
+
+<span class="b">You are running Codex in</span> <span class="cy">C:\Users\guill\dev\demo-api\.claude\worktrees\search-index</span>
+
+Since this folder is version controlled, you may wish to allow Codex
+to work in this folder without asking for approval.
+
+<span class="sel">› 1. Yes, allow Codex to work in this folder without asking for approval</span>
+  2. No, ask me to approve edits and commands
+
+<span class="dim">Press enter to continue</span></pre>
+          </section>
+
+          <!-- No harness found: the first start lists each one with the command that installs it. -->
+          <section class="view" id="view-welcome" aria-label="Bienvenue">
+            <div class="welcome">
+              <div class="wbox">
+                <h1>Aucun harness trouvé</h1>
+                <p>Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans <b style="color: var(--soft)">Réglages › Harness</b> s’il n’est pas dans le PATH.</p>
+                <div class="hinst">
+                  <div><b>Claude Code</b><pre class="cmd">npm install -g @anthropic-ai/claude-code</pre><button class="btn icon" aria-label="Copier la commande de Claude Code"><svg class="i s14"><use href="#i-import" /></svg></button></div>
+                  <div><b>Codex</b><pre class="cmd">npm install -g @openai/codex</pre><button class="btn icon" aria-label="Copier la commande de Codex"><svg class="i s14"><use href="#i-import" /></svg></button></div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <button class="btn primary"><svg class="i s14"><use href="#i-restart" /></svg>Chercher à nouveau</button>
+                  <button class="btn">Réglages › Harness…</button>
+                  <span style="margin-left: auto; color: var(--muted); font-size: 12px">Cherché dans le PATH et dans WSL (Ubuntu)</span>
                 </div>
               </div>
             </div>
@@ -5015,9 +6998,15 @@
         <span class="sb-sep"></span>
         <span class="sb-item sb-hide">5 Claude · <b>1,2 Go</b> · <b>6 %</b> CPU</span>
         <div class="sb-spacer"></div>
-        <span class="sb-item">Session 5 h <span class="meter"><i style="width: 22%"></i></span><b>22 %</b> <span class="sb-hide">· reset 2 h 14</span></span>
-        <span class="sb-item">Hebdo <span class="meter"><i style="width: 36%"></i></span><b>36 %</b> <span class="sb-hide">· reset 3 j</span></span>
-        <span class="sb-item">Aujourd’hui <b>3,48 $</b></span>
+        <button class="sb-item sb-upd" id="sb-upd" hidden><svg class="i s14"><use href="#i-download" /></svg>Mise à jour 1.8.0 prête · <b>Redémarrer</b></button>
+        <!-- One group per harness that runs agents: the current account's windows; a click opens every account's. -->
+        <button class="sb-q" id="sb-q" aria-haspopup="dialog" aria-expanded="false" aria-label="Quotas par compte. Claude Code, Principal : 5 heures 22 %, 7 jours 36 %. Codex, Principal : 5 heures 8 %, 7 jours 12 %.">
+          <span class="hn">Claude</span>5 h<span class="meter"><i style="width: 22%"></i></span><b class="pct2">22 %</b>7 j<span class="meter"><i style="width: 36%"></i></span><b class="pct2">36 %</b>
+        </button>
+        <button class="sb-q" tabindex="-1" aria-hidden="true">
+          <span class="hn">Codex</span>5 h<span class="meter"><i style="width: 8%"></i></span><b class="pct2">8 %</b>7 j<span class="meter"><i style="width: 12%"></i></span><b class="pct2">12 %</b>
+        </button>
+        <span class="sb-item">Aujourd’hui <b>≈ 4,38 $</b></span>
         <span class="sb-sep"></span>
         <span class="sb-item"><svg class="i s14"><use href="#i-branch" /></svg><b class="mono">main</b> ↓3 ↑1</span>
         <button class="sb-icon" aria-label="Son des notifications"><svg class="i s14"><use href="#i-sound" /></svg></button>
@@ -5102,6 +7091,243 @@
       </div>
     </div>
 
+    <!-- Lot 0 (ESC-116): panels, menus and windows of what came after the first preview. -->
+
+    <!-- Every account's quota, per harness, above the status bar. -->
+    <div class="qpanel" id="qpanel" role="dialog" aria-label="Quotas des comptes" hidden>
+      <h3><span class="emark">Claude</span>Comptes Claude Code</h3>
+      <div class="qa">
+        <span class="qn">Principal <span class="cur">compte en cours</span></span><span class="qt">Aujourd’hui : 3,48 $</span>
+        <div class="qw">
+          <span class="w"><span class="top"><span>5 h</span><b>22 %</b></span><span class="meter"><i style="width: 22%"></i></span><span>reset 2 h 14</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>36 %</b></span><span class="meter"><i style="width: 36%"></i></span><span>reset 3 j</span></span>
+        </div>
+      </div>
+      <div class="qa">
+        <span class="qn">Client Acme <span class="over">au-delà du seuil de pause</span></span><span class="qt">Aujourd’hui : 0,00 $</span>
+        <div class="qw">
+          <span class="w"><span class="top"><span>5 h</span><b>91 %</b></span><span class="meter hot"><i style="width: 91%"></i></span><span>reset 1 h 02</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>48 %</b></span><span class="meter"><i style="width: 48%"></i></span><span>reset 5 j</span></span>
+        </div>
+      </div>
+      <h3><span class="emark">Codex</span>Comptes Codex</h3>
+      <div class="qa">
+        <span class="qn">Principal <span class="cur">compte en cours</span></span><span class="qt">Aujourd’hui : ≈ 0,90 $ <span class="est">estimé</span></span>
+        <div class="qw">
+          <span class="w"><span class="top"><span>5 h</span><b>8 %</b></span><span class="meter"><i style="width: 8%"></i></span><span>reset 4 h 40</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>12 %</b></span><span class="meter"><i style="width: 12%"></i></span><span>reset 6 j</span></span>
+        </div>
+      </div>
+      <div class="qa">
+        <span class="qn">Perso · offre gratuite</span><span class="qt">Aujourd’hui : ≈ 0,00 $ <span class="est">estimé</span></span>
+        <div class="qw">
+          <span class="w"><span class="top"><span>30 j</span><b>64 %</b></span><span class="meter"><i style="width: 64%"></i></span><span>reset 11 j</span></span>
+        </div>
+      </div>
+      <p class="qnote">Le coût de Codex est estimé d’après ses tokens et les tarifs publics d’OpenAI ; celui de Claude Code est celui que Claude Code donne à la fin de chaque tour.</p>
+    </div>
+
+    <!-- The agent's menu: right click on its card, or « … » in its header. -->
+    <div class="menu agent-menu" id="agent-menu" role="menu" aria-label="Actions de refacto-auth" hidden>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Renommer</b></span><kbd>F2</kbd></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-term" /></svg><span class="ml"><b>Vue Claude Code</b><span class="d">L’interface de Claude Code elle-même, dans un terminal</span></span></button>
+      <button class="mi no-mark kb" role="menuitem" aria-haspopup="menu"><svg class="i s14 ic"><use href="#i-swap" /></svg><span class="ml"><b>Continuer sur un autre harness</b><span class="d">Codex · par un dossier de passation</span></span><svg class="i s14 ic"><use href="#i-right" /></svg></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-remote" /></svg><span class="ml"><b>Désactiver le remote control</b><span class="d">Connecté depuis claude.ai · Claude Code seulement</span></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Dupliquer la conversation</b></span></button>
+      <button class="mi no-mark danger" role="menuitem"><svg class="i s14 ic"><use href="#i-trash" /></svg><span class="ml"><b>Supprimer l’agent…</b></span></button>
+    </div>
+    <div class="menu sub-menu" id="sub-menu" role="menu" aria-label="Continuer sur un autre harness" hidden>
+      <button class="mi kb" role="menuitem"><span class="emark">Codex</span><span class="ml"><b>Continuer sur Codex</b><span class="d">Principal · 5 h 8 % · GPT-5.5-Codex. Le dossier de passation part en premier message.</span></span></button>
+      <div class="foot-note">Pendant un tour : « Attends la fin du tour ». L’agent ne revient jamais seul sur Claude Code.</div>
+    </div>
+
+    <!-- The voice conversation (direction A): the whole window, an orb, what was said in captions. -->
+    <div class="vo" id="vo" role="dialog" aria-modal="true" aria-label="Conversation vocale avec pagination-users" hidden>
+      <div class="vo-top">
+        <svg class="i s14"><use href="#i-wave" /></svg><b>pagination-users</b><span>· conversation vocale</span><span class="emark">Claude</span>
+        <span class="esc"><kbd>Échap</kbd> pour quitter</span>
+      </div>
+      <div class="vo-mid">
+        <div class="orb" aria-hidden="true"></div>
+        <span class="phase" id="vo-phase" role="status"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span>pagination-users te répond</span>
+      </div>
+      <div class="caps" aria-live="polite">
+        <p class="you" style="margin: 0"><b>Toi</b>Et si le client demande deux cents par page ?</p>
+        <p class="ag" style="margin: 0" id="vo-said"><b>pagination-users</b>La limite est plafonnée à cent : au-delà, la route renvoie cent éléments et un curseur. <span class="tail">Je peux renvoyer une erreur à la place si tu préfères.</span></p>
+        <div class="vo-opts" id="vo-opts" hidden><span class="opt-r" style="display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2)">« Le premier » · Plafonner</span><span class="opt-r" style="display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2)">« Le deuxième » · Une erreur</span></div>
+      </div>
+      <div class="vo-bar">
+        <button class="btn"><svg class="i s14"><use href="#i-pause" /></svg>Pause</button>
+        <button class="btn danger"><svg class="i s14"><use href="#i-stop" /></svg>Arrêter</button>
+        <span class="hint">Le message part seul après un silence · parle pendant la réponse pour la couper</span>
+      </div>
+    </div>
+
+    <!-- « Ajouter un compte… »: the harness first, then its sign-in in a terminal. -->
+    <div class="scrim" id="acct-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="acct-title">
+        <div class="m-head">
+          <h2 id="acct-title">Ajouter un compte Codex</h2>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <div class="fgrid" style="grid-template-columns: 1.2fr 1fr">
+            <div class="fld">
+              <span class="lb">Harness</span>
+              <div class="seg inline" role="radiogroup" aria-label="Harness" style="display: inline-grid; grid-template-columns: 1fr 1fr">
+                <button role="radio" aria-selected="false">Claude Code</button><button role="radio" aria-selected="true">Codex</button>
+              </div>
+            </div>
+            <div class="fld"><label for="acct-name">Nom</label><input class="inp" id="acct-name" value="Équipe" /></div>
+          </div>
+          <div class="fld">
+            <span class="lb">Partager avec Principal</span>
+            <div class="chips"><button class="chip-t" aria-pressed="true">config.toml</button><button class="chip-t" aria-pressed="true">AGENTS.md</button><button class="chip-t" aria-pressed="true">skills</button><button class="chip-t" aria-pressed="false">prompts</button><button class="chip-t" aria-pressed="false">règles</button></div>
+            <span class="help">La connexion (auth.json) n’est jamais copiée : chaque compte a la sienne (son jeton change à chaque renouvellement).</span>
+          </div>
+          <div class="fld">
+            <span class="lb">Connexion</span>
+            <pre class="mini-term"><span class="dim">$ codex login</span>
+Starting local login server on <span class="cy">http://localhost:1455</span>.
+If your browser did not open, navigate to this URL to authenticate:
+
+<span class="cy">https://auth.openai.com/oauth/authorize?client_id=app_EMoam…</span>
+</pre>
+            <span class="waitline"><span class="spin" aria-hidden="true"></span>Connecte-toi dans le navigateur ouvert par codex login (ChatGPT). La fenêtre se met à jour seule.</span>
+          </div>
+        </div>
+        <div class="m-foot">
+          <button class="btn" style="margin-right: auto"><svg class="i s14"><use href="#i-restart" /></svg>Relancer</button>
+          <button class="btn" data-close-any>Annuler</button>
+          <button class="btn primary" disabled style="opacity: 0.45">Terminé</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- A ticket: its harness, its files. -->
+    <div class="scrim" id="ticket-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="tk-title">
+        <div class="m-head">
+          <h2 id="tk-title">Nouveau ticket</h2><span class="chip-sm">DEM-8</span>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <div class="fld"><label for="tk-t">Titre du ticket</label><input class="inp" id="tk-t" value="Recherche plein texte dans les factures" /></div>
+          <div class="fld">
+            <span class="lb">Description</span>
+            <div class="inp area" role="textbox" aria-multiline="true" aria-label="Description">Les factures se cherchent par client, montant ou numéro, comme dans la maquette. Le volume de prod est dans l’export joint.</div>
+            <div class="atts" style="padding: 2px 0 0">
+              <span class="att"><span class="th" role="img" aria-label="Aperçu de recherche-factures.png"></span><span class="nm2"><b>recherche-factures.png</b><span>Image · 340 Ko</span></span><button class="x" aria-label="Retirer recherche-factures.png"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+              <span class="att"><span class="th f"><svg class="i s14"><use href="#i-file" /></svg></span><span class="nm2"><b>factures-2026.csv</b><span>Fichier · 6,2 Mo · copié</span></span><button class="x" aria-label="Retirer factures-2026.csv"><svg class="i s14"><use href="#i-close" /></svg></button></span>
+              <button class="btn" style="height: 40px"><svg class="i s14"><use href="#i-clip" /></svg>Joindre un fichier</button>
+            </div>
+            <span class="help">Colle ou glisse un fichier dans la fenêtre : les images restent des images du ticket, les autres fichiers sont copiés avec lui.</span>
+          </div>
+          <div class="fld"><span class="lb">Critères d’acceptation</span><div class="inp area" role="textbox" aria-multiline="true" aria-label="Critères d’acceptation">La recherche trouve une facture par client, montant ou numéro<br />Moins de 200 ms sur 50 000 factures<br />Tests verts</div></div>
+          <div class="fgrid">
+            <div class="fld">
+              <span class="lb">Harness</span>
+              <button class="select"><span class="emark">Codex</span><b>Codex</b><svg class="i s14"><use href="#i-down" /></svg></button>
+              <span class="help">Celui du projet : Claude Code. Le pilote auto suit ce choix.</span>
+            </div>
+            <div class="fld"><span class="lb">Boucles max</span><input class="inp" value="5" aria-label="Boucles max" /></div>
+            <div class="fld"><span class="lb">Après</span><button class="select"><b>DEM-6</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+          </div>
+        </div>
+        <div class="m-foot">
+          <span style="margin-right: auto; color: var(--muted); font-size: 12px; align-self: center"><kbd>Ctrl ↵</kbd> pour ajouter</span>
+          <button class="btn" data-close-any>Annuler</button>
+          <button class="btn primary">Ajouter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- The new project's assistant, form A: steps on a rail; a step at a time, the checks before creating. -->
+    <div class="scrim" id="wiz-modal" hidden>
+      <div class="modal xwide" role="dialog" aria-modal="true" aria-labelledby="wiz-title" style="height: min(640px, 100vh - 80px)">
+        <div class="m-head">
+          <h2 id="wiz-title">Nouveau projet</h2><span class="chip-sm mono">~/dev/billing-service</span><span class="chip-sm" id="wiz-step">Étape 4 sur 8</span>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="wiz">
+          <ol class="rail" aria-label="Étapes">
+            <li class="ok"><span class="k"><svg class="i" style="width: 11px; height: 11px"><use href="#i-check" /></svg></span>Départ</li>
+            <li class="ok"><span class="k"><svg class="i" style="width: 11px; height: 11px"><use href="#i-check" /></svg></span>Réglages copiés</li>
+            <li class="ok"><span class="k"><svg class="i" style="width: 11px; height: 11px"><use href="#i-check" /></svg></span>Worktrees</li>
+            <li id="wr-launch" aria-current="step"><span class="k">4</span>Lancement</li>
+            <li><span class="k">5</span>Kanban</li>
+            <li><span class="k">6</span>Compte et commit</li>
+            <li><span class="k">7</span><span>Intégrations<span class="tag">facultatif</span></span></li>
+            <li id="wr-sum"><span class="k">8</span>Récapitulatif</li>
+          </ol>
+          <div class="m-body" id="wiz-launch">
+            <h3 style="margin: 0; font-size: 15px">Lancement</h3>
+            <p class="wiz-lead">Les commandes qui lancent le projet, chacune dans son terminal. Copiées de <b style="color: var(--soft)">demo-api</b> et vérifiées dans ce dépôt.</p>
+            <p class="notice"><svg class="i"><use href="#i-sparkle" /></svg><span>2 commandes proposées par Claude : relis-les avant de créer.</span></p>
+            <div class="cmds">
+              <div class="cmd-row launch-row cmd-head"><span>Nom</span><span>Commande</span><span>Sous-dossier</span><span>Shell</span></div>
+              <div class="cmd-row launch-row"><input class="inp" value="API" aria-label="Nom" /><input class="inp mono" value="npm run dev:api" aria-label="Commande" /><input class="inp mono" value="api" aria-label="Sous-dossier" /><button class="select"><b>PowerShell</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+              <div class="cmd-row launch-row"><input class="inp" value="Worker" aria-label="Nom" /><input class="inp mono" value="npm run worker" aria-label="Commande" /><input class="inp mono" value="worker" aria-label="Sous-dossier" /><button class="select"><b>PowerShell</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+            </div>
+            <div style="display: flex; gap: 8px"><button class="btn"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter une commande</button><button class="btn"><svg class="i s14"><use href="#i-sparkle" /></svg>Remplir automatiquement</button></div>
+          </div>
+          <div class="m-body" id="wiz-sum" hidden>
+            <h3 style="margin: 0; font-size: 15px">Récapitulatif</h3>
+            <p class="wiz-lead">Ce qui empêcherait la méthode de travail de marcher, puis ce qui sera réglé.</p>
+            <div class="checks2">
+              <div class="ck bad"><svg class="i s14"><use href="#i-shield" /></svg><div><b>La branche cible develop est introuvable</b><p>La validation n’aurait nulle part où merger. Prends la branche courante, ou choisis-en une dans l’étape Kanban.</p></div><button class="btn">Prendre la branche courante</button></div>
+              <div class="ck ok"><svg class="i s14"><use href="#i-check-c" /></svg><div><b>Harness trouvé · un compte sert le projet · dépôt prêt</b></div></div>
+            </div>
+            <dl class="sum">
+              <dt>Harness</dt><dd>Claude Code (celui de demo-api)</dd>
+              <dt>Worktrees</dt><dd>un par agent · .claude/worktrees</dd>
+              <dt>Lancement</dt><dd>2 commandes</dd>
+              <dt>Validation</dt><dd>merge squash → main · worktree supprimé</dd>
+              <dt>Agents des tickets</dt><dd>2 en parallèle · pilote auto oui</dd>
+              <dt>Commit</dt><dd>Rédigé par l’agent · Automatique (Principal)</dd>
+              <dt>Intégrations</dt><dd>aucune</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="m-foot">
+          <button class="btn" style="margin-right: auto">Créer sans l’assistant</button>
+          <button class="btn">Retour</button>
+          <button class="btn primary" id="wiz-next">Suivant</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- The first start's question: the anonymous usage statistics. -->
+    <div class="scrim" id="tele-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tele-title" style="width: min(520px, 100vw - 48px)">
+        <div class="m-head"><svg class="i" style="color: var(--brand)"><use href="#i-stats" /></svg><h2 id="tele-title">Aider à améliorer Escouade ?</h2></div>
+        <div class="m-body">
+          <p style="margin: 0; color: var(--soft)">Escouade peut envoyer des statistiques d’usage, sans rien qui t’identifie : quelles fonctionnalités servent, avec quelle version d’Escouade et quel système. Jamais tes projets, ton code, tes conversations ni ton nom.</p>
+          <p style="margin: 0; color: var(--muted); font-size: 12.5px">Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard, et sont gardées 25 mois. Tu peux changer d’avis à tout moment dans Réglages › À propos.</p>
+          <button class="fold" aria-expanded="false"><svg class="i s14"><use href="#i-right" /></svg><span class="grow">Ce qui est envoyé, en détail</span></button>
+        </div>
+        <div class="m-foot"><button class="btn">Non merci</button><button class="btn primary">Partager les statistiques</button></div>
+      </div>
+    </div>
+
+    <!-- The update, downloaded: what restarting does to the agents. -->
+    <div class="scrim" id="upd-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="upd-title" style="width: min(560px, 100vw - 48px)">
+        <div class="m-head"><svg class="i" style="color: var(--p-ink)"><use href="#i-download" /></svg><h2 id="upd-title">Escouade 1.8.0 est prête</h2><button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button></div>
+        <div class="m-body">
+          <p class="notice"><svg class="i"><use href="#i-info" /></svg><span><b>2 agents travaillent ou attendent ta réponse</b> : leur tour en cours sera interrompu. Les agents de ticket reprennent d’eux-mêmes ; les autres attendent ton prochain message.</span></p>
+          <ul style="margin: 0; padding-left: 18px; color: var(--soft); display: grid; gap: 4px">
+            <li>Codex, deuxième harness : passation d’un agent à l’autre</li>
+            <li>Conversation vocale avec un agent</li>
+            <li>Sous-agents et tâches de fond dans la barre latérale</li>
+          </ul>
+          <button class="link" style="justify-self: start; color: var(--p-ink)">Voir les nouveautés</button>
+        </div>
+        <div class="m-foot"><button class="btn" data-close-any>Plus tard</button><button class="btn primary">Redémarrer maintenant</button></div>
+      </div>
+    </div>
+
     <!-- Settings (Ctrl+,) -->
     <div class="scrim" id="settings" hidden>
       <div class="settings" role="dialog" aria-modal="true" aria-labelledby="s-title">
@@ -5109,19 +7335,21 @@
           <div class="s-nav-h" aria-hidden="true">Réglages</div>
           <div role="tablist" aria-orientation="vertical" aria-label="Réglages">
             <button class="s-tab" role="tab" data-tab="app" aria-selected="false"><svg class="i"><use href="#i-lang" /></svg>Application<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
-            <button class="s-tab" role="tab" data-tab="claude" aria-selected="true"><svg class="i"><use href="#i-spark" /></svg>Claude Code<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
-            <button class="s-tab" role="tab" data-tab="accounts" aria-selected="false"><svg class="i"><use href="#i-user" /></svg>Comptes Claude<i class="chg"></i></button>
+            <button class="s-tab" role="tab" data-tab="claude" aria-selected="true"><svg class="i"><use href="#i-spark" /></svg>Harness<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
+            <button class="s-tab" role="tab" data-tab="accounts" aria-selected="false"><svg class="i"><use href="#i-user" /></svg>Comptes<i class="chg"></i></button>
+            <button class="s-tab" role="tab" data-tab="voice" aria-selected="false"><svg class="i"><use href="#i-mic" /></svg>Voix<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab changed" role="tab" data-tab="notifications" aria-selected="false"><svg class="i"><use href="#i-bell" /></svg>Notifications<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <div class="s-group">Par projet</div>
             <button class="s-tab" role="tab" data-tab="projects" aria-selected="false"><svg class="i"><use href="#i-folder" /></svg>Projets<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="board" aria-selected="false"><svg class="i"><use href="#i-kanban" /></svg>Kanban<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="integrations" aria-selected="false"><svg class="i"><use href="#i-link" /></svg>Intégrations<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <div class="s-group">Système</div>
+            <button class="s-tab" role="tab" data-tab="mcp" aria-selected="false"><svg class="i"><use href="#i-plug" /></svg>Serveur MCP<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="terminals" aria-selected="false"><svg class="i"><use href="#i-term" /></svg>Terminaux<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="network" aria-selected="false"><svg class="i"><use href="#i-globe" /></svg>Réseau<i class="chg" aria-label="Modifié, pas encore enregistré"></i></button>
             <button class="s-tab" role="tab" data-tab="about" aria-selected="false"><svg class="i"><use href="#i-info" /></svg>À propos<i class="chg"></i></button>
           </div>
-          <span class="s-ver">Escouade 1.7.2</span>
+          <span class="s-ver">Escouade 1.7.10</span>
         </nav>
 
         <div class="s-main">
@@ -5159,120 +7387,174 @@
               </section>
             </div>
 
-            <!-- Claude Code -->
+            <!-- Harness: one group per harness (state, executable, defaults, view), then what holds for them all. -->
             <div class="s-pane" data-pane="claude">
               <section class="sg">
-                <h2>Exécutable</h2>
+                <div class="hg"><h2>Claude Code</h2><span class="hstate"><i></i>Prêt · 2.1.4, testée avec Escouade</span></div>
                 <div class="sr">
-                  <div class="lab">
-                    <b>Chemin de l’exécutable</b>
-                    <span class="found"><svg class="i s14"><use href="#i-check" /></svg>claude (trouvé dans le PATH)</span>
-                  </div>
-                  <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable" /></div>
-                </div>
-              </section>
-              <section class="sg">
-                <h2>Nouveaux agents</h2>
-                <div class="sr">
-                  <div class="lab"><b>Modèle par défaut</b></div>
-                  <div class="ctl"><button class="select"><b>Opus 5.5</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\.local\bin\claude.exe</span></div>
+                  <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Claude Code" /></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Effort par défaut</b></div>
+                  <div class="lab"><b>Nouveaux agents</b><span>Modèle, effort et mode de permission par défaut</span></div>
                   <div class="ctl">
-                    <div class="seg inline" role="radiogroup" aria-label="Effort par défaut">
-                      <button role="radio" aria-selected="false">Bas</button><button role="radio" aria-selected="false">Moyen</button><button role="radio" aria-selected="true">Élevé</button><button role="radio" aria-selected="false">Très élevé</button><button role="radio" aria-selected="false">Max</button>
-                    </div>
+                    <button class="select"><b>Opus 5.5</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Élevé</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Auto</b><svg class="i s14"><use href="#i-down" /></svg></button>
                   </div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Mode de permission par défaut</b><span>Un classifieur approuve les actions sûres et demande pour le reste</span></div>
-                  <div class="ctl"><button class="select"><b>Auto</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
-                </div>
-                <div class="sr">
-                  <div class="lab">
-                    <b>Ouvrir les nouveaux agents dans l’interface de Claude Code</b>
-                    <span>Un nouvel agent tourne dans un terminal avec l’interface de Claude Code elle-même plutôt que dans la conversation d’Escouade. Les agents de ticket restent dans la vue d’Escouade.</span>
-                  </div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Ouvrir les nouveaux agents dans l’interface de Claude Code"></button></div>
-                </div>
-                <div class="sr">
-                  <div class="lab">
-                    <b>Les agents tiennent une liste de tâches</b>
-                    <span>S’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan ». S’applique aux agents lancés ensuite.</span>
-                  </div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Les agents tiennent une liste de tâches"></button></div>
+                  <div class="lab"><b>Remote control pour tous les agents</b><span>Chaque agent, existant ou nouveau, est joignable depuis claude.ai et l’app Claude, sous le nom « projet · agent ». Un agent à part : clic droit, « Désactiver le remote control ».</span><span class="only"><svg class="i s14"><use href="#i-info" /></svg>Claude Code seulement : Codex n’a pas de remote control.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Remote control pour tous les agents"></button></div>
                 </div>
               </section>
               <section class="sg">
-                <h2>Processus</h2>
+                <div class="hg"><h2>Codex</h2><span class="hstate warn"><i></i>Version non testée · 0.165.0, testée jusqu’à la 0.163</span></div>
                 <div class="sr">
-                  <div class="lab"><b>Reprise automatique après la limite d’usage</b><span>« continue » envoyé une fois le quota réinitialisé</span></div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Reprise automatique après la limite d’usage"></button></div>
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd</span></div>
+                  <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Codex" /></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Reprendre sur un autre compte un agent de ticket arrêté par la limite</b><span>Sinon il attend la remise à zéro de son compte</span></div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Reprendre sur un autre compte"></button></div>
+                  <div class="lab"><b>Nouveaux agents</b><span>Demander : bac à sable, écriture dans le dossier de l’agent, réseau coupé ; ce qui en sort demande.</span></div>
+                  <div class="ctl">
+                    <button class="select"><b>GPT-5.5-Codex</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Moyen</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Demander</b><svg class="i s14"><use href="#i-down" /></svg></button>
+                  </div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Arrêter les processus Claude inactifs après</b></div>
-                  <div class="ctl"><input class="inp w-num" value="30" aria-label="Arrêter les processus Claude inactifs après (minutes)" /><span class="hint">minutes, 0 = jamais</span></div>
+                  <div class="lab"><b>Coût</b><span>Estimé d’après les tokens et les tarifs publics d’OpenAI : Codex ne donne pas le coût de ses tours. Il est écrit « ≈ » partout.</span></div>
+                  <div class="ctl"><span class="hint">Pas de PDF joint · pas de tâches de fond</span></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Tous les harness</h2>
+                <div class="sr">
+                  <div class="lab"><b>Vue des nouveaux agents</b><span>Terminal du harness : l’interface de Claude Code ou de Codex elle-même. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.</span></div>
+                  <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Vue des nouveaux agents"><button role="radio" aria-selected="true">Escouade</button><button role="radio" aria-selected="false">Terminal du harness</button></div></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Arrêter les processus des agents inactifs après</b></div>
+                  <div class="ctl"><input class="inp w-num" value="30" aria-label="Arrêter les processus des agents inactifs après (minutes)" /><span class="hint">minutes, 0 = jamais</span></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Pièces jointes</b><span>Images, PDF et textes partent dans le message ; tout autre fichier, ou trop gros, est joint par son chemin. Codex ne lit pas les PDF : il les reçoit par leur chemin.</span></div>
+                  <div class="ctl"><input class="inp w-num" value="50" aria-label="Taille maximale d’un fichier joint (Mo)" /><span class="hint">Mo au plus</span></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Joindre le fichier d’origine</b><span>Un fichier déposé est lu là où il est, sans copie. Les tickets et les vues terminal copient toujours.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Joindre le fichier d’origine"></button></div>
                 </div>
               </section>
             </div>
 
-            <!-- Comptes Claude -->
+            <!-- Comptes: a group per harness; then what happens when a quota runs out, in one place. -->
             <div class="s-pane" data-pane="accounts" hidden>
               <section class="sg">
-                <p class="note" style="margin-top: 0">Les nouveaux agents partent sur le premier compte actif sous le seuil de pause, dans cet ordre.</p>
+                <div class="hg"><h2>Comptes Claude Code</h2><button class="btn" id="add-acct-claude"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter un compte…</button></div>
                 <div class="acct">
                   <div class="l1">
-                    <span class="nm">Principal</span>
-                    <span class="stt"><i></i>Connecté · moi@exemple.dev</span>
+                    <span class="nm">Principal</span><span class="stt"><i></i>Connecté · moi@exemple.dev</span>
                     <span class="quota">5 h <span class="meter"><i style="width: 22%"></i></span><b>22 %</b> · 7 j <span class="meter"><i style="width: 36%"></i></span><b>36 %</b></span>
-                    <button class="tgl" role="switch" aria-checked="true" aria-label="Actif"></button>
-                    <span class="ord">
-                      <button class="icon-btn" aria-label="Monter Principal" disabled style="opacity: 0.35"><svg class="i s14"><use href="#i-up" /></svg></button>
-                      <button class="icon-btn" aria-label="Descendre Principal"><svg class="i s14" style="transform: rotate(180deg)"><use href="#i-up" /></svg></button>
-                    </span>
+                    <button class="tgl" role="switch" aria-checked="true" aria-label="Principal actif"></button>
                   </div>
-                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.claude</span></div>
-                  <div class="l2">
-                    <span class="k">Exécutable</span><input class="inp mono w-m" placeholder="Celui des réglages" aria-label="Exécutable" />
-                    <button class="btn" style="margin-left: auto">Se reconnecter…</button>
-                  </div>
-                  <div class="l2">
-                    <span class="k">Réservé à</span>
-                    <div class="chips"><button class="chip-t" aria-pressed="true">Tous les projets</button></div>
-                  </div>
+                  <div class="l2"><span class="k">Réservé à</span><div class="chips"><button class="chip-t" aria-pressed="false">Tous les projets</button><button class="chip-t" aria-pressed="true">demo-api</button><button class="chip-t" aria-pressed="true">infra</button><button class="chip-t" aria-pressed="false">mobile-app</button></div></div>
                 </div>
                 <div class="acct">
                   <div class="l1">
-                    <span class="nm">Client Acme</span>
-                    <span class="stt"><i></i>Connecté · dev@acme.example</span>
-                    <span class="quota">5 h <span class="meter"><i style="width: 61%"></i></span><b>61 %</b> · 7 j <span class="meter"><i style="width: 48%"></i></span><b>48 %</b></span>
-                    <button class="tgl" role="switch" aria-checked="true" aria-label="Actif"></button>
-                    <span class="ord">
-                      <button class="icon-btn" aria-label="Monter Client Acme"><svg class="i s14"><use href="#i-up" /></svg></button>
-                      <button class="icon-btn" aria-label="Descendre Client Acme" disabled style="opacity: 0.35"><svg class="i s14" style="transform: rotate(180deg)"><use href="#i-up" /></svg></button>
-                    </span>
+                    <span class="nm">Client Acme</span><span class="stt"><i></i>Connecté · dev@acme.example</span>
+                    <span class="quota">5 h <span class="meter hot"><i style="width: 91%"></i></span><b style="color: var(--wait)">91 %</b> · 7 j <span class="meter"><i style="width: 48%"></i></span><b>48 %</b></span>
+                    <button class="tgl" role="switch" aria-checked="true" aria-label="Client Acme actif"></button>
                   </div>
-                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.escouade/accounts/client-acme</span></div>
-                  <div class="l2">
-                    <span class="k">Exécutable</span><input class="inp mono w-m" placeholder="Celui des réglages" aria-label="Exécutable" />
-                    <button class="btn" style="margin-left: auto">Se reconnecter…</button>
-                  </div>
-                  <div class="l2">
-                    <span class="k">Réservé à</span>
-                    <div class="chips">
-                      <button class="chip-t" aria-pressed="false"><i style="background: oklch(0.72 0.12 48)"></i>demo-api</button>
-                      <button class="chip-t" aria-pressed="true"><i style="background: oklch(0.72 0.12 300)"></i>studio-web</button>
-                      <button class="chip-t" aria-pressed="false"><i style="background: oklch(0.72 0.12 200)"></i>mobile-app</button>
-                      <button class="chip-t" aria-pressed="false"><i style="background: oklch(0.72 0.12 150)"></i>infra</button>
-                    </div>
-                  </div>
+                  <div class="l2"><span class="k">Réservé à</span><div class="chips"><button class="chip-t" aria-pressed="true">studio-web</button><button class="chip-t" aria-pressed="false">mobile-app (fermé)</button></div></div>
                 </div>
-                <button class="add-line"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter un compte…</button>
+              </section>
+              <section class="sg">
+                <div class="hg"><h2>Comptes Codex</h2><button class="btn" id="add-acct-codex"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter un compte…</button></div>
+                <div class="acct">
+                  <div class="l1">
+                    <span class="nm">Principal</span><span class="stt"><i></i>Connecté · ChatGPT Plus</span>
+                    <span class="quota">5 h <span class="meter"><i style="width: 8%"></i></span><b>8 %</b> · 7 j <span class="meter"><i style="width: 12%"></i></span><b>12 %</b></span>
+                    <button class="tgl" role="switch" aria-checked="true" aria-label="Principal Codex actif"></button>
+                  </div>
+                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.codex</span></div>
+                </div>
+                <div class="acct">
+                  <div class="l1">
+                    <span class="nm">Perso</span><span class="stt"><i style="background: var(--wait)"></i>Offre gratuite</span>
+                    <span class="quota">30 j <span class="meter"><i style="width: 64%"></i></span><b>64 %</b></span>
+                    <button class="tgl" role="switch" aria-checked="false" aria-label="Perso actif"></button>
+                  </div>
+                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.escouade/accounts/codex-perso</span><button class="btn" style="margin-left: auto">Se reconnecter…</button></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Quand un quota est épuisé</h2>
+                <p class="note">Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause. Ce qui suit dit où va un agent arrêté par la limite.</p>
+                <div class="sr">
+                  <div class="lab"><b>Reprendre sur un autre compte du même harness</b><span>Agents de ticket ; la session suit. Sinon il attend la remise à zéro.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Reprendre sur un autre compte"></button></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Puis continuer sur le harness suivant</b><span>Par un dossier de passation, quand tous les comptes du harness sont épuisés. L’agent n’y revient jamais seul : « Revenir sur… » le ramène.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Continuer sur le harness suivant"></button></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Ordre des harness</b><span>Après son harness par défaut, un projet passe aux suivants dans cet ordre.</span></div>
+                  <div class="ctl"><span class="chips"><span class="chip-t" aria-pressed="true">1 · Claude Code</span><span class="chip-t" aria-pressed="false">2 · Codex</span></span><button class="icon-btn" aria-label="Monter Codex"><svg class="i s14"><use href="#i-up" /></svg></button></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Modèle de passation · Codex</b><span>Le modèle d’un agent qui passe sur Codex.</span></div>
+                  <div class="ctl"><button class="select"><b>Le meilleur (GPT-5.5-Codex)</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Voix: dictation, then the conversation; everything on this machine. -->
+            <div class="s-pane" data-pane="voice" hidden>
+              <section class="sg">
+                <h2>Dictée</h2>
+                <p class="note">Whisper transcrit sur ta machine : rien de ce que tu dis n’est envoyé. Seul le modèle est téléchargé, par le proxy des réglages réseau, et sa somme de contrôle vérifiée.</p>
+                <div class="sr"><div class="lab"><b>Micro utilisé</b></div><div class="ctl"><button class="select"><b>Celui du système (Jabra Evolve2 65)</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="sr"><div class="lab"><b>Raccourci</b><span>Un appui bref commence et un second finit ; maintenu, il dicte tant qu’il est enfoncé. Dans le champ qui a le focus : message, ticket, vue terminal.</span></div><div class="ctl"><kbd style="height: 26px; padding: 0 8px; font-size: 12px">Ctrl Espace</kbd><button class="btn">Changer</button></div></div>
+                <div class="sr"><div class="lab"><b>Langue parlée</b></div><div class="ctl"><button class="select"><b>Celle de l’interface</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="model-list" role="radiogroup" aria-label="Modèle de transcription">
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>base · 142 Mo</b><span>Vitesse 5/5 · qualité 2/5</span></span><span></span><button class="btn">Télécharger</button></div>
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="true" tabindex="0"></span><span class="mn"><b>small · 466 Mo</b><span>Vitesse 4/5 · qualité 3/5</span></span><span class="ok"><svg class="i s14"><use href="#i-check" /></svg>Téléchargé</span><button class="btn">Effacer</button></div>
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>large-v3-turbo · 1,6 Go</b><span>Vitesse 2/5 · qualité 5/5</span></span><span class="dl" style="min-width: 150px"><span class="meter"><i style="width: 38%"></i></span>610 Mo sur 1,6 Go</span><button class="btn">Annuler</button></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Conversation</h2>
+                <p class="note">Les réponses sont lues sur ta machine par Piper. Voix libres seulement (modèle et jeu de données), sauf une exception signalée.</p>
+                <div class="model-list" role="radiogroup" aria-label="Voix en français">
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="true" tabindex="0"></span><span class="mn"><b>Siwis · qualité moyenne · 63 Mo</b><span>Français · licence du modèle MIT · jeu de données CC BY 4.0</span></span><span class="ok"><svg class="i s14"><use href="#i-check" /></svg>Téléchargée</span><button class="btn"><svg class="i s14"><use href="#i-play" /></svg>Écouter</button></div>
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>Fuze · qualité haute · 114 Mo</b><span class="exc">Exception à la règle des licences : modèle sans licence déclarée, jeu de données de synthèse (CC BY 4.0)</span></span><span></span><button class="btn">Télécharger</button></div>
+                  <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>Lessac · qualité haute · 109 Mo</b><span>English · MIT · Blizzard 2013</span></span><span></span><button class="btn">Télécharger</button></div>
+                </div>
+                <div class="sr"><div class="lab"><b>Vitesse</b><span>1 : le rythme de la voix</span></div><div class="ctl"><input class="inp w-num" value="1,1" aria-label="Vitesse" /></div></div>
+                <div class="sr"><div class="lab"><b>Délai avant l’envoi</b><span>Le silence après lequel ce que tu as dit part à l’agent.</span></div><div class="ctl"><input class="inp w-num" value="1,2" aria-label="Délai avant l’envoi (secondes)" /><span class="hint">s</span></div></div>
+              </section>
+            </div>
+
+            <!-- Serveur MCP: the one switch, where it is declared, and the journal of what was asked. -->
+            <div class="s-pane" data-pane="mcp" hidden>
+              <section class="sg">
+                <div class="sr">
+                  <div class="lab"><b>Claude et les agents peuvent piloter Escouade</b><span>Claude Code hors d’Escouade et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets, lancer des agents (ce qui dépense du quota), valider ou supprimer des tickets.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Claude et les agents peuvent piloter Escouade"></button></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Déclaré</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Claude Code · compte Principal, compte Client Acme · Codex · compte Principal</span><span class="warn">2 agents déjà lancés auront les outils au prochain démarrage de leur process : « Relancer » sur leur conversation.</span></div>
+                  <div class="ctl"><button class="btn">Copier la commande</button></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Activité</h2>
+                <p class="note">Appels au serveur, les plus récents en tête. Chaque action faite ainsi est aussi marquée « via Escouade » dans la conversation de l’agent concerné.</p>
+                <ul class="log" tabindex="0" aria-label="Appels au serveur MCP, les plus récents en tête">
+                  <li><span class="tm">14:24</span><span class="who">Claude (hors Escouade)</span><span class="wh"><b>Répondre à une question</b> · dem-6-limiter-les-tentatives</span><span class="res">Fait</span></li>
+                  <li><span class="tm">14:21</span><span class="who">chef-escouade</span><span class="wh"><b>Répondre à une demande d’autorisation</b> · dem-6</span><span class="res">Fait</span></li>
+                  <li><span class="tm">14:12</span><span class="who">chef-escouade</span><span class="wh"><b>Créer un ticket</b> · DEM-8 Recherche plein texte</span><span class="res">Fait</span></li>
+                  <li><span class="tm">13:58</span><span class="who">tests-e2e</span><span class="wh"><b>Supprimer un ticket</b> · DEM-2</span><span class="res refused">Refusé</span></li>
+                  <li><span class="tm">13:40</span><span class="who">chef-escouade</span><span class="wh"><b>Lancer un ticket</b> · DEM-7 : bloqué par DEM-6</span><span class="res error">Erreur</span></li>
+                </ul>
               </section>
             </div>
 
@@ -5308,6 +7590,14 @@
                 <div class="sr">
                   <div class="lab"><b>Nom du projet</b></div>
                   <div class="ctl"><input class="inp w-m" value="demo-api" aria-label="Nom du projet" /></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Harness par défaut</b><span>Celui des nouveaux agents (Ctrl N) et des tickets du projet, sauf s’ils en choisissent un autre.</span></div>
+                  <div class="ctl"><button class="select"><span class="emark">Claude</span><b>Claude Code</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Assistant de configuration</b><span>Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.</span></div>
+                  <div class="ctl"><button class="btn" id="open-wiz">Ouvrir l’assistant…</button></div>
                 </div>
                 <div class="sr">
                   <div class="lab"><b>Couleur</b><span>Elle teinte toute la fenêtre quand le projet est ouvert.</span></div>
@@ -5394,9 +7684,15 @@ api/.env.local</textarea></div>
               <section class="sg">
                 <h2>Zone sensible</h2>
                 <div class="sr danger-row">
-                  <div class="lab"><b>Fermer le projet</b><span>Le projet et ses agents sont retirés de l’application, conversations comprises. Les fichiers et les worktrees sur le disque ne sont pas touchés.</span></div>
+                  <div class="lab"><b>Fermer le projet</b><span>Le projet quitte les onglets ; son historique (agents, conversations, tickets) est gardé ci-dessous, et revient si tu rouvres son dossier. Les fichiers et les worktrees ne sont pas touchés.</span></div>
                   <div class="ctl"><button class="btn">Fermer le projet…</button></div>
                 </div>
+              </section>
+              <section class="sg">
+                <h2>Projets fermés</h2>
+                <p class="note">Leur historique est gardé. Rouvrir le rend tel qu’il était ; l’effacer le supprime, réservations de comptes comprises.</p>
+                <div class="closed"><i style="background: oklch(0.72 0.12 200)"></i><span class="cn"><b>mobile-app</b><span>12 agents, 9 tickets · dernière activité le 03/10 · <span class="mono">~/dev/mobile-app</span></span></span><button class="btn">Rouvrir</button><button class="btn danger">Effacer…</button></div>
+                <div class="closed"><i style="background: oklch(0.72 0.12 25)"></i><span class="cn"><b>landing-2025</b><span>3 agents, aucun ticket · le 18/08 · dossier introuvable</span></span><button class="btn" disabled style="opacity: 0.45">Rouvrir</button><button class="btn danger">Effacer…</button></div>
               </section>
             </div>
 
@@ -5524,11 +7820,14 @@ api/.env.local</textarea></div>
                   <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
                   <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round"><path d="M0 -12V12M-12 0H12" stroke-width="5.4" /><path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" /></g>
                 </svg>
-                <div><b>Escouade 1.7.2</b><span>Claude Code détecté · gratuit et open source (MIT)</span></div>
+                <div><b>Escouade 1.7.10</b><span>Harness détectés : Claude Code, Codex · gratuit et open source (MIT)</span></div>
                 <button class="btn" style="margin-left: auto">Rechercher une mise à jour</button>
               </div>
               <section class="sg">
                 <div class="sr"><div class="lab"><b>Installer les mises à jour automatiquement</b><span>Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.</span></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Installer les mises à jour automatiquement"></button></div></div>
+                <div class="sr"><div class="lab"><b>Mise à jour 1.8.0</b><span class="warn">Téléchargement impossible : le proxy a refusé le fichier (403). Le navigateur passe souvent là où l’app est bloquée.</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-ext" /></svg>Télécharger dans le navigateur</button></div></div>
+                <div class="sr"><div class="lab"><b>Statistiques d’usage</b><span>Les fonctionnalités utilisées, la version et le système, sous un identifiant tiré au hasard : ni tes projets ni ton code.</span><button class="link" style="justify-self: start; color: var(--p-ink); font-size: 12px">En détail</button></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Statistiques d’usage"></button></div></div>
+                <div class="sr"><div class="lab"><b>Crédits et licences</b><span>Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence de chaque voix</span></div><div class="ctl"><button class="btn">Ouvrir</button></div></div>
                 <div class="sr"><div class="lab"><b>Données locales</b><span class="mono" style="color: var(--soft)">~/.escouade</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-folder" /></svg>Ouvrir le dossier</button></div></div>
               </section>
             </div>
@@ -5546,6 +7845,116 @@ api/.env.local</textarea></div>
     <div class="toast" id="toast" role="status"><svg class="i s14" id="toast-ic"><use href="#i-check" /></svg><span id="toast-text"></span></div>
 
     <script>
+      // The English labels (index.html?lang=en#…), taken from the app's catalog (src/lib/i18n/en) where it has them:
+      // enough to check what is tight. What agents write stays as they wrote it, as in the app.
+      window.EN_TABS = {
+        app: ['Application', 'Zoom, text size, and languages'],
+        claude: ['Harness', 'Each harness’s executables, versions and agent defaults'],
+        accounts: ['Accounts', 'Each harness’s accounts, and what happens when a quota runs out'],
+        voice: ['Voice', 'Dictation and voice conversation, on your machine'],
+        notifications: ['Notifications', 'Visual and sound alerts'],
+        projects: ['Projects', 'Settings specific to each project'],
+        board: ['Kanban', 'Autopilot and approved tickets'],
+        integrations: ['Integrations', 'Jira, Trello, GitHub Issues, and Linear'],
+        mcp: ['MCP server', 'What Claude and the agents can do in Escouade, and what they did'],
+        terminals: ['Terminals', 'Shells available in the built-in terminals'],
+        network: ['Network', 'HTTP(S) proxy and TLS certificates'],
+        about: ['About', 'Version and local data'],
+      };
+      window.EN_LABELS = [
+        // The shell.
+        ['Vue d’ensemble', 'Overview'], ['Rechercher', 'Search'], ['Éditeur', 'Editor'], ['Stats', 'Stats'],
+        ['Agents', 'Agents'], ['Nouvel agent', 'New agent'], ['Question', 'Question'], ['En cours', 'Running'], ['Terminé', 'Done'], ['Prêt', 'Ready'],
+        ['Oui', 'Yes'], ['Seulement auth', 'Auth only'], ['Lancer toute la suite e2e (38 tests) ?', 'Run the whole e2e suite (38 tests)?'],
+        ['boucle 1/5', 'loop 1/5'], ['boucle 2/5', 'loop 2/5'], ['Aucun message', 'No message'], ['2 fichiers modifiés', '2 files changed'],
+        ['Lancement', 'Launch'], ['Tout arrêter', 'Stop all'], ['en cours', 'running'], ['planté (code 1)', 'crashed (code 1)'], ['Terminaux', 'Terminals'], ['terminé', 'exited'],
+        ['Contexte', 'Context'], ['Tokens', 'Tokens'], ['Coût', 'Cost'], ['Fichiers', 'Files'], ['Durée', 'Duration'], ['Préparer le lancement', 'Prepare launch'],
+        ['1 sous-agent actif', '1 active subagent'], ['3/7 tâches', '3/7 tasks'], ['Réflexion · 6 s', 'Thinking · 6 s'], ['48 lignes', '48 lines'], ['42 tests', '42 tests'], ['4 résultats', '4 results'],
+        ['2/4 étapes', '2/4 steps'], ['après 03', 'after 03'], ['après 04, 05', 'after 04, 05'], ['après 06', 'after 06'],
+        ['Modèle', 'Model'], ['Effort', 'Effort'], ['Élevé', 'High'], ['Moyen', 'Medium'], ['Mode', 'Mode'], ['Demander', 'Ask'], ['Édits auto', 'Accept edits'], ['Stop', 'Stop'], ['Échap', 'Esc'], ['Envoyer', 'Send'],
+        ['Conversation', 'Conversation'], ['actifs', 'active'], ['en attente', 'waiting'], ['Aujourd’hui', 'Today'], ['5 h', '5h'], ['7 j', 'W'], ['30 j', '30d'],
+        ['Claude travaille…', 'Claude is working…'], ['Codex travaille…', 'Codex is working…'], ['Le sous-agent travaille…', 'The subagent is working…'],
+        ['Escouade', 'Escouade'], ['1 sous-agent · 1 en fond', '1 subagent · 1 in background'],
+        // New agent and the harness.
+        ['Celui du projet · Opus 5.5 · Auto', 'The project’s · Opus 5.5 · Auto'], ['GPT-5.5-Codex · Demander · bac à sable', 'GPT-5.5-Codex · Ask · sandbox'],
+        ['Introuvable · Réglages › Harness', 'Not found · Settings › Harness'], ['Harness par défaut du projet…', 'Project’s default harness…'], ['Ctrl Maj N', 'Ctrl Shift N'],
+        ['Bac à sable · dossier de l’agent, réseau coupé', 'Sandbox · agent’s folder, network off'], ['Bac à sable', 'Sandbox'], ['Image · 340 Ko', 'Image · 340 KB'], ['Fichier · 6,2 Mo · copié', 'File · 6.2 MB · copied'], ['Colle ou glisse un fichier dans la fenêtre : les images restent des images du ticket, les autres fichiers sont copiés avec lui.', 'Paste or drop a file in the window: images stay the ticket’s images, other files are copied with it.'], ['Après validation :', 'After approval:'], ['Pilote auto', 'Autopilot'], ['Importer', 'Import'], ['Toutes les places sont prises', 'Every slot is taken'], ['merge squash → main', 'squash merge → main'], ['vide = détection automatique', 'empty = automatic detection'], ['Trouvé : C:\Users\guill\.local\bin\claude.exe', 'Found: C:\Users\guill\.local\bin\claude.exe'], ['Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd', 'Found: C:\Users\guill\AppData\Roaming\npm\codex.cmd'], ['Commande', 'Command'], ['Sous-dossier', 'Subfolder'], ['Les commandes qui lancent le projet, chacune dans son terminal. Copiées de', 'The commands that launch the project, each in its terminal. Copied from'], ['et vérifiées dans ce dépôt.', 'and checked in this repository.'], ['· 7 j', '· W'], ['1 planté', '1 crashed'], ['≈ 4,38 $', '≈ $4.38'], ['0,14 $', '$0.14'], ['≈ 0,52 $', '≈ $0.52'], ['≈ 2,63 $', '≈ $2.63'], ['12 résultats', '12 results'], ['17 tests', '17 tests'], ['132 lignes', '132 lines'], ['210 lignes', '210 lines'], ['9 tests', '9 tests'], ['estimé', 'estimated'], ['dont Codex estimé', 'Codex part estimated'],
+        ['Mode · Codex', 'Mode · Codex'],
+        ['Un relecteur automatique de Codex décide des demandes à ta place. Bac à sable : écriture dans le dossier de l’agent, réseau coupé.', 'An automatic reviewer of Codex decides on the requests for you. Sandbox: writing in the agent’s folder, network off.'],
+        ['Bac à sable : écriture dans le dossier de l’agent, réseau coupé. Une commande qui en sort demande, git add et git commit compris.', 'Sandbox: writing in the agent’s folder, network off. A command that leaves it asks, git add and git commit included.'],
+        ['Codex étudie et propose un plan sans rien modifier (bac à sable en lecture seule). Ses questions arrivent dans ce mode.', 'Codex studies and proposes a plan without changing anything (read-only sandbox). Its questions come in this mode.'],
+        ['Bac à sable : écriture dans le dossier de l’agent, réseau coupé. git add et git commit acceptés d’office dans son worktree ; le reste demande.', 'Sandbox: writing in the agent’s folder, network off. git add and git commit accepted at once in its worktree; the rest asks.'],
+        ['Codex ne demande rien et sort du bac à sable : tout le disque et le réseau.', 'Codex asks nothing and leaves its sandbox: the whole disk and the network.'],
+        ['Les cinq modes de Claude Code, aux mêmes places ; sur Codex, chacun dit son bac à sable.', 'Claude Code’s five modes, in the same places; on Codex, each one says its sandbox.'], ['passe au suivant.', 'goes to the next.'], ['Maj Tab', 'Shift Tab'],
+        // MCP in the conversation.
+        ['Codex demande à sortir du bac à sable', 'Codex asks to leave its sandbox'], ['Autorisé pour cette session', 'Allowed for this session'], ['par', 'by'], ['via Escouade', 'via Escouade'],
+        ['Codex t’a posé une question', 'Codex asked you a question'], ['Répondu par', 'Answered by'], ['Claude (hors Escouade)', 'Claude (outside Escouade)'], ['Donner son avancement', 'Report progress'],
+        // Handover.
+        ['Quota Claude Code épuisé jusqu’à 18:00 · Principal et Client Acme', 'Claude Code quota spent until 18:00 · Principal and Client Acme'], ['Continué sur Codex à 15:42 · choisi par toi', 'Continued on Codex at 15:42 · your choice'],
+        ['Suite sur Codex', 'Continued on Codex'], ['· quota Claude Code épuisé jusqu’à 18:00', '· Claude Code quota spent until 18:00'], ['Dossier de passation', 'Handover file'],
+        ['Écrit par Escouade depuis la conversation : le premier message de l’agent sur Codex · 3,1 k tokens', 'Written by Escouade from the conversation: the agent’s first message on Codex · 3.1k tokens'],
+        ['GPT-5.5-Codex · Demander', 'GPT-5.5-Codex · Ask'], ['Le quota', 'The'], ['est revenu. L’agent reste sur Codex tant que tu ne le ramènes pas.', 'quota came back. The agent stays on Codex until you bring it back.'], ['Revenir sur Claude Code', 'Back to Claude Code'],
+        ['Renommer', 'Rename'], ['Vue Claude Code', 'Claude Code view'], ['L’interface de Claude Code elle-même, dans un terminal', 'Claude Code’s own interface, in a terminal'], ['Continuer sur un autre harness', 'Continue on another harness'], ['Codex · par un dossier de passation', 'Codex · by a handover file'],
+        ['Désactiver le remote control', 'Turn off remote control'], ['Continuer sur Codex', 'Continue on Codex'], ['Confiance du dossier : réponds dans son terminal', 'Folder trust: answer in its terminal'], ['Vue Codex', 'Codex view'], ['Connecté depuis claude.ai · Claude Code seulement', 'Connected from claude.ai · Claude Code only'], ['Dupliquer la conversation', 'Duplicate the conversation'], ['Supprimer l’agent…', 'Delete the agent…'],
+        // Quotas.
+        ['Comptes Claude Code', 'Claude Code accounts'], ['Comptes Codex', 'Codex accounts'], ['compte en cours', 'current'], ['au-delà du seuil de pause', 'past the pause threshold'], ['Perso · offre gratuite', 'Personal · free plan'],
+        ['Aujourd’hui : 3,48 $', 'Today: $3.48'], ['Aujourd’hui : 0,00 $', 'Today: $0.00'], ['Aujourd’hui : ≈ 0,90 $', 'Today: ≈ $0.90'], ['Aujourd’hui : ≈ 0,00 $', 'Today: ≈ $0.00'],
+        ['reset 2 h 14', 'reset 2h 14'], ['reset 3 j', 'reset 3d'], ['reset 1 h 02', 'reset 1h 02'], ['reset 5 j', 'reset 5d'], ['reset 4 h 40', 'reset 4h 40'], ['reset 6 j', 'reset 6d'], ['reset 11 j', 'reset 11d'],
+        ['Le coût de Codex est estimé d’après ses tokens et les tarifs publics d’OpenAI ; celui de Claude Code est celui que Claude Code donne à la fin de chaque tour.', 'Codex’s cost is estimated from its tokens and OpenAI’s public prices; Claude Code’s is the one Claude Code gives at the end of each turn.'],
+        ['Mise à jour 1.8.0 prête ·', 'Update 1.8.0 ready ·'], ['Redémarrer', 'Restart'],
+        // Terminal view.
+        ['Codex demande s’il peut faire confiance au dossier de l’agent.', 'Codex asks whether it can trust the agent’s folder.'],
+        ['Réponds dans le terminal : sans confiance, il s’arrête. Escouade a déjà approuvé ses hooks pour ce seul process.', 'Answer in the terminal: without trust, it stops. Escouade already approved its hooks for this process only.'],
+        // Dictation, voice.
+        ['À l’écoute', 'Listening'], ['pour finir ·', 'to end ·'], ['pour annuler', 'to cancel'], ['Ctrl Espace', 'Ctrl Space'],
+        ['Télécharger le modèle de transcription ?', 'Download the transcription model?'], ['Téléchargement', 'Download'], ['Annuler', 'Cancel'],
+        ['La dictée se fait sur ta machine avec Whisper, modèle « small » (466 Mo). Une seule fois ; rien de ce que tu dis ne quitte ta machine.', 'Dictation runs on your machine with Whisper, model “small” (466 MB). Once; nothing you say leaves your machine.'],
+        ['· conversation vocale', '· voice conversation'], ['pour quitter', 'to quit'], ['pagination-users te répond', 'pagination-users is answering'], ['pagination-users te pose une question', 'pagination-users is asking you a question'], ['Toi', 'You'],
+        ['Pause', 'Pause'], ['Arrêter', 'Stop'], ['Le message part seul après un silence · parle pendant la réponse pour la couper', 'The message goes after a silence · speak during the answer to cut it'],
+        ['Dit à voix haute', 'Said aloud'], ['Lu à voix haute', 'Read aloud'],
+        // Attachments.
+        ['1,4 Mo · dans le message', '1.4 MB · in the message'], ['Gros fichier : 48 Mo, joint là où il est', 'Big file: 48 MB, attached where it is'], ['Copie… 9 / 21 Mo', 'Copying… 9 / 21 MB'], ['212 Ko', '212 KB'], ['1,4 Mo', '1.4 MB'],
+        ['Fichier d’origine, lu là où il est', 'Original file, read where it is'], ['Dépose pour joindre à ton message', 'Drop to attach to your message'], ['Images, PDF et textes partent dans le message ; le reste, par son chemin', 'Images, PDFs and texts go in the message; the rest, by its path'],
+        // Subagents, tasks.
+        ['Sous-agents', 'Subagents'], ['1 en cours · 2 finis', '1 running · 2 finished'], ['2 sous-agents finis', '2 subagents finished'], ['Tâches de fond', 'Background tasks'], ['1 en cours', '1 running'],
+        ['Type', 'Type'], ['Outils', 'Tools'], ['Tâche du plan', 'Plan task'], ['Consigne', 'Prompt'], ['Voir toute la consigne', 'See the whole prompt'],
+        ['Claude Code ne permet pas d’écrire directement à un sous-agent : ton message va à', 'Claude Code does not let you write to a subagent directly: your message goes to'], [', qui le lui transmet.', ', who passes it on.'],
+        ['Envoyer à pagination-users', 'Send to pagination-users'], ['Message pour le sous-agent…', 'Message for the subagent…'],
+        ['Commande en fond', 'Background command'], ['État', 'State'], ['Lancée par', 'Started by'], ['Sortie', 'Output'], ['lue dans le fichier de sortie', 'read from the output file'], ['Suivre la fin', 'Follow the end'],
+        // Settings of the lot.
+        ['Réglages', 'Settings'], ['Application', 'Application'], ['Harness', 'Harness'], ['Comptes', 'Accounts'], ['Voix', 'Voice'], ['Notifications', 'Notifications'], ['Par projet', 'Per project'], ['Projets', 'Projects'], ['Kanban', 'Kanban'], ['Intégrations', 'Integrations'], ['Système', 'System'], ['Serveur MCP', 'MCP server'], ['Réseau', 'Network'], ['À propos', 'About'],
+        ['Enregistrer', 'Save'], ['Prêt · 2.1.4, testée avec Escouade', 'Ready · 2.1.4, tested with Escouade'], ['Version non testée · 0.165.0, testée jusqu’à la 0.163', 'Untested version · 0.165.0, tested up to 0.163'],
+        ['Chemin de l’exécutable', 'Executable path'], ['Nouveaux agents', 'New agents'], ['Modèle, effort et mode de permission par défaut', 'Default model, effort and permission mode'], ['Opus 5.5', 'Opus 5.5'], ['Auto', 'Auto'],
+        ['Remote control pour tous les agents', 'Remote control for every agent'], ['Chaque agent, existant ou nouveau, est joignable depuis claude.ai et l’app Claude, sous le nom « projet · agent ». Un agent à part : clic droit, « Désactiver le remote control ».', 'Every agent, existing or new, is reachable from claude.ai and the Claude app, as “project · agent”. To leave one out: right click, “Turn off remote control”.'],
+        ['Claude Code seulement : Codex n’a pas de remote control.', 'Claude Code only: Codex has no remote control.'],
+        ['Demander : bac à sable, écriture dans le dossier de l’agent, réseau coupé ; ce qui en sort demande.', 'Ask: sandbox, writing in the agent’s folder, network off; what leaves it asks.'],
+        ['Estimé d’après les tokens et les tarifs publics d’OpenAI : Codex ne donne pas le coût de ses tours. Il est écrit « ≈ » partout.', 'Estimated from the tokens and OpenAI’s public prices: Codex does not give what its turns cost. It reads “≈” everywhere.'],
+        ['Pas de PDF joint · pas de tâches de fond', 'No PDF attached · no background tasks'], ['Tous les harness', 'All harnesses'], ['Vue des nouveaux agents', 'New agents’ view'],
+        ['Terminal du harness : l’interface de Claude Code ou de Codex elle-même. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.', 'Harness terminal: Claude Code’s or Codex’s own interface. Each agent switches view from its header; ticket agents stay in Escouade’s view.'],
+        ['Terminal du harness', 'Harness terminal'], ['Arrêter les processus des agents inactifs après', 'Stop idle agents’ processes after'], ['minutes, 0 = jamais', 'minutes, 0 = never'], ['Pièces jointes', 'Attachments'], ['Mo au plus', 'MB at most'],
+        ['Images, PDF et textes partent dans le message ; tout autre fichier, ou trop gros, est joint par son chemin. Codex ne lit pas les PDF : il les reçoit par leur chemin.', 'Images, PDFs and texts go in the message; any other file, or one too big, is attached by its path. Codex reads no PDF: it gets them by their path.'],
+        ['Joindre le fichier d’origine', 'Attach the original file'], ['Un fichier déposé est lu là où il est, sans copie. Les tickets et les vues terminal copient toujours.', 'A dropped file is read where it is, without a copy. Tickets and terminal views always copy.'],
+        ['Ajouter un compte…', 'Add an account…'], ['Connecté · moi@exemple.dev', 'Connected · moi@exemple.dev'], ['Connecté · dev@acme.example', 'Connected · dev@acme.example'], ['Connecté · ChatGPT Plus', 'Connected · ChatGPT Plus'], ['Offre gratuite', 'Free plan'],
+        ['Réservé à', 'Reserved for'], ['Tous les projets', 'All projects'], ['mobile-app (fermé)', 'mobile-app (closed)'], ['Dossier', 'Folder'], ['Se reconnecter…', 'Sign in again…'], ['Perso', 'Personal'],
+        ['Quand un quota est épuisé', 'When a quota runs out'], ['Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause. Ce qui suit dit où va un agent arrêté par la limite.', 'New agents start on their harness’s first active account under the pause threshold. What follows says where an agent stopped by the limit goes.'],
+        ['Reprendre sur un autre compte du même harness', 'Resume on another account of the same harness'], ['Agents de ticket ; la session suit. Sinon il attend la remise à zéro.', 'Ticket agents; the session goes along. Otherwise it waits for the reset.'],
+        ['Puis continuer sur le harness suivant', 'Then continue on the next harness'], ['Par un dossier de passation, quand tous les comptes du harness sont épuisés. L’agent n’y revient jamais seul : « Revenir sur… » le ramène.', 'By a handover file, once every account of the harness is spent. The agent never comes back by itself: “Back to…” brings it back.'],
+        ['Ordre des harness', 'Harness order'], ['Après son harness par défaut, un projet passe aux suivants dans cet ordre.', 'After its default harness, a project goes to the next ones in this order.'], ['Modèle de passation · Codex', 'Handover model · Codex'], ['Le modèle d’un agent qui passe sur Codex.', 'The model of an agent that moves to Codex.'], ['Le meilleur (GPT-5.5-Codex)', 'The best (GPT-5.5-Codex)'],
+        ['Dictée', 'Dictation'], ['Micro utilisé', 'Microphone'], ['Celui du système (Jabra Evolve2 65)', 'The system’s (Jabra Evolve2 65)'], ['Raccourci', 'Shortcut'], ['Changer', 'Change'], ['Langue parlée', 'Spoken language'], ['Celle de l’interface', 'The interface’s'],
+        ['Téléchargé', 'Downloaded'], ['Téléchargée', 'Downloaded'], ['Télécharger', 'Download'], ['Effacer', 'Delete'], ['Écouter', 'Listen'], ['Vitesse', 'Speed'], ['Délai avant l’envoi', 'Delay before sending'],
+        ['Claude et les agents peuvent piloter Escouade', 'Claude and the agents can drive Escouade'], ['Déclaré', 'Declared'], ['Copier la commande', 'Copy the command'], ['Activité', 'Activity'], ['Fait', 'Done'], ['Refusé', 'Refused'], ['Erreur', 'Error'],
+        // Windows of the lot.
+        ['Ajouter un compte Codex', 'Add a Codex account'], ['Nom', 'Name'], ['Partager avec Principal', 'Share with Principal'], ['Connexion', 'Sign-in'], ['Relancer', 'Restart'],
+        ['Connecte-toi dans le navigateur ouvert par codex login (ChatGPT). La fenêtre se met à jour seule.', 'Sign in in the browser codex login opened (ChatGPT). The window updates by itself.'],
+        ['Nouveau ticket', 'New ticket'], ['Titre du ticket', 'Ticket title'], ['Description', 'Description'], ['Joindre un fichier', 'Attach a file'], ['Critères d’acceptation', 'Acceptance criteria'], ['Boucles max', 'Max loops'], ['Après', 'After'], ['Ajouter', 'Add'], ['pour ajouter', 'to add'],
+        ['Celui du projet : Claude Code. Le pilote auto suit ce choix.', 'The project’s: Claude Code. The autopilot follows this choice.'],
+        ['Nouveau projet', 'New project'], ['Étape 4 sur 8', 'Step 4 of 8'], ['Étape 8 sur 8', 'Step 8 of 8'], ['Départ', 'Start'], ['Réglages copiés', 'Copied settings'], ['Worktrees', 'Worktrees'], ['Compte et commit', 'Account and commit'], ['facultatif', 'optional'], ['Récapitulatif', 'Summary'],
+        ['Ajouter une commande', 'Add a command'], ['Remplir automatiquement', 'Fill in automatically'], ['Créer sans l’assistant', 'Create without the assistant'], ['Retour', 'Back'], ['Suivant', 'Next'], ['Créer le projet', 'Create the project'],
+        ['2 commandes proposées par Claude : relis-les avant de créer.', '2 commands proposed by Claude: read them before creating.'],
+        ['Aucun harness trouvé', 'No harness found'], ['Chercher à nouveau', 'Search again'],
+      ];
+    </script>
+    <script>
       // Données fictives : just enough behaviour to feel the window. The address (#run, #git…) opens a screen directly.
       const $ = (s) => document.querySelector(s);
       const $$ = (s) => [...document.querySelectorAll(s)];
@@ -5562,7 +7971,7 @@ api/.env.local</textarea></div>
       function show(v) {
         leaveGlobal();
         view = v;
-        for (const id of ['agents', 'board', 'term', 'run', 'editor']) $('#view-' + id).classList.toggle('on', id === v);
+        for (const id of ['agents', 'board', 'term', 'run', 'editor', 'sub', 'task', 'tterm', 'welcome']) $('#view-' + id).classList.toggle('on', id === v);
         $$('.seg [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === (v === 'board' ? 'board' : 'agents'))));
         $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current'));
         if (v === 'agents' || v === 'editor') $$('.agents .agent')[2].setAttribute('aria-current', 'true');
@@ -5623,6 +8032,7 @@ api/.env.local</textarea></div>
         $$('.utabs [data-side]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.side === which)));
         $('#side-files').hidden = which !== 'files';
         $('#side-history').hidden = which !== 'history';
+        $('#side-hosts').hidden = which !== 'hosts';
       }
       $$('.utabs [data-side]').forEach((b) => b.addEventListener('click', () => sideTab(b.dataset.side)));
       $('.foot-row .changes').closest('.foot-row').addEventListener('click', () => (show('agents'), split(true), sideTab('files')));
@@ -5813,8 +8223,10 @@ api/.env.local</textarea></div>
       const settings = $('#settings');
       const TABS = {
         app: ['Application', 'Langue de l’interface et des textes rédigés par Claude'],
-        claude: ['Claude Code', 'Exécutable, modèle et permissions par défaut'],
-        accounts: ['Comptes Claude', 'Les comptes sur lesquels partent les agents, enregistrés à chaque changement'],
+        claude: ['Harness', 'Exécutables, versions et réglages des agents de chaque harness'],
+        accounts: ['Comptes', 'Les comptes de chaque harness, et ce qui se passe quand un quota est épuisé'],
+        voice: ['Voix', 'Dictée et conversation vocale, sur ta machine'],
+        mcp: ['Serveur MCP', 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait'],
         notifications: ['Notifications', 'Alertes visuelles et sonores'],
         projects: ['Projets', 'Réglages propres à chaque projet'],
         board: ['Kanban', 'Pilote auto et tickets validés'],
@@ -5926,6 +8338,169 @@ api/.env.local</textarea></div>
       if (route.startsWith('settings')) openSettings(route.split('-')[1] || 'claude');
       if (route === 'overview') global('overview');
       if (route === 'stats') (global('stats'), drawChart());
+
+      // ---------- Lot 0 (ESC-116) ----------
+
+      /** One popover open at a time: its trigger says so, Escape or a click elsewhere closes it. */
+      const POPS = [
+        ['#new-more', '#new-menu'],
+        ['#chip-mode', '#mode-menu'],
+        ['#sb-q', '#qpanel'],
+        ['#h-more', '#agent-menu'],
+      ];
+      function pop(which, on) {
+        for (const [btn, el] of POPS) {
+          const open = el === which ? (on ?? $(el).hidden) : false;
+          $(el).hidden = !open;
+          $(btn).setAttribute('aria-expanded', String(open));
+        }
+        if (which !== '#agent-menu') $('#sub-menu').hidden = true;
+      }
+      for (const [btn, el] of POPS) $(btn).addEventListener('click', (e) => (e.stopPropagation(), pop(el)));
+      document.addEventListener('click', (e) => !e.target.closest('.menu, .qpanel') && pop(null));
+      $$('.agents .agent').forEach((a) =>
+        a.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          pop('#agent-menu', true);
+        }),
+      );
+
+      /** A conversation of the panel: whose, on which harness, which thread. */
+      const VARIANTS = {
+        main: { th: 'th-main', name: 'pagination-users', card: '#ag-pag', harness: 'Claude Code', branch: 'escouade/pagination-users', cost: '0,14 $', model: 'Sonnet 5.5', effort: 'Élevé', mode: 'Auto', plan: true },
+        att: { th: 'th-att', name: 'pagination-users', card: '#ag-pag', harness: 'Claude Code', branch: 'escouade/pagination-users', cost: '0,14 $', model: 'Sonnet 5.5', effort: 'Élevé', mode: 'Auto' },
+        codex: { th: 'th-codex', name: 'dem-6-limiter-les-tentatives', card: '#ag-dem6', harness: 'Codex', branch: 'ticket/dem-6', cost: '≈ 0,52 $<span class="est">estimé</span>', model: 'GPT-5.5-Codex', effort: 'Moyen', mode: 'Demander', sandbox: true },
+        handover: { th: 'th-handover', name: 'refacto-auth', card: '#ag-refacto', harness: 'Codex', branch: 'escouade/refacto-auth', cost: '≈ 2,63 $<span class="est">dont Codex estimé</span>', model: 'GPT-5.5-Codex', effort: 'Moyen', mode: 'Demander', sandbox: true, back: true },
+      };
+      function variant(key) {
+        const v = VARIANTS[key];
+        show('agents');
+        for (const k of Object.values(VARIANTS)) $('#' + k.th).hidden = k.th !== v.th;
+        $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current'));
+        $(v.card).setAttribute('aria-current', 'true');
+        $('#h-name').textContent = v.name;
+        $('#h-mark').textContent = v.harness;
+        $('#h-mark').setAttribute('aria-label', `Harness : ${v.harness}`);
+        $('#h-sbx').hidden = !v.sandbox;
+        $('#h-branch').textContent = v.branch;
+        $('#fig-cost').innerHTML = v.cost;
+        $('#v-term-n').textContent = v.harness;
+        $('#v-term').setAttribute('aria-label', `Vue ${v.harness} : l’interface du harness dans un terminal`);
+        $('#chip-model b').textContent = v.model;
+        $('#chip-effort b').textContent = v.effort;
+        $('#chip-mode b').textContent = v.mode;
+        $('#c-text').placeholder = `Envoyer un message à ${v.name}…`;
+        $('#plan').hidden = !v.plan;
+        $('#back-hint').hidden = !v.back;
+        if (key === 'handover') {
+          $('#ag-refacto .emark').textContent = 'Codex';
+          $('#ag-refacto .a-meta span:nth-child(2)').textContent = 'GPT-5.5-Codex';
+        }
+      }
+
+      // The composer's voice and files.
+      $('#chip-mic').addEventListener('click', () => {
+        const on = $('#dict').hidden;
+        $('#dict').hidden = !on;
+        $('#chip-mic').classList.toggle('live', on);
+        $('#chip-mic').setAttribute('aria-pressed', String(on));
+      });
+      $('#chip-voice').addEventListener('click', () => ($('#vo').hidden = false));
+      function voicePhase(question) {
+        $('#vo-phase').lastChild.textContent = question ? 'pagination-users te pose une question' : 'pagination-users te répond';
+        $('#vo-said').innerHTML = question
+          ? '<b>pagination-users</b>Au-delà de cent par page : je plafonne, ou je renvoie une erreur ? Les choix sont : plafonner, ou une erreur.'
+          : $('#vo-said').innerHTML;
+        $('#vo-opts').hidden = !question;
+      }
+
+      // The windows of the lot.
+      const openModal = (id) => ($(id).hidden = false);
+      $$('[data-close-any]').forEach((b) => b.addEventListener('click', () => (b.closest('.scrim').hidden = true)));
+      $('#add-ticket').addEventListener('click', () => openModal('#ticket-modal'));
+      $('#add-acct-codex').addEventListener('click', () => openModal('#acct-modal'));
+      $('#open-wiz').addEventListener('click', () => ((settings.hidden = true), openModal('#wiz-modal')));
+      function wizStep(summary) {
+        $('#wiz-launch').hidden = summary;
+        $('#wiz-sum').hidden = !summary;
+        $('#wr-launch').toggleAttribute('aria-current', !summary);
+        if (summary)
+          $$('.rail li:not(#wr-sum)').forEach((li) => {
+            li.classList.add('ok');
+            li.querySelector('.k').innerHTML = '<svg class="i" style="width: 11px; height: 11px"><use href="#i-check" /></svg>';
+          });
+        $('#wr-sum').setAttribute('aria-current', summary ? 'step' : 'false');
+        $('#wiz-step').textContent = summary ? 'Étape 8 sur 8' : 'Étape 4 sur 8';
+        $('#wiz-next').textContent = summary ? 'Créer le projet' : 'Suivant';
+      }
+      $('#wiz-next').addEventListener('click', () => wizStep(true));
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        pop(null);
+        $('#vo').hidden = true;
+        $$('.scrim').forEach((m) => (m.hidden = true));
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.code === 'Space') (e.preventDefault(), $('#chip-mic').click());
+      });
+
+      // Straight to a screen of the lot: index.html#new-agent, #codex, #modes, #handover, #agent-menu, #quota,
+      // #account-codex, #terminal-view, #dictation, #dictation-offer, #voice, #voice-question, #attachments, #drop,
+      // #ticket, #subagent, #task, #wizard, #wizard-summary, #welcome, #telemetry, #update, #update-failed, #hosts,
+      // #settings-voice, #settings-mcp; add ?lang=en for the English labels.
+      if (route === 'new-agent') pop('#new-menu', true);
+      if (route === 'codex') variant('codex');
+      if (route === 'modes') (variant('codex'), pop('#mode-menu', true));
+      if (route === 'handover') variant('handover');
+      if (route === 'agent-menu') (pop('#agent-menu', true), ($('#sub-menu').hidden = false), $('#ag-refacto').setAttribute('aria-current', 'true'), $('#ag-pag').removeAttribute('aria-current'));
+      if (route === 'quota') pop('#qpanel', true);
+      if (route === 'account-codex') (openSettings('accounts'), openModal('#acct-modal'));
+      if (route === 'terminal-view') (show('tterm'), $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current')), ($('#ag-search').hidden = false), $('#ag-search').setAttribute('aria-current', 'true'));
+      if (route === 'dictation') (variant('main'), $('#chip-mic').click(), ($('#c-text').value = 'Garde 50 par page, mais monte à 100 si le client'));
+      if (route === 'dictation-offer') (variant('main'), ($('#dict-offer').hidden = false), $('#chip-mic').classList.add('live'));
+      if (route === 'voice') (variant('main'), ($('#vo').hidden = false));
+      if (route === 'voice-question') (variant('main'), ($('#vo').hidden = false), voicePhase(true));
+      if (route === 'attachments') (variant('att'), ($('#c-atts').hidden = false));
+      if (route === 'drop') (variant('att'), ($('#c-atts').hidden = false), ($('#drop').hidden = false), $('#composer').classList.add('dragging'));
+      if (route === 'ticket') (show('board'), openModal('#ticket-modal'));
+      if (route === 'subagent') (show('sub'), ($('#subl').hidden = false), $('#sub-row').setAttribute('aria-current', 'true'), $('#ag-pag').removeAttribute('aria-current'));
+      if (route === 'task') (show('task'), ($('#subl').hidden = false), $('#task-row').setAttribute('aria-current', 'true'), $('#ag-pag').removeAttribute('aria-current'));
+      if (route === 'wizard') openModal('#wiz-modal');
+      if (route === 'wizard-summary') (openModal('#wiz-modal'), wizStep(true));
+      if (route === 'welcome') (show('welcome'), app.classList.add('first'));
+      if (route === 'telemetry') openModal('#tele-modal');
+      if (route === 'update') (($('#sb-upd').hidden = false), openModal('#upd-modal'));
+      if (route === 'update-failed') {
+        $('#sb-upd').hidden = true;
+        toast('Téléchargement de la mise à jour impossible : le proxy a refusé le fichier (403).', { bad: true, sticky: true, link: 'Télécharger dans le navigateur' });
+      }
+      if (route === 'hosts') (split(true), sideTab('hosts'));
+
+      // The English labels, to check what is tight (the agents' own words stay as they came).
+      if (new URLSearchParams(location.search).get('lang') === 'en') english();
+      function english() {
+        document.documentElement.lang = 'en';
+        const EN = new Map(window.EN_LABELS);
+        const norm = (t) => t.replace(/\s+/g, ' ').trim();
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        for (const n of nodes) {
+          const k = norm(n.nodeValue);
+          if (!k || !EN.has(k)) continue;
+          const lead = /^\s/.test(n.nodeValue) ? ' ' : '';
+          const trail = /\s$/.test(n.nodeValue) ? ' ' : '';
+          n.nodeValue = lead + EN.get(k) + trail;
+        }
+        for (const el of $$('[placeholder]')) el.placeholder = el.placeholder.replace(/^Envoyer un message à (.*)…$/, 'Send a message to $1…');
+        for (const el of $$('[placeholder], [aria-label]'))
+          for (const a of ['placeholder', 'aria-label']) {
+            const v = el.getAttribute(a);
+            if (v && EN.has(norm(v))) el.setAttribute(a, EN.get(norm(v)));
+          }
+        for (const [id, [t, d]] of Object.entries(window.EN_TABS)) TABS[id] = [t, d];
+        if (!settings.hidden) settingsTab($('.s-tab[aria-selected="true"]').dataset.tab);
+      }
     </script>
   </body>
 </html>
