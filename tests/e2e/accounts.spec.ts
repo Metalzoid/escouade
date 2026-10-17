@@ -104,3 +104,86 @@ test.describe('two accounts, a conversation stopped by the usage limit', () => {
     expect(fs.readFileSync(session(pro)[0], 'utf8')).toContain('Bonjour, tu as dit : continue');
   });
 });
+
+// The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings (its adapter is not written
+// yet, so nothing runs on it: its account is only listed, reserved and put in order).
+test.describe('the accounts of two harnesses', () => {
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        fs.mkdirSync(proDir(root), { recursive: true });
+        return {
+          accounts: [
+            { id: 'pro', name: 'Pro', configDir: proDir(root), claudePath: '', active: true },
+            { id: 'work', name: 'Travail', engine: 'codex', configDir: path.join(root, 'codex-work'), claudePath: '', active: true },
+          ],
+        };
+      },
+    },
+  });
+
+  test('are grouped by harness, reserved to projects and put in order, the status bar on Claude Code’s', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    // The status bar shows the accounts of the harness of the agent shown: Claude Code's, its two windows.
+    const group = page.getByRole('button', { name: 'Quotas par compte (compte en cours : Principal)' });
+    await expect(group).toBeVisible();
+    await expect(group).toHaveAccessibleDescription(/^Quota sur 5 heures : .*\. Quota sur 7 jours : /);
+    // The panel groups them by harness; Codex's has no quota read.
+    await group.click();
+    const panel = page.getByRole('dialog', { name: 'Quotas des comptes' });
+    await expect(panel.getByRole('heading')).toHaveText(['Claude Code', 'Codex']);
+    await expect(panel.getByRole('region', { name: 'Comptes Codex' }).getByRole('group', { name: 'Travail' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' });
+    const codex = dialog.getByRole('list', { name: 'Comptes Codex' });
+    await expect(claude.getByRole('listitem')).toHaveCount(2);
+    await expect(codex.getByRole('listitem')).toHaveCount(1);
+    // Codex's account is the last active one of its harness: it stays on, whatever Claude Code has.
+    await expect(codex.getByRole('listitem', { name: 'Travail' }).getByRole('switch', { name: 'Actif' })).toBeDisabled();
+    await expect(claude.getByRole('listitem', { name: 'Pro' }).getByRole('switch', { name: 'Actif' })).toBeEnabled();
+
+    // Reserved to the project, as a Claude account is.
+    await codex.getByRole('listitem', { name: 'Travail' }).getByRole('checkbox', { name: 'demo-api' }).check();
+    const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
+    await expect.poll(() => settings().accounts.find((a: { id: string }) => a.id === 'work')?.projects).toEqual([expect.any(String)]);
+
+    // « Ordre des harness »: Codex first, kept by the backend.
+    const order = dialog.getByRole('list', { name: 'Ordre des harness' });
+    await expect(order.getByRole('listitem')).toHaveText([/Claude Code/, /Codex/]);
+    await order.getByRole('button', { name: 'Monter Codex' }).click();
+    await expect(order.getByRole('listitem')).toHaveText([/Codex/, /Claude Code/]);
+    await expect.poll(() => settings().engineOrder).toEqual(['codex', 'claude']);
+    // The groups follow it.
+    await expect
+      .poll(() => dialog.getByRole('list', { name: /^Comptes / }).evaluateAll((ls) => ls.map((l) => l.getAttribute('aria-label'))))
+      .toEqual(['Comptes Codex', 'Comptes Claude Code']);
+  });
+
+  test('the statistics are filtered by harness and put the harnesses side by side', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await send(page, 'Bonjour');
+    await expect(page.getByText('Tâche terminée')).toBeVisible();
+    await page.getByRole('button', { name: 'Stats' }).click();
+    const harness = page.getByRole('combobox', { name: 'Harness' });
+    await expect(harness.getByRole('option')).toHaveText(['Tous les harness', 'Claude Code', 'Codex']);
+    // The turn of Claude Code's agent, by harness.
+    const byEngine = page.getByRole('table', { name: 'Par harness' });
+    await expect(byEngine.getByRole('row')).toHaveCount(2);
+    await expect(byEngine.getByRole('row').nth(1)).toContainText('Claude Code');
+    const prompts = page.locator('.kpi').filter({ hasText: 'Prompts' });
+    await expect(prompts).toContainText('1');
+    // Codex alone: nothing it ran, nor any prompt of it.
+    await harness.selectOption({ label: 'Codex' });
+    await expect(prompts.locator('.kv')).toHaveText('0');
+    // Its accounts alone to choose from: a single one, so no choice to make.
+    await expect(page.getByRole('combobox', { name: 'Compte' })).toBeHidden();
+    await harness.selectOption({ label: 'Claude Code' });
+    await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText(['Tous les comptes', 'Principal', 'Pro']);
+  });
+});

@@ -1,22 +1,24 @@
 <script lang="ts">
-  import { quotaName, quotaTip } from '../lib/accounts';
+  import { meterLabel, meterName, quotaTip } from '../lib/accounts';
   import { fCountdown, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import { tip } from '../lib/tip';
   import type { RateWindow } from '../lib/types';
 
-  // One quota window of an account: « 5h <bar> reset 3h01 ». The bar is a meter that says its value to the keyboard
-  // and to screen readers; the percentage is not written (a sighted pointer finds it in a tooltip over the bar, a
-  // keyboard on the bar's focus) unless `detail`: the panel of the accounts writes it next to the bar.
+  // One meter of an account's quota: a window labelled by its length (« 5h <bar> reset 3h01 », « 7j », « 30j »), or the
+  // month's credits. The bar is a meter that says its value to the keyboard and to screen readers; the percentage is not
+  // written (a sighted pointer finds it in a tooltip over the bar, a keyboard on the bar's focus) unless `detail`: the
+  // panel of the accounts writes it next to the bar.
   let {
-    kind,
+    minutes,
     usage,
     now,
     detail = false,
     focusable = true,
   }: {
-    kind: 'fiveHour' | 'sevenDay';
-    /** The window as last read; null while it is not known. */
+    /** The window's length (300: 5 hours); null for the month's credits. */
+    minutes: number | null;
+    /** The meter as last read; null while it is not known. */
     usage: RateWindow | null;
     /** The clock (ms), to count down to the reset. */
     now: number;
@@ -26,8 +28,8 @@
     focusable?: boolean;
   } = $props();
 
-  const label = $derived(kind === 'fiveHour' ? t('accounts.quota.fiveHour.label') : t('accounts.quota.sevenDay.label'));
-  const name = $derived(quotaName(kind));
+  const label = $derived(meterLabel(minutes));
+  const name = $derived(meterName(minutes));
   const pct = $derived(usage ? Math.min(100, Math.max(0, usage.pct)) : 0);
   /** « 42 % · remise à zéro le 10/10 à 18:00 »: the tooltip and the bar's value as the screen reader reads it. */
   const text = $derived(quotaTip(usage));
@@ -97,7 +99,7 @@
   }
   /* The rows of the panel line up: the same width for the label, the bar and the percentage. */
   .detail .lbl {
-    width: 22px;
+    min-width: 22px;
     color: var(--muted);
   }
   .detail .bar {

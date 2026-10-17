@@ -225,7 +225,7 @@ class AppState {
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
   settings = $state<Settings>({} as Settings);
-  usage = $state<Usage>({ fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' });
+  usage = $state<Usage>({ todayCost: 0, accounts: [], current: {} });
   resources = $state<Resources>({ instances: 0, memory: 0, cpu: 0, agents: [] });
   git = $state<Record<string, GitInfo>>({});
   shells = $state<ShellInfo[]>([]);

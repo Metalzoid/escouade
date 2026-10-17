@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { accountName, serves } from '../../lib/accounts';
+  import { accountName, accountsOf, serves } from '../../lib/accounts';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
   import type { CommitMode } from '../../lib/types';
@@ -14,7 +14,9 @@
 
   const ACCOUNTS = $derived([
     { value: '', label: t('accounts.project.auto'), title: t('accounts.project.autoTitle') },
-    ...app.settings.accounts.filter((a) => a.active && serves(a, form.project?.id)).map((a) => ({ value: a.id, label: accountName(a) })),
+    ...accountsOf(form.config.engine ?? undefined)
+      .filter((a) => a.active && serves(a, form.project?.id))
+      .map((a) => ({ value: a.id, label: accountName(a) })),
   ]);
   const COMMIT_MODES = $derived<{ value: CommitMode; label: string }[]>(
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),

@@ -1077,10 +1077,10 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     };
     h.core.record_usage(
         crate::accounts::PRINCIPAL,
-        Reading::Windows((window(42.0, soon), window(10.5, soon + 1))),
+        Reading::claude((window(42.0, soon), window(10.5, soon + 1))),
     );
     h.core
-        .record_usage("pro", Reading::Windows((window(7.0, soon + 2), None)));
+        .record_usage("pro", Reading::claude((window(7.0, soon + 2), None)));
     let c = external(&h).await;
     assert_eq!(
         read(&c, "get_usage", json!({})).await,
@@ -1088,13 +1088,20 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
             "accounts": [
                 {
                     "name": "Principal",
+                    "engine": "claude",
                     "current": true,
+                    "meters": [
+                        { "minutes": 300, "pct": 42.0, "resetsAt": soon },
+                        { "minutes": 10080, "pct": 10.5, "resetsAt": soon + 1 },
+                    ],
                     "fiveHour": { "pct": 42.0, "resetsAt": soon },
                     "sevenDay": { "pct": 10.5, "resetsAt": soon + 1 },
                 },
                 {
                     "name": "Pro",
+                    "engine": "claude",
                     "current": false,
+                    "meters": [{ "minutes": 300, "pct": 7.0, "resetsAt": soon + 2 }],
                     "fiveHour": { "pct": 7.0, "resetsAt": soon + 2 },
                     "sevenDay": null,
                 },
@@ -1121,7 +1128,7 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     // autopilot goes on with it.
     h.core.record_usage(
         crate::accounts::PRINCIPAL,
-        Reading::Windows((window(100.0, soon), None)),
+        Reading::claude((window(100.0, soon), None)),
     );
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(false), json!(true)));
@@ -1132,13 +1139,13 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     // the current again, and the autopilot waits for the nearest reset, Pro's.
     h.core.record_usage(
         "pro",
-        Reading::Windows((window(100.0, soon - 600_000), None)),
+        Reading::claude((window(100.0, soon - 600_000), None)),
     );
     let usage = read(&c, "get_usage", json!({})).await;
     assert_eq!(currents(&usage), (json!(true), json!(false)));
     assert_eq!(
         usage["autopilotPause"],
-        json!({ "reason": "fiveHour", "until": soon - 600_000 + RESUME_MARGIN_MS })
+        json!({ "reason": "window", "minutes": 300, "until": soon - 600_000 + RESUME_MARGIN_MS })
     );
     // Pro switched off: only Principal, whose window holds the autopilot back until its end.
     // (Not saved: that would take the server down, which no project asks for.)
@@ -1150,7 +1157,7 @@ async fn the_usage_gives_each_account_its_windows_and_the_autopilots_pause() {
     assert_eq!(currents(&usage), (json!(true), json!(false)));
     assert_eq!(
         usage["autopilotPause"],
-        json!({ "reason": "fiveHour", "until": until })
+        json!({ "reason": "window", "minutes": 300, "until": until })
     );
     assert_eq!(usage["accounts"][1]["fiveHour"]["pct"], 100.0);
     // Pro back on and Principal switched off: only Pro is left to go to.

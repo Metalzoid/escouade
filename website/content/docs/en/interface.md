@@ -188,7 +188,7 @@ From left to right:
 | `● N waiting` | The number of “Question” agents, in amber when there are some. A click goes to the next agent that is waiting or needs a look (`Ctrl+J`). |
 | `✓ N done` | The number of “Done” agents. |
 | `N Claude · memory · CPU` | The running Claude processes, with the tools and MCP servers they start; the tooltip details it agent by agent. |
-| `5h … reset 3h01` and `W … reset 4d 12h` | The current account’s quotas, the 5-hour window and the 7-day one: a bar (which turns amber above 80%) and the time before the reset. The percentage is in the tooltip. With several accounts, the current account’s name comes before the bars and a click opens the “Claude accounts quota” panel. |
+| `5h … reset 3h01` and `W … reset 4d 12h` | The current account’s quotas, the 5-hour window and the 7-day one: a bar (which turns amber above 80%) and the time before the reset. The percentage is in the tooltip. With several accounts, the current account’s name comes before the bars and a click opens the “Accounts quota” panel. |
 | `Today $3.48` | What your agents cost today, preceded by “≈” while a turn is running. |
 | `⎇ main ↑1 ↓3` | The branch of the project on screen, with the commits to push (↑) and to pull (↓). A click opens the branch picker. “not published” or “remote deleted” replaces the arrows when the branch has no tracking. |
 | Update | “Update X ready · Restart” when an update is downloaded: a click opens the update window. While it downloads, the bar says “Update X…”; when an automatic restart is planned, “Restarting in N s” and a “Later” button take its place. See [updates](updates). |
@@ -199,13 +199,13 @@ See [quotas and cost](usage) and [branches](branches).
 
 ## The settings
 
-`Ctrl+,` or the ⚙ button of the status bar opens the settings window: the tabs on the left, the content on the right. A modified tab is marked; “Save” saves all the tabs at once, and “Cancel” (or `Esc`) closes the window without saving. The “Claude accounts” tab is the exception: it saves at each change. The “Projects”, “Kanban” and “Integrations” tabs set one project at a time, chosen at the top; “Project settings…” in a project tab’s menu opens the window on that project.
+`Ctrl+,` or the ⚙ button of the status bar opens the settings window: the tabs on the left, the content on the right. A modified tab is marked; “Save” saves all the tabs at once, and “Cancel” (or `Esc`) closes the window without saving. The “Accounts” tab is the exception: it saves at each change. The “Projects”, “Kanban” and “Integrations” tabs set one project at a time, chosen at the top; “Project settings…” in a project tab’s menu opens the window on that project.
 
 | Tab | Page |
 |---|---|
 | “Application” | [Application settings](settings-application) |
 | “Claude Code” | [Claude Code settings](settings-claude-code) |
-| “Claude accounts” | [Claude accounts settings](settings-accounts) |
+| “Accounts” | [Claude accounts settings](settings-accounts) |
 | “Notifications” | [Notifications settings](settings-notifications) |
 | “Projects” | [Projects settings](settings-projects) |
 | “Kanban” | [Kanban settings](settings-board) |

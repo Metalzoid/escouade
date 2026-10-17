@@ -20,9 +20,7 @@ test('the settings tell the version of Claude Code found, one Escouade was teste
   // The test's Claude Code folder has no sign-in: that is what keeps it from being ready.
   await expect(version).toHaveAttribute('data-state', 'notConnected');
   await expect(
-    dialog.getByText(
-      'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
-    ),
+    dialog.getByText('Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : connecte-toi dans l’onglet Comptes.'),
   ).toBeVisible();
 });
 
@@ -57,7 +55,7 @@ test.describe('a Claude Code newer than the tested ones', () => {
     await expect(dialog.locator('[data-state]')).toHaveText('2.1.999');
     await expect(
       dialog.getByText(
-        'Claude Code 2.1.999 n’a pas été testé avec Escouade (testé jusqu’à la 2.1.301) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré. Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
+        'Claude Code 2.1.999 n’a pas été testé avec Escouade (testé jusqu’à la 2.1.301) : il est utilisé quand même, et ce qu’Escouade ne reconnaît pas de lui est ignoré. Aucun compte connecté : connecte-toi dans l’onglet Comptes.',
       ),
     ).toBeVisible();
   });

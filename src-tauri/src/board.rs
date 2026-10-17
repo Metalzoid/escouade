@@ -335,19 +335,18 @@ pub fn turn_end(
 }
 
 /// The tickets of `project_id` to start now, in order: "À faire" by rank (with the autopilot, or
-/// launched by hand), while tickets "En cours" and not blocked leave places; none while `paused`
-/// (an agent waits for its quota, or `autopilot_pause` holds them back). The autopilot leaves a
-/// ticket that comes after one not "Terminé" yet for the next; one launched by hand starts all the
-/// same (the window asked first).
+/// launched by hand), while tickets "En cours" and not blocked leave places; none that is `held`
+/// (every account of its harness waits for its quota: an agent waits for its reset, or
+/// `autopilot_pause` holds them back), a ticket of another harness going on. The autopilot
+/// leaves a ticket that comes after one not "Terminé" yet for the next; one launched by hand
+/// starts all the same (the window asked first).
 pub fn to_start(
     tickets: &[Ticket],
     project_id: &str,
     s: &BoardSettings,
-    paused: bool,
+    held: impl FnMut(&Ticket) -> bool,
 ) -> Vec<String> {
-    if paused {
-        return Vec::new();
-    }
+    let mut held = held;
     let mine = || tickets.iter().filter(|t| t.project_id == project_id);
     let busy = mine()
         .filter(|t| t.column == Column::Doing && t.blocked.is_none())
@@ -361,6 +360,7 @@ pub fn to_start(
     let waits = |t: &Ticket| t.after.iter().any(|a| unfinished.contains(a.as_str()));
     let mut todo: Vec<&Ticket> = mine()
         .filter(|t| t.column == Column::Todo && (t.forced || (s.autopilot && !waits(t))))
+        .filter(|t| !held(t))
         .collect();
     todo.sort_by_key(|t| (t.rank, t.created_at));
     todo.into_iter().take(free).map(|t| t.id.clone()).collect()
@@ -495,9 +495,10 @@ impl Hold {
             AccountHold {
                 limit_until: self.limit_until,
                 lifted: self.lifted,
+                lifted_other: self.lifted_other.clone(),
             }
         } else {
-            self.accounts.get(id).copied().unwrap_or_default()
+            self.accounts.get(id).cloned().unwrap_or_default()
         }
     }
 
@@ -507,6 +508,7 @@ impl Hold {
         if id == PRINCIPAL {
             self.limit_until = hold.limit_until;
             self.lifted = hold.lifted;
+            self.lifted_other = hold.lifted_other;
         } else if hold == AccountHold::default() {
             self.accounts.remove(id);
         } else {
@@ -538,20 +540,15 @@ impl Hold {
             let mut hold = self.of(id);
             hold.limit_until = None;
             if let Some(u) = usage.iter().find(|u| u.id == id) {
-                for (i, w) in windows(u).into_iter().enumerate() {
-                    if let Some(end) = w.and_then(|w| over_until(w, threshold, now)) {
-                        hold.lifted[i] = Some(end);
+                for m in &u.meters {
+                    if let Some(end) = over_until(&m.rate(), threshold, now) {
+                        hold.lift(m, end);
                     }
                 }
             }
             self.set(id, hold);
         }
     }
-}
-
-/// The 5-hour and the weekly window, in the order of `AccountHold::lifted`.
-fn windows(usage: &AccountUsage) -> [Option<&RateWindow>; 2] {
-    [usage.five_hour.as_ref(), usage.seven_day.as_ref()]
 }
 
 /// When the window stops holding the tickets back, if it is used `threshold` percent or more:
@@ -620,6 +617,7 @@ pub fn autopilot_pause(
 fn limit_pause(until: i64) -> AutopilotPause {
     AutopilotPause {
         reason: PauseReason::Limit,
+        minutes: None,
         pct: None,
         until,
         accounts: Vec::new(),
@@ -697,23 +695,27 @@ pub fn account_pause(
     now: i64,
 ) -> Option<AutopilotPause> {
     let held = hold.of(id);
-    let reasons = [PauseReason::FiveHour, PauseReason::Week];
-    let windows = usage.iter().find(|u| u.id == id).map(windows);
-    let mut pauses: Vec<AutopilotPause> = windows
-        .into_iter()
-        .flatten()
-        .zip(reasons)
-        .zip(held.lifted)
-        .filter_map(|((w, reason), lifted)| {
-            let w = w?;
-            let until = over_until(w, threshold, now)?;
+    // An account of a harness without a quota has no meter: nothing holds it back but a limit.
+    let meters = usage
+        .iter()
+        .find(|u| u.id == id)
+        .map(|u| u.meters.as_slice());
+    let mut pauses: Vec<AutopilotPause> = meters
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|m| {
+            let until = over_until(&m.rate(), threshold, now)?;
             // Lifted by "Reprendre maintenant" until the end it had then.
-            if lifted.is_some_and(|end| now < end) {
+            if held.lifted_until(m).is_some_and(|end| now < end) {
                 return None;
             }
             Some(AutopilotPause {
-                reason,
-                pct: Some(w.pct),
+                reason: match m.minutes {
+                    Some(_) => PauseReason::Window,
+                    None => PauseReason::Credits,
+                },
+                minutes: m.minutes,
+                pct: Some(m.pct),
                 until,
                 accounts: Vec::new(),
             })
@@ -722,6 +724,7 @@ pub fn account_pause(
     if let Some(until) = held.limit_until.filter(|t| *t > now) {
         pauses.push(AutopilotPause {
             reason: PauseReason::Limit,
+            minutes: None,
             pct: None,
             until,
             accounts: Vec::new(),
@@ -1935,12 +1938,12 @@ mod tests {
                 ..todo("other", 0)
             },
         ];
-        assert_eq!(to_start(&list, "p1", &s, false), ["a", "b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["a", "b"]);
         list.push(Ticket {
             column: Column::Doing,
             ..todo("busy", 0)
         });
-        assert_eq!(to_start(&list, "p1", &s, false), ["a"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["a"]);
         // A blocked ticket gives its place up; one to test holds none.
         list.push(Ticket {
             column: Column::Doing,
@@ -1951,12 +1954,12 @@ mod tests {
             column: Column::Review,
             ..todo("review", 0)
         });
-        assert_eq!(to_start(&list, "p1", &s, false), ["a"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["a"]);
         list.push(Ticket {
             column: Column::Doing,
             ..todo("busy2", 0)
         });
-        assert!(to_start(&list, "p1", &s, false).is_empty());
+        assert!(to_start(&list, "p1", &s, |_| false).is_empty());
     }
 
     #[test]
@@ -1973,14 +1976,14 @@ mod tests {
                 ..todo("b", 2)
             },
         ];
-        assert_eq!(to_start(&list, "p1", &off, false), ["b"]);
-        assert!(to_start(&list, "p1", &BoardSettings::default(), true).is_empty());
+        assert_eq!(to_start(&list, "p1", &off, |_| false), ["b"]);
+        assert!(to_start(&list, "p1", &BoardSettings::default(), |_| true).is_empty());
         // A count out of bounds (an old file) still lets one run.
         let zero = BoardSettings {
             max_parallel: 0,
             ..Default::default()
         };
-        assert_eq!(to_start(&list, "p1", &zero, false), ["a"]);
+        assert_eq!(to_start(&list, "p1", &zero, |_| false), ["a"]);
     }
 
     #[test]
@@ -1998,13 +2001,13 @@ mod tests {
             todo("b", 2),
         ];
         // The one place left goes to the next ticket of the column.
-        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["b"]);
         // To test, the ticket it waits for holds no place, but is not done.
         list[0].column = Column::Review;
-        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["b"]);
         // Done, it starts in its turn.
         list[0].column = Column::Done;
-        assert_eq!(to_start(&list, "p1", &s, false), ["a", "b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["a", "b"]);
     }
 
     #[test]
@@ -2036,16 +2039,16 @@ mod tests {
                 ..todo("other", 0)
             },
         ];
-        assert_eq!(to_start(&list, "p1", &s, false), ["b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["b"]);
         // "Le lancer quand même ?": launched by hand, it starts all the same, with the autopilot
         // or without.
         list[2].forced = true;
-        assert_eq!(to_start(&list, "p1", &s, false), ["a", "b"]);
+        assert_eq!(to_start(&list, "p1", &s, |_| false), ["a", "b"]);
         let off = BoardSettings {
             autopilot: false,
             ..s
         };
-        assert_eq!(to_start(&list, "p1", &off, false), ["a"]);
+        assert_eq!(to_start(&list, "p1", &off, |_| false), ["a"]);
     }
 
     #[test]
@@ -2107,8 +2110,8 @@ mod tests {
     fn usage(five_hour: Option<RateWindow>, seven_day: Option<RateWindow>) -> Vec<AccountUsage> {
         vec![AccountUsage {
             id: "principal".into(),
-            five_hour,
-            seven_day,
+            meters: crate::model::claude_meters(five_hour, seven_day),
+
             ..Default::default()
         }]
     }
@@ -2142,7 +2145,8 @@ mod tests {
         assert_eq!(
             autopilot_pause(&u, 95, &free, NOW),
             Some(AutopilotPause {
-                reason: PauseReason::Week,
+                reason: PauseReason::Window,
+                minutes: Some(WEEK),
                 pct: Some(96.0),
                 until: NOW + 5_000 + RESUME_MARGIN_MS,
                 accounts: vec![],
@@ -2154,7 +2158,7 @@ mod tests {
         let at = usage(window(94.999_999_9, Some(NOW + 10)), None);
         assert_eq!(
             autopilot_pause(&at, 95, &free, NOW).map(|p| p.reason),
-            Some(PauseReason::FiveHour)
+            Some(PauseReason::Window)
         );
         // Its end (and the margin after it) past, or its end unknown, it holds nothing back (a
         // reading that no longer comes would hold the tickets forever).
@@ -2170,7 +2174,7 @@ mod tests {
         );
         assert_eq!(
             autopilot_pause(&both, 95, &free, NOW).map(|p| (p.reason, p.until)),
-            Some((PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS))
+            Some((PauseReason::Window, NOW + 9_000 + RESUME_MARGIN_MS))
         );
     }
 
@@ -2202,6 +2206,7 @@ mod tests {
             autopilot_pause(&unknown, 100, &hold, NOW),
             Some(AutopilotPause {
                 reason: PauseReason::Limit,
+                minutes: None,
                 pct: None,
                 until: NOW + LIMIT_PAUSE_MS,
                 accounts: vec![],
@@ -2215,7 +2220,7 @@ mod tests {
         let later = usage(window(100.0, Some(NOW + 2 * LIMIT_PAUSE_MS)), None);
         assert_eq!(
             autopilot_pause(&later, 100, &hold, NOW).map(|p| p.reason),
-            Some(PauseReason::FiveHour)
+            Some(PauseReason::Window)
         );
     }
 
@@ -2240,13 +2245,13 @@ mod tests {
         );
         assert_eq!(
             autopilot_pause(&week, 90, &hold, NOW + 1_000).map(|p| p.reason),
-            Some(PauseReason::Week)
+            Some(PauseReason::Window)
         );
         // The next 5-hour window, over it in its turn, holds again.
         let next = usage(window(95.0, Some(NOW + 90_000)), None);
         assert_eq!(
             autopilot_pause(&next, 90, &hold, NOW + 9_000 + RESUME_MARGIN_MS).map(|p| p.reason),
-            Some(PauseReason::FiveHour)
+            Some(PauseReason::Window)
         );
     }
 
@@ -2254,7 +2259,7 @@ mod tests {
     fn account(id: &str, pct: f64, end: i64) -> AccountUsage {
         AccountUsage {
             id: id.into(),
-            five_hour: window(pct, Some(end)),
+            meters: crate::model::claude_meters(window(pct, Some(end)), None),
             ..Default::default()
         }
     }
@@ -2262,6 +2267,87 @@ mod tests {
     /// No agent waits for the usage limit to reset.
     fn no_waiting() -> BTreeMap<String, i64> {
         BTreeMap::new()
+    }
+
+    #[test]
+    fn the_credits_of_the_month_and_any_window_pause_the_autopilot_as_claudes_windows_do() {
+        let free = Hold::default();
+        let meters = |meters: Vec<QuotaMeter>| {
+            vec![AccountUsage {
+                id: "principal".into(),
+                meters,
+                ..Default::default()
+            }]
+        };
+        let rate = |pct, end| RateWindow {
+            pct,
+            resets_at: Some(end),
+        };
+        // The month's credits used up: until they are given again.
+        let credits = meters(vec![QuotaMeter::credits(rate(100.0, NOW + 9_000))]);
+        let pause = autopilot_pause(&credits, 95, &free, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.minutes, pause.until),
+            (PauseReason::Credits, None, NOW + 9_000 + RESUME_MARGIN_MS)
+        );
+        // A window of another length (Codex's 30 days): its length is told.
+        let month = meters(vec![QuotaMeter::window(43_200, rate(97.0, NOW + 5_000))]);
+        let pause = autopilot_pause(&month, 95, &free, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.minutes),
+            (PauseReason::Window, Some(43_200))
+        );
+        // "Reprendre maintenant" lifts them until their end, apart from Claude Code's two windows.
+        let mut hold = Hold::default();
+        hold.lift(&credits, 95, NOW);
+        assert_eq!(autopilot_pause(&credits, 95, &hold, NOW), None);
+        assert_eq!(hold.lifted, [None, None]);
+        assert_eq!(
+            hold.lifted_other,
+            BTreeMap::from([("credits".to_string(), NOW + 9_000 + RESUME_MARGIN_MS)])
+        );
+        // The next month's hold again.
+        let next = meters(vec![QuotaMeter::credits(rate(100.0, NOW + 99_000))]);
+        assert!(autopilot_pause(&next, 95, &hold, NOW + 10_000 + RESUME_MARGIN_MS).is_some());
+    }
+
+    #[test]
+    fn an_account_without_a_quota_never_pauses_the_autopilot_but_after_a_usage_limit() {
+        // A harness without a quota (`QuotaKind::None`) reads no meter.
+        let none = vec![AccountUsage {
+            id: "principal".into(),
+            ..Default::default()
+        }];
+        assert_eq!(autopilot_pause(&none, 0, &Hold::default(), NOW), None);
+        assert!(!crate::accounts::over_threshold(&none, "principal", 0, NOW));
+        let mut hold = Hold::default();
+        hold.limit("principal", NOW + 60_000);
+        assert_eq!(
+            autopilot_pause(&none, 0, &hold, NOW).map(|p| p.reason),
+            Some(PauseReason::Limit)
+        );
+    }
+
+    #[test]
+    fn each_harness_pauses_on_its_own_accounts() {
+        // Claude Code's account used up, Codex's free: a ticket that may go to Codex starts.
+        let usage = [
+            account("principal", 100.0, NOW + 9_000),
+            AccountUsage {
+                engine: EngineId::Codex,
+                ..account("work", 10.0, NOW + 9_000)
+            },
+        ];
+        let free = Hold::default();
+        let pause = |ids: &[&str]| {
+            super::autopilot_pause(&usage, &ids_of(ids), 95, &free, &no_waiting(), NOW)
+        };
+        assert!(pause(&["principal"]).is_some());
+        assert_eq!(pause(&["work"]), None);
+    }
+
+    fn ids_of(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|s| s.to_string()).collect()
     }
 
     fn ids(list: &[&str]) -> Vec<String> {
@@ -2307,7 +2393,7 @@ mod tests {
         assert_eq!(
             (held.reason, held.pct, held.until, held.accounts),
             (
-                PauseReason::FiveHour,
+                PauseReason::Window,
                 Some(100.0),
                 NOW + 9_000 + RESUME_MARGIN_MS,
                 ids(&["principal"])
@@ -2334,7 +2420,7 @@ mod tests {
         assert_eq!(
             (pause.reason, pause.pct, pause.until),
             (
-                PauseReason::FiveHour,
+                PauseReason::Window,
                 Some(97.0),
                 NOW + 5_000 + RESUME_MARGIN_MS
             )
@@ -2355,7 +2441,10 @@ mod tests {
         // An account past the threshold on both its windows is free when both are over: its
         // pause is the later end.
         let both = AccountUsage {
-            seven_day: window(96.0, Some(NOW + 50_000)),
+            meters: crate::model::claude_meters(
+                window(97.0, Some(NOW + 5_000)),
+                window(96.0, Some(NOW + 50_000)),
+            ),
             ..account("pro", 97.0, NOW + 5_000)
         };
         let two = [account("principal", 100.0, NOW + 9_000), both];
@@ -2370,7 +2459,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             (pause.reason, pause.until),
-            (PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS)
+            (PauseReason::Window, NOW + 9_000 + RESUME_MARGIN_MS)
         );
         // With a single account, there are no accounts to tell apart.
         let alone = [account("principal", 100.0, NOW + 9_000)];
@@ -2460,7 +2549,7 @@ mod tests {
         let pause = super::autopilot_pause(&usage, &accounts, 95, &free, &waiting, NOW).unwrap();
         assert_eq!(
             (pause.reason, pause.until),
-            (PauseReason::FiveHour, NOW + 9_000 + RESUME_MARGIN_MS)
+            (PauseReason::Window, NOW + 9_000 + RESUME_MARGIN_MS)
         );
         // Over, the agent waits for nothing any more: Pro is free.
         assert_eq!(
@@ -2483,7 +2572,7 @@ mod tests {
         let pause = super::autopilot_pause(&both, &pro, 95, &free, &sooner, NOW).unwrap();
         assert_eq!(
             (pause.reason, pause.until),
-            (PauseReason::FiveHour, NOW + 30_000 + RESUME_MARGIN_MS)
+            (PauseReason::Window, NOW + 30_000 + RESUME_MARGIN_MS)
         );
         // Only agents waiting, for every account: the places say it (« Quota atteint »), not a pause.
         let none = [account("pro", 0.0, NOW), account("principal", 0.0, NOW)];
@@ -2528,7 +2617,7 @@ mod tests {
         assert_eq!(
             said(&sooner, NOW),
             Some((
-                PauseReason::FiveHour,
+                PauseReason::Window,
                 Some(100.0),
                 NOW + 30_000 + RESUME_MARGIN_MS,
                 None
@@ -2557,7 +2646,7 @@ mod tests {
         assert_eq!(
             (window.pause.reason, window.pause.pct, window.pause.until),
             (
-                PauseReason::FiveHour,
+                PauseReason::Window,
                 Some(100.0),
                 NOW + 9_000 + RESUME_MARGIN_MS
             )
@@ -2583,7 +2672,7 @@ mod tests {
         );
         assert_eq!(
             held("principal", &limit, &no_waiting()).map(|h| h.pause.reason),
-            Some(PauseReason::FiveHour)
+            Some(PauseReason::Window)
         );
         // An agent of the account waiting for its reset holds it back, until it resumes.
         let waiting = BTreeMap::from([("pro".to_string(), NOW + 7_000)]);
@@ -2628,7 +2717,7 @@ mod tests {
         assert_eq!(
             (every.pause.reason, every.pause.pct, every.pause.until),
             (
-                PauseReason::FiveHour,
+                PauseReason::Window,
                 Some(97.0),
                 NOW + 5_000 + RESUME_MARGIN_MS
             )
@@ -2723,7 +2812,7 @@ mod tests {
         assert_eq!(
             super::autopilot_pause(&next, &ids(&["principal"]), 90, &hold, &no_waiting(), later)
                 .map(|p| p.reason),
-            Some(PauseReason::FiveHour)
+            Some(PauseReason::Window)
         );
         assert_eq!(
             super::autopilot_pause(&next, &pro_and_principal, 90, &hold, &no_waiting(), later),

@@ -93,7 +93,7 @@ Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edi
 L'extraction s'est arrêtée là où d'autres lots reprennent :
 
 - **La vue Claude Code** : `tui.rs` (les arguments et réglages de l'interface de `claude`, ses hooks), `agent/transcript.rs` et `agent/sidechain.rs` (son transcript). Lot 9, vue terminal générique.
-- **Les comptes et le quota** : `accounts.rs` (comptes Claude, `CLAUDE_CONFIG_DIR`, connexion), `usage.rs` (fenêtres du quota, point d'accès OAuth). Lot 5. `Program::launch` traduit encore `CLAUDE_CONFIG_DIR` et les options de chemin de Claude Code pour WSL (`PATH_OPTIONS`).
+- **La connexion et la lecture du quota de Claude Code** : `accounts.rs` (création d'un compte, partage du dossier de Principal, connexion par `/login`, session copiée d'un compte à l'autre) et `usage.rs` (point d'accès OAuth, trousseau de macOS). Le modèle des comptes et du quota, lui, est commun (lot 5, voir « Les comptes et le quota »). `Program::launch` traduit encore `CLAUDE_CONFIG_DIR` et les options de chemin de Claude Code pour WSL (`PATH_OPTIONS`).
 - **Les modèles** : `ModelInfo::list` lit la liste de `initialize` de Claude Code. Avec les menus du composer (lot 4).
 
 ## Les données (ESC-27)
@@ -131,10 +131,11 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 | `effort` | Ses modèles prennent un effort (chaque modèle peut encore n'en avoir aucun : `supports_effort`). | Le menu « Effort » est masqué sinon. | oui |
 | `images`, `pdf` | Images et PDF joints à un message. | `Engine::message` refuse ce qu'il ne lit pas. | oui |
 | `fork` | La copie d'une conversation et jusqu'où : `none`, `entry`, `turn`, `event`, `message`. | « Dupliquer la conversation » masqué pour `none`. | `entry` |
-| `resumeOtherAccount` | Une conversation reprise sur un autre compte du même moteur. | (comptes, lot 5) | oui |
+| `resumeOtherAccount` | Une conversation reprise sur un autre compte du même moteur. | « Reprendre sur <compte> » ; la bascule ne quitte jamais le moteur. | oui |
 | `midTurn` | Un message envoyé pendant un tour : `queued`, `immediate` ou `refused`. | (composer, lot 4) | `queued` |
 | `slashCommands` | Ses commandes `/` pour un client. | Le composer n'en propose pas sinon. | oui |
-| `quota` | Le quota de ses comptes : `windows`, `credits` ou `none`. | (lot 5) | `windows` |
+| `quota` | Le quota de ses comptes : `windows`, `credits` ou `none`. | Les barres de la barre d'état et du panneau des quotas ; sans quota, aucune barre (« Pas de quota ») et jamais de pause du pilote auto. | `windows` |
+| `quotaWindows` | Les durées de ses fenêtres, en minutes. | Les barres montrées avant la première lecture (une lecture peut en donner moins : l'offre gratuite de Codex n'en a qu'une). | `[300, 10080]` |
 | `cost` | Le coût d'un tour : `exact`, `estimated` ou `none`. | Le coût est masqué pour `none` (carte, en-tête, vue d'ensemble). | `exact` |
 | `terminalView` | Sa propre interface dans un terminal. | « Vue Claude Code » et son réglage masqués sinon. | oui |
 | `remoteControl` | Remote Control. | Le menu, l'icône de la carte et le réglage masqués sinon. | oui |
@@ -187,6 +188,37 @@ Tout passe par `src/lib/engines.ts`, jamais par le nom du moteur :
 Réglages › Harness (`AppTab.svelte`, onglet `claude`) : un groupe par moteur déclaré, avec son exécutable (le champ du chemin pour le moteur par défaut, le seul qui ait un réglage de chemin tant que chaque moteur n'a pas le sien ; « Trouvé : … » pour les autres), sa version et son état (`EngineInfo`, commande `engines`), et « Se connecter… », qui ouvre la connexion du compte où partent les nouveaux agents (la fenêtre « Se connecter au compte », qui revient ensuite à l'onglet). Un moteur introuvable y donne sa commande d'installation.
 
 La fenêtre d'un ticket envoie `engine` (null : celui du projet) ; `TicketDraft.engine` est absent pour les outils MCP et les imports, qui laissent au ticket le sien. `create_agent` et `create_agent_on_branch` prennent `engine` (null : celui du ticket, puis du projet, voir « Les données »).
+
+## Les comptes et le quota (ESC-30)
+
+### Un compte, un moteur
+
+Chaque compte (`model::Account`) a son moteur (`engine`, Claude Code pour un compte d'avant la 1.8). Ce qui tient ses comptes à part, le moteur le déclare (`Engine::accounts`, `registry::AccountStore`) : un dossier de configuration par compte, passé à ses process par une variable (`ConfigDir { var }` : `CLAUDE_CONFIG_DIR` pour Claude Code, `CODEX_HOME` pour Codex). `accounts::launch_env` la pose ; une clé gardée dans le trousseau et passée par l'environnement (`CURSOR_API_KEY`) viendra avec le premier moteur qui en a besoin.
+
+Chaque moteur a son Principal, son installation habituelle, lancée sans dossier d'Escouade : `principal` pour Claude Code (l'id d'avant la 1.8), `principal-<moteur>` pour un autre (`accounts::principal_id`, `is_principal`). `accounts::normalize` le fait pour chaque moteur du registre, garde au moins un compte actif par moteur (aussi pour un moteur que cette version n'écrit pas, des comptes laissés par une version plus récente) et liste chaque moteur une fois dans `Settings.engine_order`.
+
+### Les choix restent dans le moteur
+
+`accounts::for_project(réglages, moteur, projet)` éteint les comptes des autres moteurs et ceux réservés à d'autres projets ; `pick`, `preferred` et `candidates` choisissent ensuite parmi les comptes de ce moteur seul. Donc :
+
+- un nouvel agent part sur un compte de son moteur (`Core::account_for_new(projet, moteur)`), le compte préféré du projet ne comptant que s'il est de ce moteur ;
+- la bascule automatique (`account_to_switch_to`) et « Reprendre sur <compte> » restent dans le moteur de l'agent ; passer à un autre moteur est une passation (ESC-88) ;
+- un projet qu'aucun compte actif d'un moteur ne sert ne démarre rien sur ce moteur, et le refus le dit (`accounts::no_account(nom, moteur)` : « Aucun compte Codex actif ne sert le projet… ») ;
+- `accounts::fallback_engines(réglages, moteur par défaut, projet)` donne les moteurs de secours d'un projet pour ESC-88 : son moteur par défaut, puis les autres dans « Ordre des harness » (`engine_order_set`, gardé par le backend comme les comptes), seulement ceux qui ont un compte actif qui le sert.
+
+### Le quota
+
+Un modèle commun : chaque compte a ses compteurs (`AccountUsage.meters`, des `QuotaMeter`), une fenêtre d'une durée (`minutes` : 300, 10 080, 43 200) en pourcentage avec sa remise à zéro, ou les crédits du mois (`minutes` : null). L'interface les libelle par leur durée (`meterLabel` : « 5h », « 7j » / « W », « 30j » ; « crédits »). Une lecture remplace les compteurs qu'elle donne et garde les autres (`model::merge_meters`). Claude Code donne ses deux fenêtres (`claude_meters`), par `get_usage`, `rate_limit_event` ou le point d'accès OAuth, que seuls ses comptes interrogent.
+
+Ce qui est gardé d'un lancement à l'autre (`SavedPause`, `SavedWindows`, `Hold.lifted`) garde les deux fenêtres de Claude Code là où les versions d'avant les lisent, les autres compteurs à côté (`other`, `lifted_other`).
+
+`UsageSnapshot.current` donne le compte en cours de chaque moteur. La barre d'état montre celui du moteur de l'agent affiché, sinon du moteur par défaut du projet (`statusEngine`), avec ses compteurs ; un moteur sans quota n'y a que le coût du jour. Le panneau des quotas et l'onglet « Comptes » groupent les comptes par moteur, dans « Ordre des harness ».
+
+Le pilote auto se met en pause par moteur : `board::to_start` écarte un ticket dont tous les comptes de son moteur sont retenus (`Core::project_hold(projet, moteur)`), pendant que ceux d'un autre moteur démarrent. Une pause dit sa raison (`PauseReason::Window` avec ses `minutes`, `Credits` ou `Limit`). Un moteur sans quota n'a aucun compteur : seule une limite d'usage le retient.
+
+### Le coût dans les stats
+
+Chaque tour et chaque prompt gardent leur moteur (colonnes `engine` de `turns` et de `prompts`). `Stats::query_by` prend un filtre (`Filter { account, engine }`) ; `by_engine` met les moteurs côte à côte (tokens, coût, tours, agents, ceux du compte demandé), `by_account` les comptes du moteur demandé, `engines` liste les moteurs qui ont tourné. L'interface écrit un coût comme le moteur le donne (`caps.cost`) : exact, « ≈ … estimé » (`fCost`, `costHint`), ou « — ».
 
 ## Le serveur MCP d'Escouade (ESC-33)
 
@@ -319,6 +351,8 @@ Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. 
 - [ ] `models()`, `efforts()`, `supports_effort`, `supports_auto` : les menus du composer.
 - [ ] `locate`, `version_args`, `tested()`, `oldest_reason`, `update_command`, `install()` : le trouver, le refuser trop ancien, l'installer.
 - [ ] Le schéma de sa plus récente version testée dans `tests/fixtures/engines/<moteur>-<version>.schema.json`, et les deux tests qui le tiennent (champs lus par Escouade, champs des flux enregistrés).
+
+- [ ] Ses comptes (`Engine::accounts`, la création et la connexion d'un compte) et la lecture de son quota en `QuotaMeter` (voir « Les comptes et le quota »).
 
 ### Le traducteur
 

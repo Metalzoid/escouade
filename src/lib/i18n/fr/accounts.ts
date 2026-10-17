@@ -1,20 +1,22 @@
 import type { Tree } from '../types';
 
-// The Claude accounts.
+// The accounts of every harness.
 export default {
   /** The user's own account, as long as they have not renamed it (its name is saved in the language of its first save). */
   principal: 'Principal',
 
-  // The « Comptes Claude » tab of the settings.
+  // The « Comptes » tab of the settings: a group per harness.
   tab: {
-    list: 'Comptes Claude',
-    order: 'Les nouveaux agents partent sur le premier compte actif sous le seuil de pause, dans cet ordre.',
+    list: 'Comptes',
+    /** The accounts of one harness; `{harness}`: « Claude Code ». */
+    group: 'Comptes {harness}',
+    order: 'Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre.',
     name: 'Nom',
     folder: 'Dossier',
     executable: 'Exécutable',
     executableDefault: 'Celui des réglages',
     active: 'Actif',
-    lastActive: 'Il faut au moins un compte actif.',
+    lastActive: 'Il faut au moins un compte actif par harness.',
     up: 'Monter {name}',
     down: 'Descendre {name}',
     signIn: 'Se connecter…',
@@ -27,8 +29,8 @@ export default {
     closedProject: '{name} (fermé)',
     /** `{names}` : les projets, chacun entre guillemets (`quoted`) et énumérés comme dans une phrase. */
     noAccount: {
-      one: 'Aucun compte actif ne sert {names} : ses agents et ses tickets ne démarrent pas.',
-      other: 'Aucun compte actif ne sert {names} : leurs agents et leurs tickets ne démarrent pas.',
+      one: 'Aucun compte actif de son harness par défaut ne sert {names} : ses agents et ses tickets ne démarrent pas.',
+      other: 'Aucun compte actif de leur harness par défaut ne sert {names} : leurs agents et leurs tickets ne démarrent pas.',
     },
     quoted: '« {name} »',
     reservedHint:
@@ -99,9 +101,13 @@ export default {
   },
 
   // The current account's quota in the status bar (the percentage is in a tooltip), and the panel of every account's.
+  // Each bar is a window of the quota, labelled by its length (`{n}`), or the month's credits.
   quota: {
-    fiveHour: { label: '5h', name: 'Quota sur 5 heures' },
-    sevenDay: { label: '7j', name: 'Quota sur 7 jours' },
+    hours: { label: '{n}h', name: { one: 'Quota sur {count} heure', other: 'Quota sur {count} heures' } },
+    days: { label: '{n}j', name: { one: 'Quota sur {count} jour', other: 'Quota sur {count} jours' } },
+    credits: { label: 'crédits', name: 'Crédits du mois' },
+    /** A week's window, as its bar is labelled. */
+    week: { label: '7j' },
     /** `{countdown}`: the time left, as `fCountdown` writes it. */
     reset: 'reset {countdown}',
     /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
@@ -115,7 +121,9 @@ export default {
   panel: {
     /** The button that is the quota group; `{name}`: the current account. */
     open: 'Quotas par compte (compte en cours : {name})',
-    title: 'Quotas des comptes Claude',
+    title: 'Quotas des comptes',
+    /** Under a harness without a quota: only what its turns cost. */
+    noQuota: 'Pas de quota : seul le coût de ses tours compte.',
     current: 'en cours',
     over: 'au-delà du seuil de pause',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
@@ -132,6 +140,14 @@ export default {
     failed: 'La reprise sur {account} a échoué : {error}.',
     /** `{account}`: the account the agent came from. */
     back: 'Revenir sur {account}',
+  },
+
+  // « Ordre des harness », in the « Comptes » tab once there are two harnesses.
+  engineOrder: {
+    label: 'Ordre des harness',
+    desc: 'Après son harness par défaut, un projet passe aux suivants dans cet ordre quand le quota du sien est épuisé, s’ils ont un compte actif qui le sert.',
+    up: 'Monter {name}',
+    down: 'Descendre {name}',
   },
 
   // The setting of the Harness tab.

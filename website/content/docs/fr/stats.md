@@ -1,6 +1,6 @@
 # Les statistiques
 
-Les statistiques montrent ce que tes agents ont consommé : tokens, coût et prompts par jour, par semaine ou par mois, répartis par projet, par modèle, par agent, par ticket et par compte.
+Les statistiques montrent ce que tes agents ont consommé : tokens, coût et prompts par jour, par semaine ou par mois, répartis par projet, par modèle, par agent, par ticket, par compte et par harness.
 
 ## Ouvrir les statistiques
 
@@ -61,6 +61,10 @@ Les chiffres d’un projet fermé sont gardés avec les autres. Ajoute de nouvea
 
 Avec plusieurs comptes, le tableau « Par compte » met les comptes côte à côte, du plus cher au moins cher, avec les colonnes « Compte », « Tokens », « Coût », « Tours » et « Agents ». Un tour est une réponse de Claude ; « Agents » compte les agents distincts qui ont tourné sur le compte pendant la période. Un compte supprimé depuis reste listé sous le nom « Compte supprimé (pro) » (son identifiant entre parenthèses).
 
+### Par harness
+
+Avec des comptes ou des tours de plusieurs harness, le tableau « Par harness » met les harness côte à côte, avec les colonnes « Harness », « Tokens », « Coût », « Tours » et « Agents ». Le harness d’un tour est celui qui l’a fait, même si l’agent en a changé depuis. Le coût de chaque harness est écrit comme il le donne : exact, estimé, ou absent (voir « Coût estimé » plus bas).
+
 ### Par agent
 
 Le tableau « Par agent » liste les agents de la période, du plus cher au moins cher, avec leur projet, leurs tokens et leur coût. Il compte aussi les agents archivés ; un agent supprimé garde sa ligne, sous « Agent supprimé ».
@@ -71,13 +75,19 @@ Le tableau « Par ticket » additionne ce que les agents de chaque ticket ont 
 
 Les listes d’agents et de tickets montrent 20 lignes. « Tout voir » déplie le reste, « Réduire » le replie, et « 20 sur 57 » dit où tu en es.
 
-## Filtrer par compte
+## Filtrer par harness et par compte
+
+Avec plusieurs harness (des comptes de plusieurs, ou des tours enregistrés sur plusieurs), un menu « Harness » apparaît en haut : « Tous les harness », puis chacun. Choisir un harness restreint à lui les indicateurs, le graphique, les listes et les prompts ; le tableau « Par harness » reste complet, avec sa ligne mise en avant. Le menu « Compte » se combine avec lui : il ne propose plus que les comptes de ce harness, et le tableau « Par compte » ne liste qu’eux.
 
 Avec plusieurs comptes (ou des tours enregistrés sur plusieurs), un menu « Compte » apparaît à gauche du sélecteur de période. Il propose « Tous les comptes », chaque compte, et les comptes supprimés que les statistiques connaissent encore.
 
 Choisir un compte restreint à lui les indicateurs, le graphique et les listes par projet, par modèle, par agent et par ticket, ainsi que la comparaison avec la période précédente. Le tableau « Par compte » reste complet, avec la ligne du compte choisi mise en avant. Ce choix n’est pas gardé : la page s’ouvre toujours sur « Tous les comptes ».
 
 Pour les comptes eux-mêmes, voir [Plusieurs comptes Claude](accounts).
+
+## Coût estimé
+
+Chaque harness dit comment il donne le coût d’un tour. Claude Code le donne exactement. Un harness qui ne donne que ses tokens a un coût calculé par Escouade d’après le tarif public de ses modèles : il est marqué « ≈ » et « estimé », et une infobulle le dit. Un harness qui ne donne aucun coût a « — » à la place. Dès qu’un harness estimé compte dans ce qui est affiché, les totaux sont marqués « estimé » eux aussi.
 
 ## D’où viennent les chiffres
 

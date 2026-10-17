@@ -21,7 +21,7 @@ This page covers how to use accounts; the full list of the tab’s options is in
 
 ## Add an account
 
-1. Open the settings (`Ctrl+,`, or ⚙ in the status bar) and the “Claude accounts” tab.
+1. Open the settings (`Ctrl+,`, or ⚙ in the status bar) and the “Accounts” tab.
 2. Click “Add an account…”.
 3. Type the account’s name in “Name” (the field suggests “Pro, Team…”). Two accounts can’t have the same name, whatever the capitals.
 4. Choose what the account takes from Main, under “Share with Main” (see below).
@@ -68,7 +68,7 @@ If Claude Code stops before the sign-in, the window says “Claude Code stopped 
 
 ## Manage the accounts
 
-The “Claude accounts” tab of the settings lists the accounts. Each change is saved right away, without going through the saving of the other settings (“Cancel” doesn’t undo it). One row per account:
+The “Accounts” tab of the settings lists the accounts. Each change is saved right away, without going through the saving of the other settings (“Cancel” doesn’t undo it). One row per account:
 
 | Item | Role |
 |---|---|
@@ -143,13 +143,13 @@ If no active account serves a project (because every account is reserved to othe
 
 - the project’s Kanban says “No Claude account for this project — no tickets will start”;
 - a new agent is refused, with a message that says where to tick the project;
-- the “Claude accounts” tab says it under the list, in amber, for example: No active account serves “Client”: its agents and tickets won’t start.
+- the “Accounts” tab says it under the list, in amber, for example: No active account serves “Client”: its agents and tickets won’t start.
 
 To fix it, tick the project on an active account, or untick all the boxes of one account so that it serves every project again.
 
 “Close the project” (the danger zone of the project’s settings) keeps the project’s history, and the project stays in the “Reserved to projects” list of the accounts it was reserved to: it only leaves when its history is erased (the “Also erase its history” box when closing, or “Erase history…” under “Closed projects”).
 
-An account that was reserved to that project alone therefore serves no open project while the project is closed. If it was your only active account, nothing starts for the other projects, and the “Claude accounts” tab says so under the list, as above.
+An account that was reserved to that project alone therefore serves no open project while the project is closed. If it was your only active account, nothing starts for the other projects, and the “Accounts” tab says so under the list, as above.
 
 That tab shows the closed project in the account’s “Reserved to projects” row, ticked and marked “(closed)”, for example “Client (closed)”. Untick it to free the account: with nothing ticked, it serves every project again. When you reopen the project (see [Closed projects](settings-projects#closed-projects)), its reservations are still there: there is nothing to redo. If you erase the history, when closing or later under “Closed projects”, the project leaves every account’s list. The project’s “Preferred account”, for its part, goes back to “Automatic” on reopening if its account no longer exists.
 

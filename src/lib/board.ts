@@ -48,8 +48,17 @@ export function placesLabel(busyCount: number, max: number, quota: number | null
 /** Why no ticket starts, in the header: a window's end is known to the minute, the end of the pause after a limit only about. */
 export function pauseLabel(p: AutopilotPause, now: number): string {
   if (p.reason === 'limit') return t('boardSettings.pause.limit', { time: fTime(p.until) });
-  const key = p.reason === 'week' ? 'boardSettings.pause.week' : 'boardSettings.pause.fiveHour';
-  return t(key, { pct: fPct(p.pct ?? 100), when: fWhen(p.until, now) });
+  const values = { pct: fPct(p.pct ?? 100), when: fWhen(p.until, now) };
+  if (p.reason === 'credits') return t('boardSettings.pause.credits', values);
+  return t('boardSettings.pause.window', { ...values, window: windowName(p.minutes ?? 300) });
+}
+
+/** A window of the quota by its length, as the pause says it: « hebdo », « de 5 h », « de 30 jours ». */
+export function windowName(minutes: number): string {
+  const day = 24 * 60;
+  if (minutes === 7 * day) return t('boardSettings.window.week');
+  if (minutes % day === 0) return t('boardSettings.window.days', { n: minutes / day });
+  return t('boardSettings.window.hours', { n: Math.round(minutes / 60) });
 }
 
 /** What validating a ticket does, in the header's button: `prefix` is the project's « Préfixe des branches des tickets ». */

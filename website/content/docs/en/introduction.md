@@ -69,7 +69,7 @@ A worktree is a separate working copy of your repository, on its own branch. Wit
 
 ### Claude account
 
-A Claude account is a Claude Code configuration folder, with its sign-in. “Main” is your usual account, started as before; you can add others (a personal one, a work one) in Settings › Claude accounts. Each agent stays on its account. See [Claude accounts](accounts).
+A Claude account is a Claude Code configuration folder, with its sign-in. “Main” is your usual account, started as before; you can add others (a personal one, a work one) in Settings › Accounts. Each agent stays on its account. See [Claude accounts](accounts).
 
 ### Overview
 

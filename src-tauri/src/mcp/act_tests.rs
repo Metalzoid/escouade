@@ -820,7 +820,7 @@ async fn a_ticket_is_not_started_while_the_autopilot_is_paused_the_board_is_full
     let end = h.core.pause_now() + 3_600_000;
     h.core.record_usage(
         PRINCIPAL,
-        Reading::Windows((
+        Reading::claude((
             Some(RateWindow {
                 pct: 100.0,
                 resets_at: Some(end),
@@ -2023,7 +2023,7 @@ fn with_pro(h: &Harness) {
 fn window_used(h: &Harness, account: &str, pct: f64, end: i64) {
     h.core.record_usage(
         account,
-        Reading::Windows((
+        Reading::claude((
             Some(RateWindow {
                 pct,
                 resets_at: Some(end),
@@ -2086,7 +2086,7 @@ async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refuse
     assert_eq!(entry(&h).outcome, "refused");
     // The one that prefers Pro does not wait.
     prefer(&h, &p, "pro");
-    assert!(h.core.project_hold(&p.id).is_none());
+    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_none());
     prefer(&h, &p, "");
 
     // Pro past the threshold too, sooner: no account left, and the answer says when the first is

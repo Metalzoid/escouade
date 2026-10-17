@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { accountName, quotaRows } from '../lib/accounts';
+  import { accountName, metersShown, quotaGroups } from '../lib/accounts';
+  import { capsOf } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
   import { t } from '../lib/i18n';
   import { estimateHint, fSpentUsd } from '../lib/spend';
@@ -8,15 +9,15 @@
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
 
-  // The panel the quota group of the status bar opens, above it, when there are several accounts: each one's two windows
-  // with the percentage written, the current account first. `anchor`: that button, to open over it and to give the focus
-  // back to. `id`: what the button's `aria-controls` names.
+  // The panel the quota group of the status bar opens, above it, when there are several accounts: a group per harness, in
+  // « Ordre des harness », each account's meters with the percentage written, the current account of the harness first.
+  // `anchor`: that button, to open over it and to give the focus back to. `id`: what the button's `aria-controls` names.
   let { anchor, id, onclose }: { anchor?: HTMLElement; id?: string; onclose: () => void } = $props();
 
   /** The width of the panel. */
   const WIDTH = 360;
 
-  const rows = $derived(quotaRows(app.now));
+  const groups = $derived(quotaGroups(app.now));
   let place = $state({ left: 16, bottom: 38 });
 
   onMount(() => {
@@ -56,30 +57,40 @@
   style:bottom="{place.bottom}px"
   style:width="{WIDTH}px"
 >
-  {#each rows as r (r.account.id)}
-    {@const u = r.usage}
-    <div
-      class="acct"
-      class:off={r.reasons.length > 0}
-      role="group"
-      aria-label={accountName(r.account)}
-      aria-current={r.current ? 'true' : undefined}
-    >
-      <div class="head">
-        <span class="name">{accountName(r.account)}</span>
-        {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
-        {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
-        <span class="today" use:tip={r.today.estimated ? estimateHint() : undefined}
-          >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
+  {#each groups as g (g.engine)}
+    {@const noQuota = capsOf(g.engine)?.quota === 'none'}
+    <section class="harness" aria-label={t('accounts.tab.group', { harness: g.name })}>
+      <h3 class="title">{g.name}</h3>
+      {#each g.rows as r (r.account.id)}
+        {@const u = r.usage}
+        {@const meters = metersShown(u, g.engine)}
+        <div
+          class="acct"
+          class:off={r.reasons.length > 0}
+          role="group"
+          aria-label={accountName(r.account)}
+          aria-current={r.current ? 'true' : undefined}
         >
-      </div>
-      {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
-      <!-- An account that is not signed in and was never read has no windows to show. -->
-      {#if !u || u.connected || u.fiveHour || u.sevenDay}
-        <QuotaMeter kind="fiveHour" usage={u?.fiveHour ?? null} now={app.now} detail />
-        <QuotaMeter kind="sevenDay" usage={u?.sevenDay ?? null} now={app.now} detail />
-      {/if}
-    </div>
+          <div class="head">
+            <span class="name">{accountName(r.account)}</span>
+            {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
+            {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
+            <span class="today" use:tip={r.today.estimated ? estimateHint() : undefined}
+              >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
+            >
+          </div>
+          {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
+          {#if noQuota}
+            <div class="why">{t('accounts.panel.noQuota')}</div>
+          {:else if !u || u.connected || u.meters.length}
+            <!-- An account that is not signed in and was never read has no meters to show. -->
+            {#each meters as m (m.minutes ?? 'credits')}
+              <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} detail />
+            {/each}
+          {/if}
+        </div>
+      {/each}
+    </section>
   {/each}
 </div>
 
@@ -121,8 +132,18 @@
     gap: 5px;
     padding: 10px 14px;
   }
-  .acct + .acct {
+  .acct + .acct,
+  .harness + .harness {
     border-top: 1px solid var(--line);
+  }
+  .title {
+    margin: 0;
+    padding: 9px 14px 0;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dim);
   }
   .acct.off {
     opacity: 0.55;

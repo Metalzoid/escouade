@@ -256,6 +256,12 @@ pub fn account_reorder(core: CoreState, ids: Vec<String>) -> Res<Vec<ClaudeAccou
     core.reorder_claude_accounts(&ids).map_err(err)
 }
 
+/// « Ordre des harness » set to `order`; the order as it then is.
+#[tauri::command(async)]
+pub fn engine_order_set(core: CoreState, order: Vec<EngineId>) -> Res<Vec<EngineId>> {
+    core.set_engine_order(&order).map_err(err)
+}
+
 /// The account removed (its folder stays on the disk); the accounts as they then are.
 #[tauri::command(async)]
 pub fn account_remove(core: CoreState, id: String) -> Res<Vec<ClaudeAccount>> {
@@ -997,8 +1003,15 @@ pub async fn integrate_base(core: CoreState<'_>, id: String) -> Res<crate::core:
 
 /// The statistics of a period, of every account or (`account`) of one.
 #[tauri::command(async)]
-pub fn stats(core: CoreState, range: String, account: Option<String>) -> StatsView {
-    core.stats_view(&range, account.as_deref().filter(|a| !a.is_empty()))
+pub fn stats(
+    core: CoreState,
+    range: String,
+    account: Option<String>,
+    engine: Option<String>,
+) -> StatsView {
+    let some = |v: &Option<String>| v.as_deref().filter(|a| !a.is_empty()).map(str::to_string);
+    let (account, engine) = (some(&account), some(&engine));
+    core.stats_view_by(&range, account.as_deref(), engine.as_deref())
 }
 
 #[tauri::command]

@@ -23,7 +23,7 @@ The “Claude Code” group starts with one field.
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Executable path” (blank = detect automatically) | The `claude` Escouade runs for agents. An account with its own executable, in the [“Claude accounts”](settings-accounts) tab, runs its own. | Blank |
+| “Executable path” (blank = detect automatically) | The `claude` Escouade runs for agents. An account with its own executable, in the [“Accounts”](settings-accounts) tab, runs its own. | Blank |
 
 ### Where Escouade looks
 
@@ -105,7 +105,7 @@ When an agent stops on the usage limit, Escouade plans to write “continue” t
 
 ### Resume on another account
 
-With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Claude accounts”](settings-accounts) tab.
+With several accounts, a ticket’s agent stopped by the limit goes on by itself, with its session, on the account Escouade would pick, when another one is usable, instead of waiting for its own account to reset. See [accounts](accounts) and the [“Accounts”](settings-accounts) tab.
 
 ### Claude Code view
 

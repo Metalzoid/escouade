@@ -22,6 +22,7 @@
     "midTurn": "queued",
     "slashCommands": true,
     "quota": "windows",
+    "quotaWindows": [300, 10080],
     "cost": "exact",
     "terminalView": true,
     "remoteControl": true,

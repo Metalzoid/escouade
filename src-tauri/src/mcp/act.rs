@@ -60,7 +60,9 @@ use crate::board::{Held, MoveTo};
 use crate::core::{AgentOptions, Core};
 use crate::git;
 use crate::i18n;
-use crate::model::{BoardSettings, Column, PauseReason, Project, Ticket, PROGRESS_LINE_MAX};
+use crate::model::{
+    BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
+};
 use crate::telemetry::Event;
 use crate::tickets::{
     comment_missing, only_todo_is_edited, ticket_agent_options, title_missing, Refusal, TicketDraft,
@@ -394,13 +396,16 @@ fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
             "Le pilote auto est en pause jusqu’à {until} : la limite d’usage est atteinte. Réessaie à ce moment-là.",
             "The autopilot is paused until {until}: the usage limit is reached. Try again then."
         ),
-        PauseReason::FiveHour => tr!(
-            "Le pilote auto est en pause jusqu’à {until} : la fenêtre de 5 h est utilisée à {pct} %. Réessaie à ce moment-là.",
-            "The autopilot is paused until {until}: the 5-hour window is {pct}% used. Try again then."
-        ),
-        PauseReason::Week => tr!(
-            "Le pilote auto est en pause jusqu’à {until} : la fenêtre hebdomadaire est utilisée à {pct} %. Réessaie à ce moment-là.",
-            "The autopilot is paused until {until}: the weekly window is {pct}% used. Try again then."
+        PauseReason::Window => {
+            let window = crate::usage::window_name(i18n::ui(), p.minutes.unwrap_or_default());
+            tr!(
+                "Le pilote auto est en pause jusqu’à {until} : la fenêtre {window} est utilisée à {pct} %. Réessaie à ce moment-là.",
+                "The autopilot is paused until {until}: the {window} window is {pct}% used. Try again then."
+            )
+        }
+        PauseReason::Credits => tr!(
+            "Le pilote auto est en pause jusqu’à {until} : les crédits du mois sont utilisés à {pct} %. Réessaie à ce moment-là.",
+            "The autopilot is paused until {until}: the month’s credits are {pct}% used. Try again then."
         ),
     }
 }
@@ -408,8 +413,12 @@ fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
 /// A ticket, or a new agent, of the project does not start while every account it may go to is
 /// held back (`Core::project_hold`: the one the project prefers, else any active one): one that is
 /// free takes it, as the scheduler has it. The refusal says why, and until when.
-fn not_held<R: Runtime>(core: &Core<R>, project_id: &str) -> Result<(), ToolError> {
-    match core.project_hold(project_id) {
+fn not_held<R: Runtime>(
+    core: &Core<R>,
+    project_id: &str,
+    engine: EngineId,
+) -> Result<(), ToolError> {
+    match core.project_hold(project_id, engine) {
         Some(held) => Err(ToolError::Refused(why(core, &held))),
         None => Ok(()),
     }
@@ -638,7 +647,7 @@ pub(super) fn start_ticket<R: Runtime>(
     let effort = effort_setting(i18n::ui(), a.effort.as_deref())?;
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
-        not_held(core, &t.project_id)?;
+        not_held(core, &t.project_id, core.ticket_engine(&t))?;
         let project = project_of(core, &t.project_id)?;
         let issue = core.board_issues.lock().get(&project.id).cloned();
         if let Some(issue) = issue {
@@ -1186,7 +1195,7 @@ pub(super) async fn resume_ticket<R: Runtime>(
                     account_not_held(core, &agent)?;
                 }
             }
-            None => not_held(core, &t.project_id)?,
+            None => not_held(core, &t.project_id, core.ticket_engine(&t))?,
         }
     }
     let since = wait::since(core, &t);
@@ -1341,7 +1350,7 @@ pub(super) async fn create_agent<R: Runtime>(
         )));
     }
     let model = model(core, a.model.as_deref())?;
-    not_held(core, &project.id)?;
+    not_held(core, &project.id, project.engine())?;
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.
     let _one = core.mcp.acting.lock().await;

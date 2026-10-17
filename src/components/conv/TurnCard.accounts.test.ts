@@ -5,7 +5,7 @@ import { setLang } from '../../lib/i18n';
 import { menu } from '../../lib/menu.svelte';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountUsage, Agent, RateWindow, TurnItem } from '../../lib/types';
-import { agent, fakeBackend, resetApp } from '../../test/ipc';
+import { agent, fakeBackend, resetApp, usageOf } from '../../test/ipc';
 import TurnCard from './TurnCard.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -15,16 +15,7 @@ const OFF: Account = { id: 'off', name: 'Ancien', configDir: 'C:\\claude\\off', 
 
 const NOW = new Date(2026, 9, 10, 14, 0).getTime();
 const win = (pct: number): RateWindow => ({ pct, resetsAt: NOW + 3_600_000 });
-const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
-  id,
-  fiveHour: null,
-  sevenDay: null,
-  connected: true,
-  reason: null,
-  todayCost: 0,
-  updatedAt: 1,
-  ...over,
-});
+const read = (id: string, over: Parameters<typeof usageOf>[1] = {}): AccountUsage => usageOf(id, over);
 
 const turn = (over: Partial<TurnItem> = {}): TurnItem => ({
   kind: 'turn',

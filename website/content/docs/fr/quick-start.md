@@ -32,7 +32,7 @@ La configuration recommandée : un worktree par agent, validation par merge squa
 | « Le dépôt n’a aucun commit » : aucun ticket ne démarre, un worktree part d’un commit | « Faire un premier commit » : un commit vide, aucun fichier n’est ajouté |
 | « La branche cible … est introuvable » | « Prendre la branche courante » |
 | « Les worktrees iraient dans un dossier suivi par git » | « Utiliser .claude/worktrees » |
-| « Aucun compte Claude ne sert ce projet » | Activer un compte, ou retirer sa réservation, dans Réglages › Comptes Claude |
+| « Aucun compte Claude ne sert ce projet » | Activer un compte, ou retirer sa réservation, dans Réglages › Comptes |
 | « Claude Code est introuvable » | L’installer, ou indiquer son chemin dans Réglages › Harness |
 
 Chaque contrôle est aussi dit dans l’étape qu’il concerne (le premier dès « Départ »). Clique sur « Créer le projet » : le projet s’ouvre dans un nouvel onglet avec ses réglages, puis son premier agent si tu l’as demandé. « Créer sans l’assistant », en bas à gauche, crée le projet tout de suite avec les valeurs par défaut d’Escouade et un premier agent, comme avant l’assistant. Plus tard, Réglages › Projets › « Ouvrir l’assistant… » le rouvre sur un projet existant (voir [Réglages : Projets](settings-projects#assistant-de-configuration)).

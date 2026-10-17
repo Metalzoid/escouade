@@ -39,7 +39,7 @@ Escouade follows the two quota windows of your Claude subscription: the 5-hour w
 
 As soon as there is more than one account in [the list of accounts](accounts), the bar writes the current account’s name in front of the two quotas: it is the account a new agent would start on right now, leaving out the accounts reserved to projects.
 
-The group then becomes a button, “Quota by account (current account: Pro)”. A click (or `Enter` with the keyboard) opens the “Claude accounts quota” panel above the bar. `Esc` or a click outside closes it. It shows each account, the current one first, then the others in the order of the settings:
+The group then becomes a button, “Quota by account (current account: Pro)”. A click (or `Enter` with the keyboard) opens the “Accounts quota” panel above the bar. `Esc` or a click outside closes it. It shows each account, the current one first, then the others in the order of the settings:
 
 - its name, with the “current” tag for the current account and “past the pause threshold” when one of its windows has passed “Pause above quota”;
 - what its turns cost today, for example “Today: $1.20” (with “≈” while a turn is running);

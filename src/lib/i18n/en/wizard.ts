@@ -33,7 +33,7 @@ export default defineZone('wizard', {
     worktrees: 'Where the agents work, and what sets up each worktree.',
     launch: 'The commands that launch the project, each in its own terminal.',
     kanban: 'What approving a ticket does, and how its agents work.',
-    account: 'The Claude account of this project’s agents, and who writes the commits.',
+    account: 'The account of this project’s agents, and who writes the commits.',
     integrations: 'Tickets can come from Jira, Trello, GitHub or Linear. None of it is required.',
     summary: 'What would keep the way of working from working, then what will be set.',
   },
@@ -144,8 +144,8 @@ export default defineZone('wizard', {
       fix: 'Use .claude/worktrees',
     },
     noAccount: {
-      title: 'No Claude account serves this project',
-      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Claude accounts.',
+      title: 'No account serves this project',
+      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Accounts.',
     },
     noClaude: {
       title: 'No harness found',

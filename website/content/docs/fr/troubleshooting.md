@@ -16,7 +16,7 @@ Les problèmes que rencontre le plus souvent Escouade, chacun avec son symptôme
 
 **Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Harness (voir les [réglages Claude Code](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
 
-Un compte Claude peut avoir son propre exécutable (Réglages › Comptes Claude, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
+Un compte Claude peut avoir son propre exécutable (Réglages › Comptes, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
 
 ### Claude Code est introuvable quand l’app démarre depuis le Finder (macOS)
 
@@ -94,7 +94,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 ### Les quotas ne s’affichent pas
 
-**Symptôme.** Dans la barre d’état, `5h` et `7j` ont une barre vide et un « — » à la place du décompte, et l’infobulle dit « Quota indisponible ». Dans Réglages › Comptes Claude, le compte dit « Pas connecté », « Pas connecté par un compte claude.ai (clé d’API ?) » ou « Connexion expirée : relance Claude Code pour ce compte. »
+**Symptôme.** Dans la barre d’état, `5h` et `7j` ont une barre vide et un « — » à la place du décompte, et l’infobulle dit « Quota indisponible ». Dans Réglages › Comptes, le compte dit « Pas connecté », « Pas connecté par un compte claude.ai (clé d’API ?) » ou « Connexion expirée : relance Claude Code pour ce compte. »
 
 **Causes possibles.**
 
@@ -103,7 +103,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 - Anthropic n’est pas joignable (réseau, proxy, certificat : voir plus haut). Les dernières valeurs restent affichées, et Escouade réessaie à la lecture suivante, environ toutes les cinq minutes.
 - Sous macOS, Claude Code garde sa connexion dans le trousseau. Si tu refuses l’accès quand macOS le demande, Escouade ne le redemande pas avant dix minutes.
 
-**Solution.** Dans Réglages › Comptes Claude, « Se connecter… » (ou « Se reconnecter… ») ouvre un terminal où Claude Code te connecte (commande `/login` s’il ne le propose pas). Pour Principal, c’est la connexion de ton propre Claude Code. Voir [les comptes Claude](accounts).
+**Solution.** Dans Réglages › Comptes, « Se connecter… » (ou « Se reconnecter… ») ouvre un terminal où Claude Code te connecte (commande `/login` s’il ne le propose pas). Pour Principal, c’est la connexion de ton propre Claude Code. Voir [les comptes Claude](accounts).
 
 ### Un agent s’est arrêté sur la limite d’usage
 

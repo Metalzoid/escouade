@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { agent, project, resetApp } from '../test/ipc';
+import { agent, project, resetApp, usageOf } from '../test/ipc';
 import { newAgentAccount, overThreshold, pausedAccounts, pauseOf, projectsWithoutAccount, quotaOf, quotaRows } from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
@@ -9,7 +9,7 @@ const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', 
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
 const TEAM: Account = { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\team', claudePath: '', active: false };
 
-const pause = (over: Partial<AutopilotPause> = {}): AutopilotPause => ({ reason: 'fiveHour', pct: 97, until: 5_000, ...over });
+const pause = (over: Partial<AutopilotPause> = {}): AutopilotPause => ({ reason: 'window', minutes: 300, pct: 97, until: 5_000, ...over });
 
 describe('the accounts of a project', () => {
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe('the accounts of a project', () => {
   });
 
   it('goes to the account the project prefers when it is active, else to the one new agents go to now', () => {
-    app.usage.current = 'pro';
+    app.usage.current = { claude: 'pro' };
     expect(newAgentAccount(project())?.id).toBe('pro');
     expect(newAgentAccount(project({ account: 'principal' }))?.id).toBe('principal');
     // Switched off, or gone: any account again.
@@ -26,13 +26,13 @@ describe('the accounts of a project', () => {
     expect(newAgentAccount(project({ account: 'parti' }))?.id).toBe('pro');
     expect(newAgentAccount(undefined)?.id).toBe('pro');
     // Before the backend told which: the first active one.
-    app.usage.current = '';
+    app.usage.current = { claude: '' };
     expect(newAgentAccount(project())?.id).toBe('principal');
   });
 
   it('never goes to an account reserved to other projects, and a project with accounts of its own waits for them', () => {
     app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['client'] }, TEAM];
-    app.usage.current = 'principal';
+    app.usage.current = { claude: 'principal' };
     expect(newAgentAccount(project({ id: 'other', account: 'pro' }))?.id).toBe('principal');
     expect(newAgentAccount(project({ id: 'client', account: 'pro' }))?.id).toBe('pro');
     app.autopilotPause = pause({ until: 1 });
@@ -111,16 +111,7 @@ describe('the accounts of a project', () => {
 describe('the quota of each account', () => {
   const NOW = 1_000_000;
   const win = (pct: number, resetsAt: number | null = NOW + 3_600_000): RateWindow => ({ pct, resetsAt });
-  const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
-    id,
-    fiveHour: null,
-    sevenDay: null,
-    connected: true,
-    reason: null,
-    todayCost: 0,
-    updatedAt: 1,
-    ...over,
-  });
+  const read = (id: string, over: Parameters<typeof usageOf>[1] = {}): AccountUsage => usageOf(id, over);
 
   beforeEach(() => {
     resetApp();
@@ -141,16 +132,16 @@ describe('the quota of each account', () => {
   });
 
   it('lists every account, the current one first and the others in the order of the settings', () => {
-    app.usage.current = 'pro';
+    app.usage.current = { claude: 'pro' };
     expect(quotaRows(NOW).map((r) => [r.account.id, r.current])).toEqual([
       ['pro', true],
       ['principal', false],
       ['team', false],
     ]);
-    app.usage.current = 'principal';
+    app.usage.current = { claude: 'principal' };
     expect(quotaRows(NOW).map((r) => r.account.id)).toEqual(['principal', 'pro', 'team']);
     // Not told yet: the order of the settings, none marked.
-    app.usage.current = '';
+    app.usage.current = { claude: '' };
     expect(quotaRows(NOW).map((r) => [r.account.id, r.current])).toEqual([
       ['principal', false],
       ['pro', false],
@@ -161,7 +152,12 @@ describe('the quota of each account', () => {
   it('gives each account the windows it was read with, and none before it was', () => {
     app.usage.accounts = [read('pro', { fiveHour: win(42), sevenDay: win(12) })];
     const rows = quotaRows(NOW);
-    expect(rows.find((r) => r.account.id === 'pro')?.usage).toMatchObject({ fiveHour: { pct: 42 }, sevenDay: { pct: 12 } });
+    expect(rows.find((r) => r.account.id === 'pro')?.usage).toMatchObject({
+      meters: [
+        { minutes: 300, pct: 42 },
+        { minutes: 10080, pct: 12 },
+      ],
+    });
     expect(rows.find((r) => r.account.id === 'principal')?.usage).toBeNull();
   });
 

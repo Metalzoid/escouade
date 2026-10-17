@@ -19,7 +19,7 @@ function setup(over: Parameters<typeof agent>[0] = {}, accounts: Account[] = [PR
   const a = agent({ id: `c${Math.random()}`, status: 'idle', ...over });
   resetApp({ agents: [a] });
   app.settings.accounts = accounts;
-  app.usage.current = current;
+  app.usage.current = { claude: current };
   const backend = fakeBackend({ get_conversation: () => [], set_agent_account: () => null });
   render(Composer, { agent: app.agents[a.id] });
   return { a, backend };
@@ -95,7 +95,7 @@ describe('the account chip of the Composer', () => {
     const a = agent({ id: 'c-pref', account: 'pro', status: 'idle' });
     resetApp({ agents: [a], projects: [project({ account: 'principal' })] });
     app.settings.accounts = [PRINCIPAL, PRO];
-    app.usage.current = 'pro';
+    app.usage.current = { claude: 'pro' };
     fakeBackend({ get_conversation: () => [] });
     render(Composer, { agent: app.agents[a.id] });
     await userEvent.click(chip('Compte : Pro'));
@@ -162,5 +162,28 @@ describe('the account chip of the Composer', () => {
       'data-tip',
       'An agent’s account can’t change after its first message (its conversation is filed in that account).',
     );
+  });
+});
+
+describe('the account chip of an agent of another harness (ESC-30)', () => {
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+  const HOME: Account = { id: 'home', name: 'Maison', engine: 'codex', configDir: 'C:\codex\home', claudePath: '', active: true };
+
+  beforeEach(() => resetApp());
+
+  it('offers the accounts of the agent’s harness alone', async () => {
+    setup({ account: 'work', engine: 'codex' }, [PRINCIPAL, PRO, WORK, HOME]);
+    app.usage.current = { claude: 'principal', codex: 'home' };
+    await userEvent.click(chip('Compte : Travail'));
+    const items = screen.getAllByRole('menuitemradio');
+    expect(items).toHaveLength(3);
+    expect(items[0]).toHaveAccessibleName(/^Automatique \(Maison\)/);
+    expect(items[1]).toHaveAccessibleName('Travail');
+    expect(items[2]).toHaveAccessibleName('Maison');
+  });
+
+  it('is not there when the agent’s harness has a single account, whatever the other harness has', () => {
+    setup({ account: 'work', engine: 'codex' }, [PRINCIPAL, PRO, WORK]);
+    expect(screen.queryByRole('button', { name: /^Compte/ })).not.toBeInTheDocument();
   });
 });

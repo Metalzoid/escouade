@@ -1,14 +1,65 @@
-// The Claude accounts as the window shows them.
+// The accounts of every harness as the window shows them: each one runs a single harness, and its agents never go to
+// another harness's account (going on another harness is a handover, ESC-88).
 
 import { quotaUntil } from './board';
+import { engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { t, tIn } from './i18n';
 import { app } from './state.svelte';
 import type { SettingsTab } from './settings.svelte';
-import type { Account, AccountUsage, Agent, AutopilotPause, Project, RateWindow } from './types';
+import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, RateWindow } from './types';
 
-/** The id of the user's own account. */
+/** The id of the user's own Claude Code account. */
 export const PRINCIPAL = 'principal';
+
+/** The account's harness: Claude Code for one saved before 1.8. */
+export function engineOfAccount(a: Pick<Account, 'engine'>): EngineId {
+  return a.engine ?? 'claude';
+}
+
+/** The ids of the Principals that are not `principal-<harness>`: Claude Code's, the only one before 1.8. */
+const PRINCIPAL_IDS: Partial<Record<EngineId, string>> = { claude: PRINCIPAL };
+
+/** The id of the user's own account of `engine` (`accounts::principal_id`). */
+export function principalId(engine: EngineId): string {
+  return PRINCIPAL_IDS[engine] ?? `${PRINCIPAL}-${engine}`;
+}
+
+/** Whether the account is the user's own of its harness, launched without a folder of Escouade's. */
+export function isPrincipal(a: Pick<Account, 'id' | 'engine'>): boolean {
+  return a.id === principalId(engineOfAccount(a));
+}
+
+/** The harness of what says none (the backend lists it first). */
+export function defaultEngine(): EngineId {
+  return app.engines[0]?.id ?? 'claude';
+}
+
+/**
+ * The harnesses Escouade knows (declared, or with an account) in « Ordre des harness » (`Settings.engineOrder`), those it
+ * does not list after: the order of the groups of « Comptes ».
+ */
+export function engineOrder(): EngineId[] {
+  const known = new Set<EngineId>([...app.engines.map((e) => e.id), ...(app.settings.accounts ?? []).map(engineOfAccount)]);
+  const out: EngineId[] = [];
+  const add = (e: EngineId) => {
+    if (known.has(e) && !out.includes(e)) out.push(e);
+  };
+  (app.settings.engineOrder ?? []).forEach(add);
+  known.forEach(add);
+  return out;
+}
+
+/** The harnesses that have accounts, in their order: one group each in « Comptes » and in the panel of the quotas. */
+export function accountEngines(): EngineId[] {
+  const have = new Set((app.settings.accounts ?? []).map(engineOfAccount));
+  return engineOrder().filter((e) => have.has(e));
+}
+
+/** The harness whose accounts the status bar shows: the one of the agent shown, else the project's default one. */
+export function statusEngine(): EngineId {
+  return app.agent?.engine ?? app.project?.engine ?? defaultEngine();
+}
 
 /** The files, then the folders, of Principal's that a new account may share (`accounts::SHARED_FILES`, `SHARED_DIRS`). */
 export const SHARED_FILES = ['settings.json', 'CLAUDE.md'];
@@ -17,10 +68,10 @@ export const SHARED_FILES = ['settings.json', 'CLAUDE.md'];
  * The account's name as shown. Principal is named in the language of its first save: while the user has not renamed it,
  * it is shown in the interface's.
  */
-export function accountName(a: Pick<Account, 'id' | 'name'>): string {
+export function accountName(a: Pick<Account, 'id' | 'name' | 'engine'>): string {
   const name = a.name.trim();
   const defaults = [tIn('fr', 'accounts.principal'), tIn('en', 'accounts.principal')];
-  return a.id === PRINCIPAL && (!name || defaults.includes(name)) ? t('accounts.principal') : a.name;
+  return isPrincipal(a) && (!name || defaults.includes(name)) ? t('accounts.principal') : a.name;
 }
 
 /** The agents not archived that run on the account: while there are some, it is not removed. */
@@ -34,38 +85,58 @@ export function serves(a: Pick<Account, 'projects'>, project: string | undefined
   return !reserved.length || (!!project && reserved.includes(project));
 }
 
-/** The active accounts a new agent of the project may go to, in order (`accounts::for_project`). */
-export function usableFor(project: string | undefined): Account[] {
-  return app.settings.accounts.filter((a) => a.active && serves(a, project));
+/** The accounts of `engine` (by default the default harness's), in the order of the settings. */
+export function accountsOf(engine: EngineId = defaultEngine()): Account[] {
+  return (app.settings.accounts ?? []).filter((a) => engineOfAccount(a) === engine);
 }
 
-/** The projects no active account serves (each reserved to others, Principal too, or switched off): nothing starts for them. */
-export function projectsWithoutAccount(): Project[] {
-  return app.projects.filter((p) => !usableFor(p.id).length);
+/** The active accounts of `engine` a new agent of the project may go to, in order (`accounts::for_project`). */
+export function usableFor(project: string | undefined, engine: EngineId = defaultEngine()): Account[] {
+  return (app.settings.accounts ?? []).filter((a) => a.active && engineOfAccount(a) === engine && serves(a, project));
 }
 
-/** The active account the project prefers (« Compte préféré »), if it names one: a switched off, reserved or unknown one is none. */
-function preferred(project: (Pick<Project, 'account'> & { id?: string }) | undefined): Account | undefined {
-  const id = project?.account;
-  return id ? usableFor(project?.id).find((a) => a.id === id) : undefined;
-}
-
-/** The project's tickets wait for accounts of their own: the one it prefers, or the set that reserved accounts make its own. */
-function ownAccounts(project: Pick<Project, 'id' | 'account'>): boolean {
-  const ids = (p: string | undefined) =>
-    usableFor(p)
-      .map((a) => a.id)
-      .join(' ');
-  return !!preferred(project) || ids(project.id) !== ids(undefined);
+/** The harness a project's new agents and tickets run on unless they say theirs. */
+function engineOfProject(project: { engine?: EngineId | null } | undefined): EngineId {
+  return project?.engine ?? defaultEngine();
 }
 
 /**
- * The account a new agent of the project would go to now (« Automatique »): the one it prefers, else the current account
- * (the first active one under the pause threshold, as the backend says), else the first active one.
+ * The projects no active account of their default harness serves (each reserved to others, its Principal too, or switched
+ * off): nothing starts for them there.
  */
-export function newAgentAccount(project: (Pick<Project, 'account'> & { id?: string }) | undefined): Account | undefined {
-  const usable = usableFor(project?.id);
-  return preferred(project) ?? usable.find((a) => a.id === app.usage.current) ?? usable[0];
+export function projectsWithoutAccount(): Project[] {
+  return app.projects.filter((p) => !usableFor(p.id, engineOfProject(p)).length);
+}
+
+type ProjectLike = Pick<Project, 'account'> & { id?: string; engine?: EngineId | null };
+
+/**
+ * The active account the project prefers (« Compte préféré »), if it names one of `engine`: a switched off, reserved,
+ * unknown one, or one of another harness, is none.
+ */
+function preferred(project: ProjectLike | undefined, engine: EngineId = engineOfProject(project)): Account | undefined {
+  const id = project?.account;
+  return id ? usableFor(project?.id, engine).find((a) => a.id === id) : undefined;
+}
+
+/** The project's tickets wait for accounts of their own: the one it prefers, or the set that reserved accounts make its own. */
+function ownAccounts(project: Pick<Project, 'id' | 'account'> & { engine?: EngineId | null }): boolean {
+  const engine = engineOfProject(project);
+  const ids = (p: string | undefined, e: EngineId) =>
+    usableFor(p, e)
+      .map((a) => a.id)
+      .join(' ');
+  return !!preferred(project) || ids(project.id, engine) !== ids(undefined, defaultEngine());
+}
+
+/**
+ * The account a new agent of the project on `engine` (by default the project's) would go to now (« Automatique »): the one
+ * it prefers, else the current account of that harness (the first active one under the pause threshold, as the backend
+ * says), else its first active one.
+ */
+export function newAgentAccount(project: ProjectLike | undefined, engine: EngineId = engineOfProject(project)): Account | undefined {
+  const usable = usableFor(project?.id, engine);
+  return preferred(project, engine) ?? usable.find((a) => a.id === app.usage.current[engine]) ?? usable[0];
 }
 
 /** Why no ticket of the project starts: the pause of its preferred account alone, else of the accounts new agents may go to. */
@@ -82,9 +153,9 @@ function accountOf(a: Pick<Agent, 'account'>): string {
  * When the first agent waiting for its quota resumes, if every account a ticket of the project could start on has one:
  * nothing starts before. While one has none, a ticket starts on it.
  */
-export function quotaOf(project: Pick<Project, 'account'> & { id?: string }): number | null {
+export function quotaOf(project: ProjectLike): number | null {
   const pick = preferred(project);
-  const ids = pick ? [pick.id] : usableFor(project?.id).map((a) => a.id);
+  const ids = pick ? [pick.id] : usableFor(project?.id, engineOfProject(project)).map((a) => a.id);
   const agents = Object.values(app.agents);
   const times = ids.map((id) => quotaUntil(agents.filter((a) => accountOf(a) === id)));
   return ids.length && times.every((x) => x !== null) ? Math.min(...(times as number[])) : null;
@@ -92,24 +163,61 @@ export function quotaOf(project: Pick<Project, 'account'> & { id?: string }): nu
 
 /**
  * The accounts an agent stopped by the usage limit can go on on (« Reprendre sur <compte> »), in the order of the settings:
- * the active ones other than its own that are signed in and under « Pause au-delà du quota ». One past the threshold is left
- * out: the agent would meet the limit again there.
+ * the active ones of its harness other than its own that are signed in and under « Pause au-delà du quota ». One past the
+ * threshold is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
  */
-export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string }): Account[] {
+export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string; engine?: EngineId }): Account[] {
   const own = accountOf(agent);
+  const engine = agent.engine ?? 'claude';
   const threshold = app.settings.quotaPause;
   return app.settings.accounts.filter((a) => {
-    if (!a.active || a.id === own || !serves(a, agent.projectId)) return false;
+    if (!a.active || a.id === own || engineOfAccount(a) !== engine || !serves(a, agent.projectId)) return false;
     const read = app.usage.accounts.find((u) => u.id === a.id);
     // An account not read yet counts as signed in, as the backend has it.
     if (read && !read.connected) return false;
-    return !overThreshold(read?.fiveHour ?? null, threshold, app.now) && !overThreshold(read?.sevenDay ?? null, threshold, app.now);
+    return !anyOver(read ?? null, threshold, app.now);
   });
 }
 
-/** The name of a quota bar, for the screen readers: « Quota sur 5 heures ». */
-export function quotaName(kind: 'fiveHour' | 'sevenDay'): string {
-  return kind === 'fiveHour' ? t('accounts.quota.fiveHour.name') : t('accounts.quota.sevenDay.name');
+const DAY = 24 * 60;
+
+/** A quota meter's label, by its length: « 5h », « 7j » (« 7d »), « 30j »; « crédits » for the month's credits. */
+export function meterLabel(minutes: number | null): string {
+  if (minutes === null) return t('accounts.quota.credits.label');
+  if (minutes === 7 * DAY) return t('accounts.quota.week.label');
+  if (minutes % DAY === 0) return t('accounts.quota.days.label', { n: minutes / DAY });
+  return t('accounts.quota.hours.label', { n: Math.round(minutes / 60) });
+}
+
+/** The name of a quota bar, for the screen readers: « Quota sur 5 heures », « Crédits du mois ». */
+export function meterName(minutes: number | null): string {
+  if (minutes === null) return t('accounts.quota.credits.name');
+  if (minutes % DAY === 0) return t('accounts.quota.days.name', { count: minutes / DAY });
+  return t('accounts.quota.hours.name', { count: Math.round(minutes / 60) });
+}
+
+/** One bar of an account's quota: its length (null: the month's credits) and its reading, null until it is read. */
+export interface MeterShown {
+  minutes: number | null;
+  usage: RateWindow | null;
+}
+
+/**
+ * The bars of an account of `engine`, as its harness has them: those read, else, before a reading, the windows it declares
+ * (`EngineCaps.quotaWindows`) or its credits, empty; none for a harness without a quota.
+ */
+export function metersShown(usage: AccountUsage | null, engine: EngineId): MeterShown[] {
+  const caps = app.engines.find((e) => e.id === engine)?.caps;
+  if (caps?.quota === 'none') return [];
+  const read = usage?.meters ?? [];
+  if (read.length) return read.map((m) => ({ minutes: m.minutes, usage: m }));
+  if (caps?.quota === 'credits') return [{ minutes: null, usage: null }];
+  return (caps?.quotaWindows ?? []).map((minutes) => ({ minutes, usage: null }));
+}
+
+/** Whether one of the account's meters is past « Pause au-delà du quota » (`accounts::over_threshold`). */
+export function anyOver(usage: Pick<AccountUsage, 'meters'> | null, threshold: number, now: number): boolean {
+  return (usage?.meters ?? []).some((m: QuotaMeter) => overThreshold(m, threshold, now));
 }
 
 /** A quota window as its tooltip says it: « 42 % · remise à zéro le 10/10 à 18:00 ». Also the value of its bar for a screen reader. */
@@ -160,7 +268,25 @@ function liveCostOf(id: string): number {
     .reduce((sum, a) => sum + (a.liveCost ?? 0), 0);
 }
 
-/** Every account for the panel of the quotas: the current one first, the others in the order of the settings. */
+/** The accounts of one harness in the panel of the quotas and in « Comptes ». */
+export interface QuotaGroup {
+  engine: EngineId;
+  /** Its name, as the interface says it. */
+  name: string;
+  rows: QuotaRow[];
+}
+
+/** Every account for the panel of the quotas, by harness in their order: in each, the current one first, the others in the order of the settings. */
+export function quotaGroups(now: number): QuotaGroup[] {
+  const rows = quotaRows(now);
+  return accountEngines().map((engine) => ({
+    engine,
+    name: engineName(engine),
+    rows: rows.filter((r) => engineOfAccount(r.account) === engine),
+  }));
+}
+
+/** Every account for the panel of the quotas: the current ones (one per harness) first, the others in the order of the settings. */
 export function quotaRows(now: number): QuotaRow[] {
   const rows = app.settings.accounts.map((account): QuotaRow => {
     const usage = app.usage.accounts.find((u) => u.id === account.id) ?? null;
@@ -175,16 +301,16 @@ export function quotaRows(now: number): QuotaRow[] {
       reasons.push(usage.reason);
     }
     const threshold = app.settings.quotaPause;
-    const over =
-      account.active && (overThreshold(usage?.fiveHour ?? null, threshold, now) || overThreshold(usage?.sevenDay ?? null, threshold, now));
+    const over = account.active && anyOver(usage, threshold, now);
     const live = liveCostOf(account.id);
     const today = { cost: (usage?.todayCost ?? 0) + live, estimated: live > 0 };
-    return { account, usage, current: account.id === app.usage.current, over, reasons, today };
+    const current = account.id === app.usage.current[engineOfAccount(account)];
+    return { account, usage, current, over, reasons, today };
   });
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }
 
-/** Back to the settings' tab `tab` (« Comptes Claude » by default), their draft as it was. */
+/** Back to the settings' tab `tab` (« Comptes » by default), their draft as it was. */
 export function backToAccounts(tab: SettingsTab = 'accounts') {
   app.modal = { kind: 'settings', tab, resume: true };
 }

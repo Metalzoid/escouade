@@ -890,7 +890,7 @@ impl AgentRt {
     }
 }
 
-fn parse_rate_event(info: &Value) -> (Option<RateWindow>, Option<RateWindow>) {
+fn parse_rate_event(info: &Value) -> Vec<crate::model::QuotaMeter> {
     let w = &info["unifiedWindows"];
     let parse = |k: &str| {
         w.get(k).filter(|v| v.is_object()).map(|v| RateWindow {
@@ -898,5 +898,5 @@ fn parse_rate_event(info: &Value) -> (Option<RateWindow>, Option<RateWindow>) {
             resets_at: v["resetsAt"].as_i64().map(|s| s * 1000),
         })
     };
-    (parse("five_hour"), parse("seven_day"))
+    crate::model::claude_meters(parse("five_hour"), parse("seven_day"))
 }

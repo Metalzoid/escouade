@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
-import type { Account, AccountUsage, RateWindow, Settings } from '../lib/types';
-import { agent, branchInfo, fakeBackend, gitInfo, resetApp } from '../test/ipc';
+import type { Account, AccountUsage, EngineDecl, RateWindow, Settings } from '../lib/types';
+import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, resetApp, usageOf, usageWith } from '../test/ipc';
 import StatusBar from './StatusBar.svelte';
 import { getByTip, tabTo } from '../test/tip';
 
@@ -52,14 +52,14 @@ describe('StatusBar', () => {
 
   it('shows when the weekly quota resets too', () => {
     fakeBackend();
-    app.usage = {
+    app.usage = usageWith({
       fiveHour: { pct: 10, resetsAt: null },
       sevenDay: { pct: 38.4, resetsAt: app.now + (2 * 86400 + 5 * 3600) * 1000 },
       todayCost: 0,
       updatedAt: 1,
       accounts: [],
       current: 'principal',
-    };
+    });
     render(StatusBar);
     expect(screen.getByText('7j')).toBeInTheDocument();
     expect(screen.getByText('reset 2j 5h')).toBeInTheDocument();
@@ -79,14 +79,14 @@ describe('StatusBar', () => {
 
   it('shows quotas with the time left before the session reset, and the day cost', () => {
     fakeBackend();
-    app.usage = {
+    app.usage = usageWith({
       fiveHour: { pct: 62, resetsAt: app.now + (1 * 3600 + 48 * 60) * 1000 },
       sevenDay: { pct: 38.4, resetsAt: null },
       todayCost: 4.12,
       updatedAt: 1,
       accounts: [],
       current: 'principal',
-    };
+    });
     render(StatusBar);
     expect(screen.getByText('5h')).toBeInTheDocument();
     expect(screen.getByText('reset 1h48')).toBeInTheDocument();
@@ -331,7 +331,7 @@ describe('StatusBar update', () => {
 describe('StatusBar day cost', () => {
   it('includes what running turns cost so far, marked as an estimate', () => {
     resetApp({ agents: [agent({ id: 'a1', status: 'running', liveCost: 0.5 }), agent({ id: 'a2', liveCost: 0.25 })] });
-    app.usage = { fiveHour: null, sevenDay: null, todayCost: 1, updatedAt: 1, accounts: [], current: 'principal' };
+    app.usage = usageWith({ fiveHour: null, sevenDay: null, todayCost: 1, updatedAt: 1, accounts: [], current: 'principal' });
     fakeBackend();
     render(StatusBar);
     expect(screen.getByText('≈ 1,75 $')).toBeInTheDocument();
@@ -355,14 +355,14 @@ describe('StatusBar in English', () => {
 
   it('counts the agents, and writes the quotas, their reset and the day cost in English', () => {
     fakeBackend();
-    app.usage = {
+    app.usage = usageWith({
       fiveHour: { pct: 62, resetsAt: app.now + (1 * 3600 + 48 * 60) * 1000 },
       sevenDay: { pct: 38.4, resetsAt: app.now + (2 * 86400 + 5 * 3600) * 1000 },
       todayCost: 4.12,
       updatedAt: 1,
       accounts: [],
       current: 'principal',
-    };
+    });
     render(StatusBar);
     expect(screen.getByText('1 active')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /1 waiting/ })).toHaveAttribute(
@@ -474,21 +474,12 @@ describe('StatusBar quotas of the accounts', () => {
   const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true };
   const NOW = new Date(2026, 9, 10, 14, 59).getTime();
   const win = (pct: number, hours: number): RateWindow => ({ pct, resetsAt: NOW + hours * 3_600_000 });
-  const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
-    id,
-    fiveHour: null,
-    sevenDay: null,
-    connected: true,
-    reason: null,
-    todayCost: 0,
-    updatedAt: 1,
-    ...over,
-  });
+  const read = (id: string, over: Parameters<typeof usageOf>[1] = {}): AccountUsage => usageOf(id, over);
   const two = () => {
     app.settings.accounts = [PRINCIPAL, PRO];
     app.settings.quotaPause = 90;
     // Pro is the current account: the bars are its windows, whatever the other account's are.
-    app.usage = {
+    app.usage = usageWith({
       fiveHour: win(42, 3.0167),
       sevenDay: win(12, 108),
       todayCost: 4.12,
@@ -498,17 +489,17 @@ describe('StatusBar quotas of the accounts', () => {
         read('principal', { fiveHour: win(95, 1), sevenDay: win(30, 100) }),
         read('pro', { fiveHour: win(42, 3.0167), sevenDay: win(12, 108) }),
       ],
-    };
+    });
   };
   const group = () => screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Pro)' });
-  const panel = () => screen.queryByRole('dialog', { name: 'Quotas des comptes Claude' });
+  const panel = () => screen.queryByRole('dialog', { name: 'Quotas des comptes' });
 
   beforeEach(() => {
     resetApp();
     fakeBackend();
     menu.close();
     app.now = NOW;
-    app.usage = { ...app.usage, fiveHour: win(42, 3.0167), sevenDay: win(12, 108), todayCost: 4.12 };
+    app.usage = usageWith({ ...app.usage, fiveHour: win(42, 3.0167), sevenDay: win(12, 108), todayCost: 4.12 });
   });
 
   it('is not a button with a single account, and the account is not named: the bars are in the tab order', async () => {
@@ -568,10 +559,15 @@ describe('StatusBar quotas of the accounts', () => {
     const said =
       /^Quota sur 5 heures : 42 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}\. Quota sur 7 jours : 12 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/;
     expect(group()).toHaveAccessibleDescription(said);
-    // What the bars read is told as it follows the quota; a window not read is said so.
-    app.usage = { ...app.usage, fiveHour: null, sevenDay: win(80, 100) };
+    // What the bars read is told as it follows the quota: a reading with a single window has a single bar (Codex's free
+    // plan has one).
+    app.usage = usageWith({ ...app.usage, fiveHour: null, sevenDay: win(80, 100) });
     flushSync();
-    expect(group()).toHaveAccessibleDescription(/^Quota sur 5 heures : Quota indisponible\. Quota sur 7 jours : 80 % · remise à zéro le /);
+    expect(group()).toHaveAccessibleDescription(/^Quota sur 7 jours : 80 % · remise à zéro le \d{2}\/\d{2} à \d{2}:\d{2}$/);
+    // Not read yet: the windows its harness declares, each said unavailable.
+    app.usage = usageWith({ ...app.usage, fiveHour: null, sevenDay: null });
+    flushSync();
+    expect(group()).toHaveAccessibleDescription('Quota sur 5 heures : Quota indisponible. Quota sur 7 jours : Quota indisponible');
   });
 
   it('shows both values in a tooltip when the group button gets the keyboard focus, until it loses it or Escape is pressed', async () => {
@@ -635,7 +631,7 @@ describe('StatusBar quotas of the accounts', () => {
   it('names the current account as it follows the quota: another account takes the front when it becomes the current one', async () => {
     two();
     render(StatusBar);
-    app.usage = { ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(30, 100) };
+    app.usage = usageWith({ ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(30, 100) });
     await tick();
     const button = screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Principal)' });
     expect(button).toHaveTextContent(/^Principal\s*·\s*5h/);
@@ -757,16 +753,66 @@ describe('StatusBar quotas of the accounts', () => {
   it('writes the group in English, Principal being Main', async () => {
     setLang('en');
     two();
-    app.usage = { ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(12, 108) };
+    app.usage = usageWith({ ...app.usage, current: 'principal', fiveHour: win(95, 1), sevenDay: win(12, 108) });
     render(StatusBar);
     const button = screen.getByRole('button', { name: 'Quota by account (current account: Main)' });
     expect(button).toHaveTextContent(/^Main\s*·\s*5h/);
     expect(button).toHaveTextContent('W');
     expect(button).toHaveTextContent('reset 4d 12h');
     await userEvent.click(button);
-    const dialog = screen.getByRole('dialog', { name: 'Claude accounts quota' });
+    const dialog = screen.getByRole('dialog', { name: 'Accounts quota' });
     expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('current');
     expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause threshold');
     expect(within(dialog).getByRole('group', { name: 'Pro' })).not.toHaveTextContent('past the pause threshold');
+  });
+});
+
+describe('StatusBar quotas of the harness shown (ESC-30)', () => {
+  const NOW = new Date(2026, 9, 10, 14, 59).getTime();
+  const at = (hours: number) => NOW + hours * 3_600_000;
+  const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+  /** The bare harness with a single window of 30 days. */
+  const MONTHLY: EngineDecl = { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, quota: 'windows', quotaWindows: [43200] } };
+
+  const setUp = (engine: 'claude' | 'codex', harness: EngineDecl = BARE_ENGINE) => {
+    resetApp({ agents: [agent({ id: 'a1', engine })] });
+    fakeBackend();
+    app.now = NOW;
+    app.engines = [CLAUDE_ENGINE, harness];
+    app.settings.accounts = [PRINCIPAL, WORK];
+    app.usage = {
+      todayCost: 1,
+      current: { claude: 'principal', codex: 'work' },
+      accounts: [
+        usageOf('principal', { fiveHour: { pct: 42, resetsAt: at(3) }, sevenDay: { pct: 12, resetsAt: at(100) } }),
+        usageOf('work', { engine: 'codex', meters: [{ minutes: 43200, pct: 70, resetsAt: at(200) }] }),
+      ],
+    };
+  };
+
+  it('shows the accounts of Claude Code for an agent of Claude Code', () => {
+    setUp('claude');
+    render(StatusBar);
+    expect(screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Principal)' })).toBeInTheDocument();
+    expect(screen.getByText('5h')).toBeInTheDocument();
+    expect(screen.getByText('7j')).toBeInTheDocument();
+  });
+
+  it('shows the windows of the harness of the agent shown, labelled by their length', () => {
+    setUp('codex', MONTHLY);
+    render(StatusBar);
+    expect(screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Travail)' })).toBeInTheDocument();
+    expect(screen.getByText('30j')).toBeInTheDocument();
+    expect(screen.queryByText('5h')).not.toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: 'Quota sur 30 jours' })).toHaveAttribute('aria-valuenow', '70');
+  });
+
+  it('shows no bar for a harness without a quota, only the cost of the day', () => {
+    setUp('codex');
+    render(StatusBar);
+    expect(screen.queryByRole('meter')).not.toBeInTheDocument();
+    expect(screen.getByText('Travail')).toBeInTheDocument();
+    expect(screen.getByText(/Aujourd'hui|Aujourd’hui/)).toBeInTheDocument();
   });
 });

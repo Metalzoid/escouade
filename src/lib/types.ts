@@ -48,8 +48,13 @@ export interface Settings {
   language: 'system' | Lang;
   /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
   claudeLanguage: 'ui' | Lang;
-  /** The Claude accounts, in the order new agents try them; Principal (id "principal") always among them. */
+  /** The accounts of every harness, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
+  /**
+   * « Ordre des harness »: every harness once. It gives a project its fallback harnesses after its default one, and the order
+   * of the groups of « Comptes ». Changed by `engine_order_set`, not by the settings modal's draft.
+   */
+  engineOrder?: EngineId[];
   /** « Claude et les agents peuvent piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
@@ -116,7 +121,9 @@ export type VoiceEvent =
 export interface Account {
   id: string;
   name: string;
-  /** Its `CLAUDE_CONFIG_DIR`; empty for Principal, launched without one. */
+  /** Its harness (Claude Code for an account saved before 1.8). */
+  engine?: EngineId;
+  /** Its configuration folder (`CLAUDE_CONFIG_DIR` for Claude Code); empty for Principal, launched without one. */
   configDir: string;
   /** Its own `claude`; empty: the settings' one. */
   claudePath: string;
@@ -316,6 +323,8 @@ export interface EngineCaps {
   midTurn: 'queued' | 'immediate' | 'refused';
   slashCommands: boolean;
   quota: 'windows' | 'credits' | 'none';
+  /** The lengths of the windows of its quota, in minutes: the bars the status bar shows before their first reading. */
+  quotaWindows: number[];
   /** What a turn costs: told by the harness, estimated, or unknown (nothing shown). */
   cost: 'exact' | 'estimated' | 'none';
   /** Its own interface in a terminal (« Vue Claude Code »). */
@@ -1108,25 +1117,33 @@ export interface RateWindow {
   resetsAt: number | null;
 }
 
-export interface Usage {
-  /** The current account's windows: what the status bar shows and the autopilot goes by. */
-  fiveHour: RateWindow | null;
-  sevenDay: RateWindow | null;
-  /** What the turns cost today, on every account. */
-  todayCost: number;
-  /** When the current account's windows were last read. */
-  updatedAt: number;
-  /** Every Claude account, in the settings' order. */
-  accounts: AccountUsage[];
-  /** The account new agents would go to: the first active one under the pause threshold, else the first active one. */
-  current: string;
+/**
+ * One meter of an account's quota: a window of a length (`minutes`: 300 for 5 hours, 10080 for a week), used in percent
+ * until it starts again, or the month's credits (`minutes`: null).
+ */
+export interface QuotaMeter extends RateWindow {
+  minutes: number | null;
 }
 
-/** One Claude account's quota, as last read. */
+export interface Usage {
+  /** What the turns cost today, on every account. */
+  todayCost: number;
+  /** Every account, of every harness, in the settings' order. */
+  accounts: AccountUsage[];
+  /**
+   * The account new agents of each harness would go to (the first active one under the pause threshold, else the first
+   * active one): the one whose meters the status bar shows for that harness.
+   */
+  current: Partial<Record<EngineId, string>>;
+}
+
+/** One account's quota, as last read. */
 export interface AccountUsage {
   id: string;
-  fiveHour: RateWindow | null;
-  sevenDay: RateWindow | null;
+  /** Its harness. */
+  engine: EngineId;
+  /** Its meters as last read, the shortest window first; none for a harness without a quota, or not read yet. */
+  meters: QuotaMeter[];
   /** Signed in, as the last reading tells (an account not read yet counts as signed in). */
   connected: boolean;
   /** Why its quota is not read (not signed in, sign-in expired), in the interface's language. */
@@ -1139,7 +1156,10 @@ export interface AccountUsage {
 
 /** Why no ticket of any board starts, and until when: a quota window over « Pause au-delà du quota », or a usage limit with no resume planned. */
 export interface AutopilotPause {
-  reason: 'fiveHour' | 'week' | 'limit';
+  /** A window over the threshold (of `minutes`), the month's credits, or a usage limit. */
+  reason: 'window' | 'credits' | 'limit';
+  /** The window's length, for a window. */
+  minutes?: number;
   /** The window's use, 0-100 (null after a limit). */
   pct: number | null;
   /** When the tickets start again: the window's end, or about then after a limit. */
@@ -1512,14 +1532,25 @@ export interface StatsView {
   prompts: number;
   byProject: Share[];
   byModel: Share[];
-  /** By harness (its id), the one that ran each turn. */
-  byEngine: Share[];
+  /** Every harness side by side (« Par harness »), the one that ran each turn, whichever harness the other fields are for. */
+  byEngine: EngineShare[];
   byAgent: AgentShare[];
   byTicket: TicketShare[];
   /** Every account side by side, dearest first, whichever account the other fields are for. */
   byAccount: AccountShare[];
   /** Every account that ever ran a turn (ids), whichever period or account the view is for. */
   accounts: string[];
+  /** Every harness that ever ran a turn (ids), whichever period or harness the view is for. */
+  engines: string[];
+}
+
+/** What a harness ran over the period. */
+export interface EngineShare {
+  engine: string;
+  tokens: number;
+  cost: number;
+  turns: number;
+  agents: number;
 }
 
 export interface FolderInfo {

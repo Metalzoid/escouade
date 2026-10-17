@@ -1,18 +1,19 @@
 import { defineZone } from '../types';
 
-// The Claude accounts.
+// The accounts of every harness.
 export default defineZone('accounts', {
   principal: 'Main',
 
   tab: {
-    list: 'Claude accounts',
-    order: 'New agents start on the first active account under the pause threshold, in this order.',
+    list: 'Accounts',
+    group: '{harness} accounts',
+    order: 'New agents start on the first active account of their harness under the pause threshold, in this order.',
     name: 'Name',
     folder: 'Folder',
     executable: 'Executable',
     executableDefault: 'The one in the settings',
     active: 'Active',
-    lastActive: 'At least one account must be active.',
+    lastActive: 'Each harness needs at least one active account.',
     up: 'Move {name} up',
     down: 'Move {name} down',
     signIn: 'Sign in…',
@@ -24,8 +25,8 @@ export default defineZone('accounts', {
     closedProject: '{name} (closed)',
     /** `{names}`: the projects, each quoted (`quoted`) and listed as a sentence does. */
     noAccount: {
-      one: 'No active account serves {names}: its agents and tickets won’t start.',
-      other: 'No active account serves {names}: their agents and tickets won’t start.',
+      one: 'No active account of its default harness serves {names}: its agents and tickets won’t start.',
+      other: 'No active account of their default harness serves {names}: their agents and tickets won’t start.',
     },
     quoted: '“{name}”',
     reservedHint: 'Tick projects to keep this account to them alone (a client’s projects, say): the others never start on it.',
@@ -90,8 +91,10 @@ export default defineZone('accounts', {
   },
 
   quota: {
-    fiveHour: { label: '5h', name: '5-hour quota' },
-    sevenDay: { label: 'W', name: '7-day quota' },
+    hours: { label: '{n}h', name: { one: '{count}-hour quota', other: '{count}-hour quota' } },
+    days: { label: '{n}d', name: { one: '{count}-day quota', other: '{count}-day quota' } },
+    credits: { label: 'credits', name: 'Credits of the month' },
+    week: { label: 'W' },
     reset: 'reset {countdown}',
     tip: '{pct} · resets on {date} at {time}',
     unavailable: 'Quota unavailable',
@@ -100,7 +103,8 @@ export default defineZone('accounts', {
 
   panel: {
     open: 'Quota by account (current account: {name})',
-    title: 'Claude accounts quota',
+    title: 'Accounts quota',
+    noQuota: 'No quota: only what its turns cost counts.',
     current: 'current',
     over: 'past the pause threshold',
     today: 'Today: {amount}',
@@ -111,6 +115,13 @@ export default defineZone('accounts', {
     another: 'Resume on another account',
     failed: 'Resuming on {account} failed: {error}.',
     back: 'Go back to {account}',
+  },
+
+  engineOrder: {
+    label: 'Harness order',
+    desc: 'After its default harness, a project goes on to the next ones in this order when its own quota is spent, if they have an active account that serves it.',
+    up: 'Move {name} up',
+    down: 'Move {name} down',
   },
 
   switchOnLimit: {

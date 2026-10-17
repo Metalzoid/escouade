@@ -21,7 +21,7 @@ Cette page explique l’usage ; la liste des options de l’onglet est dans [les
 
 ## Ajouter un compte
 
-1. Ouvre les réglages (`Ctrl+,`, ou ⚙ dans la barre de statut) et l’onglet « Comptes Claude ».
+1. Ouvre les réglages (`Ctrl+,`, ou ⚙ dans la barre de statut) et l’onglet « Comptes ».
 2. Clique sur « Ajouter un compte… ».
 3. Écris le nom du compte dans « Nom » (le champ suggère « Pro, Équipe… »). Deux comptes ne peuvent pas porter le même nom, majuscules ou non.
 4. Choisis ce que le compte reprend de Principal, sous « Partager avec Principal » (voir ci-dessous).
@@ -68,7 +68,7 @@ Si Claude Code s’arrête avant la connexion, la fenêtre écrit « Claude Cod
 
 ## Gérer les comptes
 
-L’onglet « Comptes Claude » des réglages liste les comptes. Chaque changement est enregistré tout de suite, sans passer par l’enregistrement des autres réglages (« Annuler » ne le défait pas). Une ligne par compte :
+L’onglet « Comptes » des réglages liste les comptes. Chaque changement est enregistré tout de suite, sans passer par l’enregistrement des autres réglages (« Annuler » ne le défait pas). Une ligne par compte :
 
 | Élément | Rôle |
 |---|---|
@@ -143,13 +143,13 @@ Si aucun compte actif ne sert un projet (par exemple parce que chaque compte est
 
 - le Kanban du projet écrit « Aucun compte Claude pour ce projet — aucun ticket ne démarre » ;
 - un nouvel agent est refusé, avec un message qui dit où cocher le projet ;
-- l’onglet « Comptes Claude » le dit sous la liste, en ambre, par exemple : Aucun compte actif ne sert « Client » : ses agents et ses tickets ne démarrent pas.
+- l’onglet « Comptes » le dit sous la liste, en ambre, par exemple : Aucun compte actif ne sert « Client » : ses agents et ses tickets ne démarrent pas.
 
 Pour y remédier, coche le projet sur un compte actif, ou décoche toutes les cases d’un compte pour qu’il serve de nouveau tous les projets.
 
 « Fermer le projet » (zone sensible des réglages du projet) garde l’historique du projet, et le projet reste dans la liste « Réservé aux projets » des comptes qui lui étaient réservés : il n’en sort que lorsque son historique est effacé (la case « Effacer aussi son historique » à la fermeture, ou « Effacer l’historique… » dans « Projets fermés »).
 
-Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet ouvert tant que le projet est fermé. Si c’était ton seul compte actif, plus rien ne démarre pour les autres projets, et l’onglet « Comptes Claude » le dit sous la liste, comme plus haut.
+Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet ouvert tant que le projet est fermé. Si c’était ton seul compte actif, plus rien ne démarre pour les autres projets, et l’onglet « Comptes » le dit sous la liste, comme plus haut.
 
 Cet onglet montre le projet fermé dans la ligne « Réservé aux projets » du compte, coché et marqué « (fermé) », par exemple « Client (fermé) ». Décoche-le pour libérer le compte : sans case cochée, il sert de nouveau tous les projets. Quand tu rouvres le projet (voir [Projets fermés](settings-projects#projets-fermes)), ses réservations sont toujours là : il n’y a rien à refaire. Si tu effaces l’historique, à la fermeture ou plus tard dans « Projets fermés », le projet sort de la liste de chaque compte. Le « Compte préféré » du projet, lui, repasse sur « Automatique » à la réouverture si son compte n’existe plus.
 

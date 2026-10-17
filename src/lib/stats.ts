@@ -1,7 +1,9 @@
 // Derived KPIs of the Stats tab.
 
+import { capsOf } from './engines';
+import { fUsd } from './format';
 import { t } from './i18n';
-import type { StatsView } from './types';
+import type { EngineCaps, EngineId, StatsView } from './types';
 
 export type Range = 'day' | 'week' | 'month';
 
@@ -24,6 +26,34 @@ export function kpis(v: StatsView): Kpis {
     tokensPerPrompt: v.prompts > 0 ? v.tokens / v.prompts : null,
     promptsPerBucket: v.buckets.length ? v.prompts / v.buckets.length : 0,
   };
+}
+
+/** How the cost of the turns of `engines` is known: told exactly, estimated by Escouade, or not at all. */
+export type CostKind = EngineCaps['cost'];
+
+/**
+ * How the cost of what several harnesses ran is known, as each one declares it: unknown when none of them gives one,
+ * estimated as soon as one of them is only estimated, exact otherwise. A harness the window does not know is taken as exact
+ * (its turns have the cost they were written with).
+ */
+export function costKindOf(engines: string[]): CostKind {
+  const kinds = engines.map((e) => capsOf(e as EngineId)?.cost ?? 'exact');
+  if (kinds.length && kinds.every((k) => k === 'none')) return 'none';
+  return kinds.includes('estimated') ? 'estimated' : 'exact';
+}
+
+/** A cost as the statistics write it: « — » when the harness gives none, « ≈ 1,20 $ » when it is an estimate. */
+export function fCost(cost: number, kind: CostKind): string {
+  if (kind === 'none') return '—';
+  // A non-breaking space, as in fUsd: « ≈ » never ends a line alone.
+  return (kind === 'estimated' ? '≈ ' : '') + fUsd(cost);
+}
+
+/** Why a cost is shown so, for its tooltip: an estimate, or none given. */
+export function costHint(kind: CostKind): string | undefined {
+  if (kind === 'estimated') return t('stats.cost.estimatedHint');
+  if (kind === 'none') return t('stats.cost.noneHint');
+  return undefined;
 }
 
 /** Lines of the lists of agents and tickets before « Tout voir ». */

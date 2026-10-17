@@ -10,7 +10,20 @@ import { mcp } from '../lib/mcp.svelte';
 import { dictation } from '../lib/dictation.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
-import type { Agent, BoardSettings, BranchInfo, EngineDecl, GitInfo, Project, Settings, Ticket } from '../lib/types';
+import type {
+  AccountUsage,
+  Agent,
+  BoardSettings,
+  BranchInfo,
+  EngineDecl,
+  GitInfo,
+  Project,
+  QuotaMeter,
+  RateWindow,
+  Settings,
+  Ticket,
+  Usage,
+} from '../lib/types';
 import claudeEngine from '../../tests/fixtures/engines/claude.json';
 
 /** Claude Code as the backend declares it (the Rust tests keep the file the same as its declaration). */
@@ -298,7 +311,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };
   app.settings = { ...SETTINGS };
-  app.usage = { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' };
+  app.usage = { todayCost: 0, accounts: [], current: {} };
   app.resources = { instances: 0, memory: 0, cpu: 0, agents: [] };
   app.git = {};
   gitSync.running = {};
@@ -361,6 +374,7 @@ export const BARE_ENGINE: EngineDecl = {
     midTurn: 'refused',
     slashCommands: false,
     quota: 'none',
+    quotaWindows: [],
     cost: 'none',
     terminalView: false,
     remoteControl: false,
@@ -375,3 +389,55 @@ export const BARE_ENGINE: EngineDecl = {
   ],
   efforts: [],
 };
+
+/** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */
+export interface ClaudeWindows {
+  fiveHour?: RateWindow | null;
+  sevenDay?: RateWindow | null;
+}
+
+/** Claude Code's windows as meters (`QuotaMeter`), those given. */
+export function claudeMeters({ fiveHour, sevenDay }: ClaudeWindows): QuotaMeter[] {
+  const meters: QuotaMeter[] = [];
+  if (fiveHour) meters.push({ minutes: 300, ...fiveHour });
+  if (sevenDay) meters.push({ minutes: 10080, ...sevenDay });
+  return meters;
+}
+
+/** An account's reading as the backend sends it, Claude Code's by default; its windows by the tests' shorthand. */
+export function usageOf(id: string, over: Partial<AccountUsage> & ClaudeWindows = {}): AccountUsage {
+  const { fiveHour, sevenDay, ...rest } = over;
+  return {
+    id,
+    engine: 'claude',
+    meters: claudeMeters({ fiveHour, sevenDay }),
+    connected: true,
+    reason: null,
+    todayCost: 0,
+    updatedAt: 1,
+    ...rest,
+  };
+}
+
+/**
+ * The quotas as the backend sends them, from the tests' shorthand of before 1.8: `fiveHour` and `sevenDay` are the windows
+ * of the current account of Claude Code (`current`, Principal by default), which the status bar shows; a window left out
+ * stays as that account had it.
+ */
+export function usageWith(
+  over: ClaudeWindows & { todayCost?: number; updatedAt?: number; accounts?: AccountUsage[]; current?: string | Usage['current'] },
+): Usage {
+  const { fiveHour, sevenDay, todayCost = 0, accounts = [], current } = over;
+  const id = typeof current === 'string' ? current : (current?.claude ?? 'principal');
+  const list = accounts.map((a) => ({ ...a }));
+  if ('fiveHour' in over || 'sevenDay' in over) {
+    let entry = list.find((a) => a.id === id);
+    if (!entry) list.push((entry = usageOf(id)));
+    const had = (m: number) => entry!.meters.find((x) => x.minutes === m) ?? null;
+    entry.meters = claudeMeters({
+      fiveHour: 'fiveHour' in over ? fiveHour : had(300),
+      sevenDay: 'sevenDay' in over ? sevenDay : had(10080),
+    });
+  }
+  return { todayCost, accounts: list, current: { ...(typeof current === 'object' ? current : {}), claude: id } };
+}

@@ -1475,8 +1475,8 @@ impl<R: Runtime> Core<R> {
         // ended one is dropped (the status bar would show it). Each account's own.
         let saved = state.pause;
         let now = now_ms();
-        let ongoing = |w: Option<RateWindow>| {
-            w.filter(|w| w.resets_at.is_some_and(|end| end + RESUME_MARGIN_MS > now))
+        let ongoing = |m: QuotaMeter| {
+            Some(m).filter(|m| m.resets_at.is_some_and(|end| end + RESUME_MARGIN_MS > now))
         };
         let usage = UsageSnapshot::restored(&saved, &settings, ongoing, now);
         let (git, rx) = GitService::new();
@@ -1932,10 +1932,21 @@ impl<R: Runtime> Core<R> {
         convsearch::search(&self.data.conversations(), &agents, &q, deadline, &stale)
     }
 
-    /// The statistics of a period, with the agents and tickets named. Every agent counts, archived
-    /// ones too: they keep their ticket, so a ticket sent back and taken up by another agent adds
-    /// up both.
+    /// `stats_view_by` of every harness.
+    #[cfg(test)]
     pub fn stats_view(&self, range: &str, account: Option<&str>) -> StatsView {
+        self.stats_view_by(range, account, None)
+    }
+
+    /// The statistics of a period, of an account, a harness or both (« Tous les harness / … »),
+    /// with the agents and tickets named. Every agent counts, archived ones too: they keep their
+    /// ticket, so a ticket sent back and taken up by another agent adds up both.
+    pub fn stats_view_by(
+        &self,
+        range: &str,
+        account: Option<&str>,
+        engine: Option<&str>,
+    ) -> StatsView {
         let agents = self
             .agents
             .read()
@@ -1965,8 +1976,9 @@ impl<R: Runtime> Core<R> {
                 (t.id.clone(), label)
             })
             .collect();
+        let filter = crate::stats::Filter { account, engine };
         self.stats
-            .query(range, account, &Labels { agents, tickets })
+            .query_by(range, filter, &Labels { agents, tickets })
     }
 
     pub(crate) fn project_agents(&self, project_id: &str) -> Vec<AgentHandle> {
@@ -3139,9 +3151,8 @@ impl<R: Runtime> Core<R> {
             let account = self.account_of(id);
             let u = self.usage.lock();
             let a = u.account(&account)?;
-            [a.five_hour.as_ref(), a.seven_day.as_ref()]
-                .into_iter()
-                .flatten()
+            a.meters
+                .iter()
                 .filter(|w| w.pct >= 100.0)
                 .filter_map(|w| w.resets_at)
                 .filter(|t| *t > now)
@@ -3499,7 +3510,11 @@ impl<R: Runtime> Core<R> {
                 name_from,
             )
         };
-        self.stats.record_prompt(&self.account_of(id), id, &pid);
+        let engine = self
+            .agent(id)
+            .map_or(EngineId::Claude, |h| h.lock().meta.engine);
+        self.stats
+            .record_prompt(&self.account_of(id), engine.as_str(), id, &pid);
         self.apply(id, &pid, &name, fx, Some(view));
         if let Some(naming) = name_from {
             let (c, id) = (self.clone(), id.to_string());
@@ -4315,13 +4330,13 @@ impl<R: Runtime> Core<R> {
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
             port_base: o.port_base,
-            // The one asked for if the settings know it (Principal otherwise), else the project's,
-            // else the first usable one.
-            account: match &o.account {
-                Some(id) => accounts::get(&settings, id).id,
-                None => self.account_for_new(project_id)?,
-            },
             ..Default::default()
+        };
+        // The one asked for if the settings know it as an account of the agent's harness
+        // (Principal otherwise), else the project's, else the first usable one of the harness.
+        meta.account = match o.account.as_deref().map(|id| accounts::get(&settings, id)) {
+            Some(a) if a.engine == meta.engine => a.id,
+            _ => self.account_for_new(project_id, meta.engine)?,
         };
         let conversations = self.data.conversations();
         // A copy's conversation is written first: when it cannot be, nothing was made for it.
@@ -5061,13 +5076,15 @@ impl<R: Runtime> Core<R> {
         let of_agent = agent
             .and_then(|id| self.agent(id).ok())
             .map(|h| h.lock().meta.account.clone());
+        // Without an agent, the default harness's (the one that asks, `ask_claude`).
+        let engine = engine::default().id();
         let id = match (of_agent, project) {
             (Some(id), _) => id,
-            (None, Some(project)) => self.account_for_new(project)?,
-            (None, None) if !accounts::serves_any(settings, None) => {
-                return Err(accounts::no_account_outside_projects())
+            (None, Some(project)) => self.account_for_new(project, engine)?,
+            (None, None) if !accounts::serves_any(settings, engine, None) => {
+                return Err(accounts::no_account_outside_projects(engine))
             }
-            (None, None) => self.pick_account(&accounts::for_project(settings, None), None),
+            (None, None) => self.pick_account(&accounts::for_project(settings, engine, None), None),
         };
         Ok(accounts::get(settings, &id))
     }
@@ -7294,17 +7311,23 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::Usage { usage: u.clone() });
         // The account new agents go to changed because the one before passed the threshold.
         let threshold = board::quota_threshold(settings.quota_pause);
-        let told = accounts::switch_notice(
-            i18n::ui(),
-            &settings,
-            &u.accounts,
-            threshold,
-            now,
-            &before,
-            &u.current,
-        );
-        if let Some(text) = told {
-            self.hub.emit(UiEvent::Toast { text });
+        // Each harness's own: new agents never go to another harness by themselves.
+        for (engine, to) in &u.current {
+            let Some(from) = before.get(engine) else {
+                continue;
+            };
+            let told = accounts::switch_notice(
+                i18n::ui(),
+                &settings,
+                &u.accounts,
+                threshold,
+                now,
+                from,
+                to,
+            );
+            if let Some(text) = told {
+                self.hub.emit(UiEvent::Toast { text });
+            }
         }
     }
 
@@ -7357,7 +7380,9 @@ impl<R: Runtime> Core<R> {
                 return Some(usage::Reading::Windows(usage::parse_windows(&v)));
             }
         }
-        if !account.active {
+        // The usage endpoint is Claude Code's: another harness's accounts are read by their own
+        // processes, or not at all (a harness without a quota).
+        if !account.active || account.engine != EngineId::Claude {
             return None;
         }
         // Noted before asking: two readings at once ask the endpoint once.

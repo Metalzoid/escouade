@@ -12,8 +12,16 @@ export default {
   // Why no ticket starts: the autopilot is paused by the quota or by a usage limit.
   pause: {
     limit: "Pilote auto en pause : limite d'usage atteinte (reprise vers {time})",
-    week: 'Pilote auto en pause : quota hebdo à {pct} (reprise {when})',
-    fiveHour: 'Pilote auto en pause : quota de 5 h à {pct} (reprise {when})',
+    /** `{window}`: the window by its length, as `window` says it. */
+    window: 'Pilote auto en pause : quota {window} à {pct} (reprise {when})',
+    credits: 'Pilote auto en pause : crédits du mois à {pct} (reprise {when})',
+  },
+
+  // A window of the quota by its length, in the pause above.
+  window: {
+    week: 'hebdo',
+    hours: 'de {n} h',
+    days: 'de {n} jours',
   },
 
   // What validating a ticket does, in the header's button.

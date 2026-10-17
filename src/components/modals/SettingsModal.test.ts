@@ -70,7 +70,7 @@ describe('SettingsModal', () => {
     ).toEqual([
       'AaApplication',
       '✳Harness',
-      '◎Comptes Claude',
+      '◎Comptes',
       '♪Notifications',
       '◖Voix',
       '▤Projets',
@@ -1140,7 +1140,7 @@ describe('SettingsModal in English', () => {
     ).toEqual([
       'AaApplication',
       '✳Harness',
-      '◎Claude accounts',
+      '◎Accounts',
       '♪Notifications',
       '◖Voice',
       '▤Projects',
@@ -1417,7 +1417,7 @@ describe('SettingsModal, the version of Claude Code', () => {
     render(SettingsModal, { tab: 'claude' });
     expect(
       await screen.findByText(
-        'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
+        'Testée avec Escouade (de la 2.1.283 à la 2.1.301). Aucun compte connecté : connecte-toi dans l’onglet Comptes.',
       ),
     ).toBeInTheDocument();
   });
@@ -1436,9 +1436,7 @@ describe('SettingsModal, the version of Claude Code', () => {
     fakeBackend({ claude_locate: () => located, engines: () => [info({ state: 'notConnected' })] });
     render(SettingsModal, { tab: 'claude' });
     expect(
-      await screen.findByText(
-        'Tested with Escouade (from 2.1.283 to 2.1.301). No account signed in: sign in from the Claude accounts tab.',
-      ),
+      await screen.findByText('Tested with Escouade (from 2.1.283 to 2.1.301). No account signed in: sign in from the Accounts tab.'),
     ).toBeInTheDocument();
     cleanup();
     fakeBackend({ claude_locate: () => located, engines: () => [info({})] });

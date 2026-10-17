@@ -1,6 +1,6 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
-  import { accountName, newAgentAccount, quotaName, quotaTip } from '../lib/accounts';
+  import { accountName, metersShown, meterName, newAgentAccount, principalId, quotaTip, statusEngine } from '../lib/accounts';
   import { fAgo, fBytes, fPct } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
@@ -27,14 +27,16 @@
         .map((r) => t('shell.status.procRow', { name: app.agents[r.id]?.name ?? '?', memory: fBytes(r.memory), cpu: fPct(r.cpu) })),
     ].join('\n'),
   );
-  // The quota of the current account: with several, the name in front, and the whole group opens the panel of every account's.
-  // (The bar is there before the settings are: no accounts yet.)
+  // The quota of the current account of the harness of the agent shown (else of the project's default harness): with several
+  // accounts, the name in front, and the whole group opens the panel of every account's. A harness without a quota has no
+  // bar. (The bar is there before the settings are: no accounts yet.)
   const several = $derived((app.settings.accounts?.length ?? 0) > 1);
-  // Every account reserved to projects (Principal too): the one whose windows the bars show (`usage.current`).
-  const current = $derived(
-    several ? (newAgentAccount(undefined) ?? app.settings.accounts.find((a) => a.id === app.usage.current)) : undefined,
-  );
+  const engine = $derived(statusEngine());
+  // Every account reserved to projects (Principal too): the one whose meters the bars show (`usage.current`).
+  const shown = $derived(newAgentAccount(undefined, engine) ?? app.settings.accounts?.find((a) => a.id === app.usage.current[engine]));
+  const current = $derived(several ? shown : undefined);
   const currentName = $derived(current ? accountName(current) : '');
+  const meters = $derived(metersShown(app.usage.accounts.find((u) => u.id === (shown?.id ?? principalId(engine))) ?? null, engine));
   let panelOpen = $state(false);
   // Down to one account: nothing left to compare.
   $effect(() => {
@@ -43,10 +45,7 @@
   // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
   // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
   // in its tooltip, one line each, but while the panel that writes them is open).
-  const quotaLines = $derived([
-    t('accounts.quota.line', { name: quotaName('fiveHour'), tip: quotaTip(app.usage.fiveHour) }),
-    t('accounts.quota.line', { name: quotaName('sevenDay'), tip: quotaTip(app.usage.sevenDay) }),
-  ]);
+  const quotaLines = $derived(meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })));
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -109,10 +108,13 @@
 </script>
 
 {#snippet quotas(focusable: boolean)}
-  {#if several}<span class="v acct" use:tip={{ text: currentName, cut: true }}>{currentName}</span><span class="d">·</span>{/if}
-  <QuotaMeter kind="fiveHour" usage={app.usage.fiveHour} now={app.now} {focusable} />
-  <span class="vsep"></span>
-  <QuotaMeter kind="sevenDay" usage={app.usage.sevenDay} now={app.now} {focusable} />
+  {#if several}<span class="v acct" use:tip={{ text: currentName, cut: true }}>{currentName}</span>{#if meters.length}<span class="d"
+        >·</span
+      >{/if}{/if}
+  {#each meters as m, i (m.minutes ?? 'credits')}
+    {#if i}<span class="vsep"></span>{/if}
+    <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} {focusable} />
+  {/each}
 {/snippet}
 
 <footer class="bar mono">
@@ -143,7 +145,7 @@
         ></span
       >
     {/if}
-    <span class="vsep"></span>
+    {#if several || meters.length}<span class="vsep"></span>{/if}
     {#if several}
       <!-- The panel's button: its bars are only seen here (their values are in the panel, which the keyboard opens). -->
       <button
@@ -160,7 +162,7 @@
         {@render quotas(false)}
       </button>
       <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
-    {:else}
+    {:else if meters.length}
       <span class="it group">{@render quotas(true)}</span>
     {/if}
     <span class="vsep"></span>

@@ -10,8 +10,14 @@ export default defineZone('boardSettings', {
 
   pause: {
     limit: 'Autopilot paused: usage limit reached (resumes around {time})',
-    week: 'Autopilot paused: weekly quota at {pct} (resumes {when})',
-    fiveHour: 'Autopilot paused: 5-hour quota at {pct} (resumes {when})',
+    window: 'Autopilot paused: {window} quota at {pct} (resumes {when})',
+    credits: 'Autopilot paused: monthly credits at {pct} (resumes {when})',
+  },
+
+  window: {
+    week: 'weekly',
+    hours: '{n}-hour',
+    days: '{n}-day',
   },
 
   summary: {

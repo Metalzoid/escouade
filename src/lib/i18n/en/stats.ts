@@ -48,6 +48,16 @@ export default defineZone('stats', {
     all: 'All accounts',
     removed: 'Deleted account ({id})',
   },
+  engine: {
+    label: 'Harness',
+    all: 'All harnesses',
+  },
+  byEngine: { title: 'By harness', engine: 'Harness', tokens: 'Tokens', turns: 'Turns', agents: 'Agents' },
+  cost: {
+    estimated: 'estimated',
+    estimatedHint: 'Estimated cost: the harness doesn’t give it, Escouade works it out from the tokens and the public price of its models.',
+    noneHint: 'This harness gives no cost.',
+  },
   byAccount: { title: 'By account', account: 'Account', tokens: 'Tokens', turns: 'Turns', agents: 'Agents' },
   showAll: 'Show all',
   showLess: 'Show less',

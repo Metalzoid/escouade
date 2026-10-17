@@ -52,6 +52,19 @@ export default {
     removed: 'Compte supprimé ({id})',
   },
   byAccount: { title: 'Par compte', account: 'Compte', tokens: 'Tokens', turns: 'Tours', agents: 'Agents' },
+  // The harnesses: the choice at the top (only with several), combined with the accounts', and « Par harness ».
+  engine: {
+    label: 'Harness',
+    all: 'Tous les harness',
+  },
+  byEngine: { title: 'Par harness', engine: 'Harness', tokens: 'Tokens', turns: 'Tours', agents: 'Agents' },
+  // A cost a harness does not give exactly.
+  cost: {
+    /** Next to a cost that is an estimate. */
+    estimated: 'estimé',
+    estimatedHint: 'Coût estimé : le harness ne le donne pas, Escouade le calcule d’après les tokens et le tarif public de ses modèles.',
+    noneHint: 'Ce harness ne donne aucun coût.',
+  },
   showAll: 'Tout voir',
   showLess: 'Réduire',
   shownOf: '{shown} sur {total}',

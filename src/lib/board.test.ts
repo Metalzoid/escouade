@@ -52,8 +52,10 @@ describe('board labels', () => {
   it('tells why the autopilot is paused, and until when', () => {
     const now = new Date(2026, 9, 3, 13, 30).getTime();
     const at = new Date(2026, 9, 3, 14, 0).getTime();
-    expect(pauseLabel({ reason: 'week', pct: 96, until: at }, now)).toBe('Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)');
-    expect(pauseLabel({ reason: 'fiveHour', pct: 100, until: at }, now)).toBe(
+    expect(pauseLabel({ reason: 'window', minutes: 10080, pct: 96, until: at }, now)).toBe(
+      'Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)',
+    );
+    expect(pauseLabel({ reason: 'window', minutes: 300, pct: 100, until: at }, now)).toBe(
       'Pilote auto en pause : quota de 5 h à 100 % (reprise à 14:00)',
     );
     const about = new Date(2026, 9, 3, 14, 30).getTime();
@@ -62,7 +64,7 @@ describe('board labels', () => {
     );
     // A weekly window that ends another day says which, its use as the status bar rounds it.
     const monday = new Date(2026, 9, 5, 9, 0).getTime();
-    expect(pauseLabel({ reason: 'week', pct: 95.6, until: monday }, now)).toBe(
+    expect(pauseLabel({ reason: 'window', minutes: 10080, pct: 95.6, until: monday }, now)).toBe(
       'Pilote auto en pause : quota hebdo à 96 % (reprise le lundi 5 octobre à 09:00)',
     );
     // While it holds, no ticket is to launch by hand, and none is promised a place.
@@ -238,8 +240,10 @@ describe('board labels in English', () => {
   it('tells why the autopilot is paused, and until when', () => {
     const now = new Date(2026, 9, 3, 13, 30).getTime();
     const at = new Date(2026, 9, 3, 14, 0).getTime();
-    expect(pauseLabel({ reason: 'week', pct: 96, until: at }, now)).toBe('Autopilot paused: weekly quota at 96% (resumes at 2:00 PM)');
-    expect(pauseLabel({ reason: 'fiveHour', pct: 100, until: at }, now)).toBe(
+    expect(pauseLabel({ reason: 'window', minutes: 10080, pct: 96, until: at }, now)).toBe(
+      'Autopilot paused: weekly quota at 96% (resumes at 2:00 PM)',
+    );
+    expect(pauseLabel({ reason: 'window', minutes: 300, pct: 100, until: at }, now)).toBe(
       'Autopilot paused: 5-hour quota at 100% (resumes at 2:00 PM)',
     );
     const about = new Date(2026, 9, 3, 14, 30).getTime();
@@ -247,7 +251,7 @@ describe('board labels in English', () => {
       'Autopilot paused: usage limit reached (resumes around 2:30 PM)',
     );
     const monday = new Date(2026, 9, 5, 9, 0).getTime();
-    expect(pauseLabel({ reason: 'week', pct: 95.6, until: monday }, now)).toBe(
+    expect(pauseLabel({ reason: 'window', minutes: 10080, pct: 95.6, until: monday }, now)).toBe(
       'Autopilot paused: weekly quota at 96% (resumes on Monday, October 5 at 9:00 AM)',
     );
   });

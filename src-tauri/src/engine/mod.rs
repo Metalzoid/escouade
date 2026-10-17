@@ -71,6 +71,21 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
     }
 }
 
+/// The name of the harness `id` names, as the interface says it: its own once it is written, else
+/// its usual name (the data of a later version may name one this version does not write).
+pub fn by_name(id: EngineId) -> &'static str {
+    if registry::all().iter().any(|e| e.id() == id) {
+        return by_id(id).name();
+    }
+    match id {
+        EngineId::Claude => "Claude Code",
+        EngineId::Codex => "Codex",
+        EngineId::Copilot => "Copilot CLI",
+        EngineId::Cursor => "Cursor CLI",
+        EngineId::Opencode => "OpenCode",
+    }
+}
+
 /// The engine of what has no agent yet (a question about a project, the settings).
 pub fn default() -> &'static dyn Engine {
     &CLAUDE
@@ -253,6 +268,9 @@ pub trait Engine: Send + Sync {
     fn version_args(&self) -> &'static [&'static str];
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;
+    /// What tells its accounts apart (`registry::AccountStore`): for Claude Code, a configuration
+    /// folder of their own given by `CLAUDE_CONFIG_DIR`.
+    fn accounts(&self) -> registry::AccountStore;
     /// The command that installs it (« Aucun harness trouvé »).
     fn install(&self) -> registry::Install;
     /// The models the composer offers, in its menu's order.

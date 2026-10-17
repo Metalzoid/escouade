@@ -62,6 +62,10 @@ pub struct Settings {
     /// The Claude accounts, in the order new agents try them; Principal always among them
     /// (`accounts::normalize`, at every load and save).
     pub accounts: Vec<Account>,
+    /// « Ordre des harness »: the harnesses one after the other, every one Escouade knows listed
+    /// once (`accounts::normalize`). It gives a project its fallback harnesses after its default
+    /// one (`accounts::fallback_engines`, ESC-88) and the order of the groups of « Comptes ».
+    pub engine_order: Vec<EngineId>,
     /// « Les agents tiennent une liste de tâches »: Claude Code's task list tools are switched on
     /// for the agents that start (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, see `Settings::agent_env`), so
     /// that their progress can be shown (`plan`).
@@ -128,14 +132,20 @@ pub fn fit_zoom(zoom: u32, width: f64, height: f64) -> u32 {
         .unwrap_or(100)
 }
 
-/// A Claude account: Claude Code with a configuration folder of its own (`accounts`).
+/// An account of a harness: the harness with a configuration folder of its own (`accounts`), as
+/// Claude Code with its `CLAUDE_CONFIG_DIR`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Account {
-    /// `accounts::PRINCIPAL` for the user's own.
+    /// `accounts::PRINCIPAL` for the user's own Claude Code (`accounts::principal_id` for another
+    /// harness's).
     pub id: String,
     pub name: String,
-    /// Its `CLAUDE_CONFIG_DIR`; empty for Principal, launched without one.
+    /// Its harness; Claude Code for an account saved before 1.8.
+    pub engine: EngineId,
+    /// Its configuration folder, given to its harness's processes by the variable the harness
+    /// declares (`Engine::config_var`: `CLAUDE_CONFIG_DIR`); empty for Principal, launched
+    /// without one.
     pub config_dir: String,
     /// Its own `claude`; empty: the settings' one.
     pub claude_path: String,
@@ -186,6 +196,7 @@ impl Default for Account {
         Self {
             id: String::new(),
             name: String::new(),
+            engine: EngineId::Claude,
             config_dir: String::new(),
             claude_path: String::new(),
             active: true,
@@ -365,6 +376,7 @@ impl Default for Settings {
             mcp_enabled: false,
             mcp_port: 0,
             accounts: Vec::new(),
+            engine_order: Vec::new(),
             todo_tools: true,
             switch_on_limit: false,
             telemetry: None,
@@ -914,7 +926,9 @@ pub struct Worktree {
 /// (`AgentMeta::engine`), a ticket's (`Ticket::engine`), a project's default (`Project::engine`),
 /// a turn's (`TurnRow::engine`, the `engine` column of the statistics). Claude Code for what was
 /// saved before 1.8, when it was the only one.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineId {
     #[default]
@@ -1343,19 +1357,102 @@ pub struct RateWindow {
     pub resets_at: Option<i64>,
 }
 
-/// What holds the autopilot back: a quota window over "Pause au-delà du quota", or the pause
-/// after a usage limit with no resume planned.
+/// The length of Claude Code's 5-hour window, in minutes (`QuotaMeter::minutes`).
+pub const FIVE_HOURS: u32 = 300;
+/// The length of a weekly window, in minutes.
+pub const WEEK: u32 = 10_080;
+
+/// One meter of an account's quota (docs/ENGINES.md, « Le quota »): a window of a length
+/// (`minutes`: 300 for 5 hours, 10 080 for a week), used in percent until it starts again, or the
+/// month's credits (`minutes`: none), used in percent until they are given again. What a harness
+/// has of them is in its capabilities (`EngineCaps::quota`: windows, credits or none).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct QuotaMeter {
+    /// The window's length; none for the month's credits.
+    pub minutes: Option<u32>,
+    /// 0-100.
+    pub pct: f64,
+    /// Epoch milliseconds.
+    pub resets_at: Option<i64>,
+}
+
+impl QuotaMeter {
+    /// The window of `minutes` as `w` reads it.
+    pub fn window(minutes: u32, w: RateWindow) -> Self {
+        Self {
+            minutes: Some(minutes),
+            pct: w.pct,
+            resets_at: w.resets_at,
+        }
+    }
+
+    /// The month's credits as `w` reads them.
+    // Read by the first harness with credits (Copilot CLI).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn credits(w: RateWindow) -> Self {
+        Self {
+            minutes: None,
+            pct: w.pct,
+            resets_at: w.resets_at,
+        }
+    }
+
+    /// Its use and its end.
+    pub fn rate(&self) -> RateWindow {
+        RateWindow {
+            pct: self.pct,
+            resets_at: self.resets_at,
+        }
+    }
+
+    /// What tells it from the account's other meters: its length, `credits` for the credits.
+    pub fn key(&self) -> String {
+        self.minutes
+            .map_or_else(|| "credits".to_string(), |m| m.to_string())
+    }
+}
+
+/// `old` with what a reading found (`new`): each meter read takes the place of the one of the
+/// same kind, the others stay as last read (they still say what was used until their end). The
+/// shortest window first, the credits last.
+pub fn merge_meters(old: &[QuotaMeter], new: &[QuotaMeter]) -> Vec<QuotaMeter> {
+    let mut all: Vec<QuotaMeter> = old
+        .iter()
+        .filter(|m| !new.iter().any(|n| n.minutes == m.minutes))
+        .chain(new)
+        .copied()
+        .collect();
+    all.sort_by_key(|m| m.minutes.unwrap_or(u32::MAX));
+    all
+}
+
+/// Claude Code's two windows (5 hours, week) as meters, those it read.
+pub fn claude_meters(
+    five_hour: Option<RateWindow>,
+    seven_day: Option<RateWindow>,
+) -> Vec<QuotaMeter> {
+    [(FIVE_HOURS, five_hour), (WEEK, seven_day)]
+        .into_iter()
+        .filter_map(|(m, w)| w.map(|w| QuotaMeter::window(m, w)))
+        .collect()
+}
+
+/// What holds the autopilot back: one of the quota's windows or its credits over « Pause
+/// au-delà du quota », or the pause after a usage limit with no resume planned.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PauseReason {
-    FiveHour,
-    Week,
+    /// A window, of `AutopilotPause::minutes`.
+    Window,
+    /// The month's credits.
+    Credits,
     Limit,
 }
 
 /// What holds the autopilot back on one account besides the quota windows read, or no longer does
 /// (`board::autopilot_pause`).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AccountHold {
     /// After a usage limit with no resume planned: until then.
@@ -1363,6 +1460,32 @@ pub struct AccountHold {
     /// "Reprendre maintenant": the 5-hour and the weekly window hold nothing back until the end
     /// they had then (the next window holds again).
     pub lifted: [Option<i64>; 2],
+    /// The same for the quota's other meters (`QuotaMeter::key`): windows of another length, the
+    /// month's credits. Apart from `lifted`, which the versions before 1.8 read.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub lifted_other: BTreeMap<String, i64>,
+}
+
+impl AccountHold {
+    /// Until when "Reprendre maintenant" lifted the meter `m`.
+    pub fn lifted_until(&self, m: &QuotaMeter) -> Option<i64> {
+        match m.minutes {
+            Some(FIVE_HOURS) => self.lifted[0],
+            Some(WEEK) => self.lifted[1],
+            _ => self.lifted_other.get(&m.key()).copied(),
+        }
+    }
+
+    /// "Reprendre maintenant" lifted the meter `m` until `end`.
+    pub fn lift(&mut self, m: &QuotaMeter, end: i64) {
+        match m.minutes {
+            Some(FIVE_HOURS) => self.lifted[0] = Some(end),
+            Some(WEEK) => self.lifted[1] = Some(end),
+            _ => {
+                self.lifted_other.insert(m.key(), end);
+            }
+        }
+    }
 }
 
 /// What holds the autopilot back besides the quota windows read, or no longer does, account by
@@ -1376,6 +1499,9 @@ pub struct Hold {
     /// Principal's: "Reprendre maintenant" lifted its 5-hour and its weekly window until the end
     /// they had then.
     pub lifted: [Option<i64>; 2],
+    /// Principal's other meters lifted (`AccountHold::lifted_other`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub lifted_other: BTreeMap<String, i64>,
     /// The other accounts', by account (only those that hold something).
     pub accounts: BTreeMap<String, AccountHold>,
 }
@@ -1390,17 +1516,54 @@ pub struct SavedPause {
     /// they saved gives them to Principal, and a version rolled back still reads them.
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
+    /// Principal's other meters (`SavedWindows::other`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub other: Vec<QuotaMeter>,
     pub hold: Hold,
     /// The other accounts' windows, by account.
     pub accounts: BTreeMap<String, SavedWindows>,
 }
 
-/// An account's quota windows, as last read.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq)]
+/// An account's quota meters, as last read: Claude Code's two windows where the versions before
+/// 1.8 kept them, the others beside them.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SavedWindows {
     pub five_hour: Option<RateWindow>,
     pub seven_day: Option<RateWindow>,
+    /// Its other meters: windows of another length, the month's credits.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub other: Vec<QuotaMeter>,
+}
+
+impl SavedWindows {
+    /// The meters to keep, as saved.
+    pub fn of(meters: &[QuotaMeter]) -> Self {
+        let at = |m: u32| {
+            meters
+                .iter()
+                .find(|x| x.minutes == Some(m))
+                .map(QuotaMeter::rate)
+        };
+        Self {
+            five_hour: at(FIVE_HOURS),
+            seven_day: at(WEEK),
+            other: meters
+                .iter()
+                .filter(|x| x.minutes != Some(FIVE_HOURS) && x.minutes != Some(WEEK))
+                .copied()
+                .collect(),
+        }
+    }
+
+    /// The meters saved.
+    pub fn meters(&self) -> Vec<QuotaMeter> {
+        merge_meters(&claude_meters(self.five_hour, self.seven_day), &self.other)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.five_hour.is_none() && self.seven_day.is_none() && self.other.is_empty()
+    }
 }
 
 /// Why no ticket starts, and until when (`board::autopilot_pause`).
@@ -1408,6 +1571,9 @@ pub struct SavedWindows {
 #[serde(rename_all = "camelCase")]
 pub struct AutopilotPause {
     pub reason: PauseReason,
+    /// The window's length, for `PauseReason::Window`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minutes: Option<u32>,
     /// The window's use, 0-100 (none after a limit).
     pub pct: Option<f64>,
     /// When the tickets start again: the window's end, or about then after a limit.
@@ -1419,30 +1585,29 @@ pub struct AutopilotPause {
     pub accounts: Vec<String>,
 }
 
-/// The quotas of every Claude account, as the window is told them (`usage::settle`).
+/// The quotas of every account, of every harness, as the window is told them (`usage::settle`).
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
-    /// The current account's windows: what the status bar shows and the autopilot goes by.
-    pub five_hour: Option<RateWindow>,
-    pub seven_day: Option<RateWindow>,
     /// What the turns cost today, on every account (also those the settings no longer list).
     pub today_cost: f64,
-    /// When the current account's windows were last read, ms since epoch.
-    pub updated_at: i64,
     /// Every account, in the settings' order.
     pub accounts: Vec<AccountUsage>,
-    /// The account new agents would go to (`accounts::pick`).
-    pub current: String,
+    /// The account new agents of each harness would go to (`accounts::pick`): the one whose
+    /// meters the status bar shows for that harness. Every harness that has an account.
+    pub current: BTreeMap<EngineId, String>,
 }
 
-/// One Claude account's quota, as last read.
+/// One account's quota, as last read.
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountUsage {
     pub id: String,
-    pub five_hour: Option<RateWindow>,
-    pub seven_day: Option<RateWindow>,
+    /// Its harness.
+    pub engine: EngineId,
+    /// Its meters as last read (`QuotaMeter`), the shortest window first; none for a harness
+    /// without a quota, or not read yet.
+    pub meters: Vec<QuotaMeter>,
     /// Signed in, as the last reading tells (an account not read yet is taken as signed in).
     pub connected: bool,
     /// Why its quota is not read (not signed in, sign-in expired), in the interface's language.
@@ -1454,6 +1619,57 @@ pub struct AccountUsage {
     /// What `connected` and `reason` tell, kept to write them again in another language.
     #[serde(skip)]
     pub problem: Option<SignInProblem>,
+}
+
+#[cfg(test)]
+impl UsageSnapshot {
+    /// The account new agents of Claude Code go to.
+    pub fn claude_current(&self) -> &str {
+        self.current
+            .get(&EngineId::Claude)
+            .map_or("", String::as_str)
+    }
+
+    /// Its 5-hour window, as the status bar shows it for Claude Code.
+    pub fn five_hour(&self) -> Option<RateWindow> {
+        let id = self.claude_current();
+        self.accounts.iter().find(|a| a.id == id)?.five_hour()
+    }
+
+    pub fn seven_day(&self) -> Option<RateWindow> {
+        let id = self.claude_current();
+        self.accounts.iter().find(|a| a.id == id)?.seven_day()
+    }
+
+    /// When the current account of Claude Code was last read.
+    pub fn updated_at(&self) -> i64 {
+        let id = self.claude_current();
+        self.accounts
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(0, |a| a.updated_at)
+    }
+}
+
+#[cfg(test)]
+impl AccountUsage {
+    pub fn five_hour(&self) -> Option<RateWindow> {
+        self.window(FIVE_HOURS)
+    }
+
+    pub fn seven_day(&self) -> Option<RateWindow> {
+        self.window(WEEK)
+    }
+}
+
+impl AccountUsage {
+    /// Its window of `minutes`, as last read.
+    pub fn window(&self, minutes: u32) -> Option<RateWindow> {
+        self.meters
+            .iter()
+            .find(|m| m.minutes == Some(minutes))
+            .map(QuotaMeter::rate)
+    }
 }
 
 /// Why an account's quota cannot be read from the usage endpoint.
@@ -1981,6 +2197,7 @@ mod tests {
                 SavedWindows {
                     five_hour: Some(full),
                     seven_day: None,
+                    ..Default::default()
                 },
             )]),
             ..Default::default()
@@ -2001,27 +2218,31 @@ mod tests {
             resets_at: Some(5),
         };
         let usage = UsageSnapshot {
-            five_hour: Some(w),
             today_cost: 1.5,
-            updated_at: 3,
             accounts: vec![AccountUsage {
                 id: "pro".into(),
-                five_hour: Some(w),
+                meters: vec![
+                    QuotaMeter::window(FIVE_HOURS, w),
+                    QuotaMeter::credits(RateWindow {
+                        pct: 40.0,
+                        resets_at: None,
+                    }),
+                ],
                 connected: false,
                 reason: Some("Pas connecté".into()),
                 updated_at: 3,
                 problem: Some(SignInProblem::NotSignedIn),
                 ..Default::default()
             }],
-            current: "pro".into(),
-            ..Default::default()
+            current: BTreeMap::from([(EngineId::Claude, "pro".to_string())]),
         };
         assert_eq!(
             serde_json::to_value(&usage).unwrap(),
-            json!({ "fiveHour": { "pct": 12.0, "resetsAt": 5 }, "sevenDay": null,
-                    "todayCost": 1.5, "updatedAt": 3, "current": "pro",
-                    "accounts": [{ "id": "pro", "fiveHour": { "pct": 12.0, "resetsAt": 5 },
-                                   "sevenDay": null, "connected": false,
+            json!({ "todayCost": 1.5, "current": { "claude": "pro" },
+                    "accounts": [{ "id": "pro", "engine": "claude",
+                                   "meters": [{ "minutes": 300, "pct": 12.0, "resetsAt": 5 },
+                                              { "minutes": null, "pct": 40.0, "resetsAt": null }],
+                                   "connected": false,
                                    "reason": "Pas connecté", "todayCost": 0.0,
                                    "updatedAt": 3 }] })
         );
@@ -2031,7 +2252,8 @@ mod tests {
     fn the_autopilots_pause_travels_in_camel_case() {
         let e = UiEvent::AutopilotPause {
             pause: Some(AutopilotPause {
-                reason: PauseReason::FiveHour,
+                reason: PauseReason::Window,
+                minutes: Some(FIVE_HOURS),
                 pct: Some(100.0),
                 until: 5,
                 accounts: vec![],
@@ -2041,7 +2263,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&e).unwrap(),
             json!({ "type": "autopilotPause",
-                    "pause": { "reason": "fiveHour", "pct": 100.0, "until": 5 } })
+                    "pause": { "reason": "window", "minutes": 300, "pct": 100.0, "until": 5 } })
         );
         let over = UiEvent::AutopilotPause {
             pause: None,
@@ -2400,7 +2622,8 @@ mod tests {
             old.of("principal"),
             AccountHold {
                 limit_until: Some(5),
-                lifted: [None, Some(7)]
+                lifted: [None, Some(7)],
+                ..Default::default()
             }
         );
         assert_eq!(old.of("pro"), AccountHold::default());
@@ -2411,6 +2634,7 @@ mod tests {
             AccountHold {
                 limit_until: Some(9),
                 lifted: [Some(3), None],
+                ..Default::default()
             },
         );
         let v = serde_json::to_value(&hold).unwrap();
@@ -2428,7 +2652,8 @@ mod tests {
     #[test]
     fn the_pause_of_several_accounts_names_them_and_the_projects_that_wait_for_their_own() {
         let pause = |accounts: &[&str]| AutopilotPause {
-            reason: PauseReason::Week,
+            reason: PauseReason::Window,
+            minutes: Some(WEEK),
             pct: Some(97.0),
             until: 5,
             accounts: accounts.iter().map(|a| a.to_string()).collect(),
@@ -2440,9 +2665,9 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&e).unwrap(),
             json!({ "type": "autopilotPause",
-                    "pause": { "reason": "week", "pct": 97.0, "until": 5,
+                    "pause": { "reason": "window", "minutes": 10080, "pct": 97.0, "until": 5,
                                "accounts": ["principal", "pro"] },
-                    "projects": { "p1": { "reason": "week", "pct": 97.0, "until": 5,
+                    "projects": { "p1": { "reason": "window", "minutes": 10080, "pct": 97.0, "until": 5,
                                           "accounts": ["pro"] } } })
         );
     }

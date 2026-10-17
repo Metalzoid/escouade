@@ -121,7 +121,7 @@ describe('drafts', () => {
         agents: [agent({ id: 'a1' }), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 })],
         ui: { activeProject: 'p1', view: 'project', selectedAgent: {} },
         settings: SETTINGS,
-        usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' },
+        usage: { todayCost: 0, accounts: [], current: { claude: 'principal' } },
         git: {},
         shells: [],
         terminals: [],

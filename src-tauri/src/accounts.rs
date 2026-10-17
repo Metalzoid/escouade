@@ -9,7 +9,7 @@ use crate::board;
 use crate::core::Core;
 use crate::engine::{self, Process};
 use crate::i18n::Lang;
-use crate::model::{Account, AccountUsage, Settings};
+use crate::model::{Account, AccountUsage, EngineId, QuotaMeter, Settings};
 use crate::pty::TermInfo;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -53,9 +53,30 @@ pub enum ShareMode {
 
 /// Principal as it is made the first time: the user's own Claude Code, active.
 pub fn principal() -> Account {
+    principal_of(EngineId::Claude)
+}
+
+/// The id of the user's own account of `engine`: `principal` for Claude Code (the only one before
+/// 1.8), `principal-<harness>` for another.
+pub fn principal_id(engine: EngineId) -> String {
+    match engine {
+        EngineId::Claude => PRINCIPAL.to_string(),
+        e => format!("{PRINCIPAL}-{e}"),
+    }
+}
+
+/// Whether the account is the user's own of its harness: launched as the harness always is,
+/// without a configuration folder of Escouade's.
+pub fn is_principal(account: &Account) -> bool {
+    account.id == principal_id(account.engine)
+}
+
+/// The Principal of `engine` as it is made the first time: the user's own, active.
+pub fn principal_of(engine: EngineId) -> Account {
     Account {
-        id: PRINCIPAL.into(),
+        id: principal_id(engine),
         name: tr!("Principal", "Main"),
+        engine,
         config_dir: String::new(),
         claude_path: String::new(),
         active: true,
@@ -63,8 +84,9 @@ pub fn principal() -> Account {
     }
 }
 
-/// Puts the accounts right: Principal among them (first when it was missing, as on the first
-/// load), with no folder of its own; every id unique; at least one account active.
+/// Puts the accounts right: the Principal of every harness written among them (Claude Code's
+/// first when it was missing, as on the first load), with no folder of its own; every id unique;
+/// at least one account of each harness active; every harness once in « Ordre des harness ».
 pub fn normalize(settings: &mut Settings) {
     let accounts = &mut settings.accounts;
     for a in accounts.iter_mut() {
@@ -88,8 +110,9 @@ pub fn normalize(settings: &mut Settings) {
             seen.insert(a.id.clone());
         }
     }
-    // None (written by hand): one after its name, never Principal's.
-    taken.insert(PRINCIPAL.to_string());
+    // None (written by hand): one after its name, never a Principal's.
+    let engines: Vec<EngineId> = engine::registry::all().iter().map(|e| e.id()).collect();
+    taken.extend(engines.iter().map(|e| principal_id(*e)));
     for a in accounts.iter_mut().filter(|a| a.id.is_empty()) {
         let base = match crate::core::slugify(&a.name) {
             s if s.is_empty() => "account".to_string(),
@@ -98,22 +121,54 @@ pub fn normalize(settings: &mut Settings) {
         a.id = unique(&base, &taken);
         taken.insert(a.id.clone());
     }
-    let at = match accounts.iter().position(|a| a.id == PRINCIPAL) {
-        Some(at) => at,
-        None => {
-            accounts.insert(0, principal());
-            0
+    for engine in &engines {
+        let id = principal_id(*engine);
+        let at = match accounts.iter().position(|a| a.id == id) {
+            Some(at) => at,
+            // Claude Code's first, as before 1.8; another's after the accounts there are.
+            None if *engine == EngineId::Claude => {
+                accounts.insert(0, principal_of(*engine));
+                0
+            }
+            None => {
+                accounts.push(principal_of(*engine));
+                accounts.len() - 1
+            }
+        };
+        let main = &mut accounts[at];
+        // Whatever a hand-edited file says: a folder would sign the user out of it, and its id
+        // says its harness.
+        main.config_dir.clear();
+        main.engine = *engine;
+        if main.name.trim().is_empty() {
+            main.name = principal().name;
         }
-    };
-    let main = &mut accounts[at];
-    // Whatever a hand-edited file says: a folder would sign the user out of it.
-    main.config_dir.clear();
-    if main.name.trim().is_empty() {
-        main.name = principal().name;
+        if !accounts.iter().any(|a| a.active && a.engine == *engine) {
+            accounts[at].active = true;
+        }
     }
-    if !accounts.iter().any(|a| a.active) {
-        accounts[at].active = true;
+    // A harness this version does not write (accounts saved by a later one) keeps one active
+    // too, its first, and its place in the order.
+    let mut others: Vec<EngineId> = Vec::new();
+    for a in accounts.iter() {
+        if !engines.contains(&a.engine) && !others.contains(&a.engine) {
+            others.push(a.engine);
+        }
     }
+    for engine in &others {
+        if !accounts.iter().any(|a| a.active && a.engine == *engine) {
+            if let Some(first) = accounts.iter_mut().find(|a| a.engine == *engine) {
+                first.active = true;
+            }
+        }
+    }
+    let mut order = Vec::new();
+    for e in settings.engine_order.iter().chain(&engines).chain(&others) {
+        if !order.contains(e) {
+            order.push(*e);
+        }
+    }
+    settings.engine_order = order;
 }
 
 /// `base`, else `base-2`, `base-3`… the first that is not `taken`.
@@ -136,7 +191,7 @@ pub fn find<'a>(settings: &'a Settings, id: &str) -> Option<&'a Account> {
     }
     // Empty: an agent made by code that names none.
     if !id.is_empty() && id != PRINCIPAL {
-        log::warn!("Claude account {id:?} unknown: Principal instead");
+        log::warn!("account {id:?} unknown: Principal instead");
     }
     settings.accounts.iter().find(|a| a.id == PRINCIPAL)
 }
@@ -147,22 +202,35 @@ pub fn get(settings: &Settings, id: &str) -> Account {
     find(settings, id).cloned().unwrap_or_else(principal)
 }
 
-/// Whether one of the account's quota windows (`usage`) is used `threshold` percent or more at
+/// The meters of the account's quota (`usage`) used `threshold` percent or more at `now`, until an
+/// end still to come (as the autopilot counts it, `board::over_threshold`). None for an account of
+/// a harness without a quota: it has no meter.
+fn meters_over(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> Vec<QuotaMeter> {
+    let meters = usage
+        .iter()
+        .find(|u| u.id == id)
+        .map(|u| u.meters.as_slice());
+    let over = |m: &&QuotaMeter| board::over_threshold(&m.rate(), threshold, now);
+    meters
+        .unwrap_or_default()
+        .iter()
+        .filter(over)
+        .copied()
+        .collect()
+}
+
+/// Whether one of the account's quota meters (`usage`) is used `threshold` percent or more at
 /// `now`, until an end still to come (as the autopilot counts it, `board::over_threshold`).
 pub fn over_threshold(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> bool {
-    usage.iter().find(|u| u.id == id).is_some_and(|u| {
-        [u.five_hour, u.seven_day]
-            .iter()
-            .flatten()
-            .any(|w| board::over_threshold(w, threshold, now))
-    })
+    !meters_over(usage, id, threshold, now).is_empty()
 }
 
 /// The account a new agent goes to. The one `preferred` names (a project's, or the one asked for)
 /// when it is active; else the first active one, in the settings' order, none of whose quota
-/// windows (`usage`) is used `threshold` percent or more at `now`; when every active account is,
+/// meters (`usage`) is used `threshold` percent or more at `now`; when every active account is,
 /// the first active one (the autopilot then pauses). Principal when none is active, which
-/// `normalize` prevents. With no `preferred` it is the account the status bar calls the current one.
+/// `normalize` prevents. Given the settings of one harness (`for_project`), it stays among its
+/// accounts: going on another harness is a handover (ESC-88).
 pub fn pick(
     settings: &Settings,
     usage: &[AccountUsage],
@@ -193,24 +261,53 @@ pub fn pick_where(
         .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
 }
 
-/// The settings as a new agent of `project` (none: one of no project) sees them: the accounts
-/// reserved to other projects (« Réservé aux projets ») taken as switched off. What `pick`,
-/// `preferred` and `candidates` are given for a project.
-pub fn for_project(settings: &Settings, project: Option<&str>) -> Settings {
+/// The settings as an agent of `engine` sees them: the accounts of the other harnesses taken as
+/// switched off.
+pub fn of_engine(settings: &Settings, engine: EngineId) -> Settings {
     let mut s = settings.clone();
+    for a in s.accounts.iter_mut().filter(|a| a.engine != engine) {
+        a.active = false;
+    }
+    s
+}
+
+/// The settings as a new agent of `project` (none: one of no project) on `engine` sees them: the
+/// accounts of the other harnesses, and those reserved to other projects (« Réservé aux
+/// projets »), taken as switched off. What `pick`, `preferred` and `candidates` are given for a
+/// project: they then choose among the accounts of that harness only.
+pub fn for_project(settings: &Settings, engine: EngineId, project: Option<&str>) -> Settings {
+    let mut s = of_engine(settings, engine);
     for a in s.accounts.iter_mut().filter(|a| !a.serves(project)) {
         a.active = false;
     }
     s
 }
 
-/// Whether an active account serves new agents of `project` (none: of no project). Principal may be
-/// reserved like any account: a project then may have none, and nothing starts for it.
-pub fn serves_any(settings: &Settings, project: Option<&str>) -> bool {
+/// Whether an active account of `engine` serves new agents of `project` (none: of no project).
+/// Principal may be reserved like any account: a project then may have none on that harness, and
+/// nothing starts for it there.
+pub fn serves_any(settings: &Settings, engine: EngineId, project: Option<&str>) -> bool {
     settings
         .accounts
         .iter()
-        .any(|a| a.active && a.serves(project))
+        .any(|a| a.active && a.engine == engine && a.serves(project))
+}
+
+/// The harnesses a project may run on, in the order it goes to them (ESC-88 goes on to the next
+/// when every account of one has used its quota): its default harness (`default`), then the
+/// others in « Ordre des harness », only those with an active account serving it (`project`: its
+/// id).
+// Read by the handover to another harness (ESC-88).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn fallback_engines(settings: &Settings, default: EngineId, project: &str) -> Vec<EngineId> {
+    std::iter::once(default)
+        .chain(settings.engine_order.iter().copied())
+        .fold(Vec::new(), |mut v, e| {
+            if !v.contains(&e) && serves_any(settings, e, Some(project)) {
+                v.push(e);
+            }
+            v
+        })
 }
 
 /// The account a project prefers (`Project::account`), if it is one the settings have and it is
@@ -231,11 +328,11 @@ pub fn candidates(settings: &Settings, preferred: Option<&str>) -> Vec<String> {
     }
 }
 
-/// What the account is called in `lang`: its name; Principal still named by default, its default
-/// name in `lang` (the one it was first saved in is not always the one the window is in).
+/// What the account is called in `lang`: its name; a Principal still named by default, its
+/// default name in `lang` (the one it was first saved in is not always the one the window is in).
 pub fn name_in(lang: Lang, account: &Account) -> String {
     let name = account.name.trim();
-    if account.id == PRINCIPAL && (name.is_empty() || default_names().iter().any(|d| d == name)) {
+    if is_principal(account) && (name.is_empty() || default_names().iter().any(|d| d == name)) {
         return tr_in!(lang, "Principal", "Main");
     }
     account.name.clone()
@@ -270,13 +367,10 @@ pub fn switch_notice(
         .accounts
         .iter()
         .find(|a| a.active && a.id == from)?;
-    let used = usage.iter().find(|u| u.id == from)?;
-    // The window that went the furthest of those that hold the account back.
-    let pct = [used.five_hour, used.seven_day]
-        .iter()
-        .flatten()
-        .filter(|w| board::over_threshold(w, threshold, now))
-        .map(|w| w.pct)
+    // The meter that went the furthest of those that hold the account back.
+    let pct = meters_over(usage, from, threshold, now)
+        .into_iter()
+        .map(|m| m.pct)
         .reduce(f64::max)?;
     let (from, to) = (name_in(lang, left), name_in(lang, &get(settings, to)));
     let pct = pct.round();
@@ -333,21 +427,24 @@ pub fn config_dir_with(account: &Account, env: Option<&str>, home: &Path) -> Pat
     }
 }
 
-/// The account's own folder, the `CLAUDE_CONFIG_DIR` its processes get: none for Principal,
-/// whatever its settings say.
+/// The account's own folder, the configuration folder its processes get (`CLAUDE_CONFIG_DIR` for
+/// Claude Code): none for a Principal, whatever its settings say.
 pub(crate) fn own_dir(account: &Account) -> Option<&str> {
     let dir = account.config_dir.trim();
-    (account.id != PRINCIPAL && !dir.is_empty()).then_some(dir)
+    (!is_principal(account) && !dir.is_empty()).then_some(dir)
 }
 
-/// What the account's Claude Code is launched with besides the network settings
-/// (`Settings::claude_env`): its `CLAUDE_CONFIG_DIR`, exactly the folder saved, when it has one.
-/// Never for Principal.
+/// What the account's harness is launched with besides the network settings
+/// (`Settings::claude_env`): the variable of its configuration folder its harness declares
+/// (`Engine::accounts`: `CLAUDE_CONFIG_DIR`, `CODEX_HOME`), exactly the folder saved, when it
+/// has one. Never for a Principal.
 pub fn launch_env(account: &Account) -> Vec<(String, String)> {
-    own_dir(account)
-        .map(|dir| (CONFIG_DIR_VAR.to_string(), dir.to_string()))
-        .into_iter()
-        .collect()
+    match engine::by_id(account.engine).accounts() {
+        engine::registry::AccountStore::ConfigDir { var } => own_dir(account)
+            .map(|dir| (var.to_string(), dir.to_string()))
+            .into_iter()
+            .collect(),
+    }
 }
 
 /// The `claude` the account runs: its own when it names one, else the settings' (found as
@@ -359,7 +456,7 @@ pub fn program(account: &Account, settings: &Settings) -> Option<engine::Program
     } else {
         own
     };
-    engine::default().locate(path, &settings.wsl_distro)
+    engine::by_id(account.engine).locate(path, &settings.wsl_distro)
 }
 
 /// The file Claude Code keeps the account's own state in (its email, its MCP servers): in its
@@ -396,11 +493,11 @@ pub fn shareable(dir: &Path) -> Vec<String> {
     files.chain(dirs).map(|n| n.to_string()).collect()
 }
 
-/// What keeps the accounts from being saved: an account other than Principal needs a folder of
+/// What keeps the accounts from being saved: an account other than a Principal needs a folder of
 /// its own written in full (relative, its processes would each read another one, under the
 /// folder they run in; empty, it would run as Principal).
 pub fn check(settings: &Settings) -> Result<()> {
-    for a in settings.accounts.iter().filter(|a| a.id != PRINCIPAL) {
+    for a in settings.accounts.iter().filter(|a| !is_principal(a)) {
         let dir = a.config_dir.trim();
         if dir.is_empty() {
             bail!(tr!(
@@ -425,7 +522,7 @@ pub fn check(settings: &Settings) -> Result<()> {
 fn names_of(a: &Account) -> Vec<String> {
     let name = a.name.trim().to_lowercase();
     let defaults = default_names().map(|n| n.to_lowercase());
-    if a.id == PRINCIPAL && defaults.contains(&name) {
+    if is_principal(a) && defaults.contains(&name) {
         defaults.to_vec()
     } else {
         vec![name]
@@ -471,7 +568,7 @@ pub fn create(
         s => s,
     };
     let mut taken: HashSet<String> = settings.accounts.iter().map(|a| a.id.clone()).collect();
-    taken.insert(PRINCIPAL.to_string());
+    taken.extend(engine::registry::all().iter().map(|e| principal_id(e.id())));
     // A folder an account removed left behind keeps its sign-in and its sessions: a new account
     // never takes it over. Named without regard to case, as the file systems of Windows and macOS.
     if let Ok(entries) = std::fs::read_dir(root) {
@@ -493,6 +590,7 @@ pub fn create(
     Ok(Account {
         id,
         name: name.to_string(),
+        engine: EngineId::Claude,
         config_dir: dir.to_string_lossy().into_owned(),
         claude_path: String::new(),
         active: true,
@@ -761,8 +859,8 @@ pub struct AccountStatus {
 /// Refused: no account has the id the window gave (removed meanwhile).
 fn unknown(id: &str) -> anyhow::Error {
     anyhow::anyhow!(tr!(
-        "compte Claude « {id} » introuvable",
-        "Claude account “{id}” not found"
+        "compte « {id} » introuvable",
+        "account “{id}” not found"
     ))
 }
 
@@ -782,27 +880,32 @@ fn reserved(account: &Account) -> anyhow::Error {
     ))
 }
 
-/// Refused: no active account serves the project `name` (all are reserved to others, or off).
-pub(crate) fn no_account(name: &str) -> anyhow::Error {
+/// Refused: no active account of `engine` serves the project `name` (all are reserved to others,
+/// or off): nothing starts for it on that harness.
+pub(crate) fn no_account(name: &str, engine: EngineId) -> anyhow::Error {
+    let harness = engine::by_name(engine);
     anyhow::anyhow!(tr!(
-        "Aucun compte Claude actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude.",
-        "No active Claude account serves the project “{name}”: tick it under “Reserved to projects” on an active account, in Settings › Claude accounts."
+        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes.",
+        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts."
     ))
 }
 
-/// Refused: no active account serves agents of no project (every one is reserved).
-pub(crate) fn no_account_outside_projects() -> anyhow::Error {
+/// Refused: no active account of `engine` serves agents of no project (every one is reserved).
+pub(crate) fn no_account_outside_projects(engine: EngineId) -> anyhow::Error {
+    let harness = engine::by_name(engine);
     anyhow::anyhow!(tr!(
-        "Aucun compte Claude actif ne sert les agents hors projet : chacun est réservé à des projets.",
-        "No active Claude account serves agents outside a project: each is reserved to projects."
+        "Aucun compte {harness} actif ne sert les agents hors projet : chacun est réservé à des projets.",
+        "No active {harness} account serves agents outside a project: each is reserved to projects."
     ))
 }
 
-/// Why a project's board starts nothing while no account serves it (`no_account`).
-pub(crate) fn no_account_issue() -> String {
+/// Why a project's board starts nothing while no account of its default harness serves it
+/// (`no_account`).
+pub(crate) fn no_account_issue(engine: EngineId) -> String {
+    let harness = engine::by_name(engine);
     tr!(
-        "Aucun compte Claude pour ce projet — aucun ticket ne démarre",
-        "No Claude account for this project — no tickets will start"
+        "Aucun compte {harness} pour ce projet — aucun ticket ne démarre",
+        "No {harness} account for this project — no tickets will start"
     )
 }
 
@@ -873,12 +976,13 @@ fn name_taken(name: &str) -> anyhow::Error {
 // The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
 // quotas settled again), one at a time (`claude_accounts_lock`).
 impl<R: Runtime> Core<R> {
-    /// The settings the window saves, but for the accounts and for « Claude et les agents peuvent
+    /// The settings the window saves, but for the accounts (and « Ordre des harness ») and for « Claude et les agents peuvent
     /// piloter Escouade »: those are the backend's, which their tabs change on their own (the window's copy
     /// may be older).
     pub fn save_window_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         let _one = self.claude_accounts_lock.lock();
         s.accounts = self.settings.read().accounts.clone();
+        s.engine_order = self.settings.read().engine_order.clone();
         s.mcp_enabled = self.settings.read().mcp_enabled;
         self.save_settings(s)
     }
@@ -966,10 +1070,16 @@ impl<R: Runtime> Core<R> {
             if others().any(|a| names_of(a).contains(&lower)) {
                 return Err(name_taken(name));
             }
-            if !account.active && !others().any(|a| a.active) {
+            // Each harness keeps one: its agents go to no other harness's.
+            let engine = s
+                .accounts
+                .iter()
+                .find(|a| a.id == account.id)
+                .map(|a| a.engine);
+            if !account.active && !others().any(|a| a.active && Some(a.engine) == engine) {
                 bail!(tr!(
-                    "Il faut au moins un compte actif.",
-                    "At least one account must be active."
+                    "Il faut au moins un compte actif par harness.",
+                    "Each harness needs at least one active account."
                 ));
             }
             let Some(a) = s.accounts.iter_mut().find(|a| a.id == account.id) else {
@@ -1013,6 +1123,16 @@ impl<R: Runtime> Core<R> {
             Ok(())
         })?;
         Ok(accounts)
+    }
+
+    /// « Ordre des harness » set to `order` (each harness once, the ones it leaves out after it);
+    /// the order as it then is.
+    pub fn set_engine_order(self: &Arc<Self>, order: &[EngineId]) -> Result<Vec<EngineId>> {
+        self.change_claude_accounts(|s| {
+            s.engine_order = order.to_vec();
+            Ok(())
+        })?;
+        Ok(self.settings.read().engine_order.clone())
     }
 
     /// The account removed from the settings, its folder left on the disk (its sign-in and its
@@ -1087,18 +1207,21 @@ impl<R: Runtime> Core<R> {
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
         let settings = self.settings.read().clone();
+        let (project, engine) = {
+            let rt = h.lock();
+            (rt.meta.project_id.clone(), rt.meta.engine)
+        };
         let target = match account.trim() {
-            "" => {
-                let project = h.lock().meta.project_id.clone();
-                self.account_for_new(&project)?
-            }
+            "" => self.account_for_new(&project, engine)?,
             wanted => {
                 let found = settings.accounts.iter().find(|a| a.id == wanted);
-                let found = found.ok_or_else(|| unknown(wanted))?;
+                // An account of another harness is not one this agent can run on.
+                let found = found
+                    .filter(|a| a.engine == engine)
+                    .ok_or_else(|| unknown(wanted))?;
                 if !found.active {
                     return Err(switched_off(found));
                 }
-                let project = h.lock().meta.project_id.clone();
                 if !found.serves(Some(&project)) {
                     return Err(reserved(found));
                 }
@@ -1282,16 +1405,26 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// Every harness with what is found of it here, for the account new agents would go to: its
-    /// program, its version, whether it is signed in, its state (`engine::registry`).
+    /// The account new agents of `engine` would go to (the current one of the harness, as the
+    /// status bar shows it), else its Principal.
+    pub(crate) fn current_account(&self, engine: EngineId) -> Account {
+        let settings = self.settings.read().clone();
+        let id = self.usage.lock().current.get(&engine).cloned();
+        let id = id.unwrap_or_else(|| principal_id(engine));
+        match settings.accounts.iter().find(|a| a.id == id) {
+            Some(a) => a.clone(),
+            None => principal_of(engine),
+        }
+    }
+
+    /// Every harness with what is found of it here, for the account new agents of it would go
+    /// to: its program, its version, whether it is signed in, its state (`engine::registry`).
     pub async fn engines(&self) -> Vec<engine::registry::EngineInfo> {
         use engine::registry;
         let settings = self.settings.read().clone();
-        let current = self.usage.lock().current.clone();
-        let account = get(&settings, &current);
         let mut out = Vec::new();
         for harness in registry::all() {
-            // The accounts are Claude Code's until each harness has its own (lot 5).
+            let account = self.current_account(harness.id());
             let found = {
                 let (account, settings) = (account.clone(), settings.clone());
                 tokio::task::spawn_blocking(move || program(&account, &settings))
@@ -1332,22 +1465,21 @@ impl<R: Runtime> Core<R> {
     /// Whether Claude Code is found for the account new agents would go to (the current one): its
     /// own `claude`, else the settings'.
     pub fn claude_found(&self) -> bool {
+        self.engine_found(EngineId::Claude)
+    }
+
+    /// Whether the program of `engine` is found for the account its new agents would go to.
+    pub fn engine_found(&self, engine: EngineId) -> bool {
         let settings = self.settings.read().clone();
-        let current = self.usage.lock().current.clone();
-        program(&get(&settings, &current), &settings).is_some()
+        program(&self.current_account(engine), &settings).is_some()
     }
 
     /// The harnesses whose program is found, in the registry's order: those the interface offers
     /// (a harness that is not found shows nowhere but in Réglages › Harness).
     pub fn engines_found(&self) -> Vec<crate::model::EngineId> {
-        let settings = self.settings.read().clone();
         engine::registry::all()
             .into_iter()
-            .filter(|h| match h.id() {
-                // The accounts are Claude Code's until each harness has its own (lot 5).
-                crate::model::EngineId::Claude => self.claude_found(),
-                _ => h.locate("", &settings.wsl_distro).is_some(),
-            })
+            .filter(|h| self.engine_found(h.id()))
             .map(|h| h.id())
             .collect()
     }
@@ -1441,6 +1573,7 @@ mod tests {
 
     fn account(id: &str, dir: &str) -> Account {
         Account {
+            engine: EngineId::Claude,
             id: id.into(),
             name: id.to_uppercase(),
             config_dir: dir.into(),
@@ -1461,6 +1594,7 @@ mod tests {
         assert_eq!(
             s.accounts,
             vec![Account {
+                engine: EngineId::Claude,
                 id: "principal".into(),
                 name: "Principal".into(),
                 config_dir: String::new(),
@@ -1594,7 +1728,7 @@ mod tests {
         let v = serde_json::to_value(account("pro", "/a")).unwrap();
         assert_eq!(
             v,
-            serde_json::json!({ "id": "pro", "name": "PRO", "configDir": "/a",
+            serde_json::json!({ "id": "pro", "name": "PRO", "engine": "claude", "configDir": "/a",
                                 "claudePath": "", "active": true, "projects": [] })
         );
     }
@@ -1847,6 +1981,7 @@ mod tests {
         assert_eq!(
             made,
             Account {
+                engine: EngineId::Claude,
                 id: "equipe-pro".into(),
                 name: "Équipe Pro".into(),
                 config_dir: root.join("equipe-pro").to_string_lossy().into(),
@@ -2157,10 +2292,13 @@ mod tests {
     fn used(id: &str, pct: f64, ends: i64) -> AccountUsage {
         AccountUsage {
             id: id.into(),
-            five_hour: Some(crate::model::RateWindow {
-                pct,
-                resets_at: Some(ends),
-            }),
+            meters: crate::model::claude_meters(
+                Some(crate::model::RateWindow {
+                    pct,
+                    resets_at: Some(ends),
+                }),
+                None,
+            ),
             ..Default::default()
         }
     }
@@ -2197,10 +2335,13 @@ mod tests {
         // Its week counts as well as its 5 hours.
         let week = AccountUsage {
             id: "principal".into(),
-            seven_day: Some(crate::model::RateWindow {
-                pct: 99.0,
-                resets_at: Some(end),
-            }),
+            meters: crate::model::claude_meters(
+                None,
+                Some(crate::model::RateWindow {
+                    pct: 99.0,
+                    resets_at: Some(end),
+                }),
+            ),
             ..Default::default()
         };
         assert_eq!(pick_at(&s, &[week]), "pro");
@@ -2257,14 +2398,14 @@ mod tests {
     fn an_account_reserved_to_projects_goes_to_those_alone() {
         let mut s = three();
         s.accounts[1].projects = vec!["client".into()];
-        let client = for_project(&s, Some("client"));
+        let client = for_project(&s, EngineId::Claude, Some("client"));
         assert_eq!(candidates(&client, None), ["principal", "pro", "team"]);
         assert_eq!(preferred(&client, "pro"), Some("pro"));
-        let other = for_project(&s, Some("other"));
+        let other = for_project(&s, EngineId::Claude, Some("other"));
         assert_eq!(candidates(&other, None), ["principal", "team"]);
         assert_eq!(preferred(&other, "pro"), None);
         assert_eq!(
-            candidates(&for_project(&s, None), None),
+            candidates(&for_project(&s, EngineId::Claude, None), None),
             ["principal", "team"]
         );
         // Principal over the threshold: the other project goes to Team, never to Pro.
@@ -2282,20 +2423,180 @@ mod tests {
         normalize(&mut s);
         // Principal keeps the projects it is reserved to, as any account does.
         assert_eq!(s.accounts[0].projects, ["client"]);
-        let client = for_project(&s, Some("client"));
+        let client = for_project(&s, EngineId::Claude, Some("client"));
         assert_eq!(candidates(&client, None), ["principal", "pro", "team"]);
-        assert_eq!(candidates(&for_project(&s, Some("other")), None), ["team"]);
+        assert_eq!(
+            candidates(&for_project(&s, EngineId::Claude, Some("other")), None),
+            ["team"]
+        );
         // Team kept to the client as well: no account is left to the other project, nor to none.
         s.accounts[2].projects = vec!["client".into()];
-        assert!(candidates(&for_project(&s, Some("other")), None).is_empty());
-        assert!(candidates(&for_project(&s, None), None).is_empty());
-        assert!(serves_any(&s, Some("client")));
-        assert!(!serves_any(&s, Some("other")));
-        assert!(!serves_any(&s, None));
+        assert!(candidates(&for_project(&s, EngineId::Claude, Some("other")), None).is_empty());
+        assert!(candidates(&for_project(&s, EngineId::Claude, None), None).is_empty());
+        assert!(serves_any(&s, EngineId::Claude, Some("client")));
+        assert!(!serves_any(&s, EngineId::Claude, Some("other")));
+        assert!(!serves_any(&s, EngineId::Claude, None));
         // A switched off account serves none either.
         s.accounts[2].projects.clear();
         deactivate(&mut s, "team");
-        assert!(!serves_any(&s, Some("other")));
+        assert!(!serves_any(&s, EngineId::Claude, Some("other")));
+    }
+
+    /// `three`, with two accounts of Codex after them: its Principal and Work.
+    fn with_codex() -> Settings {
+        let mut s = three();
+        for (id, dir) in [("principal-codex", ""), ("work", "/work")] {
+            s.accounts.push(Account {
+                engine: EngineId::Codex,
+                ..account(id, dir)
+            });
+        }
+        s
+    }
+
+    #[test]
+    fn the_accounts_of_a_harness_serve_its_agents_alone() {
+        let s = with_codex();
+        let claude = for_project(&s, EngineId::Claude, None);
+        let codex = for_project(&s, EngineId::Codex, None);
+        assert_eq!(candidates(&claude, None), ["principal", "pro", "team"]);
+        assert_eq!(candidates(&codex, None), ["principal-codex", "work"]);
+        // A project that prefers an account of another harness: any of this one's.
+        assert_eq!(preferred(&codex, "pro"), None);
+        assert_eq!(preferred(&codex, "work"), Some("work"));
+        // A harness with no account serves nothing.
+        assert!(!serves_any(&s, EngineId::Copilot, None));
+        assert!(serves_any(&s, EngineId::Codex, Some("p")));
+    }
+
+    #[test]
+    fn the_automatic_switch_between_accounts_stays_in_the_harness() {
+        let s = with_codex();
+        let end = NOW + 60_000;
+        // Every Claude account over the threshold, the Codex ones free: a new Claude agent still
+        // goes to a Claude account (the first; the autopilot then pauses), never to Codex.
+        let over = [
+            used("principal", 100.0, end),
+            used("pro", 100.0, end),
+            used("team", 100.0, end),
+        ];
+        let claude = for_project(&s, EngineId::Claude, None);
+        assert_eq!(pick(&claude, &over, 95, None, NOW), "principal");
+        // On Codex, its first free one, whatever the Claude accounts read.
+        let codex = for_project(&s, EngineId::Codex, None);
+        let codex_over = [used("principal-codex", 100.0, end)];
+        assert_eq!(pick(&codex, &codex_over, 95, None, NOW), "work");
+        // Asked for by id, an account of another harness is not taken.
+        assert_eq!(pick(&codex, &[], 95, Some("pro"), NOW), "principal-codex");
+    }
+
+    #[test]
+    fn an_account_of_any_harness_is_reserved_to_projects_as_a_claude_one() {
+        let mut s = with_codex();
+        let work = s.accounts.iter_mut().find(|a| a.id == "work").unwrap();
+        work.projects = vec!["client".into()];
+        let client = for_project(&s, EngineId::Codex, Some("client"));
+        assert_eq!(candidates(&client, None), ["principal-codex", "work"]);
+        let other = for_project(&s, EngineId::Codex, Some("other"));
+        assert_eq!(candidates(&other, None), ["principal-codex"]);
+        // Its Principal reserved too: the other project has no Codex account, and starts nothing on
+        // Codex, while Claude still serves it.
+        let main = s
+            .accounts
+            .iter_mut()
+            .find(|a| a.id == "principal-codex")
+            .unwrap();
+        main.projects = vec!["client".into()];
+        assert!(!serves_any(&s, EngineId::Codex, Some("other")));
+        assert!(serves_any(&s, EngineId::Claude, Some("other")));
+        assert!(serves_any(&s, EngineId::Codex, Some("client")));
+    }
+
+    #[test]
+    fn the_fallback_harnesses_of_a_project_follow_the_order_and_its_accounts() {
+        let mut s = with_codex();
+        s.engine_order = vec![EngineId::Codex, EngineId::Claude];
+        // Its default harness first, then the others in the order.
+        assert_eq!(
+            fallback_engines(&s, EngineId::Claude, "p"),
+            [EngineId::Claude, EngineId::Codex]
+        );
+        assert_eq!(
+            fallback_engines(&s, EngineId::Codex, "p"),
+            [EngineId::Codex, EngineId::Claude]
+        );
+        // Only those with an active account serving it.
+        for a in s
+            .accounts
+            .iter_mut()
+            .filter(|a| a.engine == EngineId::Codex)
+        {
+            a.projects = vec!["client".into()];
+        }
+        assert_eq!(
+            fallback_engines(&s, EngineId::Claude, "p"),
+            [EngineId::Claude]
+        );
+        assert_eq!(
+            fallback_engines(&s, EngineId::Claude, "client"),
+            [EngineId::Claude, EngineId::Codex]
+        );
+        // A harness out of the order (none of its accounts) is not one.
+        assert_eq!(
+            fallback_engines(&s, EngineId::Copilot, "client"),
+            [EngineId::Codex, EngineId::Claude]
+        );
+    }
+
+    #[test]
+    fn the_order_of_the_harnesses_lists_each_one_once() {
+        let mut s = Settings {
+            engine_order: vec![EngineId::Codex, EngineId::Codex],
+            ..Default::default()
+        };
+        normalize(&mut s);
+        // The one known kept, every harness written added after it.
+        assert_eq!(s.engine_order, [EngineId::Codex, EngineId::Claude]);
+        let mut fresh = Settings::default();
+        normalize(&mut fresh);
+        assert_eq!(fresh.engine_order, [EngineId::Claude]);
+    }
+
+    #[test]
+    fn each_harness_keeps_one_account_active_and_its_principal_runs_without_a_folder() {
+        let mut s = with_codex();
+        for a in s
+            .accounts
+            .iter_mut()
+            .filter(|a| a.engine == EngineId::Codex)
+        {
+            a.active = false;
+        }
+        s.accounts[3].config_dir = "/written/by/hand".into();
+        normalize(&mut s);
+        let codex: Vec<_> = s
+            .accounts
+            .iter()
+            .filter(|a| a.engine == EngineId::Codex)
+            .map(|a| (a.id.as_str(), a.active, a.config_dir.as_str()))
+            .collect();
+        // Its first one active again; its Principal never runs with a folder of Escouade's.
+        assert_eq!(
+            codex,
+            [
+                ("principal-codex", true, "/written/by/hand"),
+                ("work", false, "/work")
+            ]
+        );
+        assert_eq!(own_dir(&s.accounts[3]), None);
+        assert_eq!(own_dir(&s.accounts[4]), Some("/work"));
+        // Claude Code's accounts as they were.
+        assert!(s.accounts[..3].iter().all(|a| a.active));
+        assert!(is_principal(&s.accounts[0]) && is_principal(&s.accounts[3]));
+        assert!(!is_principal(&s.accounts[1]));
+        assert_eq!(principal_id(EngineId::Codex), "principal-codex");
+        // Their place in the order of the harnesses.
+        assert_eq!(s.engine_order, [EngineId::Claude, EngineId::Codex]);
     }
 
     #[test]
@@ -2333,10 +2634,13 @@ mod tests {
         );
         // The use told is that of the window that went the furthest.
         let week = AccountUsage {
-            seven_day: Some(crate::model::RateWindow {
-                pct: 98.6,
-                resets_at: Some(end),
-            }),
+            meters: crate::model::claude_meters(
+                None,
+                Some(crate::model::RateWindow {
+                    pct: 98.6,
+                    resets_at: Some(end),
+                }),
+            ),
             ..used("principal", 96.0, end)
         };
         assert_eq!(

@@ -344,6 +344,7 @@ pub fn run() {
             commands::account_create,
             commands::account_update,
             commands::account_reorder,
+            commands::engine_order_set,
             commands::account_remove,
             commands::account_status,
             commands::account_login,

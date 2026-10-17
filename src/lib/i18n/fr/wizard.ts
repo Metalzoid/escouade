@@ -36,7 +36,7 @@ export default {
     worktrees: 'Où travaillent les agents et ce qui prépare chaque worktree.',
     launch: 'Les commandes qui lancent le projet, chacune dans son terminal.',
     kanban: 'Ce que fait la validation d’un ticket, et comment ses agents travaillent.',
-    account: 'Le compte Claude des agents de ce projet, et qui écrit les commits.',
+    account: 'Le compte des agents de ce projet, et qui écrit les commits.',
     integrations: 'Les tickets peuvent venir de Jira, Trello, GitHub ou Linear. Rien n’est obligatoire.',
     summary: 'Ce qui empêcherait la méthode de travail de marcher, puis ce qui sera réglé.',
   },
@@ -150,8 +150,8 @@ export default {
       fix: 'Utiliser .claude/worktrees',
     },
     noAccount: {
-      title: 'Aucun compte Claude ne sert ce projet',
-      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes Claude.',
+      title: 'Aucun compte ne sert ce projet',
+      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes.',
     },
     noClaude: {
       title: 'Aucun harness trouvé',

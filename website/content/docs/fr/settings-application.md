@@ -14,7 +14,7 @@ La colonne de gauche liste les onglets, avec la version d’Escouade en bas. Le 
 |---|---|
 | « Application » | Zoom, taille du texte et langues |
 | [« Claude Code »](settings-claude-code) | Exécutable, modèle et permissions par défaut |
-| [« Comptes Claude »](settings-accounts) | Les comptes sur lesquels partent les agents, enregistrés à chaque changement |
+| [« Comptes »](settings-accounts) | Les comptes sur lesquels partent les agents, enregistrés à chaque changement |
 | [« Notifications »](settings-notifications) | Alertes visuelles et sonores |
 | [« Projets »](settings-projects) | Réglages propres à chaque projet |
 | [« Kanban »](settings-board) | Pilote auto et tickets validés |
@@ -35,7 +35,7 @@ Les changements se font dans un brouillon : rien ne s’applique avant « Enreg
 
 ### Ce qui s’enregistre tout de suite
 
-Trois endroits n’attendent pas le bouton. L’onglet « Comptes Claude », où chaque changement part au moment où tu le fais, et l’interrupteur « Claude et les agents peuvent piloter Escouade » de l’onglet « Claude Code », parce qu’un « Annuler » ne pourrait pas défaire ce qu’ils écrivent sur le disque. Et le groupe « Affichage » de l’onglet « Application », qui change aussi au clavier, fenêtre des réglages ouverte ou non : ce que tu y choisis se voit et s’enregistre tout de suite.
+Trois endroits n’attendent pas le bouton. L’onglet « Comptes », où chaque changement part au moment où tu le fais, et l’interrupteur « Claude et les agents peuvent piloter Escouade » de l’onglet « Claude Code », parce qu’un « Annuler » ne pourrait pas défaire ce qu’ils écrivent sur le disque. Et le groupe « Affichage » de l’onglet « Application », qui change aussi au clavier, fenêtre des réglages ouverte ou non : ce que tu y choisis se voit et s’enregistre tout de suite.
 
 ## L’onglet « Application »
 
@@ -47,11 +47,11 @@ Ces trois réglages s’appliquent tout de suite, sans « Enregistrer » ni re
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Zoom de l’interface » | Agrandit ou réduit toute la fenêtre, comme le zoom d’un navigateur : le texte, les espacements et les icônes ensemble, terminaux et éditeur compris. Paliers : 80 %, 90 %, 100 %, 110 %, 125 %, 150 %, 175 % et 200 %. | 100 % |
+| « Zoom de l’interface » | Agrandit ou réduit toute la fenêtre, comme le zoom d’un navigateur : le texte, les espacements et les icônes ensemble, terminaux et éditeur compris. Paliers : 80 %, 90 %, 100 %, 110 %, 125 %, 150 %, 175 % et 200 %. | 100 % |
 | « Taille du texte des terminaux » | La taille de la police des terminaux et de la [vue Claude Code](claude-code-view), en pixels, de 9 à 24 par demi-pixel. Le zoom s’y ajoute. | 12.5 |
 | « Taille du texte de l’éditeur » | La taille de la police de l’[éditeur](editor), en pixels, de 9 à 24 ; les lignes grandissent avec elle. Le zoom s’y ajoute. | 12.5 |
 
-Au clavier, partout, même dans un terminal ou avec une fenêtre ouverte : `Ctrl+=` (ou `Ctrl++`) agrandit d’un palier, `Ctrl+-` réduit d’un palier, `Ctrl+0` revient à 100 % (`⌘=`, `⌘-`, `⌘0` sous macOS). Les touches `+` et `-` du pavé numérique marchent aussi.
+Au clavier, partout, même dans un terminal ou avec une fenêtre ouverte : `Ctrl+=` (ou `Ctrl++`) agrandit d’un palier, `Ctrl+-` réduit d’un palier, `Ctrl+0` revient à 100 % (`⌘=`, `⌘-`, `⌘0` sous macOS). Les touches `+` et `-` du pavé numérique marchent aussi.
 
 Un terminal dont la police change se redimensionne aussitôt dans sa zone, et son programme apprend sa nouvelle taille en colonnes et en lignes : rien ne dépasse ni ne se coupe.
 

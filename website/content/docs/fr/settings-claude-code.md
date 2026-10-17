@@ -23,7 +23,7 @@ Le groupe « Claude Code » commence par un champ.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Chemin de l’exécutable » (vide = détection automatique) | Le `claude` qu’Escouade lance pour les agents. Un compte qui a son propre exécutable, dans l’onglet [« Comptes Claude »](settings-accounts), lance le sien. | Vide |
+| « Chemin de l’exécutable » (vide = détection automatique) | Le `claude` qu’Escouade lance pour les agents. Un compte qui a son propre exécutable, dans l’onglet [« Comptes »](settings-accounts), lance le sien. | Vide |
 
 ### Où Escouade cherche
 
@@ -105,7 +105,7 @@ Quand un agent s’arrête sur la limite d’usage, Escouade prévoit de lui éc
 
 ### Reprise sur un autre compte
 
-Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et l’onglet [« Comptes Claude »](settings-accounts).
+Avec plusieurs comptes, un agent de ticket arrêté par la limite repart tout seul, avec sa session, sur le compte que choisirait Escouade, quand un autre est utilisable, au lieu d’attendre la remise à zéro de son compte. Voir [les comptes](accounts) et l’onglet [« Comptes »](settings-accounts).
 
 ### Vue Claude Code
 

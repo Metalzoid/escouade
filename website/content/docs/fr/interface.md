@@ -188,7 +188,7 @@ De gauche à droite :
 | `● N en attente` | Le nombre d’agents « Question », en ambre quand il y en a. Un clic va à l’agent suivant qui attend ou qui est à voir (`Ctrl+J`). |
 | `✓ N terminés` | Le nombre d’agents « Terminé ». |
 | `N Claude · mémoire · CPU` | Les processus Claude en cours, avec les outils et les serveurs MCP qu’ils lancent ; l’infobulle détaille agent par agent. |
-| `5h … reset 3h01` et `7j … reset 4j 12h` | Les quotas du compte en cours, fenêtre de 5 heures et de 7 jours : une barre (qui vire à l’ambre au-delà de 80 %) et le temps avant la remise à zéro. Le pourcentage est dans l’infobulle. Avec plusieurs comptes, le nom du compte en cours précède les barres et un clic ouvre le panneau « Quotas des comptes Claude ». |
+| `5h … reset 3h01` et `7j … reset 4j 12h` | Les quotas du compte en cours, fenêtre de 5 heures et de 7 jours : une barre (qui vire à l’ambre au-delà de 80 %) et le temps avant la remise à zéro. Le pourcentage est dans l’infobulle. Avec plusieurs comptes, le nom du compte en cours précède les barres et un clic ouvre le panneau « Quotas des comptes ». |
 | `Aujourd'hui 3,48 $` | Ce que tes agents ont coûté aujourd’hui, précédé de « ≈ » tant qu’un tour tourne. |
 | `⎇ main ↑1 ↓3` | La branche du projet affiché, avec les commits à pousser (↑) et à tirer (↓). Un clic ouvre le sélecteur de branches. « non publiée » ou « distante supprimée » remplace les flèches quand la branche n’a pas de suivi. |
 | Mise à jour | « Mise à jour X prête · Redémarrer » quand une mise à jour est téléchargée : un clic ouvre la fenêtre de la mise à jour. Pendant le téléchargement, la barre dit « Mise à jour X… » ; quand un redémarrage automatique est prévu, « Redémarrage dans N s » et le bouton « Plus tard » prennent la place. Voir les [mises à jour](updates). |
@@ -199,13 +199,13 @@ Voir [les quotas et le coût](usage) et [les branches](branches).
 
 ## Les réglages
 
-`Ctrl+,` ou le bouton ⚙ de la barre d’état ouvre la fenêtre des réglages : les onglets à gauche, le contenu à droite. Un onglet modifié est marqué ; « Enregistrer » enregistre tous les onglets d’un coup et « Annuler » (ou `Échap`) ferme la fenêtre sans enregistrer. L’onglet « Comptes Claude » fait exception : il enregistre à chaque changement. Les onglets « Projets », « Kanban » et « Intégrations » règlent un projet à la fois, choisi en haut ; « Réglages du projet… » dans le menu d’un onglet de projet ouvre la fenêtre sur ce projet.
+`Ctrl+,` ou le bouton ⚙ de la barre d’état ouvre la fenêtre des réglages : les onglets à gauche, le contenu à droite. Un onglet modifié est marqué ; « Enregistrer » enregistre tous les onglets d’un coup et « Annuler » (ou `Échap`) ferme la fenêtre sans enregistrer. L’onglet « Comptes » fait exception : il enregistre à chaque changement. Les onglets « Projets », « Kanban » et « Intégrations » règlent un projet à la fois, choisi en haut ; « Réglages du projet… » dans le menu d’un onglet de projet ouvre la fenêtre sur ce projet.
 
 | Onglet | Page |
 |---|---|
 | « Application » | [Réglages de l’application](settings-application) |
 | « Claude Code » | [Réglages de Claude Code](settings-claude-code) |
-| « Comptes Claude » | [Réglages des comptes Claude](settings-accounts) |
+| « Comptes » | [Réglages des comptes Claude](settings-accounts) |
 | « Notifications » | [Réglages des notifications](settings-notifications) |
 | « Projets » | [Réglages des projets](settings-projects) |
 | « Kanban » | [Réglages du Kanban](settings-board) |

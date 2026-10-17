@@ -1,31 +1,31 @@
-# Settings: Claude accounts
+# Settings: Accounts
 
-The “Claude accounts” tab lists the accounts agents start on, in the order Escouade tries them. Each change is saved right away, without going through “Save”.
+The “Accounts” tab lists the accounts agents start on, a group per harness, in the order Escouade tries them. Each change is saved right away, without going through “Save”.
 
 ## How Escouade picks an account
 
-An account is a Claude Code run with its own configuration folder, so with its own sign-in, sessions, and quota. “Main” is your usual Claude Code: it runs as it always did, with no folder of its own, and it can’t be removed. How accounts and their quotas work is explained in [accounts](accounts) and in [usage](usage).
+An account is a harness run with its own configuration folder (for Claude Code, its `CLAUDE_CONFIG_DIR`), so with its own sign-in, sessions, and quota. Each account belongs to a single harness, and the tab groups them by harness: “Claude Code accounts”, then those of the other harnesses when they have some. Each harness has its “Main”, your usual install: it runs as it always did, with no folder of its own, and it can’t be removed. How accounts and their quotas work is explained in [accounts](accounts) and in [usage](usage).
 
-The note under the list’s title sums it up: “New agents start on the first active account under the pause threshold, in this order.” In detail:
+The note under the first group’s title sums it up: “New agents start on the first active account of their harness under the pause threshold, in this order.” In detail:
 
-- A new agent starts on the first active account in the list that has no quota window (5-hour or weekly) at the pause threshold.
+- A new agent starts on an account of its harness, never on another harness’s: the first active account of the group that has no quota window (5-hour or weekly for Claude Code) at the pause threshold.
 - If every active account has reached the threshold, it starts on the first active account, and [autopilot](autopilot) pauses.
 - A project’s “Preferred account”, in the [“Projects”](settings-projects) tab, goes first as long as it is active.
 - An account “Reserved to projects” only receives the agents and tickets of those projects.
 
 ## The list
 
-Each account has its own block in the list.
+Each account has its own block in its harness’s group.
 
 | Setting | Effect | Default |
 |---|---|---|
 | Name (the “Name” field) | The account’s name, saved when you leave the field or press `Enter`. An empty name, or one already taken by another account, is refused: the field goes back to the old one. | “Main” for the Main account; the name given at creation for the others |
-| “Active” | Switch. An inactive account receives no new agent. At least one must stay active: the switch of the last active account is grayed out (“At least one account must be active.”). | On |
-| ↑ and ↓ arrows | Move the account up or down: the order of the list is the order of priority. | — |
+| “Active” | Switch. An inactive account receives no new agent. Each harness keeps at least one active: the switch of the last active account of a group is grayed out (“Each harness needs at least one active account.”). | On |
+| ↑ and ↓ arrows | Move the account up or down in its group: the order of the group is its harness’s order of priority. | — |
 | “Folder” | The account’s configuration folder, shown but not editable. | — |
 | “Executable” | This account’s `claude`. Blank, it is the one in the “Claude Code” tab (the field says “The one in the settings”). Saved when you leave the field. | Blank |
 | “Sign in…” or “Sign in again…” | Opens the account’s sign-in. | — |
-| “Remove” | Takes the account off the list (absent for Main). | — |
+| “Remove” | Takes the account off the list (absent for each harness’s Main). | — |
 | “Reserved to projects” | One checkbox per open project, plus a ticked one, marked “(closed)”, for each closed project the account is still reserved to: the account only serves the projects ticked. | None ticked: “Every project” |
 
 ### Name and state
@@ -50,19 +50,23 @@ For Main, the folder is Claude Code’s own (`~/.claude`, or the one `CLAUDE_CON
 
 ### Reserved to projects
 
-The checkboxes keep an account to those projects alone (a client’s projects, say): other projects never start on it. With nothing ticked, the account serves every project, which the row says as “Every project”. Main can be reserved like any other.
+The checkboxes keep an account to those projects alone (a client’s projects, say): other projects never start on it. With nothing ticked, the account serves every project, which the row says as “Every project”. The accounts of every harness are reserved the same way, and Main can be reserved like any other.
 
 A project closed with its history kept stays reserved to the account: it appears in the row, ticked and marked “(closed)”, for example “Client (closed)”. Untick it to remove it from the account’s list; it also leaves by itself when its history is erased. While it is ticked, an account reserved to that project alone serves no open project, and “Every project” isn’t shown. The row appears even when no project is open, as long as the account is reserved to a closed project.
 
-If no active account serves a project (all are reserved to others, or switched off), a line under the list names the project and says its agents and tickets won’t start.
+If no active account of its default harness serves a project (all are reserved to others, or switched off), a line under the groups names the project and says its agents and tickets won’t start. A project that no active account of a harness serves starts nothing on that harness: an agent or a ticket that asks for it is refused, with the harness and the setting to change.
 
 ### Removing an account
 
 “Remove” asks for confirmation. The dialog reminds you that new agents will no longer start on the account, and that its folder stays on the disk, with its sign-in and its conversations. While agents that are not archived still run on the account, removal is refused. Projects that preferred it go back to “Automatic”.
 
+## Harness order
+
+As soon as two harnesses have accounts, the “Harness order” list shows under the groups, a harness per line with its ↑ and ↓ arrows. It orders the groups of the tab and of the quota panel, and gives each project its fallback harnesses: after its default harness, the next ones in this order, only those with an active account that serves it. A change of the order is saved right away.
+
 ## Adding an account
 
-“Add an account…”, under the list, opens the “Add a Claude account” window.
+“Add an account…”, under the groups, opens the “Add a Claude account” window: the account added is a Claude Code one.
 
 1. “Name”: the new account’s name (“Pro, Team…” as an example). Two accounts can’t have the same name.
 2. “Share with Main”: checkboxes, all ticked at first, for the items of Main’s folder the account takes over. The files are `settings.json` and `CLAUDE.md`, the folders `skills`, `agents`, `commands`, `plugins`, `hooks`, and `output-styles`; only the ones Main has are offered.
@@ -79,10 +83,10 @@ The threshold is set in the [“Kanban”](settings-board) tab, not here, but it
 |---|---|---|
 | “Pause above quota” (for all projects) | No ticket starts while the 5-hour window or the weekly window is at or above this threshold. Choices: 80%, 90%, 95%, or 100%. | 100% |
 
-An account with a window past the threshold is set aside in favor of the next one in the list, and the quota panel marks it “past the pause threshold”.
+An account with a window past the threshold is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause threshold”. Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
 
 ## Resuming on another account
 
-When a turn stops on the usage limit, the agent’s card offers “Resume on” followed by an account, or “Resume on another account” with a menu when there are several: the agent goes on with its session on the other account. The accounts offered are the active ones, other than the agent’s own, that serve its project, are signed in, and stay under the pause threshold.
+When a turn stops on the usage limit, the agent’s card offers “Resume on” followed by an account, or “Resume on another account” with a menu when there are several: the agent goes on with its session on the other account. The accounts offered are the active ones of its harness, other than the agent’s own, that serve its project, are signed in, and stay under the pause threshold: the automatic switch between accounts stays within the harness.
 
 For a ticket’s agent, the “Resume a ticket’s agent stopped by the usage limit on another account” setting in the [“Claude Code”](settings-claude-code) tab does it by itself. A session doesn’t move from an account that runs Claude Code on Windows to one that runs it in WSL, or the other way around.

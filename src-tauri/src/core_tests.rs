@@ -3754,7 +3754,7 @@ async fn nothing_is_planned_without_a_reset_still_to_come() {
         resets_at: Some(now_ms() - 60_000),
     });
     h.core
-        .record_usage("principal", Reading::Windows((full_before, None)));
+        .record_usage("principal", Reading::claude((full_before, None)));
     h.core.plan_resume(&id, None);
     assert_eq!(h.agent(&id).resume_at, None);
 }
@@ -3884,7 +3884,7 @@ async fn a_resume_takes_the_saturated_window_s_reset_and_can_be_turned_off_or_ca
         resets_at: Some(reset),
     });
     h.core
-        .record_usage("principal", Reading::Windows((full, None)));
+        .record_usage("principal", Reading::claude((full, None)));
     h.core.plan_resume(&id, None);
     let at = h.agent(&id).resume_at.expect("planned from the window");
     assert!(at > reset && at < reset + 120_000, "{at} vs {reset}");
@@ -4768,7 +4768,7 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
         .collect();
     assert_eq!(
         toasts,
-        ["Aucun compte Claude actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude."]
+        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes."]
     );
 }
 
@@ -8609,6 +8609,7 @@ async fn settings_and_agents_saved_before_the_accounts_load_on_principal() {
     assert_eq!(
         core.settings.read().accounts,
         vec![Account {
+            engine: EngineId::Claude,
             id: "principal".into(),
             name: "Principal".into(),
             config_dir: String::new(),
@@ -8808,7 +8809,7 @@ fn five_hour_pct(h: &Harness, account: &str) -> Option<f64> {
         .usage
         .lock()
         .account(account)
-        .and_then(|a| a.five_hour)
+        .and_then(|a| a.five_hour())
         .map(|w| w.pct.round())
 }
 
@@ -8853,15 +8854,15 @@ async fn a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_q
     assert_eq!(five_hour_pct(&h, "principal"), Some(12.0));
     // Principal stays the current account: its windows are the status bar's.
     let u = h.core.usage.lock().clone();
-    assert_eq!(u.current, "principal");
-    assert_eq!(u.five_hour.map(|w| w.pct.round()), Some(12.0));
+    assert_eq!(u.claude_current(), "principal");
+    assert_eq!(u.five_hour().map(|w| w.pct.round()), Some(12.0));
     // Principal at the limit too: every account past the threshold, the first active one.
     turn_over(&h, &main, "la limite").await;
     h.wait("Principal at the limit", |h| {
         five_hour_pct(h, "principal") == Some(100.0)
     })
     .await;
-    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(h.core.usage.lock().claude_current(), "principal");
     // Pro has quota again: it is the first one under the threshold, its windows first.
     std::fs::remove_file(&limit).unwrap();
     turn_over(&h, &id, "Encore").await;
@@ -8870,8 +8871,8 @@ async fn a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_q
     })
     .await;
     let u = h.core.usage.lock().clone();
-    assert_eq!(u.current, "pro");
-    assert_eq!(u.five_hour.map(|w| w.pct.round()), Some(12.0));
+    assert_eq!(u.claude_current(), "pro");
+    assert_eq!(u.five_hour().map(|w| w.pct.round()), Some(12.0));
     assert_eq!(five_hour_pct(&h, "principal"), Some(100.0));
     // As the window was told.
     let told = h
@@ -8882,7 +8883,7 @@ async fn a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_q
         .find(|e| e["type"] == "usage")
         .cloned()
         .unwrap();
-    assert_eq!(told["usage"]["current"], "pro");
+    assert_eq!(told["usage"]["current"]["claude"], "pro");
     let ids: Vec<&Value> = told["usage"]["accounts"]
         .as_array()
         .unwrap()
@@ -8903,7 +8904,7 @@ async fn an_agent_waits_for_the_windows_of_its_own_account() {
         pct: 100.0,
         resets_at: Some(reset),
     });
-    h.core.record_usage("pro", Reading::Windows((full, None)));
+    h.core.record_usage("pro", Reading::claude((full, None)));
     // Pro's full window is none of Principal's agents'.
     let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.core.plan_resume(&main, None);
@@ -8976,8 +8977,8 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     // One call, for the only account signed in and active.
     assert_eq!(tokens(&server), ["Bearer tok-pro"]);
     let read = get(&h, "pro");
-    assert_eq!(read.five_hour.map(|w| w.pct), Some(40.0));
-    assert_eq!(read.seven_day.map(|w| w.pct), Some(7.0));
+    assert_eq!(read.five_hour().map(|w| w.pct), Some(40.0));
+    assert_eq!(read.seven_day().map(|w| w.pct), Some(7.0));
     assert_eq!((read.connected, read.reason.as_deref()), (true, None));
     let none = get(&h, "vide");
     assert_eq!(
@@ -8986,7 +8987,7 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     );
     let old = get(&h, "vieux");
     assert_eq!(
-        (old.connected, old.reason.as_deref(), old.five_hour),
+        (old.connected, old.reason.as_deref(), old.five_hour()),
         (
             true,
             Some("Connexion expirée : relance Claude Code pour ce compte."),
@@ -8994,12 +8995,12 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
         )
     );
     // At rest: neither asked nor read.
-    assert_eq!(get(&h, "off").five_hour, None);
-    assert_eq!(get(&h, "principal").five_hour, None);
+    assert_eq!(get(&h, "off").five_hour(), None);
+    assert_eq!(get(&h, "principal").five_hour(), None);
     // The first active one, under the threshold: the current account.
     let u = h.core.usage.lock().clone();
     assert_eq!(
-        (u.current.as_str(), u.five_hour.map(|w| w.pct)),
+        (u.claude_current(), u.five_hour().map(|w| w.pct)),
         ("pro", Some(40.0))
     );
     // Again within the five minutes: not asked again.
@@ -9019,8 +9020,8 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     assert_eq!(
         (
             signed.connected,
-            signed.reason,
-            signed.five_hour.map(|w| w.pct)
+            signed.reason.clone(),
+            signed.five_hour().map(|w| w.pct)
         ),
         (true, None, Some(40.0))
     );
@@ -9030,7 +9031,7 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     h.core.refresh_usage().await;
     let kept = get(&h, "pro");
     assert_eq!(
-        (kept.five_hour.map(|w| w.pct), kept.connected),
+        (kept.five_hour().map(|w| w.pct), kept.connected),
         (Some(40.0), true)
     );
     assert_eq!(kept.updated_at, read.updated_at);
@@ -9090,14 +9091,14 @@ async fn quota_windows_saved_before_the_accounts_are_principals_and_each_account
         core.usage
             .lock()
             .account(id)
-            .and_then(|a| a.five_hour)
+            .and_then(|a| a.five_hour())
             .map(|w| w.pct)
     };
     assert_eq!(pct(&core, "principal"), Some(96.0));
     assert_eq!(pct(&core, "pro"), None);
     let u = core.usage.lock().clone();
     assert_eq!(
-        (u.current.as_str(), u.five_hour.map(|w| w.pct)),
+        (u.claude_current(), u.five_hour().map(|w| w.pct)),
         ("principal", Some(96.0))
     );
     // Pro's own, read since: kept for it across a restart, Principal's where they were.
@@ -9105,7 +9106,7 @@ async fn quota_windows_saved_before_the_accounts_are_principals_and_each_account
         pct: 50.0,
         resets_at: Some(end),
     });
-    core.record_usage("pro", Reading::Windows((half, None)));
+    core.record_usage("pro", Reading::claude((half, None)));
     core.save_now();
     let saved: Value = serde_json::from_slice(&std::fs::read(data.state_file()).unwrap()).unwrap();
     assert_eq!(saved["pause"]["fiveHour"]["pct"], json!(96.0));
@@ -9177,6 +9178,7 @@ async fn an_account_made_in_its_tab_gets_a_folder_of_its_own_and_comes_last() {
     assert_eq!(
         made,
         Account {
+            engine: EngineId::Claude,
             id: "pro".into(),
             name: "Pro".into(),
             config_dir: dir.to_string_lossy().into(),
@@ -9247,7 +9249,7 @@ async fn an_account_an_agent_still_runs_on_is_not_removed() {
     let e = h.core.remove_claude_account("principal").unwrap_err();
     assert_eq!(e.to_string(), "Le compte Principal ne se supprime pas.");
     let e = h.core.remove_claude_account("parti").unwrap_err();
-    assert_eq!(e.to_string(), "compte Claude « parti » introuvable");
+    assert_eq!(e.to_string(), "compte « parti » introuvable");
 }
 
 #[tokio::test]
@@ -9330,7 +9332,7 @@ async fn the_accounts_are_renamed_ordered_and_put_at_rest_in_their_tab() {
             active: false,
             ..principal
         }),
-        "Il faut au moins un compte actif."
+        "Il faut au moins un compte actif par harness."
     );
     // An account gone meanwhile.
     assert_eq!(
@@ -9338,7 +9340,7 @@ async fn the_accounts_are_renamed_ordered_and_put_at_rest_in_their_tab() {
             id: "parti".into(),
             ..perso
         }),
-        "compte Claude « parti » introuvable"
+        "compte « parti » introuvable"
     );
 }
 
@@ -9453,7 +9455,7 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
             .join(".claude")
     );
     let e = status(&h, "parti").await.unwrap_err();
-    assert_eq!(e.to_string(), "compte Claude « parti » introuvable");
+    assert_eq!(e.to_string(), "compte « parti » introuvable");
 }
 
 /// What a terminal printed, without its escape sequences nor its line ends (a pseudo-console
@@ -9591,7 +9593,7 @@ async fn an_accounts_sign_in_runs_its_claude_with_its_folder_in_a_terminal() {
         "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages."
     );
     let e = h.core.claude_login("parti", (80, 24), |_| {}).unwrap_err();
-    assert_eq!(e.to_string(), "compte Claude « parti » introuvable");
+    assert_eq!(e.to_string(), "compte « parti » introuvable");
 }
 
 // ---------- Choosing the account ----------
@@ -9629,7 +9631,7 @@ async fn a_new_agent_goes_to_the_account_asked_for_then_the_projects_then_the_fi
     // Principal used up until later: the next agents go to Pro.
     h.core.record_usage(
         "principal",
-        Reading::Windows((used_for_an_hour(100.0), None)),
+        Reading::claude((used_for_an_hour(100.0), None)),
     );
     assert_eq!(new_agent().await, "pro");
     // The one asked for comes first, whatever the quota.
@@ -9648,7 +9650,7 @@ async fn a_new_agent_goes_to_the_account_asked_for_then_the_projects_then_the_fi
     // Every account used up: the first active one (the autopilot pauses).
     change_settings(&h, |s| s.accounts[1].active = true);
     h.core
-        .record_usage("pro", Reading::Windows((used_for_an_hour(100.0), None)));
+        .record_usage("pro", Reading::claude((used_for_an_hour(100.0), None)));
     assert_eq!(new_agent().await, "principal");
 }
 
@@ -9702,12 +9704,12 @@ async fn an_agent_with_no_session_changes_account_and_its_warm_process_restarts_
     h.core.set_agent_account(&a.id, "pro").await.unwrap();
     // « Automatique »: the first usable account, here Principal once Pro is used up.
     h.core
-        .record_usage("pro", Reading::Windows((used_for_an_hour(100.0), None)));
+        .record_usage("pro", Reading::claude((used_for_an_hour(100.0), None)));
     h.core.set_agent_account(&a.id, "").await.unwrap();
     assert_eq!(h.agent(&a.id).account, "principal");
     // An account to go to, that is there and active.
     let unknown = h.core.set_agent_account(&a.id, "parti").await.unwrap_err();
-    assert_eq!(unknown.to_string(), "compte Claude « parti » introuvable");
+    assert_eq!(unknown.to_string(), "compte « parti » introuvable");
     change_settings(&h, |s| s.accounts[1].active = false);
     let off = h.core.set_agent_account(&a.id, "pro").await.unwrap_err();
     assert_eq!(off.to_string(), "Le compte « Pro » est désactivé.");
@@ -9742,13 +9744,13 @@ async fn the_window_is_told_once_when_the_current_account_changes_because_it_pas
     };
     let read = |account: &str, pct: f64| {
         h.core
-            .record_usage(account, Reading::Windows((used_for_an_hour(pct), None)))
+            .record_usage(account, Reading::claude((used_for_an_hour(pct), None)))
     };
     read("principal", 90.0);
     assert!(toasts(&h).is_empty());
     // Past the threshold: the new agents go to Pro.
     read("principal", 96.0);
-    assert_eq!(h.core.usage.lock().current, "pro");
+    assert_eq!(h.core.usage.lock().claude_current(), "pro");
     assert_eq!(
         toasts(&h),
         ["Le compte Principal a atteint 96 % : les nouveaux agents partent sur Pro."]
@@ -9760,21 +9762,21 @@ async fn the_window_is_told_once_when_the_current_account_changes_because_it_pas
     // Pro past it too: every account is, the first one is the current again, said nowhere
     // (the autopilot's pause tells).
     read("pro", 97.0);
-    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(h.core.usage.lock().claude_current(), "principal");
     assert_eq!(toasts(&h).len(), 1);
     // Principal reads under it: the first usable one again, not told.
     read("principal", 20.0);
-    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(h.core.usage.lock().claude_current(), "principal");
     assert_eq!(toasts(&h).len(), 1);
     // Past it once more: said once more.
     read("pro", 10.0);
     read("principal", 100.0);
-    assert_eq!(h.core.usage.lock().current, "pro");
+    assert_eq!(h.core.usage.lock().claude_current(), "pro");
     assert_eq!(toasts(&h).len(), 2);
     // A change of the settings that moves the current account (the one left passed the
     // threshold, Pro is switched off) does not say that it passed it.
     change_settings(&h, |s| s.accounts[1].active = false);
-    assert_eq!(h.core.usage.lock().current, "principal");
+    assert_eq!(h.core.usage.lock().claude_current(), "principal");
     assert_eq!(toasts(&h).len(), 2);
 }
 
@@ -9788,7 +9790,7 @@ async fn a_question_about_no_agent_is_asked_of_the_account_a_new_agent_would_go_
     assert_eq!(config_dirs(&h, &r).last(), Some(&Value::Null));
     h.core.record_usage(
         "principal",
-        Reading::Windows((used_for_an_hour(100.0), None)),
+        Reading::claude((used_for_an_hour(100.0), None)),
     );
     h.core.suggest_worktree_steps(&p.id).await.unwrap();
     assert_eq!(config_dirs(&h, &r).last(), Some(&json!(pro.config_dir)));
@@ -9812,20 +9814,18 @@ async fn claude_is_found_on_the_account_new_agents_would_go_to() {
     // Principal used up: Pro is the current account, and it has one.
     h.core.record_usage(
         "principal",
-        Reading::Windows((used_for_an_hour(100.0), None)),
+        Reading::claude((used_for_an_hour(100.0), None)),
     );
     assert!(h.core.claude_found());
-    assert_eq!(h.core.usage.lock().current, pro.id);
+    assert_eq!(h.core.usage.lock().claude_current(), pro.id);
     // Found for the settings: found for Principal.
     change_settings(&h, |s| {
         s.claude_path = fake_cli();
         s.accounts[1].claude_path = absent.clone();
     });
     assert!(!h.core.claude_found());
-    h.core.record_usage(
-        "principal",
-        Reading::Windows((used_for_an_hour(10.0), None)),
-    );
+    h.core
+        .record_usage("principal", Reading::claude((used_for_an_hour(10.0), None)));
     assert!(h.core.claude_found());
 }
 
@@ -9954,10 +9954,7 @@ async fn a_resume_on_another_account_is_refused_where_it_cannot_be_and_changes_n
     );
     turn_over(&h, &id, "la limite").await;
     // An account the settings do not know, one that is off, the agent's own.
-    assert_eq!(
-        refusal(&id, "parti").await,
-        "compte Claude « parti » introuvable"
-    );
+    assert_eq!(refusal(&id, "parti").await, "compte « parti » introuvable");
     assert_eq!(
         refusal(&id, "pro").await,
         "L’agent tourne déjà sur le compte « Pro »."
@@ -10048,8 +10045,7 @@ async fn a_resume_that_fails_on_the_new_account_says_so_and_can_go_back_to_the_a
     // say when it resets.
     h.core.update_usage(|u| {
         let pro = u.account_mut("pro");
-        pro.five_hour = None;
-        pro.seven_day = None;
+        pro.meters.clear();
     });
     // Back to Pro: the session goes back with what the failed turn added, the agent waits for
     // the reset it waited for as before, and it no longer says it came from anywhere.
@@ -10274,4 +10270,23 @@ async fn the_account_an_agent_came_from_is_forgotten_when_the_account_it_went_to
     assert!(m.resume_at.is_some());
     let last = h.items(&id).into_iter().rfind(|i| i["kind"] == "turn");
     assert_eq!(last.unwrap()["limited"], true);
+}
+
+#[tokio::test]
+async fn the_order_of_the_harnesses_is_the_backends_and_lists_each_one_once() {
+    let h = harness("esc30-engine-order");
+    let order = h
+        .core
+        .set_engine_order(&[EngineId::Codex, EngineId::Codex])
+        .unwrap();
+    assert_eq!(order, [EngineId::Codex, EngineId::Claude]);
+    // The window's settings, saved with the order it had before, do not change it: the tab of
+    // the accounts sets it on its own, as it does the accounts.
+    let mut s = h.core.settings.read().clone();
+    s.engine_order = vec![EngineId::Claude];
+    h.core.save_window_settings(s).unwrap();
+    assert_eq!(
+        h.core.settings.read().engine_order,
+        [EngineId::Codex, EngineId::Claude]
+    );
 }

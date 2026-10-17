@@ -5,11 +5,11 @@
   import { anyCan, offered } from '../../lib/engines';
   import { EFFORTS, MODES, modelOptions } from '../../lib/models';
   import { IS_MAC, OS } from '../../lib/platform';
-  import { accountName } from '../../lib/accounts';
+  import { accountName, engineOfAccount } from '../../lib/accounts';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
-  import type { ClaudeLocated, EngineDecl, EngineInfo } from '../../lib/types';
+  import type { ClaudeLocated, EngineDecl, EngineId, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -69,12 +69,15 @@
   const harnesses = $derived(app.engines.map((d) => ({ decl: d, info: infos?.find((i) => i.id === d.id) ?? null })));
   /** The one the path of the settings is for: the default harness, until each has its own. */
   const pathOwner = $derived(app.engines[0]?.id);
-  /** The account new agents go to: the one « Se connecter… » signs in. */
-  const signInAccount = $derived(app.settings.accounts.find((a) => a.id === app.usage.current) ?? app.settings.accounts[0]);
+  /** The account new agents of `engine` go to: the one « Se connecter… » signs in. */
+  const signInAccount = (engine: EngineId) =>
+    app.settings.accounts.find((a) => a.id === app.usage.current[engine]) ??
+    app.settings.accounts.find((a) => engineOfAccount(a) === engine);
 
-  /** « Se connecter… »: the sign-in of the account new agents go to, in a built-in terminal, back to this tab once done. */
-  function signIn() {
-    if (signInAccount) app.modal = { kind: 'account', accountId: signInAccount.id, back: 'claude' };
+  /** « Se connecter… »: the sign-in of the account new agents of `engine` go to, in a built-in terminal, back to this tab once done. */
+  function signIn(engine: EngineId) {
+    const account = signInAccount(engine);
+    if (account) app.modal = { kind: 'account', accountId: account.id, back: 'claude' };
   }
 
   /** The command that installs a harness on this system. */
@@ -124,6 +127,7 @@
   {#each harnesses as { decl, info } (decl.id)}
     {@const own = decl.id === pathOwner}
     {@const shown = own ? (info && located?.path && saved ? info : null) : info}
+    {@const account = signInAccount(decl.id)}
     <section class="harness" data-engine={decl.id} aria-label={decl.name}>
       <Group title={decl.name} note={own && located?.nat ? t('settings.claude.nat') : undefined}>
         {#if own}
@@ -146,12 +150,12 @@
           </Row>
           <Row
             label={t('settings.claude.state')}
-            desc={signInAccount ? t('settings.claude.signInDesc', { account: accountName(signInAccount) }) : undefined}
+            desc={account ? t('settings.claude.signInDesc', { account: accountName(account) }) : undefined}
           >
             <span class="state" class:ok={shown.state === 'ready'} class:bad={shown.state === 'tooOld'} data-engine-state={shown.state}
               >{t(`settings.claude.states.${shown.state}`)}</span
             >
-            <button class="btn" disabled={!signInAccount} onclick={signIn}>{t('settings.claude.signIn')}</button>
+            <button class="btn" disabled={!account} onclick={() => signIn(decl.id)}>{t('settings.claude.signIn')}</button>
           </Row>
         {:else if own ? located && !located.path : info?.state === 'absent'}
           <Row label={t('settings.claude.install')} desc={t('settings.claude.installDesc')}>

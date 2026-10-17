@@ -72,7 +72,7 @@ describe('Board', () => {
     const backend = fakeBackend();
     const at = new Date();
     at.setHours(14, 0, 0, 0);
-    app.autopilotPause = { reason: 'week', pct: 96, until: at.getTime() };
+    app.autopilotPause = { reason: 'window', minutes: 10080, pct: 96, until: at.getTime() };
     render(Board, { project: app.projects[0] });
     const said = 'Pilote auto en pause : quota hebdo à 96 % (reprise à 14:00)';
     expect(screen.getByRole('status')).toHaveTextContent(said);

@@ -65,9 +65,18 @@ export function engineOptions(current?: EngineId | null): { value: EngineId; lab
   return [...list, ...kept].map((e) => ({ value: e.id, label: e.name }));
 }
 
-/** The name of a harness as the interface says it (its id when the backend does not know it). */
+/** The usual names of the harnesses, for one this version does not write yet (an account of it saved by a later one). */
+const NAMES: Record<EngineId, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  copilot: 'Copilot CLI',
+  cursor: 'Cursor CLI',
+  opencode: 'OpenCode',
+};
+
+/** The name of a harness as the interface says it: as the backend declares it, else its usual name, else its id. */
 export function engineName(engine: EngineId | null | undefined): string {
-  return engineOf(engine)?.name ?? engine ?? '';
+  return engineOf(engine)?.name ?? (engine ? (NAMES[engine] ?? engine) : '');
 }
 
 /**

@@ -2035,7 +2035,7 @@ async fn a_ticket_stopped_by_the_usage_limit_waits_and_nothing_starts_until_the_
     // (the fake CLI's 5-hour window, used up, ends in an hour), and the margin after it.
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&b.id).column, Column::Todo);
-    assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
+    assert_eq!(h.pauses().last().unwrap()["reason"], "window");
     h.pause_tick_after(3_600_000 + RESUME_MARGIN_MS + 1_000);
     h.wait_ticket(&b.id, "started after the quota", |t| {
         t.column != Column::Todo
@@ -2109,8 +2109,7 @@ async fn a_usage_limit_with_no_resume_blocks_its_ticket_and_pauses_the_autopilot
     // As with an API key: no quota window is known, only the pause after the limit holds.
     h.core.update_usage(|u| {
         let main = u.account_mut("principal");
-        main.five_hour = None;
-        main.seven_day = None;
+        main.meters.clear();
     });
     h.core.pause_tick();
     h.wait_board_idle().await;
@@ -2152,7 +2151,7 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
         pct: 96.0,
         resets_at: Some(end),
     });
-    h.record_usage("principal", Reading::Windows((None, week)))
+    h.record_usage("principal", Reading::claude((None, week)))
         .await;
     let t = h
         .core
@@ -2163,7 +2162,9 @@ async fn nothing_starts_while_a_window_is_used_past_the_threshold_until_it_reads
     assert_eq!(h.ticket(&t.id).column, Column::Todo);
     assert_eq!(
         h.pauses(),
-        [json!({ "reason": "week", "pct": 96.0, "until": end + RESUME_MARGIN_MS })]
+        [
+            json!({ "reason": "window", "minutes": 10080, "pct": 96.0, "until": end + RESUME_MARGIN_MS })
+        ]
     );
     // Launched by hand ("Lancer", the autopilot off), it waits too.
     h.set_board(&p.id, |s| s.autopilot = false);
@@ -2188,7 +2189,7 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
         pct: 100.0,
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
-    h.record_usage("principal", Reading::Windows((ended, None)))
+    h.record_usage("principal", Reading::claude((ended, None)))
         .await;
     let a = h
         .core
@@ -2202,7 +2203,7 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
         pct: 96.0,
         resets_at: Some(now_ms() + 3_600_000),
     });
-    h.record_usage("principal", Reading::Windows((under, None)))
+    h.record_usage("principal", Reading::claude((under, None)))
         .await;
     let b = h
         .core
@@ -2219,7 +2220,7 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
         pct: 100.0,
         resets_at: Some(end),
     });
-    h.record_usage("principal", Reading::Windows((full, None)))
+    h.record_usage("principal", Reading::claude((full, None)))
         .await;
     let c = h
         .core
@@ -2228,7 +2229,7 @@ async fn a_window_past_the_threshold_holds_nothing_back_once_it_ends() {
         .unwrap();
     h.wait_board_idle().await;
     assert_eq!(h.ticket(&c.id).column, Column::Todo);
-    assert_eq!(h.pauses().last().unwrap()["reason"], "fiveHour");
+    assert_eq!(h.pauses().last().unwrap()["reason"], "window");
     // Just past its end, a clock a little ahead of the server's would start it into the limit:
     // it waits the margin an agent's resume waits.
     h.pause_tick_at(end + 1_000);
@@ -2292,7 +2293,7 @@ async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until
         pct: 100.0,
         resets_at: Some(now_ms() - RESUME_MARGIN_MS - 1_000),
     });
-    h.record_usage("principal", Reading::Windows((ended, week)))
+    h.record_usage("principal", Reading::claude((ended, week)))
         .await;
     let t = h
         .core
@@ -2306,9 +2307,9 @@ async fn a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until
     assert_eq!(re.ticket(&t.id).unwrap().column, Column::Todo);
     assert_eq!(
         re.autopilot_pause().map(|p| (p.reason, p.until)),
-        Some((PauseReason::Week, end + RESUME_MARGIN_MS))
+        Some((PauseReason::Window, end + RESUME_MARGIN_MS))
     );
-    assert_eq!(re.usage.lock().five_hour, None);
+    assert_eq!(re.usage.lock().five_hour(), None);
     re.autopilot_resume();
     wait_started(&re, &t.id).await;
 }
@@ -3101,7 +3102,7 @@ async fn a_project_no_account_serves_makes_no_agent_and_its_board_says_why() {
     assert_eq!(
         e.to_string(),
         format!(
-            "Aucun compte Claude actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte actif, dans Réglages › Comptes Claude.",
+            "Aucun compte Claude Code actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes.",
             p.name
         )
     );
@@ -3120,13 +3121,13 @@ async fn a_project_no_account_serves_makes_no_agent_and_its_board_says_why() {
         (Column::Todo, None, None)
     );
     assert!(h.alerts().is_empty(), "{:?}", h.alerts());
-    let none = "Aucun compte Claude pour ce projet — aucun ticket ne démarre";
+    let none = "Aucun compte Claude Code pour ce projet — aucun ticket ne démarre";
     assert_eq!(board_issues(&h, &p.id), [Some(none.to_string())]);
     // Nor is it launched by hand: it would start later on its own, autopilot or not.
     let e = h.core.ticket_start(&t.id).unwrap_err();
     assert!(
         e.to_string()
-            .starts_with("Aucun compte Claude actif ne sert le projet"),
+            .starts_with("Aucun compte Claude Code actif ne sert le projet"),
         "{e}"
     );
     assert!(!h.ticket(&t.id).forced);
@@ -6297,7 +6298,7 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
             resets_at: Some(end),
         })
     };
-    h.record_usage("pro", Reading::Windows((used(100.0, end), None)))
+    h.record_usage("pro", Reading::claude((used(100.0, end), None)))
         .await;
     // Principal is under: a ticket starts on it.
     let a = h
@@ -6313,7 +6314,7 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
     // which accounts did.
     h.record_usage(
         "principal",
-        Reading::Windows((used(97.0, end - 600_000), None)),
+        Reading::claude((used(97.0, end - 600_000), None)),
     )
     .await;
     let b = h
@@ -6326,8 +6327,8 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
     let pause = h.pauses().last().cloned().unwrap();
     assert_eq!(
         pause,
-        json!({ "reason": "fiveHour", "pct": 97.0, "until": end - 600_000 + RESUME_MARGIN_MS,
-                "accounts": ["pro", "principal"] })
+        json!({ "reason": "window", "minutes": 300, "pct": 97.0,
+                "until": end - 600_000 + RESUME_MARGIN_MS, "accounts": ["pro", "principal"] })
     );
     // Principal's window over, the ticket goes (on Principal).
     h.pause_tick_after(3_600_000 - 600_000 + RESUME_MARGIN_MS + 1_000);
@@ -6337,6 +6338,58 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
     .await;
     assert_eq!(account_of_ticket(&h, &b.id).await, "principal");
     assert_eq!(h.pauses().last(), Some(&Value::Null));
+}
+
+#[tokio::test]
+async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
+    let h = harness("tk-accounts-engines");
+    let (p, _) = h.project(false).await;
+    // An account of Codex beside Principal (Codex's adapter is not written yet: its agents run on
+    // the fake CLI as Claude Code's do, which is all the board needs here).
+    let work = Account {
+        id: "work".into(),
+        name: "Work".into(),
+        engine: EngineId::Codex,
+        config_dir: h.dir.join("codex-work").to_string_lossy().into(),
+        ..Default::default()
+    };
+    h.set_settings(|s| {
+        s.accounts.push(work.clone());
+        s.quota_pause = 95;
+    });
+    let end = now_ms() + 3_600_000;
+    let full = Some(RateWindow {
+        pct: 100.0,
+        resets_at: Some(end),
+    });
+    h.record_usage("principal", Reading::claude((full, None)))
+        .await;
+    // The ticket of Claude Code waits for Principal…
+    let a = h
+        .core
+        .ticket_create(&p.id, draft("Sur Claude [ok]", &[], 5))
+        .await
+        .unwrap();
+    // … while the one of Codex starts on Codex's account: never on Principal, whose quota is
+    // spent, nor the other way round.
+    let codex = TicketDraft {
+        engine: Some(Some(EngineId::Codex)),
+        ..draft("Sur Codex [ok]", &[], 5)
+    };
+    let b = h.core.ticket_create(&p.id, codex).await.unwrap();
+    h.wait_ticket(&b.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(account_of_ticket(&h, &b.id).await, "work");
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&a.id).column, Column::Todo);
+    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_some());
+    assert!(h.core.project_hold(&p.id, EngineId::Codex).is_none());
+    // The status bar has the current account of each harness.
+    let current = h.core.usage.lock().current.clone();
+    assert_eq!(
+        current.get(&EngineId::Codex).map(String::as_str),
+        Some("work")
+    );
 }
 
 #[tokio::test]
@@ -6356,13 +6409,12 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
     // is held back by its window.
     h.core.update_usage(|u| {
         let pro = u.account_mut("pro");
-        pro.five_hour = None;
-        pro.seven_day = None;
+        pro.meters.clear();
     });
     let end = now_ms() + 3_600_000;
     h.record_usage(
         "principal",
-        Reading::Windows((
+        Reading::claude((
             Some(RateWindow {
                 pct: 100.0,
                 resets_at: Some(end),
@@ -6388,7 +6440,7 @@ async fn an_agent_waiting_on_one_account_and_a_window_over_on_the_other_pause_th
     // Principal back under the threshold: a ticket goes there.
     h.record_usage(
         "principal",
-        Reading::Windows((
+        Reading::claude((
             Some(RateWindow {
                 pct: 20.0,
                 resets_at: Some(end),
@@ -6412,7 +6464,7 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
     let end = now_ms() + 3_600_000;
     h.record_usage(
         "pro",
-        Reading::Windows((
+        Reading::claude((
             Some(RateWindow {
                 pct: 100.0,
                 resets_at: Some(end),
@@ -6444,7 +6496,7 @@ async fn a_project_that_prefers_an_account_waits_for_it_alone() {
     assert_eq!(told["pause"], Value::Null);
     assert_eq!(
         told["projects"],
-        json!({ p.id.clone(): { "reason": "fiveHour", "pct": 100.0,
+        json!({ p.id.clone(): { "reason": "window", "minutes": 300, "pct": 100.0,
                                 "until": end + RESUME_MARGIN_MS, "accounts": ["pro"] } })
     );
     // Any account again: it starts, on Principal.
@@ -6490,7 +6542,7 @@ async fn used_for_an_hour(h: &Harness, account: &str, pct: f64) {
         pct,
         resets_at: Some(now_ms() + 3_600_000),
     };
-    h.record_usage(account, Reading::Windows((Some(window), None)))
+    h.record_usage(account, Reading::claude((Some(window), None)))
         .await;
 }
 

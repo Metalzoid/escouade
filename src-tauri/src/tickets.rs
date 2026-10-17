@@ -6,7 +6,7 @@ use crate::accounts;
 use crate::agent::NotifyKind;
 use crate::board::{self, TurnEnd};
 use crate::core::{not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core};
-use crate::engine::Process;
+use crate::engine::{self, Process};
 use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
@@ -18,7 +18,7 @@ use crate::ticketfiles;
 use crate::ticketimages;
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::Ordering;
@@ -814,10 +814,12 @@ impl<R: Runtime> Core<R> {
         effort: Option<String>,
     ) -> Result<()> {
         // A project no account serves starts nothing, nor later on its own once one does.
-        let project = self.ticket(id)?.project_id;
-        if !accounts::serves_any(&self.settings.read(), Some(&project)) {
+        let ticket = self.ticket(id)?;
+        let project = ticket.project_id.clone();
+        let engine = self.ticket_engine(&ticket);
+        if !accounts::serves_any(&self.settings.read(), engine, Some(&project)) {
             let name = self.project(&project).map_or(project, |p| p.name);
-            return Err(accounts::no_account(&name));
+            return Err(accounts::no_account(&name, engine));
         }
         self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
@@ -1002,11 +1004,21 @@ impl<R: Runtime> Core<R> {
         now_ms()
     }
 
+    /// The harness a ticket's agent runs on: the ticket's, else its project's default one.
+    pub(crate) fn ticket_engine(&self, ticket: &Ticket) -> EngineId {
+        ticket.engine.unwrap_or_else(|| {
+            self.project(&ticket.project_id)
+                .map_or_else(|_| engine::default().id(), |p| p.engine())
+        })
+    }
+
     /// Why no ticket of a project that goes to any account starts now, if none does
     /// (`board::autopilot_pause`): the quota windows last read, the pause after a usage limit,
-    /// what "Reprendre maintenant" lifted, for every active account.
+    /// what "Reprendre maintenant" lifted, for every active account of the default harness. Each
+    /// harness pauses on its own (`project_hold`); one without a quota never does.
     pub(crate) fn autopilot_pause(&self) -> Option<AutopilotPause> {
-        let settings = accounts::for_project(&self.settings.read(), None);
+        let engine = engine::default().id();
+        let settings = accounts::for_project(&self.settings.read(), engine, None);
         self.pause_for(&settings, None)
     }
 
@@ -1029,15 +1041,17 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Why the tickets of the projects that prefer an account, or that have accounts reserved to
-    /// them, do not start, by project: each waits for its own accounts.
+    /// them, or another default harness, do not start, by project: each waits for the accounts of
+    /// its own harness.
     pub(crate) fn project_pauses(&self) -> BTreeMap<String, AutopilotPause> {
         let all = self.settings.read().clone();
-        let any = accounts::candidates(&accounts::for_project(&all, None), None);
+        let default = engine::default().id();
+        let any = accounts::candidates(&accounts::for_project(&all, default, None), None);
         let projects = self.projects.read().clone();
         projects
             .iter()
             .filter_map(|p| {
-                let settings = accounts::for_project(&all, Some(&p.id));
+                let settings = accounts::for_project(&all, p.engine(), Some(&p.id));
                 let preferred = accounts::preferred(&settings, &p.account);
                 if preferred.is_none() && accounts::candidates(&settings, None) == any {
                     return None;
@@ -1047,17 +1061,18 @@ impl<R: Runtime> Core<R> {
             .collect()
     }
 
-    /// The account a new agent of the project goes to (a ticket's or not): the one the project
-    /// prefers when it is active, else the first usable one, in the order of the accounts.
-    /// Refused when no active account serves the project (all reserved to others, Principal too).
-    pub(crate) fn account_for_new(&self, project_id: &str) -> Result<String> {
+    /// The account a new agent of the project on `engine` goes to (a ticket's or not): the one
+    /// the project prefers when it is an active one of that harness, else the first usable one of
+    /// it, in the order of the accounts: never one of another harness. Refused when no active
+    /// account of the harness serves the project (all reserved to others, Principal too).
+    pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
         let all = self.settings.read().clone();
         let project = self.project(project_id).ok();
-        if !accounts::serves_any(&all, Some(project_id)) {
+        if !accounts::serves_any(&all, engine, Some(project_id)) {
             let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
-            return Err(accounts::no_account(&name));
+            return Err(accounts::no_account(&name, engine));
         }
-        let settings = accounts::for_project(&all, Some(project_id));
+        let settings = accounts::for_project(&all, engine, Some(project_id));
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
         Ok(self.pick_account(&settings, preferred.as_deref()))
@@ -1088,17 +1103,19 @@ impl<R: Runtime> Core<R> {
             .unwrap_or(id)
     }
 
-    /// No ticket of the project may start now: every account it may go to waits for its quota
-    /// (an agent waiting for its reset, a window over the threshold, a usage limit with no resume).
-    fn held(&self, project_id: &str) -> bool {
-        self.project_hold(project_id).is_some()
+    /// No ticket of the project on `engine` may start now: every account of that harness it may go
+    /// to waits for its quota (an agent waiting for its reset, a window over the threshold, a usage
+    /// limit with no resume).
+    fn held(&self, project_id: &str, engine: EngineId) -> bool {
+        self.project_hold(project_id, engine).is_some()
     }
 
-    /// What holds back the tickets, and the new agents, of the project, if anything does
-    /// (`board::project_hold`): every account it may go to is held, and then until the first of
-    /// them is free again. The tools that act refuse by it.
-    pub(crate) fn project_hold(&self, project_id: &str) -> Option<board::Held> {
-        let settings = accounts::for_project(&self.settings.read(), Some(project_id));
+    /// What holds back the tickets, and the new agents, of the project on `engine`, if anything
+    /// does (`board::project_hold`): every account of that harness it may go to is held, and then
+    /// until the first of them is free again. Another harness is not held by it, and one without a
+    /// quota is never held but by a usage limit. The tools that act refuse by it.
+    pub(crate) fn project_hold(&self, project_id: &str, engine: EngineId) -> Option<board::Held> {
+        let settings = accounts::for_project(&self.settings.read(), engine, Some(project_id));
         let preferred = self
             .project(project_id)
             .ok()
@@ -1196,7 +1213,7 @@ impl<R: Runtime> Core<R> {
             let settings = self.settings.read().clone();
             // No account serves the project (all reserved to others): none starts, as the window
             // is told below; saving the accounts looks again.
-            let account = self.account_for_new(&p.id).ok();
+            let account = self.account_for_new(&p.id, p.engine()).ok();
             if let Some(id) = &account {
                 let account = accounts::get(&settings, id);
                 if accounts::program(&account, &settings).is_none() {
@@ -1210,15 +1227,23 @@ impl<R: Runtime> Core<R> {
             // Held (`held`), none starts, even launched by hand. Looked at again for each project
             // and each start: one started in this pass, or already at work, may meet the usage
             // limit while the pass goes on (each start takes seconds).
-            let held = self.held(&p.id);
-            let ids = board::to_start(&self.tickets.read(), &p.id, &p.board, held);
+            // Each ticket by the accounts of its own harness.
+            let engine_of = |t: &Ticket| t.engine.unwrap_or_else(|| p.engine());
+            let ids = {
+                let tickets = self.tickets.read().clone();
+                let mut held: HashMap<EngineId, bool> = HashMap::new();
+                board::to_start(&tickets, &p.id, &p.board, |t| {
+                    let e = engine_of(t);
+                    *held.entry(e).or_insert_with(|| self.held(&p.id, e))
+                })
+            };
             // A board that told why nothing starts is looked at again even with nothing to start:
             // its issue goes once its target is there.
             if ids.is_empty() && !self.board_issues.lock().contains_key(&p.id) {
                 continue;
             }
             if account.is_none() {
-                let issue = accounts::no_account_issue();
+                let issue = accounts::no_account_issue(p.engine());
                 if self.set_board_issue(&p.id, Some(issue.clone())) {
                     log::info!("board of {}: {issue}", p.name);
                 }
@@ -1242,8 +1267,11 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             for id in ids {
-                if self.held(&p.id) {
-                    break;
+                let engine = self
+                    .ticket(&id)
+                    .map_or_else(|_| p.engine(), |t| engine_of(&t));
+                if self.held(&p.id, engine) {
+                    continue;
                 }
                 self.start_ticket(&p, &id).await;
             }
@@ -1633,7 +1661,7 @@ impl<R: Runtime> Core<R> {
         if !settings.switch_on_limit || ticket.blocked.is_some() {
             return None;
         }
-        let (project, current) = {
+        let (project, current, engine) = {
             let rt = self.agent(agent_id).ok()?;
             let rt = rt.lock();
             if rt.meta.archived {
@@ -1642,13 +1670,15 @@ impl<R: Runtime> Core<R> {
             (
                 rt.meta.project_id.clone(),
                 accounts::get(&settings, &rt.meta.account).id,
+                rt.meta.engine,
             )
         };
-        // No account serves the project any more: none to go on on.
-        if !accounts::serves_any(&settings, Some(&project)) {
+        // No account of its harness serves the project any more: none to go on on. Another
+        // harness's would be a handover, not a switch (ESC-88).
+        if !accounts::serves_any(&settings, engine, Some(&project)) {
             return None;
         }
-        let settings = accounts::for_project(&settings, Some(&project));
+        let settings = accounts::for_project(&settings, engine, Some(&project));
         let preferred = self
             .project(&project)
             .ok()

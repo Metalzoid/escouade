@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
-import type { Account, AccountShare, AgentShare, StatsView, TicketShare } from '../lib/types';
-import { fakeBackend, project, resetApp } from '../test/ipc';
+import type { Account, AccountShare, AgentShare, EngineDecl, StatsView, TicketShare } from '../lib/types';
+import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp } from '../test/ipc';
 import Stats from './Stats.svelte';
 
 const view = (range: string): StatsView => ({
@@ -24,11 +24,12 @@ const view = (range: string): StatsView => ({
     { key: 'gone', tokens: 14_500, cost: 0.4 },
   ],
   byModel: [{ key: 'claude-opus-5-5', tokens: 74_500, cost: 2 }],
-  byEngine: [{ key: 'claude', tokens: 74_500, cost: 2 }],
+  byEngine: [{ engine: 'claude', tokens: 74_500, cost: 2, turns: 4, agents: 1 }],
   byAgent: [],
   byTicket: [],
   byAccount: [],
   accounts: ['principal'],
+  engines: ['claude'],
 });
 
 const agentShare = (i: number, over: Partial<AgentShare> = {}): AgentShare => ({
@@ -314,7 +315,7 @@ describe('Stats by account', () => {
     ).toEqual(['Tous les comptes', 'Principal', 'Pro']);
     expect(select).toHaveValue('');
     await screen.findAllByText('74,5 k');
-    expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null });
+    expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null, engine: null });
   });
 
   it('asks for the account chosen with the period, and for every account again when asked to', async () => {
@@ -322,12 +323,12 @@ describe('Stats by account', () => {
     render(Stats);
     const select = await picker();
     await userEvent.selectOptions(select, 'Pro');
-    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'pro' }));
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'pro', engine: null }));
     // The period changes, the account stays.
     await userEvent.click(screen.getByRole('button', { name: 'Mois' }));
-    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: 'pro' }));
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: 'pro', engine: null }));
     await userEvent.selectOptions(select, 'Tous les comptes');
-    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: null }));
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'month', account: null, engine: null }));
   });
 
   it('shows the figures of the account chosen', async () => {
@@ -577,5 +578,107 @@ describe('Stats in English', () => {
     });
     render(Stats);
     expect(await screen.findByText(/Statistics unavailable: .*database locked/)).toBeInTheDocument();
+  });
+});
+
+describe('Stats by harness (ESC-30)', () => {
+  const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+  /** The bare harness whose cost is an estimate, as Codex's (from the tokens and OpenAI's prices). */
+  const ESTIMATED: EngineDecl = { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, cost: 'estimated' } };
+
+  const both = (a: { range: string; engine: string | null }): StatsView => ({
+    ...view(a.range),
+    ...(a.engine === 'codex' ? { tokens: 20_000, cost: 0.4, costAll: 0.4 } : {}),
+    byEngine: [
+      { engine: 'claude', tokens: 54_500, cost: 1.6, turns: 3, agents: 2 },
+      { engine: 'codex', tokens: 20_000, cost: 0.4, turns: 2, agents: 1 },
+    ],
+    engines: ['claude', 'codex'],
+    accounts: ['principal', 'work'],
+  });
+
+  const lines = (name: string) =>
+    within(screen.getByRole('table', { name }))
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) =>
+        within(r)
+          .getAllByRole('cell')
+          .map((c) => c.textContent?.replace(/\s/g, ' ')),
+      );
+
+  beforeEach(() => {
+    localStorage.clear();
+    resetApp({ projects: [project()] });
+    app.engines = [CLAUDE_ENGINE, ESTIMATED];
+    app.settings.accounts = [PRINCIPAL, WORK];
+  });
+
+  it('filters by harness, combined with the accounts of that harness', async () => {
+    const backend = fakeBackend({ stats: both });
+    render(Stats);
+    const engine = await screen.findByRole('combobox', { name: 'Harness' });
+    expect(
+      within(engine)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les harness', 'Claude Code', 'Harness nu']);
+    await userEvent.selectOptions(engine, 'Harness nu');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null, engine: 'codex' }));
+    // The accounts offered are the harness's.
+    const account = screen.getByRole('combobox', { name: 'Compte' });
+    expect(
+      within(account)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les comptes', 'Travail']);
+    await userEvent.selectOptions(account, 'Travail');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'work', engine: 'codex' }));
+  });
+
+  it('puts the harnesses side by side, the cost of one that only estimates it marked so', async () => {
+    fakeBackend({ stats: both });
+    render(Stats);
+    await screen.findByRole('table', { name: 'Par harness' });
+    expect(lines('Par harness')).toEqual([
+      ['Claude Code', '54,5 k', '1,60 $', '3', '2'],
+      ['Harness nu', '20,0 k', '≈ 0,40 $estimé', '2', '1'],
+    ]);
+    // With turns of a harness that estimates, the totals are estimates too.
+    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
+    expect(kpis.getByText('estimé')).toBeInTheDocument();
+    expect(kpis.getByText(/≈\s2,00 \$/)).toBeInTheDocument();
+  });
+
+  it('writes « — » for a harness that gives no cost', async () => {
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    fakeBackend({ stats: both });
+    render(Stats);
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Harness' }), 'Harness nu');
+    await waitFor(() => expect(lines('Par harness')[1]).toEqual(['Harness nu', '20,0 k', '—', '2', '1']));
+    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
+    await waitFor(() => expect(kpis.getAllByText('—').length).toBeGreaterThan(0));
+    expect(kpis.queryByText('estimé')).not.toBeInTheDocument();
+  });
+
+  it('offers no harness to choose, and no « Par harness », with Claude Code alone', async () => {
+    app.engines = [CLAUDE_ENGINE];
+    app.settings.accounts = [PRINCIPAL];
+    fakeBackend({ stats: (a: any) => view(a.range) });
+    render(Stats);
+    await screen.findAllByText('74,5 k');
+    expect(screen.queryByRole('combobox', { name: 'Harness' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Par harness' })).not.toBeInTheDocument();
+    expect(screen.queryByText('estimé')).not.toBeInTheDocument();
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    fakeBackend({ stats: both });
+    render(Stats);
+    expect(await screen.findByRole('combobox', { name: 'Harness' })).toHaveTextContent('All harnesses');
+    await screen.findByRole('table', { name: 'By harness' });
+    expect(screen.getAllByText('estimated').length).toBeGreaterThan(0);
   });
 });

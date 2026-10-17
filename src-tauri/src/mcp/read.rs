@@ -14,7 +14,8 @@ use crate::core::Core;
 use crate::git;
 use crate::model::{
     AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView, Project,
-    RateWindow, RemoteSource, Service, Ticket, MAX_PENDING_FIELD, MAX_PENDING_ITEMS,
+    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, FIVE_HOURS, MAX_PENDING_FIELD,
+    MAX_PENDING_ITEMS, WEEK,
 };
 use crate::plan::PlanState;
 use serde::Serialize;
@@ -653,8 +654,14 @@ struct Usage {
 #[serde(rename_all = "camelCase")]
 struct AccountUsage {
     name: String,
-    /// New agents go to it now.
+    /// Its harness.
+    engine: EngineId,
+    /// New agents of its harness go to it now.
     current: bool,
+    /// Its quota's meters as last read (`QuotaMeter`): windows by their length, the month's
+    /// credits; none for a harness without a quota.
+    meters: Vec<QuotaMeter>,
+    /// Claude Code's two windows, as before 1.8.
     five_hour: Option<RateWindow>,
     seven_day: Option<RateWindow>,
 }
@@ -662,11 +669,14 @@ struct AccountUsage {
 #[derive(Serialize)]
 struct Pause {
     reason: PauseReason,
+    /// The window's length, for a window.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minutes: Option<u32>,
     /// When the tickets start again (epoch milliseconds).
     until: i64,
 }
 
-/// `get_usage`: each Claude account's quota windows, and the autopilot's pause.
+/// `get_usage`: each account's quota, of every harness, and the autopilot's pause.
 pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
     let mut list = core.settings.read().accounts.clone();
     if list.is_empty() {
@@ -681,9 +691,11 @@ pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
         .map(|a| {
             let read = usage.account(&a.id);
             AccountUsage {
-                current: a.id == usage.current,
-                five_hour: read.and_then(|u| u.five_hour),
-                seven_day: read.and_then(|u| u.seven_day),
+                current: usage.current.get(&a.engine) == Some(&a.id),
+                meters: read.map(|u| u.meters.clone()).unwrap_or_default(),
+                five_hour: read.and_then(|u| u.window(FIVE_HOURS)),
+                seven_day: read.and_then(|u| u.window(WEEK)),
+                engine: a.engine,
                 name: a.name,
             }
         })
@@ -692,6 +704,7 @@ pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
         accounts: rows,
         autopilot_pause: core.autopilot_pause().map(|p| Pause {
             reason: p.reason,
+            minutes: p.minutes,
             until: p.until,
         }),
     })

@@ -5,7 +5,7 @@ use crate::agent::{AgentHandle, AgentRt, Effects};
 use crate::board::TurnEnd;
 use crate::engine::claude_args;
 use crate::engine::{ClaudeProcess, SpawnOpts};
-use crate::model::{AgentMeta, AgentStatus, RateWindow};
+use crate::model::{AgentMeta, AgentStatus};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -58,7 +58,7 @@ fn spawn_recording(
 }
 
 /// What a launch of the fake CLI saw: its turns' ends, the quota windows it told.
-type Rates = Arc<parking_lot::Mutex<Vec<(Option<RateWindow>, Option<RateWindow>)>>>;
+type Rates = Arc<parking_lot::Mutex<Vec<Vec<crate::model::QuotaMeter>>>>;
 
 /// Like `spawn_recording`, with `CLAUDE_CONFIG_DIR` set to `config_dir` when given (an account
 /// of its own), and the quota windows it tells noted in `rates`.
@@ -808,7 +808,10 @@ async fn an_accounts_fake_limit_stops_every_turn_at_the_limit_at_100_percent() {
     assert_eq!(*ends.lock(), vec![TurnEnd::Limited]);
     let told = rates.lock().clone();
     assert_eq!(told.len(), 1, "{told:?}");
-    assert_eq!(told[0].0.map(|w| w.pct), Some(100.0));
+    assert_eq!(
+        told[0].first().map(|w| (w.minutes, w.pct)),
+        Some((Some(300), 100.0))
+    );
 
     // The file gone, the account has quota again.
     std::fs::remove_file(config.join("fake-limit")).unwrap();
@@ -816,7 +819,7 @@ async fn an_accounts_fake_limit_stops_every_turn_at_the_limit_at_100_percent() {
     wait_ends(&ends, 2).await;
     assert!(matches!(ends.lock()[1], TurnEnd::Finished(_)));
     wait_rates(&rates, 2).await;
-    let pct = rates.lock()[1].0.map(|w| w.pct).unwrap();
+    let pct = rates.lock()[1].first().map(|w| w.pct).unwrap();
     assert!((pct - 12.0).abs() < 1e-9, "{pct}");
     let usage = proc
         .control(json!({ "subtype": "get_usage" }), Duration::from_secs(10))

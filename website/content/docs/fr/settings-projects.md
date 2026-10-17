@@ -15,7 +15,7 @@ L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en
 | « Couleur » | Une pastille parmi 14 (13 teintes et un ton neutre). La couleur repère le projet et teinte l’interface quand il est affiché. | La première couleur qu’aucun projet n’a prise, à la création |
 | « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif sous le seuil de pause, dans l’ordre des comptes) ou un des comptes actifs qui servent ce projet. | « Automatique » |
 
-Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’onglet [« Comptes Claude »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
+Les comptes sont décrits dans [les comptes](accounts) et réglés dans l’onglet [« Comptes »](settings-accounts). Un compte désactivé depuis qu’il a été choisi reste affiché avec « (inactif) » tant qu’il est choisi, et il est ignoré en attendant.
 
 ## Remote control
 

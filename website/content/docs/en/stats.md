@@ -61,6 +61,10 @@ A closed project’s figures are kept with the others. Add the project again in 
 
 With several accounts, the “By account” table puts the accounts side by side, from the most to the least expensive, with the columns “Account”, “Tokens”, “Cost”, “Turns” and “Agents”. A turn is one reply from Claude; “Agents” counts the distinct agents that ran on the account during the period. An account removed since stays listed as “Deleted account (pro)” (its id in parentheses).
 
+### By harness
+
+With accounts or turns of several harnesses, the “By harness” table puts the harnesses side by side, with the columns “Harness”, “Tokens”, “Cost”, “Turns” and “Agents”. A turn’s harness is the one that ran it, even if the agent has changed harness since. Each harness’s cost is written as it gives it: exact, estimated, or missing (see “Estimated cost” below).
+
 ### By agent
 
 The “By agent” table lists the period’s agents, from the most to the least expensive, with their project, their tokens and their cost. It also counts archived agents; a deleted agent keeps its row, as “Deleted agent”.
@@ -71,13 +75,19 @@ The “By ticket” table adds up what each ticket’s agents cost: “Ticket”
 
 The agent and ticket lists show 20 rows. “Show all” unfolds the rest, “Show less” folds it back, and “20 of 57” tells you where you are.
 
-## Filter by account
+## Filter by harness and by account
+
+With several harnesses (accounts of several, or turns recorded on several), a “Harness” menu shows at the top: “All harnesses”, then each one. Choosing a harness narrows the indicators, the chart, the lists and the prompts to it; the “By harness” table stays complete, with its row highlighted. The “Account” menu combines with it: it only offers the accounts of that harness, and the “By account” table only lists them.
 
 With several accounts (or turns recorded on several), an “Account” menu appears to the left of the period selector. It offers “All accounts”, each account, and the removed accounts the statistics still know about.
 
 Choosing an account narrows the indicators, the chart and the by-project, by-model, by-agent and by-ticket lists to it, as well as the comparison with the previous period. The “By account” table stays complete, with the chosen account’s row highlighted. The choice isn’t kept: the page always opens on “All accounts”.
 
 For the accounts themselves, see [Several Claude accounts](accounts).
+
+## Estimated cost
+
+Each harness says how it gives the cost of a turn. Claude Code gives it exactly. A harness that only gives its tokens has a cost Escouade works out from the public price of its models: it is marked “≈” and “estimated”, and a tooltip says so. A harness that gives no cost has “—” instead. As soon as an estimated harness counts in what is shown, the totals are marked “estimated” too.
 
 ## Where the figures come from
 

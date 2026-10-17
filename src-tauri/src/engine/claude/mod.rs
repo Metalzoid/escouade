@@ -83,6 +83,7 @@ pub fn caps() -> EngineCaps {
         mid_turn: MidTurn::Queued,
         slash_commands: true,
         quota: QuotaKind::Windows,
+        quota_windows: vec![crate::model::FIVE_HOURS, crate::model::WEEK],
         cost: CostKind::Exact,
         terminal_view: true,
         remote_control: true,
@@ -365,6 +366,12 @@ impl Engine for Claude {
 
     fn version_args(&self) -> &'static [&'static str] {
         &["--version"]
+    }
+
+    fn accounts(&self) -> super::registry::AccountStore {
+        super::registry::AccountStore::ConfigDir {
+            var: crate::accounts::CONFIG_DIR_VAR,
+        }
     }
 
     fn caps(&self) -> EngineCaps {

@@ -18,7 +18,7 @@ async function start(over: Partial<InitialState> = {}, handlers: Record<string, 
     agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }), agent({ id: 'b1', projectId: 'p2', name: 'landing' })],
     ui: { activeProject: 'p1', view: 'project', selectedAgent: {} },
     settings: SETTINGS,
-    usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' },
+    usage: { todayCost: 0, accounts: [], current: { claude: 'principal' } },
     git: {},
     shells: [],
     terminals: [],
@@ -445,7 +445,7 @@ describe('AppState start-up', () => {
       agents: [agent({ status: 'done', tokens: 100 })],
       ui: { activeProject: 'p1', view: 'project', selectedAgent: {} },
       settings: SETTINGS,
-      usage: { fiveHour: null, sevenDay: null, todayCost: 0, updatedAt: 0, accounts: [], current: 'principal' },
+      usage: { todayCost: 0, accounts: [], current: { claude: 'principal' } },
       git: {},
       shells: [],
       terminals: [],
@@ -1072,7 +1072,7 @@ describe('board', () => {
     const pause = { reason: 'limit' as const, pct: null, until: 5 };
     const { emit } = await start({ autopilotPause: pause });
     expect(app.autopilotPause).toEqual(pause);
-    const week = { reason: 'week' as const, pct: 96, until: 9 };
+    const week = { reason: 'window' as const, minutes: 10080, pct: 96, until: 9 };
     emit({ type: 'autopilotPause', pause: week });
     expect(app.autopilotPause).toEqual(week);
     emit({ type: 'autopilotPause', pause: null });
@@ -1084,7 +1084,7 @@ describe('board', () => {
   });
 
   it('knows why the projects that prefer an account wait for it, from the start and as the backend tells it', async () => {
-    const mine = { reason: 'fiveHour' as const, pct: 100, until: 7, accounts: ['pro'] };
+    const mine = { reason: 'window' as const, minutes: 300, pct: 100, until: 7, accounts: ['pro'] };
     const { emit } = await start({ projectPauses: { p1: mine } });
     expect(app.projectPauses).toEqual({ p1: mine });
     // Told with the other pause, each time: what it no longer names is over.

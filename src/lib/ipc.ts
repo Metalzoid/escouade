@@ -131,6 +131,8 @@ export const api = {
   accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
   /** The accounts in the order of `ids`, as they then are. */
   accountReorder: (ids: string[]) => invoke<Account[]>('account_reorder', { ids }),
+  /** « Ordre des harness » set; the order as it then is. */
+  engineOrderSet: (order: EngineId[]) => invoke<EngineId[]>('engine_order_set', { order }),
   /** The account removed, its folder left on the disk; refused while an agent not archived runs on it. */
   accountRemove: (id: string) => invoke<Account[]>('account_remove', { id }),
   accountStatus: (id: string) => invoke<AccountStatus>('account_status', { id }),
@@ -287,7 +289,8 @@ export const api = {
    */
   setRemoteControl: (id: string, enabled: boolean) => invoke<boolean>('set_remote_control', { id, enabled }),
   /** The statistics of a period: of every account (null) or of one. */
-  stats: (range: string, account: string | null = null) => invoke<StatsView>('stats', { range, account }),
+  stats: (range: string, account: string | null = null, engine: string | null = null) =>
+    invoke<StatsView>('stats', { range, account, engine }),
   refreshUsage: () => invoke<void>('refresh_usage'),
   gitDiscard: (projectId: string, agentId: string | null, path: string) => invoke<void>('git_discard', { projectId, agentId, path }),
   /** What a direct commit of the agent's changes takes (null: the project's own checkout, its agents' worktrees apart). */

@@ -616,7 +616,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [ ] Les fichiers de plan (superpowers) se lisent sur le disque comme aujourd'hui, quel que soit le moteur. Faire un essai réel avec superpowers sous Codex, sous Copilot (qui lit `.claude/skills`) et sous Cursor.
 
 ### Comptes et quotas
-- [ ] « Comptes Claude » devient « Comptes », groupés par moteur.
+- [x] « Comptes Claude » devient « Comptes », groupés par moteur (ESC-30 : un groupe par harness dans « Ordre des harness », un Principal par harness, `Engine::accounts` dit ce qui tient ses comptes à part).
 - [ ] **Comptes Codex** : un compte est un `CODEX_HOME`.
   - Principal est `~/.codex`, lancé sans toucher à la variable, comme pour Claude.
   - Les autres sont dans `~/.escouade/codex/<nom>`. « Ajouter un compte » ouvre un terminal intégré avec `codex login`.
@@ -643,13 +643,13 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Si le point 0 trouve une source : une barre « usage du mois », comme pour Copilot.
   - Sinon : pas de barre, un lien vers le tableau de bord dans le panneau des comptes, et pas de pause au quota pour le pilote auto, comme pour OpenCode.
   - Un tour arrêté par la limite devient une carte qui le dit.
-- [ ] **Comptes réservés aux projets, pour tout moteur** : chaque compte, de tout moteur, peut être « Réservé aux projets » cochés, comme les comptes Claude aujourd'hui (Principal compris), avec les mêmes règles. Les moteurs ont un ordre, réglable : il donne les moteurs de secours de chaque projet (voir la section suivante).
-- [ ] **Bascule automatique** : entre comptes du même moteur seulement (passer à un autre moteur : voir la section suivante). Les nouveaux agents et tickets partent sur le compte suivant sous le seuil. Reprendre un agent Codex, Copilot ou Cursor sur un autre compte ne se fait que si l'essai du point 0 l'a permis. Pour Codex, cet essai reste à faire (pas de second compte le 2026-10-16) : d'ici là, la bascule ne vaut que pour les nouveaux agents et tickets Codex, et un agent Codex arrêté par la limite attend la remise à zéro ou continue sur un autre moteur.
+- [x] **Comptes réservés aux projets, pour tout moteur** (ESC-30 ; `accounts::fallback_engines` donne la suite des moteurs à ESC-88) : chaque compte, de tout moteur, peut être « Réservé aux projets » cochés, comme les comptes Claude aujourd'hui (Principal compris), avec les mêmes règles. Les moteurs ont un ordre, réglable : il donne les moteurs de secours de chaque projet (voir la section suivante).
+- [x] **Bascule automatique** (ESC-30, le choix des comptes se fait dans le moteur de l'agent ; ce qui est propre à Codex vient avec ESC-38) : entre comptes du même moteur seulement (passer à un autre moteur : voir la section suivante). Les nouveaux agents et tickets partent sur le compte suivant sous le seuil. Reprendre un agent Codex, Copilot ou Cursor sur un autre compte ne se fait que si l'essai du point 0 l'a permis. Pour Codex, cet essai reste à faire (pas de second compte le 2026-10-16) : d'ici là, la bascule ne vaut que pour les nouveaux agents et tickets Codex, et un agent Codex arrêté par la limite attend la remise à zéro ou continue sur un autre moteur.
 - [ ] **OpenCode** : il n'a pas de quota d'abonnement (il passe par les API des fournisseurs).
   - Un seul compte en 1.8 : sa config par défaut.
   - Pas de barre de quota : la barre d'état montre seulement le coût du jour.
   - Pas de pause au quota pour le pilote auto (voir « Décisions »).
-- [ ] **Barre d'état** : le groupe des quotas montre les comptes du moteur de l'agent affiché (sinon, du moteur par défaut du projet). Le panneau des comptes les liste tous, groupés par moteur.
+- [x] **Barre d'état** (ESC-30 ; le modèle de quota commun, `QuotaMeter` : fenêtres libellées par leur durée, crédits du mois, ou rien) : le groupe des quotas montre les comptes du moteur de l'agent affiché (sinon, du moteur par défaut du projet). Le panneau des comptes les liste tous, groupés par moteur.
 
 ### Continuer sur un autre moteur quand le quota est épuisé (demandé le 2026-10-14, ESC-88)
 But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un agent arrêté par la limite attend la remise à zéro, ou reprend sur un autre compte Claude (docs/SPEC.md, « Reprise sur un autre compte »). Quand tous les comptes du moteur d'un agent sont épuisés, il doit pouvoir continuer sur un autre moteur.
@@ -682,8 +682,8 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
 - [ ] **Fenêtre de contexte** : `modelContextWindow` chez Codex, `session.usage_info` chez Copilot, la limite du modèle chez OpenCode ; chez Cursor, à relever au point 0.
 - [ ] **Stats** :
   - [x] Une colonne `engine` dans la table des tours (les tours d'avant valent `claude`), et `by_engine` dans la vue des stats (ESC-27).
-  - Un filtre « Tous les moteurs / Claude Code / Codex / Copilot / Cursor / OpenCode », qui se combine avec celui des comptes.
-  - Une vue « Par moteur ».
+  - [x] Un filtre « Tous les moteurs / Claude Code / Codex / Copilot / Cursor / OpenCode », qui se combine avec celui des comptes (ESC-30 : « Tous les harness », colonne `engine` des prompts).
+  - [x] Une vue « Par moteur » (ESC-30 : « Par harness », tours et agents ; un coût estimé marqué « ≈ … estimé », « — » sans coût).
 
 ### Serveur MCP d'Escouade
 - [ ] **Agents d'Escouade** (l'interrupteur « Claude et les agents peuvent piloter Escouade », depuis ESC-91) : même jeton par lancement et même oubli qu'aujourd'hui.

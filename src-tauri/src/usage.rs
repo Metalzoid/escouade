@@ -6,8 +6,8 @@ use crate::accounts;
 use crate::board;
 use crate::i18n::Lang;
 use crate::model::{
-    Account, AccountUsage, Hold, RateWindow, SavedPause, SavedWindows, Settings, SignInProblem,
-    UsageSnapshot,
+    claude_meters, merge_meters, Account, AccountUsage, Hold, QuotaMeter, RateWindow, SavedPause,
+    SavedWindows, Settings, SignInProblem, UsageSnapshot,
 };
 use anyhow::Result;
 use serde_json::Value;
@@ -16,7 +16,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use unicode_normalization::UnicodeNormalization;
 
-pub type Windows = (Option<RateWindow>, Option<RateWindow>);
+/// An account's quota meters as a reading finds them (`QuotaMeter`): Claude Code's 5-hour and
+/// weekly windows, those it told.
+pub type Windows = Vec<QuotaMeter>;
 
 /// Parses `rate_limits` from a `get_usage` control response, or the body of the OAuth usage
 /// endpoint (same shape: `{five_hour: {utilization 0-100, resets_at ISO}, seven_day: …}`).
@@ -31,7 +33,7 @@ pub fn parse_windows(v: &Value) -> Windows {
                 .map(|d| d.timestamp_millis()),
         })
     };
-    (parse("five_hour"), parse("seven_day"))
+    claude_meters(parse("five_hour"), parse("seven_day"))
 }
 
 /// The app's own requests (quotas, ticket systems): through the proxy, trusting the certificates
@@ -336,7 +338,7 @@ pub fn keychain_service(config_dir_env: Option<&str>) -> String {
 }
 
 /// What a reading of an account's quota found.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Reading {
     /// Its windows (one not told keeps its last reading).
     Windows(Windows),
@@ -344,6 +346,14 @@ pub enum Reading {
     NotSignedIn,
     /// Its sign-in is out of date.
     Expired,
+}
+
+#[cfg(test)]
+impl Reading {
+    /// Claude Code's 5-hour and weekly windows, those read.
+    pub fn claude((five_hour, seven_day): (Option<RateWindow>, Option<RateWindow>)) -> Self {
+        Reading::Windows(claude_meters(five_hour, seven_day))
+    }
 }
 
 /// The account's quota from the endpoint at `api`, with its sign-in: Err when it could not be
@@ -358,6 +368,23 @@ pub async fn read_oauth(settings: &Settings, api: &str, sign_in: &SignIn) -> Res
             }
         },
     )
+}
+
+/// A window of the quota as a sentence says it, by its length in `lang`: « de 5 h »,
+/// « hebdomadaire », « de 30 jours » (« la fenêtre … est utilisée à 95 % »).
+pub fn window_name(lang: Lang, minutes: u32) -> String {
+    const DAY: u32 = 24 * 60;
+    match minutes {
+        crate::model::WEEK => tr_in!(lang, "hebdomadaire", "weekly"),
+        m if m < DAY || m % DAY != 0 => {
+            let hours = (f64::from(m) / 60.0).round();
+            tr_in!(lang, "de {hours} h", "{hours}-hour")
+        }
+        m => {
+            let days = m / DAY;
+            tr_in!(lang, "de {days} jours", "{days}-day")
+        }
+    }
 }
 
 /// What `AccountUsage::reason` says of a problem, in `lang`.
@@ -405,9 +432,8 @@ impl UsageSnapshot {
     pub fn record(&mut self, id: &str, reading: Reading, now: i64) {
         let a = self.account_mut(id);
         match reading {
-            Reading::Windows((five, week)) => {
-                a.five_hour = five.or(a.five_hour);
-                a.seven_day = week.or(a.seven_day);
+            Reading::Windows(meters) => {
+                a.meters = merge_meters(&a.meters, &meters);
                 a.updated_at = now;
                 // Read: signed in.
                 a.problem = None;
@@ -419,19 +445,23 @@ impl UsageSnapshot {
     }
 
     /// The accounts as the settings list them (in their order; one new without any reading, one
-    /// removed gone), each told in the interface's language, the current one chosen and its
-    /// windows put first (`five_hour`, `seven_day`: what the status bar and the autopilot read).
+    /// removed gone), each told in the interface's language, and the current one of each harness
+    /// chosen (what the status bar shows for it).
     pub fn settle(&mut self, settings: &Settings, now: i64) {
         let mut before = std::mem::take(&mut self.accounts);
         self.accounts = settings
             .accounts
             .iter()
-            .map(|a| match before.iter().position(|u| u.id == a.id) {
-                Some(at) => before.swap_remove(at),
-                None => AccountUsage {
-                    id: a.id.clone(),
-                    ..Default::default()
-                },
+            .map(|a| {
+                let mut u = match before.iter().position(|u| u.id == a.id) {
+                    Some(at) => before.swap_remove(at),
+                    None => AccountUsage {
+                        id: a.id.clone(),
+                        ..Default::default()
+                    },
+                };
+                u.engine = a.engine;
+                u
             })
             .collect();
         let lang = crate::i18n::ui();
@@ -441,20 +471,24 @@ impl UsageSnapshot {
             a.reason = a.problem.map(|p| reason(p, lang));
         }
         let threshold = board::quota_threshold(settings.quota_pause);
-        // The accounts reserved to some projects are not where any new agent goes; when each one
-        // is (Principal too), the first usable active one all the same.
-        let open = accounts::for_project(settings, None);
-        let settings = if accounts::serves_any(settings, None) {
-            &open
-        } else {
-            settings
-        };
-        self.current = accounts::pick(settings, &self.accounts, threshold, None, now);
-        if let Some(current) = self.account(&self.current).cloned() {
-            self.five_hour = current.five_hour;
-            self.seven_day = current.seven_day;
-            self.updated_at = current.updated_at;
-        }
+        let engines: std::collections::BTreeSet<_> =
+            settings.accounts.iter().map(|a| a.engine).collect();
+        self.current = engines
+            .into_iter()
+            .map(|engine| {
+                // The accounts reserved to some projects are not where any new agent goes; when
+                // each one of the harness is (Principal too), the first usable active one all the
+                // same.
+                let open = accounts::for_project(settings, engine, None);
+                let settings = if accounts::serves_any(settings, engine, None) {
+                    open
+                } else {
+                    accounts::of_engine(settings, engine)
+                };
+                let id = accounts::pick(&settings, &self.accounts, threshold, None, now);
+                (engine, id)
+            })
+            .collect();
     }
 
     /// The windows to keep across a restart, with what else holds the autopilot back: Principal's
@@ -463,31 +497,31 @@ impl UsageSnapshot {
         // Of an account gone from the settings, nothing is kept.
         hold.accounts
             .retain(|id, _| self.accounts.iter().any(|a| a.id == *id));
-        let windows = |a: &AccountUsage| SavedWindows {
-            five_hour: a.five_hour,
-            seven_day: a.seven_day,
-        };
-        let principal = self.account(accounts::PRINCIPAL).map(windows);
+        let principal = self
+            .account(accounts::PRINCIPAL)
+            .map(|a| SavedWindows::of(&a.meters))
+            .unwrap_or_default();
         SavedPause {
-            five_hour: principal.and_then(|w| w.five_hour),
-            seven_day: principal.and_then(|w| w.seven_day),
+            five_hour: principal.five_hour,
+            seven_day: principal.seven_day,
+            other: principal.other,
             hold,
             accounts: self
                 .accounts
                 .iter()
                 .filter(|a| a.id != accounts::PRINCIPAL)
-                .filter(|a| a.five_hour.is_some() || a.seven_day.is_some())
-                .map(|a| (a.id.clone(), windows(a)))
+                .map(|a| (a.id.clone(), SavedWindows::of(&a.meters)))
+                .filter(|(_, w)| !w.is_empty())
                 .collect(),
         }
     }
 
     /// The quotas as the last run left them (`saved`), on the accounts of the settings, keeping
-    /// the windows `keep` keeps (those still going on).
+    /// the meters `keep` keeps (those still going on).
     pub fn restored(
         saved: &SavedPause,
         settings: &Settings,
-        keep: impl Fn(Option<RateWindow>) -> Option<RateWindow>,
+        keep: impl Fn(QuotaMeter) -> Option<QuotaMeter>,
         now: i64,
     ) -> Self {
         let mut usage = Self::default();
@@ -496,13 +530,13 @@ impl UsageSnapshot {
                 SavedWindows {
                     five_hour: saved.five_hour,
                     seven_day: saved.seven_day,
+                    other: saved.other.clone(),
                 }
             } else {
-                saved.accounts.get(&a.id).copied().unwrap_or_default()
+                saved.accounts.get(&a.id).cloned().unwrap_or_default()
             };
             let entry = usage.account_mut(&a.id);
-            entry.five_hour = keep(w.five_hour);
-            entry.seven_day = keep(w.seven_day);
+            entry.meters = w.meters().into_iter().filter_map(&keep).collect();
         }
         usage.settle(settings, now);
         usage
@@ -560,11 +594,13 @@ mod tests {
             "seven_day": {"utilization": 30, "resets_at": null},
             "seven_day_opus": null
         });
-        let (five, week) = parse_windows(&v);
-        let five = five.unwrap();
-        assert_eq!(five.pct, 62.0);
-        assert!(five.resets_at.unwrap() > 1_790_000_000_000);
-        assert_eq!(week.unwrap().resets_at, None);
+        let meters = parse_windows(&v);
+        // Each window by its length, the shortest first.
+        let lengths: Vec<_> = meters.iter().map(|m| m.minutes).collect();
+        assert_eq!(lengths, [Some(300), Some(10_080)]);
+        assert_eq!(meters[0].pct, 62.0);
+        assert!(meters[0].resets_at.unwrap() > 1_790_000_000_000);
+        assert_eq!(meters[1].resets_at, None);
     }
 
     #[test]
@@ -845,9 +881,9 @@ mod tests {
         );
         let api = format!("{}/api/oauth/usage", server.url);
         let settings = Settings::default();
-        let (five, week) = fetch_oauth(&settings, &api, "tok-pro").await.unwrap();
-        assert_eq!(five.map(|w| w.pct), Some(40.0));
-        assert_eq!(week.map(|w| w.pct), Some(7.0));
+        let meters = fetch_oauth(&settings, &api, "tok-pro").await.unwrap();
+        let pct: Vec<_> = meters.iter().map(|w| w.pct).collect();
+        assert_eq!(pct, [40.0, 7.0]);
         let req = &server.requests()[0];
         assert_eq!(
             req.headers.get("authorization").map(String::as_str),
@@ -871,7 +907,7 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            matches!(got, Reading::Windows((Some(_), Some(_)))),
+            matches!(&got, Reading::Windows(m) if m.len() == 2),
             "{got:?}"
         );
         assert_eq!(
@@ -934,7 +970,7 @@ mod tests {
         s.accounts[0].active = false;
         let mut u = UsageSnapshot::default();
         u.settle(&s, now_ms());
-        assert_eq!(u.current, "pro");
+        assert_eq!(u.claude_current(), "pro");
     }
 
     #[test]
@@ -946,21 +982,24 @@ mod tests {
         u.settle(&s, now);
         let ids: Vec<&str> = u.accounts.iter().map(|a| a.id.as_str()).collect();
         assert_eq!(ids, ["principal", "pro"]);
-        assert_eq!(u.current, "principal");
+        assert_eq!(u.claude_current(), "principal");
         // Not read yet: taken as signed in.
         assert!(u.accounts.iter().all(|a| a.connected && a.reason.is_none()));
-        u.record("pro", Reading::Windows((window(40.0, hour), None)), now);
+        u.record("pro", Reading::claude((window(40.0, hour), None)), now);
         u.settle(&s, now);
-        assert_eq!(u.account("pro").unwrap().five_hour, window(40.0, hour));
+        assert_eq!(u.account("pro").unwrap().five_hour(), window(40.0, hour));
         assert_eq!(u.account("pro").unwrap().updated_at, now);
-        assert_eq!(u.account("principal").unwrap().five_hour, None);
+        assert_eq!(u.account("principal").unwrap().five_hour(), None);
         // Principal is current: its windows first, none read.
-        assert_eq!((u.five_hour, u.seven_day, u.updated_at), (None, None, 0));
+        assert_eq!(
+            (u.five_hour(), u.seven_day(), u.updated_at()),
+            (None, None, 0)
+        );
         // A window not told keeps its last reading.
-        u.record("pro", Reading::Windows((None, window(7.0, hour))), now + 1);
+        u.record("pro", Reading::claude((None, window(7.0, hour))), now + 1);
         let pro = u.account("pro").unwrap();
         assert_eq!(
-            (pro.five_hour, pro.seven_day, pro.updated_at),
+            (pro.five_hour(), pro.seven_day(), pro.updated_at),
             (window(40.0, hour), window(7.0, hour), now + 1)
         );
     }
@@ -974,32 +1013,32 @@ mod tests {
         let mut u = UsageSnapshot::default();
         u.record(
             "principal",
-            Reading::Windows((window(95.0, hour), None)),
+            Reading::claude((window(95.0, hour), None)),
             now,
         );
-        u.record("pro", Reading::Windows((window(30.0, hour), None)), now);
+        u.record("pro", Reading::claude((window(30.0, hour), None)), now);
         u.settle(&s, now);
-        assert_eq!(u.current, "pro");
-        assert_eq!(u.five_hour, window(30.0, hour));
-        assert_eq!(u.updated_at, now);
+        assert_eq!(u.claude_current(), "pro");
+        assert_eq!(u.five_hour(), window(30.0, hour));
+        assert_eq!(u.updated_at(), now);
         // Every one over it: the first active one.
-        u.record("pro", Reading::Windows((None, window(92.0, hour))), now);
+        u.record("pro", Reading::claude((None, window(92.0, hour))), now);
         u.settle(&s, now);
-        assert_eq!(u.current, "principal");
-        assert_eq!(u.five_hour, window(95.0, hour));
+        assert_eq!(u.claude_current(), "principal");
+        assert_eq!(u.five_hour(), window(95.0, hour));
         // An inactive one is passed over.
         s.accounts[0].active = false;
         u.settle(&s, now);
-        assert_eq!(u.current, "pro");
+        assert_eq!(u.claude_current(), "pro");
         // A window whose end has passed holds nothing back.
         s.accounts[0].active = true;
         u.record(
             "principal",
-            Reading::Windows((window(95.0, now - 3_600_000), None)),
+            Reading::claude((window(95.0, now - 3_600_000), None)),
             now,
         );
         u.settle(&s, now);
-        assert_eq!(u.current, "principal");
+        assert_eq!(u.claude_current(), "principal");
     }
 
     #[test]
@@ -1009,7 +1048,7 @@ mod tests {
         let mut u = UsageSnapshot::default();
         u.record(
             "pro",
-            Reading::Windows((window(40.0, now + 60_000), None)),
+            Reading::claude((window(40.0, now + 60_000), None)),
             now,
         );
         u.record("pro", Reading::NotSignedIn, now + 1);
@@ -1022,7 +1061,7 @@ mod tests {
         );
         // Its last windows stay, read when they were.
         assert_eq!(
-            (pro.five_hour.map(|w| w.pct), pro.updated_at),
+            (pro.five_hour().map(|w| w.pct), pro.updated_at),
             (Some(40.0), now)
         );
         let principal = u.account("principal").unwrap();
@@ -1034,7 +1073,7 @@ mod tests {
             )
         );
         // Read again: signed in.
-        u.record("pro", Reading::Windows((None, None)), now + 2);
+        u.record("pro", Reading::claude((None, None)), now + 2);
         u.settle(&s, now);
         let pro = u.account("pro").unwrap();
         assert_eq!((pro.connected, pro.reason.as_deref()), (true, None));
@@ -1047,7 +1086,7 @@ mod tests {
         let mut u = UsageSnapshot::default();
         u.record(
             "pro",
-            Reading::Windows((window(40.0, now + 60_000), None)),
+            Reading::claude((window(40.0, now + 60_000), None)),
             now,
         );
         // Pro first, a third one added.
@@ -1059,15 +1098,15 @@ mod tests {
         u.settle(&s, now);
         let ids: Vec<&str> = u.accounts.iter().map(|a| a.id.as_str()).collect();
         assert_eq!(ids, ["pro", "principal", "perso"]);
-        assert_eq!(u.current, "pro");
-        assert_eq!(u.five_hour.map(|w| w.pct), Some(40.0));
-        assert_eq!(u.account("perso").unwrap().five_hour, None);
+        assert_eq!(u.claude_current(), "pro");
+        assert_eq!(u.five_hour().map(|w| w.pct), Some(40.0));
+        assert_eq!(u.account("perso").unwrap().five_hour(), None);
         // Removed: gone with its readings.
         s.accounts.remove(0);
         u.settle(&s, now);
         assert!(u.account("pro").is_none());
-        assert_eq!(u.current, "principal");
-        assert_eq!(u.five_hour, None);
+        assert_eq!(u.claude_current(), "principal");
+        assert_eq!(u.five_hour(), None);
     }
 
     #[test]
@@ -1076,8 +1115,8 @@ mod tests {
         let now = now_ms();
         let (five, week) = (window(80.0, now + 60_000), window(60.0, now + 120_000));
         let mut u = UsageSnapshot::default();
-        u.record("principal", Reading::Windows((five, None)), now);
-        u.record("pro", Reading::Windows((None, week)), now);
+        u.record("principal", Reading::claude((five, None)), now);
+        u.record("pro", Reading::claude((None, week)), now);
         u.settle(&s, now);
         let hold = Hold {
             limit_until: Some(5),
@@ -1094,27 +1133,28 @@ mod tests {
                 "pro".to_string(),
                 SavedWindows {
                     five_hour: None,
-                    seven_day: week
+                    seven_day: week,
+                    ..Default::default()
                 }
             )])
         );
-        let back = UsageSnapshot::restored(&saved, &s, |w| w, now);
-        assert_eq!(back.account("principal").unwrap().five_hour, five);
-        assert_eq!(back.account("pro").unwrap().seven_day, week);
-        assert_eq!(back.current, "principal");
-        assert_eq!(back.five_hour, five);
+        let back = UsageSnapshot::restored(&saved, &s, Some, now);
+        assert_eq!(back.account("principal").unwrap().five_hour(), five);
+        assert_eq!(back.account("pro").unwrap().seven_day(), week);
+        assert_eq!(back.claude_current(), "principal");
+        assert_eq!(back.five_hour(), five);
         // Only what `keep` keeps.
         let back = UsageSnapshot::restored(&saved, &s, |_| None, now);
         assert!(back
             .accounts
             .iter()
-            .all(|a| a.five_hour.is_none() && a.seven_day.is_none()));
+            .all(|a| a.five_hour().is_none() && a.seven_day().is_none()));
         // An account gone from the settings: its windows are not.
         let alone = Settings {
             accounts: vec![accounts::principal()],
             ..Default::default()
         };
-        let back = UsageSnapshot::restored(&saved, &alone, |w| w, now);
+        let back = UsageSnapshot::restored(&saved, &alone, Some, now);
         assert_eq!(back.accounts.len(), 1);
         // Never read: nothing kept for it.
         let mut u = UsageSnapshot::default();
@@ -1133,8 +1173,8 @@ mod tests {
             ..Default::default()
         };
         let mut hold = Hold::default();
-        hold.accounts.insert("pro".into(), held);
-        hold.accounts.insert("parti".into(), held);
+        hold.accounts.insert("pro".into(), held.clone());
+        hold.accounts.insert("parti".into(), held.clone());
         // The pause of an account that is gone from the settings goes with it.
         let saved = u.saved(hold);
         assert_eq!(

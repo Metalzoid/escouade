@@ -6,7 +6,7 @@ export default {
   tabs: {
     app: { label: 'Application', desc: 'Zoom, taille du texte et langues' },
     claude: { label: 'Harness', desc: 'Exécutables, versions, connexion et réglages des agents' },
-    accounts: { label: 'Comptes Claude', desc: 'Les comptes sur lesquels partent les agents, enregistrés à chaque changement' },
+    accounts: { label: 'Comptes', desc: 'Les comptes de chaque harness sur lesquels partent les agents, enregistrés à chaque changement' },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
@@ -123,7 +123,7 @@ export default {
     version: 'Version',
     versionTested: 'Testée avec Escouade (de la {oldest} à la {newest}).',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
-    versionNotConnected: 'Aucun compte connecté : connecte-toi dans l’onglet Comptes Claude.',
+    versionNotConnected: 'Aucun compte connecté : connecte-toi dans l’onglet Comptes.',
     newAgents: 'Nouveaux agents',
     defaultModel: 'Modèle par défaut',
     defaultEffort: 'Effort par défaut',

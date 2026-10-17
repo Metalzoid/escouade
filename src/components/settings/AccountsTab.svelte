@@ -1,19 +1,35 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { accountName, agentsOn, backToAccounts, PRINCIPAL, projectsWithoutAccount } from '../../lib/accounts';
+  import {
+    accountEngines,
+    accountName,
+    agentsOn,
+    backToAccounts,
+    engineOfAccount,
+    engineOrder,
+    isPrincipal,
+    PRINCIPAL,
+    projectsWithoutAccount,
+  } from '../../lib/accounts';
+  import { engineName } from '../../lib/engines';
   import { fList, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
-  import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
+  import type { Account, AccountStatus, ClosedProject, EngineId } from '../../lib/types';
   import Group from './Group.svelte';
   import { tip } from '../../lib/tip';
 
-  // The Claude accounts. Each change goes to the backend at once (`account_*`), not through the modal's draft: an
-  // account is made, signed in and removed on the disk, which « Annuler » could not take back.
+  // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
+  // `engine_order_set`), not through the modal's draft: an account is made, signed in and removed on the disk, which
+  // « Annuler » could not take back.
 
   const accounts = $derived(app.settings.accounts ?? []);
-  const activeCount = $derived(accounts.filter((a) => a.active).length);
+  const groups = $derived(accountEngines().map((engine) => ({ engine, list: accounts.filter((a) => engineOfAccount(a) === engine) })));
+  /** How many accounts of each harness are active: its last one stays on. */
+  const activeOf = (engine: EngineId) => accounts.filter((a) => a.active && engineOfAccount(a) === engine).length;
+  /** « Ordre des harness », once there are two harnesses to put in order. */
+  const order = $derived(engineOrder());
   /** Principal may be reserved like any account: the projects none serves then, told under the list. */
   const orphans = $derived(projectsWithoutAccount());
   const orphansText = $derived(
@@ -71,6 +87,14 @@
     return a.id === PRINCIPAL ? t('accounts.tab.state.principalNotConnected') : t('accounts.tab.state.notConnected');
   }
 
+  /** The harness moved by `by` places in « Ordre des harness ». */
+  async function moveEngine(i: number, by: number) {
+    const next = [...order];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    const saved = await app.run(api.engineOrderSet(next));
+    if (saved) app.settings.engineOrder = saved;
+  }
+
   /** Saved as the backend has it: the accounts it then gives are the window's. */
   async function save(next: Account): Promise<boolean> {
     const list = await app.run(api.accountUpdate(next));
@@ -92,9 +116,11 @@
     if (!(await save({ ...plain(a), [field]: input.value }))) input.value = shown;
   }
 
-  async function move(i: number, by: number) {
-    const ids = accounts.map((a) => a.id);
-    [ids[i], ids[i + by]] = [ids[i + by], ids[i]];
+  /** The account `a` swapped with `other`, the one before or after it in its harness's group. */
+  async function move(a: Account, other: Account) {
+    const ids = accounts.map((x) => x.id);
+    const [i, j] = [ids.indexOf(a.id), ids.indexOf(other.id)];
+    [ids[i], ids[j]] = [ids[j], ids[i]];
     const list = await app.run(api.accountReorder(ids));
     if (list) app.settings.accounts = list;
   }
@@ -128,106 +154,135 @@
   };
 </script>
 
-<Group title={t('accounts.tab.list')} note={t('accounts.tab.order')} plain>
-  <ul class="list" aria-label={t('accounts.tab.list')}>
-    {#each accounts as a, i (a.id)}
-      {@const name = accountName(a)}
-      {@const status = statuses[a.id]}
-      {@const late = expired(a.id)}
-      {@const last = a.active && activeCount === 1}
-      {@const reserved = a.projects ?? []}
-      {@const closedOnes = closedReserved(a)}
-      <li class="acct" aria-label={name}>
-        <div class="line">
-          <input
-            class="field name"
-            aria-label={t('accounts.tab.name')}
-            spellcheck="false"
-            value={name}
-            onkeydown={blurOnEnter}
-            onblur={(e) => commit(a, e.currentTarget, 'name')}
-          />
-          <span class="state" class:on={a.active && status?.connected} class:off={!a.active}>
-            <span class="dot" aria-hidden="true"></span>{stateOf(a, status)}
-          </span>
-          <div style="flex:1"></div>
-          <span class="k" aria-hidden="true">{t('accounts.tab.active')}</span>
-          <button
-            class="switch"
-            class:on={a.active}
-            role="switch"
-            aria-checked={a.active}
-            aria-label={t('accounts.tab.active')}
-            aria-describedby={last ? 'accounts-last-active' : undefined}
-            use:tip={last ? t('accounts.tab.lastActive') : undefined}
-            disabled={last}
-            onclick={() => save({ ...plain(a), active: !a.active })}
-          ></button>
-          <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
-          <button
-            class="icon-btn"
-            aria-label={t('accounts.tab.down', { name })}
-            disabled={i === accounts.length - 1}
-            onclick={() => move(i, 1)}>↓</button
-          >
-        </div>
-        <div class="line">
-          <span class="k">{t('accounts.tab.folder')}</span>
-          <span class="dir mono">{tildify(a.configDir || status?.dir || '')}</span>
-        </div>
-        <div class="line">
-          <label class="k" for="account-exe-{a.id}">{t('accounts.tab.executable')}</label>
-          <input
-            id="account-exe-{a.id}"
-            class="field mono exe"
-            spellcheck="false"
-            placeholder={t('accounts.tab.executableDefault')}
-            value={a.claudePath}
-            onkeydown={blurOnEnter}
-            onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
-          />
-          <div style="flex:1"></div>
-          {#if status}
-            <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
-            <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
-              {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
-            </button>
-          {/if}
-          {#if a.id !== PRINCIPAL}
-            <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
-          {/if}
-        </div>
-        {#if app.projects.length || closedOnes.length}
-          <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
-            <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
-            {#each app.projects as p (p.id)}
-              <label class="chip">
-                <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
-                {p.name}
-              </label>
-            {/each}
-            <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
-            {#each closedOnes as c (c.id)}
-              <label class="chip">
-                <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
-                {t('accounts.tab.closedProject', { name: c.name })}
-              </label>
-            {/each}
-            {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+{#each groups as g, gi (g.engine)}
+  {@const harness = engineName(g.engine)}
+  {@const list = g.list}
+  <Group title={t('accounts.tab.group', { harness })} note={gi === 0 ? t('accounts.tab.order') : undefined} plain>
+    <ul class="list" aria-label={t('accounts.tab.group', { harness })}>
+      {#each list as a, i (a.id)}
+        {@const name = accountName(a)}
+        {@const status = statuses[a.id]}
+        {@const late = expired(a.id)}
+        {@const last = a.active && activeOf(g.engine) === 1}
+        {@const reserved = a.projects ?? []}
+        {@const closedOnes = closedReserved(a)}
+        <li class="acct" aria-label={name}>
+          <div class="line">
+            <input
+              class="field name"
+              aria-label={t('accounts.tab.name')}
+              spellcheck="false"
+              value={name}
+              onkeydown={blurOnEnter}
+              onblur={(e) => commit(a, e.currentTarget, 'name')}
+            />
+            <span class="state" class:on={a.active && status?.connected} class:off={!a.active}>
+              <span class="dot" aria-hidden="true"></span>{stateOf(a, status)}
+            </span>
+            <div style="flex:1"></div>
+            <span class="k" aria-hidden="true">{t('accounts.tab.active')}</span>
+            <button
+              class="switch"
+              class:on={a.active}
+              role="switch"
+              aria-checked={a.active}
+              aria-label={t('accounts.tab.active')}
+              aria-describedby={last ? 'accounts-last-active' : undefined}
+              use:tip={last ? t('accounts.tab.lastActive') : undefined}
+              disabled={last}
+              onclick={() => save({ ...plain(a), active: !a.active })}
+            ></button>
+            <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(a, list[i - 1])}
+              >↑</button
+            >
+            <button
+              class="icon-btn"
+              aria-label={t('accounts.tab.down', { name })}
+              disabled={i === list.length - 1}
+              onclick={() => move(a, list[i + 1])}>↓</button
+            >
           </div>
-        {/if}
-        {#if late}<p class="late">{late}</p>{/if}
-        {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
-      </li>
-    {/each}
-  </ul>
-  <!-- Always there, empty while every project has an account: a screen reader hears it fill. -->
-  <p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
-  <span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
-</Group>
+          <div class="line">
+            <span class="k">{t('accounts.tab.folder')}</span>
+            <span class="dir mono">{tildify(a.configDir || status?.dir || '')}</span>
+          </div>
+          <div class="line">
+            <label class="k" for="account-exe-{a.id}">{t('accounts.tab.executable')}</label>
+            <input
+              id="account-exe-{a.id}"
+              class="field mono exe"
+              spellcheck="false"
+              placeholder={t('accounts.tab.executableDefault')}
+              value={a.claudePath}
+              onkeydown={blurOnEnter}
+              onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
+            />
+            <div style="flex:1"></div>
+            {#if status}
+              <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
+              <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
+                {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
+              </button>
+            {/if}
+            {#if !isPrincipal(a)}
+              <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
+            {/if}
+          </div>
+          {#if app.projects.length || closedOnes.length}
+            <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
+              <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
+              {#each app.projects as p (p.id)}
+                <label class="chip">
+                  <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
+                  {p.name}
+                </label>
+              {/each}
+              <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
+              {#each closedOnes as c (c.id)}
+                <label class="chip">
+                  <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
+                  {t('accounts.tab.closedProject', { name: c.name })}
+                </label>
+              {/each}
+              {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+            </div>
+          {/if}
+          {#if late}<p class="late">{late}</p>{/if}
+          {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
+        </li>
+      {/each}
+    </ul>
+  </Group>
+{/each}
+<!-- Always there, empty while every project has an account: a screen reader hears it fill. -->
+<p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
+<span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
 <div>
   <button class="btn" onclick={() => (app.modal = { kind: 'account' })}>{t('accounts.tab.add')}</button>
 </div>
+{#if order.length > 1}
+  <Group title={t('accounts.engineOrder.label')} note={t('accounts.engineOrder.desc')} plain>
+    <ol class="list" aria-label={t('accounts.engineOrder.label')}>
+      {#each order as e, i (e)}
+        {@const name = engineName(e)}
+        <li class="acct line">
+          <span class="rank" aria-hidden="true">{i + 1}</span>
+          <span class="engine">{name}</span>
+          <div style="flex:1"></div>
+          <button class="icon-btn" aria-label={t('accounts.engineOrder.up', { name })} disabled={i === 0} onclick={() => moveEngine(i, -1)}
+            >↑</button
+          >
+          <button
+            class="icon-btn"
+            aria-label={t('accounts.engineOrder.down', { name })}
+            disabled={i === order.length - 1}
+            onclick={() => moveEngine(i, 1)}>↓</button
+          >
+        </li>
+      {/each}
+    </ol>
+  </Group>
+{/if}
 
 <style>
   .list {
@@ -351,5 +406,19 @@
   }
   .refused {
     color: var(--del);
+  }
+  .rank {
+    width: 16px;
+    font-size: 12px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .engine {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  li.line {
+    flex-direction: row;
+    padding: 8px 16px;
   }
 </style>

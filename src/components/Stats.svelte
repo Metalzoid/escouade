@@ -1,13 +1,14 @@
 <script lang="ts">
-  import { accountName } from '../lib/accounts';
+  import { accountEngines, accountName, engineOfAccount } from '../lib/accounts';
+  import { engineName } from '../lib/engines';
   import { readPref, writePref } from '../lib/prefs';
   import { fDate, fInt, fPct, fTok, fUsd } from '../lib/format';
   import { locale, t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { displayModel } from '../lib/models';
   import { app } from '../lib/state.svelte';
-  import { kpis, niceMax, ROWS, shown, type Range } from '../lib/stats';
-  import type { Bucket, StatsView } from '../lib/types';
+  import { costHint, costKindOf, fCost, kpis, niceMax, ROWS, shown, type Range } from '../lib/stats';
+  import type { Bucket, EngineId, StatsView } from '../lib/types';
   import { tip } from '../lib/tip';
 
   // Categorical palette validated for the dark surface (dataviz validator: all checks pass).
@@ -28,33 +29,52 @@
   let allTickets = $state(false);
   /** The account chosen ('': every account). Not kept from one visit to the next: the totals are what the window opens on. */
   let account = $state('');
+  /** The harness chosen ('': every harness), combined with the account. Not kept either. */
+  let engine = $state('');
   let loadTimer: ReturnType<typeof setTimeout> | undefined;
   /** The last question asked: the answer to an earlier one (another period, another account) comes too late to be shown. */
   let asked = 0;
 
-  const accounts = $derived(app.settings.accounts ?? []);
+  /** The harnesses to choose from: those with accounts, then those only the statistics remember. */
+  const engineChoices = $derived(
+    [...new Set<string>([...accountEngines(), ...(view?.engines ?? [])])].map((id) => ({ id, name: engineName(id as EngineId) })),
+  );
+  /** The choice of a harness and « Par harness » only mean something with several harnesses, or turns of several. */
+  const severalEngines = $derived(engineChoices.length > 1);
+  /** The harness the views are for; none (every harness) unless one is chosen that can be. */
+  const engineFilter = $derived(severalEngines && engineChoices.some((c) => c.id === engine) ? engine : null);
+
+  /** The accounts of the harness chosen, or of every one. */
+  const accounts = $derived((app.settings.accounts ?? []).filter((a) => !engineFilter || engineOfAccount(a) === engineFilter));
   /** What to choose from: the accounts of the settings, then those only the statistics remember (removed, their turns remain). */
   const choices = $derived([
     ...accounts.map((a) => ({ id: a.id, name: accountName(a) })),
     ...(view?.accounts ?? [])
-      .filter((id) => !accounts.some((a) => a.id === id))
+      .filter((id) => !(app.settings.accounts ?? []).some((a) => a.id === id))
       .map((id) => ({ id, name: t('stats.account.removed', { id }) })),
   ]);
   /** The choice and « Par compte » only mean something with several accounts, or turns of several. */
   const several = $derived(accounts.length > 1 || (view?.accounts.length ?? 0) > 1);
   /** The account the views are for; none (every account) unless one is chosen that can be. */
   const filter = $derived(several && choices.some((c) => c.id === account) ? account : null);
+  /**
+   * How the cost of what the views add up is known: that of the harness chosen, else of every harness that ran a turn in the
+   * period. Each line of « Par harness » has its own.
+   */
+  const costKind = $derived(costKindOf(engineFilter ? [engineFilter] : (view?.byEngine ?? []).map((e) => e.engine)));
+  const money = (cost: number) => fCost(cost, costKind);
 
   $effect(() => {
     const r = range;
     const a = filter;
+    const e = engineFilter;
     void app.usage.todayCost; // refresh when new turns are recorded
     void locale.ui; // the backend names the steps of the period (« 27/09 », “Sep 27”) in the interface's language
     clearTimeout(loadTimer);
     loadTimer = setTimeout(() => {
       const n = ++asked;
       api
-        .stats(r, a)
+        .stats(r, a, e)
         .then((v) => {
           if (n !== asked) return;
           view = v;
@@ -103,6 +123,17 @@
         >
       </div>
       <div style="flex:1"></div>
+      {#if severalEngines}
+        <select
+          class="field picker"
+          aria-label={t('stats.engine.label')}
+          value={engineFilter ?? ''}
+          onchange={(e) => (engine = e.currentTarget.value)}
+        >
+          <option value="">{t('stats.engine.all')}</option>
+          {#each engineChoices as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+        </select>
+      {/if}
       {#if several}
         <select
           class="field picker"
@@ -130,16 +161,20 @@
         </div>
         <div class="kpi">
           <span class="kl">{t('stats.kpi.totalCost')}</span>
-          <span class="kv mono">{fUsd(view.cost)}</span>
+          <span class="kv mono" use:tip={costHint(costKind)}
+            >{money(view.cost)}{#if costKind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span>{/if}</span
+          >
           <span class="ks"
-            >{view.firstTs
-              ? t('stats.kpi.costSince', { amount: fUsd(view.costAll), date: fDate(view.firstTs) })
-              : t('stats.kpi.costAllTime', { amount: fUsd(view.costAll) })}</span
+            >{costKind === 'none'
+              ? '—'
+              : view.firstTs
+                ? t('stats.kpi.costSince', { amount: money(view.costAll), date: fDate(view.firstTs) })
+                : t('stats.kpi.costAllTime', { amount: money(view.costAll) })}</span
           >
         </div>
         <div class="kpi">
           <span class="kl">{t('stats.kpi.costPerPrompt')}</span>
-          <span class="kv mono">{k.costPerPrompt !== null ? fUsd(k.costPerPrompt) : '—'}</span>
+          <span class="kv mono">{k.costPerPrompt !== null ? money(k.costPerPrompt) : '—'}</span>
           <span class="ks"
             >{k.tokensPerPrompt !== null
               ? t('stats.kpi.tokensPerPrompt', { tokens: fTok(k.tokensPerPrompt) })
@@ -177,7 +212,7 @@
               {#each view.buckets as b (b.start)}
                 <tr>
                   <td>{b.label}</td><td>{fTok(b.input)}</td><td>{fTok(b.cache)}</td><td>{fTok(b.output)}</td><td>{fTok(total(b))}</td><td
-                    >{fUsd(b.cost)}</td
+                    >{money(b.cost)}</td
                   ><td>{b.prompts}</td>
                 </tr>
               {/each}
@@ -218,7 +253,7 @@
                         </div>
                       {/each}
                       <div class="tr total">{t('stats.table.total')}<span class="tv mono">{fTok(total(b))}</span></div>
-                      <div class="tr">{t('common.cost')}<span class="tv mono">{fUsd(b.cost)}</span></div>
+                      <div class="tr">{t('common.cost')}<span class="tv mono">{money(b.cost)}</span></div>
                       <div class="tr">{t('stats.table.prompts')}<span class="tv mono">{b.prompts}</span></div>
                     </div>
                   {/if}
@@ -247,7 +282,7 @@
                 ></div>
               </div>
               <span class="stok mono">{fTok(s.tokens)}</span>
-              <span class="scost mono">{fUsd(s.cost)}</span>
+              <span class="scost mono">{money(s.cost)}</span>
             </div>
           {:else}
             <span class="none">{t('stats.noData')}</span>
@@ -260,13 +295,48 @@
               <span class="sname">{displayModel(s.key)}</span>
               <div class="track"><div class="fill" style:width="{(s.tokens / Math.max(1, view.byModel[0].tokens)) * 100}%"></div></div>
               <span class="stok mono">{fTok(s.tokens)}</span>
-              <span class="scost mono">{fUsd(s.cost)}</span>
+              <span class="scost mono">{money(s.cost)}</span>
             </div>
           {:else}
             <span class="none">{t('stats.noData')}</span>
           {/each}
         </section>
       </div>
+
+      {#if severalEngines}
+        <!-- The harnesses side by side: the choice of a harness does not narrow them, it marks its own line. Each one's cost is
+             told as it gives it: an estimate is marked so, none is « — ». -->
+        <section class="card">
+          <span class="ct" id="stats-engines">{t('stats.byEngine.title')}</span>
+          {#if view.byEngine.length}
+            <table class="list" aria-labelledby="stats-engines">
+              <thead>
+                <tr
+                  ><th class="w-name">{t('stats.byEngine.engine')}</th><th class="num">{t('stats.byEngine.tokens')}</th><th class="num"
+                    >{t('common.cost')}</th
+                  ><th class="num">{t('stats.byEngine.turns')}</th><th class="num">{t('stats.byEngine.agents')}</th></tr
+                >
+              </thead>
+              <tbody>
+                {#each view.byEngine as e (e.engine)}
+                  {@const kind = costKindOf([e.engine])}
+                  <tr class:on={e.engine === engineFilter} aria-current={e.engine === engineFilter ? 'true' : undefined}>
+                    <td class="cut strong">{engineName(e.engine as EngineId)}</td>
+                    <td class="num mono">{fTok(e.tokens)}</td>
+                    <td class="num mono" use:tip={costHint(kind)}
+                      >{fCost(e.cost, kind)}{#if kind === 'estimated'}<span class="est">{t('stats.cost.estimated')}</span>{/if}</td
+                    >
+                    <td class="num mono">{fInt(e.turns)}</td>
+                    <td class="num mono">{fInt(e.agents)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <span class="none">{t('stats.noData')}</span>
+          {/if}
+        </section>
+      {/if}
 
       {#if several}
         <!-- The accounts side by side: the choice above does not narrow them, it marks its own line. -->
@@ -287,7 +357,7 @@
                   <tr class:on={a.account === filter} aria-current={a.account === filter ? 'true' : undefined}>
                     <td class="cut strong" use:tip={{ text: name, cut: true }}>{name}</td>
                     <td class="num mono">{fTok(a.tokens)}</td>
-                    <td class="num mono">{fUsd(a.cost)}</td>
+                    <td class="num mono">{money(a.cost)}</td>
                     <td class="num mono">{fInt(a.turns)}</td>
                     <td class="num mono">{fInt(a.agents)}</td>
                   </tr>
@@ -318,7 +388,7 @@
                   <td class="cut strong" use:tip={{ text: a.name, cut: true }}>{a.name ?? t('stats.byAgent.deleted')}</td>
                   <td class="cut"><span class="psw" style:background={p.color}></span>{p.name}</td>
                   <td class="num mono">{fTok(a.tokens)}</td>
-                  <td class="num mono">{fUsd(a.cost)}</td>
+                  <td class="num mono">{money(a.cost)}</td>
                 </tr>
               {/each}
             </tbody>
@@ -353,7 +423,7 @@
                   <td class="mono">{x.key}</td>
                   <td class="cut strong" use:tip={{ text: x.title, cut: true }}>{x.title}</td>
                   <td class="num">{t('common.count.loops', { count: x.loops })}</td>
-                  <td class="num mono">{fUsd(x.cost)}</td>
+                  <td class="num mono">{money(x.cost)}</td>
                 </tr>
               {/each}
             </tbody>
@@ -409,6 +479,18 @@
   .s {
     font-size: 12.5px;
     color: var(--muted);
+  }
+  .est {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+    background: var(--elev2);
+    color: var(--muted);
+    font-family: var(--font-ui, inherit);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    vertical-align: middle;
   }
   .picker {
     height: 38px;

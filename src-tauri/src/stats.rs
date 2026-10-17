@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS turns (
 CREATE INDEX IF NOT EXISTS turns_ts ON turns(ts);
 CREATE TABLE IF NOT EXISTS prompts (
   id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, agent_id TEXT NOT NULL, project_id TEXT NOT NULL,
-  account TEXT NOT NULL DEFAULT 'principal'
+  account TEXT NOT NULL DEFAULT 'principal',
+  engine TEXT NOT NULL DEFAULT 'claude'
 );
 CREATE INDEX IF NOT EXISTS prompts_ts ON prompts(ts);
 ";
@@ -30,11 +31,12 @@ CREATE INDEX IF NOT EXISTS prompts_ts ON prompts(ts);
 /// What an older database lacks to be read as `SCHEMA` says, with the default its lines take.
 /// Before the Claude accounts (1.7) its tables had no `account`: every line they hold was written
 /// on the only account there was, Principal (`accounts::PRINCIPAL`). Before the harnesses (1.8)
-/// the turns had no `engine`: every one was run by Claude Code.
-const ADDED_COLUMNS: [(&str, &str, &str); 3] = [
+/// the turns and the prompts had no `engine`: every one was Claude Code's.
+const ADDED_COLUMNS: [(&str, &str, &str); 4] = [
     ("turns", "account", "principal"),
     ("prompts", "account", "principal"),
     ("turns", "engine", "claude"),
+    ("prompts", "engine", "claude"),
 ];
 
 /// Adds to an older database the columns it lacks (`ADDED_COLUMNS`). A table that has a column
@@ -103,6 +105,31 @@ pub struct AccountShare {
     pub agents: u64,
 }
 
+/// What a harness ran over the period: its tokens and cost, how many turns and for how many
+/// agents (« Par harness »).
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineShare {
+    pub engine: String,
+    pub tokens: u64,
+    pub cost: f64,
+    pub turns: u64,
+    pub agents: u64,
+}
+
+/// What the statistics are narrowed to: one account, one harness, or both (none: everything).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Filter<'a> {
+    pub account: Option<&'a str>,
+    pub engine: Option<&'a str>,
+}
+
+impl Filter<'_> {
+    fn wants(&self, account: &str, engine: &str) -> bool {
+        self.account.is_none_or(|a| a == account) && self.engine.is_none_or(|e| e == engine)
+    }
+}
+
 /// What the agents of a ticket used over the period, added up.
 #[derive(Debug, Clone, Serialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -149,14 +176,18 @@ pub struct StatsView {
     pub prompts: u64,
     pub by_project: Vec<Share>,
     pub by_model: Vec<Share>,
-    /// By harness (`claude`, `codex`…): the one that ran each turn.
-    pub by_engine: Vec<Share>,
+    /// Every harness side by side (« Par harness »), whichever one the view is for: the one that
+    /// ran each turn, of the account asked for when there is one.
+    pub by_engine: Vec<EngineShare>,
     pub by_agent: Vec<AgentShare>,
     pub by_ticket: Vec<TicketShare>,
-    /// Every account side by side, whichever one the view is for.
+    /// Every account side by side, whichever one the view is for, of the harness asked for when
+    /// there is one.
     pub by_account: Vec<AccountShare>,
     /// Every account that ever ran a turn, whichever the period or the account asked for.
     pub accounts: Vec<String>,
+    /// Every harness that ever ran a turn, whichever the period or the harness asked for.
+    pub engines: Vec<String>,
 }
 
 impl Stats {
@@ -215,16 +246,28 @@ impl Stats {
         }
     }
 
-    pub fn record_prompt(&self, account: &str, agent_id: &str, project_id: &str) {
-        self.record_prompt_at(now_ms(), account, agent_id, project_id);
+    pub fn record_prompt(&self, account: &str, engine: &str, agent_id: &str, project_id: &str) {
+        self.record_prompt_with(now_ms(), account, engine, agent_id, project_id);
     }
 
+    #[cfg(test)]
     fn record_prompt_at(&self, ts: i64, account: &str, agent_id: &str, project_id: &str) {
+        self.record_prompt_with(ts, account, "claude", agent_id, project_id);
+    }
+
+    fn record_prompt_with(
+        &self,
+        ts: i64,
+        account: &str,
+        engine: &str,
+        agent_id: &str,
+        project_id: &str,
+    ) {
         let guard = self.conn.lock();
         if let Some(c) = guard.as_ref() {
             let _ = c.execute(
-                "INSERT INTO prompts (ts, agent_id, project_id, account) VALUES (?1,?2,?3,?4)",
-                params![ts, agent_id, project_id, account],
+                "INSERT INTO prompts (ts, agent_id, project_id, account, engine) VALUES (?1,?2,?3,?4,?5)",
+                params![ts, agent_id, project_id, account, engine],
             );
         }
     }
@@ -255,15 +298,43 @@ impl Stats {
 
     /// The period's statistics: of every account, or of `account` alone (all views but `by_account`
     /// and `accounts`, which put the accounts side by side).
+    #[cfg(test)]
     pub fn query(&self, range: &str, account: Option<&str>, names: &Labels) -> StatsView {
-        self.query_at(range, Local::now().date_naive(), account, names)
+        let filter = Filter {
+            account,
+            engine: None,
+        };
+        self.query_by(range, filter, names)
     }
 
+    /// The period's statistics narrowed by `filter` (an account, a harness, both): all views but
+    /// those that put them side by side (`by_account` and `accounts` for the accounts, which keep
+    /// to the harness asked for; `by_engine` and `engines` for the harnesses, which keep to the
+    /// account asked for).
+    pub fn query_by(&self, range: &str, filter: Filter, names: &Labels) -> StatsView {
+        self.query_at_by(range, Local::now().date_naive(), filter, names)
+    }
+
+    #[cfg(test)]
     fn query_at(
         &self,
         range: &str,
         today: NaiveDate,
         account: Option<&str>,
+        names: &Labels,
+    ) -> StatsView {
+        let filter = Filter {
+            account,
+            engine: None,
+        };
+        self.query_at_by(range, today, filter, names)
+    }
+
+    fn query_at_by(
+        &self,
+        range: &str,
+        today: NaiveDate,
+        filter: Filter,
         names: &Labels,
     ) -> StatsView {
         let (starts, labels, prev_start) = bucket_bounds(range, today, crate::i18n::ui());
@@ -291,11 +362,10 @@ impl Stats {
         let guard = self.conn.lock();
         let Some(c) = guard.as_ref() else { return view };
 
-        let (mut by_project, mut by_model, mut by_engine): (
-            HashMap<String, Share>,
-            HashMap<String, Share>,
-            HashMap<String, Share>,
-        ) = Default::default();
+        let (mut by_project, mut by_model): (HashMap<String, Share>, HashMap<String, Share>) =
+            Default::default();
+        let mut by_engine: HashMap<String, EngineShare> = HashMap::new();
+        let mut engine_agents: HashSet<(String, String)> = HashSet::new();
         let mut by_agent: HashMap<String, AgentShare> = HashMap::new();
         // The accounts side by side take every turn of the period, whichever account the view is
         // for. A turn is what a reply wrote together: the lines of one agent at one moment (one
@@ -309,21 +379,35 @@ impl Stats {
             });
             for (ts, project, model, input, cache, output, cost, agent, line_account, engine) in rows.into_iter().flatten().flatten() {
                 let tokens = (input + cache + output) as u64;
-                let wanted = account.is_none_or(|a| a == line_account);
+                let wanted = filter.wants(&line_account, &engine);
                 if ts < first {
                     if wanted {
                         view.tokens_prev += tokens;
                     }
                     continue;
                 }
-                let share = by_account.entry(line_account.clone()).or_insert_with(|| AccountShare {
-                    account: line_account.clone(),
-                    ..Default::default()
-                });
-                share.tokens += tokens;
-                share.cost += cost;
-                share.turns += u64::from(turns_seen.insert((agent.clone(), ts)));
-                share.agents += u64::from(agents_seen.insert((line_account, agent.clone())));
+                // A turn is counted once for its account and once for its harness.
+                let first_line = turns_seen.insert((agent.clone(), ts));
+                if filter.engine.is_none_or(|e| e == engine) {
+                    let share = by_account.entry(line_account.clone()).or_insert_with(|| AccountShare {
+                        account: line_account.clone(),
+                        ..Default::default()
+                    });
+                    share.tokens += tokens;
+                    share.cost += cost;
+                    share.turns += u64::from(first_line);
+                    share.agents += u64::from(agents_seen.insert((line_account.clone(), agent.clone())));
+                }
+                if filter.account.is_none_or(|a| a == line_account) {
+                    let share = by_engine.entry(engine.clone()).or_insert_with(|| EngineShare {
+                        engine: engine.clone(),
+                        ..Default::default()
+                    });
+                    share.tokens += tokens;
+                    share.cost += cost;
+                    share.turns += u64::from(first_line);
+                    share.agents += u64::from(engine_agents.insert((engine.clone(), agent.clone())));
+                }
                 if !wanted {
                     continue;
                 }
@@ -342,7 +426,7 @@ impl Stats {
                 });
                 a.tokens += tokens;
                 a.cost += cost;
-                for (map, key) in [(&mut by_project, project), (&mut by_model, model), (&mut by_engine, engine)] {
+                for (map, key) in [(&mut by_project, project), (&mut by_model, model)] {
                     let s = map.entry(key.clone()).or_insert_with(|| Share { key, ..Default::default() });
                     s.tokens += tokens;
                     s.cost += cost;
@@ -350,9 +434,11 @@ impl Stats {
             }
         }
         if let Ok(mut stmt) = c.prepare(
-            "SELECT ts FROM prompts WHERE ts >= ?1 AND ts < ?2 AND (?3 IS NULL OR account = ?3)",
+            "SELECT ts FROM prompts WHERE ts >= ?1 AND ts < ?2 AND (?3 IS NULL OR account = ?3) AND (?4 IS NULL OR engine = ?4)",
         ) {
-            let rows = stmt.query_map(params![first, end, account], |r| r.get::<_, i64>(0));
+            let rows = stmt.query_map(params![first, end, filter.account, filter.engine], |r| {
+                r.get::<_, i64>(0)
+            });
             for ts in rows.into_iter().flatten().flatten() {
                 let i = bounds.partition_point(|b| *b <= ts).saturating_sub(1);
                 view.buckets[i].prompts += 1;
@@ -361,8 +447,8 @@ impl Stats {
         }
         let (cost_all, first_ts): (f64, Option<i64>) = c
             .query_row(
-                "SELECT COALESCE(SUM(cost),0), MIN(ts) FROM turns WHERE (?1 IS NULL OR account = ?1)",
-                [account],
+                "SELECT COALESCE(SUM(cost),0), MIN(ts) FROM turns WHERE (?1 IS NULL OR account = ?1) AND (?2 IS NULL OR engine = ?2)",
+                [filter.account, filter.engine],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap_or((0.0, None));
@@ -375,7 +461,14 @@ impl Stats {
         };
         view.by_project = sort(by_project);
         view.by_model = sort(by_model);
-        view.by_engine = sort(by_engine);
+        let mut engines: Vec<EngineShare> = by_engine.into_values().collect();
+        // The harness breaks ties, as the id does for the agents.
+        engines.sort_by(|a, b| {
+            b.tokens
+                .cmp(&a.tokens)
+                .then_with(|| a.engine.cmp(&b.engine))
+        });
+        view.by_engine = engines;
         (view.by_agent, view.by_ticket) = agent_lists(by_agent, names);
         let mut accounts: Vec<AccountShare> = by_account.into_values().collect();
         // The id breaks ties, as for the agents.
@@ -388,6 +481,10 @@ impl Stats {
         if let Ok(mut stmt) = c.prepare("SELECT DISTINCT account FROM turns ORDER BY account") {
             let rows = stmt.query_map([], |r| r.get::<_, String>(0));
             view.accounts = rows.into_iter().flatten().flatten().collect();
+        }
+        if let Ok(mut stmt) = c.prepare("SELECT DISTINCT engine FROM turns ORDER BY engine") {
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0));
+            view.engines = rows.into_iter().flatten().flatten().collect();
         }
         view
     }
@@ -1210,12 +1307,12 @@ mod tests {
         .unwrap()
     }
 
-    fn share(key: &str, tokens: u64, cost: f64) -> Share {
-        Share {
-            key: key.into(),
-            tokens,
-            cost,
-        }
+    /// The harnesses side by side: each one's tokens and cost.
+    fn engine_shares(v: &StatsView) -> Vec<(&str, u64, f64)> {
+        let shares = v.by_engine.iter();
+        shares
+            .map(|s| (s.engine.as_str(), s.tokens, s.cost))
+            .collect()
     }
 
     #[test]
@@ -1231,7 +1328,7 @@ mod tests {
         assert_eq!(column_of_turns(&s, "account"), ["principal", "pro"]);
         let v = s.query_at("day", today, None, &Labels::default());
         assert!((v.cost - 1.5).abs() < 1e-9);
-        assert_eq!(v.by_engine, vec![share("claude", 320, 1.5)]);
+        assert_eq!(engine_shares(&v), [("claude", 320, 1.5)]);
         // A turn written from now on keeps the harness that ran it.
         let codex = TurnRow {
             engine: crate::model::EngineId::Codex,
@@ -1241,12 +1338,63 @@ mod tests {
         assert_eq!(column_of_turns(&s, "engine"), ["claude", "claude", "codex"]);
         let v = s.query_at("day", today, None, &Labels::default());
         assert_eq!(
-            v.by_engine,
-            vec![share("claude", 320, 1.5), share("codex", 160, 2.0)]
+            engine_shares(&v),
+            [("claude", 320, 1.5), ("codex", 160, 2.0)]
         );
         // With an account asked for, its turns alone.
         let pro = s.query_at("day", today, Some("pro"), &Labels::default());
-        assert_eq!(pro.by_engine, vec![share("claude", 160, 0.5)]);
+        assert_eq!(engine_shares(&pro), [("claude", 160, 0.5)]);
+    }
+
+    #[test]
+    fn the_statistics_narrow_to_a_harness_combined_with_an_account_and_put_the_harnesses_side_by_side(
+    ) {
+        let today = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        let noon = local_ms(today) + 12 * 3600 * 1000;
+        let s = Stats::memory();
+        let on = |engine| TurnRow {
+            engine,
+            ..row("model", 50, 1.0)
+        };
+        use crate::model::EngineId::{Claude, Codex};
+        // Claude Code on Principal (a1) and Pro (a2), Codex on Work (a3, two turns).
+        s.record_turns_at(noon, "principal", "a1", "p1", &[on(Claude)]);
+        s.record_turns_at(noon, "pro", "a2", "p1", &[on(Claude)]);
+        s.record_turns_at(noon, "work", "a3", "p1", &[on(Codex)]);
+        s.record_turns_at(noon + 1, "work", "a3", "p1", &[on(Codex)]);
+        s.record_prompt_with(noon, "work", "codex", "a3", "p1");
+        s.record_prompt_with(noon, "pro", "claude", "a2", "p1");
+        let by = |account, engine| {
+            let filter = Filter { account, engine };
+            s.query_at_by("day", today, filter, &Labels::default())
+        };
+        let all = by(None, None);
+        assert_eq!((all.tokens, all.prompts), (640, 2));
+        assert_eq!(all.engines, ["claude", "codex"]);
+        // « Par harness »: each one's turns and agents.
+        let side: Vec<_> = all
+            .by_engine
+            .iter()
+            .map(|e| (e.engine.as_str(), e.turns, e.agents, e.cost))
+            .collect();
+        assert_eq!(side, [("claude", 2, 2, 2.0), ("codex", 2, 1, 2.0)]);
+        // Codex alone: its turns and prompts, its accounts side by side; the harnesses are all
+        // still there, side by side.
+        let codex = by(None, Some("codex"));
+        assert_eq!((codex.tokens, codex.cost, codex.prompts), (320, 2.0, 1));
+        let accounts: Vec<_> = codex
+            .by_account
+            .iter()
+            .map(|a| a.account.as_str())
+            .collect();
+        assert_eq!(accounts, ["work"]);
+        assert_eq!(codex.by_engine.len(), 2);
+        assert!((codex.cost_all - 2.0).abs() < 1e-9);
+        // Combined with an account: the turns of both, the harnesses of that account.
+        let pro = by(Some("pro"), Some("claude"));
+        assert_eq!((pro.tokens, pro.prompts), (160, 1));
+        assert_eq!(engine_shares(&pro), [("claude", 160, 1.0)]);
+        assert_eq!(by(Some("pro"), Some("codex")).tokens, 0);
     }
 
     #[test]

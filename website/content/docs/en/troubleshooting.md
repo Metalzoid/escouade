@@ -16,7 +16,7 @@ The problems Escouade runs into most often, each with its symptom, its cause, an
 
 **Fix.** Install Claude Code and sign in, or give its path in Settings › Harness (see the [Claude Code settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
 
-A Claude account can have its own executable (Settings › Claude accounts, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
+A Claude account can have its own executable (Settings › Accounts, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
 
 ### Claude Code is not found when the app starts from the Finder (macOS)
 
@@ -94,7 +94,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 
 ### Quotas don’t show
 
-**Symptom.** In the status bar, `5h` and `W` have an empty bar and a “—” in place of the countdown, and the tooltip says “Quota unavailable”. In Settings › Claude accounts, the account says “Not signed in”, “Not signed in with a claude.ai account (API key?)”, or “Sign-in expired: run Claude Code again for this account.”
+**Symptom.** In the status bar, `5h` and `W` have an empty bar and a “—” in place of the countdown, and the tooltip says “Quota unavailable”. In Settings › Accounts, the account says “Not signed in”, “Not signed in with a claude.ai account (API key?)”, or “Sign-in expired: run Claude Code again for this account.”
 
 **Possible causes.**
 
@@ -103,7 +103,7 @@ Then, in a Windows terminal, run `wsl --shutdown` and restart Escouade.
 - Anthropic can’t be reached (network, proxy, certificate: see above). The last values stay displayed, and Escouade tries again at the next read, about every five minutes.
 - On macOS, Claude Code keeps its sign-in in the keychain. If you deny access when macOS asks, Escouade doesn’t ask again for ten minutes.
 
-**Fix.** In Settings › Claude accounts, “Sign in…” (or “Sign in again…”) opens a terminal where Claude Code signs you in (use the `/login` command if it doesn’t offer it). For Main, it is your own Claude Code’s sign-in. See [Claude accounts](accounts).
+**Fix.** In Settings › Accounts, “Sign in…” (or “Sign in again…”) opens a terminal where Claude Code signs you in (use the `/login` command if it doesn’t offer it). For Main, it is your own Claude Code’s sign-in. See [Claude accounts](accounts).
 
 ### An agent stopped on the usage limit
 

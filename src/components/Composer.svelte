@@ -14,7 +14,7 @@
     readForMessage,
     type DraftAttachment,
   } from '../lib/attachments';
-  import { accountName, newAgentAccount, serves } from '../lib/accounts';
+  import { accountName, accountsOf, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, setDraft } from '../lib/drafts';
@@ -99,13 +99,14 @@
       };
     }),
   );
-  // The account chip: with several accounts, beside the model. It changes the account only while the agent has no session
-  // (nothing said to it yet, no copy's original behind it): then its conversation is filed in that account.
+  // The account chip: with several accounts of the agent's harness, beside the model. It changes the account only while
+  // the agent has no session (nothing said to it yet, no copy's original behind it): then its conversation is filed in that
+  // account. Another harness's accounts are never offered: the agent runs on its own harness.
   const project = $derived(app.projects.find((p) => p.id === agent.projectId));
-  const accounts = $derived(app.settings.accounts);
+  const accounts = $derived(accountsOf(agent.engine ?? undefined));
   const accountLocked = $derived(!!agent.sessionId || !!agent.forkOf || agent.prompts > 0 || busy);
   // « Automatique » names the account a new agent of the project would go to: none when every one is reserved to others.
-  const autoAccount = $derived(newAgentAccount(project));
+  const autoAccount = $derived(newAgentAccount(project, agent.engine ?? undefined));
   const accountOptions = $derived(
     accounts.length < 2
       ? []

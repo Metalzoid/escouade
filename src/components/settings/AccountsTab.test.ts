@@ -8,7 +8,7 @@ vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
-import { agent, fakeBackend, project, resetApp, SETTINGS } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, SETTINGS, usageOf } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -40,7 +40,7 @@ describe('AccountsTab', () => {
     const b = backend();
     render(SettingsModal, { tab: 'accounts' });
     const tabs = screen.getAllByRole('tab');
-    const at = tabs.indexOf(screen.getByRole('tab', { name: 'Comptes Claude' }));
+    const at = tabs.indexOf(screen.getByRole('tab', { name: 'Comptes' }));
     expect(tabs[at - 1]).toBe(screen.getByRole('tab', { name: 'Harness' }));
     expect(tabs[at]).toHaveAttribute('aria-selected', 'true');
     expect(names()).toEqual(['Principal', 'Pro']);
@@ -60,10 +60,10 @@ describe('AccountsTab', () => {
     expect(within(row('Principal')).queryByRole('button', { name: 'Supprimer' })).not.toBeInTheDocument();
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(
-      screen.getByText('Les nouveaux agents partent sur le premier compte actif sous le seuil de pause, dans cet ordre.'),
+      screen.getByText('Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre.'),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
-    expect(screen.getByRole('tab', { name: 'Comptes Claude' })).not.toHaveClass('changed');
+    expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
   });
 
   it('says what an account at rest, Principal on an API key or a sign-in out of date is', async () => {
@@ -72,16 +72,8 @@ describe('AccountsTab', () => {
     app.usage = {
       ...app.usage,
       accounts: [
-        { id: 'principal', fiveHour: null, sevenDay: null, connected: false, reason: 'Pas connecté', todayCost: 0, updatedAt: 0 },
-        {
-          id: 'pro',
-          fiveHour: null,
-          sevenDay: null,
-          connected: true,
-          reason: 'Connexion expirée : relance Claude Code pour ce compte.',
-          todayCost: 0,
-          updatedAt: 0,
-        },
+        usageOf('principal', { connected: false, reason: 'Pas connecté', updatedAt: 0 }),
+        usageOf('pro', { reason: 'Connexion expirée : relance Claude Code pour ce compte.', updatedAt: 0 }),
       ],
     };
     render(SettingsModal, { tab: 'accounts' });
@@ -148,7 +140,7 @@ describe('AccountsTab', () => {
     await waitFor(() => expect(within(row('Pro')).getByRole('switch', { name: 'Actif' })).toHaveAttribute('aria-checked', 'false'));
     // Principal is then the only one active.
     expect(principal).toBeDisabled();
-    expect(principal).toHaveAccessibleDescription('Il faut au moins un compte actif.');
+    expect(principal).toHaveAccessibleDescription('Il faut au moins un compte actif par harness.');
   });
 
   it('keeps Principal to projects too, and says which projects no active account serves then', async () => {
@@ -163,11 +155,15 @@ describe('AccountsTab', () => {
     // Pro switched off: no account serves the others any more, and the tab says so.
     const status = screen.getByRole('status');
     await waitFor(() =>
-      expect(status).toHaveTextContent('Aucun compte actif ne sert « infra » et « web » : leurs agents et leurs tickets ne démarrent pas.'),
+      expect(status).toHaveTextContent(
+        'Aucun compte actif de leur harness par défaut ne sert « infra » et « web » : leurs agents et leurs tickets ne démarrent pas.',
+      ),
     );
     await userEvent.click(within(row('Principal')).getByRole('checkbox', { name: 'web' }));
     await waitFor(() =>
-      expect(status).toHaveTextContent('Aucun compte actif ne sert « infra » : ses agents et ses tickets ne démarrent pas.'),
+      expect(status).toHaveTextContent(
+        'Aucun compte actif de son harness par défaut ne sert « infra » : ses agents et ses tickets ne démarrent pas.',
+      ),
     );
   });
 
@@ -329,14 +325,111 @@ describe('AccountsTab', () => {
     setLang('en');
     backend();
     render(SettingsModal, { tab: 'accounts' });
-    expect(screen.getByRole('tab', { name: 'Claude accounts' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Accounts' })).toBeInTheDocument();
     expect(names()).toEqual(['Main', 'Pro']);
     expect(await within(row('Main')).findByText('Signed in · ada@atlas.dev')).toBeInTheDocument();
     expect(await within(row('Pro')).findByText('Not signed in')).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('textbox', { name: 'Executable' })).toHaveAttribute('placeholder', 'The one in the settings');
     expect(screen.getByRole('button', { name: 'Add an account…' })).toBeInTheDocument();
-    expect(screen.getByText('New agents start on the first active account under the pause threshold, in this order.')).toBeInTheDocument();
+    expect(
+      screen.getByText('New agents start on the first active account of their harness under the pause threshold, in this order.'),
+    ).toBeInTheDocument();
     app.settings.accounts = [{ ...PRINCIPAL, name: 'Perso' }, PRO];
     await waitFor(() => expect(names()).toEqual(['Perso', 'Pro']));
+  });
+});
+
+describe('AccountsTab with two harnesses (ESC-30)', () => {
+  const CODEX_MAIN: Account = { id: 'principal-codex', name: 'Principal', engine: 'codex', configDir: '', claudePath: '', active: true };
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+  const statuses = () => ({ connected: true, email: null, dir: '', stamp: null });
+
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO, CODEX_MAIN, WORK], engineOrder: ['claude', 'codex'] };
+    app.modal = { kind: 'settings', tab: 'accounts' };
+  });
+
+  const list = (name: string) => screen.getByRole('list', { name });
+  const items = (name: string) =>
+    within(list(name))
+      .getAllByRole('listitem')
+      .map((li) => li.getAttribute('aria-label') ?? li.textContent?.trim());
+
+  it('groups the accounts by harness, each kept to its own harness', async () => {
+    const b = fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      account_reorder: (a: { ids: string[] }) => a.ids.map((id) => app.settings.accounts.find((x) => x.id === id)),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(items('Comptes Claude Code')).toEqual(['Principal', 'Pro']);
+    expect(items('Comptes Harness nu')).toEqual(['Principal', 'Travail']);
+    // A Principal of each harness, which never goes.
+    const codex = list('Comptes Harness nu');
+    expect(
+      within(within(codex).getByRole('listitem', { name: 'Principal' })).queryByRole('button', { name: 'Supprimer' }),
+    ).not.toBeInTheDocument();
+    expect(within(within(codex).getByRole('listitem', { name: 'Travail' })).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
+    // An account goes up among its harness's: never past another harness's.
+    expect(within(codex).getByRole('button', { name: 'Monter Principal' })).toBeDisabled();
+    await userEvent.click(within(codex).getByRole('button', { name: 'Monter Travail' }));
+    await waitFor(() => expect(b.called('account_reorder')).toHaveLength(1));
+    expect(b.called('account_reorder')[0].args.ids).toEqual(['principal', 'pro', 'work', 'principal-codex']);
+  });
+
+  it('keeps one account of each harness active, whatever the other harness has', () => {
+    app.settings.accounts = [PRINCIPAL, PRO, CODEX_MAIN, { ...WORK, active: false }];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { tab: 'accounts' });
+    const codex = list('Comptes Harness nu');
+    expect(within(within(codex).getByRole('listitem', { name: 'Principal' })).getByRole('switch', { name: 'Actif' })).toBeDisabled();
+    const claude = list('Comptes Claude Code');
+    expect(within(within(claude).getByRole('listitem', { name: 'Pro' })).getByRole('switch', { name: 'Actif' })).toBeEnabled();
+  });
+
+  it('sets the order of the harnesses, which gives a project its fallback harnesses', async () => {
+    const b = fakeBackend({ account_status: statuses, save_settings: () => [], engine_order_set: (a: { order: string[] }) => a.order });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(screen.getByText(/Après son harness par défaut, un projet passe aux suivants dans cet ordre/)).toBeInTheDocument();
+    const order = list('Ordre des harness');
+    expect(
+      within(order)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent?.replace(/[↑↓\s]+/g, ' ').trim()),
+    ).toEqual(['1 Claude Code', '2 Harness nu']);
+    expect(within(order).getByRole('button', { name: 'Monter Claude Code' })).toBeDisabled();
+    await userEvent.click(within(order).getByRole('button', { name: 'Monter Harness nu' }));
+    await waitFor(() => expect(b.called('engine_order_set')).toHaveLength(1));
+    expect(b.called('engine_order_set')[0].args.order).toEqual(['codex', 'claude']);
+    expect(app.settings.engineOrder).toEqual(['codex', 'claude']);
+    // The groups follow it.
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('list')
+          .map((l) => l.getAttribute('aria-label'))
+          .slice(0, 2),
+      ).toEqual(['Comptes Harness nu', 'Comptes Claude Code']),
+    );
+  });
+
+  it('shows no order with a single harness', () => {
+    app.engines = [CLAUDE_ENGINE];
+    app.settings.accounts = [PRINCIPAL, PRO];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(screen.queryByRole('list', { name: 'Ordre des harness' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Comptes Claude Code' })).toBeInTheDocument();
+  });
+
+  it('is written in English', () => {
+    setLang('en');
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(screen.getByRole('list', { name: 'Claude Code accounts' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Harness order' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move Harness nu up' })).toBeInTheDocument();
   });
 });

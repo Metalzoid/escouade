@@ -5,7 +5,7 @@ export default defineZone('settings', {
   tabs: {
     app: { label: 'Application', desc: 'Zoom, text size, and languages' },
     claude: { label: 'Harness', desc: 'Executables, versions, sign-in, and agent defaults' },
-    accounts: { label: 'Claude accounts', desc: 'The accounts agents start on, saved as you change them' },
+    accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, saved as you change them' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
@@ -105,7 +105,7 @@ export default defineZone('settings', {
     version: 'Version',
     versionTested: 'Tested with Escouade (from {oldest} to {newest}).',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
-    versionNotConnected: 'No account signed in: sign in from the Claude accounts tab.',
+    versionNotConnected: 'No account signed in: sign in from the Accounts tab.',
     newAgents: 'New agents',
     defaultModel: 'Default model',
     defaultEffort: 'Default effort',

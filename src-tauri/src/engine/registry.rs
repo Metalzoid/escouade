@@ -77,6 +77,17 @@ pub enum QuotaKind {
     None,
 }
 
+/// What tells a harness's accounts apart (docs/ENGINES.md, « Les comptes »). Its Principal is
+/// launched without it, as the harness always is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AccountStore {
+    /// A configuration folder of their own, given to their processes by `var`: `CLAUDE_CONFIG_DIR`
+    /// (Claude Code), `CODEX_HOME` (Codex). A key kept in the keychain and given by the
+    /// environment (`CURSOR_API_KEY`) comes with the first harness that needs one.
+    ConfigDir { var: &'static str },
+}
+
 /// What a turn costs, as the harness tells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 // Its other values are for the harnesses to come (docs/TODO-1.8.md, chapter 1).
@@ -111,6 +122,10 @@ pub struct EngineCaps {
     /// Its `/` commands in the composer.
     pub slash_commands: bool,
     pub quota: QuotaKind,
+    /// The lengths of the windows of its quota, in minutes (`QuotaMeter::minutes`): what the
+    /// status bar shows before their first reading (Claude Code: 5 hours and a week). A reading
+    /// may give fewer (Codex's free plan has one).
+    pub quota_windows: Vec<u32>,
     pub cost: CostKind,
     /// Its own interface in a terminal (« Vue Claude Code »).
     pub terminal_view: bool,

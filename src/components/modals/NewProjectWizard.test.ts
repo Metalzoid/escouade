@@ -279,8 +279,8 @@ describe('the new project’s assistant', () => {
     await typePath();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
-    expect(screen.getByText('Aucun compte Claude ne sert ce projet')).toBeInTheDocument();
-    expect(screen.getByText(/Réglages › Comptes Claude/)).toBeInTheDocument();
+    expect(screen.getByText('Aucun compte ne sert ce projet')).toBeInTheDocument();
+    expect(screen.getByText(/Réglages › Comptes/)).toBeInTheDocument();
     expect(screen.getByText('Aucun harness trouvé')).toBeInTheDocument();
     expect(screen.getByText(/indique son chemin dans Réglages › Harness/)).toBeInTheDocument();
     app.enginesFound = ['claude'];

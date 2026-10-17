@@ -3,10 +3,10 @@
 //! ticket's, a copy the one its original has, and each turn keeps the one that ran it.
 
 use crate::core::{AgentOptions, Core};
-use crate::core_tests::harness;
+use crate::core_tests::{harness, Harness};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
-use crate::stats::{Labels, Share};
+use crate::stats::{EngineShare, Labels};
 use crate::tickets_tests::draft;
 use serde_json::{json, Value};
 use tauri::test::mock_app;
@@ -133,10 +133,32 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
     core.stop_for_good();
 }
 
+/// An account for every harness beside Principal: an agent of a harness goes to its accounts
+/// alone (ESC-30). Their adapters are not written yet, so their agents run on the fake CLI.
+fn accounts_for_every_harness(h: &Harness) {
+    h.set_settings(|s| {
+        for engine in [
+            EngineId::Codex,
+            EngineId::Copilot,
+            EngineId::Cursor,
+            EngineId::Opencode,
+        ] {
+            s.accounts.push(crate::model::Account {
+                id: format!("{engine}-work"),
+                name: format!("{engine} work"),
+                engine,
+                config_dir: h.dir.join(engine.as_str()).to_string_lossy().into(),
+                ..Default::default()
+            });
+        }
+    });
+}
+
 #[tokio::test]
 async fn a_new_agent_runs_on_its_projects_harness_unless_told_another() {
     let h = harness("esc27-new-agent");
     let (p, _) = h.project(false).await;
+    accounts_for_every_harness(&h);
     // A project saved before 1.8, or whose harness is the default: Claude Code.
     let a = h.core.create_agent(&p.id, None).await.unwrap().meta;
     assert_eq!(a.engine, EngineId::Claude);
@@ -186,6 +208,7 @@ async fn a_new_agent_runs_on_its_projects_harness_unless_told_another() {
 async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_original_has() {
     let h = harness("esc27-turns");
     let (p, _) = h.project(false).await;
+    accounts_for_every_harness(&h);
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&id, "Premier").await;
     h.wait("the first turn counted", |h| {
@@ -213,7 +236,7 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
         .query("day", None, &Labels::default())
         .by_engine
         .into_iter()
-        .map(|s: Share| s.key)
+        .map(|s: EngineShare| s.engine)
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect();
@@ -227,6 +250,7 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
 async fn a_tickets_agent_runs_on_the_tickets_harness_else_on_its_projects() {
     let h = harness("esc27-tickets");
     let (p, _) = h.project(false).await;
+    accounts_for_every_harness(&h);
     h.set_board(&p.id, |s| s.autopilot = false);
     // A ticket of its own harness.
     let own = h

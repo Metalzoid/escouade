@@ -14,7 +14,7 @@ The left column lists the tabs, with Escouade’s version at the bottom. The nam
 |---|---|
 | “Application” | Zoom, text size, and languages |
 | [“Claude Code”](settings-claude-code) | Executable, model, and default permissions |
-| [“Claude accounts”](settings-accounts) | The accounts agents start on, saved as you change them |
+| [“Accounts”](settings-accounts) | The accounts agents start on, saved as you change them |
 | [“Notifications”](settings-notifications) | Visual and sound alerts |
 | [“Projects”](settings-projects) | Settings specific to each project |
 | [“Kanban”](settings-board) | Autopilot and approved tickets |
@@ -35,7 +35,7 @@ Changes go into a draft: nothing applies until you click “Save”. A dot on a 
 
 ### What saves right away
 
-Three places do not wait for the button. The “Claude accounts” tab, where each change goes through the moment you make it, and the “Claude and the agents can drive Escouade” switch on the “Claude Code” tab, because a “Cancel” could not undo what they write to disk. And the “Display” group of the “Application” tab, which also changes from the keyboard, settings window open or not: what you pick there shows and saves right away.
+Three places do not wait for the button. The “Accounts” tab, where each change goes through the moment you make it, and the “Claude and the agents can drive Escouade” switch on the “Claude Code” tab, because a “Cancel” could not undo what they write to disk. And the “Display” group of the “Application” tab, which also changes from the keyboard, settings window open or not: what you pick there shows and saves right away.
 
 ## The “Application” tab
 

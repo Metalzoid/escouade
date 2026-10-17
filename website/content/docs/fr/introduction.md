@@ -69,7 +69,7 @@ Un worktree est une copie de travail séparée de ton dépôt, sur sa propre bra
 
 ### Compte Claude
 
-Un compte Claude est un dossier de configuration de Claude Code, avec sa connexion. « Principal » est ton compte habituel, lancé comme avant ; tu peux en ajouter d’autres (un perso, un pro) dans Réglages › Comptes Claude. Chaque agent reste sur son compte. Voir [les comptes Claude](accounts).
+Un compte Claude est un dossier de configuration de Claude Code, avec sa connexion. « Principal » est ton compte habituel, lancé comme avant ; tu peux en ajouter d’autres (un perso, un pro) dans Réglages › Comptes. Chaque agent reste sur son compte. Voir [les comptes Claude](accounts).
 
 ### Vue d’ensemble
 

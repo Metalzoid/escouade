@@ -3,7 +3,7 @@
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { anyCan, choosesEngine, engineOptions } from '../../lib/engines';
-  import { accountName, serves } from '../../lib/accounts';
+  import { accountName, accountsOf, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { joinPath, tildify } from '../../lib/format';
   import { revealHidden } from '../../lib/recipe';
@@ -24,10 +24,13 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
-  /** « Compte préféré »: « Automatique », then each active account (the project's own, even switched off since). */
+  /**
+   * « Compte préféré »: « Automatique », then each active account of its default harness (the project's own, even switched
+   * off since).
+   */
   const ACCOUNTS = $derived([
     { value: '', label: t('accounts.project.auto'), title: t('accounts.project.autoTitle') },
-    ...app.settings.accounts
+    ...accountsOf(draft.engine ?? undefined)
       .filter((a) => (a.active && serves(a, project.id)) || a.id === draft.account)
       .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.project.inactive', { name: accountName(a) }) })),
   ]);
@@ -192,7 +195,7 @@
       />
     </Row>
   {/if}
-  {#if app.settings.accounts.length > 1}
+  {#if accountsOf(draft.engine ?? undefined).length > 1}
     <Row label={t('accounts.project.label')} desc={t('accounts.project.desc')}>
       <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={draft.account} />
     </Row>

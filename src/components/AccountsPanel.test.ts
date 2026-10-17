@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
-import { agent, resetApp } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp, usageOf } from '../test/ipc';
 import type { Account, AccountUsage, RateWindow } from '../lib/types';
 import AccountsPanel from './AccountsPanel.svelte';
 
@@ -13,18 +13,9 @@ const TEAM: Account = { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\tea
 
 const NOW = new Date(2026, 9, 10, 14, 59).getTime();
 const win = (pct: number, hours = 3.0167): RateWindow => ({ pct, resetsAt: NOW + hours * 3_600_000 });
-const read = (id: string, over: Partial<AccountUsage> = {}): AccountUsage => ({
-  id,
-  fiveHour: null,
-  sevenDay: null,
-  connected: true,
-  reason: null,
-  todayCost: 0,
-  updatedAt: 1,
-  ...over,
-});
+const read = (id: string, over: Parameters<typeof usageOf>[1] = {}): AccountUsage => usageOf(id, over);
 
-const panel = () => screen.getByRole('dialog', { name: 'Quotas des comptes Claude' });
+const panel = () => screen.getByRole('dialog', { name: 'Quotas des comptes' });
 const group = (name: string) => within(panel()).getByRole('group', { name });
 
 describe('AccountsPanel', () => {
@@ -33,7 +24,7 @@ describe('AccountsPanel', () => {
     app.now = NOW;
     app.settings.accounts = [PRINCIPAL, PRO, TEAM];
     app.settings.quotaPause = 90;
-    app.usage.current = 'pro';
+    app.usage.current = { claude: 'pro' };
     app.usage.accounts = [
       read('principal', { fiveHour: win(95), sevenDay: win(30, 100) }),
       read('pro', { fiveHour: win(42), sevenDay: win(12, 108) }),
@@ -199,7 +190,7 @@ describe('AccountsPanel', () => {
   it('writes it all in English', () => {
     setLang('en');
     render(AccountsPanel, { onclose: () => {} });
-    const dialog = screen.getByRole('dialog', { name: 'Claude accounts quota' });
+    const dialog = screen.getByRole('dialog', { name: 'Accounts quota' });
     expect(within(dialog).getByRole('group', { name: 'Pro' })).toHaveTextContent('current');
     // Principal is Main in English while it keeps its default name.
     expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause threshold');
@@ -218,5 +209,46 @@ describe('AccountsPanel', () => {
     render(AccountsPanel, { onclose: () => {} });
     expect(screen.getByRole('group', { name: 'Main' })).toHaveTextContent('Today: $1.20');
     expect(screen.getByRole('group', { name: 'Pro' })).toHaveTextContent('Today: $0.50');
+  });
+});
+
+describe('AccountsPanel with the accounts of two harnesses (ESC-30)', () => {
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+
+  beforeEach(() => {
+    resetApp();
+    app.now = NOW;
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings.accounts = [PRINCIPAL, PRO, WORK];
+    app.usage.current = { claude: 'pro', codex: 'work' };
+    app.usage.accounts = [read('principal', { fiveHour: win(10) }), read('pro', { fiveHour: win(42) }), read('work', { engine: 'codex' })];
+  });
+
+  it('groups the accounts by harness, each with its current one first', () => {
+    render(AccountsPanel, { onclose: () => {} });
+    const groups = within(panel()).getAllByRole('region');
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Comptes Claude Code', 'Comptes Harness nu']);
+    expect(
+      within(groups[0])
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['Pro', 'Principal']);
+    // Each harness has its own current account.
+    expect(within(groups[1]).getByRole('group', { name: 'Travail' })).toHaveAttribute('aria-current', 'true');
+    // A harness without a quota has no bar: what its turns cost, alone.
+    expect(within(groups[1]).queryByRole('meter')).not.toBeInTheDocument();
+    expect(within(groups[1]).getByText('Pas de quota : seul le coût de ses tours compte.')).toBeInTheDocument();
+    // Each Claude account was read with its 5-hour window alone: one bar each.
+    expect(within(groups[0]).getAllByRole('meter')).toHaveLength(2);
+  });
+
+  it('follows the order of the harnesses', () => {
+    app.settings.engineOrder = ['codex', 'claude'];
+    render(AccountsPanel, { onclose: () => {} });
+    expect(
+      within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Harness nu', 'Claude Code']);
   });
 });

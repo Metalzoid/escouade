@@ -25,7 +25,7 @@ const at = (h: number, m = 0) => {
   d.setHours(h, m, 0, 0);
   return d.getTime();
 };
-const pause = (over: Partial<AutopilotPause> = {}): AutopilotPause => ({ reason: 'fiveHour', pct: 97, until: at(14), ...over });
+const pause = (over: Partial<AutopilotPause> = {}): AutopilotPause => ({ reason: 'window', minutes: 300, pct: 97, until: at(14), ...over });
 
 describe('the board with several accounts', () => {
   beforeEach(() => {

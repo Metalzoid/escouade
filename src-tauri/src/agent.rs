@@ -75,7 +75,7 @@ pub struct Effects {
     pub save: bool,
     pub notify: Option<AgentAlert>,
     pub turns: Vec<TurnRow>,
-    pub rate: Option<(Option<RateWindow>, Option<RateWindow>)>,
+    pub rate: Option<Vec<crate::model::QuotaMeter>>,
     /// The turn was stopped by the usage limit, which resets then (if Claude Code told).
     pub limited: Option<Option<i64>>,
     pub files_changed: bool,
