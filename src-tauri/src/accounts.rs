@@ -466,14 +466,16 @@ pub fn launch_env(account: &Account) -> Vec<(String, String)> {
 }
 
 /// The program the account runs: its own when it names one, else the settings' path for Claude
-/// Code (the only harness with one in the settings), else where its harness usually is (found as
-/// `Engine::locate` finds it). None when it cannot be found.
+/// Code (the only harness with one in the settings, and the harnesses not written yet, which run
+/// its adapter), else where its harness usually is (found as `Engine::locate` finds it). None when
+/// it cannot be found.
 pub fn program(account: &Account, settings: &Settings) -> Option<engine::Program> {
     let own = account.claude_path.trim();
-    let path = match (own.is_empty(), account.engine) {
+    let runs_claude = engine::by_id(account.engine).id() == EngineId::Claude;
+    let path = match (own.is_empty(), runs_claude) {
         (false, _) => own,
-        (true, EngineId::Claude) => &settings.claude_path,
-        (true, _) => "",
+        (true, true) => &settings.claude_path,
+        (true, false) => "",
     };
     engine::by_id(account.engine).locate(path, &settings.wsl_distro)
 }
@@ -1915,6 +1917,13 @@ mod tests {
         assert_eq!(program(&with(path(&own)), &settings), native(&own));
         assert_eq!(program(&with(String::new()), &settings), native(&set));
         assert_eq!(program(&with("  ".into()), &settings), native(&set));
+        // A harness not written yet runs Claude Code's adapter, so the settings' claude too (never one
+        // found elsewhere on the machine).
+        let cursor = Account {
+            engine: EngineId::Cursor,
+            ..with(String::new())
+        };
+        assert_eq!(program(&cursor, &settings), native(&set));
         // Its own named and not there: not found, rather than another one.
         let gone = path(&dir.join("absent.cmd"));
         assert_eq!(program(&with(gone), &settings), None);

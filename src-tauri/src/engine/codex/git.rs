@@ -134,11 +134,8 @@ fn posix_words(s: &str) -> Option<Vec<String>> {
 /// command under Windows), `bash -lc <script>` (a POSIX shell); a bare `git …` is run as it is
 /// (None for its shell). Anything else is not unwrapped.
 fn unwrap(argv: &[String]) -> Option<(Option<Shell>, String)> {
-    let program = argv.first()?;
-    let name = Path::new(program.as_str())
-        .file_name()?
-        .to_string_lossy()
-        .to_lowercase();
+    // Its file name, whatever the slashes: a path of Windows is read the same on every system.
+    let name = argv.first()?.rsplit(['/', '\\']).next()?.to_lowercase();
     let name = name.strip_suffix(".exe").unwrap_or(&name);
     let rest = &argv[1..];
     match name {
