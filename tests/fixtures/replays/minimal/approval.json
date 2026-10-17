@@ -9,9 +9,7 @@
     "sessionId": "min-rec-1",
     "status": "done",
     "tokens": 0,
-    "touchedFiles": [
-      "src/app.ts"
-    ]
+    "touchedFiles": ["src/app.ts"]
   },
   "flux": "approval.jsonl",
   "items": [
