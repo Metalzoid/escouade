@@ -9,8 +9,8 @@
 use super::activity::clip;
 use crate::accounts;
 use crate::core::Core;
-use crate::engine::{self, Engine};
-use crate::model::{Account, Settings};
+use crate::engine::{self, userconfig, Engine};
+use crate::model::{Account, EngineId, Settings};
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -225,30 +225,72 @@ pub async fn withdraw(engine: &dyn Engine, target: &Target) -> Result<bool> {
     Ok(true)
 }
 
-/// The harness the accounts are of: Claude Code's alone until each harness has its own (docs/TODO-1.8.md,
-/// « Comptes et quotas »), and its user config is where the server is declared.
-fn harness() -> &'static dyn Engine {
-    engine::default()
+/// The user configs a declaration run wrote (`userconfig::same_file_key`), and how that went.
+type Seen = std::collections::HashMap<PathBuf, std::result::Result<(), String>>;
+
+/// The harness of `account`, whose user config its declaration goes in.
+fn harness(account: &Account) -> &'static dyn Engine {
+    engine::by_id(account.engine)
 }
 
-/// Where the server stands in one account's Claude Code, as the window shows it.
+/// Where the server stands in one account of a harness, as the window shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Declaration {
-    /// The id of the Claude account.
+    /// The id of the account.
     pub account: String,
+    /// Its harness.
+    pub engine: EngineId,
     /// The server is declared in it (as wanted).
     pub ok: bool,
     /// Why it is not.
     pub error: Option<String>,
-    /// The command that declares it in this account by hand, its token hidden (`MASK`): the real
+    /// The command that declares it in this account by hand (for a harness with a user config
+    /// Escouade writes itself, the entry to paste in `file`), its token hidden (`MASK`): the real
     /// one is built when the user asks to copy it (`Core::mcp_manual_command`), and is never kept
     /// nor sent with the state.
     pub command: String,
+    /// The user config to paste `command` in, for a harness Escouade writes it in itself; None:
+    /// `command` is to be run.
+    pub file: Option<String>,
 }
 
-// The declaration in each account, kept in step with the settings: « Claude et les agents peuvent piloter Escouade »
-// turned on or off, an account added, switched on or off, the server on another port.
+/// Whether the server is declared in the harness `engine` while it runs: Claude Code with the
+/// switch, another harness with its own « <harness> peut piloter Escouade » too.
+fn wanted_in(settings: &Settings, engine: EngineId) -> bool {
+    settings.mcp_enabled && (engine == EngineId::Claude || settings.mcp_harnesses.contains(&engine))
+}
+
+/// The accounts of `engine` the server is declared in: its active ones; a harness that has none
+/// in the settings yet (its Principal is made at its first agent, `Core::accounts_of`), its
+/// Principal all the same, which is the user's own config. `all`: the inactive ones too (to take
+/// the entry out of).
+fn accounts_in(settings: &Settings, engine: EngineId, all: bool) -> Vec<Account> {
+    let of: Vec<Account> = settings
+        .accounts
+        .iter()
+        .filter(|a| a.engine == engine && (all || a.active))
+        .cloned()
+        .collect();
+    let none = !settings.accounts.iter().any(|a| a.engine == engine);
+    if none && engine != EngineId::Claude {
+        return vec![accounts::principal_of(engine)];
+    }
+    of
+}
+
+/// The harnesses that can be declared in: Claude Code, and those with a user config of theirs.
+fn declarable() -> Vec<EngineId> {
+    engine::registry::all()
+        .into_iter()
+        .filter(|e| e.id() == EngineId::Claude || e.user_config().is_some())
+        .map(|e| e.id())
+        .collect()
+}
+
+// The declaration in each account, kept in step with the settings: « Claude et les agents peuvent
+// piloter Escouade » or « <harness> peut piloter Escouade » turned on or off, an account added,
+// switched on or off, the server on another port.
 impl<R: Runtime> Core<R> {
     /// The app's `CLAUDE_CONFIG_DIR` and home folder as the account's `claude` goes by them
     /// (`accounts::claude_home`: the Linux home folder for one of WSL). In unit tests every core
@@ -263,9 +305,39 @@ impl<R: Runtime> Core<R> {
         accounts::app_env()
     }
 
-    /// How the account's Claude Code is run to declare the server: its `claude`, its network
-    /// settings, its folder (never Principal's), from the data folder.
+    /// The user config of an account of a harness Escouade writes it in itself: in its folder
+    /// (`accounts::config_dir`; in unit tests, a Principal's is in the core's own data folder,
+    /// never the machine user's).
+    pub(crate) fn user_config_file(
+        &self,
+        settings: &Settings,
+        account: &Account,
+    ) -> Option<PathBuf> {
+        let user = harness(account).user_config()?;
+        let dir = match accounts::own_dir(account) {
+            None if cfg!(test) => self
+                .data
+                .root()
+                .join(format!("{}-home", account.engine.as_str())),
+            _ => accounts::config_dir(account, settings),
+        };
+        Some(dir.join(user.file))
+    }
+
+    /// How the account's harness is run to declare the server: its program, its network
+    /// settings, its folder (never Principal's), from the data folder. A harness whose user config
+    /// Escouade writes itself runs nothing: only `config` counts.
     fn install_target(&self, settings: &Settings, account: &Account) -> Result<Target> {
+        if let Some(config) = self.user_config_file(settings, account) {
+            return Ok(Target {
+                program: accounts::program(account, settings)
+                    .unwrap_or_else(|| engine::Program::Native(account.engine.as_str().into())),
+                env: Vec::new(),
+                cwd: self.data.root().to_path_buf(),
+                config,
+                timeout: COMMAND_TIMEOUT,
+            });
+        }
         let program = accounts::program(account, settings).ok_or_else(|| {
             anyhow!(tr!(
                 "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
@@ -294,21 +366,27 @@ impl<R: Runtime> Core<R> {
         })
     }
 
-    /// What the account would be told to run by hand to declare `entry`.
+    /// What the account would be told to run by hand (or to paste in its user config) to declare
+    /// `entry`.
     fn manual_command(&self, settings: &Settings, account: &Account, entry: &Entry) -> String {
+        let engine = harness(account);
+        if let Some(file) = self.user_config_file(settings, account) {
+            let replace = current(engine, &file).is_some();
+            return engine.manual_declaration(cfg!(windows), "", None, entry, replace);
+        }
         let (env, home) = self.claude_app_env(account, settings);
         let claude_json = accounts::claude_json_with(account, env.as_deref(), &home);
-        let replace = current(harness(), &claude_json).is_some();
+        let replace = current(engine, &claude_json).is_some();
         // A `claude` of WSL: the command for a terminal of its distribution, its folder there.
         if let Some(wsl) = accounts::program(account, settings).and_then(|p| p.wsl().cloned()) {
             let dir = accounts::own_dir(account).map(|d| wsl.linux_path(d).unwrap_or(d.into()));
-            return harness().manual_declaration(false, &wsl.path, dir.as_deref(), entry, replace);
+            return engine.manual_declaration(false, &wsl.path, dir.as_deref(), entry, replace);
         }
         let typed = [account.claude_path.trim(), settings.claude_path.trim()]
             .into_iter()
             .find(|p| !p.is_empty())
             .unwrap_or("claude");
-        harness().manual_declaration(
+        engine.manual_declaration(
             cfg!(windows),
             typed,
             accounts::own_dir(account),
@@ -318,25 +396,62 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The server declared in `account`: how that went.
+    /// `seen`: the user configs this run already wrote, with how that went. An account whose
+    /// `config.toml` leads to one of them (a link to its Principal's) is told the same, and the
+    /// file is not written again.
     async fn declare_in(
         &self,
         settings: &Settings,
         account: &Account,
         entry: &Entry,
+        seen: &mut Seen,
     ) -> Declaration {
-        let done = match self.install_target(settings, account) {
-            Ok(target) => declare(harness(), &target, entry).await.map(|_| ()),
-            Err(e) => Err(e),
+        let file = self.user_config_file(settings, account);
+        let key = file.as_deref().map(userconfig::same_file_key);
+        let done = match key.as_ref().and_then(|k| seen.get(k)) {
+            Some(before) => before.clone(),
+            None => {
+                let done = match self.install_target(settings, account) {
+                    Ok(target) => declare(harness(account), &target, entry)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| format!("{e:#}")),
+                    Err(e) => Err(format!("{e:#}")),
+                };
+                if let Some(k) = key {
+                    seen.insert(k, done.clone());
+                }
+                done
+            }
         };
         if let Err(e) = &done {
-            log::warn!("mcp: not declared for account {}: {e:#}", account.id);
+            log::warn!("mcp: not declared for account {}: {e}", account.id);
         }
         Declaration {
             account: account.id.clone(),
+            engine: account.engine,
             ok: done.is_ok(),
-            error: done.err().map(|e| format!("{e:#}")),
+            error: done.err(),
             command: mask_bearer(&self.manual_command(settings, account, entry)),
+            // Where it is really written: for a link, the file it leads to.
+            file: file.map(|f| userconfig::written_at(&f).to_string_lossy().into_owned()),
         }
+    }
+
+    /// The account `id` among those the server is declared in (a harness's Principal not saved
+    /// yet included).
+    fn declared_account(&self, settings: &Settings, id: &str) -> Option<Account> {
+        settings
+            .accounts
+            .iter()
+            .find(|a| a.id == id)
+            .cloned()
+            .or_else(|| {
+                declarable()
+                    .into_iter()
+                    .flat_map(|e| accounts_in(settings, e, true))
+                    .find(|a| a.id == id)
+            })
     }
 
     /// The command that declares the server by hand in the account `account`, with the real token
@@ -344,16 +459,12 @@ impl<R: Runtime> Core<R> {
     /// and a port to give.
     pub fn mcp_manual_command(&self, account: &str) -> Result<String> {
         let settings = self.settings.read().clone();
-        let account = settings
-            .accounts
-            .iter()
-            .find(|a| a.id == account)
-            .ok_or_else(|| {
-                anyhow!(tr!(
-                    "compte Claude « {account} » introuvable",
-                    "Claude account “{account}” not found"
-                ))
-            })?;
+        let account = self.declared_account(&settings, account).ok_or_else(|| {
+            anyhow!(tr!(
+                "compte « {account} » introuvable",
+                "account “{account}” not found"
+            ))
+        })?;
         let status = self.mcp.status();
         if !settings.mcp_enabled || !status.running {
             bail!(tr!(
@@ -362,7 +473,7 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let token = self.mcp.external_token()?;
-        Ok(self.manual_command(&settings, account, &wanted(status.port, &token)))
+        Ok(self.manual_command(&settings, &account, &wanted(status.port, &token)))
     }
 
     /// « Claude et les agents peuvent piloter Escouade » turned on or off: saved like any setting, which starts or
@@ -375,9 +486,29 @@ impl<R: Runtime> Core<R> {
         self.save_settings(settings)
     }
 
-    /// The declaration in Claude Code is to be brought in step with the settings: on its own task
-    /// (the commands are slow), unless nothing is to be done (off, and nothing declared to take out).
-    pub(crate) fn declare_in_claude(&self) {
+    /// « <harness> peut piloter Escouade » turned on or off: saved like any setting. Off, the token
+    /// changes first (`save_settings`, `McpServer::harness_off`), then the entry leaves the
+    /// harness's accounts.
+    pub fn set_mcp_harness(self: &Arc<Self>, engine: EngineId, on: bool) -> Result<()> {
+        if !declarable().contains(&engine) || engine == EngineId::Claude {
+            bail!(tr!(
+                "{engine} ne déclare pas le serveur MCP d’Escouade.",
+                "{engine} does not declare Escouade’s MCP server.",
+                engine = engine::by_id(engine).name()
+            ));
+        }
+        let _one = self.claude_accounts_lock.lock();
+        let mut settings = self.settings.read().clone();
+        settings.mcp_harnesses.retain(|e| *e != engine);
+        if on {
+            settings.mcp_harnesses.push(engine);
+        }
+        self.save_settings(settings)
+    }
+
+    /// The declaration is to be brought in step with the settings: on its own task (the commands
+    /// are slow), unless nothing is to be done (off, and nothing declared to take out).
+    pub(crate) fn declare_in_harnesses(&self) {
         if !self.settings.read().mcp_enabled && !self.mcp.withdraw.load(Ordering::Acquire) {
             return;
         }
@@ -387,8 +518,22 @@ impl<R: Runtime> Core<R> {
         tauri::async_runtime::spawn(async move { core.declare_now().await });
     }
 
-    /// A Claude account was removed from the settings: its entry leaves its `.claude.json` (the
-    /// folder stays on the disk, and the token would open the server from there for as long as the
+    /// Whether the user config of `gone` is one of an account still there (a link to its
+    /// Principal's): the entry stays, that account wants it.
+    fn shares_its_config(&self, settings: &Settings, gone: &Account) -> bool {
+        let Some(file) = self.user_config_file(settings, gone) else {
+            return false;
+        };
+        let key = userconfig::same_file_key(&file);
+        accounts_in(settings, gone.engine, true)
+            .iter()
+            .filter(|a| a.id != gone.id)
+            .filter_map(|a| self.user_config_file(settings, a))
+            .any(|f| userconfig::same_file_key(&f) == key)
+    }
+
+    /// An account was removed from the settings: its entry leaves its user config (the folder
+    /// stays on the disk, and the token would open the server from there for as long as the
     /// switch is on), whether the switch is on or off (a leftover goes too). On its own task, after
     /// the declaration under way; a failure is only logged. The token is not changed: the other
     /// accounts still hold it.
@@ -399,10 +544,12 @@ impl<R: Runtime> Core<R> {
         tauri::async_runtime::spawn(async move {
             {
                 let _one = core.mcp.declaring.lock().await;
-                if !core.quitting.load(Ordering::Acquire) {
-                    let settings = core.settings.read().clone();
+                let settings = core.settings.read().clone();
+                if !core.quitting.load(Ordering::Acquire)
+                    && !core.shares_its_config(&settings, &gone)
+                {
                     let done = match core.install_target(&settings, &gone) {
-                        Ok(target) => withdraw(harness(), &target).await.map(|_| ()),
+                        Ok(target) => withdraw(harness(&gone), &target).await.map(|_| ()),
                         Err(e) => Err(e),
                     };
                     if let Err(e) = done {
@@ -418,40 +565,62 @@ impl<R: Runtime> Core<R> {
         });
     }
 
-    /// Brings Claude Code in step with the settings, one run at a time:
-    /// - on, with the server running: the server declared in every active account (left alone when
-    ///   it is there as wanted, replaced when it is another, added when it is absent), each account's
-    ///   result told to the window;
-    /// - off, after it was on: taken out of every account, whether active or not (the token was
-    ///   changed when it was turned off, `McpServer::turned_off`, so that an entry that stays — a
-    ///   refusal, a `claude` that is gone, a crash, the app quitting before this run — opens
-    ///   nothing).
+    /// Brings the harnesses in step with the settings, one run at a time:
+    /// - on, with the server running: the server declared in every active account of each harness
+    ///   it is wanted in (left alone when it is there as wanted, replaced when it is another, added
+    ///   when it is absent), each account's result told to the window; taken out of the accounts
+    ///   of a harness whose own switch was turned off;
+    /// - off, after it was on: taken out of every account of every harness, whether active or not
+    ///   (the token was changed when it was turned off, `McpServer::turned_off`, so that an entry
+    ///   that stays — a refusal, a `claude` that is gone, a crash, the app quitting before this
+    ///   run — opens nothing).
     pub(crate) async fn declare_now(&self) {
         self.declare_run().await;
         #[cfg(test)]
         self.mcp.runs.fetch_add(1, Ordering::AcqRel);
     }
 
+    /// The entry taken out of every account of `engine`, active or not; failures logged.
+    /// Two accounts whose user config is the same file (a link): it is taken out of it once.
+    async fn withdraw_all(&self, settings: &Settings, engine: EngineId) {
+        let mut seen = std::collections::HashSet::new();
+        for account in accounts_in(settings, engine, true) {
+            if let Some(file) = self.user_config_file(settings, &account) {
+                if !seen.insert(userconfig::same_file_key(&file)) {
+                    continue;
+                }
+            }
+            let Ok(target) = self.install_target(settings, &account) else {
+                continue;
+            };
+            if let Err(e) = withdraw(harness(&account), &target).await {
+                log::warn!("mcp: not taken out of account {}: {e:#}", account.id);
+            }
+        }
+    }
+
     async fn declare_run(&self) {
         let _one = self.mcp.declaring.lock().await;
         let withdrawing = self.mcp.withdraw.swap(false, Ordering::AcqRel);
+        let turned_off = std::mem::take(&mut *self.mcp.withdraw_from.lock());
         if self.quitting.load(Ordering::Acquire) {
             return;
         }
         let settings = self.settings.read().clone();
         if !settings.mcp_enabled {
             if withdrawing {
-                for account in &settings.accounts {
-                    let Ok(target) = self.install_target(&settings, account) else {
-                        continue;
-                    };
-                    if let Err(e) = withdraw(harness(), &target).await {
-                        log::warn!("mcp: not taken out of account {}: {e:#}", account.id);
-                    }
+                for engine in declarable() {
+                    self.withdraw_all(&settings, engine).await;
                 }
             }
             self.mcp.tell_declared(Vec::new());
             return;
+        }
+        // A harness's own switch turned off: its entries go first (the token already changed).
+        for engine in turned_off {
+            if !wanted_in(&settings, engine) {
+                self.withdraw_all(&settings, engine).await;
+            }
         }
         // Turned off and on again before the run: the token changed when it was turned off, and the
         // entries are replaced below, with the new one.
@@ -464,8 +633,17 @@ impl<R: Runtime> Core<R> {
         };
         let wanted = wanted(status.port, &token);
         let mut declared = Vec::new();
-        for account in settings.accounts.iter().filter(|a| a.active) {
-            declared.push(self.declare_in(&settings, account, &wanted).await);
+        let mut seen = Seen::new();
+        for engine in declarable()
+            .into_iter()
+            .filter(|e| wanted_in(&settings, *e))
+        {
+            for account in accounts_in(&settings, engine, false) {
+                declared.push(
+                    self.declare_in(&settings, &account, &wanted, &mut seen)
+                        .await,
+                );
+            }
         }
         self.mcp.tell_declared(declared);
     }

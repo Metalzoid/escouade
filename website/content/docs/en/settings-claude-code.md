@@ -169,6 +169,10 @@ With the switch on, a line below it says where the declaration stands:
 > [!WARNING]
 > The token is written in plain text in Claude Code’s config (`~/.claude.json` for the Main account). Turning it off changes the token.
 
+### Codex can drive Escouade
+
+When Codex is installed, a second switch, “Codex can drive Escouade”, also declares the server in the `config.toml` of each active Codex account (`~/.codex/config.toml` for the Main account): Codex outside Escouade (a terminal, its app) then gets the same tools. It stays greyed out while “Claude and the agents can drive Escouade” is off (“First turn on “Claude and the agents can drive Escouade”.”), and saves right away too. Escouade writes the entry itself and keeps the rest of the file, comments included. The line below says “Declaring in Codex…” then “Declared in Codex · Main account”; for an account where it fails (a `config.toml` that is not valid TOML, left as it is), it shows the entry to add by hand (“Add it by hand to …:”), the token masked, and “Copy the entry” copies the real one (“Entry copied”). The token is written there in plain text, which the switch’s description says. Turning it off first changes the token, then removes the entry: the file is back to what it was. The detail is on the [MCP server](mcp#codex-can-drive-escouade) page.
+
 ## MCP activity
 
 This last group, “MCP activity”, lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.

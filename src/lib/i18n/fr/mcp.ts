@@ -9,10 +9,15 @@ export default {
     enable: 'Claude et les agents peuvent piloter Escouade',
     enableDesc:
       'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
-    /** `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
-    declared: 'Déclaré dans Claude · {accounts}',
+    /** « <harness> peut piloter Escouade » (ESC-50): another harness outside Escouade, declared in its user config. `{file}`: the Principal's. */
+    harness: '{harness} peut piloter Escouade',
+    harnessDesc:
+      '{harness} hors d’Escouade (un terminal, son app) reçoit les mêmes outils, déclarés dans la config de chaque compte {harness} actif ({file} pour le compte Principal), le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée.',
+    harnessNeedsServer: 'Active d’abord « Claude et les agents peuvent piloter Escouade ».',
+    /** `{harness}`: Claude, Codex. `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
+    declared: 'Déclaré dans {harness} · {accounts}',
     account: 'compte {name}',
-    working: 'Déclaration dans Claude…',
+    working: 'Déclaration dans {harness}…',
     notDeclared: 'Pas déclaré pour le compte {name} : {error}',
     serverFailed: 'Le serveur n’a pas démarré : {error}',
     /** The agents whose process started before the switch was on (« Outils d’Escouade au prochain démarrage » on their conversation). */
@@ -24,6 +29,10 @@ export default {
     command: 'À lancer à la main dans {shell} :',
     copy: 'Copier la commande',
     copied: 'Commande copiée',
+    /** A harness whose user config Escouade writes itself: the entry to paste in it. */
+    paste: 'À ajouter à la main dans {file} :',
+    copyEntry: 'Copier l’entrée',
+    copiedEntry: 'Entrée copiée',
     copyFailed: 'Copie impossible : {error}',
     note: 'Le jeton est écrit en clair dans la config de Claude Code (~/.claude.json pour le compte Principal). Désactiver change le jeton.',
   },

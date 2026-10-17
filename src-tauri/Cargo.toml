@@ -60,6 +60,8 @@ http-body-util = "0.1"
 subtle = "2.6"
 # Its tokens: 32 bytes from the system's random generator.
 getrandom = "0.4"
+# « Codex peut piloter Escouade »: its entry in each account's `config.toml`, the user's comments and layout kept.
+toml_edit = "0.25"
 # Dictation (`voice`): the microphone through cpal (WASAPI, CoreAudio, ALSA), transcribed on the
 # machine by whisper.cpp (whisper-rs builds it, with cmake), its model downloaded on demand.
 cpal = "0.18"

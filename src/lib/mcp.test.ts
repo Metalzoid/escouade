@@ -15,9 +15,11 @@ const entry = (n: number, over: Partial<McpActivityEntry> = {}): McpActivityEntr
 
 const declaration = (account: string, over: Partial<McpDeclaration> = {}): McpDeclaration => ({
   account,
+  engine: 'claude',
   ok: true,
   error: null,
   command: 'claude mcp add',
+  file: null,
   ...over,
 });
 

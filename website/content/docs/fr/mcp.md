@@ -31,6 +31,25 @@ Claude Code connaît le serveur sous le nom `escouade` : ses outils s’appellen
 > [!NOTE]
 > Sous Windows avec Claude Code dans WSL, les outils MCP d’Escouade demandent le réseau miroir de WSL : `networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`, puis `wsl --shutdown`. Réglages › Harness le rappelle quand le réseau de WSL est en NAT.
 
+## « Codex peut piloter Escouade »
+
+Codex hors d’Escouade (un terminal, son app) peut lui aussi piloter Escouade, avec les mêmes outils et le même jeton que Claude hors Escouade.
+
+1. Allume d’abord « Claude et les agents peuvent piloter Escouade » : l’interrupteur de Codex en dépend, et reste grisé sans lui.
+2. Dans le même groupe, allume « Codex peut piloter Escouade ». Il n’apparaît que si Codex est installé, et s’enregistre tout de suite, lui aussi.
+
+`codex mcp add` ne prend pas d’en-tête : Escouade écrit donc lui-même l’entrée dans le `config.toml` de chaque compte Codex actif (`~/.codex/config.toml` pour « Principal », sinon dans le dossier du compte), et garde tout le reste du fichier tel quel, commentaires, ordre et fins de ligne compris :
+
+```toml
+[mcp_servers.escouade]
+url = "http://127.0.0.1:<port>/mcp"
+http_headers = { Authorization = "Bearer <jeton>" }
+```
+
+L’onglet dit « Déclaré dans Codex · compte Principal ». Un fichier qui n’est pas un TOML valide n’est pas touché : l’onglet le dit, avec l’entrée à ajouter à la main (« Copier l’entrée » copie la vraie, jeton compris). Le jeton est écrit **en clair** dans ce fichier. Éteindre « Codex peut piloter Escouade » change d’abord le jeton (l’ancien n’ouvre plus rien tout de suite), puis retire l’entrée de chaque compte Codex, qui retrouve le fichier d’avant à l’octet près, et déclare le nouveau jeton dans Claude Code. Éteindre « Claude et les agents peuvent piloter Escouade » retire aussi l’entrée de Codex ; son interrupteur reste allumé, et la remet au prochain allumage.
+
+Les agents d’Escouade sur Codex n’ont pas besoin de cet interrupteur : ils reçoivent le serveur par les options de leur processus, avec leur propre jeton, qui l’emporte sur celui de l’entrée.
+
 ## Les outils
 
 Dans les arguments, un projet se nomme par son id ou son nom (casse libre), un agent par son id ou son nom, un ticket par sa clé (`ATL-12`, casse libre) ou son id. Les réponses sont en JSON.
@@ -160,7 +179,7 @@ Sont aussi refusées, et notées : une requête sans jeton (« Requête refusé
 ## Jeton et réseau
 
 - Le serveur n’écoute que sur `127.0.0.1`, sur un port libre entre 47000 et 47999, choisi au premier démarrage puis gardé (il en change seulement quand le sien est pris, et la déclaration est alors refaite dans chaque compte).
-- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; quand il le refuse, et sous Linux, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de Claude Code (`~/.claude.json` pour « Principal »). Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
+- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; quand il le refuse, et sous Linux, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de Claude Code (`~/.claude.json` pour « Principal »), et dans le `config.toml` de Codex quand « Codex peut piloter Escouade » est allumé. Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
 - Une requête envoyée par une page web (en-tête `Origin`) ou adressée à un autre nom que `127.0.0.1` ou `localhost` est refusée, même avec un jeton : un site que tu visites ne peut pas appeler le serveur.
 - Un autre client MCP se connecte à `http://127.0.0.1:<port>/mcp` avec le même en-tête. L’adresse et le jeton se lisent dans l’entrée `escouade` du `.claude.json` du compte, ou dans la commande que l’onglet propose quand la déclaration échoue.
 

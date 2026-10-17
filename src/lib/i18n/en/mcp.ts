@@ -7,9 +7,13 @@ export default defineZone('mcp', {
     enable: 'Claude and the agents can drive Escouade',
     enableDesc:
       'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
-    declared: 'Declared in Claude · {accounts}',
+    harness: '{harness} can drive Escouade',
+    harnessDesc:
+      '{harness} outside Escouade (a terminal, its app) gets the same tools, declared in the config of each active {harness} account ({file} for the Main account), the rest of the file and its comments kept. The token is written there in plain text. Turning it off changes the token, then takes the entry out.',
+    harnessNeedsServer: 'First turn on “Claude and the agents can drive Escouade”.',
+    declared: 'Declared in {harness} · {accounts}',
     account: '{name} account',
-    working: 'Declaring in Claude…',
+    working: 'Declaring in {harness}…',
     notDeclared: 'Not declared for the {name} account: {error}',
     serverFailed: 'The server did not start: {error}',
     nextStart: {
@@ -19,6 +23,9 @@ export default defineZone('mcp', {
     command: 'Run it by hand in {shell}:',
     copy: 'Copy the command',
     copied: 'Command copied',
+    paste: 'Add it by hand to {file}:',
+    copyEntry: 'Copy the entry',
+    copiedEntry: 'Entry copied',
     copyFailed: 'Copy failed: {error}',
     note: 'The token is written in plain text in Claude Code’s config (~/.claude.json for the Main account). Turning it off changes the token.',
   },

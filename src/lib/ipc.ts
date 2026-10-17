@@ -100,6 +100,8 @@ export const api = {
   mcpClearActivity: () => invoke<void>('mcp_clear_activity'),
   /** « Claude et les agents peuvent piloter Escouade »: saved at once; the declaration in each account follows (`mcpDeclared`). */
   mcpSetEnabled: (enabled: boolean) => invoke<void>('mcp_set_enabled', { enabled }),
+  /** « <harness> peut piloter Escouade »: saved at once; the declaration in each of its accounts follows (`mcpDeclared`). */
+  mcpSetHarness: (engine: EngineId, on: boolean) => invoke<void>('mcp_set_harness', { engine, on }),
   /** Where the server stands in each active account's Claude Code (the command to run by hand has its token hidden). */
   mcpDeclareStatus: () => invoke<McpDeclaration[]>('mcp_declare_status'),
   /** The command that declares the server by hand in the account, with the real token: asked for when it is copied. */

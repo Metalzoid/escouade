@@ -41,5 +41,6 @@
     { "id": "haiku", "label": "Haiku", "effort": false, "auto": false }
   ],
   "efforts": ["low", "medium", "high", "xhigh", "max"],
-  "writer": "Claude Haiku"
+  "writer": "Claude Haiku",
+  "mcpConfig": null
 }

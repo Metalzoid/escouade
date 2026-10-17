@@ -30,6 +30,8 @@ export interface App {
   root: string;
   /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
   claudeJson: string;
+  /** Principal's `config.toml` of Codex: where « Codex peut piloter Escouade » declares the server (`CODEX_HOME` is a test folder). */
+  codexToml: string;
   /** Launches of the fake CLI: argv, cwd, its process id (a new session of it is `sess-<pid>`), the proxy, the Claude Code folder (`CLAUDE_CONFIG_DIR`) and the task list variable it received (null when unset). */
   launches: () => {
     argv: string[];
@@ -257,6 +259,8 @@ export const test = base.extend<{
       ESCOUADE_USAGE_API: NO_USAGE_API,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
+      // Codex's Principal is a folder of the test's (its `config.toml`, « Codex peut piloter Escouade »), never the user's ~/.codex.
+      CODEX_HOME: path.join(root, 'codex'),
       FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
       ...appEnv,
     };
@@ -295,6 +299,7 @@ export const test = base.extend<{
         data,
         root,
         claudeJson: path.join(root, 'claude', '.claude.json'),
+        codexToml: path.join(root, 'codex', 'config.toml'),
         launches,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.

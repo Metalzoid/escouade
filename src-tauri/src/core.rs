@@ -1815,6 +1815,17 @@ impl<R: Runtime> Core<R> {
             // « Claude et les agents peuvent piloter Escouade » turned off: the token changes at once, and its entry
             // leaves every account (`declare_now`, on its own task); the agents lose it at once.
             self.mcp_turned_off();
+        } else if mcp_enabled {
+            // « <harness> peut piloter Escouade » turned off: the token changes at once too, and the entry
+            // leaves that harness's accounts.
+            let now = self.settings.read().mcp_harnesses.clone();
+            for engine in before_settings
+                .mcp_harnesses
+                .iter()
+                .filter(|e| !now.contains(e))
+            {
+                self.mcp.harness_off(*engine);
+            }
         }
         let lang = self.lang();
         if lang != before {

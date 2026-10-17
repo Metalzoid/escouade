@@ -8,8 +8,8 @@ vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }
 import { setLang } from '../../lib/i18n';
 import { mcp } from '../../lib/mcp.svelte';
 import { app } from '../../lib/state.svelte';
-import type { Account, McpActivityEntry, McpDeclaration, McpStatus } from '../../lib/types';
-import { agent, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import type { Account, EngineDecl, McpActivityEntry, McpDeclaration, McpStatus } from '../../lib/types';
+import { agent, BARE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import McpSection from './McpSection.svelte';
 
@@ -23,12 +23,21 @@ const WITH_FOLDER = (add: string) =>
   `$old = $env:CLAUDE_CONFIG_DIR; $env:CLAUDE_CONFIG_DIR = 'C:\\Users\\ada\\.escouade\\claude\\pro'; claude ${add}; $env:CLAUDE_CONFIG_DIR = $old`;
 
 // As the backend sends them: the commands have their token hidden. The real one is asked for when it is copied.
-const ok = (account: string): McpDeclaration => ({ account, ok: true, error: null, command: `claude ${ADD('••••••••')}` });
+const ok = (account: string): McpDeclaration => ({
+  account,
+  engine: 'claude',
+  ok: true,
+  error: null,
+  command: `claude ${ADD('••••••••')}`,
+  file: null,
+});
 const failed = (account: string, error: string): McpDeclaration => ({
   account,
+  engine: 'claude',
   ok: false,
   error,
   command: WITH_FOLDER(ADD('••••••••')),
+  file: null,
 });
 const RUNNING: McpStatus = { running: true, port: 47123, error: null };
 
@@ -389,5 +398,116 @@ describe('McpSection', () => {
       await waitFor(() => expect(items()).toHaveLength(2));
       expect(items().map((r) => r.querySelector('.tool')?.textContent)).toEqual(['list_agents', 'get_ticket']);
     });
+  });
+});
+
+describe('McpSection — « Codex peut piloter Escouade »', () => {
+  const CODEX: EngineDecl = { ...BARE_ENGINE, id: 'codex', name: 'Codex', speaker: 'Codex', mcpConfig: '~/.codex/config.toml' };
+  const CODEX_PRO: Account = { ...PRO, id: 'codex-pro', name: 'Perso', engine: 'codex' };
+  const codexSwitch = () => screen.getByRole('switch', { name: 'Codex peut piloter Escouade' });
+  const entry = (token: string) =>
+    `[mcp_servers.escouade]\nurl = "http://127.0.0.1:47123/mcp"\nhttp_headers = { Authorization = "Bearer ${token}" }`;
+  const codexOk = (account: string): McpDeclaration => ({
+    account,
+    engine: 'codex',
+    ok: true,
+    error: null,
+    command: entry('••••••••'),
+    file: 'C:\Users\ada\.codex\config.toml',
+  });
+
+  beforeEach(() => {
+    resetApp();
+    app.engines = [app.engines[0], CODEX];
+    app.enginesFound = ['claude', 'codex'];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO, CODEX_PRO] };
+  });
+
+  it('has its own switch for a harness found that declares a config, which says the token is written in plain text', async () => {
+    backend();
+    render(McpSection);
+    expect(codexSwitch()).toHaveAttribute('aria-checked', 'false');
+    expect(
+      screen.getByText(
+        'Codex hors d’Escouade (un terminal, son app) reçoit les mêmes outils, déclarés dans la config de chaque compte Codex actif (~/.codex/config.toml pour le compte Principal), le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée.',
+      ),
+    ).toBeInTheDocument();
+    // The server off: it waits for it, and says so.
+    expect(codexSwitch()).toBeDisabled();
+    expect(screen.getByText('Active d’abord « Claude et les agents peuvent piloter Escouade ».')).toBeInTheDocument();
+    // Not found: no switch.
+    app.enginesFound = ['claude'];
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Codex peut piloter Escouade' })).not.toBeInTheDocument());
+  });
+
+  it('is saved at once, and tells where it is declared beside Claude Code', async () => {
+    app.settings.mcpEnabled = true;
+    const be = backend({ mcp_status: () => RUNNING, mcp_declare_status: () => [ok('principal')], mcp_set_harness: () => null });
+    render(McpSection);
+    expect(await screen.findByText('Déclaré dans Claude · compte Principal')).toBeInTheDocument();
+    expect(screen.queryByText(/Active d’abord/)).not.toBeInTheDocument();
+    await userEvent.click(codexSwitch());
+    expect(be.called('mcp_set_harness').map((c) => c.args)).toEqual([{ engine: 'codex', on: true }]);
+    await waitFor(() => expect(codexSwitch()).toHaveAttribute('aria-checked', 'true'));
+    expect(app.settings.mcpHarnesses).toEqual(['codex']);
+    expect(screen.getByText('Déclaration dans Codex…')).toBeInTheDocument();
+    // The Principal of Codex not saved yet is named as Principal.
+    mcp.take({ type: 'mcpDeclared', declared: [ok('principal'), codexOk('principal-codex'), codexOk('codex-pro')] });
+    expect(await screen.findByText('Déclaré dans Codex · compte Principal, compte Perso')).toBeInTheDocument();
+    expect(screen.getByText('Déclaré dans Claude · compte Principal')).toBeInTheDocument();
+
+    await userEvent.click(codexSwitch());
+    expect(be.called('mcp_set_harness').map((c) => c.args)).toEqual([
+      { engine: 'codex', on: true },
+      { engine: 'codex', on: false },
+    ]);
+    await waitFor(() => expect(codexSwitch()).toHaveAttribute('aria-checked', 'false'));
+    expect(app.settings.mcpHarnesses).toEqual([]);
+    expect(screen.queryByText(/dans Codex/)).not.toBeInTheDocument();
+  });
+
+  it('gives the entry to paste in the file of an account it failed in, its token hidden, the real one copied', async () => {
+    app.settings.mcpEnabled = true;
+    app.settings.mcpHarnesses = ['codex'];
+    const failedCodex: McpDeclaration = {
+      ...codexOk('codex-pro'),
+      ok: false,
+      error: 'C:\Users\ada\.codex\config.toml n’est pas un TOML valide',
+    };
+    const writeText = vi.fn(async (_: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const be = backend({
+      mcp_status: () => RUNNING,
+      mcp_declare_status: () => [ok('principal'), failedCodex],
+      mcp_manual_command: () => entry(TOKEN),
+    });
+    render(McpSection);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Pas déclaré pour le compte Perso : C:\Users\ada\.codex\config.toml n’est pas un TOML valide',
+    );
+    expect(screen.getByText('À ajouter à la main dans C:\Users\ada\.codex\config.toml :')).toBeInTheDocument();
+    expect(document.querySelector('.cmd')?.textContent).toBe(entry('••••••••'));
+    expect(document.body.textContent).not.toContain(TOKEN);
+    await userEvent.click(screen.getByRole('button', { name: 'Copier l’entrée' }));
+    expect(be.called('mcp_manual_command').map((c) => c.args)).toEqual([{ account: 'codex-pro' }]);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(entry(TOKEN)));
+    expect(app.toasts.map((t) => t.text)).toEqual(['Entrée copiée']);
+  });
+
+  it('is written in English when the interface is', async () => {
+    setLang('en');
+    app.settings.mcpEnabled = true;
+    app.settings.mcpHarnesses = ['codex'];
+    backend({ mcp_status: () => RUNNING, mcp_declare_status: () => [ok('principal'), codexOk('codex-pro')] });
+    render(McpSection);
+    expect(await screen.findByText('Declared in Codex · Perso account')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Codex can drive Escouade' })).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByText(
+        'Codex outside Escouade (a terminal, its app) gets the same tools, declared in the config of each active Codex account (~/.codex/config.toml for the Main account), the rest of the file and its comments kept. The token is written there in plain text. Turning it off changes the token, then takes the entry out.',
+      ),
+    ).toBeInTheDocument();
+    app.settings.mcpEnabled = false;
+    expect(await screen.findByText('First turn on “Claude and the agents can drive Escouade”.')).toBeInTheDocument();
   });
 });

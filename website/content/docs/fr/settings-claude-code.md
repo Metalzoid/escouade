@@ -169,6 +169,10 @@ Interrupteur allumé, une ligne dessous dit où en est la déclaration :
 > [!WARNING]
 > Le jeton est écrit en clair dans la config de Claude Code (`~/.claude.json` pour le compte Principal). Désactiver change le jeton.
 
+### Codex peut piloter Escouade
+
+Quand Codex est installé, un second interrupteur, « Codex peut piloter Escouade », déclare aussi le serveur dans le `config.toml` de chaque compte Codex actif (`~/.codex/config.toml` pour le compte Principal) : Codex hors d’Escouade (un terminal, son app) reçoit alors les mêmes outils. Il reste grisé tant que « Claude et les agents peuvent piloter Escouade » est éteint (« Active d’abord « Claude et les agents peuvent piloter Escouade ». »), et s’enregistre tout de suite lui aussi. Escouade écrit l’entrée lui-même et garde le reste du fichier, commentaires compris. La ligne dessous dit « Déclaration dans Codex… » puis « Déclaré dans Codex · compte Principal » ; pour un compte où ça échoue (un `config.toml` qui n’est pas un TOML valide, laissé tel quel), elle montre l’entrée à ajouter à la main (« À ajouter à la main dans … : »), jeton masqué, et « Copier l’entrée » copie la vraie (« Entrée copiée »). Le jeton y est écrit en clair, ce que la description de l’interrupteur dit. Le désactiver change d’abord le jeton, puis retire l’entrée : le fichier redevient celui d’avant. Le détail est sur la page du [serveur MCP](mcp#codex-peut-piloter-escouade).
+
 ## Activité MCP
 
 Le groupe « Activité MCP » liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».

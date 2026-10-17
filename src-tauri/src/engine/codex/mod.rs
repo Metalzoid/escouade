@@ -26,6 +26,7 @@ use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
+use super::userconfig::{Format, UserConfig};
 use super::{
     mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
     Weight,
@@ -33,7 +34,6 @@ use super::{
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
-use crate::mcp::install::{Entry, Standing, Target};
 use crate::model::{EngineId, QuotaMeter, RateWindow};
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -405,12 +405,18 @@ fn user_input(text: &str, attachments: &[Attachment]) -> Result<Value> {
     Ok(Value::Array(input))
 }
 
-fn not_yet() -> String {
-    tr!(
-        "Codex ne le fait pas encore dans Escouade",
-        "Codex doesn’t do it in Escouade yet"
-    )
-}
+/// Its entry in each account's `config.toml` (« Codex peut piloter Escouade »): `codex mcp add`
+/// takes no header, and `bearer_token` is refused for an HTTP entry. Tried on 0.163.0: the entry
+/// reaches the server with its header; an agent's `-c … bearer_token_env_var` wins over it (its
+/// own token sent, not the user's).
+static USER_CONFIG: UserConfig = UserConfig {
+    file: "config.toml",
+    shown: "~/.codex/config.toml",
+    format: Format::Toml,
+    servers: &["mcp_servers"],
+    url: "url",
+    headers: "http_headers",
+};
 
 impl Engine for Codex {
     fn id(&self) -> EngineId {
@@ -601,41 +607,8 @@ impl Engine for Codex {
         escouade_launch(escouade)
     }
 
-    /// Its `config.toml` comes with ESC-50: nothing declared yet.
-    fn declared(&self, config: &Path) -> Standing {
-        if config.is_file() {
-            Standing::Absent
-        } else {
-            Standing::NoFile
-        }
-    }
-
-    fn add_declaration<'a>(
-        &'a self,
-        _target: &'a Target,
-        _entry: &'a Entry,
-        _secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>> {
-        Box::pin(async move { bail!(not_yet()) })
-    }
-
-    fn remove_declaration<'a>(
-        &'a self,
-        _target: &'a Target,
-        _secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>> {
-        Box::pin(async move { bail!(not_yet()) })
-    }
-
-    fn manual_declaration(
-        &self,
-        _windows: bool,
-        _program: &str,
-        _config_dir: Option<&str>,
-        _entry: &Entry,
-        _replace: bool,
-    ) -> String {
-        String::new()
+    fn user_config(&self) -> Option<&'static UserConfig> {
+        Some(&USER_CONFIG)
     }
 }
 

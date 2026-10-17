@@ -1190,6 +1190,7 @@ dependencies = [
  "tauri-winrt-notification 0.7.3",
  "tokio",
  "tokio-rustls",
+ "toml_edit 0.25.15+spec-1.1.0",
  "trash",
  "unicode-normalization",
  "uuid",
@@ -5532,6 +5533,7 @@ dependencies = [
  "indexmap 2.14.2",
  "toml_datetime 1.1.1+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.4",
 ]
 

@@ -1945,6 +1945,13 @@ pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
     Ok(())
 }
 
+/// « <harness> peut piloter Escouade » turned on or off, saved at once like `mcp_set_enabled`: it
+/// writes into the user config of each account of the harness.
+#[tauri::command(async)]
+pub fn mcp_set_harness(core: CoreState, engine: crate::model::EngineId, on: bool) -> Res<()> {
+    core.set_mcp_harness(engine, on).map_err(err)
+}
+
 /// The answer to « Statistiques d’usage », at the first start.
 #[tauri::command(async)]
 pub fn telemetry_set(core: CoreState, consent: bool) -> Res<()> {

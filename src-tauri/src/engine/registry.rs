@@ -303,6 +303,10 @@ pub struct EngineDecl {
     pub efforts: Vec<&'static str>,
     /// The model that writes the texts (« Modèle des textes rédigés »: `Claude Haiku`).
     pub writer: &'static str,
+    /// The user config Escouade declares its server in, as the window names it for the Principal
+    /// (« Codex peut piloter Escouade »: `~/.codex/config.toml`); None: no switch of its own
+    /// (Claude Code's declaration goes with « Claude et les agents peuvent piloter Escouade »).
+    pub mcp_config: Option<&'static str>,
 }
 
 pub fn declared() -> Vec<EngineDecl> {
@@ -318,6 +322,7 @@ pub fn declared() -> Vec<EngineDecl> {
             models: e.models(),
             efforts: e.efforts().to_vec(),
             writer: e.writer(super::Weight::Light),
+            mcp_config: e.user_config().map(|u| u.shown),
         })
         .collect()
 }

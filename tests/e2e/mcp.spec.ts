@@ -1,5 +1,6 @@
 import fs from 'node:fs';
-import { addProject, expect, send, test, type App } from './fixture';
+import path from 'node:path';
+import { addProject, expect, FAKE_CODEX, send, test, type App } from './fixture';
 
 // Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
 // and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
@@ -215,5 +216,61 @@ test.describe('the switch saved on, the app starting', () => {
     await dialog.getByRole('tab', { name: 'Projets' }).click();
     await expect(dialog.getByRole('switch', { name: 'Un worktree par agent' })).toBeVisible();
     await expect(dialog.getByRole('switch', { name: 'Les agents peuvent utiliser Escouade' })).toHaveCount(0);
+  });
+});
+
+test.describe('« Codex peut piloter Escouade »', () => {
+  test.use({ appEnv: { ESCOUADE_CODEX: FAKE_CODEX } });
+
+  /** What the user had in Principal's `config.toml` of Codex. */
+  const USERS = '# mon modèle\nmodel = "gpt-5"\n\n[mcp_servers.node_repl]\ncommand = "node" # le mien\n';
+
+  /** The server as Codex's `config.toml` declares it, if it does. */
+  function inCodex(app: App): { url: string; token: string } | null {
+    const text = fs.existsSync(app.codexToml) ? fs.readFileSync(app.codexToml, 'utf8') : '';
+    const url = /\[mcp_servers\.escouade\]\nurl = "([^"]+)"/.exec(text)?.[1];
+    const token = /http_headers = \{ Authorization = "Bearer ([^"]+)" \}/.exec(text)?.[1];
+    return url && token ? { url, token } : null;
+  }
+
+  test('its switch declares the server in its config.toml, comments kept, and turned off changes the token and leaves the file as it was', async ({
+    app,
+  }) => {
+    fs.mkdirSync(path.dirname(app.codexToml), { recursive: true });
+    fs.writeFileSync(app.codexToml, USERS);
+    const { page } = app;
+    await addProject(page, app.repo, { firstAgent: false });
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    const codex = dialog.getByRole('switch', { name: 'Codex peut piloter Escouade' });
+    // The token in plain text, said beside it; nothing to do while the server is off.
+    await expect(dialog.getByText(/Le jeton y est écrit en clair\. Désactiver change le jeton/)).toBeVisible();
+    await expect(codex).toBeDisabled();
+    await dialog.getByRole('switch', { name: SWITCH }).click();
+    await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+    expect(inCodex(app)).toBeNull();
+
+    await codex.click();
+    await expect(codex).toHaveAttribute('aria-checked', 'true');
+    await expect(dialog.getByText('Déclaré dans Codex · compte Principal')).toBeVisible();
+    const server = inCodex(app)!;
+    expect(server).not.toBeNull();
+    // The same token as Claude Code's, and it opens the server.
+    expect(server).toEqual(declared(app));
+    expect((await rpc(server, 1, 'ping', {})).status).toBe(200);
+    // The user's lines first, untouched.
+    expect(fs.readFileSync(app.codexToml, 'utf8').startsWith(USERS)).toBe(true);
+
+    await codex.click();
+    await expect(codex).toHaveAttribute('aria-checked', 'false');
+    await expect(dialog.getByText(/Déclaré dans Codex/)).toBeHidden();
+    await expect.poll(() => fs.readFileSync(app.codexToml, 'utf8')).toBe(USERS);
+    // The old token opens nothing, though the server still runs for Claude Code, with a new one.
+    const old = await fetch(server.url, { method: 'POST', headers: { authorization: `Bearer ${server.token}` }, body: '{}' });
+    expect(old.status).toBe(401);
+    // (Claude Code's entry is replaced: removed, then added with the new token.)
+    await expect.poll(() => declared(app)?.token ?? server.token).not.toBe(server.token);
+    expect((await rpc(declared(app)!, 3, 'ping', {})).status).toBe(200);
   });
 });

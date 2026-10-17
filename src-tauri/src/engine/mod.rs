@@ -14,11 +14,14 @@ pub mod oneshot;
 mod program;
 pub mod registry;
 pub mod terminal;
+pub mod userconfig;
 
 #[cfg(test)]
 pub(crate) mod bench;
 #[cfg(test)]
 pub(crate) mod minimal;
+#[cfg(test)]
+mod userconfig_tests;
 
 pub(crate) use claude::terminal as claude_terminal;
 pub use claude::CLAUDE;
@@ -377,34 +380,63 @@ pub trait Engine: Send + Sync {
 
     // ----- « <harness> peut piloter Escouade » (`mcp::install`) -----
 
+    /// The user config Escouade writes the server's entry in itself, for a harness whose CLI
+    /// cannot (`userconfig`): with it, the methods below need not be written. None: the harness
+    /// declares the server by its own commands (Claude Code: `claude mcp add`), or not at all.
+    fn user_config(&self) -> Option<&'static userconfig::UserConfig> {
+        None
+    }
     /// What its user config `config` (`Target.config`) says of Escouade's server.
-    fn declared(&self, config: &Path) -> Standing;
+    fn declared(&self, config: &Path) -> Standing {
+        match self.user_config() {
+            Some(user) => user.declared(config),
+            None => Standing::NoFile,
+        }
+    }
     /// `entry` added to the user config of the account of `target`, which has none of that name;
     /// `secrets` (the tokens in play) hidden from what an error says.
     fn add_declaration<'a>(
         &'a self,
         target: &'a Target,
         entry: &'a Entry,
-        secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>>;
+        _secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            match self.user_config() {
+                Some(user) => user.add(&target.config, entry),
+                None => userconfig::none(),
+            }
+        })
+    }
     /// The server's entry removed from the user config of the account of `target`.
     fn remove_declaration<'a>(
         &'a self,
         target: &'a Target,
-        secrets: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<()>>;
+        _secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            match self.user_config() {
+                Some(user) => user.remove(&target.config),
+                None => userconfig::none(),
+            }
+        })
+    }
     /// The commands that declare `entry` by hand, in the shell of the platform (`windows`:
     /// PowerShell, else a POSIX shell), for an account of folder `config_dir` (none for the
     /// default one), with `program` as the user named it; `replace`: an entry is there, removed
-    /// first.
+    /// first. A harness with a `user_config`: the entry to paste in it, in place of one there.
     fn manual_declaration(
         &self,
-        windows: bool,
-        program: &str,
-        config_dir: Option<&str>,
+        _windows: bool,
+        _program: &str,
+        _config_dir: Option<&str>,
         entry: &Entry,
-        replace: bool,
-    ) -> String;
+        _replace: bool,
+    ) -> String {
+        self.user_config()
+            .map(|user| user.snippet(entry))
+            .unwrap_or_default()
+    }
 }
 
 /// The live process of an agent.

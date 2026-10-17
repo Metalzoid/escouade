@@ -31,6 +31,25 @@ Claude Code knows the server as `escouade`: its tools are called `mcp__escouade_
 > [!NOTE]
 > On Windows with Claude Code in WSL, Escouade’s MCP tools need WSL’s mirrored network: `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`. Settings › Harness reminds you when WSL’s network is NAT.
 
+## “Codex can drive Escouade”
+
+Codex outside Escouade (a terminal, its app) can drive Escouade too, with the same tools and the same token as Claude outside Escouade.
+
+1. First turn on “Claude and the agents can drive Escouade”: Codex’s switch depends on it, and stays greyed out without it.
+2. In the same group, turn on “Codex can drive Escouade”. It only shows when Codex is installed, and is saved at once, too.
+
+`codex mcp add` takes no header, so Escouade writes the entry itself in the `config.toml` of each active Codex account (`~/.codex/config.toml` for “Main”, otherwise in the account’s folder), and keeps the rest of the file as it is, comments, order and line endings included:
+
+```toml
+[mcp_servers.escouade]
+url = "http://127.0.0.1:<port>/mcp"
+http_headers = { Authorization = "Bearer <token>" }
+```
+
+The tab says “Declared in Codex · Main account”. A file that is not valid TOML is left alone: the tab says so, with the entry to add by hand (“Copy the entry” copies the real one, token included). The token is written **in plain text** in that file. Turning “Codex can drive Escouade” off first changes the token (the old one opens nothing from then on), then removes the entry from every Codex account, whose file is back to what it was, byte for byte, and declares the new token in Claude Code. Turning “Claude and the agents can drive Escouade” off removes Codex’s entry too; its switch stays on, and puts it back the next time.
+
+Escouade’s agents on Codex do not need this switch: they get the server through their process’s options, with their own token, which wins over the entry’s.
+
 ## The tools
 
 In the arguments, a project is named by its id or its name (any case), an agent by its id or its name, a ticket by its key (`ATL-12`, any case) or its id. Answers are JSON.
@@ -160,7 +179,7 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 ## Token and network
 
 - The server only listens on `127.0.0.1`, on a free port between 47000 and 47999, chosen at the first start and then kept (it only changes when its own is taken, and the declaration is then redone in every account).
-- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in Claude Code’s config (`~/.claude.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
+- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in Claude Code’s config (`~/.claude.json` for “Main”), and in Codex’s `config.toml` when “Codex can drive Escouade” is on. An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
 - A request sent by a web page (`Origin` header) or addressed to a name other than `127.0.0.1` or `localhost` is refused, even with a token: a site you visit cannot call the server.
 - Another MCP client connects to `http://127.0.0.1:<port>/mcp` with the same header. The address and the token can be read in the account’s `.claude.json`, in the `escouade` entry, or in the command the tab offers when the declaration fails.
 

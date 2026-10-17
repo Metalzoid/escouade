@@ -1136,6 +1136,7 @@ impl<R: Runtime> Core<R> {
         s.accounts = self.settings.read().accounts.clone();
         s.engine_order = self.settings.read().engine_order.clone();
         s.mcp_enabled = self.settings.read().mcp_enabled;
+        s.mcp_harnesses = self.settings.read().mcp_harnesses.clone();
         self.save_settings(s)
     }
 

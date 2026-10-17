@@ -64,6 +64,8 @@ export interface Settings {
   engineOrder?: EngineId[];
   /** « Claude et les agents peuvent piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
+  /** « <harness> peut piloter Escouade »: the other harnesses the server is declared in too. Changed by `mcp_set_harness`, not by the settings modal's draft. */
+  mcpHarnesses?: EngineId[];
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
@@ -450,6 +452,8 @@ export interface EngineDecl {
   efforts: string[];
   /** The model that writes the texts (« Modèle des textes rédigés »): `Claude Haiku`. */
   writer: string;
+  /** The user config « <harness> peut piloter Escouade » writes in, for the Principal (`~/.codex/config.toml`); null: no switch of its own. */
+  mcpConfig?: string | null;
 }
 
 /** A harness with what is found of it here (Réglages). */
@@ -1527,12 +1531,19 @@ export interface McpActivityEntry {
 
 /** Where the server stands in one account's Claude Code. */
 export interface McpDeclaration {
-  /** The id of the Claude account. */
+  /** The id of the account. */
   account: string;
+  /** Its harness. */
+  engine: EngineId;
   ok: boolean;
   error: string | null;
-  /** The command that declares it by hand, its token already hidden (`mcp_manual_command` gives the real one when it is copied). */
+  /**
+   * The command that declares it by hand (for a harness whose user config Escouade writes itself, the entry to paste in
+   * `file`), its token already hidden (`mcp_manual_command` gives the real one when it is copied).
+   */
   command: string;
+  /** The user config to paste `command` in; null: `command` is to be run. */
+  file: string | null;
 }
 
 /** What the step running of a worktree's setup wrote: its rank (from 0), how many lines so far, and the last of them. */
