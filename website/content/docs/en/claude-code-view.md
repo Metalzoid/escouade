@@ -77,6 +77,17 @@ In Settings › Harness, group “New agents”, the “New agents’ view” ch
 
 The first time Claude Code’s interface launches in a folder, it asks whether you trust it. Escouade never answers for you. Worktrees created in the project’s default worktrees folder (`.claude/worktrees`) inherit the answer given for the project. A “Worktrees folder” outside the project doesn’t inherit it: the interface asks the question the first time each worktree is launched (see [worktrees](worktrees)).
 
+## With Codex
+
+An agent on Codex has the same view: the button is called “Codex view” and starts Codex’s interface (`codex`) in the agent’s folder, on its account, with its model and effort. Both views share the same Codex conversation: the terminal resumes the session (`codex resume`), and Codex’s app-server resumes it back in the Escouade view, in the same Codex folder. What differs from Claude Code:
+
+- **Tracking.** Codex runs its hooks as commands: Escouade gives it `escouade-hook`, installed with the app. These hooks are declared for this interface alone, through the options of its command line (`-c hooks.…`), and so is their approval: nothing is written to your `config.toml`, and your own Codex sessions don’t see them. Without the token Escouade gives the interface, `escouade-hook` does nothing anyway. The agent’s card says when it works, when it waits for your permission and when it’s done; its conversation comes from the session’s log (`sessions/…/rollout-….jsonl` in Codex’s folder), read continuously.
+- **Folder trust.** On a project Codex doesn’t know, its interface first asks whether you trust the folder. Escouade never answers for you, and types no message while the question is asked: “Codex asks whether you trust this folder: answer in its terminal, then send your message again.” Codex’s app-server, for its part, records that trust in your `config.toml` by itself the first time a Codex agent works in the Escouade view: a project where a Codex agent already ran no longer asks.
+- **Modes.** “Auto” starts the interface with `--approve-for-me` (Codex’s automatic reviewer), “Bypass” with no requests and no sandbox, the others with `-a on-request` and the mode’s sandbox. Codex’s Plan mode is picked in its interface.
+- **The agent’s added instructions** are only given to a new session: a resumed session keeps the ones it had.
+- **Interrupting** sends `Esc`, as with Claude Code. An image pasted in the terminal (PNG or JPEG) is typed there by its path.
+- **Not tracked in this view**: the “Plan” banner, subagents and cost (Codex gives none).
+
 ## On Windows with WSL
 
 When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the Claude Code settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:

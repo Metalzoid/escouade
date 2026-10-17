@@ -251,6 +251,16 @@ impl AgentRt {
         }
     }
 
+    /// The turn of its thread under way.
+    pub(super) fn codex_turn(&self) -> Option<String> {
+        self.codex.turn.clone()
+    }
+
+    /// Another conversation (or another process of it): what was kept of the last one is gone.
+    pub(super) fn codex_new_conversation(&mut self) {
+        self.codex = CodexState::default();
+    }
+
     /// Whose a message of the thread `thread` is.
     fn codex_thread(&self, thread: Option<&str>) -> Thread {
         let Some(t) = thread else {

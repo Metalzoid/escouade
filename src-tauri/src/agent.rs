@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 mod claude;
 mod codex;
+mod codex_tui;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]
 mod minimal;

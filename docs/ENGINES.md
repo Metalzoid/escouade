@@ -272,20 +272,35 @@ Ce qui nomme un outil d'un moteur passe par lui : le message transmis à un sous
 
 « Vue <harness> » : un agent tourne dans l'interface de son harness elle-même, dans un terminal intégré, à la place de la conversation d'Escouade. Une session n'a qu'un process à la fois : changer de vue arrête l'un et reprend la session dans l'autre. Le cœur (`tui.rs`) fait le même travail pour tous les harness (terminal et sortie gardée, serveur de hooks et jetons, lecture du journal au fil de l'eau, sortie aussitôt et session perdue, file des messages, arrêt) et ne parle à un harness que par son `TerminalView` (`engine/terminal.rs`), que `Engine::terminal()` donne, `None` pour un harness sans vue terminal (`caps().terminal_view` dit la même chose, ce qu'un test vérifie pour chaque harness).
 
-| Méthode | Ce qu'elle dit | Claude Code (`engine/claude/terminal.rs`) |
-|---|---|---|
-| `shell()` | Le nom de son terminal. | `claude` |
-| `launch(TerminalLaunch)` | Ses arguments, son fichier privé et ses variables, depuis l'agent, la session nommée d'avance, Remote Control, le serveur de hooks (`HookServer` : adresse, variable du jeton, variable de l'adresse, `escouade-hook`) et le serveur MCP donné ou refusé. | `tui_args`, et les hooks HTTP dans le fichier de `--settings` |
-| `read_dir_args(dossier)` | Ce qui lui fait lire un dossier sans demander (celui des fichiers joints). | `--add-dir=<dossier>` |
-| `names_its_session()` | Escouade nomme une session neuve avant le lancement ; sinon, son premier hook la dit. | oui (`--session-id`) |
-| `on_hook(rt, hook)` | L'état en direct : début et fin de tour, permission ou question en attente. | `AgentRt::on_hook` |
-| `running_dir`, `find_running` | Où il liste ses interfaces lancées, et la sienne : elle est passée ce qu'elle demande avant de lire un message. | `<dossier du compte>/sessions`, `tui::find_registered` |
-| `find_log`, `on_log_entry` | La conversation : le journal de la session, et chaque entrée traduite. | `projects/*/<session>.jsonl`, `AgentRt::on_transcript` |
-| `says_session_lost`, `copy_session` | La reprise : ce qu'il écrit quand il ne trouve pas la session, et la copie d'une session d'un compte à l'autre. | « No conversation found », `accounts::copy_session` |
-| `paste`, `submit`, `image_types` | Le collage d'un message (entre crochets, puis la touche d'envoi), et les images qu'il prend par un chemin collé. | collage entre crochets, Entrée, PNG/JPEG/GIF/WebP |
-| `interrupt_key`, `quit_key` | La touche qui interrompt un tour, et celle qui le ferme pour de bon, envoyée deux fois. | Échap, Ctrl+C |
+| Méthode | Ce qu'elle dit | Claude Code (`engine/claude/terminal.rs`) | Codex (`engine/codex/terminal.rs`) |
+|---|---|---|---|
+| `shell()` | Le nom de son terminal. | `claude` | `codex` |
+| `launch(TerminalLaunch)` | Ses arguments, son fichier privé et ses variables, depuis l'agent, la session nommée d'avance, Remote Control, le serveur de hooks (`HookServer` : adresse, variable du jeton, variable de l'adresse, `escouade-hook`) et le serveur MCP donné ou refusé. | `tui_args`, et les hooks HTTP dans le fichier de `--settings` | `resume <id>` ou `fork <id>`, `--no-daemon`, `-m`, l'effort, le mode (`--approve-for-me`, `-a on-request -s <bac à sable>`, ou sans bac à sable), les consignes d'une nouvelle session (`-c developer_instructions`), et `escouade-hook` pour chaque événement (`-c hooks.<Événement>=…`) ; l'adresse du serveur de hooks dans `ESCOUADE_HOOK_URL` |
+| `escouade(harness, accès, dossier)` | Le serveur MCP d'Escouade pour l'interface, le dossier du compte à portée. | `Engine::escouade_launch` | le même, mais le refus n'est passé que si le `config.toml` du compte déclare une entrée `escouade` (sinon Codex ne démarre pas) |
+| `prepare(programme, dossier, arguments, environnement)` | Ce qu'il faut ajouter aux arguments juste avant le lancement. | rien | la confiance de ses hooks pour ce seul process : `-c hooks.state={…}`, avec les clés et hachages que donne `hooks/list` d'un `codex app-server` lancé avec les mêmes hooks (et ceux de l'utilisateur déjà approuvés) |
+| `read_dir_args(dossier)` | Ce qui lui fait lire un dossier sans demander (celui des fichiers joints). | `--add-dir=<dossier>` | rien : Codex lit tout sans demander |
+| `names_its_session()` | Escouade nomme une session neuve avant le lancement ; sinon, son premier hook la dit. | oui (`--session-id`) | non : `SessionStart`, avec le premier message |
+| `on_hook(rt, hook)` | L'état en direct : début et fin de tour, permission ou question en attente. | `AgentRt::on_hook` | `AgentRt::codex_hook` : `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `Stop`, `Interrupt` |
+| `running_dir`, `find_running` | Où il liste ses interfaces lancées, et la sienne : elle est passée ce qu'elle demande avant de lire un message. | `<dossier du compte>/sessions`, `tui::find_registered` | aucun |
+| `find_log`, `on_log_entry` | La conversation : le journal de la session, et chaque entrée traduite. | `projects/*/<session>.jsonl`, `AgentRt::on_transcript` | `sessions/<a>/<m>/<j>/rollout-<date>-<session>.jsonl`, `AgentRt::codex_rollout` : ses `event_msg` changés en notifications de l'app-server, traduites par `codex_frame` |
+| `says_session_lost`, `copy_session` | La reprise : ce qu'il écrit quand il ne trouve pas la session, et la copie d'une session d'un compte à l'autre. | « No conversation found », `accounts::copy_session` | « No saved session found », le rollout copié au même endroit |
+| `paste_refusal(dossier du compte, dossier)` | Pourquoi un message ne peut pas être tapé maintenant (une question de l'interface à l'écran). | jamais | tant que le `config.toml` n'a pas de niveau de confiance pour le dépôt (sa racine, celle du projet pour un worktree) : Codex demande s'il faut faire confiance au dossier |
+| `paste`, `submit`, `image_types` | Le collage d'un message (entre crochets, puis la touche d'envoi), et les images qu'il prend par un chemin collé. | collage entre crochets, Entrée, PNG/JPEG/GIF/WebP | collage entre crochets, Entrée, PNG/JPEG |
+| `interrupt_key`, `quit_key` | La touche qui interrompt un tour, et celle qui le ferme pour de bon, envoyée deux fois. | Échap, Ctrl+C | Échap, Ctrl+C |
 
 Les textes de la vue nomment le harness de l'agent (« Vue {engine} », « {engine} s'est arrêté. ») ; avec Claude Code, ils sont ceux d'avant. Le réglage des nouveaux agents (« Vue des nouveaux agents » : « Escouade » ou « Terminal du harness ») est montré tant qu'un harness a une vue terminal ; un agent dont le harness n'en a pas reste dans la vue d'Escouade (`Core::create_agent_with`), et le passage est refusé (`set_agent_view`).
+
+Au retour dans la vue d'Escouade, la lecture du journal est oubliée (`AgentMeta.transcript_read`) : ce que le flux y ajoute ensuite est déjà dans la conversation, et l'interface suivante lit le journal à partir de sa fin. Sans cela, l'interface de Codex rejouerait les tours de l'app-server, écrits dans le même rollout.
+
+### La vue Codex (ESC-47)
+
+Faite d'après l'essai de Codex 0.163.0 (docs/TODO-1.8.md, point 0, « Vue terminal »). Ses choix :
+- **Rien chez l'utilisateur.** Les hooks sont des options du process de l'interface (`-c hooks.<Événement>=…`), leur confiance aussi (`-c hooks.state=…`). Codex ignore sans rien dire un hook qu'on ne lui a pas dit d'approuver, et le hachage qu'il attend n'est pas documenté : `prepare` le lui demande (`hooks/list` d'un `codex app-server` lancé avec les mêmes hooks, dans le même `CODEX_HOME`, environ 0,1 s), plutôt que de le recalculer. Les hooks de l'utilisateur déjà approuvés sont redonnés avec, pour ne pas les perdre dans ce process.
+- **`--no-daemon`** : l'interface a son propre process, jamais celui d'un démon partagé, qui n'aurait ni ses options ni ses hooks.
+- **Le rollout** est le journal : ses `event_msg` (`task_started`, `item_completed`, `token_count`, `task_complete`, `turn_aborted`) ont la forme interne de Codex (snake_case, éléments en PascalCase) ; `agent/codex_tui.rs` en fait les notifications de l'app-server qu'ils racontent, traduites par `codex_frame` comme en vue Escouade. Un message tapé dans l'interface (`UserMessage`) devient le message de l'utilisateur. Ce qu'un tour fini raconte en retard (la commande coupée par Échap) est laissé de côté.
+- **La fin d'un tour** vient du rollout ; si `Stop` ou `Interrupt` n'est pas suivi de sa fin, le cœur la fait au bout de 1,8 s (`end_tui_turn`, qui passe par `codex_tui_end` pour un agent Codex).
+- **Le compte** : le dossier de Codex d'un Principal est `CODEX_HOME`, sinon `~/.codex` (`accounts::config_dir`).
+- **Le faux `codex`** joue aussi l'interface (`tests/fixtures/fake-codex-tui.mjs`) : il exécute les hooks de ses options seulement s'ils sont approuvés avec le hachage que donne le `hooks/list` de son app-server, écrit son rollout, pose la question de la confiance du dossier, et refuse un `resume` sans rollout comme Codex. Sous Windows, il est lancé par un petit programme (`src-tauri/examples/fake_codex.rs`, que `cargo test` construit) : un `.cmd` ne passe pas `<session-flags>` (cmd.exe y lit une redirection), là où le vrai `codex.exe` le prend tel quel. Tests : `codex_tui_tests.rs` (dont `real_codex_view`, l'essai réel, à la main), `agent/codex_tui.rs` (le rollout réel de `tests/fixtures/codex/tui-rollout.jsonl` et les charges de `hooks-payloads.jsonl`), `engine/codex/terminal.rs`.
 
 ### `escouade-hook`
 

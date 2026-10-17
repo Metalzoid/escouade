@@ -14,6 +14,7 @@ mod locate;
 mod process;
 #[cfg(test)]
 mod schema_tests;
+pub(crate) mod terminal;
 
 #[cfg(test)]
 pub(crate) use bench::fake_codex;
@@ -269,7 +270,7 @@ pub fn caps() -> EngineCaps {
         quota_windows: vec![crate::model::FIVE_HOURS, crate::model::WEEK],
         // Estimated from its tokens with ESC-38.
         cost: CostKind::None,
-        terminal_view: false,
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -474,7 +475,7 @@ impl Engine for Codex {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::CODEX_TERMINAL)
     }
 
     fn install(&self) -> Install {

@@ -77,6 +77,17 @@ Dans Réglages › Harness, groupe « Nouveaux agents », le choix « Vue des
 
 La première fois que l’interface de Claude Code se lance dans un dossier, elle demande si tu lui fais confiance. Escouade ne répond jamais à ta place. Les worktrees créés dans le dossier des worktrees par défaut du projet (`.claude/worktrees`) héritent de la réponse donnée pour le projet. Un « Dossier des worktrees » hors du projet n’en hérite pas : l’interface pose la question au premier lancement de chaque worktree (voir [les worktrees](worktrees)).
 
+## Avec Codex
+
+Un agent sur Codex a la même vue : le bouton s’appelle « Vue Codex » et lance l’interface de Codex (`codex`) dans le dossier de l’agent, sur son compte, avec son modèle et son effort. Les deux vues partagent la même conversation de Codex : le terminal reprend la session (`codex resume`), et l’app-server de Codex la reprend au retour dans la vue Escouade, dans le même dossier de Codex. Ce qui change par rapport à Claude Code :
+
+- **Le suivi.** Codex lance ses hooks comme des commandes : Escouade lui donne `escouade-hook`, installée avec l’app. Ces hooks sont déclarés pour cette seule interface, par les options de sa ligne de commande (`-c hooks.…`), et leur approbation aussi : rien n’est écrit dans ton `config.toml`, et tes propres sessions de Codex ne les voient pas. Sans le jeton qu’Escouade donne à l’interface, `escouade-hook` ne fait d’ailleurs rien. La carte de l’agent dit quand il travaille, quand il attend ton autorisation et quand il a fini ; sa conversation vient du journal de la session (`sessions/…/rollout-….jsonl` dans le dossier de Codex), relu en continu.
+- **La confiance du dossier.** Sur un projet que Codex ne connaît pas, son interface demande d’abord si tu fais confiance au dossier. Escouade ne répond jamais à ta place, et ne tape aucun message tant que la question est posée : « Codex demande si tu fais confiance à ce dossier : réponds dans son terminal, puis renvoie ton message. » L’app-server de Codex, lui, enregistre cette confiance de lui-même dans ton `config.toml` la première fois qu’un agent Codex travaille dans la vue Escouade : un projet où un agent Codex a déjà tourné ne pose plus la question.
+- **Les modes.** « Auto » lance l’interface avec `--approve-for-me` (le relecteur automatique de Codex), « Bypass » sans demande ni bac à sable, les autres avec `-a on-request` et le bac à sable du mode. Le mode Plan de Codex se choisit dans son interface.
+- **Les consignes ajoutées** de l’agent ne sont données qu’à une nouvelle session : une session reprise garde celles qu’elle avait.
+- **Interrompre** envoie `Échap`, comme chez Claude Code. Une image collée dans le terminal (PNG ou JPEG) y est tapée par son chemin.
+- **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », les sous-agents et le coût (Codex n’en donne pas).
+
 ## Sous Windows avec WSL
 
 Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages de Claude Code](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :

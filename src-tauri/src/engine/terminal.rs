@@ -19,7 +19,7 @@ use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-use super::Escouade;
+use super::{mcp, BoxFuture, Engine, Escouade, Program};
 
 /// Escouade's hooks' server, as an interface's hooks reach it. `url_var` and `command` are for
 /// the harnesses that run their hooks as commands (`escouade-hook`): Claude Code calls them over
@@ -77,6 +77,22 @@ pub trait TerminalView: Send + Sync {
     fn launch(&self, l: &TerminalLaunch) -> TerminalArgs;
     /// The arguments that let it read the folder `dir` without a question.
     fn read_dir_args(&self, dir: &Path) -> Vec<String>;
+    /// Escouade's MCP server for it (`Engine::escouade_launch` of its harness), the account's
+    /// configuration folder `config_dir` at hand.
+    fn escouade(&self, harness: &dyn Engine, access: &Escouade, _config_dir: &Path) -> mcp::Launch {
+        harness.escouade_launch(access)
+    }
+    /// What is added to its arguments once they are known (`args`, with its environment `env`),
+    /// just before it starts: nothing, unless its harness has to be asked first.
+    fn prepare<'a>(
+        &'a self,
+        _program: &'a Program,
+        _cwd: &'a str,
+        _args: &'a [String],
+        _env: &'a [(String, String)],
+    ) -> BoxFuture<'a, Result<Vec<String>>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
     /// Escouade names a new session before the interface starts (its log is then known before any
     /// hook); false: the interface names its own, which its first hook tells.
     fn names_its_session(&self) -> bool;
@@ -114,6 +130,13 @@ pub trait TerminalView: Send + Sync {
     fn copy_session(&self, from: &Path, to: &Path, session: &str) -> Result<()>;
 
     // ----- the paste and the interruption -----
+
+    /// Why a message may not be pasted in it now, though it is up (in the agent's folder `cwd`,
+    /// its account's configuration folder `config_dir`): a question of its own on its screen,
+    /// which a text typed would answer. None: it may.
+    fn paste_refusal(&self, _config_dir: &Path, _cwd: &str) -> Option<String> {
+        None
+    }
 
     /// What is typed in it for a message `text`, before `submit` sends it: pasted, so that its
     /// line breaks stay in it.

@@ -880,6 +880,9 @@ impl<R: Runtime> Core<R> {
                 let mut rt = h.lock();
                 rt.meta.terminal = false;
                 rt.tui_exit = None;
+                // The stream shows what it does itself: an interface started later reads the
+                // log from its end then, not what the stream added to it again.
+                rt.meta.transcript_read = None;
                 rt.gen += 1;
                 let term = rt
                     .tui
@@ -1266,7 +1269,7 @@ impl<R: Runtime> Core<R> {
                 .into_iter()
                 .flat_map(|d| view.read_dir_args(&d)),
         );
-        let launch = harness.escouade_launch(&access);
+        let launch = view.escouade(harness, &access, &config_dir);
         args.extend(launch.args);
         // Its hooks, and Escouade's server kept out of it when its tools are refused.
         let written = match &started_from.file {
@@ -1285,6 +1288,23 @@ impl<R: Runtime> Core<R> {
         env.extend(started_from.env);
         env.extend(launch.env);
         no_proxy(&mut env);
+        // What its harness has to be asked before it starts (Codex: the trust of its hooks).
+        match view.prepare(&program, &cwd, &args, &env).await {
+            Ok(more) => args.extend(more),
+            Err(e) => {
+                log::warn!("agent {id}: {harness_name}'s interface not prepared: {e:#}");
+                let text = tr!(
+                    "Escouade ne suivra pas l’état de cet agent dans son terminal : {harness} n’a pas dit comment approuver ses hooks ({error}).",
+                    "Escouade won’t follow this agent’s state in its terminal: {harness} did not tell how to trust its hooks ({error}).",
+                    harness = harness_name,
+                    error = format!("{e:#}")
+                );
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.notice("warn", text, fx);
+                    Ok(())
+                });
+            }
+        }
         let info = TermInfo {
             id: new_id(),
             // No project's: the window lists it with no project's terminals.
@@ -2001,9 +2021,22 @@ impl<R: Runtime> Core<R> {
     /// then Enter. Refused while it waits for an answer there (the text would go to its dialog).
     pub(crate) fn send_to_tui(&self, id: &str, text: &str) -> Result<()> {
         let h = self.agent(id)?;
+        let (account, cwd) = {
+            let rt = h.lock();
+            (rt.meta.account.clone(), rt.meta.cwd.clone())
+        };
+        let config_dir = {
+            let settings = self.settings.read();
+            accounts::config_dir(&accounts::get(&settings, &account), &settings)
+        };
         let (term, typing, view, harness) = {
             let rt = h.lock();
             let (view, harness) = view_of(&rt.meta)?;
+            if rt.tui.is_some() {
+                if let Some(why) = view.paste_refusal(&config_dir, &cwd) {
+                    bail!(why);
+                }
+            }
             if rt.meta.status == AgentStatus::Waiting {
                 bail!(tr!(
                     "L’agent attend une réponse dans son terminal : réponds-y d’abord.",

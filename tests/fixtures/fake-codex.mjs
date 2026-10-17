@@ -3,7 +3,11 @@
 // streams of tests/fixtures/codex/ show it: what the conformance bench (src-tauri/src/engine/codex/bench.rs)
 // and the end-to-end tests drive instead of Codex.
 //
-// `codex --version` says its version; `codex app-server …` serves. It answers `initialize`, `thread/start`
+// `codex --version` says its version; `codex app-server …` serves; anything else is its interface (« Vue Codex »,
+// tests/fixtures/fake-codex-tui.mjs). The app-server lists the hooks of its `-c hooks.<Event>=…` options
+// (`hooks/list`: their keys and hashes, trusted when a `-c hooks.state=…` option says so), and writes the
+// rollout of a thread it starts or forks (its `session_meta`), where its interface finds it to resume it.
+// It answers `initialize`, `thread/start`
 // (a new thread `thr-<pid>-<n>`), `thread/resume` (any thread but one whose id starts with "perdu": refused),
 // `thread/fork` (a new thread), `model/list`, `account/rateLimits/read`, `turn/start`, `turn/steer`,
 // `turn/interrupt`, `thread/name/set`. What a turn plays is picked by its message (French words, as the
@@ -39,11 +43,6 @@ if (argv.includes('--version')) {
   process.stdout.write(`codex-cli ${VERSION}\n`);
   process.exit(0);
 }
-if (argv[0] !== 'app-server') {
-  process.stderr.write(`fake codex: only app-server is played (${argv.join(' ')})\n`);
-  process.exit(2);
-}
-
 const LOG = process.env.FAKE_CODEX_LOG;
 const log = (entry) => LOG && fs.appendFileSync(LOG, JSON.stringify(entry) + '\n');
 log({
@@ -53,8 +52,15 @@ log({
     pid: process.pid,
     codexHome: process.env.CODEX_HOME ?? null,
     token: !!process.env.ESCOUADE_MCP_TOKEN,
+    tui: argv[0] !== 'app-server',
   },
 });
+const ui = await import('./fake-codex-tui.mjs');
+if (argv[0] !== 'app-server') {
+  ui.tui(argv, log);
+  // The rest is the app-server's: never reached.
+  await new Promise(() => {});
+}
 
 const out = (msg) => process.stdout.write(JSON.stringify(msg) + '\n');
 const notify = (method, params) => out({ method, params });
@@ -488,6 +494,7 @@ function handle(msg) {
       cwd = p.cwd ?? cwd;
       instructions = p.developerInstructions ?? '';
       thread = id('thr');
+      if (process.env.CODEX_HOME) ui.newRollout(process.env.CODEX_HOME, thread, cwd);
       reply({ thread: threadObject(thread) });
       return notify('thread/started', { thread: threadObject(thread) });
     case 'thread/resume':
@@ -499,6 +506,7 @@ function handle(msg) {
       cwd = p.cwd ?? cwd;
       const of = p.threadId;
       thread = id('thr-fork');
+      if (process.env.CODEX_HOME) ui.newRollout(process.env.CODEX_HOME, thread, cwd, { forked_from_id: of });
       reply({ thread: threadObject(thread, { forkedFromId: of }) });
       return notify('thread/started', { thread: threadObject(thread, { forkedFromId: of }) });
     }
@@ -506,6 +514,21 @@ function handle(msg) {
       return reply({ data: MODELS, nextCursor: null });
     case 'account/rateLimits/read':
       return reply({ rateLimits: RATE(usage || 12), rateLimitsByLimitId: {} });
+    case 'hooks/list': {
+      const trust = ui.trustOf(argv);
+      const hooks = ui.hooksOf(argv).map((h, i) => ({
+        key: h.key,
+        eventName: h.event.charAt(0).toLowerCase() + h.event.slice(1),
+        handlerType: 'command',
+        command: h.command,
+        source: 'sessionFlags',
+        displayOrder: i,
+        enabled: true,
+        currentHash: h.hash,
+        trustStatus: trust[h.key] === h.hash ? 'trusted' : 'untrusted',
+      }));
+      return reply({ data: (p.cwds ?? [cwd]).map((c) => ({ cwd: c, hooks })) });
+    }
     case 'thread/name/set':
       return reply({});
     case 'turn/start':

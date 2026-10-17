@@ -17,7 +17,7 @@ Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'
 Fait pour la 1.8 :
 - [x] **Vue Claude Code** (2026-10-12) : un agent peut tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade (bouton de l'en-tête, réglage pour les nouveaux agents). Escouade le suit par ses hooks HTTP et son transcript. Voir `docs/PROTOCOL.md`, « Vue Claude Code ».
   - [ ] À essayer sous Windows (ConPTY, `claude.exe` natif) et macOS avec un vrai compte : collage d'un message, Échap, `/clear`, une compaction, un sous-agent.
-  - [ ] La même vue pour les autres moteurs (demandé le 2026-10-14) : voir le chapitre 1, « Vue terminal de chaque moteur ».
+  - [ ] La même vue pour les autres moteurs (demandé le 2026-10-14) : voir le chapitre 1, « Vue terminal de chaque moteur ». Codex : fait (ESC-47) ; les autres harness sont reportés (décidé le 2026-10-17).
   - [x] **Changer de vue aussi au clic droit sur un agent** (demandé le 2026-10-12, fait le 2026-10-15, ESC-11) : dans le menu de sa carte de la barre latérale (`Sidebar.svelte`, à côté de « Dupliquer la conversation », « Ouvrir un terminal »…), « Vue Claude Code » ou « Vue Escouade » selon sa vue du moment. Mêmes règles que le bouton de l'en-tête (`Conversation.svelte`) : jamais pour un agent de ticket ni un agent archivé, même appel `api.setAgentView`. Textes fr et en.
     - Fait : le bouton et le menu suivent la même règle et font le même appel (`canSwitchView`, `switchView`, `src/lib/agent-actions.ts`). L'entrée suit « Ouvrir un terminal ». Tests : `Sidebar.test.ts`, « Vue Claude Code » / « Vue Escouade » (les deux vues, le refus du backend dit dans un toast, un agent de ticket et un agent archivé dans chaque vue) et le menu en anglais.
 
@@ -746,8 +746,9 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - la vue le dit (« Suivi limité : Cursor ne prévient pas Escouade de la fin d'un tour ») ;
   - l'historique revient au retour en vue Escouade ;
   - à revoir à chaque version du CLI.
-- [ ] **Permission en attente** : Claude Code a `PermissionRequest`, Codex aussi (essayé : il part avant la demande, avec `tool_name` et `tool_input`). Chez Copilot, trouver le signal : un hook dédié, ou le `PreToolUse` d'un outil que la politique fera demander. Sans lui, la carte ne dit pas « attend ta réponse ».
-- [ ] **Vue Codex**, d'après l'essai du 2026-10-16 :
+- [ ] **Permission en attente** (Codex : fait, ESC-47) : Claude Code a `PermissionRequest`, Codex aussi (essayé : il part avant la demande, avec `tool_name` et `tool_input`). Chez Copilot, trouver le signal : un hook dédié, ou le `PreToolUse` d'un outil que la politique fera demander. Sans lui, la carte ne dit pas « attend ta réponse ».
+- [x] **Essai réel de la vue Codex** (2026-10-17, ESC-47) : le test `real_codex_view` (`src-tauri/src/codex_tui_tests.rs`, lancé à la main avec `ESCOUADE_REAL_CODEX` = le `codex.exe` 0.163.0 de `%TEMP%\esc22`), sur le `~/.codex` du poste, `config.toml` sauvé puis remis, ses fils retirés de `~/.codex/sessions` (l'index n'avait pas bougé). Vu : les sept hooks d'Escouade passés par `-c`, avec la confiance que `prepare` tire de `hooks/list`, sont tous `trusted` pour Codex ; sur le dépôt neuf de l'essai, l'interface dessine d'abord son invite puis pose la question « Trust this folder? » (`1. Trust and continue`), et Escouade refuse d'y taper un message tant qu'elle n'a pas de réponse ; après Entrée (Codex écrit la confiance), « Réponds seulement : A » passe, la carte dit « En cours » puis « Terminé » et la conversation a la réponse « A » ; de retour en vue Escouade, l'app-server reprend la même session et répond « B ». Un `codex resume` d'une session inconnue écrit « ERROR: No saved session found with ID <id>. » et sort.
+- [x] **Vue Codex**, d'après l'essai du 2026-10-16 (fait le 2026-10-17, ESC-47 : docs/ENGINES.md, « La vue Codex ») :
   - Les hooks d'Escouade passent par `-c` et leur confiance aussi (`hooks.state`, clés et hachages lus par `hooks/list` d'un app-server lancé avec les mêmes `-c`) : rien n'est écrit chez l'utilisateur. Sans cette confiance, Codex les ignore sans rien dire.
   - Les charges des hooks sont celles de Claude Code (`session_id`, `turn_id`, `tool_name: "Bash"`, `last_assistant_message`…) : le serveur de hooks d'Escouade les lit presque tel quel.
   - Interrompre envoie Échap ; le hook `Interrupt` le confirme.
@@ -755,8 +756,8 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - En vue Escouade, l'app-server écrit cette confiance de lui-même au premier `thread/start` en `workspace-write`. Le dire dans la doc (Escouade touche ainsi au `config.toml` de l'utilisateur, par Codex), et voir s'il faut le dire dans l'app.
   - Une session neuve prend le modèle du `config.toml` : Escouade passe `-m` avec celui de l'agent.
 - [x] **Bouton et réglage** (ESC-34 ; le réglage dit « Terminal du harness », le mot de l'interface) : « Vue Claude Code » devient « Vue <moteur> » (« Vue Codex »…) dans l'en-tête de la conversation et le clic droit sur la carte. Le réglage des nouveaux agents propose « Escouade » ou « Terminal du moteur ». Textes fr et en.
-- [ ] **Coût** : estimé depuis l'usage lu dans le journal, comme en vue Claude Code. Rien pour Cursor.
-- [ ] **Tests** : chaque faux moteur a aussi une interface factice, lancée dans un pseudo-terminal, qui écrit son journal et appelle ses hooks, comme pour la vue Claude Code (`tests/fixtures/tui-transcript.jsonl`, `tui-hooks.jsonl`).
+- [ ] **Coût** : estimé depuis l'usage lu dans le journal, comme en vue Claude Code. Rien pour Cursor. Codex : ses tokens sont comptés (`token_count` du rollout), son coût attend l'estimation d'ESC-38.
+- [ ] **Tests** : chaque faux moteur a aussi une interface factice, lancée dans un pseudo-terminal, qui écrit son journal et appelle ses hooks, comme pour la vue Claude Code (`tests/fixtures/tui-transcript.jsonl`, `tui-hooks.jsonl`). Codex : fait (ESC-47, `tests/fixtures/fake-codex-tui.mjs`, `src-tauri/src/codex_tui_tests.rs`).
 
 ### Ce qui reste propre à Claude Code
 - [ ] Ces fonctions sont masquées pour les autres moteurs, pas grisées :

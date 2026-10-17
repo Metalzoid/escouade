@@ -13,6 +13,8 @@ mod clipboard;
 mod closed;
 #[cfg(test)]
 mod closed_tests;
+#[cfg(test)]
+mod codex_tui_tests;
 mod commands;
 mod conv;
 mod convsearch;

@@ -428,10 +428,25 @@ pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<Str
 
 /// The configuration folder the account's Claude Code reads, seen from the app: its own, or for
 /// Principal (no folder) the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes
-/// inherit, else `~/.claude` (in Linux for a `claude` of WSL: `claude_home`).
+/// inherit, else `~/.claude` (in Linux for a `claude` of WSL: `claude_home`). A Principal of
+/// Codex: the app's `CODEX_HOME`, else `~/.codex`.
 pub fn config_dir(account: &Account, settings: &Settings) -> PathBuf {
+    if account.engine == EngineId::Codex && own_dir(account).is_none() {
+        return codex_home_with(
+            std::env::var("CODEX_HOME").ok().as_deref(),
+            &dirs::home_dir().unwrap_or_default(),
+        );
+    }
     let (env, home) = claude_home(account, settings);
     config_dir_with(account, env.as_deref(), &home)
+}
+
+/// The folder of Codex's Principal, the app's `CODEX_HOME` (`env`) and home folder given.
+pub fn codex_home_with(env: Option<&str>, home: &Path) -> PathBuf {
+    match env.filter(|v| !v.trim().is_empty()) {
+        Some(v) => PathBuf::from(v),
+        None => home.join(".codex"),
+    }
 }
 
 /// `config_dir` with the app's `CLAUDE_CONFIG_DIR` (`env`) and home folder given.

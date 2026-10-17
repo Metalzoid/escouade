@@ -45,6 +45,7 @@ impl AgentRt {
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.interrupt_plan();
+        self.codex_new_conversation();
         // It tells the state of its link to claude.ai itself, once it has one.
         self.remote_state = None;
     }
@@ -329,6 +330,9 @@ impl AgentRt {
         if !self.meta.status.is_active() {
             return;
         }
+        if self.meta.engine == EngineId::Codex {
+            return self.codex_tui_end(fx);
+        }
         let mut models = serde_json::Map::new();
         for (model, u) in self.tui_usage.values() {
             let entry = models.entry(model.clone()).or_insert_with(|| {
@@ -419,7 +423,7 @@ impl AgentRt {
 
     /// The interface waits for the user (a permission, a question): it is told, as the stream's
     /// requests are.
-    fn tui_wait(&mut self, body: String, fx: &mut Effects) {
+    pub(super) fn tui_wait(&mut self, body: String, fx: &mut Effects) {
         if self.meta.status == AgentStatus::Waiting {
             return;
         }

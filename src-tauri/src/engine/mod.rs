@@ -8,7 +8,7 @@
 //! these two traits only.
 
 mod claude;
-mod codex;
+pub(crate) mod codex;
 pub mod mcp;
 pub mod oneshot;
 mod program;
