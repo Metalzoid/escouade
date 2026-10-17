@@ -12,6 +12,11 @@ pub mod mcp;
 mod program;
 pub mod registry;
 
+#[cfg(test)]
+pub(crate) mod bench;
+#[cfg(test)]
+mod minimal;
+
 pub use claude::CLAUDE;
 pub use mcp::Escouade;
 pub use program::{Located, Program};

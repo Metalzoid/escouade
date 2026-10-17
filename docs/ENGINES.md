@@ -2,7 +2,7 @@
 
 Un **moteur** fait tourner les agents d'Escouade : Claude Code aujourd'hui, puis Codex, Copilot CLI, Cursor CLI et OpenCode (docs/TODO-1.8.md, chapitre 1). L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
 
-Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec le premier lot de la refonte multi-moteurs (ESC-26) : l'extraction de Claude Code derrière l'interface, sans changement de comportement. La partie « Ajouter un moteur » sera complétée avec le banc de conformité (lot 10).
+Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec le premier lot de la refonte multi-moteurs (ESC-26) : l'extraction de Claude Code derrière l'interface, sans changement de comportement. « Le banc de conformité » et la liste à cocher « Ajouter un moteur » sont venus avec le lot 10 (ESC-35).
 
 ## Où est quoi
 
@@ -14,6 +14,9 @@ Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec
 | `src-tauri/src/engine/program.rs` | `Program` : le programme d'un moteur, du système ou de WSL (lancé par `wsl.exe`), et `Located`, où il est, comme les réglages le montrent. Commun à tous les moteurs. |
 | `src-tauri/src/engine/claude/` | Claude Code, première implémentation : `mod.rs` (le moteur `Claude`, ses arguments, ses messages, ses one-shots, et `EngineProcess` pour son process), `process.rs` (`ClaudeProcess` : le process stdio et ses requêtes de contrôle, l'ancien `claude.rs`), `locate.rs` (où est `claude`). |
 | `src-tauri/src/agent/claude.rs` | La traduction des frames de Claude Code (stream-json) en éléments de conversation : l'ancien corps de `AgentRt::handle_frame`. |
+| `src-tauri/src/engine/bench/` | Le banc de conformité (tests seulement) : les scénarios et leur pilote (`mod.rs`), le rejeu des flux enregistrés (`replay.rs`). Voir « Le banc de conformité ». |
+| `src-tauri/src/engine/claude/bench.rs` | Claude Code sur le banc, avec le faux `claude`, et le rejeu de ses flux (`tests/fixtures/replays/claude/`). |
+| `src-tauri/src/engine/minimal/`, `src-tauri/src/agent/minimal.rs` | Le faux moteur minimal (tests seulement) : le moins qu'un moteur écrive pour passer le banc. |
 | `src-tauri/src/agent.rs` | La conversation normalisée d'un agent, son statut, ses demandes en attente, son usage : ce que chaque moteur remplit. |
 
 Le reste du backend (cœur, tickets, pilote auto, serveur MCP, stats, comptes) ne parle plus à Claude Code que par ces deux traits : il ne construit plus aucune frame ni requête de contrôle (`core.rs` n'a plus un seul `json!`), ne lit plus les arguments de `claude`, ni son stderr.
@@ -225,12 +228,126 @@ Le protocole est une consigne ajoutée : le pilote auto le met dans `AgentOption
 
 Ce qui nomme un outil d'un moteur passe par lui : le message transmis à un sous-agent (`Engine::subagent_relay`, l'outil `SendMessage` de Claude Code).
 
-## Ajouter un moteur (ébauche)
+## Le banc de conformité (ESC-35)
 
-1. Écrire `engine/<moteur>/` : un `Engine` (lancement, message, one-shot, lecture du stderr, serveur MCP d'Escouade donné, refusé et déclaré) et un `EngineProcess` pour son process (dans le Job de l'agent, `job::Job::for_child`).
-2. Écrire `agent/<moteur>.rs` : la traduction de son flux dans les éléments normalisés, les noms d'outils de Claude Code.
-3. Le faire rendre par `engine::by_id` pour son `EngineId` (déjà dans les données : `AgentMeta.engine`, voir « Les données »).
-4. Sa ligne dans `registry::all()`, ses capacités, sa plage de versions testées et le schéma de la plus récente (voir « Le registre »), son faux moteur et le banc de conformité (lot 10).
+Une suite de scénarios commune que chaque moteur passe avec son faux moteur (`src-tauri/src/engine/bench/mod.rs`). Elle juge ce que la traduction du moteur fait de chaque scénario **dans la conversation de l'agent** (éléments normalisés, statut, demandes en attente, plan, `Effects`), jamais ses frames : la même suite vaut pour tous les protocoles.
+
+Le banc pilote le moteur comme le cœur le fait, sans le cœur : `Engine::spawn` (avec `Spawn::of`, comme `Core::ensure_process`), `EngineProcess::initialize`, `Engine::message` puis `send_message` et `AgentRt::push_user` (comme `Core::deliver`), `AgentRt::answer_permission_by` et `answer_question_by` (comme la fenêtre), `interrupt` avec `AgentRt.interrupted` (comme `Core::interrupt`), `AgentRt::detach` puis `close_input` (l'arrêt d'un agent inactif). Chaque frame passe par `Engine::translate` du moteur essayé, pas par `engine::of` : un moteur se met sur le banc avant d'avoir sa ligne dans `engine::by_id`.
+
+### Les scénarios
+
+| Scénario | Ce que fait le banc | Ce qu'il vérifie | Demandé |
+|---|---|---|---|
+| `Text` | Un message ordinaire. | Un élément `text`, un `turn` sans erreur, `TurnEnd::Finished` avec le texte, statut `done`, une session. | toujours |
+| `Thinking` | Un message qui fait raisonner. | Un élément `thinking` non vide, puis un `text`. | toujours |
+| `Approval` | Une commande qui demande son approbation, autorisée. | Une demande en attente de type permission, une carte `permission` d'outil `Bash`, statut `waiting` ; après l'accord, la décision sur la carte, l'outil `Bash` en `ok`, le tour fini. | toujours |
+| `Edit` | Une modification de fichier. | Un outil `Edit`, `Write` ou `MultiEdit` en `ok`, le fichier parmi `touchedFiles`, `Effects.files_changed`. | toujours |
+| `Question` | Une question à l'utilisateur, répondue par son premier choix. | Une carte `question` (forme d'`AskUserQuestion` : `questions[].question`, `options[].label`) en attente ; ses réponses sur la carte, le tour fini. | toujours |
+| `Interrupt` | Un tour long, interrompu. | `TurnEnd::Interrupted`, l'élément `turn` marqué `interrupted`. | toujours |
+| `PlanMode` | La fin du mode plan, un plan à approuver. | Une permission d'outil `ExitPlanMode`, accordée, le tour fini. | si `caps.modes` a `plan` |
+| `Subagents` | Un sous-agent lancé. | Un outil `Task` (ou `Agent`), une ligne dans `meta.plan.agents`, finie (`done`) au bout du tour. | toujours |
+| `Limit` | Un tour arrêté par la limite d'usage. | `TurnEnd::Limited`, `Effects.limited`, l'élément `turn` marqué `limited`. | si `caps.quota` n'est pas `none` |
+| `Resume` | Un tour, l'arrêt du process, un nouveau process, un tour. | `Start::of` donne `Resume` sur la session, et le second tour la garde. | toujours |
+| `Fork` | Un tour, puis une copie (`fork_of` et `fork_at` de l'original, comme « Dupliquer la conversation »). | La copie a sa propre session, et `fork_of` est oublié dès son premier tour ; pour `fork: entry`, l'original a une `last_entry`. | si `caps.fork` n'est pas `none` |
+| `Quota` | `EngineProcess::read_usage`. | Des fenêtres que `usage::parse_windows` lit. | si `caps.quota` n'est pas `none` |
+
+Un scénario qui échoue dit le moteur, le scénario et la conversation entière ; un process qui ne dit plus rien le fait échouer au bout de 60 s.
+
+### Brancher un moteur
+
+Un moteur se branche par une `Target`, écrite à côté de lui (`engine/<moteur>/bench.rs`), et un test qui appelle `bench::run` : rien du banc ni du cœur ne change.
+
+```rust
+impl Target for Codex {
+    fn engine(&self) -> &'static dyn Engine { &CODEX }
+    fn program(&self) -> Program { /* tests/fixtures/fake-codex.cmd */ }
+    fn env(&self, dir: &Path) -> Vec<(String, String)> { /* ex. CODEX_HOME dans dir */ }
+    fn prompt(&self, s: Scenario) -> Option<String> { /* le message qui fait jouer s au faux */ }
+}
+
+#[tokio::test]
+async fn the_fake_codex_passes_the_bench() {
+    let played = run(&Codex, &bench_dir("bench-codex")).await;
+    assert_eq!(played, Scenario::ALL);
+}
+```
+
+`run` joue chaque scénario que ses capacités demandent (`Scenario::applies`), chacun dans son dossier, et rend ceux qu'il a joués : le test dit lesquels il attend. Un faux qui ne joue pas un scénario demandé (`prompt` rend `None`) fait échouer le banc.
+
+- **Claude Code** : `engine/claude/bench.rs`, avec le faux `claude` (`tests/fixtures/fake-claude.mjs`, dont le message choisit le scénario ; « raisonnement » a été ajouté pour `Thinking`). Il joue les douze scénarios (`the_fake_claude_passes_the_bench`).
+- **Le faux moteur minimal** : `engine/minimal/` et sa traduction `agent/minimal.rs`, pour les tests seulement. C'est le moins qu'un moteur écrive pour passer le banc : un `Engine` (ses méthodes que le banc n'appelle pas sont `unreachable!`), un process joué sur un fil de l'app dans un protocole à lui (`start`, `thinking`, `say`, `call`, `done`, `ask`, `question`, `end`), des outils à lui (`shell`, `patch`, `agent`) nommés comme ceux de Claude Code (`Bash`, `Edit`, `Task`). Ses capacités n'ont ni copie, ni quota, ni mode `plan` : il joue les huit autres scénarios (`the_minimal_fake_engine_plugs_into_the_bench_and_passes_what_its_capabilities_call_for`). Il s'est branché par ses deux déclarations de module (`engine/mod.rs`, `agent.rs`), comme tout moteur, sans une ligne du cœur ni du banc.
+
+### Les flux enregistrés
+
+Un flux réel enregistré se rejoue dans la traduction d'un moteur et se compare aux éléments attendus (`engine/bench/replay.rs`). Un cas est un fichier JSON de `tests/fixtures/replays/<moteur>/` :
+
+```json
+{
+  "about": "Ce qui a été enregistré, avec quelle version, et ce que ça montre.",
+  "flux": "../../real-run-send-message.jsonl",
+  "agent": { "cwd": "C:\\Users\\dev\\repo" },
+  "items": [{ "kind": "text", "parent": null, "streaming": false, "text": "LAUNCHED" }],
+  "agentAfter": { "sessionId": "e172c854-…", "status": "done", "touchedFiles": [] }
+}
+```
+
+- `flux` : le flux tel qu'il est venu, une frame (une valeur JSON) par ligne, chemin relatif au cas. Les enregistrements restent où ils sont (`tests/fixtures/real-run-*.jsonl`, `tests/fixtures/codex/`).
+- `agent` (facultatif) : l'agent avant la première frame, par-dessus les valeurs d'un nouvel agent, comme son état est sauvé (`AgentMeta`, en camelCase).
+- `items` : la conversation que font les frames, dans l'ordre, sans son `id` ni ses heures (`ts`, `startedAt`, `endedAt`, inventés à chaque rejeu). Un élément attendu n'est comparé que par ce qu'il dit : une clé qu'il omet n'est pas comparée (un objet en lui non plus ; une liste a sa longueur). Les nombres sont comparés à leur dernier bit près.
+- `agentAfter` (facultatif) : l'agent après la dernière frame, comparé de même.
+
+Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. `ESCOUADE_BLESS=1 cargo test --lib <test>` réécrit les cas d'après ce que font leurs frames (leurs `items`, et les clés de leur `agentAfter`, ou six d'entre elles s'il n'en a pas) au lieu de les comparer : le diff se relit avant d'être commité. Un test par moteur rejoue tous ses cas (`replay::check_all(&CLAUDE, "claude")`). Aujourd'hui : trois flux réels de Claude Code (sous-agent à qui l'on écrit, sous-agent arrêté, commande passée en arrière-plan) et un flux du faux moteur minimal, écrit à la main dans son protocole.
+
+## Ajouter un moteur
+
+À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), déjà dans `EngineId`.
+
+### L'adaptateur
+
+- [ ] `src-tauri/src/engine/<moteur>/mod.rs` : un `static` qui implémente `Engine` (sans état), déclaré dans `engine/mod.rs` (`mod <moteur>;`).
+- [ ] `spawn` : lancer, reprendre et copier selon `Spawn.start` (`New`, `Resume`, `Fork`), avec le modèle, l'effort, le mode, les consignes ajoutées (`append_prompt`), les dossiers lisibles sans question (`read_dirs`) et le serveur MCP d'Escouade (`spawn.escouade`) ; un `Fork` refusé si le moteur ne copie pas.
+- [ ] Un `EngineProcess` pour son process, dans le Job de l'agent (`job::Job::for_child`) : `initialize` (`Ready` : commandes `/`, modèles), `send_message`, `interrupt`, `set_model`, `set_effort`, `set_mode`, `answer_permission`, `answer_question`, `read_usage`, `rename`, `close_input`, `kill`, `wait_exit`, `wait_gone`. Ce qu'il ne sait pas faire (`stop_task`, `task_output`, `remote_control`) répond « non pris en charge ».
+- [ ] Un transport qui n'est pas une ligne par message (en-têtes `Content-Length`, SSE) est lu dans le process, qui passe une `Value` par frame à `on_frame` ; les réponses à ses propres requêtes restent dans le process.
+- [ ] `message` : la forme de son message, pièces jointes comprises, et le refus d'un fichier qu'il ne lit pas (`caps.images`, `caps.pdf`).
+- [ ] `start_lost` : la session ou le point de copie perdus, lus dans son stderr.
+- [ ] `one_shot` : `Weight::Light` (son modèle le plus rapide, sans outil) et `Weight::Reading` (outils de lecture seule), sans session, sans réglages de l'utilisateur ni serveur MCP.
+- [ ] Sa ligne dans `engine::by_id`, et dans `registry::all()`.
+
+### Les capacités et le registre
+
+- [ ] `caps()` : ce qu'il sait faire, ni plus ni moins (`EngineCaps`, voir « Le registre ») ; chaque mode avec son sens chez lui (`ModeCap.meaning`). L'interface masque le reste.
+- [ ] `models()`, `efforts()`, `supports_effort`, `supports_auto` : les menus du composer.
+- [ ] `locate`, `version_args`, `tested()`, `oldest_reason`, `update_command`, `install()` : le trouver, le refuser trop ancien, l'installer.
+- [ ] Le schéma de sa plus récente version testée dans `tests/fixtures/engines/<moteur>-<version>.schema.json`, et les deux tests qui le tiennent (champs lus par Escouade, champs des flux enregistrés).
+
+### Le traducteur
+
+- [ ] `src-tauri/src/agent/<moteur>.rs` (`mod <moteur>;` dans `agent.rs`) : `AgentRt::<moteur>_frame`, que `Engine::translate` appelle.
+- [ ] Les éléments normalisés : `text`, `thinking`, `tool` (puis son résultat : `status` `ok` ou `error`, `result`), `permission` et `question` avec leur demande en attente (`add_pending`, statut `waiting`), `notice`, `event`, et le `turn` de fin de tour avec `Effects.turn_end` (`Finished`, `Interrupted`, `Limited`, `Error`), `Effects.limited` et `Effects.rate`.
+- [ ] Les noms d'outils de Claude Code (`Bash`, `Edit`, `Write`, `Task`…, table de docs/TODO-1.8.md, « Un moteur par agent »), un outil MCP nommé par `mcp::tool_name`, un outil inconnu sous son propre nom ; un fichier modifié passé à `touch`.
+- [ ] La session : `meta.session_id` dès qu'il la dit, `fork_of` et `fork_at` oubliés au premier tour d'une copie, `last_entry` (ou son équivalent) pour copier jusqu'au bon point.
+- [ ] Le plan : sous-agents (`plan_tool_use`, `on_tool_result`), liste de tâches, fin de tour (`PlanState::end_turn`).
+- [ ] L'inconnu toléré : un champ, une frame ou un événement inconnus sont ignorés sans casser le tour (un test, comme `an_unknown_field_or_frame_of_a_newer_claude_code_leaves_the_turn_going`).
+
+### Le serveur MCP d'Escouade et les textes
+
+- [ ] `grant_file`, `refusal`, `escouade_launch` : le serveur donné ou refusé, **jamais le jeton dans les arguments** (`no_engine_puts_the_token_on_the_command_line` le vérifie pour chaque moteur de `registry::all()`).
+- [ ] `declared`, `add_declaration`, `remove_declaration`, `manual_declaration` : « <harness> peut piloter Escouade ».
+- [ ] `speaker`, `instructions_room`, `subagent_relay` : comment les textes nomment ses agents, la place des consignes ajoutées, le message transmis à un sous-agent.
+
+### Le faux moteur et le banc
+
+- [ ] `tests/fixtures/fake-<moteur>.mjs`, avec son `.cmd` (Windows) et un script sans extension (macOS, Linux) : son vrai protocole, rejoué d'après ses flux enregistrés ; le message choisit le scénario, comme pour le faux `claude`.
+- [ ] `src-tauri/src/engine/<moteur>/bench.rs` : sa `Target` et le test qui appelle `bench::run`, avec la liste des scénarios attendus ; le banc passe.
+- [ ] Ses flux réels enregistrés (`tests/fixtures/<moteur>/`), un cas par flux dans `tests/fixtures/replays/<moteur>/` (béni, relu), et le test `replay::check_all(&<MOTEUR>, "<moteur>")`.
+- [ ] S'il a une vue terminal (`caps.terminal_view`) : son interface factice, lancée dans un pseudo-terminal, qui écrit son journal et appelle ses hooks (lot 9).
+- [ ] Les e2e : un agent sur ce moteur (message, approbation, diff, fin de tour), un ticket lancé dessus par le pilote auto.
+
+### Les essais réels
+
+- [ ] Un essai réel avant la release : un vrai compte, un ticket en worktree jusqu'au commit et au merge, un plan avec sous-agents, une limite d'usage si possible ; ses flux enregistrés (voir ci-dessus).
+- [ ] La plage de versions testées mise à jour d'après l'essai (`tested()`).
+- [ ] docs/PROTOCOL.md : sa section (versions testées, méthodes et événements utilisés, correspondance des modes et des outils) ; ce document : sa colonne dans les tables ; README (installation), CHANGELOG et site.
 
 ## Vérification de l'extraction (ESC-26)
 

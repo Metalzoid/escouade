@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "question", "permission", "edit", "slow", "crash", "grandchild"; anything else is a
+// scenario: "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// before the reply); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
 // [detached] too, that program outlives the process). A `--resume=missing…` session fails like an
 // unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
@@ -1893,6 +1894,13 @@ function startSession() {
       streamText('Je commence…');
       // "slow 3s" ends after 3 seconds, a plain "slow" after 30.
       slowTimer = setTimeout(() => result(), Number(/slow (\d+)s/.exec(text)?.[1] ?? 30) * 1000);
+      return;
+    }
+    if (text.includes('raisonnement')) {
+      // A turn that reasons before it answers: a thinking block, then its reply.
+      assistant({ type: 'thinking', thinking: 'Je pèse les deux pistes avant de répondre.', signature: 'sig-fake' });
+      streamText('Réponse réfléchie.');
+      result();
       return;
     }
     streamText(`Bonjour, tu as dit : ${text}`);

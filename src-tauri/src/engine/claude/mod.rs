@@ -1,6 +1,8 @@
 //! Claude Code, the first engine: a `claude` process driven over the stream-json protocol
 //! (docs/PROTOCOL.md), its frames translated by `AgentRt::claude_frame` (`agent/claude.rs`).
 
+#[cfg(test)]
+mod bench;
 mod locate;
 mod mcp;
 mod process;

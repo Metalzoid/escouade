@@ -1,0 +1,12 @@
+{"type":"start","session":"min-rec-1"}
+{"type":"thinking","text":"Il faut d'abord vider le dossier build."}
+{"type":"call","id":"call-1","tool":"shell","input":{"command":"rm -rf build"}}
+{"type":"ask","request":"ask-2","call":"call-1"}
+{"type":"done","call":"call-1","output":"build supprimé"}
+{"type":"call","id":"call-3","tool":"agent","input":{"task":"Relire le diff"}}
+{"type":"say","text":"Rien à redire.","parent":"call-3"}
+{"type":"done","call":"call-3","output":"Rien à redire."}
+{"type":"call","id":"call-4","tool":"patch","input":{"path":"src/app.ts","diff":"-const a = 1;\n+const a = 2;"}}
+{"type":"done","call":"call-4","output":"1 fichier modifié"}
+{"type":"say","text":"Commande exécutée, fichier modifié."}
+{"type":"end"}

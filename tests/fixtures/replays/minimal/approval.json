@@ -1,0 +1,105 @@
+{
+  "about": "The minimal fake engine of the bench (engine/minimal/), written by hand in its protocol: a reasoning, a command asked for approval (never answered: the turn ends with it waiting), a subagent and a file changed.",
+  "agent": {
+    "cwd": "/repo"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "min-rec-1",
+    "status": "done",
+    "tokens": 0,
+    "touchedFiles": [
+      "src/app.ts"
+    ]
+  },
+  "flux": "approval.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "Il faut d'abord vider le dossier build."
+    },
+    {
+      "input": {
+        "command": "rm -rf build"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "build supprimé"
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": false,
+      "cancelled": true,
+      "decision": null,
+      "defaultNo": false,
+      "input": {
+        "command": "rm -rf build"
+      },
+      "kind": "permission",
+      "toolName": "Bash",
+      "toolUseId": "call-1"
+    },
+    {
+      "input": {
+        "description": "Relire le diff",
+        "prompt": "Relire le diff"
+      },
+      "kind": "tool",
+      "name": "Task",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "Rien à redire."
+      },
+      "run": {
+        "status": "done",
+        "tools": 0
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": "call-3",
+      "streaming": false,
+      "text": "Rien à redire."
+    },
+    {
+      "input": {
+        "diff": "-const a = 1;\n+const a = 2;",
+        "file_path": "/repo/src/app.ts"
+      },
+      "kind": "tool",
+      "name": "Edit",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "1 fichier modifié"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Commande exécutée, fichier modifié."
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 0
+    }
+  ]
+}

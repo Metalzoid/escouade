@@ -1,0 +1,178 @@
+{
+  "about": "Claude Code 2.1.301, Haiku: a command started in the foreground that goes to the background, its output and its end (ESC-14).",
+  "agent": {
+    "cwd": "C:\\Users\\dev\\AppData\\Local\\Temp\\esc14-cwd-opWcIM"
+  },
+  "agentAfter": {
+    "cost": 0.00698206,
+    "lastEntry": "3e2c851f-54be-4456-8bd8-f5defb596b5a",
+    "sessionId": "24a0b54d-c8af-40dc-af17-d1ee05b7d730",
+    "status": "done",
+    "tokens": 227492,
+    "touchedFiles": []
+  },
+  "flux": "../../real-run-foreground-flip.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "command": "for i in $(seq 1 300); do echo \"line $i xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"; done; sleep 10; echo end",
+        "description": "Loud",
+        "run_in_background": true
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": false,
+      "cancelled": true,
+      "decision": null,
+      "defaultNo": false,
+      "description": "Loud",
+      "input": {
+        "command": "for i in $(seq 1 300); do echo \"line $i xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"; done; sleep 10; echo end",
+        "description": "Loud",
+        "run_in_background": true
+      },
+      "kind": "permission",
+      "reason": "A variable in this command can't be checked before it runs",
+      "title": null,
+      "toolName": "Bash",
+      "toolUseId": "toolu_01CZh3jhQgUcdhR4YECEvkKU"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "command": "for i in $(seq 1 12); do echo fg $i; sleep 2; done; echo fgdone",
+        "description": "Foreground loop"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": false,
+      "cancelled": true,
+      "decision": null,
+      "defaultNo": false,
+      "description": "Foreground loop",
+      "input": {
+        "command": "for i in $(seq 1 12); do echo fg $i; sleep 2; done; echo fgdone",
+        "description": "Foreground loop"
+      },
+      "kind": "permission",
+      "reason": "A variable in this command can't be checked before it runs",
+      "title": null,
+      "toolName": "Bash",
+      "toolUseId": "toolu_01Wbt9p4pKH7HaG91Lq5C3N5"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "FINISHED"
+    },
+    {
+      "cost": 0.0052461800000000005,
+      "durationMs": 14560,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 110390
+    },
+    {
+      "kind": "event",
+      "source": "task",
+      "text": "<task-notification>\n<task-id>bdv6oe7xp</task-id>\n<tool-use-id>toolu_01CZh3jhQgUcdhR4YECEvkKU</tool-use-id>\n<status>completed</status>\n<summary>Background command \"Loud\" completed (exit code 0)</summary>\n</task-notification>"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "The \"Loud\" background command finished with exit code 0. The foreground loop (`bj6es8xxy`) was moved to the background by you, so I haven't seen its completion yet."
+    },
+    {
+      "cost": 0.0006191399999999998,
+      "durationMs": 1914,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 38541
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "file_path": "C:\\Users\\dev\\AppData\\Local\\Temp\\claude\\C--Users-dev-AppData-Local-Temp-esc14-cwd-opWcIM\\24a0b54d-c8af-40dc-af17-d1ee05b7d730\\tasks\\bj6es8xxy.output"
+      },
+      "kind": "tool",
+      "name": "Read",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "1\tfg 1\n2\tfg 2\n3\tfg 3\n4\tfg 4\n5\tfg 5\n6\tfg 6\n7\tfg 7\n8\tfg 8\n9\tfg 9\n10\tfg 10\n11\tfg 11\n12\tfg 12\n13\tfgdone\n14\t\n15\t[exited with code 0]\n16"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "The foreground loop finished. Its output shows `fg 1` through `fg 12`, then `fgdone`, with exit code 0."
+    },
+    {
+      "cost": 0.0011167399999999997,
+      "durationMs": 2998,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 78561
+    }
+  ]
+}

@@ -19,6 +19,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 mod claude;
+// The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
+#[cfg(test)]
+mod minimal;
 pub mod sidechain;
 mod transcript;
 

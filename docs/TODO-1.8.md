@@ -496,7 +496,7 @@ Lots, dans l'ordre :
 7. **Textes rédigés** par moteur (voir « Textes rédigés par un modèle »).
 8. **Serveur MCP** par moteur (voir « Serveur MCP d'Escouade »). Fait (ESC-33), voir docs/ENGINES.md, « Le serveur MCP d'Escouade » : l'interface et Claude Code ; Codex suit avec ESC-38 et ESC-50.
 9. **Vue terminal générique** et commande `escouade-hook` (voir « Vue terminal de chaque moteur »).
-10. **Banc de conformité** des moteurs, et guide `docs/ENGINES.md` « Ajouter un moteur ».
+10. **Banc de conformité** des moteurs, et guide `docs/ENGINES.md` « Ajouter un moteur ». Fait (ESC-35), voir docs/ENGINES.md, « Le banc de conformité » : le faux `claude` passe les douze scénarios, un faux moteur minimal s'y branche sans toucher au cœur, et les flux réels se rejouent depuis `tests/fixtures/replays/` ; chaque moteur y branche son faux avec son ticket.
 11. **Moteur ACP générique** : client, extensions propres à un moteur, faux agent ACP.
 12. **Continuer sur un autre moteur** quand le quota est épuisé (voir la section du même nom, ESC-88).
 

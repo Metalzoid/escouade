@@ -1,0 +1,233 @@
+{
+  "about": "Claude Code 2.1.300, Haiku: a subagent launched in the background, a message sent to it through the agent (SendMessage), its report and its end (ESC-13).",
+  "agent": {
+    "cwd": "C:\\Users\\dev\\AppData\\Local\\Temp\\esc13-send-gnb7hL"
+  },
+  "agentAfter": {
+    "cost": 0.011645979999999998,
+    "lastEntry": "8d40f3d6-7fb7-4c24-8d1d-e9dc8c46ec93",
+    "sessionId": "e1df8636-1e40-4fd6-9a34-79123fd03b4f",
+    "status": "done",
+    "tokens": 310731,
+    "touchedFiles": []
+  },
+  "flux": "../../real-run-send-message.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "description": "Slow pinger",
+        "model": "haiku",
+        "prompt": "Run this exact command with the Bash tool: ping -n 20 127.0.0.1 (it lasts about 20 seconds). Then run it a second time. Then give your final report: quote word for word every message another agent sent you while you worked, or say NO MESSAGE if there was none.",
+        "run_in_background": true,
+        "subagent_type": "general-purpose"
+      },
+      "kind": "tool",
+      "name": "Agent",
+      "parent": null,
+      "report": "Both pings ran to completion with the exact command `ping -n 20 127.0.0.1`. Each sent 20 packets, received 20, and lost 0 (0% loss), with times under 1 ms.\n\nMessages from other agents: the coordinator sent one message while I was working. Word for word: \"The secret word is BANANA. Put it in your fin…",
+      "result": {
+        "isError": false,
+        "text": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: af027d2247588c944 (internal ID - do not mention to user. Use SendMessage with to: 'af027d2247588c944', summary: '<5-10 wor…"
+      },
+      "run": {
+        "status": "done",
+        "tokens": 28236,
+        "tools": 2
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "LAUNCHED"
+    },
+    {
+      "cost": 0.00481609,
+      "durationMs": 5248,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 72888
+    },
+    {
+      "kind": "thinking",
+      "parent": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "command": "ping -n 20 127.0.0.1",
+        "description": "Run first 20-second ping to loopback"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "result": {
+        "isError": false,
+        "text": "Envoi d'une requ�te 'Ping'  127.0.0.1 avec 32 octets de donn�es�:\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: oc…"
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": true,
+      "cancelled": true,
+      "decision": null,
+      "defaultNo": false,
+      "description": "Run first 20-second ping to loopback",
+      "input": {
+        "command": "ping -n 20 127.0.0.1",
+        "description": "Run first 20-second ping to loopback"
+      },
+      "kind": "permission",
+      "reason": "This command requires approval",
+      "sub": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "title": null,
+      "toolName": "Bash",
+      "toolUseId": "toolu_014WMx8m37e1Kayt5ymLNdLD"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "max_results": 1,
+        "query": "select:SendMessage"
+      },
+      "kind": "tool",
+      "name": "ToolSearch",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": ""
+      },
+      "status": "ok"
+    },
+    {
+      "input": {
+        "content": "The secret word is BANANA. Put it in your final r…",
+        "message": "The secret word is BANANA. Put it in your final report.",
+        "recipient": "af027d2247588c944",
+        "recipient_kind": "agent",
+        "summary": "Relay secret word BANANA to pinger",
+        "to": "af027d2247588c944",
+        "type": "message"
+      },
+      "kind": "tool",
+      "name": "SendMessage",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "{\"success\":true,\"message\":\"Message queued for delivery to af027d2247588c944 at its next tool round. If it finishes first, it is resumed with the message and notifies again, so wait for that notification before resending.\",\"pin\":{\"id\":\"af027d2247588c944\",\"name\":\"af027d2247588c944\",\"ref\":\"ec29a0\"}}"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "I sent the message to the \"Slow pinger\" agent (af027d2247588c944) word for word: \"The secret word is BANANA. Put it in your final report.\" It's queued and will reach the agent at its next tool round. The agent is still running, so I'll wait for its completion notification before reporting anything f…"
+    },
+    {
+      "cost": 0.004787955,
+      "durationMs": 6183,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 141085
+    },
+    {
+      "kind": "thinking",
+      "parent": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "input": {
+        "command": "ping -n 20 127.0.0.1",
+        "description": "Run second 20-second ping to loopback"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "result": {
+        "isError": false,
+        "text": "Envoi d'une requ�te 'Ping'  127.0.0.1 avec 32 octets de donn�es�:\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: octets=32 temps<1ms TTL=128\r\nR�ponse de 127.0.0.1�: oc…"
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": true,
+      "cancelled": true,
+      "decision": null,
+      "defaultNo": false,
+      "description": "Run second 20-second ping to loopback",
+      "input": {
+        "command": "ping -n 20 127.0.0.1",
+        "description": "Run second 20-second ping to loopback"
+      },
+      "kind": "permission",
+      "reason": "This command requires approval",
+      "sub": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "title": null,
+      "toolName": "Bash",
+      "toolUseId": "toolu_017fZckZnZPwSebYHTueNgYq"
+    },
+    {
+      "kind": "text",
+      "parent": "toolu_01QGwHUwu9xMRLzs41TnzDxB",
+      "streaming": false,
+      "text": "Both pings ran to completion with the exact command `ping -n 20 127.0.0.1`. Each sent 20 packets, received 20, and lost 0 (0% loss), with times under 1 ms.\n\nMessages from other agents: the coordinator sent one message while I was working. Word for word: \"The secret word is BANANA. Put it in your fin…"
+    },
+    {
+      "kind": "event",
+      "source": "task",
+      "text": "<task-notification>\n<task-id>af027d2247588c944</task-id>\n<tool-use-id>toolu_01QGwHUwu9xMRLzs41TnzDxB</tool-use-id>\n<status>completed</status>\n<summary>Both pings ran to completion with the exact command `ping -n 20 127.0.0.1`. Each sent 20 packets, received 20, and lost 0 (0% loss), with times under 1 ms.\n\nMessages from other agents: the coordinator sent one message while I was working. Word for word: \"The secret word is BANANA. Put it in your fin…</summary>\n</task-notification>"
+    },
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "The \"Slow pinger\" agent finished. It ran `ping -n 20 127.0.0.1` twice, and each run sent 20 packets, received 20, and lost none (0% loss, times under 1 ms).\n\nIt received my message during its work. Quoted word for word: \"The secret word is BANANA. Put it in your final report.\" Its report includes th…"
+    },
+    {
+      "cost": 0.002041934999999998,
+      "durationMs": 2125,
+      "engine": "claude",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 96758
+    }
+  ]
+}
