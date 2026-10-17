@@ -5,7 +5,7 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { PermissionItem } from '../../lib/types';
 import { answerClock, conversationHost, settle } from '../../test/conversation';
-import { fakeBackend, resetApp } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import PermissionCard from './PermissionCard.svelte';
 
 const item = (over: Partial<PermissionItem> = {}): PermissionItem => ({
@@ -157,6 +157,23 @@ describe('PermissionCard of a tool of Escouade', () => {
     expect(screen.queryByText(/Claude wants to use/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Autoriser' }));
     expect(backend.called('answer_permission')[0].args).toEqual({ id: 'a1', requestId: 'req-2', decision: 'allow', message: null });
+  });
+
+  it('reads the same for an agent of another harness: its calls of Escouade are named mcp__escouade__<tool> too', async () => {
+    resetApp({ agents: [agent({ id: 'a2', engine: 'codex' })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    const backend = fakeBackend();
+    render(PermissionCard, {
+      item: escouade({ project: 'demo', title: 'Corriger la connexion' }, { title: undefined }),
+      agentId: 'a2',
+      pending: true,
+      cwd: 'C:\code',
+    });
+    expect(screen.getByText('Escouade · Créer un ticket')).toBeInTheDocument();
+    expect(terms()).toEqual(['project :', 'title :']);
+    expect(values()).toEqual(['demo', 'Corriger la connexion']);
+    await userEvent.click(screen.getByRole('button', { name: 'Autoriser' }));
+    expect(backend.called('answer_permission')[0].args).toEqual({ id: 'a2', requestId: 'req-2', decision: 'allow', message: null });
   });
 
   it('cuts a long value at 2,000 characters', () => {

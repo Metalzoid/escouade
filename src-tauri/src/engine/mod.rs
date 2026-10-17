@@ -8,23 +8,26 @@
 //! these two traits only.
 
 mod claude;
+pub mod mcp;
 mod program;
 pub mod registry;
 
 pub use claude::CLAUDE;
+pub use mcp::Escouade;
 pub use program::{Located, Program};
 
 #[cfg(test)]
-pub(crate) use claude::{claude_args, ClaudeProcess, SpawnOpts};
+pub(crate) use claude::{all_tools as claude_all_tools, claude_args, ClaudeProcess, SpawnOpts};
 
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::job::JobUsage;
+use crate::mcp::install::{Entry, Standing, Target};
 use crate::model::{AgentMeta, EngineId};
 use anyhow::Result;
 use serde_json::Value;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -96,16 +99,6 @@ impl Start {
     }
 }
 
-/// What the agent is given of Escouade's MCP server (`mcp::AgentAccess`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Escouade {
-    /// Its tools, as the agent itself: the file that names the server with the agent's token.
-    Granted { config: PathBuf },
-    /// None of them, whatever the user's own config declares; `settings`, when it could be
-    /// written, also keeps the server itself out of the process.
-    Denied { settings: Option<PathBuf> },
-}
-
 /// How to start the process of an agent.
 pub struct Spawn {
     /// Its harness's program, of its account.
@@ -142,7 +135,7 @@ impl Spawn {
             append_prompt: meta.append_prompt.clone(),
             start: Start::of(meta),
             read_dirs: Vec::new(),
-            escouade: Escouade::Denied { settings: None },
+            escouade: Escouade::Denied { file: None },
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
         }
@@ -260,6 +253,50 @@ pub trait Engine: Send + Sync {
 
     /// One question, its answer (`OneShot`).
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>>;
+
+    // ----- Escouade's MCP server, for its agents (`engine::mcp`) -----
+
+    /// What the private file of a process given Escouade's server at `url` with `token` holds
+    /// (written before the process starts, gone when it stops); None: the engine passes the
+    /// server otherwise (`escouade_launch`), and no file is written.
+    fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>>;
+    /// What a process refused the server reads from a file, the same for every agent; None: its
+    /// arguments alone keep the server out.
+    fn refusal(&self) -> Option<Value>;
+    /// The arguments and variables of a process given or refused the server, as `escouade` says.
+    /// Never the token among the arguments: a file or a variable holds it.
+    fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch;
+
+    // ----- « <harness> peut piloter Escouade » (`mcp::install`) -----
+
+    /// What its user config `config` (`Target.config`) says of Escouade's server.
+    fn declared(&self, config: &Path) -> Standing;
+    /// `entry` added to the user config of the account of `target`, which has none of that name;
+    /// `secrets` (the tokens in play) hidden from what an error says.
+    fn add_declaration<'a>(
+        &'a self,
+        target: &'a Target,
+        entry: &'a Entry,
+        secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>>;
+    /// The server's entry removed from the user config of the account of `target`.
+    fn remove_declaration<'a>(
+        &'a self,
+        target: &'a Target,
+        secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>>;
+    /// The commands that declare `entry` by hand, in the shell of the platform (`windows`:
+    /// PowerShell, else a POSIX shell), for an account of folder `config_dir` (none for the
+    /// default one), with `program` as the user named it; `replace`: an entry is there, removed
+    /// first.
+    fn manual_declaration(
+        &self,
+        windows: bool,
+        program: &str,
+        config_dir: Option<&str>,
+        entry: &Entry,
+        replace: bool,
+    ) -> String;
 }
 
 /// The live process of an agent.

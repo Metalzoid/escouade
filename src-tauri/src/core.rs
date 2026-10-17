@@ -7,7 +7,7 @@ use crate::board;
 use crate::closed;
 use crate::conv;
 use crate::convsearch;
-use crate::engine::{self, EngineProcess, Escouade, OneShot, Process, Remote, Spawn, Weight};
+use crate::engine::{self, EngineProcess, OneShot, Process, Remote, Spawn, Weight};
 use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
@@ -2514,24 +2514,10 @@ impl<R: Runtime> Core<R> {
         // A ticket's agent reads the ticket's files too (`ticketfiles`).
         spawn.read_dirs.extend(self.ticket_read_dir(id));
         // Escouade's MCP server, as this agent (a token of its own) or kept out of it.
-        let access = self.agent_access(id);
-        spawn.escouade = match &access {
-            crate::mcp::AgentAccess::Granted { config, .. } => Escouade::Granted {
-                config: config.clone(),
-            },
-            crate::mcp::AgentAccess::Denied => Escouade::Denied {
-                settings: access.refusal().and_then(|refusal| {
-                    self.mcp_refusal_file(&refusal)
-                        // Its tools refused all the same.
-                        .inspect_err(|e| {
-                            log::warn!("agent {id}: Escouade's server not kept out: {e:#}")
-                        })
-                        .ok()
-                }),
-            },
-        };
+        let access = self.agent_access(id, engine);
+        spawn.escouade = self.with_refusal_file(id, engine, access);
         // Given back when this process ends, unless a newer one of the agent has its own.
-        let token = access.token().map(str::to_string);
+        let token = spawn.escouade.token().map(str::to_string);
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());

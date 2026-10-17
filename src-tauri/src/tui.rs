@@ -15,7 +15,7 @@
 use crate::accounts;
 use crate::agent::{AgentHandle, Effects, TuiRun};
 use crate::core::Core;
-use crate::mcp::AgentAccess;
+use crate::engine::{Engine, Escouade};
 use crate::model::*;
 use crate::pty::{PtyManager, TermInfo};
 use anyhow::{anyhow, bail, Context, Result};
@@ -451,9 +451,9 @@ pub(crate) async fn quit_interface(pty: &PtyManager, term: &str) {
 
 /// The settings an interface is started with (`--settings <file>`): its hooks, each an HTTP call
 /// to `port` with the token of its environment, and, Escouade's tools refused to it (`access`),
-/// the server itself kept out (`AgentAccess::refusal`: Claude Code reads the last `--settings`
-/// only, so both are in this one).
-pub fn tui_settings(port: u16, access: &AgentAccess) -> Value {
+/// the server itself kept out (`Engine::refusal` of its `engine`: Claude Code reads the last
+/// `--settings` only, so both are in this one).
+pub fn tui_settings(port: u16, engine: &dyn Engine, access: &Escouade) -> Value {
     let hook = json!([{ "hooks": [{
         "type": "http",
         "url": format!("http://127.0.0.1:{port}{PATH}"),
@@ -466,7 +466,11 @@ pub fn tui_settings(port: u16, access: &AgentAccess) -> Value {
         .map(|e| (e.to_string(), hook.clone()))
         .collect();
     let mut settings = json!({ "hooks": hooks });
-    if let Some(Value::Object(refusal)) = access.refusal() {
+    let refusal = match access {
+        Escouade::Denied { .. } => engine.refusal(),
+        Escouade::Granted { .. } => None,
+    };
+    if let Some(Value::Object(refusal)) = refusal {
         settings.as_object_mut().unwrap().extend(refusal);
     }
     settings
@@ -1271,10 +1275,12 @@ impl<R: Runtime> Core<R> {
             self.agent_read_dir(id)
                 .map(|d| format!("--add-dir={}", d.display())),
         );
-        let access = self.agent_access(id);
-        args.extend(access.args());
+        let harness = crate::engine::of(&h.lock().meta);
+        let access = self.agent_access(id, harness);
+        let launch = harness.escouade_launch(&access);
+        args.extend(launch.args);
         // Its hooks, and Escouade's server kept out of it when its tools are refused.
-        let written = serde_json::to_vec_pretty(&tui_settings(port, &access))
+        let written = serde_json::to_vec_pretty(&tui_settings(port, harness, &access))
             .map_err(anyhow::Error::from)
             .and_then(|b| Ok(std::fs::write(&settings_file, b)?));
         if let Err(e) = written {
@@ -1286,6 +1292,7 @@ impl<R: Runtime> Core<R> {
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         env.push((TOKEN_VAR.into(), token));
+        env.extend(launch.env);
         no_proxy(&mut env);
         let info = TermInfo {
             id: new_id(),
@@ -2533,11 +2540,12 @@ mod tests {
 
     #[test]
     fn the_hooks_call_the_server_with_the_token_of_the_environment() {
-        let granted = AgentAccess::Granted {
-            config: PathBuf::from("/data/mcp/a1.json"),
+        let granted = Escouade::Granted {
+            url: "http://127.0.0.1:4321/mcp".into(),
             token: "t".into(),
+            file: Some(PathBuf::from("/data/mcp/a1.json")),
         };
-        let s = tui_settings(4321, &granted);
+        let s = tui_settings(4321, &crate::engine::CLAUDE, &granted);
         let h = &s["hooks"]["PermissionRequest"][0]["hooks"][0];
         assert_eq!(h["type"], "http");
         assert_eq!(h["url"], "http://127.0.0.1:4321/hook");
@@ -2556,7 +2564,11 @@ mod tests {
     #[test]
     fn an_interface_refused_escouades_tools_is_kept_from_its_server_by_the_same_settings() {
         // Claude Code reads the last `--settings` only: the refusal goes into the hooks' file.
-        let s = tui_settings(4321, &AgentAccess::Denied);
+        let s = tui_settings(
+            4321,
+            &crate::engine::CLAUDE,
+            &Escouade::Denied { file: None },
+        );
         assert!(s["hooks"]["PermissionRequest"].is_array(), "{s}");
         assert_eq!(
             s["deniedMcpServers"],

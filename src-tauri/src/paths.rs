@@ -322,7 +322,7 @@ impl DataDir {
     }
 
     /// The settings an agent refused Escouade's tools is started with (`--settings`): Escouade's
-    /// server kept out of it, whatever config declares it (`AgentAccess::refusal`).
+    /// server kept out of it, whatever config declares it (`Engine::refusal`).
     pub fn mcp_refusal_file(&self) -> PathBuf {
         self.0.join("mcp-refused.json")
     }

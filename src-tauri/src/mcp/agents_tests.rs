@@ -2,9 +2,9 @@
 //! `claude` logs it), the config file and the token each one is given, and when they go.
 
 use super::tests::{answer_text, bearer, client, post, INITIALIZE, TEST_TOOL};
-use super::AgentAccess;
 use crate::core_tests::{harness, Harness};
 use crate::engine::Process;
+use crate::engine::{Engine, Escouade};
 use crate::model::*;
 use rmcp::model::CallToolRequestParams;
 use serde_json::{json, Value};
@@ -108,31 +108,118 @@ async fn admitted(port: u16, token: &str) -> bool {
 }
 
 #[test]
-fn what_an_agents_process_is_given_of_escouade_never_holds_its_token() {
+fn what_claude_codes_process_is_given_of_escouade_is_as_before() {
+    let claude: &dyn Engine = &crate::engine::CLAUDE;
+    let denied = |file: Option<&str>| Escouade::Denied {
+        file: file.map(PathBuf::from),
+    };
     assert_eq!(
-        AgentAccess::Denied.args(),
+        claude.escouade_launch(&denied(None)).args,
         ["--disallowedTools", "mcp__escouade"]
     );
-    let granted = AgentAccess::Granted {
-        config: PathBuf::from("C:/data/mcp/a1.json"),
+    assert_eq!(
+        claude
+            .escouade_launch(&denied(Some("C:/data/mcp-refused.json")))
+            .args,
+        [
+            "--settings",
+            "C:/data/mcp-refused.json",
+            "--disallowedTools",
+            "mcp__escouade"
+        ]
+    );
+    let granted = Escouade::Granted {
+        url: "http://127.0.0.1:4321/mcp".into(),
         token: "s3cr3t".into(),
+        file: Some(PathBuf::from("C:/data/mcp/a1.json")),
     };
     // A path, not the JSON itself: a `.cmd` launcher takes 8,191 characters at most.
-    assert_eq!(granted.args(), ["--mcp-config", "C:/data/mcp/a1.json"]);
+    let launch = claude.escouade_launch(&granted);
+    assert_eq!(launch.args, ["--mcp-config", "C:/data/mcp/a1.json"]);
+    assert!(launch.env.is_empty());
+    // The file names the server as `claude mcp add --transport http` would, with the token.
+    let file: Value = serde_json::from_slice(
+        &claude
+            .grant_file("http://127.0.0.1:4321/mcp", "s3cr3t")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        file,
+        json!({ "mcpServers": { "escouade": {
+            "type": "http",
+            "url": "http://127.0.0.1:4321/mcp",
+            "headers": { "Authorization": "Bearer s3cr3t" },
+        } } })
+    );
     // Refused, the server itself is kept out too, by the settings it is started with: its tools
     // refused alone, Claude Code still connects it and gives the agent its instructions.
     assert_eq!(
-        AgentAccess::Denied.refusal(),
+        claude.refusal(),
         Some(json!({ "deniedMcpServers": [{ "serverName": "escouade" }] }))
     );
-    assert_eq!(granted.refusal(), None);
+}
+
+/// What every engine must keep: the token of a process given Escouade's server is never on its
+/// command line (seen by every process of the user, and written by the app's log), only in the
+/// private file it is given or in its environment; and a refused process gets no token at all.
+fn keeps_the_token_off_the_command_line(engine: &dyn Engine) {
+    let (url, token) = ("http://127.0.0.1:4321/mcp", "t0k3n-0f-th3-ag3nt");
+    let file = engine
+        .grant_file(url, token)
+        .map(|_| PathBuf::from("C:/data/mcp/a1.json"));
+    let granted = Escouade::Granted {
+        url: url.into(),
+        token: token.into(),
+        file: file.clone(),
+    };
+    let launch = engine.escouade_launch(&granted);
+    let name = engine.name();
+    assert!(
+        !launch.args.iter().any(|a| a.contains(token)),
+        "{name}: {launch:?}"
+    );
+    // Somewhere it reaches all the same: its file, or a variable.
+    let in_file = engine
+        .grant_file(url, token)
+        .is_some_and(|b| String::from_utf8_lossy(&b).contains(token));
+    let in_env = launch.env.iter().any(|(_, v)| v.contains(token));
+    assert!(in_file || in_env, "{name}: the token reaches nothing");
+    if in_file {
+        let file = file.unwrap().to_string_lossy().into_owned();
+        assert!(launch.args.contains(&file), "{name}: {launch:?}");
+    }
+    for refused in [
+        Escouade::Denied { file: None },
+        Escouade::Denied {
+            file: Some(PathBuf::from("C:/data/mcp-refused.json")),
+        },
+    ] {
+        let launch = engine.escouade_launch(&refused);
+        assert!(
+            !launch
+                .args
+                .iter()
+                .chain(launch.env.iter().map(|(_, v)| v))
+                .any(|a| a.contains(token)),
+            "{name}: {launch:?}"
+        );
+    }
+}
+
+#[test]
+fn no_engine_puts_the_token_on_the_command_line() {
+    for engine in crate::engine::registry::all() {
+        keeps_the_token_off_the_command_line(engine);
+    }
 }
 
 #[test]
 fn an_agents_access_never_prints_its_token() {
-    let granted = AgentAccess::Granted {
-        config: PathBuf::from("C:/data/mcp/a1.json"),
+    let granted = Escouade::Granted {
+        url: "http://127.0.0.1:4321/mcp".into(),
         token: "s3cr3t".into(),
+        file: Some(PathBuf::from("C:/data/mcp/a1.json")),
     };
     // The pretty form too (`{:#?}`): a log or a failed assertion writes either.
     for shown in [format!("{granted:?}"), format!("{granted:#?}")] {
@@ -142,7 +229,48 @@ fn an_agents_access_never_prints_its_token() {
             "{shown}"
         );
     }
-    assert_eq!(format!("{:?}", AgentAccess::Denied), "Denied");
+    assert_eq!(
+        format!("{:?}", Escouade::Denied { file: None }),
+        "Denied { file: None }"
+    );
+    // Nor what a process is started with, where an engine may pass the token in a variable.
+    let launch = crate::engine::mcp::Launch {
+        args: vec!["--x".into()],
+        env: vec![("ESCOUADE_MCP_TOKEN".into(), "s3cr3t".into())],
+    };
+    let shown = format!("{launch:?}");
+    assert!(
+        !shown.contains("s3cr3t") && shown.contains("ESCOUADE_MCP_TOKEN"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn escouades_tools_are_named_mcp_escouade_tool_whatever_the_engine() {
+    use crate::engine::mcp::{tool_name, SERVER};
+    assert_eq!(
+        tool_name(SERVER, "create_ticket"),
+        "mcp__escouade__create_ticket"
+    );
+    assert_eq!(
+        tool_name("github", "create_issue"),
+        "mcp__github__create_issue"
+    );
+    // What refuses them to Claude Code is the start of those names.
+    assert_eq!(crate::engine::claude_all_tools(), "mcp__escouade");
+    for engine in crate::engine::registry::all() {
+        // Every engine names the server `escouade` where it gives it: its tools then take the
+        // names the window reads (the permission card, the labels, the search).
+        let file = engine.grant_file("http://127.0.0.1:1/mcp", "t");
+        let launch = engine.escouade_launch(&Escouade::Granted {
+            url: "http://127.0.0.1:1/mcp".into(),
+            token: "t".into(),
+            file: None,
+        });
+        let named = file.is_some_and(|b| String::from_utf8_lossy(&b).contains("\"escouade\""))
+            || launch.args.iter().any(|a| a.contains("escouade"));
+        assert!(named, "{}", engine.name());
+    }
 }
 
 #[tokio::test]
@@ -208,7 +336,10 @@ async fn an_agent_reaches_escouade_with_a_token_of_its_own_while_claude_may_driv
     // Claude Code would be inherited, and the agent would act as « Claude (hors Escouade) ».
     h.core.mcp.stop();
     settled(&h, &id).await;
-    assert_eq!(h.core.agent_access(&id), AgentAccess::Denied);
+    assert_eq!(
+        h.core.agent_access(&id, &crate::engine::CLAUDE),
+        Escouade::Denied { file: None }
+    );
     h.turn(&id, "Toujours là ?").await;
     assert_eq!(escouade_flags(&h.launches(&r).pop().unwrap()), (None, true));
     assert!(!config.exists());
@@ -492,7 +623,7 @@ async fn an_agent_without_a_process_or_at_work_is_not_restarted_under_its_feet()
 #[tokio::test]
 async fn the_refusal_file_is_written_back_when_it_is_not_as_it_should_be() {
     let h = harness("mcp-agents-refusal-file");
-    let refusal = AgentAccess::Denied.refusal().unwrap();
+    let refusal = crate::engine::CLAUDE.refusal().unwrap();
     let file = h.core.mcp_refusal_file(&refusal).unwrap();
     assert_eq!(read_json(&file), refusal);
     // Changed by hand (or cut short): written again at the next refused start.

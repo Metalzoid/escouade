@@ -9,19 +9,16 @@
 use super::activity::clip;
 use crate::accounts;
 use crate::core::Core;
+use crate::engine::{self, Engine};
 use crate::model::{Account, Settings};
 use anyhow::{anyhow, bail, Result};
 use serde::Serialize;
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::Runtime;
-
-/// The name Claude Code knows the server by: its tools are `mcp__escouade__<tool>`.
-pub const NAME: &str = "escouade";
 
 /// How long one `claude mcp` command may take.
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -84,8 +81,9 @@ pub struct Target {
     pub env: Vec<(String, String)>,
     /// Where the command runs.
     pub cwd: PathBuf,
-    /// Its `.claude.json`, which holds the user scope's servers.
-    pub claude_json: PathBuf,
+    /// Its user config, which holds the servers it reaches in every folder (Claude Code's
+    /// `.claude.json`).
+    pub config: PathBuf,
     pub timeout: Duration,
 }
 
@@ -108,8 +106,8 @@ pub fn wanted(port: u16, token: &str) -> Entry {
     }
 }
 
-/// What a `.claude.json` says of the server.
-enum Standing {
+/// What a harness's user config says of the server (`Engine::declared`).
+pub enum Standing {
     /// There is no such file.
     NoFile,
     /// There is a file that cannot be read or is no JSON: nothing can be told of the server.
@@ -121,69 +119,19 @@ enum Standing {
     Declared(Entry),
 }
 
-fn standing(claude_json: &Path) -> Standing {
-    let text = match std::fs::read_to_string(claude_json) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Standing::NoFile,
-        Err(_) => return Standing::Unreadable,
-    };
-    let Ok(json) = serde_json::from_str::<Value>(&text) else {
-        return Standing::Unreadable;
-    };
-    let Some(found) = json.get("mcpServers").and_then(|s| s.get(NAME)) else {
-        return Standing::Absent;
-    };
-    let http = found["type"] == "http";
-    let url = found["url"].as_str().filter(|_| http).unwrap_or_default();
-    let token = found["headers"]["Authorization"]
-        .as_str()
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .unwrap_or_default();
-    Standing::Declared(Entry {
-        url: url.to_string(),
-        token: token.to_string(),
-    })
-}
-
-/// The entry `.claude.json` (`claude_json`) holds under the server's name, if it holds one. A file
-/// that is not there or not JSON holds none.
-pub fn current(claude_json: &Path) -> Option<Entry> {
-    match standing(claude_json) {
+/// The entry the user config `config` of `engine` holds under the server's name, if it holds one.
+/// A file that is not there or cannot be read holds none.
+pub fn current(engine: &dyn Engine, config: &Path) -> Option<Entry> {
+    match engine.declared(config) {
         Standing::Declared(entry) => Some(entry),
         _ => None,
     }
 }
 
-/// The arguments of `claude mcp add`: the header last, since Claude Code lets it take every
-/// argument that follows.
-fn add_args(entry: &Entry) -> Vec<String> {
-    let header = format!("Authorization: Bearer {}", entry.token);
-    [
-        "mcp",
-        "add",
-        "--scope",
-        "user",
-        "--transport",
-        "http",
-        NAME,
-        &entry.url,
-        "--header",
-        &header,
-    ]
-    .map(String::from)
-    .to_vec()
-}
-
-fn remove_args() -> Vec<String> {
-    ["mcp", "remove", NAME, "--scope", "user"]
-        .map(String::from)
-        .to_vec()
-}
-
-/// Runs `claude` with `args` as the account does, within its time. Err with what Claude Code
+/// Runs the account's program with `args` as the account does, within its time. Err with what Claude Code
 /// said when it fails, any of `secrets` (the tokens in play) hidden: the error goes to the window
 /// and the logs.
-async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
+pub(crate) async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
     let launch = target
         .program
         .launch(&target.cwd.to_string_lossy(), args, &target.env)?;
@@ -232,19 +180,20 @@ async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
     }
 }
 
-/// The server declared in the account of `target` as `entry` says: added; replaced (removed, then
-/// added) when the entry there is another; left alone, with no command run, when it is the same.
-pub async fn declare(target: &Target, entry: &Entry) -> Result<Declared> {
-    let had = current(&target.claude_json);
+/// The server declared in the account of `target` as `entry` says, in the user config of `engine`:
+/// added; replaced (removed, then added) when the entry there is another; left alone, with nothing
+/// run, when it is the same.
+pub async fn declare(engine: &dyn Engine, target: &Target, entry: &Entry) -> Result<Declared> {
+    let had = current(engine, &target.config);
     if had.as_ref() == Some(entry) {
         return Ok(Declared::Unchanged);
     }
     let secrets = [entry.token.as_str(), had.as_ref().map_or("", |h| &h.token)];
     if had.is_some() {
         // `add` of a name already there fails.
-        run(target, &remove_args(), &secrets).await?;
+        engine.remove_declaration(target, &secrets).await?;
     }
-    run(target, &add_args(entry), &secrets).await?;
+    engine.add_declaration(target, entry, &secrets).await?;
     Ok(if had.is_some() {
         Declared::Replaced
     } else {
@@ -252,20 +201,21 @@ pub async fn declare(target: &Target, entry: &Entry) -> Result<Declared> {
     })
 }
 
-/// The server's entry removed from the account of `target`; whether there was one. No file or no
-/// entry in it, no command; a file that cannot be read may hold one, so the command is run, and its
-/// failure is a failure. A command that fails with the entry gone all the same is not one.
-pub async fn withdraw(target: &Target) -> Result<bool> {
-    let had = standing(&target.claude_json);
+/// The server's entry removed from the account of `target`, in the user config of `engine`;
+/// whether there was one. No file or no entry in it, nothing run; a file that cannot be read may
+/// hold one, so the removal is run, and its failure is a failure. A removal that fails with the
+/// entry gone all the same is not one.
+pub async fn withdraw(engine: &dyn Engine, target: &Target) -> Result<bool> {
+    let had = engine.declared(&target.config);
     let token = match &had {
         Standing::NoFile | Standing::Absent => return Ok(false),
         Standing::Declared(entry) => entry.token.as_str(),
         Standing::Unreadable => "",
     };
-    if let Err(e) = run(target, &remove_args(), &[token]).await {
+    if let Err(e) = engine.remove_declaration(target, &[token]).await {
         // Removed meanwhile: Claude Code answers an absent entry with an error too.
         if matches!(
-            standing(&target.claude_json),
+            engine.declared(&target.config),
             Standing::NoFile | Standing::Absent
         ) {
             return Ok(true);
@@ -275,70 +225,10 @@ pub async fn withdraw(target: &Target) -> Result<bool> {
     Ok(true)
 }
 
-/// `s` as one word of PowerShell.
-fn powershell_word(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
-}
-
-/// `s` as one word of a POSIX shell.
-fn posix_word(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
-/// The command that declares `entry` by hand, in the shell of the platform (`windows`: PowerShell,
-/// else a POSIX shell), for an account of folder `config_dir` (none for Principal). `program` is
-/// the `claude` as the user named it (`claude` by default). `replace`: an entry is there, which is
-/// removed first (the shell goes on whether or not it was). The folder is set for the command
-/// alone: not left set in the user's shell, where it would send the next `claude` to this account.
-pub fn manual_command_in(
-    windows: bool,
-    program: &str,
-    config_dir: Option<&str>,
-    entry: &Entry,
-    replace: bool,
-) -> String {
-    let word = |s: &str| {
-        if windows {
-            powershell_word(s)
-        } else {
-            posix_word(s)
-        }
-    };
-    let claude = if program == "claude" {
-        program.to_string()
-    } else if windows {
-        format!("& {}", word(program))
-    } else {
-        word(program)
-    };
-    let header = format!("Authorization: Bearer {}", entry.token);
-    let add = format!(
-        "{claude} mcp add --scope user --transport http {NAME} {} --header \"{header}\"",
-        entry.url
-    );
-    let remove = format!("{claude} mcp remove {NAME} --scope user");
-    let commands = if replace {
-        vec![remove, add]
-    } else {
-        vec![add]
-    };
-    let Some(dir) = config_dir else {
-        return commands.join("; ");
-    };
-    if windows {
-        let dir = word(dir);
-        format!(
-            "$old = $env:CLAUDE_CONFIG_DIR; $env:CLAUDE_CONFIG_DIR = {dir}; {}; $env:CLAUDE_CONFIG_DIR = $old",
-            commands.join("; ")
-        )
-    } else {
-        let set = format!("CLAUDE_CONFIG_DIR={}", word(dir));
-        commands
-            .iter()
-            .map(|c| format!("{set} {c}"))
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
+/// The harness the accounts are of: Claude Code's alone until each harness has its own (docs/TODO-1.8.md,
+/// « Comptes et quotas »), and its user config is where the server is declared.
+fn harness() -> &'static dyn Engine {
+    engine::default()
 }
 
 /// Where the server stands in one account's Claude Code, as the window shows it.
@@ -399,7 +289,7 @@ impl<R: Runtime> Core<R> {
             program,
             env: vars,
             cwd: self.data.root().to_path_buf(),
-            claude_json: accounts::claude_json_with(account, env.as_deref(), &home),
+            config: accounts::claude_json_with(account, env.as_deref(), &home),
             timeout: COMMAND_TIMEOUT,
         })
     }
@@ -408,17 +298,17 @@ impl<R: Runtime> Core<R> {
     fn manual_command(&self, settings: &Settings, account: &Account, entry: &Entry) -> String {
         let (env, home) = self.claude_app_env(account, settings);
         let claude_json = accounts::claude_json_with(account, env.as_deref(), &home);
-        let replace = current(&claude_json).is_some();
+        let replace = current(harness(), &claude_json).is_some();
         // A `claude` of WSL: the command for a terminal of its distribution, its folder there.
         if let Some(wsl) = accounts::program(account, settings).and_then(|p| p.wsl().cloned()) {
             let dir = accounts::own_dir(account).map(|d| wsl.linux_path(d).unwrap_or(d.into()));
-            return manual_command_in(false, &wsl.path, dir.as_deref(), entry, replace);
+            return harness().manual_declaration(false, &wsl.path, dir.as_deref(), entry, replace);
         }
         let typed = [account.claude_path.trim(), settings.claude_path.trim()]
             .into_iter()
             .find(|p| !p.is_empty())
             .unwrap_or("claude");
-        manual_command_in(
+        harness().manual_declaration(
             cfg!(windows),
             typed,
             accounts::own_dir(account),
@@ -435,7 +325,7 @@ impl<R: Runtime> Core<R> {
         entry: &Entry,
     ) -> Declaration {
         let done = match self.install_target(settings, account) {
-            Ok(target) => declare(&target, entry).await.map(|_| ()),
+            Ok(target) => declare(harness(), &target, entry).await.map(|_| ()),
             Err(e) => Err(e),
         };
         if let Err(e) = &done {
@@ -512,7 +402,7 @@ impl<R: Runtime> Core<R> {
                 if !core.quitting.load(Ordering::Acquire) {
                     let settings = core.settings.read().clone();
                     let done = match core.install_target(&settings, &gone) {
-                        Ok(target) => withdraw(&target).await.map(|_| ()),
+                        Ok(target) => withdraw(harness(), &target).await.map(|_| ()),
                         Err(e) => Err(e),
                     };
                     if let Err(e) = done {
@@ -555,7 +445,7 @@ impl<R: Runtime> Core<R> {
                     let Ok(target) = self.install_target(&settings, account) else {
                         continue;
                     };
-                    if let Err(e) = withdraw(&target).await {
+                    if let Err(e) = withdraw(harness(), &target).await {
                         log::warn!("mcp: not taken out of account {}: {e:#}", account.id);
                     }
                 }

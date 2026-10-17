@@ -44,6 +44,7 @@ mod wait;
 pub(crate) use act::visible_line;
 
 use crate::core::Core;
+use crate::engine::Escouade;
 use crate::integrations::secrets;
 use crate::model::UiEvent;
 use crate::paths;
@@ -92,71 +93,6 @@ pub struct McpStatus {
     pub port: u16,
     /// Why it does not run though the settings want it to.
     pub error: Option<String>,
-}
-
-/// What `--disallowedTools` is given to refuse an agent every tool of Escouade's server, whatever
-/// config declares it: Claude Code names them `mcp__escouade__<tool>`.
-pub(crate) const ALL_TOOLS: &str = "mcp__escouade";
-
-/// What an agent's process is started with of Escouade (`Core::agent_access`).
-#[derive(Clone, PartialEq, Eq)]
-pub enum AgentAccess {
-    /// Its tools are refused to it, those of an entry of the user's config of Claude Code included
-    /// (the agent would inherit it, and act as Claude outside Escouade): the switch is off, or it
-    /// is on and the server is not running (nothing to reach), or no token could be given.
-    Denied,
-    /// The server, as the agent itself: `config` (`--mcp-config`) names it with `token`, the
-    /// agent's own, valid until the process stops (`McpServer::release_agent`).
-    Granted { config: PathBuf, token: String },
-}
-
-impl AgentAccess {
-    /// Its arguments for `claude`: never the token, only the path of the file that holds it (a
-    /// `.cmd` launcher takes 8,191 characters at most, and the app's log writes the arguments).
-    /// Both options take several values: given last, nothing after them is read as one.
-    pub fn args(&self) -> Vec<String> {
-        match self {
-            AgentAccess::Denied => vec!["--disallowedTools".into(), ALL_TOOLS.into()],
-            AgentAccess::Granted { config, .. } => {
-                vec!["--mcp-config".into(), config.to_string_lossy().into_owned()]
-            }
-        }
-    }
-
-    /// Refused, the settings that keep the server itself out of the process (`--settings`): its
-    /// tools refused alone, Claude Code still connects an entry of that name of the user's config,
-    /// and the agent reads the server's instructions with none of its tools (ESC-91, tried on
-    /// Claude Code 2.1.300: `deniedMcpServers` leaves the server unconnected, never asked).
-    pub fn refusal(&self) -> Option<serde_json::Value> {
-        match self {
-            AgentAccess::Denied => Some(serde_json::json!({
-                "deniedMcpServers": [{ "serverName": install::NAME }],
-            })),
-            AgentAccess::Granted { .. } => None,
-        }
-    }
-
-    /// The agent's token, when it has one.
-    pub fn token(&self) -> Option<&str> {
-        match self {
-            AgentAccess::Granted { token, .. } => Some(token),
-            AgentAccess::Denied => None,
-        }
-    }
-}
-
-/// Written by hand: the token is a secret, and a log or a failed assertion prints a `{:?}`.
-impl std::fmt::Debug for AgentAccess {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AgentAccess::Denied => f.write_str("Denied"),
-            AgentAccess::Granted { config, .. } => f
-                .debug_struct("Granted")
-                .field("config", config)
-                .field("token", &"<masked>")
-                .finish(),
-        }
-    }
 }
 
 /// The server listening: its accept loop stops when `stop` says so (or goes), then says it
@@ -448,10 +384,16 @@ impl<R: Runtime> McpServer<R> {
         token
     }
 
-    /// What the agent's next process reaches the server at `port` with: a new token (the one it
-    /// had is refused from now on), in the config file the process is started with
-    /// (`--mcp-config`, `<data>/mcp/<agent id>.json`), private like every file holding a token.
-    pub fn grant_agent(&self, agent_id: &str, port: u16) -> Result<AgentAccess> {
+    /// What the agent's next process reaches the server at `port` with, as `engine` hands it: a
+    /// new token (the one it had is refused from now on), in the file the engine wants written
+    /// (`Engine::grant_file`: `<data>/mcp/<agent id>.json`, private like every file holding a
+    /// token), or with none (the engine passes it otherwise, never on the command line).
+    pub fn grant_agent(
+        &self,
+        agent_id: &str,
+        port: u16,
+        engine: &dyn crate::engine::Engine,
+    ) -> Result<Escouade> {
         let core = self
             .core
             .upgrade()
@@ -459,20 +401,25 @@ impl<R: Runtime> McpServer<R> {
         let config = core.data.mcp_agent_config(agent_id);
         let _files = self.agent_files.lock();
         let token = self.register_agent(agent_id);
-        // As `claude mcp add --transport http` declares a server, under the same name: the user's
-        // own entry of that name, if any, gives way to this one (« dynamic » before « user »).
-        let body = serde_json::json!({ "mcpServers": { "escouade": {
-            "type": "http",
-            "url": format!("http://127.0.0.1:{port}{PATH}"),
-            "headers": { "Authorization": format!("Bearer {token}") },
-        } } });
+        let url = format!("http://127.0.0.1:{port}{PATH}");
+        let Some(body) = engine.grant_file(&url, &token) else {
+            return Ok(Escouade::Granted {
+                url,
+                token,
+                file: None,
+            });
+        };
         let written = std::fs::create_dir_all(core.data.mcp_agents())
-            .and_then(|()| paths::write_private(&config, body.to_string().as_bytes()));
+            .and_then(|()| paths::write_private(&config, &body));
         if let Err(e) = written {
             self.tokens.agents.write().remove(agent_id);
             return Err(e).with_context(|| format!("{} not written", config.display()));
         }
-        Ok(AgentAccess::Granted { config, token })
+        Ok(Escouade::Granted {
+            url,
+            token,
+            file: Some(config),
+        })
     }
 
     /// The agent's process given `token` stopped: the token is refused from now on and its config
@@ -711,34 +658,63 @@ impl<R: Runtime> Core<R> {
         self.mcp_wanted() && self.mcp.status().running
     }
 
-    /// What the agent's next process is started with of Escouade (`AgentAccess`):
+    /// What the agent's next process is started with of Escouade, as `engine` hands it:
     /// - the switch off, its tools refused, those of an entry of that name in the user's config of
-    ///   Claude Code included (its removal may have failed, or the user wrote it);
+    ///   its harness included (its removal may have failed, or the user wrote it);
     /// - on, with the server not running, the same (none to reach, and an entry of the user's
     ///   would be inherited as Claude outside Escouade's);
     /// - on, the server as the agent itself, whatever its project (ESC-91).
-    pub(crate) fn agent_access(&self, agent_id: &str) -> AgentAccess {
+    ///
+    /// Refused, no file is given yet: the start that wants the engine's refusal in a file of its
+    /// own adds it (`with_refusal_file`), the terminal view puts it in its settings.
+    pub(crate) fn agent_access(
+        &self,
+        agent_id: &str,
+        engine: &dyn crate::engine::Engine,
+    ) -> Escouade {
+        let denied = Escouade::Denied { file: None };
         if !self.mcp_wanted() {
-            return AgentAccess::Denied;
+            return denied;
         }
         let status = self.mcp.status();
         if !status.running {
-            return AgentAccess::Denied;
+            return denied;
         }
-        match self.mcp.grant_agent(agent_id, status.port) {
+        match self.mcp.grant_agent(agent_id, status.port, engine) {
             Ok(access) => access,
             Err(e) => {
                 // Without a token of its own, it would reach the server through the user's entry,
                 // taken for Claude outside Escouade: refused rather than taken for another.
                 log::error!("mcp: agent {agent_id} not given the server: {e:#}");
-                AgentAccess::Denied
+                denied
             }
         }
     }
 
-    /// The file of `refusal` (`AgentAccess::refusal`), for a process's `--settings`: the same for
-    /// every agent, written when it is not there as it should be (never while a `claude` starting
-    /// reads it, once it is).
+    /// `access`, refused, with the file of the engine's refusal (`Engine::refusal`), when it has
+    /// one and it could be written (its tools are refused all the same, by its arguments).
+    pub(crate) fn with_refusal_file(
+        &self,
+        agent_id: &str,
+        engine: &dyn crate::engine::Engine,
+        access: Escouade,
+    ) -> Escouade {
+        let Escouade::Denied { .. } = access else {
+            return access;
+        };
+        let file = engine.refusal().and_then(|refusal| {
+            self.mcp_refusal_file(&refusal)
+                .inspect_err(|e| {
+                    log::warn!("agent {agent_id}: Escouade's server not kept out: {e:#}")
+                })
+                .ok()
+        });
+        Escouade::Denied { file }
+    }
+
+    /// The file of `refusal` (`Engine::refusal`), for a process's settings: the same for every
+    /// agent, written when it is not there as it should be (never while a process starting reads
+    /// it, once it is).
     pub(crate) fn mcp_refusal_file(&self, refusal: &serde_json::Value) -> Result<PathBuf> {
         let file = self.data.mcp_refusal_file();
         let bytes = serde_json::to_vec_pretty(refusal)?;

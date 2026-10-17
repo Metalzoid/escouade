@@ -225,7 +225,7 @@ pub struct AgentRt {
     /// never names the agent (not saved).
     pub(crate) unprompted: Option<String>,
     /// Its live process (or interface) was started with Escouade's server kept out of it
-    /// (`AgentAccess::Denied`).
+    /// (`Escouade::Denied`).
     pub(crate) without_escouade: bool,
     /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
     /// which a start now would give (`Core::mark_escouade_next`, ESC-91).

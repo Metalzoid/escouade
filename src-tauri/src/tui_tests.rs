@@ -1281,6 +1281,35 @@ async fn an_interface_refused_escouades_tools_is_started_without_its_server() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_interface_given_escouade_has_its_token_in_its_file_never_on_its_command_line() {
+    let h = harness("tui-escouade-granted");
+    h.core.set_mcp_enabled(true).unwrap();
+    h.wait("the server", |h| h.core.mcp.status().running).await;
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let argv = h
+        .launches(&cwd)
+        .into_iter()
+        .rfind(|argv| !argv.iter().any(|a| a == "stream-json"))
+        .expect("the interface's launch");
+    let at = argv
+        .iter()
+        .position(|a| a == "--mcp-config")
+        .unwrap_or_else(|| panic!("no --mcp-config: {argv:?}"));
+    let file = std::path::PathBuf::from(&argv[at + 1]);
+    assert_eq!(file, h.core.data.mcp_agent_config(&id));
+    let config: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let token = config["mcpServers"]["escouade"]["headers"]["Authorization"]
+        .as_str()
+        .and_then(|a| a.strip_prefix("Bearer "))
+        .expect("a bearer token")
+        .to_string();
+    assert!(!argv.iter().any(|a| a.contains(&token)), "{argv:?}");
+    assert!(!argv.iter().any(|a| a == "--disallowedTools"), "{argv:?}");
+    h.core.mcp.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_interface_starts_with_the_folder_of_the_files_joined_to_its_agent_readable() {
     let h = harness("tui-add-dir");
     let id = agent_in_tui(&h).await;

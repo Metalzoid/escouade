@@ -2,8 +2,11 @@
 //! (docs/PROTOCOL.md), its frames translated by `AgentRt::claude_frame` (`agent/claude.rs`).
 
 mod locate;
+mod mcp;
 mod process;
 
+#[cfg(test)]
+pub(crate) use mcp::all_tools;
 pub(crate) use process::{ClaudeProcess, SpawnOpts};
 
 use super::registry::{
@@ -19,6 +22,7 @@ use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL, MB};
 use crate::i18n::{self, Lang};
 use crate::job::JobUsage;
+use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
 use anyhow::{anyhow, bail, Result};
@@ -235,17 +239,7 @@ fn args(s: &Spawn) -> Vec<String> {
             .iter()
             .map(|d| format!("--add-dir={}", d.display())),
     );
-    match &s.escouade {
-        Escouade::Denied { settings } => {
-            if let Some(file) = settings {
-                a.extend(["--settings".into(), file.to_string_lossy().into_owned()]);
-            }
-            a.extend(["--disallowedTools".into(), crate::mcp::ALL_TOOLS.into()]);
-        }
-        Escouade::Granted { config } => {
-            a.extend(["--mcp-config".into(), config.to_string_lossy().into_owned()]);
-        }
-    }
+    a.extend(mcp::launch(&s.escouade).args);
     a
 }
 
@@ -364,11 +358,13 @@ impl Engine for Claude {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
+        let mut env = spawn.env.clone();
+        env.extend(mcp::launch(&spawn.escouade).env);
         let opts = SpawnOpts {
             args: args(&spawn),
             program: spawn.program,
             cwd: spawn.cwd,
-            env: spawn.env,
+            env,
         };
         log::info!(
             "{}: starting {} {} in {} (account {})",
@@ -402,6 +398,50 @@ impl Engine for Claude {
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
         Box::pin(one_shot(ask))
+    }
+
+    fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {
+        Some(mcp::grant_file(url, token))
+    }
+
+    fn refusal(&self) -> Option<Value> {
+        Some(mcp::refusal())
+    }
+
+    fn escouade_launch(&self, escouade: &Escouade) -> super::mcp::Launch {
+        mcp::launch(escouade)
+    }
+
+    fn declared(&self, config: &std::path::Path) -> Standing {
+        mcp::declared(config)
+    }
+
+    fn add_declaration<'a>(
+        &'a self,
+        target: &'a Target,
+        entry: &'a Entry,
+        secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(mcp::add(target, entry, secrets))
+    }
+
+    fn remove_declaration<'a>(
+        &'a self,
+        target: &'a Target,
+        secrets: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(mcp::remove(target, secrets))
+    }
+
+    fn manual_declaration(
+        &self,
+        windows: bool,
+        program: &str,
+        config_dir: Option<&str>,
+        entry: &Entry,
+        replace: bool,
+    ) -> String {
+        mcp::manual_declaration(windows, program, config_dir, entry, replace)
     }
 }
 
