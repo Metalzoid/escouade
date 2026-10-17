@@ -278,8 +278,8 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
         }
         Scenario::Quota => {
             let read = run.proc().read_usage().await.unwrap();
-            let (five, week) = crate::usage::parse_windows(&read.expect("its windows"));
-            assert!(five.is_some() || week.is_some());
+            let meters = crate::usage::parse_windows(&read.expect("its windows"));
+            assert!(!meters.is_empty(), "no meter read");
         }
     }
     run.stop().await;

@@ -63,6 +63,7 @@ impl Engine for Minimal {
             mid_turn: MidTurn::Refused,
             slash_commands: false,
             quota: QuotaKind::None,
+            quota_windows: Vec::new(),
             cost: CostKind::None,
             terminal_view: false,
             remote_control: false,
@@ -70,6 +71,20 @@ impl Engine for Minimal {
             todo_tools: false,
             default_refusal: false,
         }
+    }
+
+    fn accounts(&self) -> crate::engine::registry::AccountStore {
+        crate::engine::registry::AccountStore::ConfigDir {
+            var: "MINIMAL_HOME",
+        }
+    }
+
+    fn writer(&self, _: crate::engine::Weight) -> &'static str {
+        "Minimal"
+    }
+
+    fn terminal(&self) -> Option<&'static dyn crate::engine::TerminalView> {
+        None
     }
 
     fn spawn(
