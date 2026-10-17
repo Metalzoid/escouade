@@ -9,6 +9,7 @@
 
 mod claude;
 pub mod mcp;
+pub mod oneshot;
 mod program;
 pub mod registry;
 
@@ -302,6 +303,9 @@ pub trait Engine: Send + Sync {
 
     /// One question, its answer (`OneShot`).
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>>;
+    /// The model that answers its one-shot questions of `weight`, as the interface names it
+    /// (« Modèle des textes rédigés »: `Claude Haiku`).
+    fn writer(&self, weight: Weight) -> &'static str;
 
     // ----- Escouade's MCP server, for its agents (`engine::mcp`) -----
 

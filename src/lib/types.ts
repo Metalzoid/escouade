@@ -48,6 +48,9 @@ export interface Settings {
   language: 'system' | Lang;
   /** « Langue des textes rédigés par Claude »: the interface's, or a language of its own. */
   claudeLanguage: 'ui' | Lang;
+  /** « Modèle des textes rédigés »: the harness the texts written by a model go to; null, or one not found: Claude Code
+   * when it is found (its Haiku), else the first found (`writerOf`). */
+  writerEngine: EngineId | null;
   /** The accounts of every harness, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
   /**
@@ -366,6 +369,8 @@ export interface EngineDecl {
   models: ModelDecl[];
   /** The efforts of the composer's menu, in its order (empty without `caps.effort`). */
   efforts: string[];
+  /** The model that writes the texts (« Modèle des textes rédigés »): `Claude Haiku`. */
+  writer: string;
 }
 
 /** A harness with what is found of it here (Réglages). */

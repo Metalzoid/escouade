@@ -10290,3 +10290,29 @@ async fn the_order_of_the_harnesses_is_the_backends_and_lists_each_one_once() {
         [EngineId::Codex, EngineId::Claude]
     );
 }
+
+#[tokio::test]
+async fn the_written_texts_go_to_claude_code_while_it_is_the_only_harness_found_whatever_is_chosen()
+{
+    let h = harness("writer-engine");
+    let (p, r) = h.project(false).await;
+    // Settings saved before the choice: none, Claude Code's by default.
+    assert_eq!(h.core.settings.read().writer_engine, None);
+    let asked = |h: &Harness| h.launches(&r).last().cloned().unwrap_or_default();
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    let argv = asked(&h);
+    assert!(argv.contains(&"-p".to_string()), "{argv:?}");
+    // A harness chosen but not found here: Claude Code still writes them, as before.
+    change_settings(&h, |s| s.writer_engine = Some(EngineId::Codex));
+    let before = h.launch_log(&r).len();
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    assert_eq!(h.launch_log(&r).len(), before + 1);
+    assert!(asked(&h).contains(&"-p".to_string()));
+    // The choice is kept as saved.
+    let saved: Settings =
+        serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
+    assert_eq!(saved.writer_engine, Some(EngineId::Codex));
+    let raw: Value =
+        serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
+    assert_eq!(raw["writerEngine"], "codex");
+}

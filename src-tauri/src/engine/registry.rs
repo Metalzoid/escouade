@@ -283,6 +283,8 @@ pub struct EngineDecl {
     pub models: Vec<ModelDecl>,
     /// The efforts of the composer's menu, in its order (empty when `caps.effort` is false).
     pub efforts: Vec<&'static str>,
+    /// The model that writes the texts (« Modèle des textes rédigés »: `Claude Haiku`).
+    pub writer: &'static str,
 }
 
 pub fn declared() -> Vec<EngineDecl> {
@@ -297,6 +299,7 @@ pub fn declared() -> Vec<EngineDecl> {
             install: e.install(),
             models: e.models(),
             efforts: e.efforts().to_vec(),
+            writer: e.writer(super::Weight::Light),
         })
         .collect()
 }

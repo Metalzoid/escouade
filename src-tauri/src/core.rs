@@ -423,7 +423,7 @@ pub enum SyncOp {
     Push,
 }
 
-/// A one-shot question to a harness (`Core::ask_claude`).
+/// A one-shot question to a harness (`Core::ask_harness`).
 struct Ask<'a> {
     weight: Weight,
     cwd: &'a Path,
@@ -4992,7 +4992,7 @@ impl<R: Runtime> Core<R> {
     /// Claude's answer to `prompt` after it read the project, in its folder, with tools that only
     /// read (never Bash nor Edit): it can neither change nor run anything.
     async fn read_project(&self, project: &Project, system: &str, prompt: &str) -> Result<String> {
-        self.ask_claude(Ask {
+        self.ask_harness(Ask {
             weight: Weight::Reading,
             cwd: Path::new(&project.path),
             system,
@@ -5019,9 +5019,9 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// One question to Haiku (`claude -p`, no tools, no session, no MCP) about `agent`, asked of
-    /// its account (with none, of the account a new agent of `project` would go to): its answer,
-    /// within 90 s.
+    /// One question to the harness of « Modèle des textes rédigés » (Claude: Haiku, no tools, no
+    /// session, no MCP) about `agent`, asked of its account (with none, of the account a new agent
+    /// of `project` would go to): its answer, within 90 s.
     pub(crate) async fn one_shot(
         &self,
         system: &str,
@@ -5029,7 +5029,7 @@ impl<R: Runtime> Core<R> {
         agent: Option<&str>,
         project: Option<&str>,
     ) -> Result<String> {
-        self.one_shot_within(system, prompt, Duration::from_secs(90), agent, project)
+        self.one_shot_within(system, prompt, engine::oneshot::LIMIT, agent, project)
             .await
     }
 
@@ -5043,7 +5043,7 @@ impl<R: Runtime> Core<R> {
         agent: Option<&str>,
         project: Option<&str>,
     ) -> Result<String> {
-        self.ask_claude(Ask {
+        self.ask_harness(Ask {
             weight: Weight::Light,
             cwd: &std::env::temp_dir(),
             system,
@@ -5089,9 +5089,9 @@ impl<R: Runtime> Core<R> {
         Ok(accounts::get(settings, &id))
     }
 
-    /// One question to the harness of the account it is asked of (no session, no settings, no
-    /// MCP), as `ask` says: its answer, within its limit.
-    async fn ask_claude(&self, ask: Ask<'_>) -> Result<String> {
+    /// One question to the harness of « Modèle des textes rédigés » (no session, no settings, no
+    /// MCP), as `ask` says: its answer, within its limit (`engine::oneshot`).
+    async fn ask_harness(&self, ask: Ask<'_>) -> Result<String> {
         let Ask {
             weight,
             cwd,
@@ -5102,16 +5102,31 @@ impl<R: Runtime> Core<R> {
             project,
         } = ask;
         let settings = self.settings.read().clone();
-        let account = self.account_for(&settings, agent, project)?;
-        let program = accounts::program(&account, &settings)
-            .with_context(|| tr!("claude introuvable", "claude not found"))?;
-        let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
-        let engine = match agent.and_then(|id| self.agent(id).ok()) {
-            Some(h) => engine::of(&h.lock().meta),
-            None => engine::default(),
+        // None found: Claude Code's, which says what is missing, as before there was a choice.
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+            .unwrap_or(EngineId::Claude);
+        let engine = engine::by_id(id);
+        let (program, env) = if id == EngineId::Claude {
+            // The accounts are Claude Code's until each harness has its own (lot 5): asked of the
+            // account of the agent or the project it is about.
+            let account = self.account_for(&settings, agent, project)?;
+            let program = accounts::program(&account, &settings)
+                .with_context(|| tr!("claude introuvable", "claude not found"))?;
+            let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
+            (program, env)
+        } else {
+            let program = engine.locate("", &settings.wsl_distro).ok_or_else(|| {
+                anyhow!(tr!(
+                    "{name} introuvable",
+                    "{name} not found",
+                    name = engine.name()
+                ))
+            })?;
+            (program, settings.claude_env())
         };
-        engine
-            .one_shot(OneShot {
+        engine::oneshot::ask(
+            engine,
+            OneShot {
                 program,
                 env,
                 weight,
@@ -5119,8 +5134,9 @@ impl<R: Runtime> Core<R> {
                 system,
                 prompt,
                 limit,
-            })
-            .await
+            },
+        )
+        .await
     }
 
     /// A short name for the task, or None when the model did not answer with one.

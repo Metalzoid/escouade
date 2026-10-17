@@ -17,6 +17,8 @@ import {
   showsCost,
   showsMark,
   speakerOf,
+  writerOf,
+  writerOptions,
 } from './engines';
 import { EFFORTS, MODES } from './models';
 import { app } from './state.svelte';
@@ -152,5 +154,37 @@ describe('the window', () => {
         });
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('« Modèle des textes rédigés »', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('offers the model of each harness found, and only those', () => {
+    app.enginesFound = ['claude', 'codex'];
+    expect(writerOptions()).toEqual([
+      { value: 'claude', label: 'Claude Haiku' },
+      { value: 'codex', label: 'Nu mini' },
+    ]);
+    app.enginesFound = ['codex'];
+    expect(writerOptions()).toEqual([{ value: 'codex', label: 'Nu mini' }]);
+    app.enginesFound = [];
+    expect(writerOptions()).toEqual([]);
+  });
+
+  it('goes to the harness chosen while it is found, else to Claude Haiku, else to the first found', () => {
+    app.enginesFound = ['codex', 'claude'];
+    expect(writerOf(null)).toBe('claude');
+    expect(writerOf('codex')).toBe('codex');
+    app.enginesFound = ['claude'];
+    expect(writerOf('codex')).toBe('claude');
+    app.enginesFound = ['codex'];
+    expect(writerOf(null)).toBe('codex');
+    expect(writerOf('claude')).toBe('codex');
+    app.enginesFound = [];
+    expect(writerOf('claude')).toBeNull();
   });
 });

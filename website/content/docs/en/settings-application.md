@@ -39,7 +39,7 @@ Three places do not wait for the button. The “Accounts” tab, where each chan
 
 ## The “Application” tab
 
-The tab has two groups, “Display” and “Language”.
+The tab has three groups, “Display”, “Language”, and “Written texts”.
 
 ### Display
 
@@ -89,3 +89,13 @@ The three choices are “Same as the interface (default)”, “English”, and 
 
 > [!TIP]
 > Many teams commit in English with an interface in French: pick “Français” for the interface and “English” for the texts Claude writes.
+
+## Written texts
+
+“Model for written texts” chooses the model that writes the short texts Escouade has drafted outside an agent’s conversation:
+
+- the name given to a new agent;
+- the proposed commit messages and pull request descriptions, see [Git](git);
+- the worktree commands “✦ Fill in automatically” proposes after reading the project.
+
+Each question gets 90 seconds for its answer; past that, the process is stopped with everything it started, and the answer is read up to a bounded size. Only the installed [harnesses](settings-claude-code) are offered. By default, it’s “Claude Haiku” when Claude Code is installed, otherwise the first harness found. A harness chosen then uninstalled gives way to that default. With no harness installed, the group doesn’t show.

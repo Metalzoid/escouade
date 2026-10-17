@@ -15,15 +15,29 @@ const percent = (n: number) => `${n} %`;
 /** The zoom the page is shown at, from its pixel ratio and the one it had at 100 %. */
 const zoomOf = async (page: Page, base: number) => Math.round(((await page.evaluate(() => devicePixelRatio)) / base) * 100);
 
-/** The elements shown past the right or the bottom edge of the window: what a zoom must never cut. */
+/**
+ * The elements shown past the right or the bottom edge of the window: what a zoom must never cut. One below the fold of
+ * a pane that scrolls, the pane itself in the window, is reached by scrolling: not cut.
+ */
 function overflowing(page: Page) {
   return page.evaluate(() => {
     const out: string[] = [];
+    const scrolledTo = (el: Element) => {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        const y = getComputedStyle(p).overflowY;
+        if ((y === 'auto' || y === 'scroll') && p.scrollHeight > p.clientHeight) {
+          const b = p.getBoundingClientRect();
+          return b.bottom <= innerHeight + 1 && b.right <= innerWidth + 1;
+        }
+      }
+      return false;
+    };
     for (const el of document.querySelectorAll('body *')) {
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
       // The terminals' parking lot is off screen on purpose.
       if (r.left < -1000) continue;
+      if (r.right <= innerWidth + 1 && scrolledTo(el)) continue;
       if (r.right > innerWidth + 1 || r.bottom > innerHeight + 1) {
         out.push(`${el.tagName.toLowerCase()}.${[...el.classList].join('.')} (${Math.round(r.right)}, ${Math.round(r.bottom)})`);
       }

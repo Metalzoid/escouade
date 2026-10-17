@@ -40,5 +40,6 @@
     { "id": "sonnet", "label": "Sonnet", "effort": true, "auto": true },
     { "id": "haiku", "label": "Haiku", "effort": false, "auto": false }
   ],
-  "efforts": ["low", "medium", "high", "xhigh", "max"]
+  "efforts": ["low", "medium", "high", "xhigh", "max"],
+  "writer": "Claude Haiku"
 }

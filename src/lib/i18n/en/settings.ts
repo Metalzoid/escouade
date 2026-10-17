@@ -74,6 +74,10 @@ export default defineZone('settings', {
     claudeLanguageHelp:
       'Proposed commit messages and pull request descriptions, comments posted to Jira, Trello, GitHub, and Linear, instructions given to agents (by default, the proposed commit message follows the language of the repository’s latest commits).',
     langName: { fr: 'French', en: 'English' },
+    writing: 'Written texts',
+    writer: 'Model for written texts',
+    writerHelp:
+      'Name given to a new agent, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only the installed harnesses are offered.',
   },
 
   claude: {

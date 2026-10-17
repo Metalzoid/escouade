@@ -700,10 +700,10 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
   - Le jeton reste en clair dans ces fichiers : le dire, comme pour Claude.
 
 ### Textes rédigés par un modèle (one-shots)
-- [ ] Aujourd'hui, ces textes passent par Haiku via `claude -p` : nom d'un agent, message de commit proposé, et les autres questions de `ask_claude`. Un utilisateur sans Claude Code doit aussi les avoir.
-- [ ] Réglage « Modèle des textes rédigés », avec cinq choix. Mêmes limites qu'aujourd'hui : 90 s, lecture bornée.
-  - Claude Haiku : par défaut quand Claude Code est installé.
-  - Codex : `codex exec`, petit modèle, bac à sable `read-only`, éphémère.
+- [x] Ces textes (nom d'un agent, message de commit proposé, description de PR, questions de « Remplir automatiquement ») passent par l'interface `Engine::one_shot` du harness choisi (`engine::oneshot`, ESC-32). Un utilisateur sans Claude Code les aura dès qu'un autre harness écrira son `one_shot`.
+- [x] Réglage « Modèle des textes rédigés » (Réglages › Application › « Textes rédigés »), qui ne liste que les harness installés. Mêmes limites qu'avant, tenues pour tout moteur par `engine::oneshot::ask` : 90 s, lecture bornée (1 Mo).
+  - [x] Claude Haiku : par défaut quand Claude Code est installé.
+  - [ ] Codex (avec son adaptateur) : `codex exec`, petit modèle, bac à sable `read-only`, éphémère.
   - Copilot : `copilot -p … --output-format json`, petit modèle, sans outil (`--available-tools` vide, à vérifier). Le schéma de sa sortie n'est pas documenté : lire la seule réponse finale.
   - Cursor : `agent -p --output-format json`, avec un petit modèle, en lecture seule (mode `ask` ou sans `--force` : à vérifier).
   - OpenCode : `opencode run`, avec le modèle choisi.

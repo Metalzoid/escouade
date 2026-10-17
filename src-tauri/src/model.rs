@@ -54,6 +54,9 @@ pub struct Settings {
     /// "Langue des textes rédigés par Claude": "ui" (the interface's), "fr" or "en". Many teams
     /// commit in English with an interface in French.
     pub claude_language: String,
+    /// « Modèle des textes rédigés »: the harness the one-shot questions go to (`engine::oneshot`).
+    /// None, or one not found: Claude Code when it is found (its Haiku), else the first found.
+    pub writer_engine: Option<EngineId>,
     /// « Claude et les agents peuvent piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
     pub mcp_enabled: bool,
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
@@ -373,6 +376,7 @@ impl Default for Settings {
             integrations: IntegrationSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
+            writer_engine: None,
             mcp_enabled: false,
             mcp_port: 0,
             accounts: Vec::new(),

@@ -89,6 +89,11 @@ export default {
       'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub et Linear, consignes données aux agents (par défaut, le message de commit proposé reprend la langue des derniers commits du dépôt).',
     /** A language named in the interface's (the choices name each in itself: `LANG_NAMES`). */
     langName: { fr: 'Français', en: 'Anglais' },
+    /** « Modèle des textes rédigés »: the harness the texts written by a model go to, among those found. */
+    writing: 'Textes rédigés',
+    writer: 'Modèle des textes rédigés',
+    writerHelp:
+      'Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness installés sont proposés.',
   },
 
   // The « Harness » tab (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode: « Harness » in French too).

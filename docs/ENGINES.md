@@ -12,6 +12,7 @@ Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec
 | `src-tauri/src/engine/registry.rs` | Le registre des moteurs : ce que chacun déclare (`EngineCaps`, `Tested`), sa version et son état sur la machine (`EngineInfo`), le refus d'une version trop ancienne (voir « Le registre »). |
 | `src-tauri/src/engine/mcp.rs` | Le serveur MCP d'Escouade d'un process : `Escouade` (donné ou refusé), `Launch` (ses arguments et variables), `SERVER` et `tool_name` (les noms `mcp__escouade__<outil>`), voir « Le serveur MCP d'Escouade ». |
 | `src-tauri/src/engine/program.rs` | `Program` : le programme d'un moteur, du système ou de WSL (lancé par `wsl.exe`), et `Located`, où il est, comme les réglages le montrent. Commun à tous les moteurs. |
+| `src-tauri/src/engine/oneshot.rs` | Les textes rédigés (one-shots) : `writer`, le harness de « Modèle des textes rédigés » parmi ceux trouvés ; `ask`, la question posée à un moteur dans son délai (90 s par défaut, `LIMIT`) et sa réponse bornée (`ANSWER_MAX`, 1 Mo) quel que soit le moteur ; `run`, le lancement d'un CLI qui lit la question sur son entrée, sa sortie lue jusqu'à cette borne. |
 | `src-tauri/src/engine/claude/` | Claude Code, première implémentation : `mod.rs` (le moteur `Claude`, ses arguments, ses messages, ses one-shots, et `EngineProcess` pour son process), `process.rs` (`ClaudeProcess` : le process stdio et ses requêtes de contrôle, l'ancien `claude.rs`), `locate.rs` (où est `claude`). |
 | `src-tauri/src/agent/claude.rs` | La traduction des frames de Claude Code (stream-json) en éléments de conversation : l'ancien corps de `AgentRt::handle_frame`. |
 | `src-tauri/src/engine/bench/` | Le banc de conformité (tests seulement) : les scénarios et leur pilote (`mod.rs`), le rejeu des flux enregistrés (`replay.rs`). Voir « Le banc de conformité ». |
@@ -40,6 +41,7 @@ Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` d
 | `translate(rt, frame, fx)` | **La traduction** d'une frame du process dans la conversation de l'agent. | `AgentRt::claude_frame` |
 | `start_lost(stderr)` | Pourquoi un process arrêté avant d'être prêt n'a pas pu démarrer : session perdue, ou point de copie absent. | « No conversation found », « No message found with message.uuid » |
 | `one_shot(OneShot)` | Une question sans session, sans réglages de l'utilisateur ni serveur MCP : nom d'un agent, message de commit, titres, suggestion des étapes d'un worktree. | `claude -p --output-format json` |
+| `writer(Weight)` | Le modèle qui répond aux one-shots, tel que « Modèle des textes rédigés » le nomme. | « Claude Haiku » (« Claude Sonnet » pour `Reading`) |
 
 ### `EngineProcess` : le process vivant d'un agent
 
@@ -85,7 +87,7 @@ Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edi
 8. **Modèle, effort et mode gardent les valeurs d'Escouade** (celles de Claude Code : `auto`, `plan`, `acceptEdits`…) ; un autre moteur fera sa correspondance dans son adaptateur (pour Codex : `approvalPolicy`, bac à sable et `collaborationMode` pour le mode Plan). Les modes qu'il prend et leur sens sont dans ses capacités (« Le registre ») ; ses modèles viennent avec le composer (lot 4).
 9. **Ce que Claude Code est seul à faire** (Remote Control, tâches de fond, arrêt d'un sous-agent) a ses méthodes à part dans `EngineProcess`, plutôt que des requêtes brutes dans le cœur. Un autre moteur les refusera (« non pris en charge ») et l'interface les masquera par ses capacités (docs/TODO-1.8.md, « Ce qui reste propre à Claude Code »).
 10. **Une échappatoire, `control` et `reply`** : une requête et une réponse dans le protocole du moteur. Les tests s'en servent (`background_tasks`), et la traduction pour refuser ce qu'Escouade ne sait pas traiter. Le cœur n'en a pas besoin.
-11. **Les one-shots disent leur poids, pas leur modèle** : `Weight::Light` (le modèle le plus rapide, sans outil : Haiku) ou `Weight::Reading` (un modèle plus fort, avec des outils qui ne font que lire : Sonnet avec `Read,Glob,Grep`). Le moteur choisit ; les textes rédigés par moteur sont le lot 7.
+11. **Les one-shots disent leur poids, pas leur modèle** : `Weight::Light` (le modèle le plus rapide, sans outil : Haiku) ou `Weight::Reading` (un modèle plus fort, avec des outils qui ne font que lire : Sonnet avec `Read,Glob,Grep`). Le moteur choisit. Le harness qui répond est celui de « Modèle des textes rédigés » (`engine::oneshot::writer`), pas celui de l'agent ; `engine::oneshot::ask` tient pour tous le délai et la lecture bornée, et `engine::oneshot::run` lance un CLI qui lit la question sur son entrée et répond sur sa sortie. `Engine::writer(weight)` nomme son modèle dans le réglage (« Claude Haiku »).
 12. **Les lectures propres à un moteur passent par lui** : le stderr d'un démarrage raté (`start_lost`), le quota (`read_usage`), les modèles (`Ready`).
 
 ## Ce qui reste propre à Claude Code hors de `engine/`

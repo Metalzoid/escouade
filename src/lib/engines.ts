@@ -124,3 +124,19 @@ export function modelTakes(who: { engine: EngineId | null | undefined }, model: 
   const decl = models.find((x) => x.id === m) ?? models.find((x) => m.includes(x.id));
   return decl ? decl[what] : true;
 }
+
+/**
+ * The harness the texts written by a model go to (« Modèle des textes rédigés »), as the backend picks it
+ * (`oneshot::writer`): the one `chosen` while it is found, else Claude Code when it is (its Haiku), else the first found;
+ * null when none is.
+ */
+export function writerOf(chosen: EngineId | null | undefined): EngineId | null {
+  const found = offered().map((e) => e.id);
+  if (chosen && found.includes(chosen)) return chosen;
+  return found.includes('claude') ? 'claude' : (found[0] ?? null);
+}
+
+/** The choices of « Modèle des textes rédigés »: the model each harness found writes them with (`Claude Haiku`). */
+export function writerOptions(): { value: EngineId; label: string }[] {
+  return offered().map((e) => ({ value: e.id, label: e.writer || e.name }));
+}

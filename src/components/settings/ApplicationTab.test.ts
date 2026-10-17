@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAVE_DELAY_MS, zoomState } from '../../lib/display.svelte';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { fakeBackend, resetApp } from '../../test/ipc';
+import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
 const panel = () => screen.getByRole('tabpanel');
@@ -105,7 +105,7 @@ describe('the « Application » tab', () => {
         within(panel())
           .getAllByRole('heading')
           .map((h) => h.textContent),
-      ).toEqual(['Affichage', 'Langue']);
+      ).toEqual(['Affichage', 'Langue', 'Textes rédigés']);
       expect(choices(ZOOM)).toEqual(['80 %', '90 %', '100 %', '110 %', '125 %', '150 %', '175 %', '200 %']);
       expect(choice(ZOOM, '100 %')).toHaveAttribute('aria-pressed', 'true');
       expect(panel()).toHaveTextContent('Aussi au clavier : Ctrl+= pour agrandir, Ctrl+- pour réduire, Ctrl+0 pour revenir à 100 %.');
@@ -165,6 +165,57 @@ describe('the « Application » tab', () => {
       expect(app.settings.editorFontSize).toBe(15);
       vi.advanceTimersByTime(SAVE_DELAY_MS);
       expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ terminalFontSize: 24, editorFontSize: 15 });
+    });
+  });
+
+  describe('« Modèle des textes rédigés »', () => {
+    const WRITER = 'Modèle des textes rédigés';
+
+    it('offers Claude Haiku alone with Claude Code alone, chosen by default', () => {
+      fakeBackend();
+      render(SettingsModal, { tab: 'app' });
+      expect(within(panel()).getByRole('heading', { name: 'Textes rédigés' })).toBeInTheDocument();
+      expect(choices(WRITER)).toEqual(['Claude Haiku']);
+      expect(choice(WRITER, 'Claude Haiku')).toHaveAttribute('aria-pressed', 'true');
+      expect(panel()).toHaveTextContent('Seuls les harness installés sont proposés.');
+    });
+
+    it('lists only the harnesses installed, and saves the one chosen', async () => {
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, { ...BARE_ENGINE, id: 'cursor', name: 'Absent', writer: 'Absent mini' }];
+      app.enginesFound = ['claude', 'codex'];
+      const backend = fakeBackend({ save_settings: () => [] });
+      render(SettingsModal, { tab: 'app' });
+      expect(choices(WRITER)).toEqual(['Claude Haiku', 'Nu mini']);
+      await userEvent.click(choice(WRITER, 'Nu mini'));
+      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ writerEngine: 'codex' });
+    });
+
+    it('shows the harness the texts go to when the one chosen is not installed any more', () => {
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+      app.enginesFound = ['codex'];
+      app.settings = { ...app.settings, writerEngine: 'claude' };
+      fakeBackend();
+      render(SettingsModal, { tab: 'app' });
+      expect(choices(WRITER)).toEqual(['Nu mini']);
+      expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('is not shown when no harness is installed', () => {
+      app.enginesFound = [];
+      fakeBackend();
+      render(SettingsModal, { tab: 'app' });
+      expect(within(panel()).queryByRole('group', { name: WRITER })).toBeNull();
+    });
+
+    it('reads in English', () => {
+      fakeBackend();
+      setLang('en');
+      render(SettingsModal, { tab: 'app' });
+      expect(within(panel()).getByRole('heading', { name: 'Written texts' })).toBeInTheDocument();
+      expect(choices('Model for written texts')).toEqual(['Claude Haiku']);
+      expect(panel()).toHaveTextContent('Only the installed harnesses are offered.');
     });
   });
 });

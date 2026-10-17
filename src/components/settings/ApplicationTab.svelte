@@ -1,5 +1,6 @@
 <script lang="ts">
   import { DEFAULT_FONT_SIZE, FONT_SIZE_MAX, FONT_SIZE_MIN, fontSize, setDisplay, ZOOM_LEVELS, zoomState } from '../../lib/display.svelte';
+  import { writerOf, writerOptions } from '../../lib/engines';
   import { LANG_NAMES, t, type Lang } from '../../lib/i18n';
   import { keyLabel } from '../../lib/platform';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -20,6 +21,8 @@
     { value: 'system' as const, label: t('settings.app.system', { lang: t(`settings.app.langName.${app.lang.system}`) }) },
     ...own,
   ]);
+  /** « Modèle des textes rédigés »: the harnesses found. */
+  const writers = $derived(writerOptions());
   const percent = (n: number) => t('settings.app.percent', { n });
   /** The steps the window cannot hold are not offered (`zoomState.fit`). */
   const zoomOptions = $derived(
@@ -84,6 +87,19 @@
     <Chips label={t('settings.app.claudeLanguage')} options={claudeOptions} bind:value={s.claudeLanguage} />
   </Row>
 </Group>
+
+<!-- Only the harnesses found are offered; none found, nothing to choose. -->
+{#if writers.length}
+  <Group title={t('settings.app.writing')}>
+    <Row label={t('settings.app.writer')} desc={t('settings.app.writerHelp')}>
+      <Chips
+        label={t('settings.app.writer')}
+        options={writers}
+        bind:value={() => writerOf(s.writerEngine) ?? writers[0].value, (v) => (s.writerEngine = v)}
+      />
+    </Row>
+  </Group>
+{/if}
 
 <style>
   .held {

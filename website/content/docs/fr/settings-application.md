@@ -89,3 +89,13 @@ Les trois choix sont « Comme l’interface (par défaut) », « English » 
 
 > [!TIP]
 > Beaucoup d’équipes commitent en anglais avec une interface en français : choisis « Français » pour l’interface et « English » pour les textes de Claude.
+
+## Textes rédigés
+
+« Modèle des textes rédigés » choisit le modèle qui écrit les textes courts qu’Escouade fait rédiger hors d’une conversation d’agent :
+
+- le nom donné à un nouvel agent ;
+- les messages de commit et les descriptions de pull request proposés, voir [Git](git) ;
+- les commandes du worktree que « ✦ Remplir automatiquement » propose après avoir lu le projet.
+
+Chaque question a 90 secondes pour sa réponse ; passé ce délai, le processus est arrêté avec tout ce qu’il a lancé, et la réponse est lue jusqu’à une taille bornée. Seuls les [harness](settings-claude-code) installés sont proposés. Par défaut, c’est « Claude Haiku » quand Claude Code est installé, sinon le premier harness trouvé. Un harness choisi puis désinstallé laisse la place à ce choix par défaut. Sans aucun harness installé, le groupe n’apparaît pas.

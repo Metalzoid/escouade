@@ -90,6 +90,7 @@ export const SETTINGS: Settings = {
   },
   language: 'system',
   claudeLanguage: 'ui',
+  writerEngine: null,
   accounts: [{ id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true }],
   mcpEnabled: false,
   mcpPort: 0,
@@ -388,6 +389,7 @@ export const BARE_ENGINE: EngineDecl = {
     { id: 'gpt-5.5-mini', label: 'GPT-5.5 mini', effort: false, auto: false },
   ],
   efforts: [],
+  writer: 'Nu mini',
 };
 
 /** Claude Code's two windows of a reading, the shorthand of the tests: `fiveHour` and `sevenDay`, as before 1.8. */

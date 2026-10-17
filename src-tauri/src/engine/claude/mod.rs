@@ -27,7 +27,7 @@ use crate::job::JobUsage;
 use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::time::Duration;
 
@@ -454,6 +454,10 @@ impl Engine for Claude {
         Box::pin(one_shot(ask))
     }
 
+    fn writer(&self, weight: Weight) -> &'static str {
+        writer(weight)
+    }
+
     fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {
         Some(mcp::grant_file(url, token))
     }
@@ -500,10 +504,9 @@ impl Engine for Claude {
 }
 
 /// One question to Claude (`claude -p`, no session, no settings, no MCP), as `ask` says: its
-/// answer, within its limit (the question's writing included: a `claude` that never reads it
-/// would hold it forever).
+/// answer (its limit is `oneshot::ask`'s, the question's writing included: a `claude` that never
+/// reads it would hold it forever).
 async fn one_shot(ask: OneShot<'_>) -> Result<String> {
-    use tokio::io::AsyncWriteExt;
     let OneShot {
         program,
         env,
@@ -511,11 +514,11 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         cwd,
         system,
         prompt,
-        limit,
+        limit: _,
     } = ask;
-    let (who, model, tools) = match weight {
-        Weight::Light => ("Haiku", "haiku", ""),
-        Weight::Reading => ("Claude", "sonnet", "Read,Glob,Grep"),
+    let (model, tools) = match weight {
+        Weight::Light => ("haiku", ""),
+        Weight::Reading => ("sonnet", "Read,Glob,Grep"),
     };
     let args = [
         "-p",
@@ -534,39 +537,19 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         system,
     ]
     .map(String::from);
-    let launch = program.launch(&cwd.to_string_lossy(), &args, &env)?;
-    let mut cmd = tokio::process::Command::new(&launch.program);
     // Reading needs no permission in its folder, and is refused outside of it: nothing more is
     // allowed.
-    cmd.args(&launch.args)
-        .current_dir(cwd)
-        .envs(launch.env)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-    crate::job::isolate(&mut cmd);
-    let mut child = cmd.spawn()?;
-    // Dropped when this returns: whatever the process left running ends with it.
-    let _job = crate::job::Job::for_child(&child);
-    let asked = async move {
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-            // Dropped here: the input ends, and the CLI answers.
-        }
-        anyhow::Ok(child.wait_with_output().await?)
-    };
-    let out = tokio::time::timeout(limit, asked).await.map_err(|_| {
-        anyhow!(tr!(
-            "pas de réponse de {who} en {s} s",
-            "no answer from {who} in {s} s",
-            s = limit.as_secs()
-        ))
-    })??;
-    let v = json_answer(&out.stdout)?;
+    let out = super::oneshot::run(&program, cwd, &args, &env, prompt, writer(weight)).await?;
+    let v = json_answer(&out)?;
     Ok(v["result"].as_str().unwrap_or("").to_string())
+}
+
+/// The model that answers a one-shot question of `weight`, as the interface names it.
+fn writer(weight: Weight) -> &'static str {
+    match weight {
+        Weight::Light => "Claude Haiku",
+        Weight::Reading => "Claude Sonnet",
+    }
 }
 
 /// The answer to a control request of the CLI that lets a tool run.
