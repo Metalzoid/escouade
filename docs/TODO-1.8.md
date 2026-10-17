@@ -243,6 +243,16 @@ Aussi pour la 1.8 :
   - suivi du statut (les états du workflow de l'équipe : « In Progress », « In Review », « Done ») et commentaires au passage « À tester » puis « Terminé » (`sync.rs`) ;
   - API GraphQL (`https://api.linear.app/graphql`) : un faux serveur pour les tests, comme `fake.rs`, et le réglage de proxy appliqué ;
   - interface : Linear dans Réglages › Intégrations et dans « Importer des tickets », textes fr et en ; site, README et journal.
+- [ ] **Aperçu et navigateur** (demandé le 2026-10-17) : voir le résultat d'un agent sans quitter l'app, le lui montrer, et le laisser vérifier lui-même. Pas un navigateur à tout faire (onglets, favoris, comptes) : celui de l'utilisateur le fait mieux.
+  - **Temps 1, le panneau d'aperçu** : le serveur de dev de l'agent (celui de « ▶ Tester », sur ses ports réservés) dans un panneau à côté de la conversation, comme la disposition moitié / moitié des fichiers, rechargé quand l'agent modifie un fichier.
+    - Une deuxième vue web de Tauri, dans le panneau (vues multiples, encore marquées instables dans Tauri 2) ou dans une fenêtre à part ; le moteur web du système (WebView2 sous Windows, WebKit sous macOS et Linux).
+    - **Sélecteur d'élément** : un clic sur un élément de la page envoie à l'agent son HTML, son CSS calculé, sa place dans le code quand on la retrouve (attributs de source des frameworks, cartes de source) et une capture, avec une phrase de l'utilisateur (« ce bouton est mal aligné »). Par un petit script injecté dans la page.
+    - **Console et réseau** : les erreurs de la console et les requêtes en échec, envoyées à l'agent en un clic.
+    - Sur une PR : le même panneau pour l'aperçu déployé (Vercel, Netlify…), voir le chapitre 2, « Aperçus ».
+  - **Temps 2, la vérification par l'agent** : ouvrir la page, cliquer, remplir, capturer, lire la console, pour valider un critère d'acceptation du Kanban sans l'utilisateur.
+    - Pas par le panneau : le moteur web du système se pilote mal (WebView2 parle le protocole de Chrome, CDP ; WebKit n'a pas d'équivalent ouvert). Par un Chromium sans fenêtre, avec le serveur MCP de Playwright, qu'Escouade fournit et configure pour chaque agent (ses ports, son dossier de profil à part).
+    - Ses captures et ce qu'il a fait affichés dans la conversation, et dans le bilan du ticket.
+  - Textes fr et en ; docs : SPEC, README, site.
 
 ## Ampleur (estimation du 2026-10-11)
 
