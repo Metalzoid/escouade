@@ -222,6 +222,10 @@ pub struct AgentRt {
     /// How many of its interfaces in a row stopped soon after they started (not saved): an
     /// automatic start is refused from the second on, so that one that cannot run does not loop.
     pub(crate) tui_quick_exits: u32,
+    /// The session its interface named at its start, while nothing of it is read from its
+    /// transcript (not saved): Claude Code writes none before a first message, so its absence is no
+    /// loss, and nothing is said of it (`Core::drop_unwritten_session`).
+    pub(crate) unwritten_session: Option<String>,
     /// Haiku was asked to name it since the app started (not saved): asked once, at the first
     /// message that gives a text to name it from (`naming_text`).
     pub(crate) naming_asked: bool,
@@ -464,6 +468,7 @@ impl AgentRt {
             tui_since: None,
             tui_exit: None,
             tui_quick_exits: 0,
+            unwritten_session: None,
             naming_asked: false,
             unprompted: None,
             without_escouade: false,

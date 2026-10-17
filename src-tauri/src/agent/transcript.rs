@@ -56,6 +56,7 @@ impl AgentRt {
         self.meta.last_entry = None;
         self.meta.fork_of = None;
         self.meta.fork_at = None;
+        self.unwritten_session = None;
     }
 
     /// One entry of the transcript its Claude Code interface writes.
@@ -63,6 +64,10 @@ impl AgentRt {
         // A subagent's entries are in files of their own; one here would be told as the agent's.
         if e["isSidechain"] == true {
             return;
+        }
+        // Something of its session is written: its absence now would be a loss.
+        if matches!(e["type"].as_str(), Some("user" | "assistant")) {
+            self.unwritten_session = None;
         }
         match e["type"].as_str().unwrap_or("") {
             "user" => self.on_tui_user(e, fx),

@@ -2477,6 +2477,9 @@ impl<R: Runtime> Core<R> {
         // An interface of the agent that is quitting is gone first: never two processes on one
         // session.
         self.after_quit(id).await;
+        // A session its interface named and never wrote is not resumed: it would fail, and tell a
+        // loss the interface told already, or that there was not.
+        self.drop_unwritten_session(h);
         let settings = self.settings.read().clone();
         // Its account's harness, where its session is kept.
         let harness = engine::of(&h.lock().meta);

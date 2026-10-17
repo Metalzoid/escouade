@@ -1761,6 +1761,75 @@ async fn a_session_with_no_transcript_is_given_up_and_the_interface_starts_a_new
     }
 }
 
+/// The arguments of each stream process the fake `claude` launched in the agent's folder.
+fn agent_stream_launches(h: &Harness, id: &str) -> Vec<Vec<String>> {
+    h.launches(std::path::Path::new(&h.agent(id).cwd))
+        .into_iter()
+        .filter(|a| a.iter().any(|x| x == "stream-json"))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lost_session_is_told_once_though_the_stream_and_the_interface_start_again_after() {
+    // The session is lost: the interface starts a new one, which it names and has not written yet
+    // (no message sent in it). The stream warmed up on the way back to Escouade's view, and the
+    // interface started again, find no transcript of it either: nothing of it is lost, nothing
+    // more is said (ESC-113: « une nouvelle session sera démarrée au prochain message » came too).
+    let h = harness("tui-session-lost-once");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let id = agent_to_open(&h, &p, |m| {
+        m.session_id = Some("cccccccc-0000-4000-8000-000000000001".into());
+        m.prompts = 3;
+    })
+    .await;
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    let named = h.agent(&id).session_id.unwrap();
+    let told = vec![crate::tui::session_lost_notice()];
+    assert_eq!(notices(&h, &id, "warn"), told);
+
+    // Back to Escouade's view: the stream is warmed up at once, as the interface quits.
+    let before = agent_stream_launches(&h, &id).len();
+    h.core.set_agent_view(&id, false).await.unwrap();
+    h.wait("the stream started", |h| {
+        agent_stream_launches(h, &id).len() > before
+            && h.core.agent(&id).unwrap().lock().proc.is_some()
+    })
+    .await;
+    let streams = agent_stream_launches(&h, &id)[before..].to_vec();
+    assert!(
+        !session_args(&streams, &format!("--resume={named}")),
+        "{streams:?}"
+    );
+    assert_eq!(notices(&h, &id, "warn"), told);
+
+    // And into the Claude Code view again: the interface starts on the stream's session.
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    assert_eq!(notices(&h, &id, "warn"), told);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_started_again_in_the_session_it_named_and_never_wrote_says_nothing() {
+    let h = harness("tui-session-unwritten");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let id = agent_to_open(&h, &p, |m| m.prompts = 3).await;
+    let (info, screen) = open_tui(&h, &id, false).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    let named = h.agent(&id).session_id.unwrap();
+    // Closed with no message sent in it, then opened again.
+    h.core.kill_terminal(&info.id);
+    h.wait("its interface over", |h| !interface_runs(h, &id))
+        .await;
+    let (info, screen) = open_tui(&h, &id, true).await.unwrap();
+    alive(&h, &info.id, &screen).await;
+    assert_ne!(h.agent(&id).session_id.unwrap(), named);
+    assert!(notices(&h, &id, "warn").is_empty());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_left_in_another_accounts_folder_is_copied_and_resumed() {
     let h = harness("tui-session-other-account");

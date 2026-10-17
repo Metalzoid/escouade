@@ -1197,6 +1197,7 @@ impl<R: Runtime> Core<R> {
             // As it was before the new session is its: what the interface is started from.
             let meta = rt.meta.clone();
             if let Some(s) = new_session.clone() {
+                rt.unwritten_session = Some(s.clone());
                 rt.meta.session_id = Some(s);
                 rt.meta.fork_of = None;
                 rt.meta.fork_at = None;
@@ -1870,7 +1871,10 @@ impl<R: Runtime> Core<R> {
         config_dir: &Path,
     ) {
         let Ok(h) = self.agent(id) else { return };
-        let meta = h.lock().meta.clone();
+        let (meta, unwritten) = {
+            let rt = h.lock();
+            (rt.meta.clone(), rt.unwritten_session.clone())
+        };
         let Some(session) = session_to_resume(&meta).map(str::to_string) else {
             return;
         };
@@ -1895,8 +1899,10 @@ impl<R: Runtime> Core<R> {
         .await;
         let Ok(check) = checked else { return };
         let is_copy = meta.session_id.is_none();
-        // A conversation to lose: messages sent, or entries of it read.
-        let had_conversation = meta.prompts > 0 || meta.last_entry.is_some();
+        // A conversation to lose: messages sent, or entries of it read; never in the session an
+        // interface named and did not write (no message sent in it).
+        let had_conversation = (meta.prompts > 0 || meta.last_entry.is_some())
+            && unwritten.as_deref() != Some(session.as_str());
         let to = accounts::name_in(crate::i18n::ui(), account);
         let lost = |notice: Option<String>| {
             let _ = self.with_agent(id, |rt, fx| {
@@ -1953,6 +1959,41 @@ impl<R: Runtime> Core<R> {
                     }
                 }
             }
+        }
+    }
+
+    /// Before the stream resumes the agent's session (its launch lock held), once its interface is
+    /// gone: a session the interface named and never wrote (no message sent in it, so Claude Code
+    /// has no transcript of it) is given up without a word, and the stream starts a new one.
+    /// Resumed, it would fail, and tell a loss once more after the interface told its own
+    /// (ESC-113). Left to the stream when the account's folder cannot be read (a `claude` of WSL
+    /// whose distribution is not running).
+    pub(crate) fn drop_unwritten_session(&self, h: &AgentHandle) {
+        let (session, meta) = {
+            let rt = h.lock();
+            let Some(s) = rt.unwritten_session.clone() else {
+                return;
+            };
+            if rt.meta.session_id.as_deref() != Some(s.as_str()) {
+                return;
+            }
+            (s, rt.meta.clone())
+        };
+        let Ok((view, _)) = view_of(&meta) else {
+            return;
+        };
+        let settings = self.settings.read().clone();
+        let dir = accounts::config_dir(&accounts::get(&settings, &meta.account), &settings);
+        if !dir.is_dir() || view.find_log(&dir, &session).is_some() {
+            return;
+        }
+        let mut rt = h.lock();
+        if rt.meta.session_id.as_deref() == Some(session.as_str()) {
+            log::info!(
+                "agent {}: session {session} never written by its interface, the stream starts a new one",
+                rt.meta.id
+            );
+            rt.forget_session();
         }
     }
 

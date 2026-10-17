@@ -12,7 +12,27 @@ function interfaces(app: App) {
   return app.launches().filter((l) => l.argv.includes('--settings') && !l.argv.includes('stream-json'));
 }
 
+/** The launches of the stream's process. */
+function streams(app: App) {
+  return app.launches().filter((l) => l.argv.includes('stream-json'));
+}
+
 const flag = (argv: string[], name: string) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);
+
+/**
+ * Back in Escouade's view, the loss is told once: the stream does not resume the session the interface (launched with
+ * `argv`) named and never wrote (no message sent in it), which would fail and tell it again (ESC-113).
+ */
+async function toldOnceBackInEscouadesView(app: App, argv: string[]) {
+  const before = streams(app).length;
+  await app.page.getByRole('button', { name: 'Vue Escouade' }).click();
+  await expect.poll(() => streams(app).length, { timeout: 20_000 }).toBeGreaterThan(before);
+  const named = flag(argv, '--session-id');
+  expect(streams(app).some((l) => flag(l.argv, '--resume') === named)).toBe(false);
+  // The time a stream that failed on it would take to say so.
+  await app.page.waitForTimeout(2000);
+  await expect(app.page.getByText(/Session Claude introuvable/)).toHaveCount(1);
+}
 
 /** The marker, in Principal's Claude Code folder. */
 const marker = (app: App, name: string) => path.join(app.root, 'claude', name);
@@ -103,8 +123,7 @@ test('a session with no transcript is replaced by a new one when the interface s
   await expect(view.getByText(/s’est arrêté/)).toHaveCount(0);
 
   // The conversation tells it.
-  await page.getByRole('button', { name: 'Vue Escouade' }).click();
-  await expect(page.getByText(/Session Claude introuvable/)).toBeVisible();
+  await toldOnceBackInEscouadesView(app, second.argv);
 });
 
 test('a session Claude Code cannot find, though its transcript is there, starts again once in a new session, never in a loop', async ({
@@ -135,8 +154,7 @@ test('a session Claude Code cannot find, though its transcript is there, starts 
   expect(interfaces(app)).toHaveLength(3);
   await expect(view.getByText(/s’est arrêté/)).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Vue Escouade' }).click();
-  await expect(page.getByText(/Session Claude introuvable/)).toBeVisible();
+  await toldOnceBackInEscouadesView(app, restarted.argv);
 });
 
 test('« Vue des nouveaux agents » set to the harness’s terminal opens a new agent in Claude Code’s interface (ESC-34)', async ({ app }) => {

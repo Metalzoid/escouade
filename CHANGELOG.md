@@ -28,6 +28,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ### Corrections
 
+- Une session Claude perdue ne s'annonce plus qu'une fois. Avant, après « Session Claude introuvable : l'interface repart en nouvelle session. » en vue Claude Code, le retour à la vue d'Escouade ajoutait « Session Claude introuvable : une nouvelle session sera démarrée au prochain message. », et une interface rouverte sans message envoyé l'annonçait encore : la session neuve que l'interface avait ouverte n'était pas encore écrite (Claude Code ne l'écrit qu'au premier message), et sa reprise échouait. Une session ouverte par l'interface où rien n'a été dit est maintenant abandonnée sans un mot.
 - Dans une fenêtre étroite (un écran de 1024 pixels de large, ou une fenêtre réduite vers 1000 pixels), la barre d'état ne coupe plus ses boutons « ♪ » et « ⚙ » (Réglages) au bord droit : elle se resserre, les quotas y perdent leur compte à rebours (toujours dans leur infobulle), et les processus et la branche s'abrègent en « … ». Un nom de branche long ne pousse plus non plus « Enregistrer » hors de la fenêtre dans l'éditeur, ni ne déborde de sa ligne d'état : il s'abrège, entier dans son infobulle.
 
 ## [1.7.10] — 2026-10-16
