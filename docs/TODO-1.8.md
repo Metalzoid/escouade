@@ -636,12 +636,12 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 
 ### Comptes et quotas
 - [x] « Comptes Claude » devient « Comptes », groupés par moteur (ESC-30 : un groupe par harness dans « Ordre des harness », un Principal par harness, `Engine::accounts` dit ce qui tient ses comptes à part).
-- [ ] **Comptes Codex** : un compte est un `CODEX_HOME`.
+- [x] **Comptes Codex** (ESC-38 : `accounts::store`, `create_of`, `codex_sign_in`, connexion par `codex login`) : un compte est un `CODEX_HOME`.
   - Principal est `~/.codex`, lancé sans toucher à la variable, comme pour Claude.
   - Les autres sont dans `~/.escouade/codex/<nom>`. « Ajouter un compte » ouvre un terminal intégré avec `codex login`.
   - Ce qui se partage (`config.toml`, `AGENTS.md`, skills) est proposé par lien ou par copie. `auth.json` n'est jamais copié (son jeton de rafraîchissement tourne : deux dossiers qui s'en servent pourraient s'invalider l'un l'autre).
   - Le `config.toml` d'un compte garde aussi son bac à sable Windows (`[windows] sandbox`) et la confiance des dossiers (`[projects.'<racine>']`) : un compte neuf part sans, et `elevated` y demande son installation (droits d'admin).
-  - À vérifier avec un vrai second compte (point 0) : la connexion dans un `CODEX_HOME` à part et la séparation du trousseau.
+  - À vérifier avec un vrai second compte (point 0) : la connexion dans un `CODEX_HOME` à part et la séparation du trousseau. Pas de second compte ChatGPT (décidé) : l'ajout s'essaie jusqu'à l'écran de connexion. Un compte dont Codex garde la connexion dans le trousseau (`cli_auth_credentials_store = "keyring"`) n'a pas d'`auth.json` et passe pour non connecté.
 - [ ] **Comptes Copilot** : un compte est un `COPILOT_HOME`.
   - Principal est `~/.copilot`, lancé sans la variable.
   - Les autres sont dans `~/.escouade/copilot/<nom>`, avec `copilot login` dans un terminal intégré.
@@ -650,7 +650,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [ ] **Comptes Cursor** :
   - Principal est la connexion de `agent login`, lancé sans rien changer.
   - Les autres sont une clé d'API par compte, gardée dans le trousseau et passée par `CURSOR_API_KEY` dans l'environnement du process, jamais sur la ligne de commande. Sauf si le point 0 trouve un dossier de config à part par compte, à traiter alors comme `CODEX_HOME`.
-- [ ] **Quota de Codex** :
+- [x] **Quota de Codex** (ESC-38 : `Engine::read_quota`, `codex::process::read_limits`, au plus toutes les 5 min par compte) :
   - Source : `account/rateLimits/updated` sur un agent vivant (après chaque appel du modèle). Sinon, `account/rateLimits/read` toutes les 5 min, par un app-server du compte lancé pour ça puis arrêté : essayé, il ne lance aucun tour et coûte peu (0,6 s, 62 Mo).
   - Les fenêtres prennent un libellé selon leur durée (`windowDurationMins` 300 → « 5h », 10080 → « 7j » / « W », 43200 → « 30j »), avec `usedPercent` et `resetsAt`. Une seule fenêtre peut exister (`secondary: null` avec l'offre gratuite) : la barre n'en montre alors qu'une.
   - Un tour arrêté par la limite (`rateLimitReachedType`) attend la remise à zéro, puis reprend seul, comme chez Claude.
@@ -694,18 +694,18 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
 - [x] **Tests** (ESC-88, `handover_tests.rs` ; l'essai réel reste à ESC-52) : deux faux moteurs du banc de conformité (limite sur le premier, suite sur le second, retour) ; essai réel Claude → Codex avant la release (ESC-52).
 
 ### Coût, tokens, stats
-- [ ] **Codex** : les tokens d'un tour sont la différence des `total` de `thread/tokenUsage/updated` entre le début et la fin du tour (`inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `outputTokens`, `reasoningOutputTokens`) : `last` n'est que le dernier appel au modèle, et un tour en fait plusieurs. Ceux d'un sous-agent arrivent sous son `threadId`, à ajouter au tour parent. Codex ne donne aucun coût en dollars : il est estimé avec une grille des modèles OpenAI dans `pricing.rs` et marqué « estimé ». Avec un abonnement ChatGPT, c'est un coût théorique, comme celui de Claude avec Max.
+- [x] **Codex** (ESC-38 : `pricing::estimate_openai`, grille lue le 2026-10-17 sur developers.openai.com/api/docs/pricing) : les tokens d'un tour sont la différence des `total` de `thread/tokenUsage/updated` entre le début et la fin du tour (`inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `outputTokens`, `reasoningOutputTokens`) : `last` n'est que le dernier appel au modèle, et un tour en fait plusieurs. Ceux d'un sous-agent arrivent sous son `threadId`, à ajouter au tour parent. Codex ne donne aucun coût en dollars : il est estimé avec une grille des modèles OpenAI dans `pricing.rs` et marqué « estimé ». Avec un abonnement ChatGPT, c'est un coût théorique, comme celui de Claude avec Max.
 - [ ] **Copilot** : les tokens de chaque appel (`assistant.usage`) additionnés par tour. Le coût vient des nano-AIU convertis en dollars (conversion à vérifier au point 0), sinon des prix par token de `models.list`.
 - [ ] **Cursor** : ni tokens ni coût connus dans son flux, à chercher au point 0. Sans source, le coût d'un tour n'est pas affiché (« — ») et les stats de Cursor comptent les tours et leur durée.
 - [ ] **OpenCode** : `cost` et `tokens` de chaque message, additionnés par tour.
-- [ ] **Fenêtre de contexte** : `modelContextWindow` chez Codex, `session.usage_info` chez Copilot, la limite du modèle chez OpenCode ; chez Cursor, à relever au point 0.
+- [ ] **Fenêtre de contexte** : `modelContextWindow` chez Codex (fait, ESC-37), `session.usage_info` chez Copilot, la limite du modèle chez OpenCode ; chez Cursor, à relever au point 0.
 - [ ] **Stats** :
   - [x] Une colonne `engine` dans la table des tours (les tours d'avant valent `claude`), et `by_engine` dans la vue des stats (ESC-27).
   - [x] Un filtre « Tous les moteurs / Claude Code / Codex / Copilot / Cursor / OpenCode », qui se combine avec celui des comptes (ESC-30 : « Tous les harness », colonne `engine` des prompts).
   - [x] Une vue « Par moteur » (ESC-30 : « Par harness », tours et agents ; un coût estimé marqué « ≈ … estimé », « — » sans coût).
 
 ### Serveur MCP d'Escouade
-- [ ] **Agents d'Escouade** (l'interrupteur « Claude et les agents peuvent piloter Escouade », depuis ESC-91) : même jeton par lancement et même oubli qu'aujourd'hui.
+- [x] **Agents d'Escouade**, pour Codex (ESC-37, vérifié de bout en bout par ESC-38 : `mcp::agents_tests`) (l'interrupteur « Claude et les agents peuvent piloter Escouade », depuis ESC-91) : même jeton par lancement et même oubli qu'aujourd'hui.
   - Codex : `-c mcp_servers.escouade.url=…` et `bearer_token_env_var`, avec le jeton dans l'environnement du process. Réglage désactivé : `-c mcp_servers.escouade.enabled=false`. Les deux essayés (point 0). Jamais par la `config` de `thread/start`, qui ferait perdre les `-c` sur `mcp_servers`.
   - Copilot : `--additional-mcp-config @<fichier privé>` (comme le `--mcp-config` de Claude : un fichier 0600, oublié à la fin du process), ou `mcpServers` à la création de session. Réglage désactivé : `--disable-mcp-server escouade`.
   - Cursor : une entrée HTTP dans les `mcpServers` de `session/new`, avec l'en-tête `Authorization`, si le point 0 montre que Cursor les prend. Réglage désactivé : rien de passé (pour une entrée `escouade` de l'utilisateur, voir point 0).
@@ -722,7 +722,7 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
 - [x] Ces textes (nom d'un agent, message de commit proposé, description de PR, questions de « Remplir automatiquement ») passent par l'interface `Engine::one_shot` du harness choisi (`engine::oneshot`, ESC-32). Un utilisateur sans Claude Code les aura dès qu'un autre harness écrira son `one_shot`.
 - [x] Réglage « Modèle des textes rédigés » (Réglages › Application › « Textes rédigés »), qui ne liste que les harness installés. Mêmes limites qu'avant, tenues pour tout moteur par `engine::oneshot::ask` : 90 s, lecture bornée (1 Mo).
   - [x] Claude Haiku : par défaut quand Claude Code est installé.
-  - [ ] Codex (avec son adaptateur) : `codex exec`, petit modèle, bac à sable `read-only`, éphémère.
+  - [x] Codex (ESC-38, `engine/codex/exec.rs`) : `codex exec --ephemeral --ignore-user-config --ignore-rules --sandbox read-only --json -m gpt-6-luna`, la question par l'entrée (`exec` n'a pas de prompt système : les consignes la précèdent entre `<instructions>`), la réponse le dernier `agent_message`. Essayé sur 0.163.0 : avec son shell, un modèle à qui l'on demande un nom explore d'abord son dossier (29 k tokens au lieu de 12 k) ; un texte court se pose donc sans outil (`--disable shell_tool`, `apps`, `plugins`, `browser_use`, `computer_use`). Sans le `config.toml` du compte, le bac à sable de Windows manque et toute commande est refusée : un texte qui lit son dossier reprend son `[windows] sandbox` par `-c`. Rien n'est écrit dans `~/.codex` (`sessions`, `session_index.jsonl` et `config.toml` inchangés, vérifié).
   - Copilot : `copilot -p … --output-format json`, petit modèle, sans outil (`--available-tools` vide, à vérifier). Le schéma de sa sortie n'est pas documenté : lire la seule réponse finale.
   - Cursor : `agent -p --output-format json`, avec un petit modèle, en lecture seule (mode `ask` ou sans `--force` : à vérifier).
   - OpenCode : `opencode run`, avec le modèle choisi.

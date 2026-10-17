@@ -360,6 +360,43 @@ impl CodexProcess {
     }
 }
 
+/// The quota of an account none of whose agents runs (`account/rateLimits/read`): an app-server of
+/// its own (`env`: its `CODEX_HOME`), started in `cwd` for that and stopped once it answered. It
+/// starts no thread, and costs little (0,6 s and 62 Mo on Codex 0.163.0, tried).
+pub(super) async fn read_limits(
+    program: Program,
+    env: Vec<(String, String)>,
+    cwd: String,
+) -> Result<Value> {
+    let opts = Opts {
+        program,
+        cwd,
+        args: vec!["app-server".into()],
+        env,
+        start: Start::New,
+        settings: Settings::default(),
+        instructions: None,
+    };
+    let p = CodexProcess::spawn(opts, Box::new(|_| {}), Box::new(|_, _| {}))?;
+    let read = async {
+        p.request(
+            "initialize",
+            json!({
+                "clientInfo": { "name": "escouade", "title": "Escouade", "version": env!("CARGO_PKG_VERSION") },
+            }),
+            REQUEST_LIMIT,
+        )
+        .await?;
+        p.write(&json!({ "method": "initialized" }))?;
+        p.request("account/rateLimits/read", json!({}), REQUEST_LIMIT)
+            .await
+    };
+    let read = read.await;
+    p.kill();
+    p.wait_gone(Duration::from_secs(5)).await;
+    Ok(read?["rateLimits"].clone())
+}
+
 /// One message of Codex: an answer to one of the process's requests (resolved here), or what goes
 /// to the translation. The turn under way is followed here. Gives the messages to steer into the
 /// turn that just started.

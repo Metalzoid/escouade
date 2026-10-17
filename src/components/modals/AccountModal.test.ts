@@ -21,7 +21,7 @@ vi.mock('../../lib/terminals', () => ({
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus } from '../../lib/types';
-import { fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
 import AccountModal from './AccountModal.svelte';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
@@ -62,7 +62,7 @@ describe('AccountModal', () => {
   it('offers what Principal has to share, all of it checked and linked; on Windows, its files are copied', async () => {
     backend();
     render(AccountModal, {});
-    const dialog = screen.getByRole('dialog', { name: 'Ajouter un compte Claude' });
+    const dialog = screen.getByRole('dialog', { name: 'Ajouter un compte Claude Code' });
     const share = await within(dialog).findByRole('group', { name: 'Partager avec Principal' });
     const boxes = within(share).getAllByRole('checkbox');
     expect(boxes.map((b) => b.getAttribute('name'))).toEqual(SHAREABLE);
@@ -97,6 +97,52 @@ describe('AccountModal', () => {
     expect(screen.queryByRole('group')).not.toBeInTheDocument();
   });
 
+  it('adds an account of Codex, picked among the harnesses found, with what its Principal shares and never its sign-in', async () => {
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, name: 'Codex' }];
+    app.enginesFound = ['claude', 'codex'];
+    const WORK: Account = {
+      ...PRO,
+      id: 'travail',
+      name: 'Travail',
+      engine: 'codex',
+      configDir: 'C:\\Users\\ada\\.escouade\\codex\\travail',
+    };
+    const b = backend([OUT], {
+      account_shareable: (a) => (a.engine === 'codex' ? ['config.toml', 'AGENTS.md', 'skills'] : SHAREABLE),
+      account_create: () => WORK,
+    });
+    render(AccountModal, {});
+    expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Claude Code' })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Harness' }), 'codex');
+    expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Codex' })).toBeInTheDocument();
+    await waitFor(() => expect(b.called('account_shareable').at(-1)?.args).toEqual({ engine: 'codex' }));
+    const group = await screen.findByRole('group', { name: 'Partager avec Principal' });
+    // config.toml and AGENTS.md are files, skills a folder.
+    expect(within(group).getByRole('checkbox', { name: 'config.toml' })).toBeChecked();
+    expect(within(group).getByRole('checkbox', { name: 'skills' })).toBeChecked();
+    expect(screen.getByText(/La connexion \(auth\.json\) n’est jamais copiée/)).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Travail');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
+    await waitFor(() => expect(b.called('account_create')).toHaveLength(1));
+    expect(b.called('account_create')[0].args).toEqual({
+      name: 'Travail',
+      share: ['config.toml', 'AGENTS.md', 'skills'],
+      mode: 'link',
+      engine: 'codex',
+    });
+    // Its `codex login` in a terminal, said so.
+    await screen.findByRole('dialog', { name: 'Se connecter au compte « Travail »' });
+    expect(term.opened).toEqual(['travail']);
+    expect(screen.getByRole('status')).toHaveTextContent('codex login ouvre ton navigateur');
+  });
+
+  it('offers no harness to pick while only one is found', async () => {
+    backend();
+    render(AccountModal, {});
+    await screen.findByRole('group', { name: 'Partager avec Principal' });
+    expect(screen.queryByRole('combobox', { name: 'Harness' })).not.toBeInTheDocument();
+  });
+
   it('makes the account with what is checked, then runs its claude until the sign-in is there', async () => {
     const b = backend([OUT, OUT, IN]);
     render(AccountModal, {});
@@ -106,7 +152,12 @@ describe('AccountModal', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Copier' }));
     await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
     await waitFor(() => expect(b.called('account_create')).toHaveLength(1));
-    expect(b.called('account_create')[0].args).toEqual({ name: 'Pro', share: ['settings.json', 'CLAUDE.md', 'skills'], mode: 'copy' });
+    expect(b.called('account_create')[0].args).toEqual({
+      name: 'Pro',
+      share: ['settings.json', 'CLAUDE.md', 'skills'],
+      mode: 'copy',
+      engine: 'claude',
+    });
     // Saved: the settings know it, last.
     expect(app.settings.accounts).toEqual([PRINCIPAL, PRO]);
     // Its claude in a terminal, in the window.
@@ -298,7 +349,7 @@ describe('AccountModal', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Pro');
     await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Un compte s’appelle déjà « Pro ».');
-    expect(screen.getByRole('dialog', { name: 'Ajouter un compte Claude' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Ajouter un compte Claude Code' })).toBeInTheDocument();
     expect(term.opened).toEqual([]);
   });
 
@@ -306,7 +357,7 @@ describe('AccountModal', () => {
     setLang('en');
     backend([OUT, IN]);
     render(AccountModal, {});
-    expect(screen.getByRole('dialog', { name: 'Add a Claude account' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add a Claude Code account' })).toBeInTheDocument();
     const share = await screen.findByRole('group', { name: 'Share with Main' });
     expect(within(share).getByRole('radio', { name: 'Link (a change applies to both accounts)' })).toBeChecked();
     expect(within(share).getByText('copied (linking a file needs administrator rights)')).toBeInTheDocument();

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnItem } from '../../lib/types';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { agent, fakeBackend, resetApp } from '../../test/ipc';
+import { agent, BARE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import TurnCard from './TurnCard.svelte';
 
 const turn = (over: Partial<TurnItem> = {}): TurnItem => ({
@@ -80,6 +80,21 @@ describe('TurnCard', () => {
     render(TurnCard, { item: turn(), agent: agent({ status: 'done' }), last: true });
     expect(screen.getByText('0 fichier modifié')).toBeInTheDocument();
     expect(screen.queryByRole('list')).toBeNull();
+  });
+
+  it('marks as estimated the cost of a turn of a harness that tells none, on its card and its separator', () => {
+    app.engines = [...app.engines, { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, cost: 'estimated' } }];
+    const a = agent({ status: 'done', engine: 'codex' });
+    const { unmount } = render(TurnCard, { item: turn({ cost: 0.02, engine: 'codex' }), agent: a, last: true });
+    // The text matched once its spaces are normal ones.
+    expect(screen.getByText(/^≈\s0,020\s\$ estimé$/)).toBeInTheDocument();
+    unmount();
+    render(TurnCard, { item: turn({ cost: 0.02, engine: 'codex' }), agent: a, last: false });
+    expect(screen.getByText(/≈\s0,020\s\$ estimé/)).toBeInTheDocument();
+    // Claude Code tells its own: never « estimé ».
+    render(TurnCard, { item: turn(), agent: agent({ status: 'done' }), last: true });
+    expect(screen.getByText(/^2,84\s\$$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/estimé/)).toHaveLength(1);
   });
 
   it('is a discreet separator for earlier turns', () => {

@@ -27,6 +27,8 @@ Cette page explique l’usage ; la liste des options de l’onglet est dans [les
 4. Choisis ce que le compte reprend de Principal, sous « Partager avec Principal » (voir ci-dessous).
 5. Clique sur « Créer et se connecter ». Le compte est créé, actif et placé en dernier dans la liste, puis la fenêtre ouvre sa connexion.
 
+Dès que deux harness sont installés, la fenêtre commence par « Harness » : le harness du compte, Claude Code ou Codex (voir [les comptes Codex](#comptes-codex)).
+
 Escouade crée pour le compte un dossier sous `~/.escouade/claude/`, nommé d’après le compte. Elle ne reprend jamais le dossier d’un compte supprimé : un nouveau compte a toujours un dossier neuf.
 
 > [!NOTE]
@@ -65,6 +67,17 @@ Après « Créer et se connecter », la fenêtre change de titre (« Se conne
 Si Claude Code s’arrête avant la connexion, la fenêtre écrit « Claude Code s’est arrêté avant la connexion. » et propose « Relancer ». Si tu fermes la fenêtre en cours de route, le compte reste dans la liste, « Pas connecté » : reprends avec « Se connecter… ».
 
 « Se connecter… » sert aussi à reconnecter un compte dont la connexion a expiré. Quand le compte est connecté et à jour, le bouton devient « Se reconnecter… » : utile pour passer à un autre compte claude.ai.
+
+## Comptes Codex
+
+Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODEX_HOME`) : sa connexion à ChatGPT, ses sessions et son quota. Ils se gèrent dans le groupe « Comptes Codex » de l’onglet, comme ceux de Claude Code.
+
+- Son « Principal » est ton Codex habituel, `~/.codex` : Escouade le lance sans toucher à `CODEX_HOME`. Il apparaît au premier agent ou ticket Codex, ou avec le premier compte Codex ajouté.
+- « Ajouter un compte… », harness « Codex », crée son dossier sous `~/.escouade/codex/`. Il peut reprendre de Principal `config.toml` (ses réglages, dont le bac à sable de Windows et la confiance de tes dossiers), `AGENTS.md` et ses dossiers `skills`, `prompts` et `rules`, par lien ou par copie, comme un compte Claude Code.
+- La connexion (`auth.json`) n’est jamais copiée : son jeton change à chaque renouvellement, et deux dossiers qui s’en serviraient se déconnecteraient l’un l’autre.
+- « Créer et se connecter » ouvre un terminal où tourne `codex login` dans le dossier du compte : le navigateur s’ouvre sur la connexion de ChatGPT. Dès qu’`auth.json` est écrit, la fenêtre écrit « Connecté au compte » suivi de l’adresse du compte ChatGPT.
+
+Le quota d’un compte Codex vient de Codex lui-même : de ses agents pendant qu’ils tournent, sinon d’un app-server du compte lancé toutes les 5 minutes le temps de le lire, sans tour ni conversation. Ses fenêtres prennent un libellé selon leur durée (« 5h », « 7j », ou une seule fenêtre « 30j » avec l’offre gratuite). Un tour arrêté par la limite attend la remise à zéro puis reprend seul, et les nouveaux agents Codex partent sur le compte Codex suivant sous le seuil, comme chez Claude Code. Reprendre un agent Codex sur un autre compte n’est pas proposé : il attend sa remise à zéro, ou continue sur un autre harness.
 
 ## Gérer les comptes
 

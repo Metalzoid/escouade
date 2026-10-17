@@ -2633,6 +2633,18 @@ impl<R: Runtime> Core<R> {
     /// it) gets its Principal, its usual installation (`accounts::normalize` makes none for a
     /// harness that never served): saved, and the window told.
     pub(crate) fn accounts_of(&self, engine: EngineId) {
+        // Looked at under the read lock: it is asked often (every text written by a model), and a
+        // writer waiting on the settings holds back every new reader, a thread that reads them
+        // again within a read of its own included.
+        if self
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .any(|a| a.engine == engine)
+        {
+            return;
+        }
         let accounts = {
             let mut s = self.settings.write();
             if s.accounts.iter().any(|a| a.engine == engine) {
@@ -5196,32 +5208,41 @@ impl<R: Runtime> Core<R> {
         accounts::get(&self.settings.read(), &account).id
     }
 
-    /// The account a question is asked of: its `agent`'s; else, as a new agent of its `project`
-    /// (when it is about one) would go. Refused when no account serves that project.
+    /// The account of `engine` a question is asked of: its `agent`'s when the agent runs on that
+    /// harness; else, as a new agent of its `project` (when it is about one) would go. Refused when
+    /// no account of it serves that project.
     fn account_for(
         &self,
-        settings: &Settings,
+        engine: EngineId,
         agent: Option<&str>,
         project: Option<&str>,
     ) -> Result<Account> {
+        // A harness that never served has its Principal from now on (`Core::accounts_of`); Claude
+        // Code always has one.
+        if engine != EngineId::Claude {
+            self.accounts_of(engine);
+        }
+        let settings = self.settings.read().clone();
         let of_agent = agent
             .and_then(|id| self.agent(id).ok())
-            .map(|h| h.lock().meta.account.clone());
-        // Without an agent, the default harness's (the one that asks, `ask_claude`).
-        let engine = engine::default().id();
+            .map(|h| h.lock().meta.account.clone())
+            .filter(|id| accounts::get(&settings, id).engine == engine);
         let id = match (of_agent, project) {
             (Some(id), _) => id,
             (None, Some(project)) => self.account_for_new(project, engine)?,
-            (None, None) if !accounts::serves_any(settings, engine, None) => {
+            (None, None) if !accounts::serves_any(&settings, engine, None) => {
                 return Err(accounts::no_account_outside_projects(engine))
             }
-            (None, None) => self.pick_account(&accounts::for_project(settings, engine, None), None),
+            (None, None) => {
+                self.pick_account(&accounts::for_project(&settings, engine, None), None)
+            }
         };
-        Ok(accounts::get(settings, &id))
+        Ok(accounts::get(&settings, &id))
     }
 
     /// One question to the harness of « Modèle des textes rédigés » (no session, no settings, no
-    /// MCP), as `ask` says: its answer, within its limit (`engine::oneshot`).
+    /// MCP), as `ask` says, on the account of the agent or the project it is about: its answer,
+    /// within its limit (`engine::oneshot`).
     async fn ask_harness(&self, ask: Ask<'_>) -> Result<String> {
         let Ask {
             weight,
@@ -5237,24 +5258,17 @@ impl<R: Runtime> Core<R> {
         let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
             .unwrap_or(EngineId::Claude);
         let engine = engine::by_id(id);
-        let (program, env) = if id == EngineId::Claude {
-            // The accounts are Claude Code's until each harness has its own (lot 5): asked of the
-            // account of the agent or the project it is about.
-            let account = self.account_for(&settings, agent, project)?;
-            let program = accounts::program(&account, &settings)
-                .with_context(|| tr!("claude introuvable", "claude not found"))?;
-            let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
-            (program, env)
-        } else {
-            let program = engine.locate("", &settings.wsl_distro).ok_or_else(|| {
-                anyhow!(tr!(
-                    "{name} introuvable",
-                    "{name} not found",
-                    name = engine.name()
-                ))
-            })?;
-            (program, settings.claude_env())
-        };
+        let account = self.account_for(id, agent, project)?;
+        let settings = self.settings.read().clone();
+        let program = accounts::program(&account, &settings).ok_or_else(|| {
+            // Claude Code by its command, as before there was a choice.
+            let name = match id {
+                EngineId::Claude => "claude",
+                _ => engine.name(),
+            };
+            anyhow!(tr!("{name} introuvable", "{name} not found"))
+        })?;
+        let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
         engine::oneshot::ask(
             engine,
             OneShot {
@@ -7516,6 +7530,44 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The quota of an account of a harness other than Claude Code none of whose agents runs, read
+    /// by a process of its own (`Engine::read_quota`) when it was not in the last five minutes.
+    /// Not signed in, it is looked at again at the next reading (no process was started).
+    async fn read_quota_apart(
+        &self,
+        settings: &Settings,
+        account: &Account,
+    ) -> Option<usage::Reading> {
+        let program = accounts::program(account, settings)?;
+        let before = {
+            let mut last = self.last_oauth_call.lock();
+            if !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
+                return None;
+            }
+            last.insert(account.id.clone(), now_ms())
+        };
+        let env = [settings.claude_env(), accounts::launch_env(account)].concat();
+        let dir = accounts::config_dir(account, settings);
+        match engine::by_id(account.engine)
+            .read_quota(program, env, &dir)
+            .await
+        {
+            Ok(Some(usage::Reading::NotSignedIn)) => {
+                let mut last = self.last_oauth_call.lock();
+                match before {
+                    Some(t) => last.insert(account.id.clone(), t),
+                    None => last.remove(&account.id),
+                };
+                Some(usage::Reading::NotSignedIn)
+            }
+            Ok(reading) => reading,
+            Err(e) => {
+                log::debug!("quota of account {}: {e:#}", account.id);
+                None
+            }
+        }
+    }
+
     /// One reading of the account's quota, if one is to be had: its process's, else the
     /// endpoint's when the account is active and was not asked in the last five minutes. None
     /// also for an error of the network or of the server: the last values stand.
@@ -7530,10 +7582,14 @@ impl<R: Runtime> Core<R> {
                 return Some(usage::Reading::Windows(usage::parse_windows(&v)));
             }
         }
-        // The usage endpoint is Claude Code's: another harness's accounts are read by their own
-        // processes, or not at all (a harness without a quota).
-        if !account.active || account.engine != EngineId::Claude {
+        if !account.active {
             return None;
+        }
+        // The usage endpoint is Claude Code's: another harness's accounts are read by a process of
+        // their own (Codex: an app-server, `Engine::read_quota`), at most every five minutes, or not
+        // at all (a harness without a quota).
+        if account.engine != EngineId::Claude {
+            return self.read_quota_apart(settings, account).await;
         }
         // Noted before asking: two readings at once ask the endpoint once.
         let before = {

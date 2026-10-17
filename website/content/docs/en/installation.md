@@ -47,7 +47,7 @@ Escouade starts Codex’s app-server (`codex app-server`), one per agent, throug
 | Auto | Codex’s automatic reviewer decides on the requests for you. |
 | Bypass | Codex asks nothing and leaves its sandbox. |
 
-A request from Codex has three buttons: “Allow”, “For this session” (the same request doesn’t come back during the session) and “Deny”. A message sent while it works goes into its turn instead of waiting. Codex doesn’t read PDFs. Its several accounts, its quota outside an agent and its estimated cost come next.
+A request from Codex has three buttons: “Allow”, “For this session” (the same request doesn’t come back during the session) and “Deny”. A message sent while it works goes into its turn instead of waiting. Codex doesn’t read PDFs. Its accounts are added as Claude Code’s are (see [several accounts](accounts#codex-accounts)), its quota shows in the status bar, and the cost of its turns is estimated from OpenAI’s public prices.
 
 ## Installing Escouade
 

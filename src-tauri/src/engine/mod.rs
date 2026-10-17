@@ -322,6 +322,18 @@ pub trait Engine: Send + Sync {
         200_000
     }
 
+    /// The quota of an account none of whose agents runs, read by a process of its own (`program`
+    /// with `env`, its folder `dir`): None when the harness reads none so (Claude Code's endpoint
+    /// is asked by the core).
+    fn read_quota<'a>(
+        &'a self,
+        _program: Program,
+        _env: Vec<(String, String)>,
+        _dir: &'a Path,
+    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
+        Box::pin(async { Ok(None) })
+    }
+
     /// Whether `model` takes an effort.
     fn supports_effort(&self, model: &str) -> bool;
     /// Whether `model` takes the mode `auto`.

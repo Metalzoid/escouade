@@ -47,7 +47,8 @@ export default defineZone('accounts', {
   },
 
   modal: {
-    addTitle: 'Add a Claude account',
+    addTitle: 'Add a {harness} account',
+    harness: 'Harness',
     signInTitle: 'Sign in to the account “{name}”',
     name: 'Name',
     namePlaceholder: 'Pro, Team…',
@@ -64,7 +65,13 @@ export default defineZone('accounts', {
     signInHint: 'Sign in in the terminal below (use the /login command if Claude Code doesn’t offer it).',
     connected: 'Signed in as {email}',
     connectedNoEmail: 'Signed in',
-    ended: 'Claude Code stopped before signing in.',
+    ended: '{harness} stopped before signing in.',
+    // What a Codex account keeps apart (its folder is a CODEX_HOME).
+    codex: {
+      nothingToShare: '{name} has no config.toml, AGENTS.md, skills, prompts or rules to share.',
+      neverShared: 'The sign-in (auth.json) is never copied: each account has its own (its token changes each time it is renewed).',
+      signInHint: 'Sign in in the terminal below: codex login opens your browser on ChatGPT’s sign-in.',
+    },
     restart: 'Restart',
     done: 'Done',
   },

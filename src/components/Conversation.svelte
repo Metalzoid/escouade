@@ -595,7 +595,7 @@
       </div>
       <div class="m opt"><span class="k">{t('conv.header.tokens')}</span><span class="v mono">{fTok(used.tokens)}</span></div>
       {#if showsCost(agent)}
-        <div class="m opt2" use:tip={used.estimated ? estimateHint() : undefined}>
+        <div class="m opt2" use:tip={used.estimated ? estimateHint(used) : undefined}>
           <span class="k">{t('common.cost')}</span><span class="v mono">{fSpentUsd(used)}</span>
         </div>
       {/if}

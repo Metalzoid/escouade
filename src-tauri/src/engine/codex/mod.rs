@@ -4,11 +4,12 @@
 //!
 //! What it does as Escouade drives it comes from the real runs of Codex 0.163.0 (ESC-22,
 //! docs/TODO-1.8.md, point 0, « Codex »), whose streams are in `tests/fixtures/codex/` and whose
-//! schema is `tests/fixtures/engines/codex-0.163.0.schema.json`. Its accounts and their quota, the
-//! estimated cost, Escouade's MCP server and the texts written by a model come with ESC-38.
+//! schema is `tests/fixtures/engines/codex-0.163.0.schema.json`. Its texts written by a model go
+//! through `codex exec` (`exec`).
 
 #[cfg(test)]
 mod bench;
+mod exec;
 pub(crate) mod git;
 mod locate;
 mod process;
@@ -268,8 +269,8 @@ pub fn caps() -> EngineCaps {
         slash_commands: false,
         quota: QuotaKind::Windows,
         quota_windows: vec![crate::model::FIVE_HOURS, crate::model::WEEK],
-        // Estimated from its tokens with ESC-38.
-        cost: CostKind::None,
+        // Estimated from its tokens and the public prices of OpenAI's models (`pricing`).
+        cost: CostKind::Estimated,
         terminal_view: true,
         remote_control: false,
         background_tasks: false,
@@ -498,6 +499,24 @@ impl Engine for Codex {
         &EFFORTS
     }
 
+    /// Not signed in (no `auth.json`): said so, no process started. Else `account/rateLimits/read`
+    /// of an app-server of its own (`process::read_limits`).
+    fn read_quota<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a Path,
+    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
+        Box::pin(async move {
+            if crate::accounts::codex_sign_in(dir).is_none() {
+                return Ok(Some(crate::usage::Reading::NotSignedIn));
+            }
+            let cwd = std::env::temp_dir().to_string_lossy().into_owned();
+            let limits = process::read_limits(program, env, cwd).await?;
+            Ok(Some(crate::usage::Reading::Windows(meters(&limits))))
+        })
+    }
+
     fn supports_effort(&self, _model: &str) -> bool {
         true
     }
@@ -561,13 +580,13 @@ impl Engine for Codex {
         None
     }
 
-    /// `codex exec` comes with ESC-38.
-    fn one_shot<'a>(&'a self, _ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
-        Box::pin(async move { bail!(not_yet()) })
+    /// `codex exec`, ephemeral, in a read-only sandbox (`exec`).
+    fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
+        Box::pin(exec::one_shot(ask))
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {
-        "Codex"
+        exec::WRITER
     }
 
     fn grant_file(&self, _url: &str, _token: &str) -> Option<Vec<u8>> {

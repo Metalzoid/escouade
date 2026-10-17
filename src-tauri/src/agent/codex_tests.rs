@@ -551,3 +551,49 @@ fn a_decision_of_codexs_automatic_reviewer_is_told_in_the_conversation() {
         .unwrap()
         .contains("Automatic approval review approved"));
 }
+
+#[test]
+fn a_turns_tokens_are_its_threads_since_it_began_and_its_cost_is_estimated_from_them() {
+    let mut a = rt();
+    a.meta.model = "gpt-6-luna".into();
+    let usage = |a: &mut AgentRt, thread: &str, input: u64, cached: u64, output: u64| {
+        frame(
+            a,
+            "thread/tokenUsage/updated",
+            json!({ "threadId": thread, "turnId": "t1", "tokenUsage": {
+                "total": { "inputTokens": input, "cachedInputTokens": cached, "outputTokens": output,
+                           "reasoningOutputTokens": 0, "totalTokens": input + output },
+                "last": { "inputTokens": 1000, "cachedInputTokens": 0, "outputTokens": 10 },
+                "modelContextWindow": 258400,
+            } }),
+        )
+    };
+    // What the thread had counted before this turn is not this turn's.
+    usage(&mut a, "thr", 500_000, 0, 1_000);
+    completed(&mut a, json!({ "id": "t0", "status": "completed" }));
+    let before = a.meta.cost;
+    started(&mut a, "t1");
+    usage(&mut a, "thr", 1_500_000, 400_000, 101_000);
+    // A subagent's thread counts in its parent's turn.
+    usage(&mut a, "child", 1_000_000, 0, 100_000);
+    assert_eq!((a.context_tokens, a.context_window), (1000, 258_400));
+    let fx = completed(&mut a, json!({ "id": "t1", "status": "completed" }));
+    let row = &fx.turns[0];
+    assert_eq!(
+        (row.input, row.cache, row.output),
+        (1_600_000, 400_000, 200_000)
+    );
+    // gpt-6-luna: $0.10 a million of input, $0.01 cached, $0.50 of output.
+    let cost = 1.6 * 0.10 + 0.4 * 0.01 + 0.2 * 0.50;
+    assert!((row.cost - cost).abs() < 1e-9, "{}", row.cost);
+    let turn = last(&mut a, "turn");
+    assert!((turn["cost"].as_f64().unwrap() - cost).abs() < 1e-9);
+    assert!((a.meta.cost - before - cost).abs() < 1e-9);
+    // A model OpenAI's grid does not price (a Claude model left by a handover) costs nothing told,
+    // its tokens counted all the same.
+    a.meta.model = "opus".into();
+    started(&mut a, "t2");
+    usage(&mut a, "thr", 2_500_000, 400_000, 101_000);
+    let fx = completed(&mut a, json!({ "id": "t2", "status": "completed" }));
+    assert_eq!((fx.turns[0].input, fx.turns[0].cost), (1_000_000, 0.0));
+}

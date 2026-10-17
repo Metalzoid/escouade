@@ -31,6 +31,9 @@ const requests = (app: App, method: string) =>
 async function newCodexAgent(page: Page) {
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
   await page.getByRole('menuitem', { name: 'Nouvel agent sur Codex' }).click();
+  // Shown before anything is typed: a message typed sooner would go to the agent shown before it.
+  await expect(page.locator('main.conv header.head')).toContainText('Codex');
+  await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Codex…' })).toBeVisible();
 }
 
 test.describe('an agent on Codex', () => {
@@ -222,5 +225,39 @@ test.describe('a voice conversation with an agent on Codex', () => {
       })
       .toEqual(["C'est noté, je m'en occupe avec Codex."]);
     await page.keyboard.press('Escape');
+  });
+
+  test('has the cost of its turns estimated, and an account of its own added and signed in by codex login (ESC-38)', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newCodexAgent(page);
+    await send(page, 'bonjour Codex');
+    // Codex tells no cost: Escouade's estimate, said so.
+    const done = page.getByTestId('turn-done');
+    await expect(done).toContainText(/≈\s.*\$ estimé/);
+    await expect(done.getByText(/estimé/)).toHaveAttribute('data-tip', /Coût estimé/);
+
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await settings.getByRole('button', { name: 'Ajouter un compte…' }).click();
+    const add = page.getByRole('dialog', { name: 'Ajouter un compte Claude Code' });
+    await add.getByRole('combobox', { name: 'Harness' }).selectOption('codex');
+    const codex = page.getByRole('dialog', { name: 'Ajouter un compte Codex' });
+    await expect(codex.getByText(/La connexion \(auth\.json\) n’est jamais copiée/)).toBeVisible();
+    await codex.getByRole('textbox', { name: 'Nom' }).fill('Travail');
+    await codex.getByRole('button', { name: 'Créer et se connecter' }).click();
+    // `codex login` in a terminal, in the account's own folder: signed in once its auth.json is there.
+    const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Travail »' });
+    await expect(signIn.getByRole('status')).toHaveText('Connecté au compte codex@example.com', { timeout: 20_000 });
+    const folder = path.join(app.root, 'data', 'codex', 'travail');
+    expect(fs.existsSync(path.join(folder, 'auth.json'))).toBe(true);
+    const login = codexLog(app).find((e: any) => e.login) as any;
+    expect(login.login).toEqual({ argv: ['login'], codexHome: folder });
+    await signIn.getByRole('button', { name: 'Terminé' }).click();
+    // Listed with Codex's Principal, which it brought.
+    const list = page.getByRole('dialog', { name: 'Réglages' }).getByRole('list', { name: 'Comptes Codex' });
+    await expect(list.getByRole('listitem')).toHaveCount(2);
+    await expect(list.getByRole('listitem', { name: 'Travail' })).toContainText('Connecté · codex@example.com');
   });
 });

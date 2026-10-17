@@ -235,7 +235,8 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
         rt.meta.session_id = None;
     }
     h.turn(&id, "Second").await;
-    // Codex tells no cost: its tokens count the turn.
+    // Codex tells no cost, and its model here is a Claude one, which OpenAI's grid does not price
+    // (`pricing::estimate_openai`): its tokens count the turn.
     let codex_counted = |h: &Harness| {
         h.core
             .stats

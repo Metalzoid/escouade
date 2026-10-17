@@ -235,22 +235,28 @@ pub fn claude_found(core: CoreState) -> ClaudeFound {
 
 // ---------- Claude accounts ----------
 
-/// The items of Principal's folder a new account may share (those it has).
+/// The items of the folder of the Principal of `engine` (Claude Code's by default) a new account
+/// of it may share (those it has).
 #[tauri::command(async)]
-pub fn account_shareable(core: CoreState) -> Vec<String> {
-    core.claude_shareable()
+pub fn account_shareable(core: CoreState, engine: Option<EngineId>) -> Vec<String> {
+    core.shareable(engine.unwrap_or(EngineId::Claude))
 }
 
-/// « Créer et se connecter »: a new account, its folder made and the items `share` of Principal's
-/// linked or copied into it (`mode`), saved last in the settings.
+/// « Créer et se connecter »: a new account of `engine` (Claude Code by default), its folder made
+/// and the items `share` of its Principal's linked or copied into it (`mode`), saved last in the
+/// settings.
 #[tauri::command(async)]
 pub fn account_create(
     core: CoreState,
     name: String,
     share: Vec<String>,
     mode: ShareMode,
+    engine: Option<EngineId>,
 ) -> Res<ClaudeAccount> {
-    let r = core.create_claude_account(&name, &share, mode).map_err(err);
+    let engine = engine.unwrap_or(EngineId::Claude);
+    let r = core
+        .create_account(engine, &name, &share, mode)
+        .map_err(err);
     counted(&core, Event::AccountCreated, r)
 }
 

@@ -14,6 +14,8 @@ mod closed;
 #[cfg(test)]
 mod closed_tests;
 #[cfg(test)]
+mod codex_tests;
+#[cfg(test)]
 mod codex_tui_tests;
 mod commands;
 mod conv;

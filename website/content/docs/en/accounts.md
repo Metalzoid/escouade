@@ -27,6 +27,8 @@ This page covers how to use accounts; the full list of the tab’s options is in
 4. Choose what the account takes from Main, under “Share with Main” (see below).
 5. Click “Create and sign in”. The account is created, active and placed last in the list, then the window opens its sign-in.
 
+Once two harnesses are installed, the window starts with “Harness”: the account’s harness, Claude Code or Codex (see [Codex accounts](#codex-accounts)).
+
 Escouade creates a folder for the account under `~/.escouade/claude/`, named after the account. It never reuses the folder of a removed account: a new account always gets a fresh folder.
 
 > [!NOTE]
@@ -65,6 +67,17 @@ After “Create and sign in”, the window changes its title (“Sign in to the 
 If Claude Code stops before the sign-in, the window says “Claude Code stopped before signing in.” and offers “Restart”. If you close the window along the way, the account stays in the list, “Not signed in”: pick it up again with “Sign in…”.
 
 “Sign in…” also reconnects an account whose sign-in has expired. When the account is signed in and up to date, the button reads “Sign in again…”: handy to switch to another claude.ai account.
+
+## Codex accounts
+
+A Codex account is Codex started with a folder of its own (the `CODEX_HOME` variable): its ChatGPT sign-in, its sessions and its quota. They are managed in the “Codex accounts” group of the tab, as Claude Code’s are.
+
+- Its “Main” is your usual Codex, `~/.codex`: Escouade starts it without touching `CODEX_HOME`. It shows with the first Codex agent or ticket, or with the first Codex account added.
+- “Add an account…”, harness “Codex”, makes its folder under `~/.escouade/codex/`. It may take from Main `config.toml` (its settings, the Windows sandbox and the trust of your folders included), `AGENTS.md` and its `skills`, `prompts` and `rules` folders, linked or copied, as a Claude Code account does.
+- The sign-in (`auth.json`) is never copied: its token changes each time it is renewed, and two folders using it would sign each other out.
+- “Create and sign in” opens a terminal running `codex login` in the account’s folder: the browser opens on ChatGPT’s sign-in. As soon as `auth.json` is written, the window says “Signed in as” followed by the ChatGPT account’s address.
+
+A Codex account’s quota comes from Codex itself: from its agents while they run, else from an app-server of the account started every 5 minutes just long enough to read it, with no turn nor conversation. Its windows are labeled by their length (“5h”, “W”, or a single “30d” window on the free plan). A turn stopped by the limit waits for the reset then goes on by itself, and new Codex agents go to the next Codex account under the threshold, as with Claude Code. Resuming a Codex agent on another account isn’t offered: it waits for its reset, or goes on on another harness.
 
 ## Manage the accounts
 

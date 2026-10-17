@@ -47,7 +47,7 @@ Escouade lance l’app-server de Codex (`codex app-server`), un par agent, par s
 | Auto | Le relecteur automatique de Codex décide des demandes à ta place. |
 | Bypass | Codex ne demande rien et sort de son bac à sable. |
 
-Une demande de Codex a trois boutons : « Autoriser », « Pour cette session » (la même demande ne revient plus pendant la session) et « Refuser ». Un message envoyé pendant qu’il travaille entre dans son tour au lieu d’attendre. Codex ne lit pas les PDF. Ses comptes multiples, son quota hors d’un agent et son coût estimé arrivent ensuite.
+Une demande de Codex a trois boutons : « Autoriser », « Pour cette session » (la même demande ne revient plus pendant la session) et « Refuser ». Un message envoyé pendant qu’il travaille entre dans son tour au lieu d’attendre. Codex ne lit pas les PDF. Ses comptes s’ajoutent comme ceux de Claude Code (voir [plusieurs comptes](accounts#comptes-codex)), son quota s’affiche dans la barre de statut, et le coût de ses tours est estimé d’après le tarif public d’OpenAI.
 
 ## Installer Escouade
 

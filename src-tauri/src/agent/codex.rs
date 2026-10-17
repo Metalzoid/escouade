@@ -807,6 +807,14 @@ impl AgentRt {
         self.codex.tokens_at_start = self.codex.tokens.clone();
         let fresh = used.input.saturating_sub(used.cached);
         let tokens = fresh + used.cached + used.output;
+        // Codex tells no cost: estimated from the public prices of OpenAI's models ('estimé').
+        let usage = crate::pricing::Usage {
+            input: fresh,
+            cache_read: used.cached,
+            output: used.output,
+            ..Default::default()
+        };
+        let cost = crate::pricing::estimate_openai(&self.meta.model, &usage).unwrap_or(0.0);
         if tokens > 0 {
             fx.turns.push(TurnRow {
                 engine: self.meta.engine,
@@ -814,9 +822,10 @@ impl AgentRt {
                 input: fresh,
                 cache: used.cached,
                 output: used.output,
-                cost: 0.0,
+                cost,
             });
             self.meta.tokens += tokens;
+            self.meta.cost += cost;
         }
         if limited {
             fx.limited = Some(self.codex.limit_resets.take());
@@ -845,7 +854,7 @@ impl AgentRt {
         }
         let item = json!({
             "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": turn["durationMs"],
-            "cost": 0.0, "tokens": tokens, "isError": failed, "interrupted": interrupted,
+            "cost": cost, "tokens": tokens, "isError": failed, "interrupted": interrupted,
             "error": message, "limited": limited, "engine": self.meta.engine,
         });
         self.append(item, fx);

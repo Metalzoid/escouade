@@ -6,6 +6,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu } from '../../lib/menu.svelte';
+  import { estimatedBy } from '../../lib/spend';
   import { app } from '../../lib/state.svelte';
   import type { FileEdit } from '../../lib/tools';
   import type { Agent, EngineId, TurnItem } from '../../lib/types';
@@ -39,6 +40,9 @@
   // The harness it left, once its quota came back: offered, never taken by itself.
   const back = $derived(latest && !working && !agent.archived ? backTarget(agent) : null);
   const mark = $derived(marked ? t('handover.turnOn', { harness: engineName(item.engine ?? 'claude') }) : '');
+  // A harness that tells no cost (Codex): Escouade's estimate, said so.
+  const estimated = $derived(estimatedBy(item.engine ?? agent.engine));
+  const cost = $derived(estimated ? `≈ ${fUsd(item.cost)} ${t('stats.cost.estimated')}` : fUsd(item.cost));
 
   function continueOn(engine: EngineId) {
     app.run(api.continueOnEngine(agent.id, engine));
@@ -117,7 +121,7 @@
     <div class="title ok"><span class="check">✓</span>{t('conv.turn.done')}</div>
     <div class="stats mono">
       <span>{fDur(item.durationMs ?? 0)}</span><span>{t('conv.turn.tokens', { tokens: fTok(item.tokens) })}</span><span
-        >{fUsd(item.cost)}</span
+        use:tip={estimated ? t('stats.cost.estimatedHint') : undefined}>{cost}</span
       ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>{#if mark}<span>{mark}</span>{/if}
     </div>
     {#if edits.length}
@@ -144,9 +148,9 @@
 {:else}
   <div class="sep mono">
     <span class="line"></span>
-    {item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} · {fUsd(
-      item.cost,
-    )}{mark ? ` · ${mark}` : ''}
+    {item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} · {cost}{mark
+      ? ` · ${mark}`
+      : ''}
     <span class="line"></span>
   </div>
   {#if back}<div class="back-alone">{@render backRow()}</div>{/if}

@@ -210,14 +210,18 @@ export function criteriaMet(ticket: Ticket): number {
  */
 export function ticketSpent(ticket: Ticket, agents: Record<string, Agent>): Spent | null {
   const sum: Spent = { tokens: 0, cost: 0, estimated: false };
+  // A turn running: something is used already, its cost estimated.
+  let running = false;
   for (const a of Object.values(agents)) {
     if (a.ticketId !== ticket.id) continue;
     const s = spent(a);
     sum.tokens += s.tokens;
     sum.cost += s.cost;
     sum.estimated ||= s.estimated;
+    if (s.byHarness) sum.byHarness = true;
+    running ||= (a.liveTokens ?? 0) > 0;
   }
-  return sum.cost > 0 || sum.estimated ? sum : null;
+  return sum.cost > 0 || running ? sum : null;
 }
 
 /** "n boucles · coût" of a finished ticket: every loop, those of the rounds it was sent back for included (a ticket saved before they were counted: its last round's). */

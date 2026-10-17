@@ -3,7 +3,8 @@
 // streams of tests/fixtures/codex/ show it: what the conformance bench (src-tauri/src/engine/codex/bench.rs)
 // and the end-to-end tests drive instead of Codex.
 //
-// `codex --version` says its version; `codex app-server …` serves; anything else is its interface (« Vue Codex »,
+// `codex --version` says its version; `codex exec` and `codex login` play theirs (below); `codex app-server …`
+// serves; anything else is its interface (« Vue Codex »,
 // tests/fixtures/fake-codex-tui.mjs). The app-server lists the hooks of its `-c hooks.<Event>=…` options
 // (`hooks/list`: their keys and hashes, trusted when a `-c hooks.state=…` option says so), and writes the
 // rollout of a thread it starts or forks (its `session_meta`), where its interface finds it to resume it.
@@ -43,23 +44,97 @@ if (argv.includes('--version')) {
   process.stdout.write(`codex-cli ${VERSION}\n`);
   process.exit(0);
 }
+const LOG_FILE = process.env.FAKE_CODEX_LOG;
+const logLine = (entry) => LOG_FILE && fs.appendFileSync(LOG_FILE, JSON.stringify(entry) + '\n');
+if (argv[0] === 'exec') {
+  // `codex exec … -` (the texts written by a model): its question read from its input, its answer the last
+  // message of its `--json` stream, « Réponse de Codex : <the question's last line> »; a question that says
+  // "échoue" fails its turn as Codex 0.163.0 does.
+  let question = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (d) => (question += d));
+  process.stdin.on('end', () => {
+    logLine({ exec: { argv, cwd: process.cwd(), codexHome: process.env.CODEX_HOME ?? null, question } });
+    // Also in its account's folder, for the tests of the core (which give the fake no variable of its own).
+    if (process.env.CODEX_HOME) {
+      fs.mkdirSync(process.env.CODEX_HOME, { recursive: true });
+      fs.appendFileSync(path.join(process.env.CODEX_HOME, 'exec.jsonl'), JSON.stringify({ argv, question }) + '\n');
+    }
+    const say = (v) => process.stdout.write(JSON.stringify(v) + '\n');
+    say({ type: 'thread.started', thread_id: `exec-${process.pid}` });
+    say({ type: 'turn.started' });
+    if (question.includes('échoue')) {
+      const api = { type: 'error', status: 400, error: { type: 'invalid_request_error', message: 'Le modèle a refusé.' } };
+      say({ type: 'turn.failed', error: { message: JSON.stringify(api) } });
+      process.exit(1);
+    }
+    say({ type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'Je réfléchis.' } });
+    const last = question.trim().split('\n').at(-1);
+    say({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: `Réponse de Codex : ${last}` } });
+    say({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 0, output_tokens: 5 } });
+    process.exit(0);
+  });
+} else if (argv[0] === 'login') {
+  // `codex login` (« Ajouter un compte »): signed in at once, `auth.json` written in CODEX_HOME as Codex writes
+  // it (its id_token says the email), after a line of its own. FAKE_CODEX_LOGIN_WAIT: it waits for a line typed
+  // first (to try the terminal).
+  const home = process.env.CODEX_HOME || path.join(process.env.USERPROFILE || process.env.HOME || '.', '.codex');
+  logLine({ login: { argv, codexHome: process.env.CODEX_HOME ?? null } });
+  process.stdout.write('Starting local login server on http://localhost:1455.\r\n');
+  const done = () => {
+    const b64 = (v) => Buffer.from(JSON.stringify(v)).toString('base64url');
+    const idToken = `${b64({ alg: 'none' })}.${b64({ email: process.env.FAKE_CODEX_EMAIL || 'codex@example.com' })}.sig`;
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(
+      path.join(home, 'auth.json'),
+      JSON.stringify({
+        auth_mode: 'chatgpt',
+        OPENAI_API_KEY: null,
+        tokens: { id_token: idToken, access_token: 'acces', refresh_token: 'rafraichi', account_id: 'compte-1' },
+        last_refresh: new Date().toISOString(),
+      }),
+    );
+    process.stdout.write('Successfully logged in\r\n');
+    process.exit(0);
+  };
+  if (process.env.FAKE_CODEX_LOGIN_WAIT) process.stdin.once('data', done);
+  else done();
+}
+// `exec` and `login` end the process themselves: neither the interface nor the app-server below is played.
+if (argv[0] === 'exec' || argv[0] === 'login') await new Promise(() => {});
+
 const LOG = process.env.FAKE_CODEX_LOG;
 const log = (entry) => LOG && fs.appendFileSync(LOG, JSON.stringify(entry) + '\n');
-log({
-  launch: {
-    argv,
-    cwd: process.cwd(),
-    pid: process.pid,
-    codexHome: process.env.CODEX_HOME ?? null,
-    token: !!process.env.ESCOUADE_MCP_TOKEN,
-    tui: argv[0] !== 'app-server',
-  },
-});
+const launch = {
+  argv,
+  cwd: process.cwd(),
+  pid: process.pid,
+  codexHome: process.env.CODEX_HOME ?? null,
+  token: !!process.env.ESCOUADE_MCP_TOKEN,
+  tui: argv[0] !== 'app-server',
+};
+log({ launch });
 const ui = await import('./fake-codex-tui.mjs');
 if (argv[0] !== 'app-server') {
   ui.tui(argv, log);
   // The rest is the app-server's: never reached.
   await new Promise(() => {});
+}
+// Also in its account's folder (`<CODEX_HOME>/launches.jsonl`), for the tests of the core, which give the fake no
+// variable of its own; and that folder's `quota.json` ({"rateLimits": …}), when there is one, is its quota.
+const HOME = process.env.CODEX_HOME;
+if (HOME) {
+  fs.mkdirSync(HOME, { recursive: true });
+  // With the token itself, which the tests let in the server.
+  const own = { ...launch, escouadeToken: process.env.ESCOUADE_MCP_TOKEN ?? null };
+  fs.appendFileSync(path.join(HOME, 'launches.jsonl'), JSON.stringify(own) + '\n');
+}
+function ownQuota() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(HOME, 'quota.json'), 'utf8')).rateLimits;
+  } catch {
+    return null;
+  }
 }
 
 const out = (msg) => process.stdout.write(JSON.stringify(msg) + '\n');
@@ -513,7 +588,7 @@ function handle(msg) {
     case 'model/list':
       return reply({ data: MODELS, nextCursor: null });
     case 'account/rateLimits/read':
-      return reply({ rateLimits: RATE(usage || 12), rateLimitsByLimitId: {} });
+      return reply({ rateLimits: (!usage && ownQuota()) || RATE(usage || 12), rateLimitsByLimitId: {} });
     case 'hooks/list': {
       const trust = ui.trustOf(argv);
       const hooks = ui.hooksOf(argv).map((h, i) => ({

@@ -4,6 +4,7 @@
 import { quotaUntil } from './board';
 import { engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
+import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
 import { app } from './state.svelte';
 import type { SettingsTab } from './settings.svelte';
@@ -61,8 +62,8 @@ export function statusEngine(): EngineId {
   return app.agent?.engine ?? app.project?.engine ?? defaultEngine();
 }
 
-/** The files, then the folders, of Principal's that a new account may share (`accounts::SHARED_FILES`, `SHARED_DIRS`). */
-export const SHARED_FILES = ['settings.json', 'CLAUDE.md'];
+/** The files a new account may share of its Principal's folder, Claude Code's then Codex's (`accounts::SHARED_FILES`, `CODEX_SHARED_FILES`): the other items are folders. */
+export const SHARED_FILES = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md'];
 
 /**
  * The account's name as shown. Principal is named in the language of its first save: while the user has not renamed it,
@@ -258,7 +259,7 @@ export interface QuotaRow {
   /** Why it is dimmed: switched off, not signed in, sign-in expired. */
   reasons: string[];
   /** What its turns cost today, the ones running now included (an estimate): the status bar's total, account by account. */
-  today: { cost: number; estimated: boolean };
+  today: { cost: number; estimated: boolean; byHarness?: boolean };
 }
 
 /** What the turns running on the account's agents cost so far: archived agents too, as the status bar counts them. */
@@ -303,7 +304,8 @@ export function quotaRows(now: number): QuotaRow[] {
     const threshold = app.settings.quotaPause;
     const over = account.active && anyOver(usage, threshold, now);
     const live = liveCostOf(account.id);
-    const today = { cost: (usage?.todayCost ?? 0) + live, estimated: live > 0 };
+    const byHarness = estimatedBy(engineOfAccount(account));
+    const today = { cost: (usage?.todayCost ?? 0) + live, estimated: byHarness || live > 0, ...(byHarness ? { byHarness } : {}) };
     const current = account.id === app.usage.current[engineOfAccount(account)];
     return { account, usage, current, over, reasons, today };
   });

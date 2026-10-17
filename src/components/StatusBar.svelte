@@ -6,7 +6,7 @@
   import Rich from '../lib/i18n/Rich.svelte';
   import { gitSync, syncInfo, type SyncOp } from '../lib/git-sync.svelte';
   import { api } from '../lib/ipc';
-  import { estimateHint, fSpentUsd } from '../lib/spend';
+  import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
@@ -14,6 +14,11 @@
   import { tip } from '../lib/tip';
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
+  // The day's cost: an estimate while a turn runs, or once a harness that tells none (Codex) spent some of it.
+  const today = $derived.by(() => {
+    const byHarness = app.usage.accounts.some((u) => u.todayCost > 0 && estimatedBy(u.engine));
+    return { cost: app.usage.todayCost + app.liveCost, estimated: byHarness || app.liveCost > 0, byHarness };
+  });
   const running = $derived(agents.filter((a) => a.status === 'running').length);
   const waiting = $derived(agents.filter((a) => a.status === 'waiting').length);
   const done = $derived(agents.filter((a) => a.status === 'done').length);
@@ -166,9 +171,9 @@
       <span class="it group">{@render quotas(true)}</span>
     {/if}
     <span class="vsep"></span>
-    <span class="it" use:tip={app.liveCost > 0 ? estimateHint() : undefined}
+    <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}
       >{t('shell.status.today')}
-      <span class="v strong">{fSpentUsd({ cost: app.usage.todayCost + app.liveCost, estimated: app.liveCost > 0 })}</span></span
+      <span class="v strong">{fSpentUsd(today)}</span></span
     >
     {#if repo}
       <span class="vsep"></span>

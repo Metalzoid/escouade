@@ -676,3 +676,97 @@ async fn turned_off_the_agents_already_running_lose_the_tools_at_once_and_get_th
     assert!(!escouade_next(&h, &id));
     h.core.mcp.stop();
 }
+
+/// The launches of the fake `codex` with the folder `dir` (`<CODEX_HOME>/launches.jsonl`).
+fn codex_launches(dir: &Path) -> Vec<Value> {
+    std::fs::read_to_string(dir.join("launches.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_environment_or_refused_it(
+) {
+    let h = harness("esc38-mcp-codex");
+    let (p, _) = h.project(false).await;
+    let home = h.dir.join("codex-work");
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "codex-work".into(),
+            name: "Codex".into(),
+            engine: EngineId::Codex,
+            config_dir: home.to_string_lossy().into(),
+            claude_path: crate::engine::fake_codex(),
+            active: true,
+            projects: Vec::new(),
+        })
+    });
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            crate::core::AgentOptions {
+                engine: Some(EngineId::Codex),
+                account: Some("codex-work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let argv_of = |l: &Value| -> Vec<String> {
+        l["argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a.as_str().unwrap().to_string())
+            .collect()
+    };
+    // « Claude et les agents peuvent piloter Escouade » on: its URL among the options, its token in
+    // the environment alone, and the server lets it in.
+    drives(&h, true);
+    settled(&h, &id).await;
+    let port = h.core.mcp.status().port;
+    h.turn(&id, "bonjour").await;
+    let launch = codex_launches(&home).pop().unwrap();
+    let argv = argv_of(&launch);
+    assert!(
+        argv.contains(&format!(
+            "mcp_servers.escouade.url=http://127.0.0.1:{port}/mcp"
+        )),
+        "{argv:?}"
+    );
+    assert!(
+        argv.contains(&"mcp_servers.escouade.bearer_token_env_var=ESCOUADE_MCP_TOKEN".to_string())
+    );
+    let token = launch["escouadeToken"]
+        .as_str()
+        .expect("a token")
+        .to_string();
+    assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
+    assert!(admitted(port, &token).await);
+    // Off: nothing of the server, and no token.
+    drives(&h, false);
+    settled(&h, &id).await;
+    h.turn(&id, "encore").await;
+    let launch = codex_launches(&home).pop().unwrap();
+    assert!(launch["escouadeToken"].is_null());
+    assert!(!argv_of(&launch).iter().any(|a| a.contains("mcp_servers")));
+    // An entry `escouade` of the user's own config of Codex is turned off.
+    std::fs::write(
+        home.join("config.toml"),
+        "[mcp_servers.escouade]\nurl = \"http://127.0.0.1:1/mcp\"\n",
+    )
+    .unwrap();
+    settled(&h, &id).await;
+    h.turn(&id, "et encore").await;
+    let argv = argv_of(&codex_launches(&home).pop().unwrap());
+    assert!(
+        argv.contains(&"mcp_servers.escouade.enabled=false".to_string()),
+        "{argv:?}"
+    );
+    h.core.stop_for_good();
+}

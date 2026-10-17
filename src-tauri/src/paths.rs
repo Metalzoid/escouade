@@ -397,6 +397,15 @@ impl DataDir {
         self.0.join("claude")
     }
 
+    /// The folders of the accounts of `engine` made in the settings: `claude/<name>`,
+    /// `codex/<name>` (each its `CODEX_HOME`).
+    pub fn accounts_of(&self, engine: crate::model::EngineId) -> PathBuf {
+        match engine {
+            crate::model::EngineId::Claude => self.claude_accounts(),
+            e => self.0.join(e.as_str()),
+        }
+    }
+
     /// The script the sign-in of a Claude account opens its browser with, on Unix
     /// (`pty::open_browser_apart`).
     pub fn browser_opener(&self) -> PathBuf {

@@ -39,6 +39,45 @@ pub const SHARED_DIRS: [&str; 6] = [
     "output-styles",
 ];
 
+/// What a new account of Codex may share of its Principal's folder (`~/.codex`): its settings
+/// (`config.toml`, which keeps its Windows sandbox and the trust of its folders) and instructions,
+/// then its skills, prompts and rules. Never its sign-in (`auth.json`: its refresh token turns, two
+/// folders using it would sign each other out), nor its sessions and state.
+pub const CODEX_SHARED_FILES: [&str; 2] = ["config.toml", "AGENTS.md"];
+pub const CODEX_SHARED_DIRS: [&str; 3] = ["skills", "prompts", "rules"];
+
+/// How the accounts of a harness keep their folder: where its Principal's is in the home folder,
+/// the variable that moves it, what a new account may share of it, and the arguments of its
+/// program that sign in.
+pub struct Store {
+    pub home: &'static str,
+    pub var: &'static str,
+    pub files: &'static [&'static str],
+    pub dirs: &'static [&'static str],
+    pub login: &'static [&'static str],
+}
+
+/// The `Store` of the accounts of `engine`: Codex's, else Claude Code's (the harnesses not
+/// written run Claude Code, `engine::by_id`).
+pub fn store(engine: EngineId) -> Store {
+    match engine {
+        EngineId::Codex => Store {
+            home: ".codex",
+            var: "CODEX_HOME",
+            files: &CODEX_SHARED_FILES,
+            dirs: &CODEX_SHARED_DIRS,
+            login: &["login"],
+        },
+        _ => Store {
+            home: ".claude",
+            var: CONFIG_DIR_VAR,
+            files: &SHARED_FILES,
+            dirs: &SHARED_DIRS,
+            login: &[],
+        },
+    }
+}
+
 /// How a new account shares Principal's items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -428,25 +467,26 @@ pub(crate) fn claude_home(account: &Account, settings: &Settings) -> (Option<Str
 
 /// The configuration folder the account's Claude Code reads, seen from the app: its own, or for
 /// Principal (no folder) the app's `CLAUDE_CONFIG_DIR` when it has one, which its processes
-/// inherit, else `~/.claude` (in Linux for a `claude` of WSL: `claude_home`). A Principal of
-/// Codex: the app's `CODEX_HOME`, else `~/.codex`.
+/// inherit, else `~/.claude` (in Linux for a `claude` of WSL: `claude_home`). For another harness,
+/// the same with its own variable and folder (Codex: `CODEX_HOME`, `~/.codex`).
 pub fn config_dir(account: &Account, settings: &Settings) -> PathBuf {
-    if account.engine == EngineId::Codex && own_dir(account).is_none() {
-        return codex_home_with(
-            std::env::var("CODEX_HOME").ok().as_deref(),
-            &dirs::home_dir().unwrap_or_default(),
-        );
+    if account.engine != EngineId::Claude {
+        let store = store(account.engine);
+        let (_, home) = app_env();
+        // Never the machine user's in the tests (as `app_env`).
+        let env = (!cfg!(test))
+            .then(|| std::env::var(store.var).ok())
+            .flatten();
+        return match own_dir(account) {
+            Some(dir) => PathBuf::from(dir),
+            None => match env.filter(|v| !v.is_empty()) {
+                Some(v) => PathBuf::from(v),
+                None => home.join(store.home),
+            },
+        };
     }
     let (env, home) = claude_home(account, settings);
     config_dir_with(account, env.as_deref(), &home)
-}
-
-/// The folder of Codex's Principal, the app's `CODEX_HOME` (`env`) and home folder given.
-pub fn codex_home_with(env: Option<&str>, home: &Path) -> PathBuf {
-    match env.filter(|v| !v.trim().is_empty()) {
-        Some(v) => PathBuf::from(v),
-        None => home.join(".codex"),
-    }
 }
 
 /// `config_dir` with the app's `CLAUDE_CONFIG_DIR` (`env`) and home folder given.
@@ -522,10 +562,55 @@ pub fn email_in(file: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The sign-in of a Codex account, as its `auth.json` keeps it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodexSignIn {
+    /// The email of its ChatGPT account (in its `id_token`), none signed in with an API key.
+    pub email: Option<String>,
+    /// What tells one sign-in from another: a hash of its `id_token` (or key), never the token.
+    pub stamp: Option<String>,
+}
+
+/// The sign-in of the Codex account of folder `dir` (`<dir>/auth.json`: tokens of ChatGPT, or an
+/// API key); None when it has none.
+pub fn codex_sign_in(dir: &Path) -> Option<CodexSignIn> {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+    let text = std::fs::read_to_string(dir.join("auth.json")).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    let id_token = v["tokens"]["id_token"].as_str().filter(|t| !t.is_empty());
+    let key = v["OPENAI_API_KEY"].as_str().filter(|k| !k.is_empty());
+    let secret = id_token.or(key)?;
+    let email = id_token.and_then(|t| {
+        let payload = t.split('.').nth(1)?;
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(payload.trim_end_matches('='))
+            .ok()?;
+        let claims: Value = serde_json::from_slice(&bytes).ok()?;
+        claims["email"]
+            .as_str()
+            .filter(|e| !e.is_empty())
+            .map(str::to_string)
+    });
+    let hash = sha2::Sha256::digest(secret.as_bytes());
+    Some(CodexSignIn {
+        email,
+        stamp: Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect()),
+    })
+}
+
 /// The items of `SHARED_FILES` and `SHARED_DIRS` that Principal's folder `dir` has, files first.
+#[cfg(test)]
 pub fn shareable(dir: &Path) -> Vec<String> {
-    let files = SHARED_FILES.iter().filter(|n| dir.join(n).is_file());
-    let dirs = SHARED_DIRS.iter().filter(|n| dir.join(n).is_dir());
+    shareable_of(EngineId::Claude, dir)
+}
+
+/// The items a new account of `engine` may share (`store`) that its Principal's folder `dir` has,
+/// files first.
+pub fn shareable_of(engine: EngineId, dir: &Path) -> Vec<String> {
+    let store = store(engine);
+    let files = store.files.iter().filter(|n| dir.join(n).is_file());
+    let dirs = store.dirs.iter().filter(|n| dir.join(n).is_dir());
     files.chain(dirs).map(|n| n.to_string()).collect()
 }
 
@@ -569,6 +654,7 @@ fn names_of(a: &Account) -> Vec<String> {
 /// it and taken by no account (`settings`) nor folder there, with the items `share` of Principal's
 /// folder (`principal_dir`) linked or copied into it (`mode`). Its sign-in and `.claude.json`
 /// are its own: Claude Code makes them when it signs in.
+#[cfg(test)]
 pub fn create(
     settings: &Settings,
     root: &Path,
@@ -577,6 +663,30 @@ pub fn create(
     share: &[String],
     mode: ShareMode,
 ) -> Result<Account> {
+    create_of(
+        EngineId::Claude,
+        settings,
+        root,
+        principal_dir,
+        name,
+        share,
+        mode,
+    )
+}
+
+/// `create` for an account of `engine`, sharing what its harness lets share (`store`): its folder
+/// made under `root` (`<data folder>/codex` for Codex). Its sign-in is its own: its harness makes
+/// it when it signs in (Codex's `auth.json` is never shared).
+pub fn create_of(
+    engine: EngineId,
+    settings: &Settings,
+    root: &Path,
+    principal_dir: &Path,
+    name: &str,
+    share: &[String],
+    mode: ShareMode,
+) -> Result<Account> {
+    let store = store(engine);
     let name = name.trim();
     if name.is_empty() {
         bail!(tr!("Donne un nom au compte.", "Give the account a name."));
@@ -592,7 +702,7 @@ pub fn create(
     // Every item checked before anything is made: never the sign-in, nor a path out of the folder.
     if let Some(n) = share
         .iter()
-        .find(|n| !SHARED_FILES.contains(&n.as_str()) && !SHARED_DIRS.contains(&n.as_str()))
+        .find(|n| !store.files.contains(&n.as_str()) && !store.dirs.contains(&n.as_str()))
     {
         bail!(tr!(
             "« {n} » ne se partage pas entre comptes.",
@@ -618,7 +728,7 @@ pub fn create(
     std::fs::create_dir_all(root)?;
     let dir = std::path::absolute(root.join(&id))?;
     std::fs::create_dir(&dir)?;
-    if let Err(e) = share_items(principal_dir, &dir, share, mode) {
+    if let Err(e) = share_items(&store, principal_dir, &dir, share, mode) {
         // Its links go with it, never what they lead to.
         let _ = std::fs::remove_dir_all(&dir);
         return Err(e);
@@ -626,7 +736,7 @@ pub fn create(
     Ok(Account {
         id,
         name: name.to_string(),
-        engine: EngineId::Claude,
+        engine,
         config_dir: dir.to_string_lossy().into_owned(),
         claude_path: String::new(),
         active: true,
@@ -635,7 +745,13 @@ pub fn create(
 }
 
 /// The items `names` of `from` (Principal's folder) linked or copied into `to`: those it has.
-fn share_items(from: &Path, to: &Path, names: &[String], mode: ShareMode) -> Result<()> {
+fn share_items(
+    store: &Store,
+    from: &Path,
+    to: &Path,
+    names: &[String],
+    mode: ShareMode,
+) -> Result<()> {
     // A junction cannot lead into a distribution of WSL (a `claude` of WSL's folder).
     let mode = if crate::wsl::on_share(from) {
         ShareMode::Copy
@@ -644,7 +760,7 @@ fn share_items(from: &Path, to: &Path, names: &[String], mode: ShareMode) -> Res
     };
     for name in names {
         let (src, dst) = (from.join(name), to.join(name));
-        let done = if SHARED_DIRS.contains(&name.as_str()) {
+        let done = if store.dirs.contains(&name.as_str()) {
             if !src.is_dir() {
                 continue;
             }
@@ -1067,26 +1183,62 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The items of Principal's folder a new account may share.
+    #[cfg(test)]
     pub fn claude_shareable(&self) -> Vec<String> {
+        self.shareable(EngineId::Claude)
+    }
+
+    /// The items of the folder of the Principal of `engine` a new account of it may share.
+    pub fn shareable(&self, engine: EngineId) -> Vec<String> {
         let settings = self.settings.read().clone();
-        shareable(&config_dir(&get(&settings, PRINCIPAL), &settings))
+        shareable_of(
+            engine,
+            &config_dir(&get(&settings, &principal_id(engine)), &settings),
+        )
     }
 
     /// « Créer et se connecter »: a new account (`create`), its folder in the data folder, last in
     /// the order and active.
+    #[cfg(test)]
     pub fn create_claude_account(
         self: &Arc<Self>,
         name: &str,
         share: &[String],
         mode: ShareMode,
     ) -> Result<Account> {
-        let root = self.data.claude_accounts();
+        self.create_account(EngineId::Claude, name, share, mode)
+    }
+
+    /// « Créer et se connecter » for an account of `engine` (`create_of`), its folder in the data
+    /// folder's of its harness (`claude`, `codex`), last in the order and active. The first of a
+    /// harness that never served brings its Principal with it (`normalize`).
+    pub fn create_account(
+        self: &Arc<Self>,
+        engine: EngineId,
+        name: &str,
+        share: &[String],
+        mode: ShareMode,
+    ) -> Result<Account> {
+        let root = self.data.accounts_of(engine);
         let (made, _) = self.change_claude_accounts(|s| {
-            let from = config_dir(&get(s, PRINCIPAL), s);
-            let made = create(s, &root, &from, name, share, mode)?;
+            let from = config_dir(&get(s, &principal_id(engine)), s);
+            let made = create_of(engine, s, &root, &from, name, share, mode)?;
+            // Its harness's Principal first, as `normalize` would add it after.
+            if !s.accounts.iter().any(|a| a.engine == engine) {
+                s.accounts.push(principal_of(engine));
+            }
             s.accounts.push(made.clone());
             Ok(made)
         })?;
+        // The window learns them all: the first account of a harness brings its Principal.
+        let (accounts, engine_order) = {
+            let s = self.settings.read();
+            (s.accounts.clone(), s.engine_order.clone())
+        };
+        self.hub.emit(crate::model::UiEvent::Accounts {
+            accounts,
+            engine_order,
+        });
         Ok(made)
     }
 
@@ -1524,6 +1676,16 @@ impl<R: Runtime> Core<R> {
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;
         let settings = self.settings.read().clone();
+        if account.engine == EngineId::Codex {
+            let dir = config_dir(&account, &settings);
+            let signed = codex_sign_in(&dir);
+            return Ok(AccountStatus {
+                connected: signed.is_some(),
+                stamp: signed.as_ref().and_then(|s| s.stamp.clone()),
+                email: signed.and_then(|s| s.email),
+                dir: dir.to_string_lossy().into_owned(),
+            });
+        }
         let sign_in = crate::usage::sign_in(&account, &settings);
         let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
             Ok(stored) => Some(stored),
@@ -1559,18 +1721,28 @@ impl<R: Runtime> Core<R> {
     ) -> Result<TermInfo> {
         let account = self.claude_account(id)?;
         let settings = self.settings.read().clone();
+        let name = engine::by_name(account.engine);
         let program = program(&account, &settings).ok_or_else(|| {
             anyhow::anyhow!(tr!(
-                "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "Claude Code not found. Install it or give its path in the settings."
+                "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
+                "{name} not found. Install it or give its path in the settings."
             ))
         })?;
+        // Its own command of sign-in (`codex login`), else the program itself (Claude Code asks).
+        let args: Vec<String> = store(account.engine)
+            .login
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
         let info = TermInfo {
             id: crate::model::new_id(),
             // No project's: the window lists it nowhere.
             project_id: String::new(),
             name: account.name.clone(),
-            shell: "claude".into(),
+            shell: match account.engine {
+                EngineId::Claude => "claude".into(),
+                _ => name.to_lowercase(),
+            },
         };
         // Run from the home folder, as the user would.
         let (_, home) = app_env();
@@ -1584,7 +1756,7 @@ impl<R: Runtime> Core<R> {
         self.pty.spawn_program(
             info.clone(),
             &program,
-            &[],
+            &args,
             &home.to_string_lossy(),
             size,
             env,

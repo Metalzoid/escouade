@@ -1,14 +1,29 @@
-import { describe, expect, it } from 'vitest';
-import { agent } from '../test/ipc';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
+import { app } from './state.svelte';
 import { fInt } from './format';
 import { setLang } from './i18n';
 import { contextUse, estimateHint, fSpentUsd, spent } from './spend';
 
 describe('spent', () => {
+  beforeEach(() => resetApp());
+
   it('adds the running turn to what the finished turns used, as an estimate', () => {
     const s = spent(agent({ tokens: 1000, cost: 0.5, liveTokens: 250, liveCost: 0.125 }));
     expect(s).toEqual({ tokens: 1250, cost: 0.625, estimated: true });
     expect(fSpentUsd(s)).toBe('≈\u00a00,63\u00a0$');
+  });
+
+  it('is an estimate all along for a harness that tells no cost, and says why', () => {
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, cost: 'estimated' } }];
+    const s = spent(agent({ engine: 'codex', tokens: 1000, cost: 0.05 }));
+    expect(s).toEqual({ tokens: 1000, cost: 0.05, estimated: true, byHarness: true });
+    expect(fSpentUsd(s)).toBe('≈ 0,050 $');
+    expect(estimateHint(s)).toBe(
+      'Coût estimé : le harness ne le donne pas, Escouade le calcule d’après les tokens et le tarif public de ses modèles.',
+    );
+    // Claude Code's is exact between turns.
+    expect(spent(agent({ engine: 'claude', tokens: 1000, cost: 0.05 })).estimated).toBe(false);
   });
 
   it('is exact between turns', () => {

@@ -529,7 +529,7 @@
               >⎇ {shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
             >{/if}
         </div>
-        <div class="meta dim" use:tip={s.estimated ? estimateHint() : undefined}>
+        <div class="meta dim" use:tip={s.estimated ? estimateHint(s) : undefined}>
           <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span>{#if showsCost(a)}<span>{fSpentUsd(s)}</span>{/if}<span
             >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
           >

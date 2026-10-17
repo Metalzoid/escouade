@@ -427,7 +427,7 @@
       {#if figures}
         <div class="figures">
           {#if used}
-            <span class="k mono" use:tip={used.estimated ? estimateHint() : undefined}
+            <span class="k mono" use:tip={used.estimated ? estimateHint(used) : undefined}
               ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
             >
           {/if}

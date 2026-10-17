@@ -75,7 +75,7 @@
             <span class="name">{accountName(r.account)}</span>
             {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
             {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
-            <span class="today" use:tip={r.today.estimated ? estimateHint() : undefined}
+            <span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
               >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
             >
           </div>

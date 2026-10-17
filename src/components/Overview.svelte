@@ -304,7 +304,7 @@
         {/if}
       </span>
       <span class="model mono"><span class="sr">{t('common.model')}{' '}</span>{modelLabel(a.model, app.models)}</span>
-      <span class="num" use:tip={used.estimated ? estimateHint() : undefined}
+      <span class="num" use:tip={used.estimated ? estimateHint(used) : undefined}
         ><span class="sr">{t('common.cost')}{' '}</span>{showsCost(a) ? fSpentUsd(used) : ''}</span
       >
       <span class="num ctx" class:full={ctx?.full} use:tip={ctx?.title ?? t('stats.overview.contextUnknown')}

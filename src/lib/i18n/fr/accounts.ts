@@ -54,7 +54,8 @@ export default {
 
   // « Ajouter un compte… » and « Se connecter… ».
   modal: {
-    addTitle: 'Ajouter un compte Claude',
+    addTitle: 'Ajouter un compte {harness}',
+    harness: 'Harness',
     signInTitle: 'Se connecter au compte « {name} »',
     name: 'Nom',
     namePlaceholder: 'Pro, Équipe…',
@@ -71,7 +72,13 @@ export default {
     signInHint: 'Connecte-toi dans le terminal ci-dessous (commande /login si Claude Code ne la propose pas).',
     connected: 'Connecté au compte {email}',
     connectedNoEmail: 'Connecté',
-    ended: 'Claude Code s’est arrêté avant la connexion.',
+    ended: '{harness} s’est arrêté avant la connexion.',
+    // What a Codex account keeps apart (its folder is a CODEX_HOME).
+    codex: {
+      nothingToShare: '{name} n’a ni config.toml, ni AGENTS.md, ni skills, prompts ou règles à partager.',
+      neverShared: 'La connexion (auth.json) n’est jamais copiée : chaque compte a la sienne (son jeton change à chaque renouvellement).',
+      signInHint: 'Connecte-toi dans le terminal ci-dessous : codex login ouvre ton navigateur sur la connexion de ChatGPT.',
+    },
     restart: 'Relancer',
     done: 'Terminé',
   },

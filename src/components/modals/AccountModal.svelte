@@ -1,20 +1,35 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { accountName, backToAccounts, PRINCIPAL, SHARED_FILES } from '../../lib/accounts';
-  import { t } from '../../lib/i18n';
+  import { accountName, backToAccounts, engineOfAccount, principalId, SHARED_FILES } from '../../lib/accounts';
+  import { engineName, offered } from '../../lib/engines';
+  import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
   import type { SettingsTab } from '../../lib/settings.svelte';
-  import type { Account, ShareMode } from '../../lib/types';
+  import type { Account, EngineId, ShareMode } from '../../lib/types';
   import Modal from './Modal.svelte';
 
-  // « Ajouter un compte… »: a new Claude account, made with what it shares of Principal's folder, then signed in.
-  // « Se connecter… » (`accountId`): straight to the sign-in. The sign-in runs the account's own `claude` in a terminal
-  // here; Escouade looks for it every 2 s, then closes the terminal and reads the account's quota. Closed before, the
-  // account stays, not signed in.
-  let { accountId, back }: { accountId?: string; back?: SettingsTab } = $props();
+  // « Ajouter un compte… »: a new account of a harness (`engine`, else the one picked here), made with what it shares of
+  // the folder of that harness's Principal, then signed in. « Se connecter… » (`accountId`): straight to the sign-in.
+  // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`); Escouade looks for it
+  // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
+  let { accountId, back, engine: asked }: { accountId?: string; back?: SettingsTab; engine?: EngineId } = $props();
+
+  /** What the modal says of the folders of a harness's accounts: Claude Code's unless the harness has its own. */
+  const SAYS: Partial<Record<EngineId, { nothing: Key; never: Key; hint: Key }>> = {
+    codex: {
+      nothing: 'accounts.modal.codex.nothingToShare',
+      never: 'accounts.modal.codex.neverShared',
+      hint: 'accounts.modal.codex.signInHint',
+    },
+  };
+  const CLAUDE_SAYS = {
+    nothing: 'accounts.modal.nothingToShare',
+    never: 'accounts.modal.neverShared',
+    hint: 'accounts.modal.signInHint',
+  } as const;
 
   /** How often the sign-in is looked for. */
   const POLL_MS = 2000;
@@ -25,6 +40,11 @@
 
   /** The account signing in; none while it is still to make. */
   let account = $state<Account | null>(untrack(() => app.settings.accounts.find((a) => a.id === accountId) ?? null));
+  /** The harness of the account: the one asked for, else the first offered (Claude Code's when it is found). */
+  let engine = $state<EngineId>(untrack(() => (account ? engineOfAccount(account) : (asked ?? offered()[0]?.id ?? 'claude'))));
+  /** The harnesses an account may be added to: those found, a menu from two on. */
+  const engines = $derived(offered());
+  const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   let name = $state('');
   /** What Principal has to share; null until known. */
   let shareable = $state<string[] | null>(null);
@@ -51,22 +71,36 @@
   /** A look at the sign-in is under way: the next tick waits for it. */
   let looking = false;
 
-  const principal = $derived(accountName(app.settings.accounts.find((a) => a.id === PRINCIPAL) ?? { id: PRINCIPAL, name: '' }));
+  const principal = $derived(
+    accountName(app.settings.accounts.find((a) => a.id === principalId(engine)) ?? { id: principalId(engine), name: '', engine }),
+  );
   const files = $derived((shareable ?? []).filter((n) => SHARED_FILES.includes(n)));
   const folders = $derived((shareable ?? []).filter((n) => !SHARED_FILES.includes(n)));
   const exited = $derived(termId !== null && app.exitedTerms[termId] !== undefined);
-  const title = $derived(account ? t('accounts.modal.signInTitle', { name: accountName(account) }) : t('accounts.modal.addTitle'));
+  const title = $derived(
+    account
+      ? t('accounts.modal.signInTitle', { name: accountName(account) })
+      : t('accounts.modal.addTitle', { harness: engineName(engine) }),
+  );
 
   untrack(() => {
     if (account) return void start();
+    loadShareable();
+  });
+
+  /** What the Principal of the harness picked has to share, all ticked. */
+  function loadShareable() {
+    const of = engine;
+    shareable = null;
     api
-      .accountShareable()
+      .accountShareable(of)
       .then((list) => {
+        if (of !== engine) return;
         shareable = list;
         checked = Object.fromEntries(list.map((n) => [n, true]));
       })
       .catch(() => (shareable = []));
-  });
+  }
 
   // The terminal shown in the window while it runs.
   $effect(() => {
@@ -83,8 +117,9 @@
     error = null;
     try {
       const share = (shareable ?? []).filter((n) => checked[n]);
-      const made = await api.accountCreate(name.trim(), share, mode);
-      app.settings.accounts = [...app.settings.accounts, made];
+      const made = await api.accountCreate(name.trim(), share, mode, engine);
+      // The backend tells them all (`accounts`, with the Principal a first account of a harness brings): this one at once.
+      if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
       account = made;
       await start();
     } catch (e) {
@@ -201,6 +236,14 @@
 <!-- Signing in, only its × closes it: the account stays, not signed in. -->
 <Modal {title} width={account ? 820 : 600} onclose={close} footer={!account || signedIn ? actions : undefined}>
   {#if !account}
+    {#if engines.length > 1}
+      <div class="field-row">
+        <label class="k" for="account-harness">{t('accounts.modal.harness')}</label>
+        <select id="account-harness" class="field name" bind:value={engine} onchange={loadShareable}>
+          {#each engines as e (e.id)}<option value={e.id}>{e.name}</option>{/each}
+        </select>
+      </div>
+    {/if}
     <div class="field-row">
       <label class="k" for="account-name">{t('accounts.modal.name')}</label>
       <!-- svelte-ignore a11y_autofocus -->
@@ -236,21 +279,21 @@
         </div>
       </fieldset>
     {:else if shareable}
-      <p class="note">{t('accounts.modal.nothingToShare', { name: principal })}</p>
+      <p class="note">{t(says.nothing, { name: principal })}</p>
     {/if}
-    <p class="note">{t('accounts.modal.neverShared')}</p>
+    <p class="note">{t(says.never)}</p>
   {:else}
     <p class="said" class:ok={signedIn} role="status">
       {#if signedIn}
         {signedIn.email ? t('accounts.modal.connected', { email: signedIn.email }) : t('accounts.modal.connectedNoEmail')}
       {:else}
-        {t('accounts.modal.signInHint')}
+        {t(says.hint)}
       {/if}
     </p>
     {#if termId}<div class="term" bind:this={box}></div>{/if}
     {#if exited && !signedIn}
       <div class="ended">
-        <span>{t('accounts.modal.ended')}</span>
+        <span>{t('accounts.modal.ended', { harness: engineName(engine) })}</span>
         <button class="btn" onclick={restart}>{t('accounts.modal.restart')}</button>
       </div>
     {/if}

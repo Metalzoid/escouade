@@ -141,9 +141,10 @@ export const api = {
   /** Every harness with what is found of it here: its program, version and state (versions read again). */
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
-  accountShareable: () => invoke<string[]>('account_shareable'),
-  /** A new Claude account, its folder made with the items `share` of Principal's linked or copied, saved last. */
-  accountCreate: (name: string, share: string[], mode: ShareMode) => invoke<Account>('account_create', { name, share, mode }),
+  accountShareable: (engine?: EngineId) => invoke<string[]>('account_shareable', engine ? { engine } : {}),
+  /** A new account of `engine` (Claude Code's by default), its folder made with the items `share` of its Principal's linked or copied, saved last. */
+  accountCreate: (name: string, share: string[], mode: ShareMode, engine?: EngineId) =>
+    invoke<Account>('account_create', engine ? { name, share, mode, engine } : { name, share, mode }),
   /** The account's name, `claude` and « Actif » (its folder stays its own); the accounts as they then are. */
   accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
   /** The accounts in the order of `ids`, as they then are. */
