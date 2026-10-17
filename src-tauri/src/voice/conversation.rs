@@ -88,7 +88,17 @@ struct Shared {
     done: AtomicBool,
     choice: ConvChoice,
     model: PathBuf,
+    /// How it reads and hears, which the settings may change while it goes on (`conversation_tune`).
+    reader: Mutex<Reader>,
+}
+
+/// The voice that reads (its model), its speaker and pace, its volume, and the language Whisper is told.
+#[derive(Debug, Clone, PartialEq)]
+struct Reader {
     voice: PathBuf,
+    speak: SpeakOptions,
+    volume: f32,
+    language: String,
 }
 
 pub(super) struct Conversation {
@@ -140,7 +150,12 @@ impl Voice {
             pending: Mutex::new(Vec::new()),
             done: AtomicBool::new(false),
             model: self.store.path(model.id),
-            voice: self.voices.model(&voice.id),
+            reader: Mutex::new(Reader {
+                voice: self.voices.model(&voice.id),
+                speak: choice.speak.clone(),
+                volume: choice.volume,
+                language: choice.language.clone(),
+            }),
             choice,
         });
         let failure = Arc::new(Mutex::new(None::<VoiceError>));
@@ -164,6 +179,8 @@ impl Voice {
             let p = shared.model.clone();
             std::thread::spawn(move || t.preload(&p));
         }
+        // The voice too (and ONNX Runtime): the first sentence read does not wait for it (ESC-115).
+        self.preload_voice(shared.reader.lock().voice.clone());
         *self.conv.lock() = Some(Conversation {
             shared: shared.clone(),
             capture: Mutex::new(Some(capture)),
@@ -175,6 +192,59 @@ impl Voice {
             .spawn(move || listen(shared, rate, failure, emit, transcriber))
             .map_err(|e| VoiceError::Other(e.to_string()))?;
         Ok(ConvStarted::Listening { session: id })
+    }
+
+    /// Loads `model` on a thread of its own, ahead of its first sentence. Failing, it is only written down: the first
+    /// sentence loads it then, as it did before.
+    fn preload_voice(&self, model: PathBuf) {
+        let engine = self.engine.clone();
+        let spawned = std::thread::Builder::new()
+            .name("voice-preload".into())
+            .spawn(move || {
+                if let Err(e) = engine.preload(&model) {
+                    log::warn!(
+                        "speech: voice not loaded ahead ({e:#}): it will be at its first sentence"
+                    );
+                }
+            });
+        if let Err(e) = spawned {
+            log::warn!("speech: voice not loaded ahead ({e})");
+        }
+    }
+
+    /// The settings changed while a conversation goes on: its next readings take the voice, the pace and the volume
+    /// they now say, and what it hears is transcribed in their language; a new voice is loaded at once, ahead of its
+    /// first sentence. A voice not downloaded is not taken (the next conversation offers it).
+    pub fn conversation_tune(&self, choice: &ConvChoice) {
+        let Some(s) = self.conv.lock().as_ref().map(|c| c.shared.clone()) else {
+            return;
+        };
+        let Some(voice) = super::speech::catalog::find(&choice.voice) else {
+            return;
+        };
+        if !self.voices.has(voice) {
+            log::info!(
+                "speech: {} not downloaded, the conversation keeps its voice",
+                voice.id
+            );
+            return;
+        }
+        let tuned = Reader {
+            voice: self.voices.model(&voice.id),
+            speak: choice.speak.clone(),
+            volume: choice.volume,
+            language: choice.language.clone(),
+        };
+        let mut reader = s.reader.lock();
+        if *reader == tuned {
+            return;
+        }
+        let new_voice = reader.voice != tuned.voice;
+        *reader = tuned;
+        if new_voice {
+            log::info!("speech: the conversation now reads in {}", voice.id);
+            self.preload_voice(reader.voice.clone());
+        }
     }
 
     fn conv_shared(&self, session: u64) -> Option<Arc<Shared>> {
@@ -220,6 +290,7 @@ impl Voice {
         let output = self.output.clone();
         let emit = self.emit.clone();
         let sentences = engine.sentences(text);
+        let reader = s.reader.lock().clone();
         std::thread::Builder::new()
             .name("voice-speak".into())
             .spawn(move || {
@@ -228,7 +299,7 @@ impl Voice {
                     if stop.load(Ordering::Acquire) {
                         return;
                     }
-                    let audio = match engine.synthesize(&s.voice, &sentence, &s.choice.speak) {
+                    let audio = match engine.synthesize(&reader.voice, &sentence, &reader.speak) {
                         Ok(a) => a,
                         Err(e) => {
                             error = Some(format!("{e:#}"));
@@ -263,7 +334,7 @@ impl Voice {
                                 }
                             })
                         };
-                        match output.open(audio.rate, s.choice.volume, done) {
+                        match output.open(audio.rate, reader.volume, done) {
                             Ok(p) => *slot = Some(p),
                             Err(e) => {
                                 error = Some(e);
@@ -441,8 +512,9 @@ fn listen(
                             std::thread::spawn(move || {
                                 let pcm = audio::resample(&said, rate, audio::WHISPER_RATE);
                                 let never = Arc::new(AtomicBool::new(false));
+                                let language = s2.reader.lock().language.clone();
                                 let text = t
-                                    .transcribe(&s2.model, &pcm, &s2.choice.language, &never)
+                                    .transcribe(&s2.model, &pcm, &language, &never)
                                     .map_err(|e| format!("{e:#}"));
                                 if s2.done.load(Ordering::Acquire) {
                                     return;

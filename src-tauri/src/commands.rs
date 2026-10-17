@@ -170,9 +170,15 @@ pub fn set_ui(core: CoreState, ui: UiState) {
 /// The settings as the window saves them; the Claude accounts are left as they are (their tab
 /// changes them with the `account_*` commands).
 #[tauri::command(async)]
-pub fn save_settings(core: CoreState, settings: Settings) -> Res<Vec<ShellInfo>> {
+pub fn save_settings(
+    core: CoreState,
+    voice: VoiceState,
+    settings: Settings,
+) -> Res<Vec<ShellInfo>> {
     let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
+    // A conversation under way takes the voice, its language, pace and volume (ESC-115).
+    voice.conversation_tune(&conv_choice(&core.settings.read()).0);
     if settings.remote_control_all && !remote_was_on {
         core.telemetry
             .track(Event::RemoteControlEnabled { from: "global" });
@@ -2074,6 +2080,22 @@ fn speak_options(settings: &Settings, voice: &str) -> crate::voice::speech::Spea
     }
 }
 
+/// What a conversation is held with, from `settings`, and its language.
+fn conv_choice(settings: &Settings) -> (crate::voice::conversation::ConvChoice, &'static str) {
+    let lang = speech_lang(settings);
+    let id = settings.voice.speech.voice(lang);
+    let choice = crate::voice::conversation::ConvChoice {
+        device: settings.voice.device.clone(),
+        model: settings.voice.model.clone(),
+        language: lang.to_string(),
+        speak: speak_options(settings, &id),
+        volume: settings.voice.speech.volume.clamp(0.0, 1.0),
+        silence_ms: settings.voice.speech.silence_ms,
+        voice: id,
+    };
+    (choice, lang)
+}
+
 /// Réglages › Voix: the conversation's voices (which are downloaded), and whether the app can speak here.
 #[tauri::command(async)]
 pub fn speech_info(voice: VoiceState) -> crate::voice::SpeechInfo {
@@ -2086,18 +2108,8 @@ pub fn conversation_start(
     core: CoreState,
     voice: VoiceState,
 ) -> Res<crate::voice::conversation::ConvStarted> {
-    let settings = core.settings.read().clone();
-    let lang = speech_lang(&settings);
-    let id = settings.voice.speech.voice(lang);
-    let choice = crate::voice::conversation::ConvChoice {
-        device: settings.voice.device.clone(),
-        model: settings.voice.model.clone(),
-        language: lang.to_string(),
-        speak: speak_options(&settings, &id),
-        volume: settings.voice.speech.volume.clamp(0.0, 1.0),
-        silence_ms: settings.voice.speech.silence_ms,
-        voice: id.clone(),
-    };
+    let (choice, lang) = conv_choice(&core.settings.read());
+    let id = choice.voice.clone();
     let started = voice.conversation_start(choice).map_err(voice_err)?;
     if matches!(
         started,

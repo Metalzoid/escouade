@@ -18,8 +18,12 @@ struct Conv {
 }
 
 fn conv_harness(name: &str, text: &str) -> Conv {
+    conv_harness_with(name, text, speech::Fake::new(None))
+}
+
+fn conv_harness_with(name: &str, text: &str, engine: speech::Fake) -> Conv {
     let mut h = harness(name, text, 16_000);
-    let engine = Arc::new(speech::Fake::new(None));
+    let engine = Arc::new(engine);
     h.voice = h.voice.with_speech(engine.clone(), Arc::new(speech::output::Silent));
     Conv { h, engine }
 }
@@ -311,4 +315,109 @@ fn a_voice_is_downloaded_with_its_size_and_checksum_checked() {
         assert!(!store.model(&info.id).exists());
         assert!(!dir.join("voices").join(format!("{}.onnx.part", info.id)).exists());
     });
+}
+
+/// A fake voice that takes `ms` to load, as Piper's does (0.9 s on the user's machine), and fails ahead if `fails`.
+fn slow_voice(ms: u64, fails: bool) -> speech::Fake {
+    let mut f = speech::Fake::new(None);
+    f.load_time = Duration::from_millis(ms);
+    f.preload_fails = fails;
+    f
+}
+
+/// Waits (5 s at most) until `n` voices were loaded.
+fn wait_loads(c: &Conv, n: usize) -> Vec<speech::FakeLoad> {
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let loads = c.engine.loads.lock().clone();
+        if loads.len() >= n {
+            return loads;
+        }
+        assert!(Instant::now() < end, "{n} loads never came: {loads:?}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn the_voice_is_loaded_as_the_conversation_starts_and_its_first_sentence_does_not_wait_for_it() {
+    let c = conv_harness_with("conv-preload", "", slow_voice(600, false));
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let started = Instant::now();
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    // Not on the caller's thread: the start answers at once.
+    assert!(started.elapsed() < Duration::from_millis(400), "{:?}", started.elapsed());
+    let model = h.voice.voices.model("fr_FR-siwis-medium");
+    assert_eq!(wait_loads(&c, 1), vec![speech::FakeLoad { model: model.clone(), ahead: true }]);
+    // The agent answers: its first sentence is heard without the voice's loading.
+    let said = Instant::now();
+    h.voice.conversation_say(session, "C'est fait.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSentence { index: 0, .. }));
+    assert!(said.elapsed() < Duration::from_millis(400), "{:?}", said.elapsed());
+    assert_eq!(c.engine.loads.lock().len(), 1, "loaded once");
+    // Leaving the conversation keeps it: the next one is quick too.
+    h.voice.conversation_stop();
+    listening(h.voice.conversation_start(conv_choice()).unwrap());
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(c.engine.loads.lock().len(), 1, "not loaded again");
+    h.voice.conversation_stop();
+    // Deleted, it goes: the voice downloaded again is loaded again.
+    h.voice.delete_voice("fr_FR-siwis-medium").unwrap();
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    listening(h.voice.conversation_start(conv_choice()).unwrap());
+    assert_eq!(wait_loads(&c, 2)[1], speech::FakeLoad { model, ahead: true });
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn a_voice_that_cannot_be_loaded_ahead_is_loaded_at_its_first_sentence() {
+    let c = conv_harness_with("conv-preload-fails", "", slow_voice(0, true));
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    std::thread::sleep(Duration::from_millis(100));
+    let reading = h.voice.conversation_say(session, "C'est fait.").unwrap();
+    hear(h, 0.3, 0.0);
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None });
+    assert_eq!(
+        *c.engine.loads.lock(),
+        vec![speech::FakeLoad { model: h.voice.voices.model("fr_FR-siwis-medium"), ahead: false }]
+    );
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn a_voice_or_a_language_changed_during_the_conversation_is_loaded_and_taken() {
+    let c = conv_harness_with("conv-tune", "hello", slow_voice(300, false));
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    wait_loads(&c, 1);
+    // An English voice, not downloaded: the conversation keeps its own.
+    let english = ConvChoice { language: "en".into(), voice: "en_US-amy-medium".into(), ..conv_choice() };
+    h.voice.conversation_tune(&english);
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(c.engine.loads.lock().len(), 1);
+    // Downloaded: loaded at once, ahead of the next reading, which it reads; what is heard is in English.
+    put_voice(&h.voice, "en_US-amy-medium");
+    h.voice.conversation_tune(&english);
+    let amy = h.voice.voices.model("en_US-amy-medium");
+    assert_eq!(wait_loads(&c, 2)[1], speech::FakeLoad { model: amy.clone(), ahead: true });
+    h.voice.conversation_say(session, "Done.").unwrap();
+    hear(h, 0.3, 0.0);
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    assert_eq!(c.engine.loads.lock().len(), 2, "read in the voice loaded ahead");
+    hear(h, 0.3, 0.0);
+    hear(h, 1.0, 0.3);
+    hear(h, 1.0, 0.0);
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
+    assert_eq!(c.h.fake.calls.lock()[0].1, "en");
+    // Back to French: loaded again (one voice is kept at a time, as Piper does).
+    h.voice.conversation_tune(&conv_choice());
+    assert_eq!(wait_loads(&c, 3)[2].model, h.voice.voices.model("fr_FR-siwis-medium"));
+    h.voice.conversation_stop();
 }

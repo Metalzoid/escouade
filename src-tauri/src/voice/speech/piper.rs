@@ -267,6 +267,29 @@ pub fn normalize(samples: &mut [f32]) {
     }
 }
 
+impl Piper {
+    /// `model` in `slot`, loaded there unless it already is (with ONNX Runtime, the first time).
+    fn load<'a>(&self, slot: &'a mut Option<Loaded>, model: &Path) -> Result<&'a mut Loaded> {
+        runtime()?;
+        if slot.as_ref().map(|l| l.path.as_path()) != Some(model) {
+            *slot = None;
+            let config = read_config(model)?;
+            let started = std::time::Instant::now();
+            let session = ort::session::Session::builder()
+                .map_err(|e| anyhow::anyhow!("{e}"))?
+                .commit_from_file(model)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            log::info!("speech: voice loaded in {:?}", started.elapsed());
+            *slot = Some(Loaded {
+                path: model.to_path_buf(),
+                session,
+                config,
+            });
+        }
+        Ok(slot.as_mut().unwrap())
+    }
+}
+
 impl Engine for Piper {
     fn available(&self) -> bool {
         !DYNAMIC || runtime_path().exists()
@@ -286,24 +309,8 @@ impl Engine for Piper {
 
     fn synthesize(&self, model: &Path, sentence: &str, opts: &SpeakOptions) -> Result<Audio> {
         use ort::value::Tensor;
-        runtime()?;
         let mut slot = self.loaded.lock();
-        if slot.as_ref().map(|l| l.path.as_path()) != Some(model) {
-            *slot = None;
-            let config = read_config(model)?;
-            let started = std::time::Instant::now();
-            let session = ort::session::Session::builder()
-                .map_err(|e| anyhow::anyhow!("{e}"))?
-                .commit_from_file(model)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
-            log::info!("speech: voice loaded in {:?}", started.elapsed());
-            *slot = Some(Loaded {
-                path: model.to_path_buf(),
-                session,
-                config,
-            });
-        }
-        let loaded = slot.as_mut().unwrap();
+        let loaded = self.load(&mut slot, model)?;
         let config = &loaded.config;
         let mut phonemes = String::new();
         for (clause, mark) in sentences(sentence).into_iter().flatten() {
@@ -352,6 +359,18 @@ impl Engine for Piper {
             (rate as f32 * SENTENCE_GAP) as usize,
         ));
         Ok(Audio { samples, rate })
+    }
+
+    fn preload(&self, model: &Path) -> Result<()> {
+        let started = std::time::Instant::now();
+        let espeak = {
+            let mut slot = self.loaded.lock();
+            self.load(&mut slot, model)?.config.espeak.voice.clone()
+        };
+        // eSpeak NG too: its data written out, its voice made, as the first sentence would.
+        self.phonemizer.phonemes(&espeak, "a")?;
+        log::info!("speech: voice ready in {:?}", started.elapsed());
+        Ok(())
     }
 
     fn unload(&self) {
@@ -436,6 +455,44 @@ mod tests {
         let mut s = vec![0.1, -0.3, 0.2];
         normalize(&mut s);
         assert!((s[1] + 0.9).abs() < 1e-6 && (s[0] - 0.3).abs() < 1e-6);
+    }
+
+    /// ESC-115, measured with a real voice (`ESCOUADE_SPEECH_TEST_VOICE`), by hand: the first sentence waits for the
+    /// voice when it was not loaded ahead (`ESCOUADE_SPEECH_TEST_COLD`, as before), not once it was.
+    #[test]
+    fn a_real_voice_loaded_ahead_reads_its_first_sentence_as_fast_as_the_next() {
+        let Ok(voice) = std::env::var("ESCOUADE_SPEECH_TEST_VOICE") else {
+            return;
+        };
+        let cold = std::env::var_os("ESCOUADE_SPEECH_TEST_COLD").is_some();
+        let dir = crate::paths::test_dir("speech-preload");
+        let piper = std::sync::Arc::new(Piper::new(dir.join("espeak-ng-data")));
+        let model = PathBuf::from(&voice);
+        if !cold {
+            let (p, m) = (piper.clone(), model.clone());
+            let started = std::time::Instant::now();
+            std::thread::spawn(move || p.preload(&m))
+                .join()
+                .unwrap()
+                .unwrap();
+            eprintln!("loaded ahead in {:?}", started.elapsed());
+        }
+        let timed = |text: &str| {
+            let started = std::time::Instant::now();
+            piper
+                .synthesize(&model, text, &SpeakOptions::default())
+                .unwrap();
+            started.elapsed()
+        };
+        let first = timed("C'est fait, les tests passent.");
+        let next = timed("Je regarde la page des réglages.");
+        eprintln!("first sentence in {first:?}, the next in {next:?} (cold: {cold})");
+        if !cold {
+            assert!(
+                first < next * 2 + std::time::Duration::from_millis(150),
+                "{first:?} / {next:?}"
+            );
+        }
     }
 
     /// The real thing, when a voice is given (`ESCOUADE_SPEECH_TEST_VOICE`, its `.onnx`): speaks a French sentence,

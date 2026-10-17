@@ -46,15 +46,31 @@ pub trait Engine: Send + Sync {
     fn sentences(&self, text: &str) -> Vec<String>;
     /// The sound of `sentence` in the voice whose model is `model` (`<id>.onnx`, its `.onnx.json` beside it).
     fn synthesize(&self, model: &Path, sentence: &str, opts: &SpeakOptions) -> Result<Audio>;
+    /// Loads the voice whose model is `model` (and what it needs) ahead of its first sentence, which then does not
+    /// wait for it (ESC-115). Blocks: called on a thread of its own. A voice already loaded is not loaded again.
+    fn preload(&self, model: &Path) -> Result<()>;
     /// The voice loaded lets go of its memory (its file is about to be deleted).
     fn unload(&self);
 }
 
 /// A voice that is no voice: a tone, 50 ms a character (4 s at most), and the sentences it was asked written down
-/// (`said`, and the file of `ESCOUADE_SPEECH_FAKE` in end-to-end tests).
+/// (`said`, and the file of `ESCOUADE_SPEECH_FAKE` in end-to-end tests). It loads as Piper does: a voice once, on
+/// its first sentence or ahead of it (`preload`), `load_time` long, each load written down (`loads`); ahead of it,
+/// it fails when `preload_fails` says so.
 pub struct Fake {
     pub said: Mutex<Vec<String>>,
     pub log: Option<PathBuf>,
+    pub load_time: std::time::Duration,
+    pub loads: Mutex<Vec<FakeLoad>>,
+    pub preload_fails: bool,
+    loaded: Mutex<Option<PathBuf>>,
+}
+
+/// A voice the fake loaded: which, and whether ahead of its first sentence.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FakeLoad {
+    pub model: PathBuf,
+    pub ahead: bool,
 }
 
 impl Fake {
@@ -62,7 +78,29 @@ impl Fake {
         Self {
             said: Mutex::new(Vec::new()),
             log,
+            load_time: std::time::Duration::ZERO,
+            loads: Mutex::new(Vec::new()),
+            preload_fails: false,
+            loaded: Mutex::new(None),
         }
+    }
+
+    fn load(&self, model: &Path, ahead: bool) -> Result<()> {
+        let mut loaded = self.loaded.lock();
+        if loaded.as_deref() == Some(model) {
+            return Ok(());
+        }
+        *loaded = None;
+        if !model.exists() {
+            anyhow::bail!("{}: no such voice", model.display());
+        }
+        std::thread::sleep(self.load_time);
+        self.loads.lock().push(FakeLoad {
+            model: model.to_path_buf(),
+            ahead,
+        });
+        *loaded = Some(model.to_path_buf());
+        Ok(())
     }
 }
 
@@ -86,9 +124,7 @@ impl Engine for Fake {
     }
 
     fn synthesize(&self, model: &Path, sentence: &str, _opts: &SpeakOptions) -> Result<Audio> {
-        if !model.exists() {
-            anyhow::bail!("{}: no such voice", model.display());
-        }
+        self.load(model, false)?;
         self.said.lock().push(sentence.to_string());
         if let Some(log) = &self.log {
             use std::io::Write;
@@ -109,7 +145,16 @@ impl Engine for Fake {
         })
     }
 
-    fn unload(&self) {}
+    fn preload(&self, model: &Path) -> Result<()> {
+        if self.preload_fails {
+            anyhow::bail!("ONNX Runtime: not loaded");
+        }
+        self.load(model, true)
+    }
+
+    fn unload(&self) {
+        *self.loaded.lock() = None;
+    }
 }
 
 /// A voice as the settings show it.
