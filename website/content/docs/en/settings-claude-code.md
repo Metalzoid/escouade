@@ -1,6 +1,6 @@
 # Settings: Harness
 
-The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, Claude Code today, with their executable, their version, and their state. It also sets the model, effort, and permission mode of new agents, how Claude processes live, attachments, remote control for all agents, and the server that lets Claude drive Escouade.
+The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their executable, version, and state, and sets new agents, how processes live, attachments, remote control, and the server that lets Claude drive Escouade.
 
 ## Each harness
 
