@@ -20,7 +20,8 @@
     <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
     {#if waiting}<span class="note">{t('conv.user.waiting')}</span>{/if}
     <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
-    {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span>{/if}
+    {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span
+      >{/if}
     {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
   </div>
 </div>

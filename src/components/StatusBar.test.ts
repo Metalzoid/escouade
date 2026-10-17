@@ -409,10 +409,7 @@ describe('StatusBar in English', () => {
     app.agents.a1 = { ...app.agents.a1, liveCost: 0.5 };
     fakeBackend();
     render(StatusBar);
-    expect(screen.getByText(/Today/)).toHaveAttribute(
-      'data-tip',
-      'Estimate (public prices) during the turn; exact cost at its end',
-    );
+    expect(screen.getByText(/Today/)).toHaveAttribute('data-tip', 'Estimate (public prices) during the turn; exact cost at its end');
     expect(screen.getByText('≈ $0.50')).toBeInTheDocument();
   });
 

@@ -676,7 +676,11 @@
         {:else if conv.loaded && top.length === 0 && !conv.waiting.length}
           <div class="empty">
             <span class="t">{t('conv.empty.title')}</span>
-            <span class="s"><Rich k="conv.empty.hint" engine={speakerOf(agent.engine)}>{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich></span>
+            <span class="s"
+              ><Rich k="conv.empty.hint" engine={speakerOf(agent.engine)}
+                >{#snippet cwd()}<span class="mono">{agent.cwd}</span>{/snippet}</Rich
+              ></span
+            >
             {#if !app.enginesFound.includes(agent.engine ?? 'claude')}
               <span class="warn">{t('conv.empty.engineMissing', { engine: engineName(agent.engine) })}</span>
             {/if}
