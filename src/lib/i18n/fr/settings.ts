@@ -226,6 +226,9 @@ export default {
 
   // The « À propos » tab.
   about: {
+    credits: 'Crédits et licences',
+    creditsDesc: 'Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence et le crédit de chaque voix',
+    creditsOpen: 'Ouvrir',
     /** `{list}`: the harnesses found, by name. */
     enginesFound: 'Harness détectés : {list}',
     noEngine: 'Aucun harness trouvé',

@@ -9,6 +9,11 @@ rust-version = "1.88"
 # The app; `escouade-hook` (src/bin) is the other program the installers ship beside it.
 default-run = "escouade"
 
+[features]
+# ONNX Runtime loaded from a library at run time, as on Intel Macs and Linux: to try that path elsewhere
+# (`ESCOUADE_ORT_DYLIB` names the library).
+ort-dynamic = ["ort/load-dynamic"]
+
 [lib]
 name = "escouade_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -61,6 +66,19 @@ cpal = "0.18"
 whisper-rs = { version = "0.16", features = ["log_backend"] }
 # A WAV file as the sound source: the end-to-end tests, which have no microphone.
 hound = "3.5"
+# The conversation (`voice::speech`): Piper's voices read on the machine. The text becomes phonemes through eSpeak NG
+# (its port to Rust, GPL-3.0-or-later, the data of French and English built in), which the voice's VITS model, run by
+# ONNX Runtime, turns into sound.
+espeak-ng = { version = "0.2", default-features = false, features = ["bundled-data-fr", "bundled-data-en"] }
+
+# ONNX Runtime, linked in statically on Windows and Apple Silicon (pyke's builds, downloaded by its build script). Pyke
+# builds none for Intel Macs, and its Linux one needs glibc 2.38: there Microsoft's own library (1.23.2, glibc 2.27) is
+# shipped in the bundle (scripts/onnxruntime.sh, tauri.ort-<os>.conf.json) and loaded at run time.
+[target.'cfg(any(windows, all(target_os = "macos", target_arch = "aarch64")))'.dependencies]
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-rustls", "api-22"] }
+
+[target.'cfg(any(target_os = "linux", all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-22"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
