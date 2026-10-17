@@ -36,6 +36,10 @@ export interface Settings {
   autoResume: boolean;
   /** « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent goes on by itself on another usable account, rather than wait for its own to reset. */
   switchOnLimit: boolean;
+  /** « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés »: an agent whose harness is spent for its project goes on by itself on the next fallback harness (a handover). Off by default. */
+  handoverOnLimit: boolean;
+  /** « Modèle de passation », by harness: the model an agent handed over to it runs on; absent: its best (the first of its menu). */
+  handoverModels: Partial<Record<EngineId, string>>;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
@@ -849,6 +853,8 @@ export interface Agent {
   account: string;
   /** The account it ran on before « Reprendre sur <compte> » moved it, until a turn ends on the new one: a turn that fails there is the resume’s failure. */
   movedFrom: string | null;
+  /** The harness it left by a handover (« Continuer sur <harness> »): set aside until `until` (the reset of its quota; null: left with quota to spare), then offered back, never gone back to by itself. */
+  handedFrom: HandedFrom | null;
   /** What it is doing right now ("Lit src/db.ts", "Lance npm test"…), during a turn. */
   activity: string | null;
   /** The setup of its new worktree under way: the step running ("1/2 · npm ci"). */
@@ -1297,7 +1303,7 @@ export interface UserItem extends Base {
   ts: number;
   queued: boolean;
   /** "remote": sent from claude.ai / the Claude app (Remote Control). */
-  origin?: 'remote';
+  origin?: 'remote' | 'handover';
 }
 export interface TextItem extends Base {
   kind: 'text';
@@ -1368,6 +1374,23 @@ export interface TurnItem extends Base {
   /** The harness that ran it (absent from turns saved before 1.8, all Claude Code's). */
   engine?: EngineId;
 }
+/** A handover to another harness: « Suite sur Codex · quota Claude Code épuisé jusqu’à 18:00 ». */
+export interface HandoverItem extends Base {
+  kind: 'handover';
+  ts: number;
+  from: EngineId;
+  to: EngineId;
+  /** It left because every account of its harness serving the project was spent. */
+  limited: boolean;
+  /** When that quota resets (ms), if known. */
+  until: number | null;
+}
+/** The harness an agent left by a handover (`Agent.handedFrom`). */
+export interface HandedFrom {
+  engine: EngineId;
+  account: string;
+  until: number | null;
+}
 export interface NoticeItem extends Base {
   kind: 'notice';
   ts: number;
@@ -1386,7 +1409,8 @@ export interface EventItem extends Base {
   ts: number;
 }
 
-export type ConvItem = UserItem | TextItem | ThinkingItem | ToolItem | QuestionItem | PermissionItem | TurnItem | NoticeItem | EventItem;
+export type ConvItem =
+  UserItem | TextItem | ThinkingItem | ToolItem | QuestionItem | PermissionItem | TurnItem | NoticeItem | EventItem | HandoverItem;
 
 export type ConvOp =
   | { op: 'append'; item: ConvItem }

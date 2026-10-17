@@ -33,6 +33,7 @@
   import Thinking from './conv/Thinking.svelte';
   import ToolRow from './conv/ToolRow.svelte';
   import TurnCard from './conv/TurnCard.svelte';
+  import Handover from './conv/Handover.svelte';
   import UserMessage from './conv/UserMessage.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -110,6 +111,8 @@
     for (let i = top.length - 1; i >= 0; i--) if (top[i].kind === 'turn') return top[i].id;
     return null;
   });
+  // Once the conversation went from one harness to another (ESC-88), each turn says the one that ran it.
+  const marked = $derived(conv.items.some((i) => i.kind === 'handover'));
   // Subagents named after their tasks, for their messages.
   const labels = $derived(subagentLabels(conv.items));
   const branch = $derived(agent.worktree?.branch ?? app.git[project.id]?.branch ?? '');
@@ -751,7 +754,10 @@
                   last={i === top.length - 1}
                   latest={item.id === latestTurn}
                   edits={i === top.length - 1 ? lastEdits : []}
+                  {marked}
                 />
+              {:else if item.kind === 'handover'}
+                <Handover {item} />
               {:else if item.kind === 'notice'}
                 <Notice {item} />
               {/if}

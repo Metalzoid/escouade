@@ -95,6 +95,8 @@ Les demandes d’autorisation et leur traitement sont décrits dans [la conversa
 |---|---|---|
 | « Reprise automatique après la limite d’usage » | « continue » est envoyé à l’agent une fois le quota réinitialisé. | Activé |
 | « Reprendre sur un autre compte un agent de ticket arrêté par la limite » | Sinon il attend la remise à zéro de son compte. Absent tant qu’il n’y a qu’un compte. | Désactivé |
+| « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » | L’agent passe seul sur le harness de secours suivant de son projet, et le pilote auto le suit pour les tickets ; sinon il attend la remise à zéro. Le harness quitté n’est pas repris avant sa remise à zéro, et l’agent n’y revient jamais seul. Absent tant qu’un seul harness est trouvé. | Désactivé |
+| « Modèle de passation · <harness> » | Le modèle d’un agent qui passe sur ce harness. Un par harness, affiché avec le réglage précédent. | Le meilleur |
 | « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
 | « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |

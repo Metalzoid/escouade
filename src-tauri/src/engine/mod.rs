@@ -72,7 +72,19 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
         | EngineId::Copilot
         | EngineId::Cursor
         | EngineId::Opencode => &CLAUDE,
+        #[cfg(test)]
+        EngineId::Bench => &minimal::MINIMAL,
     }
+}
+
+/// Whether the harness `id` names is written (its adapter is there): only those take an agent
+/// handed over (the others resolve to Claude Code's, `by_id`).
+pub fn written(id: EngineId) -> bool {
+    #[cfg(test)]
+    if id == EngineId::Bench {
+        return true;
+    }
+    registry::all().iter().any(|e| e.id() == id)
 }
 
 /// The name of the harness `id` names, as the interface says it: its own once it is written, else
@@ -87,6 +99,8 @@ pub fn by_name(id: EngineId) -> &'static str {
         EngineId::Copilot => "Copilot CLI",
         EngineId::Cursor => "Cursor CLI",
         EngineId::Opencode => "OpenCode",
+        #[cfg(test)]
+        EngineId::Bench => "Minimal",
     }
 }
 
@@ -285,6 +299,20 @@ pub trait Engine: Send + Sync {
     fn models(&self) -> Vec<registry::ModelDecl>;
     /// The efforts the composer offers, in its menu's order (none without `caps().effort`).
     fn efforts(&self) -> &'static [&'static str];
+
+    /// The model an agent handed over to it runs on unless « Modèle de passation » says another:
+    /// its best, the first of its menu.
+    fn handover_model(&self) -> String {
+        self.models()
+            .first()
+            .map(|m| m.id.to_string())
+            .unwrap_or_default()
+    }
+    /// The size of the context window of `model`, in tokens: what bounds the handover file it is
+    /// given (`handover`).
+    fn context_window(&self, _model: &str) -> u64 {
+        200_000
+    }
 
     /// Whether `model` takes an effort.
     fn supports_effort(&self, model: &str) -> bool;

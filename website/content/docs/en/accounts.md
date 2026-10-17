@@ -188,6 +188,20 @@ When on, the agent of a ticket stopped by the limit moves by itself to another a
 
 The account left receives no new ticket until it resets (30 minutes when the reset isn’t known). A project whose “Preferred account” is the agent’s own account keeps its agent there: it waits.
 
+### Continue on another harness
+
+When no account of the agent’s harness serving its project can take it any more (limit reached, or past “Pause past quota”), the card offers “Continue on Codex”: the project’s next harness. A project goes first to its default harness, then to the others in the “Harness order” (Settings › Accounts), only those with an active account serving it: an account “Reserved to projects” serves only the ones it ticks. The ▾ button (“Continue on another harness”) opens the menu of the next ones. With no fallback harness, the agent waits for the reset, as before.
+
+A session doesn’t move from one harness to another: this is a handover. The agent keeps its conversation, its worktree and its branch; a new process of the target harness starts on the account its rule picks, with that harness’s “Handover model” (its best one by default, Settings › Harness) and the same mode, or the closest one that never allows more. Its first message is a handover file Escouade writes from the conversation, without asking anything of the harness it left: the original request and the later messages, the agent’s latest messages, its progress and the tasks of its plan, the changed files (`git status`, `git diff --stat`, the branch’s commits), the last turn if it was cut and where, a question or a permission left unanswered. A ticket keeps its protocol through the added instructions. The file is bounded by the target model’s context window; the conversation folds it under “Handover file”.
+
+The conversation marks it: “Continued on Codex · Claude Code quota spent until 6:00 PM”, then each turn says the harness that ran it, and keeps its statistics and its cost.
+
+The agent’s menu also offers “Continue on another harness…” at any time, outside a running turn.
+
+The harness left is set aside until its reset. After that, the card and the menu offer “Go back to Claude Code”: a handover the other way. The agent never goes back by itself.
+
+The setting “Continue on the next harness when every account of a harness is spent” (Settings › Harness, “Processes” group, shown with two harnesses) does it without you. It is off by default. When on, the agent stopped by the limit moves by itself to the first fallback harness with an account to take it, never to the one it left; the autopilot follows its ticket on the new harness.
+
 ## Disable or remove an account
 
 **Disable.** The “Active” switch keeps the account in the list, with its sign-in, its folder and its conversations, but no new agent, ticket or resume starts on it any more. Its state becomes “Inactive”. Agents already on it stay there; their “Account” menu shows it as “Pro (inactive)”.

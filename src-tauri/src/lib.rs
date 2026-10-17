@@ -27,6 +27,7 @@ mod fileorigin;
 mod fileorigin_tests;
 mod fsedit;
 mod git;
+mod handover;
 mod hub;
 mod integrations;
 #[cfg(test)]
@@ -387,6 +388,7 @@ pub fn run() {
             commands::set_agent_options,
             commands::set_agent_account,
             commands::resume_on_account,
+            commands::continue_on_engine,
             commands::back_to_previous_account,
             commands::rename_agent,
             commands::duplicate_agent,

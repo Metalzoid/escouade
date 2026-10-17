@@ -243,6 +243,8 @@ export const api = {
   setAgentAccount: (id: string, account: string) => invoke<void>('set_agent_account', { id, account }),
   /** « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on another account. */
   resumeOnAccount: (agentId: string, account: string) => invoke<void>('resume_on_account', { agentId, account }),
+  /** « Continuer sur <harness> » and « Revenir sur <harness> »: the agent goes on on another harness, by a handover. */
+  continueOnEngine: (agentId: string, engine: EngineId) => invoke<void>('continue_on_engine', { agentId, engine }),
   /** « Revenir sur <compte> »: a resume on another account failed; the agent goes back to the account it came from. */
   backToPreviousAccount: (agentId: string) => invoke<void>('back_to_previous_account', { agentId }),
   renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),

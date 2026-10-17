@@ -12,6 +12,7 @@ import editor from './editor';
 import errors from './errors';
 import format from './format';
 import git from './git';
+import handover from './handover';
 import integrations from './integrations';
 import mcp from './mcp';
 import nav from './nav';
@@ -41,6 +42,7 @@ export const fr = {
   shell,
   errors,
   accounts,
+  handover,
   mcp,
   branches,
   plan,

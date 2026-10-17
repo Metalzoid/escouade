@@ -20,7 +20,8 @@
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
-  import type { Agent, AgentStatus, Project } from '../lib/types';
+  import { backTarget, forwardTargets } from '../lib/handover';
+  import type { Agent, AgentStatus, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -129,6 +130,7 @@
             },
           ]
         : []),
+      ...handoverItems(e, a),
       ...remoteItems(a),
       { label: '', separator: true },
       { label: t('nav.sidebar.menu.delete'), danger: true, onClick: () => confirmDelete(a) },
@@ -143,6 +145,38 @@
     menu.open = {
       ...at,
       items: project.runCommands.map((c) => ({ label: c.name, hint: c.cwd || undefined, onClick: () => runIn(project, c, a.id) })),
+    };
+  }
+
+  /** « Continuer sur un autre harness… » at any time, and « Revenir sur <harness> » once the quota of the one it left came back (ESC-88). */
+  function handoverItems(e: MouseEvent, a: Agent): MenuItem[] {
+    if (a.archived) return [];
+    const forward = forwardTargets(a);
+    const back = backTarget(a);
+    // Its turn ends first; a question or a permission waiting goes in the handover file.
+    const waits = a.status === 'running';
+    const busy = { disabled: waits, title: waits ? t('handover.waitTurn') : undefined };
+    const items: MenuItem[] = [];
+    if (forward.length) items.push({ label: t('handover.menu'), ...busy, onClick: () => engineMenu(e, a, forward) });
+    if (back)
+      items.push({
+        label: t('handover.back', { harness: engineName(back) }),
+        ...busy,
+        onClick: () => app.run(api.continueOnEngine(a.id, back)),
+      });
+    return items;
+  }
+
+  /** The harnesses the agent may go on on, where its menu was. */
+  async function engineMenu(e: MouseEvent, a: Agent, engines: EngineId[]) {
+    const at = { x: e.clientX, y: e.clientY };
+    await tick();
+    menu.open = {
+      ...at,
+      items: engines.map((x) => ({
+        label: t('handover.continueOn', { harness: engineName(x) }),
+        onClick: () => app.run(api.continueOnEngine(a.id, x)),
+      })),
     };
   }
 

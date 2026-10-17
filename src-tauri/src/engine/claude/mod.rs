@@ -411,6 +411,15 @@ impl Engine for Claude {
         supports_auto(model)
     }
 
+    /// A million tokens for the models of the long context (`opus[1m]`), else 200 000.
+    fn context_window(&self, model: &str) -> u64 {
+        if model.to_lowercase().contains("[1m]") {
+            1_000_000
+        } else {
+            200_000
+        }
+    }
+
     fn spawn(
         &self,
         spawn: Spawn,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
-  import { speakerOf } from '../../lib/engines';
+  import { engineName, speakerOf } from '../../lib/engines';
   import type { EngineId, UserItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
   import { withoutInstruction } from '../../lib/conversation';
@@ -11,26 +11,55 @@
   const shown = $derived(withoutInstruction(item.text));
 </script>
 
-<div class="wrap">
-  <div class="bubble">
-    {#if item.images > 0}
-      <span class="chip">🖼 {t('conv.user.images', { count: item.images })}</span>
-    {/if}
-    {#each item.files ?? [] as name, i (i)}
-      <span class="chip">📄 {name}</span>
-    {/each}
-    <span class="text">{shown.text}</span>
-    {#if shown.spoken}<span class="note" data-said-aloud>🎙 {t('conv.user.saidAloud')}</span>{/if}
-    <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
-    {#if waiting}<span class="note">{t('conv.user.waiting')}</span>{/if}
-    <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
-    {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span
-      >{/if}
-    {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
+{#if item.origin === 'handover'}
+  <!-- The handover file (ESC-88): written by Escouade, folded under its title. -->
+  <details class="file">
+    <summary use:tip={t('handover.file.hint', { harness: engineName(engine) })}>{t('handover.file.title')}</summary>
+    <span class="text">{item.text}</span>
+  </details>
+{:else}
+  <div class="wrap">
+    <div class="bubble">
+      {#if item.images > 0}
+        <span class="chip">🖼 {t('conv.user.images', { count: item.images })}</span>
+      {/if}
+      {#each item.files ?? [] as name, i (i)}
+        <span class="chip">📄 {name}</span>
+      {/each}
+      <span class="text">{shown.text}</span>
+      {#if shown.spoken}<span class="note" data-said-aloud>🎙 {t('conv.user.saidAloud')}</span>{/if}
+      <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
+      {#if waiting}<span class="note">{t('conv.user.waiting')}</span>{/if}
+      <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
+      {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span
+        >{/if}
+      {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
+    </div>
   </div>
-</div>
+{/if}
 
 <style>
+  .file {
+    margin-left: 34px;
+    padding: 8px 12px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line2);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .file summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .file .text {
+    display: block;
+    margin-top: 8px;
+    max-height: 360px;
+    overflow: auto;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
   .wrap {
     display: flex;
     justify-content: flex-end;

@@ -1,23 +1,26 @@
 <script lang="ts">
   import { accountName, resumeTargets } from '../../lib/accounts';
+  import { engineName } from '../../lib/engines';
+  import { backTarget, forwardTargets } from '../../lib/handover';
   import { fDur, fTok, fUsd, fWhen, isAbsPath } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu } from '../../lib/menu.svelte';
   import { app } from '../../lib/state.svelte';
   import type { FileEdit } from '../../lib/tools';
-  import type { Agent, TurnItem } from '../../lib/types';
+  import type { Agent, EngineId, TurnItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
 
   // `edits`: the files this turn edited, recapped once the agent is done. `latest`: the conversation's
-  // latest turn (notices may follow it).
+  // latest turn (notices may follow it). `marked`: the conversation went from one harness to another, each turn says its own.
   let {
     item,
     agent,
     last,
     latest = last,
     edits = [],
-  }: { item: TurnItem; agent: Agent; last: boolean; latest?: boolean; edits?: FileEdit[] } = $props();
+    marked = false,
+  }: { item: TurnItem; agent: Agent; last: boolean; latest?: boolean; edits?: FileEdit[]; marked?: boolean } = $props();
 
   const big = $derived(last && agent.status === 'done' && !item.isError && !item.interrupted);
 
@@ -29,6 +32,25 @@
   // The first turn after a resume on another account failed there: the sentence replaces the error, which it holds.
   const resumeFailed = $derived(latest && !working && !item.limited && agent.movedFrom ? accountById(agent.account) : undefined);
   const before = $derived(resumeFailed && agent.movedFrom ? accountById(agent.movedFrom) : undefined);
+
+  // Every account of its harness serving the project spent (none to resume on): the project's fallback harnesses (ESC-88).
+  const stopped = $derived(latest && !working && !agent.archived && (item.limited || !!agent.resumeAt));
+  const engines = $derived(stopped && !targets.length ? forwardTargets(agent) : []);
+  // The harness it left, once its quota came back: offered, never taken by itself.
+  const back = $derived(latest && !working && !agent.archived ? backTarget(agent) : null);
+  const mark = $derived(marked ? t('handover.turnOn', { harness: engineName(item.engine ?? 'claude') }) : '');
+
+  function continueOn(engine: EngineId) {
+    app.run(api.continueOnEngine(agent.id, engine));
+  }
+
+  /** The other harnesses, in a menu under their button. */
+  function moreEngines(e: MouseEvent) {
+    menu.showAt(
+      e.currentTarget as HTMLElement,
+      engines.slice(1).map((x) => ({ label: t('handover.continueOn', { harness: engineName(x) }), onClick: () => continueOn(x) })),
+    );
+  }
 
   function resumeOn(account: string) {
     app.run(api.resumeOnAccount(agent.id, account));
@@ -60,11 +82,21 @@
         </div>
       {/if}
     {:else if item.error}<pre class="err">{item.error}</pre>{/if}
-    {#if (latest && agent.resumeAt) || targets.length}
+    {#if (latest && agent.resumeAt) || targets.length || engines.length}
       <div class="resume">
         {#if latest && agent.resumeAt}
           <span>{t('conv.turn.resumeAt', { when: fWhen(agent.resumeAt, app.now) })}</span>
           <button class="btn small" onclick={() => app.run(api.cancelResume(agent.id))}>{t('conv.turn.cancelResume')}</button>
+        {/if}
+        {#if engines.length}
+          <span class="pair">
+            <button class="btn small" onclick={() => continueOn(engines[0])}
+              >{t('handover.continueOn', { harness: engineName(engines[0]) })}</button
+            >
+            {#if engines.length > 1}
+              <button class="btn small" aria-haspopup="menu" aria-label={t('handover.another')} onclick={moreEngines}>▾</button>
+            {/if}
+          </span>
         {/if}
         {#if targets.length}
           <span class="pair">
@@ -78,6 +110,7 @@
         {/if}
       </div>
     {/if}
+    {@render backRow()}
   </div>
 {:else if big}
   <div class="card done" data-testid="turn-done">
@@ -85,7 +118,7 @@
     <div class="stats mono">
       <span>{fDur(item.durationMs ?? 0)}</span><span>{t('conv.turn.tokens', { tokens: fTok(item.tokens) })}</span><span
         >{fUsd(item.cost)}</span
-      ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>
+      ><span>{t('conv.turn.filesEdited', { count: edits.length })}</span>{#if mark}<span>{mark}</span>{/if}
     </div>
     {#if edits.length}
       <ul class="recap mono" aria-label={t('conv.turn.editedFiles')}>
@@ -106,18 +139,33 @@
         {/each}
       </ul>
     {/if}
+    {@render backRow()}
   </div>
 {:else}
   <div class="sep mono">
     <span class="line"></span>
     {item.interrupted ? t('conv.turn.interrupted') : fDur(item.durationMs ?? 0)} · {t('conv.turn.tokens', { tokens: fTok(item.tokens) })} · {fUsd(
       item.cost,
-    )}
+    )}{mark ? ` · ${mark}` : ''}
     <span class="line"></span>
   </div>
+  {#if back}<div class="back-alone">{@render backRow()}</div>{/if}
 {/if}
 
+{#snippet backRow()}
+  {#if back}
+    <div class="resume">
+      <button class="btn small" use:tip={t('handover.backHint', { harness: engineName(back) })} onclick={() => continueOn(back!)}
+        >{t('handover.back', { harness: engineName(back) })}</button
+      >
+    </div>
+  {/if}
+{/snippet}
+
 <style>
+  .back-alone {
+    margin: 8px 0 0 34px;
+  }
   .card {
     margin-left: 34px;
     display: flex;

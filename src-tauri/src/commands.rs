@@ -747,6 +747,19 @@ pub async fn set_agent_account(core: CoreState<'_>, id: String, account: String)
     core.set_agent_account(&id, &account).await.map_err(err)
 }
 
+/// « Continuer sur <harness> » and « Revenir sur <harness> »: the agent goes on on another harness,
+/// by a handover (`handover`).
+#[tauri::command]
+pub async fn continue_on_engine(
+    core: CoreState<'_>,
+    agent_id: String,
+    engine: EngineId,
+) -> Res<()> {
+    core.continue_on_engine(&agent_id, engine)
+        .await
+        .map_err(err)
+}
+
 /// « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on
 /// another account.
 #[tauri::command]

@@ -3384,14 +3384,14 @@ impl<R: Runtime> Core<R> {
         attachments: Vec<Attachment>,
         files: Vec<AttachedFile>,
     ) -> Result<()> {
-        self.send(id, None, text, attachments, files, true, false)
+        self.send(id, None, text, attachments, files, true, false, None)
             .await
     }
 
     /// A sentence said in a conversation (ESC-97): the agent is asked to end its answer with a passage to be read
     /// aloud (`voice::spoken`).
     pub async fn send_spoken(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
-        self.send(id, None, text, Vec::new(), Vec::new(), true, true)
+        self.send(id, None, text, Vec::new(), Vec::new(), true, true, None)
             .await
     }
 
@@ -3406,7 +3406,7 @@ impl<R: Runtime> Core<R> {
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<()> {
-        self.send(id, origin, text, attachments, Vec::new(), true, false)
+        self.send(id, origin, text, attachments, Vec::new(), true, false, None)
             .await
     }
 
@@ -3414,11 +3414,40 @@ impl<R: Runtime> Core<R> {
     /// conflicts of the base to resolve): no task of the user's to name the agent after, so it
     /// never does.
     pub(crate) async fn send_by_app(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
-        self.send(id, None, text, Vec::new(), Vec::new(), false, false)
+        self.send(id, None, text, Vec::new(), Vec::new(), false, false, None)
             .await
     }
 
-    /// Sends the message to the agent; `names`: it may name the agent (`naming_text`). `files` are
+    /// The handover file (`handover`), the first message of the agent on the harness it goes on
+    /// on: its conversation shows it as such (`origin`: "handover"), folded. A ticket's agent
+    /// that cannot get it blocks its ticket.
+    pub(crate) async fn send_handover(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
+        let sent = self
+            .send(
+                id,
+                None,
+                text,
+                Vec::new(),
+                Vec::new(),
+                false,
+                // Escouade's own text, never said aloud.
+                false,
+                Some("handover"),
+            )
+            .await;
+        if let (Err(e), Some(ticket)) = (&sent, self.doing_ticket_of(id)) {
+            log::warn!("agent {id}: handover file to its ticket's agent not sent: {e:#}");
+            let _ = self.edit_ticket(&ticket, |t| {
+                t.blocked = Some(crate::tickets::error_reason(e));
+                Ok(())
+            });
+            self.notify_ticket(&ticket, false);
+        }
+        sent
+    }
+
+    /// Sends the message to the agent; `names`: it may name the agent (`naming_text`); `kind`: the
+    /// origin its item in the conversation shows (`push_user_from`). `files` are
     /// the files joined by their path: they are checked again (`checked_files`), the message ends
     /// with a line for each, and the agent may read the ones of the user's own from then on. The
     /// agent is named from the text alone, never from those lines. `spoken`: said in a conversation, it ends with the
@@ -3433,6 +3462,7 @@ impl<R: Runtime> Core<R> {
         files: Vec<AttachedFile>,
         names: bool,
         spoken: bool,
+        kind: Option<&str>,
     ) -> Result<()> {
         // Until its turn runs (its process started, the message delivered), it is under way.
         let _working = self.working();
@@ -3482,7 +3512,7 @@ impl<R: Runtime> Core<R> {
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
-            if self.deliver(id, &proc, &delivered, naming, &content, &attachments)? {
+            if self.deliver(id, &proc, &delivered, naming, &content, &attachments, kind)? {
                 return Ok(());
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
@@ -3498,6 +3528,7 @@ impl<R: Runtime> Core<R> {
     /// `text` is what the agent is sent, `naming` what its name is made from when it is not named
     /// yet (the same, unless the text is headed by its author's name): Haiku is asked once, at the
     /// first message that gives it a text to name the agent from (`naming_text`).
+    #[allow(clippy::too_many_arguments)]
     fn deliver(
         self: &Arc<Self>,
         id: &str,
@@ -3506,6 +3537,7 @@ impl<R: Runtime> Core<R> {
         naming: &str,
         content: &engine::Message,
         attachments: &[Attachment],
+        kind: Option<&str>,
     ) -> Result<bool> {
         let h = self.agent(id)?;
         let mut fx = Effects::default();
@@ -3520,7 +3552,7 @@ impl<R: Runtime> Core<R> {
             }
             let (images, files): (Vec<_>, Vec<_>) = attachments.iter().partition(|a| a.is_image());
             let files: Vec<String> = files.into_iter().map(|a| a.name.clone()).collect();
-            rt.push_user(&uid, text, images.len() as u32, &files, &mut fx);
+            rt.push_user_from(&uid, text, images.len() as u32, &files, kind, &mut fx);
             let name_from = rt.name_from(naming);
             (
                 rt.meta.project_id.clone(),

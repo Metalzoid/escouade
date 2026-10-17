@@ -78,6 +78,14 @@ pub struct Settings {
     /// wait for its own to reset. Off unless the user switches it on (not verified with a second
     /// real account): settings saved before it have it off too.
     pub switch_on_limit: bool,
+    /// « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés »: an
+    /// agent stopped by the usage limit, none of whose harness's accounts serving its project can
+    /// take it, goes on by itself on the next of the project's fallback harnesses (a handover,
+    /// `handover`); the autopilot follows it for the tickets. Off unless the user switches it on.
+    pub handover_on_limit: bool,
+    /// « Modèle de passation »: the model an agent handed over to a harness runs on there, by
+    /// harness; none (or one it does not list): its best (`Engine::handover_model`).
+    pub handover_models: std::collections::BTreeMap<EngineId, String>,
     /// « Statistiques d’usage » (`telemetry`): None until the user answered the question
     /// of the first start (settings saved before it have none: they are asked too).
     pub telemetry: Option<bool>,
@@ -425,6 +433,8 @@ impl Default for Settings {
             engine_order: Vec::new(),
             todo_tools: true,
             switch_on_limit: false,
+            handover_on_limit: false,
+            handover_models: Default::default(),
             telemetry: None,
             attach_max_mb: 0,
             attach_warn_mb: 200,
@@ -983,6 +993,10 @@ pub enum EngineId {
     Copilot,
     Cursor,
     Opencode,
+    /// The minimal fake engine of the conformance bench, run by the core in the tests of the
+    /// handover (`engine/minimal/`): a second harness beside Claude Code's fake.
+    #[cfg(test)]
+    Bench,
 }
 
 impl EngineId {
@@ -994,6 +1008,8 @@ impl EngineId {
             EngineId::Copilot => "copilot",
             EngineId::Cursor => "cursor",
             EngineId::Opencode => "opencode",
+            #[cfg(test)]
+            EngineId::Bench => "bench",
         }
     }
 }
@@ -1105,6 +1121,10 @@ pub struct AgentMeta {
     /// The resume it waited for on that account (`resume_at`), which the move dropped: where it waits
     /// again when it goes back, if the account's windows no longer say when it resets.
     pub moved_resume_at: Option<i64>,
+    /// The harness it left by a handover (« Continuer sur <harness> »), until it goes back: set
+    /// aside until its quota resets, then offered back (« Revenir sur <harness> »), never gone
+    /// back to by itself.
+    pub handed_from: Option<HandedFrom>,
     /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
     /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
     pub terminal: bool,
@@ -1115,6 +1135,18 @@ pub struct AgentMeta {
     /// them: the only files outside its folders that its `Read` is allowed without asking
     /// (`attachfiles::granted`). The `MAX_GRANTED_FILES` last.
     pub granted_files: Vec<String>,
+}
+
+/// The harness an agent left by a handover (`AgentMeta::handed_from`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HandedFrom {
+    pub engine: EngineId,
+    /// The account it ran on there.
+    pub account: String,
+    /// When the quota of that harness resets (ms): it is not gone back to before. None: it left
+    /// with quota to spare (a handover asked for by hand).
+    pub until: Option<i64>,
 }
 
 /// The most files of the user's own an agent keeps the right to read (`AgentMeta::granted_files`):

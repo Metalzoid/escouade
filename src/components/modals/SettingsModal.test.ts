@@ -363,6 +363,31 @@ describe('SettingsModal', () => {
     expect(screen.queryByRole('switch', { name: /Reprendre sur un autre compte/ })).not.toBeInTheDocument();
   });
 
+  it('lets an agent go on on the next harness once every account of its own is spent, off by default, with a model per harness (ESC-88)', async () => {
+    const backend = backendSaving();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, name: 'Codex' }];
+    app.enginesFound = ['claude', 'codex'];
+    render(SettingsModal);
+    const next = screen.getByRole('switch', { name: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés' });
+    expect(next).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(next);
+    // Codex's best model by default; another one chosen.
+    const codex = screen.getByRole('group', { name: 'Modèle de passation · Codex' });
+    expect(within(codex).getByRole('button', { name: 'Le meilleur (GPT-5.5)' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(codex).getByRole('button', { name: 'GPT-5.5 mini' }));
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({
+      handoverOnLimit: true,
+      handoverModels: { codex: 'gpt-5.5-mini' },
+    });
+  });
+
+  it('has no such switch with a single harness', () => {
+    backendSaving();
+    render(SettingsModal);
+    expect(screen.queryByRole('switch', { name: /Continuer sur le harness suivant/ })).not.toBeInTheDocument();
+  });
+
   it('changes nothing when cancelled, nor when closed', async () => {
     const backend = fakeBackend();
     render(SettingsModal);

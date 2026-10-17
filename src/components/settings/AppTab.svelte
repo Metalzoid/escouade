@@ -201,6 +201,32 @@
         <Switch label={t('accounts.switchOnLimit.label')} bind:on={s.switchOnLimit} />
       </Row>
     {/if}
+    <!-- Going on on another harness (ESC-88): only with two harnesses found. -->
+    {#if found.length > 1}
+      <Row label={t('handover.settings.onLimit')} desc={t('handover.settings.onLimitDesc')}>
+        <Switch label={t('handover.settings.onLimit')} bind:on={s.handoverOnLimit} />
+      </Row>
+      {#each found.filter((e) => e.models.length) as e (e.id)}
+        <Row label={t('handover.settings.model', { harness: e.name })} desc={t('handover.settings.modelDesc')}>
+          <Chips
+            label={t('handover.settings.model', { harness: e.name })}
+            options={[
+              { value: '', label: t('handover.settings.best', { model: e.models[0].label }) },
+              ...e.models.map((m) => ({ value: m.id, label: m.label })),
+            ]}
+            bind:value={
+              () => s.handoverModels?.[e.id] ?? '',
+              (v) => {
+                const models = { ...(s.handoverModels ?? {}) };
+                if (v) models[e.id] = v;
+                else delete models[e.id];
+                s.handoverModels = models;
+              }
+            }
+          />
+        </Row>
+      {/each}
+    {/if}
     <!-- Settings of what only some harnesses do: shown while one of them is there. -->
     {#if anyCan('terminalView')}
       <Row label={t('settings.claude.terminalView')} desc={t('settings.claude.terminalViewDesc')}>

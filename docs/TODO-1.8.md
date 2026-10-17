@@ -655,25 +655,25 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 ### Continuer sur un autre moteur quand le quota est épuisé (demandé le 2026-10-14, ESC-88)
 But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un agent arrêté par la limite attend la remise à zéro, ou reprend sur un autre compte Claude (docs/SPEC.md, « Reprise sur un autre compte »). Quand tous les comptes du moteur d'un agent sont épuisés, il doit pouvoir continuer sur un autre moteur.
 
-- [ ] **Une passation, pas une copie de session** : une session ne passe pas d'un moteur à l'autre.
+- [x] **Une passation, pas une copie de session** (ESC-88, `handover.rs` ; sans résumé des tours anciens par un modèle : le dossier les omet en le disant) : une session ne passe pas d'un moteur à l'autre.
   - Même agent, même conversation dans Escouade, même worktree, même branche. Un nouveau process du moteur cible, sur le compte que choisit sa propre règle.
   - Le premier message est un dossier de passation construit par Escouade depuis son journal (`conv.rs`), sans le moteur épuisé : demandes de l'utilisateur ; travail fait (derniers messages de l'agent, avancement, tâches du plan) ; fichiers modifiés (`git status`, `diff --stat`) ; tour coupé, et où ; question ou permission en attente.
   - Pour un ticket, son protocole (critères, boucle, bilan) repasse par les consignes ajoutées.
   - Le dossier est borné à la fenêtre de contexte du modèle cible ; les tours anciens peuvent être résumés par le modèle des textes rédigés du moteur cible.
-- [ ] **Mode et modèle** : le même mode si le moteur cible l'a, sinon le plus proche qui n'autorise jamais plus. Un modèle de passation par moteur, réglable (par défaut, son meilleur).
-- [ ] **Dans la conversation** : une séparation « Suite sur Codex · quota Claude épuisé jusqu'à 18:00 », puis la marque du moteur sur les tours suivants. La carte montre le moteur du moment. Chaque tour garde son moteur (stats, coût).
-- [ ] **Moteurs de secours, par projet** (décidé le 2026-10-14) : comme les comptes Claude aujourd'hui, sans réglage à part.
+- [x] **Mode et modèle** (ESC-88) : le même mode si le moteur cible l'a, sinon le plus proche qui n'autorise jamais plus. Un modèle de passation par moteur, réglable (par défaut, son meilleur).
+- [x] **Dans la conversation** (ESC-88) : une séparation « Suite sur Codex · quota Claude épuisé jusqu'à 18:00 », puis la marque du moteur sur les tours suivants. La carte montre le moteur du moment. Chaque tour garde son moteur (stats, coût).
+- [x] **Moteurs de secours, par projet** (décidé le 2026-10-14, ESC-88) : comme les comptes Claude aujourd'hui, sans réglage à part.
   - Chaque compte, de tout moteur, peut être « Réservé aux projets » cochés, et les moteurs ont un ordre, réglable (voir « Comptes et quotas »).
   - Pour un projet, la suite est : son moteur par défaut, puis les autres moteurs dans l'ordre réglé, seulement ceux qui ont un compte actif servant ce projet.
   - Un projet qu'aucun autre moteur ne sert attend la remise à zéro, comme aujourd'hui.
-- [ ] **Quand** (décidé le 2026-10-14 : l'automatique est une option) :
+- [x] **Quand** (décidé le 2026-10-14 : l'automatique est une option ; ESC-88) :
   - par défaut, rien ne change : l'agent attend la remise à zéro et reprend seul ;
   - « Continuer sur <moteur> » sur la carte de fin d'un tour arrêté par la limite, pour le moteur suivant du projet (un menu s'il y en a plusieurs), à côté de « Reprendre sur <compte> » ;
   - « Continuer sur un autre moteur… » dans le menu de l'agent, à tout moment ;
   - une option, désactivée par défaut, « Continuer sur le moteur suivant quand tous les comptes d'un moteur sont épuisés » : l'agent y passe seul, et le pilote auto la suit pour les tickets.
-- [ ] **Retour** (décidé le 2026-10-14 : jamais automatique) : le moteur quitté est mis de côté jusqu'à sa remise à zéro (pas d'allers-retours, comme le compte quitté aujourd'hui). Ensuite, l'agent reste sur son moteur de secours et « Revenir sur Claude » est proposé : une passation dans l'autre sens, ou l'ancienne session de ce moteur reprise et complétée par ce qui s'est passé depuis.
-- [ ] **Vue terminal** : l'agent continue dans la vue du moteur cible s'il en a une, sinon en vue Escouade.
-- [ ] **Tests** : deux faux moteurs du banc de conformité (limite sur le premier, suite sur le second, retour) ; essai réel Claude → Codex avant la release (ESC-52).
+- [x] **Retour** (décidé le 2026-10-14 : jamais automatique ; ESC-88 : une passation dans l'autre sens) : le moteur quitté est mis de côté jusqu'à sa remise à zéro (pas d'allers-retours, comme le compte quitté aujourd'hui). Ensuite, l'agent reste sur son moteur de secours et « Revenir sur Claude » est proposé : une passation dans l'autre sens, ou l'ancienne session de ce moteur reprise et complétée par ce qui s'est passé depuis.
+- [ ] **Vue terminal** (ESC-88 : la passation ramène l'agent en vue Escouade ; le retour dans la vue terminal du harness cible reste à faire avec Codex, ESC-52) : l'agent continue dans la vue du moteur cible s'il en a une, sinon en vue Escouade.
+- [x] **Tests** (ESC-88, `handover_tests.rs` ; l'essai réel reste à ESC-52) : deux faux moteurs du banc de conformité (limite sur le premier, suite sur le second, retour) ; essai réel Claude → Codex avant la release (ESC-52).
 
 ### Coût, tokens, stats
 - [ ] **Codex** : les tokens d'un tour sont la différence des `total` de `thread/tokenUsage/updated` entre le début et la fin du tour (`inputTokens`, `cachedInputTokens`, `cacheWriteInputTokens`, `outputTokens`, `reasoningOutputTokens`) : `last` n'est que le dernier appel au modèle, et un tour en fait plusieurs. Ceux d'un sous-agent arrivent sous son `threadId`, à ajouter au tour parent. Codex ne donne aucun coût en dollars : il est estimé avec une grille des modèles OpenAI dans `pricing.rs` et marqué « estimé ». Avec un abonnement ChatGPT, c'est un coût théorique, comme celui de Claude avec Max.

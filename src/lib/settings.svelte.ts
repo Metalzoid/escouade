@@ -69,6 +69,8 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'defaultMode',
     'autoResume',
     'switchOnLimit',
+    'handoverOnLimit',
+    'handoverModels',
     'todoTools',
     'idleStopMinutes',
     'attachMaxMb',

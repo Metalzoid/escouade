@@ -35,10 +35,10 @@ pub(crate) struct Minimal;
 pub(crate) static MINIMAL: Minimal = Minimal;
 
 impl Engine for Minimal {
-    /// A test engine has no id of its own in the data: it borrows Claude Code's, which nothing of
-    /// the bench reads.
+    /// The id the tests of the handover run it under, beside Claude Code's fake (the bench reads
+    /// none).
     fn id(&self) -> EngineId {
-        EngineId::Claude
+        EngineId::Bench
     }
 
     fn name(&self) -> &'static str {
@@ -133,11 +133,15 @@ impl Engine for Minimal {
     fn subagent_relay(&self, _: crate::i18n::Lang, _: &str, _: &str, _: &str) -> Option<String> {
         None
     }
+    /// Played in the app's process: no program is looked for.
     fn locate(&self, _: &str, _: &str) -> Option<Program> {
-        unreachable!("not on the bench")
+        Some(Program::Native(PathBuf::new()))
     }
     fn tested(&self) -> Tested {
-        unreachable!("not on the bench")
+        Tested {
+            oldest: "0",
+            newest: "0",
+        }
     }
     fn oldest_reason(&self, _: crate::i18n::Lang) -> String {
         unreachable!("not on the bench")
@@ -145,14 +149,27 @@ impl Engine for Minimal {
     fn update_command(&self) -> &'static str {
         unreachable!("not on the bench")
     }
+    /// Asked by the core before a start: no program answers, no version is read.
     fn version_args(&self) -> &'static [&'static str] {
-        unreachable!("not on the bench")
+        &["--version"]
     }
     fn install(&self) -> Install {
         unreachable!("not on the bench")
     }
     fn models(&self) -> Vec<ModelDecl> {
-        Vec::new()
+        ["grand", "petit"]
+            .into_iter()
+            .map(|id| ModelDecl {
+                id,
+                label: id,
+                effort: false,
+                auto: false,
+            })
+            .collect()
+    }
+    /// A small window, for the tests of what bounds the handover file.
+    fn context_window(&self, _: &str) -> u64 {
+        4_000
     }
     fn efforts(&self) -> &'static [&'static str] {
         &[]
@@ -352,7 +369,9 @@ impl Script {
         while let Ok(input) = self.input.recv() {
             if let Input::Say(text) = input {
                 match self.turn(&text) {
-                    Ok(()) => self.out(json!({ "type": "end" })),
+                    Ok(()) => {
+                        self.out(json!({ "type": "end", "usage": { "input": 120, "output": 30 } }))
+                    }
                     Err(Cut::Interrupted) => {
                         self.out(json!({ "type": "end", "interrupted": true }))
                     }

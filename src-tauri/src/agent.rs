@@ -777,7 +777,7 @@ impl AgentRt {
         fx.ops.push(op);
     }
 
-    fn append(&mut self, item: Value, fx: &mut Effects) {
+    pub(crate) fn append(&mut self, item: Value, fx: &mut Effects) {
         self.push(ConvOp::Append { item }, fx);
     }
 
@@ -844,6 +844,7 @@ impl AgentRt {
     /// Records a user message delivered to Claude under `id` (the frame uuid), with its image
     /// count and the names of its other attached files. Returns true when it was queued behind
     /// a running turn.
+    #[cfg(test)]
     pub fn push_user(
         &mut self,
         id: &str,
@@ -855,8 +856,9 @@ impl AgentRt {
         self.push_user_from(id, text, images, files, None, fx)
     }
 
-    /// `origin`: "remote" for a message sent from claude.ai / the Claude app (Remote Control).
-    fn push_user_from(
+    /// `origin`: "remote" for a message sent from claude.ai / the Claude app (Remote Control),
+    /// "handover" for the handover file of a harness the agent goes on on (`handover`).
+    pub(crate) fn push_user_from(
         &mut self,
         id: &str,
         text: &str,

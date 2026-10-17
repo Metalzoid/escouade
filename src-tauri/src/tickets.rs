@@ -1560,11 +1560,20 @@ impl<R: Runtime> Core<R> {
             let rt = h.lock();
             (rt.meta.ticket_id.clone(), rt.meta.resume_at.is_some())
         };
-        let Some(ticket_id) = ticket_id else { return };
         let limited = end == TurnEnd::Limited;
+        let Some(ticket_id) = ticket_id else {
+            // Its harness spent, an agent goes on on another one, with the option (ESC-88).
+            if limited {
+                self.handover_on_limit(agent_id).await;
+            }
+            return;
+        };
         // Stopped by the usage limit with another account to go on on: it does, rather than wait
-        // for its own to reset. The ticket stays as it is: its agent's next turn is read.
-        if limited && self.switch_on_limit(agent_id).await {
+        // for its own to reset; with none left on its harness, on another harness (the option of
+        // the handover). The ticket stays as it is: its agent's next turn is read.
+        if limited
+            && (self.switch_on_limit(agent_id).await || self.handover_on_limit(agent_id).await)
+        {
             return;
         }
         // A usage limit with no resume planned (turned off, no reset known) would leave the

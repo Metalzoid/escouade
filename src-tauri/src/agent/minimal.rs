@@ -7,7 +7,7 @@
 //! - `call {id, tool, input, parent?}`: a tool (`shell`, `patch`, `agent`, named here as Claude
 //!   Code names them: `Bash`, `Edit`, `Task`), and `done {call, output, error?}` its result;
 //! - `ask {request, call}`: the approval of a call; `question {request, call, text, choices}`;
-//! - `end {interrupted?}`: the turn is over.
+//! - `end {interrupted?, usage?}`: the turn is over, its tokens read (`usage {input, output}`).
 
 use super::*;
 
@@ -155,9 +155,24 @@ impl AgentRt {
                 self.forget_turn();
                 self.close_open_items(fx);
                 self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
+                let (input, output) = (
+                    f["usage"]["input"].as_u64().unwrap_or(0),
+                    f["usage"]["output"].as_u64().unwrap_or(0),
+                );
+                if input + output > 0 {
+                    fx.turns.push(TurnRow {
+                        engine: self.meta.engine,
+                        model: self.meta.model.clone(),
+                        input,
+                        cache: 0,
+                        output,
+                        cost: 0.0,
+                    });
+                    self.meta.tokens += input + output;
+                }
                 let item = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null, "cost": 0.0,
-                    "tokens": 0, "isError": false, "interrupted": interrupted, "error": null,
+                    "tokens": input + output, "isError": false, "interrupted": interrupted, "error": null,
                     "limited": false, "engine": self.meta.engine,
                 });
                 self.append(item, fx);

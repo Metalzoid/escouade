@@ -188,6 +188,20 @@ Activé, l’agent d’un ticket arrêté par la limite passe de lui-même sur u
 
 Le compte quitté ne reçoit plus de nouveau ticket jusqu’à sa remise à zéro (30 minutes quand elle n’est pas connue). Un projet dont le « Compte préféré » est le compte de l’agent garde son agent là : il attend.
 
+### Continuer sur un autre harness
+
+Quand plus aucun compte du harness de l’agent qui sert son projet ne peut le prendre (limite atteinte, ou au-delà de « Pause au-delà du quota »), la carte propose « Continuer sur Codex » : le harness suivant du projet. Un projet passe d’abord par son harness par défaut, puis par les autres dans l’« Ordre des harness » (Réglages › Comptes), seulement ceux qui ont un compte actif qui le sert : un compte « Réservé aux projets » ne sert que ceux qu’il coche. Le bouton ▾ (« Continuer sur un autre harness ») ouvre le menu des suivants. Sans harness de secours, l’agent attend la remise à zéro, comme avant.
+
+Une session ne passe pas d’un harness à l’autre : c’est une passation. L’agent garde sa conversation, son worktree et sa branche ; un nouveau processus du harness cible démarre sur le compte que choisit sa règle, avec le « Modèle de passation » de ce harness (son meilleur par défaut, Réglages › Harness) et le même mode, ou le plus proche qui n’autorise jamais plus. Son premier message est un dossier de passation écrit par Escouade depuis la conversation, sans rien demander au harness quitté : la demande d’origine et les messages suivants, les derniers messages de l’agent, son avancement et les tâches de son plan, les fichiers modifiés (`git status`, `git diff --stat`, les commits de la branche), le dernier tour s’il a été coupé et où, une question ou une permission restée sans réponse. Un ticket garde son protocole par les consignes ajoutées. Le dossier est borné à la fenêtre de contexte du modèle cible ; il est replié dans la conversation sous « Dossier de passation ».
+
+La conversation le marque : « Suite sur Codex · quota Claude Code épuisé jusqu’à 18:00 », puis chaque tour dit le harness qui l’a fait, et ses statistiques et son coût lui restent.
+
+Le menu de l’agent propose aussi « Continuer sur un autre harness… » à tout moment, hors d’un tour en cours.
+
+Le harness quitté est mis de côté jusqu’à sa remise à zéro. Ensuite, la carte et le menu proposent « Revenir sur Claude Code » : une passation dans l’autre sens. L’agent n’y revient jamais seul.
+
+Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Harness, groupe « Processus », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.
+
 ## Désactiver ou supprimer un compte
 
 **Désactiver.** L’interrupteur « Actif » garde le compte dans la liste, avec sa connexion, son dossier et ses conversations, mais plus aucun nouvel agent, ticket ou reprise ne part dessus. L’état devient « Inactif ». Les agents qui y sont déjà y restent ; leur menu « Compte » l’écrit « Pro (inactif) ».
