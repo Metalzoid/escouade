@@ -33,6 +33,22 @@ The path in the settings accepts `~` for your home folder, and on Windows it can
 
 Without Claude Code, the welcome screen says so, so does an agent’s empty conversation, and the Kanban starts no tickets (“Claude Code not found — no tickets will start”). Install it or set its path in the settings: when you save another path, these messages update without restarting Escouade.
 
+### Codex, the other harness
+
+Escouade also runs its agents on **Codex**, OpenAI’s CLI, beside Claude Code. It’s optional: install it with npm (`npm install -g @openai/codex`) and sign in (`codex login`), and it shows in Settings › Harness. Escouade was tested with Codex 0.163.0: an older version is refused, with the command that updates it, and a newer one is used with a warning. The Codex desktop app often installs an older version, which the `PATH` may find first: install npm’s then.
+
+Escouade starts Codex’s app-server (`codex app-server`), one per agent, through its native binary (on Windows, the `codex.exe` of the npm package, not its launcher). Once Codex is found, “New agent ▾” offers “New agent on Codex”, a ticket has its “Harness” field, and a project its “Default harness”. Its models and their efforts are those Codex lists for your account, and Escouade’s modes say what they mean there:
+
+| Mode | With Codex |
+|---|---|
+| Plan | Codex’s Plan mode: it studies, may ask you questions, then proposes its plan, changing nothing (read-only sandbox). |
+| Ask | Sandbox: writing in the agent’s folder, network off. A command that leaves it asks, `git add` and `git commit` included (Codex protects the whole `.git` folder). |
+| Accept edits | The same, and Escouade accepts at once `git add` and `git commit` in the agent’s worktree, when the command is nothing else (no option of git before the subcommand, no other command but `&&` between them) and its hooks are the repository’s; the network and the rest ask. |
+| Auto | Codex’s automatic reviewer decides on the requests for you. |
+| Bypass | Codex asks nothing and leaves its sandbox. |
+
+A request from Codex has three buttons: “Allow”, “For this session” (the same request doesn’t come back during the session) and “Deny”. A message sent while it works goes into its turn instead of waiting. Codex doesn’t read PDFs. Its several accounts, its quota outside an agent and its estimated cost come next.
+
 ## Installing Escouade
 
 The installers are on the [GitHub releases](https://github.com/guillaume-gagnaire/escouade/releases/latest) page.

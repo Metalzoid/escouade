@@ -148,6 +148,12 @@ fn accounts_for_every_harness(h: &Harness) {
                 name: format!("{engine} work"),
                 engine,
                 config_dir: h.dir.join(engine.as_str()).to_string_lossy().into(),
+                // Codex runs its fake; the harnesses not written yet run Claude Code's.
+                claude_path: if engine == EngineId::Codex {
+                    crate::engine::fake_codex()
+                } else {
+                    String::new()
+                },
                 ..Default::default()
             });
         }
@@ -217,12 +223,29 @@ async fn each_turn_keeps_the_harness_that_ran_it_and_a_copy_takes_the_one_its_or
     .await;
     let first_cost = h.core.stats.today_cost();
     // A handover (ESC-88) puts it on another harness: its turns from then on are that one's.
-    h.core.agent(&id).unwrap().lock().meta.engine = EngineId::Codex;
+    // Its process (Claude Code's) gone, as a handover stops it.
+    {
+        let h = h.core.agent(&id).unwrap();
+        let mut rt = h.lock();
+        if let Some(p) = rt.detach() {
+            p.kill();
+        }
+        rt.meta.engine = EngineId::Codex;
+        rt.meta.account = "codex-work".into();
+        rt.meta.session_id = None;
+    }
     h.turn(&id, "Second").await;
-    h.wait("the second turn counted", |h| {
-        h.core.stats.today_cost() > first_cost
-    })
-    .await;
+    // Codex tells no cost: its tokens count the turn.
+    let codex_counted = |h: &Harness| {
+        h.core
+            .stats
+            .query("day", None, &Labels::default())
+            .by_engine
+            .iter()
+            .any(|s| s.engine == "codex")
+    };
+    h.wait("the second turn counted", codex_counted).await;
+    assert_eq!(h.core.stats.today_cost(), first_cost);
     let turns: Vec<Value> = h
         .items(&id)
         .into_iter()

@@ -55,6 +55,24 @@ describe('PermissionCard', () => {
     expect(screen.queryByRole('button', { name: 'Toujours autoriser' })).not.toBeInTheDocument();
   });
 
+  it('offers « Pour cette session » for a harness whose « always » is the session’s, and shows a change’s diff (ESC-37)', async () => {
+    const backend = fakeBackend();
+    const asked = item({
+      toolName: 'Edit',
+      input: { file_path: 'C:\code\src\app.ts' },
+      alwaysScope: 'session',
+      patch: [{ oldStart: 1, newStart: 1, lines: ['-const a = 1;', '+const a = 2;'] }],
+    });
+    const { unmount } = render(PermissionCard, { item: asked, agentId: 'a1', pending: true, cwd: 'C:\code' });
+    expect(screen.queryByRole('button', { name: 'Toujours autoriser' })).not.toBeInTheDocument();
+    expect(screen.getByText('const a = 2;')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pour cette session' }));
+    expect(backend.called('answer_permission')[0].args.decision).toBe('always');
+    unmount();
+    render(PermissionCard, { item: { ...asked, decision: 'always' }, agentId: 'a1', pending: false, cwd: 'C:\code' });
+    expect(screen.getByText(/Autorisé pour cette session/)).toBeInTheDocument();
+  });
+
   it('renders a proposed plan and keeps planning on refusal', async () => {
     const backend = fakeBackend();
     render(PermissionCard, {

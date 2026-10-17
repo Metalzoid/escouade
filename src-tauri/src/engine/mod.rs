@@ -8,6 +8,7 @@
 //! these two traits only.
 
 mod claude;
+mod codex;
 pub mod mcp;
 pub mod oneshot;
 mod program;
@@ -21,6 +22,13 @@ pub(crate) mod minimal;
 
 pub(crate) use claude::terminal as claude_terminal;
 pub use claude::CLAUDE;
+pub(crate) use codex::git as codex_git;
+pub use codex::CODEX;
+#[cfg(test)]
+pub(crate) use codex::{fake_codex, is_plan_approval as codex_is_plan_approval};
+pub(crate) use codex::{
+    id_key as codex_request_id, meters as codex_meters, mode_of as codex_mode_of, plan_approval,
+};
 pub use mcp::Escouade;
 pub use program::{Located, Program};
 pub use terminal::TerminalView;
@@ -62,16 +70,13 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names. Claude Code is the only one written yet: the others get theirs with
+/// The engine `id` names. Claude Code and Codex are written: the others get theirs with
 /// their adapter (docs/TODO-1.8.md, chapter 1), and until then nothing makes an agent of theirs
 /// (the interface offers none).
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
-        EngineId::Claude
-        | EngineId::Codex
-        | EngineId::Copilot
-        | EngineId::Cursor
-        | EngineId::Opencode => &CLAUDE,
+        EngineId::Codex => &CODEX,
+        EngineId::Claude | EngineId::Copilot | EngineId::Cursor | EngineId::Opencode => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
     }
@@ -188,8 +193,11 @@ impl Spawn {
 pub struct Ready {
     /// Its slash commands, as the composer lists them.
     pub commands: Vec<Value>,
-    /// The models it offers, as it tells them (`ModelInfo::list` reads them).
+    /// The models it offers, as it tells them (`ModelInfo::list` reads them: Claude Code's).
     pub models: Value,
+    /// The models of its account, as a harness that lists them tells them (Codex: `model/list`):
+    /// the composer's menu of its agents, their efforts and what they read.
+    pub catalog: Option<Vec<registry::ToldModel>>,
 }
 
 /// A message to an agent, in its engine's own form (`Engine::message`).

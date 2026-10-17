@@ -352,6 +352,14 @@ Essayé le 2026-10-16 avec **Codex 0.163.0** (paquet npm `@openai/codex@0.163.0`
   - **Confiance du dossier** : sur un projet non approuvé, l'interface s'ouvre sur « Trust and continue » (pour la racine du dépôt, donc le projet, pas le worktree). Entrée seule l'accepte, et Codex l'écrit dans le `config.toml` du compte (`[projects.'<racine>'] trust_level = "trusted"`) ; Ctrl+C sort sans rien écrire. Aucun hook ne part avant ce choix, ni juste après : `SessionStart` n'arrive qu'avec le premier message.
   - **L'app-server approuve le projet tout seul** : `thread/start` en `workspace-write` écrit cette même confiance dans le `config.toml` du compte, sans rien demander (en `read-only`, non). Un projet où un agent Codex a tourné en vue Escouade n'a donc plus de dialogue dans l'interface.
 
+- [x] **Essai réel d'Escouade avec Codex 0.163.0** (2026-10-17, ESC-37) : l'app de debug, le `codex.exe` de `%TEMP%\esc22` (`ESCOUADE_CODEX`), le compte ChatGPT du poste et `gpt-6-luna`, sur un dépôt hors du dossier temporaire avec un worktree par agent ; le trafic JSON-RPC relevé par un relais. `~/.codex/config.toml` a été sauvé avant et remis tel quel après (l'app-server y avait écrit la confiance du dépôt d'essai), et les fils d'essai retirés de `~/.codex/sessions` et de `session_index.jsonl`. Ce qu'on a vu :
+  - **Un défaut, corrigé** : `-c mcp_servers.escouade.enabled=false` seul, sans entrée `escouade` chez l'utilisateur, empêche Codex de démarrer (« Error: invalid transport in `mcp_servers.escouade` », code 1). Le refus n'est plus passé que si le `config.toml` du compte déclare l'entrée.
+  - Un agent Codex répond (« bonjour ») ; en « Demander », `git ls-remote` échoue dans le bac à sable (réseau), Codex redemande l'élévation (`item/commandExecution/requestApproval`), la carte s'affiche, « Autoriser » répond `accept` et la commande passe.
+  - En « Édits auto », `git add essai.txt` puis `git commit -m "essai Codex"` échouent dans le bac à sable, sont redemandés avec élévation, et Escouade répond `accept` sans carte : le commit est dans la branche du worktree.
+  - `git -c core.pager=cat add essai2.txt` en « Édits auto » : redemandé avec élévation, la carte s'affiche (option de git avant la sous-commande), « Refuser » répond `decline`.
+  - **Le mode « Auto » des nouveaux agents** : le relecteur automatique de Codex (`approvalsReviewer: auto_review`) approuve seul l'élévation de `git ls-remote`, sans requête à Escouade, et le dit par une notification `guardianWarning` (« Automatic approval review approved (risk: low…) ») ; il ouvre pour cela ses propres fils (« Guardian review »), écrits dans `~/.codex/sessions` et `session_index.jsonl`. La conversation le dit désormais.
+  - Conversation vocale : Codex suit la consigne et finit par `<spoken>Le README contient simplement le titre « essai ». C’est tout ce qu’il indique.</spoken>`, montré à part et lu.
+
 ### Copilot CLI (Copilot SDK, JSON-RPC sur stdio)
 - [ ] **SDK Rust ou client maison** : la crate `github-copilot-sdk` (1.0.19, « generally available », Rust 1.94 au moins) parle à `copilot --server --stdio` en JSON-RPC 2.0, avec des en-têtes `Content-Length` comme LSP.
   - Ces options du CLI sont internes au SDK : elles ne sont pas dans sa référence publique.
@@ -506,9 +514,9 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 ### Un moteur par agent
 - [ ] `AgentMeta.engine` vaut `claude`, `codex`, `copilot`, `cursor` ou `opencode`. Par défaut, `claude` (les agents d'avant la 1.8). Un agent a un moteur à la fois. Il en change seulement par une passation (voir « Continuer sur un autre moteur quand le quota est épuisé »), et chaque tour garde le moteur qui l'a fait ; sa copie prend son moteur du moment.
 - [ ] Ce qui est propre à Claude passe derrière une interface « moteur ». C'est aujourd'hui le process stdio et ses requêtes de contrôle (`claude.rs`), et la traduction des frames en éléments de conversation (`AgentRt::handle_frame`). L'interface couvre : lancer, reprendre, copier, envoyer un message avec ses pièces jointes, interrompre, changer de modèle, d'effort ou de mode, répondre à une permission ou une question, lire l'usage, arrêter.
-- [ ] Chaque moteur traduit son flux dans les mêmes éléments de conversation (`user`, `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`, `event`) et les mêmes changements du bandeau « Plan ».
+- [x] Chaque moteur traduit son flux dans les mêmes éléments de conversation (`user`, `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`, `event`) et les mêmes changements du bandeau « Plan ». Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
 - [ ] **D'abord une extraction pure**, avec Claude seul et sans aucun changement de comportement : les tests existants (`core_tests`, `agent.rs`, e2e) passent tels quels.
-- [ ] **Outils** : le backend donne aux outils des autres moteurs le nom que leur donne Claude Code. `tools.ts`, la ligne d'activité, `convsearch.rs` et les cartes ne changent donc pas. Un outil inconnu s'affiche sous son propre nom.
+- [x] **Outils** : le backend donne aux outils des autres moteurs le nom que leur donne Claude Code. `tools.ts`, la ligne d'activité, `convsearch.rs` et les cartes ne changent donc pas. Un outil inconnu s'affiche sous son propre nom. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
 
   | Moteur | Outil d'origine | Nom pris dans Escouade |
   |---|---|---|
@@ -522,14 +530,14 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   | Cursor | `tool_call` d'ACP, selon son `kind` : `execute`, `edit`, `read`, `search`, `fetch` | `Bash`, `Edit` (ou `Write`), `Read`, `Grep`, `WebFetch` ; les noms propres à Cursor (`readToolCall`, `writeToolCall`…) relevés au point 0 |
   | Cursor | outil MCP | `mcp__<serveur>__<outil>` |
   | OpenCode | `bash`, `edit`, `write`, `read`, `grep`, `glob`, `list`, `patch`, `webfetch`, `todowrite`, `task` | leur équivalent chez Claude Code |
-- [ ] **Process** :
+- [x] **Process** : Codex : fait (ESC-37, docs/PROTOCOL.md, « Codex app-server »).
   - Codex : un `codex app-server` par agent, lancé par son binaire natif (sous Windows, le `codex.exe` du paquet de la plateforme, pas `codex.cmd`), avec `-c tools.update_plan.enabled=true` et `capabilities.experimentalApi` (pour le mode Plan seulement). Ses enfants restent dans le Job, bac à sable compris (vérifié). Les événements des sous-agents arrivent sur la même connexion : tout se trie par `threadId`.
   - Copilot : un `copilot --server --stdio` par agent (par la crate du SDK si elle laisse Escouade lancer le process, voir point 0).
   - Cursor : un `agent acp` par agent.
   - OpenCode : un `opencode serve` par agent, sur `127.0.0.1`, avec un port libre et un mot de passe tiré au hasard, sauf si l'essai du point 0 le montre trop coûteux. Le backend lit son flux SSE `/event`.
   - Dans tous les cas, le process est dans le Job de l'agent, ce qui garde le CPU et la RAM par agent et tue tout l'arbre d'un coup.
   - L'arrêt pour inactivité et la reprise restent ceux d'aujourd'hui (`thread/resume`, `resume_session`, ou session rouverte par son id).
-- [ ] **Versions** :
+- [x] **Versions** : Codex : 0.163.0, son schéma dans `tests/fixtures/engines/codex-0.163.0.schema.json` et ses deux tests (ESC-37).
   - Chaque moteur a une plage de versions testées. Une version plus ancienne est refusée avec sa raison. Une plus récente est acceptée avec un avertissement (« Codex 0.170 n'a pas été testé avec Escouade »).
   - La lecture tolère l'inconnu : champs ignorés, et une notification ou un élément inconnu est écarté sans casser le tour.
   - Les schémas des versions testées sont gardés dans le dépôt, et un test vérifie que les champs lus par Escouade y sont : `codex app-server generate-json-schema` pour Codex, le schéma du protocole du SDK pour Copilot, le schéma d'ACP et la liste des extensions `cursor/*` pour Cursor.
@@ -544,14 +552,14 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [x] **Marque du moteur** (ESC-29) sur la carte de l'agent, dans la barre latérale, la vue d'ensemble et l'onglet, dès que plus d'un moteur sert.
 
 ### Composer : modèles, effort, modes
-- [ ] **Modèles** : le menu liste ceux du moteur de l'agent.
+- [x] **Modèles** : le menu liste ceux du moteur de l'agent. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Claude : les alias, comme aujourd'hui.
   - Codex : `model/list`, avec `supportedReasoningEfforts` et `inputModalities`.
   - Copilot : `models.list`, avec ses efforts, ses capacités et son multiplicateur de facturation (écrit à côté du modèle : un modèle qui coûte trois fois plus le dit).
   - Cursor : `agent models`, les modèles du compte (Auto compris). Le changement en cours de session dépend du point 0.
   - OpenCode : les modèles des seuls fournisseurs connectés, avec une recherche et des favoris dans les réglages, car la liste peut être longue.
-- [ ] **Effort** : celui du modèle choisi (efforts de raisonnement de Codex et de Copilot, `variant` d'OpenCode). Le menu est masqué si le modèle n'en a pas.
-- [ ] **Modes** : Escouade garde ses cinq modes. Chaque moteur dit lesquels il prend et comment. Le titre du mode dans le menu explique ce qu'il veut dire pour ce moteur, bac à sable compris. À confirmer par les essais :
+- [x] **Effort** : celui du modèle choisi (efforts de raisonnement de Codex et de Copilot, `variant` d'OpenCode). Le menu est masqué si le modèle n'en a pas. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
+- [x] **Modes** : Escouade garde ses cinq modes. Chaque moteur dit lesquels il prend et comment. Le titre du mode dans le menu explique ce qu'il veut dire pour ce moteur, bac à sable compris. À confirmer par les essais : Codex : fait (ESC-37), table dans docs/PROTOCOL.md, « Les modes ».
 
   | Escouade | Codex | Copilot | Cursor | OpenCode |
   |---|---|---|---|---|
@@ -580,13 +588,13 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Images : quand les modalités du modèle les acceptent (pièce jointe `file` ou `blob` chez Copilot, bloc `image` d'ACP chez Cursor s'il annonce `promptCapabilities.image`).
   - PDF : Codex ne les lit pas. Le bouton le dit et les refuse. Avec Copilot, Cursor et OpenCode, ça dépend du modèle (à vérifier).
   - Documents texte : collés comme texte.
-- [ ] **Message pendant un tour** :
+- [x] **Message pendant un tour** : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : « maintenant » passe par `turn/steer`.
   - Copilot : « maintenant » passe par `immediate`, « ensuite » par `enqueue`.
   - Ailleurs, Escouade met le message en file jusqu'à la fin du tour, et c'est le cas pour OpenCode v1 si l'essai le demande.
 
 ### Permissions et questions
-- [ ] **Codex** :
+- [x] **Codex** : Fait (ESC-37) : « Pour cette session » est le `acceptForSession` de Codex, et la carte d'un `git add` ou `git commit` le dit hors du bac à sable.
   - Une commande donne une carte « Codex veut lancer : <commande> », avec son dossier et sa raison (`reason`, que le modèle rédige dans la langue de l'utilisateur). La commande arrive enveloppée (`pwsh.exe -Command '…'` sous Windows) : la carte montre `commandActions[].command`, la commande telle que le modèle l'a écrite.
   - Une modification de fichier donne une carte avec son diff.
   - `item/permissions/requestApproval` donne une carte qui dit ce qui est demandé.
@@ -601,7 +609,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - `approve-permanently` et `approve-for-location` (écrits dans la config de Copilot) : à proposer ou non, voir « Décisions ».
 - [ ] **Cursor** : `session/request_permission` donne une carte selon le `kind` de l'outil : la commande, la modification avec son diff, le fichier lu, l'adresse, l'outil MCP. Boutons : « Autoriser » (`allow-once`), « Toujours » (`allow-always`, qui écrit dans `~/.cursor/cli-config.json` : voir « Décisions »), « Refuser » (`reject-once`).
 - [ ] **OpenCode** : `permission.asked` donne une carte. Boutons : « Autoriser » (`once`), « Toujours » (`always`, qui écrit le motif retenu, `patterns`), « Refuser » (`reject`, avec le message saisi).
-- [ ] **Questions** : la carte de question existante reçoit :
+- [x] **Questions** : la carte de question existante reçoit : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : `item/tool/requestUserInput` (`questions[]` avec `id`, `header`, `question`, `options` avec leur description, `isOther`, `isSecret`), réponse `{answers: {<id>: {answers: [<libellé>]}}}`. Ces questions n'arrivent qu'en mode Plan (essayé) : le dire dans la doc. La fin d'un plan est un élément `plan` (texte Markdown), qui devient la carte « Plan à approuver ».
   - Copilot : `user_input.requested` (choix et réponse libre) et `elicitation.requested` (un formulaire de plusieurs champs, qui demande une carte un peu plus riche).
   - Cursor : `cursor/ask_question` (une extension, qui attend la réponse).
@@ -610,7 +618,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [ ] Les notifications, la liste « À répondre » de la vue d'ensemble et le pilote auto ne changent pas : ils lisent les demandes normalisées.
 
 ### Plan, tâches, sous-agents (bandeau « Plan » de la 1.7)
-- [ ] **Codex** : `turn/plan/updated` (les étapes d'`update_plan` et leur statut) donne les tâches, à condition de lancer Codex avec `-c tools.update_plan.enabled=true` (sinon le modèle n'a pas l'outil). Les sous-agents viennent de `subAgentActivity` (`started` / `completed`, `agentThreadId`, `agentPath`) ; leurs éléments et leurs tours arrivent sur la même connexion, sous leur propre `threadId`, ce qui donne leur activité comme les sous-agents de Claude.
+- [x] **Codex** : `turn/plan/updated` (les étapes d'`update_plan` et leur statut) donne les tâches, à condition de lancer Codex avec `-c tools.update_plan.enabled=true` (sinon le modèle n'a pas l'outil). Les sous-agents viennent de `subAgentActivity` (`started` / `completed`, `agentThreadId`, `agentPath`) ; leurs éléments et leurs tours arrivent sur la même connexion, sous leur propre `threadId`, ce qui donne leur activité comme les sous-agents de Claude. Fait (ESC-37).
 - [ ] **Copilot** : `session.todos_changed` dit que les tâches ont changé, puis Escouade les lit (`plan.readSqlTodosWithDependencies`, dépendances comprises). Les sous-agents viennent de `subagent.*` et de l'`agentId` de chaque événement.
 - [ ] **Cursor** : `cursor/update_todos` (ou le `plan` d'ACP) donne les tâches, `cursor/task` les sous-agents (à confirmer au point 0).
 - [ ] **OpenCode** : `todo.updated` (`pending`, `in_progress`, `completed`, `cancelled`) donne les tâches. L'outil `task` et les sessions enfants donnent les sous-agents, avec leurs tokens et leurs outils.
@@ -756,7 +764,7 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - L'avertissement « Claude Code refuserait par défaut ».
   - Les tâches de fond et les workflows.
   - `CLAUDE_CODE_ENABLE_TODO_TOOLS`.
-- [ ] La copie d'un agent se fait au dernier tour (Codex, `thread/fork` avec `lastTurnId`, essayé), au dernier événement (Copilot) ou au dernier message (OpenCode), qui est le même point que celui de Claude. Pour Cursor, selon le point 0 ; s'il ne sait pas copier, « Dupliquer la conversation » est masqué pour ses agents.
+- [x] La copie d'un agent se fait au dernier tour (Codex, `thread/fork` avec `lastTurnId`, essayé), au dernier événement (Copilot) ou au dernier message (OpenCode), qui est le même point que celui de Claude. Pour Cursor, selon le point 0 ; s'il ne sait pas copier, « Dupliquer la conversation » est masqué pour ses agents. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
 
 ### Textes
 - [x] Environ 100 « Claude » par catalogue (fr et en) (ESC-31 ; une trentaine parlaient de l'agent, les autres de Claude lui-même ou de ce qui n'existe que chez Claude Code).
@@ -771,9 +779,9 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Leur texte ne nomme plus d'outil propre à Claude Code.
 
 ### Tests
-- [ ] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length`), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota.
+- [x] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length`), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota. `fake-codex.mjs` : fait (ESC-37), il passe les douze scénarios du banc ; les autres faux sont reportés avec leurs harness.
 - [ ] **Tests unitaires** : chaque traduction (flux réel enregistré → éléments de conversation ; pour Codex, ceux de `tests/fixtures/codex/`, et le rollout de la vue terminal), la correspondance des modes, l'estimation du coût, le libellé des fenêtres de quota.
-- [ ] **e2e** :
+- [ ] **e2e** : Codex : `tests/e2e/codex.spec.ts` (un agent de bout en bout, la question et le plan du mode Plan, un ticket lancé sur Codex par le pilote auto, la conversation vocale), ESC-37.
   - Un agent sur Codex : message, approbation d'une commande, diff, fin de tour.
   - Le même sur Copilot, sur Cursor, puis sur OpenCode.
   - Un ticket lancé sur Codex par le pilote auto.

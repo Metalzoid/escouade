@@ -2,7 +2,7 @@
 // never from the name of the agent's harness. A function its harness lacks is hidden, not greyed out.
 
 import { app } from './state.svelte';
-import type { EngineCaps, EngineDecl, EngineId } from './types';
+import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
 
 /** The flags of `EngineCaps` that say yes or no. */
 type Flag = { [K in keyof EngineCaps]: EngineCaps[K] extends boolean ? K : never }[keyof EngineCaps];
@@ -102,16 +102,39 @@ export function showsMark(): boolean {
   return enginesInUse().size > 1;
 }
 
-/** The models of the composer's menu for the harness of `who` (none for a harness the backend does not know). */
+/** The models the harness of `who` listed for its account (Codex: `model/list`), none until it has. */
+function toldOf(who: { engine: EngineId | null | undefined }): ToldModel[] {
+  const id = who.engine ?? engineOf(null)?.id;
+  return (id && app.engineModels[id]) || [];
+}
+
+/** The name a harness that lists its models gives `model` (`gpt-6-luna` → `GPT-6-Luna`), if one does. */
+export function toldLabel(model: string): string | undefined {
+  for (const list of Object.values(app.engineModels)) {
+    const found = list?.find((m) => m.id === model);
+    if (found) return found.label;
+  }
+  return undefined;
+}
+
+/**
+ * The models of the composer's menu for the harness of `who`: those it listed for its account when it lists them, else
+ * those it declares (none for a harness the backend does not know).
+ */
 export function modelsOf(who: { engine: EngineId | null | undefined }): { id: string; label: string }[] {
+  const told = toldOf(who);
+  if (told.length) return told.map((m) => ({ id: m.id, label: m.label }));
   return engineOf(who.engine)?.models ?? [];
 }
 
 /** The efforts of the harness of `who`, among `all` (in their order): none when it takes none. */
-export function effortsOf<T extends { value: string }>(who: { engine: EngineId | null | undefined }, all: T[]): T[] {
+export function effortsOf<T extends { value: string }>(who: { engine: EngineId | null | undefined; model?: string }, all: T[]): T[] {
   const decl = engineOf(who.engine);
   if (!decl?.caps.effort) return [];
-  return all.filter((e) => decl.efforts.includes(e.value));
+  // Those of its model, as its harness listed it.
+  const told = toldOf(who).find((m) => m.id === who.model);
+  const efforts = told ? told.efforts : decl.efforts;
+  return all.filter((e) => efforts.includes(e.value));
 }
 
 /**
@@ -120,6 +143,8 @@ export function effortsOf<T extends { value: string }>(who: { engine: EngineId |
  */
 export function modelTakes(who: { engine: EngineId | null | undefined }, model: string, what: 'effort' | 'auto'): boolean {
   const m = model.toLowerCase();
+  const told = toldOf(who).find((x) => x.id.toLowerCase() === m);
+  if (told) return what === 'effort' ? told.efforts.length > 0 : true;
   const models = engineOf(who.engine)?.models ?? [];
   const decl = models.find((x) => x.id === m) ?? models.find((x) => m.includes(x.id));
   return decl ? decl[what] : true;

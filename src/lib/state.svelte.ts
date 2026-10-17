@@ -31,6 +31,7 @@ import type {
   LangInfo,
   LaunchState,
   ModelInfo,
+  ToldModel,
   EngineDecl,
   EngineId,
   Project,
@@ -252,6 +253,8 @@ class AppState {
   models = $state<ModelInfo[]>([]);
   /** What each harness declares (its capabilities), as the backend gave it at the start. */
   engines = $state.raw<EngineDecl[]>([]);
+  /** The models the harnesses that list them told (Codex: `model/list`): the composer's menu of their agents. */
+  engineModels = $state.raw<Partial<Record<EngineId, ToldModel[]>>>({});
   /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
   version = $state('');
@@ -503,6 +506,7 @@ class AppState {
     this.version = s.version;
     this.models = s.models;
     this.engines = s.engines ?? [];
+    this.engineModels = s.engineModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -627,6 +631,12 @@ class AppState {
         break;
       case 'models':
         this.models = e.models;
+        break;
+      case 'accounts':
+        this.settings = { ...this.settings, accounts: e.accounts, engineOrder: e.engineOrder };
+        break;
+      case 'engineModels':
+        this.engineModels = { ...this.engineModels, [e.engine]: e.models };
         break;
       case 'focus':
         this.selectProject(e.projectId);

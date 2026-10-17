@@ -23,6 +23,10 @@ pub type Windows = Vec<QuotaMeter>;
 /// Parses `rate_limits` from a `get_usage` control response, or the body of the OAuth usage
 /// endpoint (same shape: `{five_hour: {utilization 0-100, resets_at ISO}, seven_day: …}`).
 pub fn parse_windows(v: &Value) -> Windows {
+    // A harness that reads its windows itself gives them as meters (Codex, `EngineProcess::read_usage`).
+    if let Some(meters) = v.get("meters").filter(|m| m.is_array()) {
+        return serde_json::from_value(meters.clone()).unwrap_or_default();
+    }
     let parse = |k: &str| {
         let w = v.get(k).filter(|w| w.is_object())?;
         Some(RateWindow {

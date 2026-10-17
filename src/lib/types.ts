@@ -420,6 +420,20 @@ export interface ModelDecl {
   auto: boolean;
 }
 
+/** A model as its harness lists it for the account (Codex: `model/list`), in place of the declared ones. */
+export interface ToldModel {
+  id: string;
+  /** Its name in the menu (`GPT-6-Luna`). */
+  label: string;
+  /** The efforts it takes, in its harness's order (none: no menu « Effort »). */
+  efforts: string[];
+  defaultEffort: string | null;
+  /** It reads images. */
+  images: boolean;
+  /** The one its harness runs unless told otherwise. */
+  default: boolean;
+}
+
 /** What a harness declares, as the window gets it at its start. */
 export interface EngineDecl {
   id: EngineId;
@@ -1354,6 +1368,10 @@ export interface PermissionItem extends Base {
   input: Record<string, any>;
   reason?: string | null;
   canAlways: boolean;
+  /** What « always » stands for: for the rest of the session (Codex: `acceptForSession`), else the rules Claude Code suggested. */
+  alwaysScope?: 'session';
+  /** A change of files asked: its diff, in the lines of a tool's `result.patch`. */
+  patch?: { oldStart: number; newStart: number; lines: string[] }[];
   defaultNo: boolean;
   decision: 'allow' | 'always' | 'deny' | null;
   message?: string | null;
@@ -1455,6 +1473,8 @@ export type UiEvent =
   | { type: 'terminalExit'; id: string; code: number | null }
   | { type: 'resources'; resources: Resources }
   | { type: 'models'; models: ModelInfo[] }
+  | { type: 'engineModels'; engine: EngineId; models: ToldModel[] }
+  | { type: 'accounts'; accounts: Settings['accounts']; engineOrder: EngineId[] }
   | { type: 'quitRequested'; unsaved: number }
   /** The automatic restart for the update downloaded: when it comes, or null once called off. */
   | { type: 'updateRestart'; at: number | null }
@@ -1539,6 +1559,8 @@ export interface InitialState {
   version: string;
   /** Claude Code's models as it last reported them, empty until a process has started. */
   models: ModelInfo[];
+  /** The models the harnesses that list them told (Codex: `model/list`), absent before 1.8. */
+  engineModels?: Partial<Record<EngineId, ToldModel[]>>;
   /** What each harness declares: its capabilities. */
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */

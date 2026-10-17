@@ -1,0 +1,29 @@
+{
+  "about": "Codex 0.163.0 : un tour en échec (modèle refusé avec un compte ChatGPT) : le message d'erreur de l'API sur le tour.",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\essai\\proj\\.claude\\worktrees\\agent2",
+    "engine": "codex"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": null,
+    "sessionId": "01a14671-7e09-7bb2-a9dc-ba06b4137cb7",
+    "status": "error",
+    "tokens": 0,
+    "touchedFiles": []
+  },
+  "flux": "../../codex/failed-turn.jsonl",
+  "items": [
+    {
+      "cost": 0.0,
+      "durationMs": 4573,
+      "engine": "codex",
+      "error": "The 'gpt-5.6-sol' model is not supported when using Codex with a ChatGPT account.",
+      "interrupted": false,
+      "isError": true,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 0
+    }
+  ]
+}

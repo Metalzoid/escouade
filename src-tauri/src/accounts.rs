@@ -84,9 +84,10 @@ pub fn principal_of(engine: EngineId) -> Account {
     }
 }
 
-/// Puts the accounts right: the Principal of every harness written among them (Claude Code's
-/// first when it was missing, as on the first load), with no folder of its own; every id unique;
-/// at least one account of each harness active; every harness once in « Ordre des harness ».
+/// Puts the accounts right: Claude Code's Principal (first when it was missing, as on the first
+/// load), and that of every other harness written that has accounts, with no folder of its own;
+/// every id unique; at least one account of each harness active; every harness with accounts once
+/// in « Ordre des harness ».
 pub fn normalize(settings: &mut Settings) {
     let accounts = &mut settings.accounts;
     for a in accounts.iter_mut() {
@@ -121,6 +122,12 @@ pub fn normalize(settings: &mut Settings) {
         a.id = unique(&base, &taken);
         taken.insert(a.id.clone());
     }
+    // A harness other than Claude Code has its Principal once it serves (`Core::accounts_of`): one
+    // that never ran shows nowhere, nor is it a harness to go on on (`fallback_engines`).
+    let engines: Vec<EngineId> = engines
+        .into_iter()
+        .filter(|e| *e == EngineId::Claude || accounts.iter().any(|a| a.engine == *e))
+        .collect();
     for engine in &engines {
         let id = principal_id(*engine);
         let at = match accounts.iter().position(|a| a.id == id) {
@@ -199,6 +206,17 @@ pub fn find<'a>(settings: &'a Settings, id: &str) -> Option<&'a Account> {
 /// `find`, as a copy that is always there: settings never normalized (written whole by a test)
 /// give Principal as it is made.
 pub fn get(settings: &Settings, id: &str) -> Account {
+    // The Principal of another harness, missing from settings saved without it: that harness's own,
+    // never Claude Code's (an agent of Codex would start `claude`).
+    if !settings.accounts.iter().any(|a| a.id == id) {
+        if let Some(e) = engine::registry::all()
+            .iter()
+            .map(|e| e.id())
+            .find(|e| *e != EngineId::Claude && principal_id(*e) == id)
+        {
+            return principal_of(e);
+        }
+    }
     find(settings, id).cloned().unwrap_or_else(principal)
 }
 
@@ -447,14 +465,15 @@ pub fn launch_env(account: &Account) -> Vec<(String, String)> {
     }
 }
 
-/// The `claude` the account runs: its own when it names one, else the settings' (found as
+/// The program the account runs: its own when it names one, else the settings' path for Claude
+/// Code (the only harness with one in the settings), else where its harness usually is (found as
 /// `Engine::locate` finds it). None when it cannot be found.
 pub fn program(account: &Account, settings: &Settings) -> Option<engine::Program> {
     let own = account.claude_path.trim();
-    let path = if own.is_empty() {
-        &settings.claude_path
-    } else {
-        own
+    let path = match (own.is_empty(), account.engine) {
+        (false, _) => own,
+        (true, EngineId::Claude) => &settings.claude_path,
+        (true, _) => "",
     };
     engine::by_id(account.engine).locate(path, &settings.wsl_distro)
 }
@@ -2563,6 +2582,33 @@ mod tests {
     }
 
     #[test]
+    fn the_principal_of_another_harness_missing_from_the_settings_is_still_that_harnesss() {
+        let s = Settings::default();
+        let codex = get(&s, "principal-codex");
+        assert_eq!(
+            (codex.engine, codex.id.as_str()),
+            (EngineId::Codex, "principal-codex")
+        );
+        assert_eq!(get(&s, "gone").engine, EngineId::Claude);
+    }
+
+    #[test]
+    fn a_harness_other_than_claude_code_has_no_principal_until_it_serves() {
+        // Codex is written (ESC-37), and never ran here: nothing of it in the accounts, nor in the
+        // order of the harnesses (it is no harness to go on on).
+        let mut s = Settings::default();
+        normalize(&mut s);
+        assert!(s.accounts.iter().all(|a| a.engine == EngineId::Claude));
+        assert_eq!(s.engine_order, [EngineId::Claude]);
+        // Once it served (`Core::accounts_of`), its Principal stays.
+        s.accounts.push(principal_of(EngineId::Codex));
+        normalize(&mut s);
+        normalize(&mut s);
+        assert_eq!(ids(&s), ["principal", "principal-codex"]);
+        assert_eq!(s.engine_order, [EngineId::Claude, EngineId::Codex]);
+    }
+
+    #[test]
     fn each_harness_keeps_one_account_active_and_its_principal_runs_without_a_folder() {
         let mut s = with_codex();
         for a in s
@@ -2583,10 +2629,7 @@ mod tests {
         // Its first one active again; its Principal never runs with a folder of Escouade's.
         assert_eq!(
             codex,
-            [
-                ("principal-codex", true, "/written/by/hand"),
-                ("work", false, "/work")
-            ]
+            [("principal-codex", true, ""), ("work", false, "/work")]
         );
         assert_eq!(own_dir(&s.accounts[3]), None);
         assert_eq!(own_dir(&s.accounts[4]), Some("/work"));

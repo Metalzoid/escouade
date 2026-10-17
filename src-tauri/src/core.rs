@@ -635,6 +635,8 @@ pub struct Core<R: Runtime = Wry> {
     pub usage: Mutex<UsageSnapshot>,
     /// Claude Code's models as it last reported them (the version each alias runs).
     pub models: RwLock<Vec<ModelInfo>>,
+    /// The models the harnesses that list them told (`PersistedState::engine_models`).
+    pub engine_models: RwLock<BTreeMap<EngineId, Vec<crate::engine::registry::ToldModel>>>,
     pub git: GitService,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
@@ -1507,6 +1509,7 @@ impl<R: Runtime> Core<R> {
             agents: RwLock::new(agents),
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),
+            engine_models: RwLock::new(state.engine_models),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
@@ -1714,6 +1717,7 @@ impl<R: Runtime> Core<R> {
         let projects = self.projects.read().clone();
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
+        let engine_models = self.engine_models.read().clone();
         let tickets = self.tickets.read().clone();
         let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
@@ -1723,6 +1727,7 @@ impl<R: Runtime> Core<R> {
             agents,
             ui,
             models,
+            engine_models,
             tickets,
             pause,
             leftover_histories,
@@ -2291,8 +2296,9 @@ impl<R: Runtime> Core<R> {
             let mut rt = h.lock();
             let current = rt.gen == gen;
             log::info!(
-                "agent {}: claude exited (code {code:?}, current process: {current})",
-                rt.meta.id
+                "agent {}: {} exited (code {code:?}, current process: {current})",
+                rt.meta.id,
+                rt.meta.engine
             );
             if !current {
                 // A replaced, stopped or deleted agent's process: nothing to report.
@@ -2580,7 +2586,13 @@ impl<R: Runtime> Core<R> {
                     started.elapsed().as_millis()
                 );
                 h.lock().commands = ready.commands;
-                self.set_models(&ready.models);
+                // Claude Code tells the version each alias runs; Codex lists its account's.
+                if !ready.models.is_null() {
+                    self.set_models(&ready.models);
+                }
+                if let Some(models) = ready.catalog {
+                    self.set_engine_models(engine.id(), models);
+                }
                 if h.lock().meta.remote_control {
                     if let Err(e) = self.link_remote(h, &proc).await {
                         self.remote_unavailable(id, &e, true);
@@ -2615,6 +2627,71 @@ impl<R: Runtime> Core<R> {
         // Under the lock: two processes starting together leave the UI with what is kept.
         self.hub.emit(UiEvent::Models { models });
         self.request_save();
+    }
+
+    /// A harness other than Claude Code that serves for the first time (a new agent, a ticket on
+    /// it) gets its Principal, its usual installation (`accounts::normalize` makes none for a
+    /// harness that never served): saved, and the window told.
+    pub(crate) fn accounts_of(&self, engine: EngineId) {
+        let accounts = {
+            let mut s = self.settings.write();
+            if s.accounts.iter().any(|a| a.engine == engine) {
+                return;
+            }
+            s.accounts.push(accounts::principal_of(engine));
+            accounts::normalize(&mut s);
+            match serde_json::to_vec_pretty(&*s) {
+                Ok(bytes) => {
+                    if let Err(e) = paths::write_atomic(&self.data.settings_file(), &bytes) {
+                        log::warn!("settings not saved with the Principal of {engine}: {e:#}");
+                    }
+                }
+                Err(e) => log::warn!("settings not serialized: {e:#}"),
+            }
+            (s.accounts.clone(), s.engine_order.clone())
+        };
+        log::info!("the Principal of {engine} serves from now on");
+        self.hub.emit(UiEvent::Accounts {
+            accounts: accounts.0,
+            engine_order: accounts.1,
+        });
+    }
+
+    /// Keeps the models a harness listed for its account at a process start (Codex: `model/list`):
+    /// the composer's menu of its agents.
+    fn set_engine_models(&self, engine: EngineId, models: Vec<crate::engine::registry::ToldModel>) {
+        let mut all = self.engine_models.write();
+        if all.get(&engine) == Some(&models) {
+            return;
+        }
+        all.insert(engine, models.clone());
+        self.hub.emit(UiEvent::EngineModels { engine, models });
+        self.request_save();
+    }
+
+    /// The model of a new agent of `engine` when `wanted` is none of its own: the one its account
+    /// runs by default (`model/list`), else the first of its menu. Claude Code takes `wanted`
+    /// (its aliases and full ids alike).
+    pub(crate) fn model_for(&self, engine: EngineId, wanted: String) -> String {
+        if engine == EngineId::Claude {
+            return wanted;
+        }
+        let told = self
+            .engine_models
+            .read()
+            .get(&engine)
+            .cloned()
+            .unwrap_or_default();
+        let declared = crate::engine::by_id(engine).models();
+        if told.iter().any(|m| m.id == wanted) || declared.iter().any(|m| m.id == wanted) {
+            return wanted;
+        }
+        told.iter()
+            .find(|m| m.default)
+            .or(told.first())
+            .map(|m| m.id.clone())
+            .or_else(|| declared.first().map(|m| m.id.to_string()))
+            .unwrap_or(wanted)
     }
 
     /// Starts the agent's process in the background so the first message answers fast. In the
@@ -4371,7 +4448,7 @@ impl<R: Runtime> Core<R> {
                 .as_ref()
                 .filter(|c| c.session_id.is_some())
                 .and_then(|c| c.entry.clone()),
-            model: o.model.unwrap_or(settings.default_model.clone()),
+            model: self.model_for(engine, o.model.unwrap_or(settings.default_model.clone())),
             effort: o.effort.unwrap_or(settings.default_effort.clone()),
             mode: o.mode.unwrap_or(settings.default_mode.clone()),
             cwd: project.path.clone(),

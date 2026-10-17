@@ -33,6 +33,22 @@ Le chemin des réglages accepte `~` pour ton dossier personnel, et sous Windows 
 
 Sans Claude Code, l’écran d’accueil le dit, la conversation vide d’un agent aussi, et le Kanban ne démarre aucun ticket (« Claude Code introuvable — aucun ticket ne démarre »). Installe-le ou indique son chemin dans les réglages : quand tu enregistres un autre chemin, ces messages se mettent à jour sans redémarrer Escouade.
 
+### Codex, l’autre harness
+
+Escouade fait aussi tourner ses agents sur **Codex**, le CLI d’OpenAI, à côté de Claude Code. Il est facultatif : installe-le par npm (`npm install -g @openai/codex`) et connecte-le (`codex login`), puis il apparaît dans Réglages › Harness. Escouade a été testé avec Codex 0.163.0 : une version plus ancienne est refusée, avec la commande qui la met à jour, et une plus récente est utilisée avec un avertissement. L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : installe alors celle de npm.
+
+Escouade lance l’app-server de Codex (`codex app-server`), un par agent, par son binaire natif (sous Windows, le `codex.exe` du paquet npm, pas son lanceur). Dès que Codex est trouvé, « Nouvel agent ▾ » propose « Nouvel agent sur Codex », un ticket a son champ « Harness », et un projet son « Harness par défaut ». Ses modèles et leurs efforts sont ceux que Codex liste pour ton compte, et les modes d’Escouade disent ce qu’ils veulent dire chez lui :
+
+| Mode | Chez Codex |
+|---|---|
+| Plan | Le mode Plan de Codex : il étudie, peut te poser des questions, puis propose son plan, sans rien modifier (bac à sable en lecture seule). |
+| Demander | Bac à sable : écriture dans le dossier de l’agent, réseau coupé. Une commande qui en sort demande, `git add` et `git commit` compris (Codex protège tout le dossier `.git`). |
+| Édits auto | Pareil, et Escouade accepte d’office `git add` et `git commit` dans le worktree de l’agent, quand la commande n’est que cela (sans option de git avant la sous-commande, sans autre commande que `&&` entre elles) et que ses hooks sont ceux du dépôt ; le réseau et le reste demandent. |
+| Auto | Le relecteur automatique de Codex décide des demandes à ta place. |
+| Bypass | Codex ne demande rien et sort de son bac à sable. |
+
+Une demande de Codex a trois boutons : « Autoriser », « Pour cette session » (la même demande ne revient plus pendant la session) et « Refuser ». Un message envoyé pendant qu’il travaille entre dans son tour au lieu d’attendre. Codex ne lit pas les PDF. Ses comptes multiples, son quota hors d’un agent et son coût estimé arrivent ensuite.
+
 ## Installer Escouade
 
 Les installeurs sont sur la page des [releases GitHub](https://github.com/guillaume-gagnaire/escouade/releases/latest).

@@ -1,0 +1,36 @@
+{
+  "about": "Codex 0.163.0 : un fil repris par thread/resume (sa session est celle de l'agent), un tour qui écrit bye.txt et commite.",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\essai\\proj\\.claude\\worktrees\\agent1",
+    "engine": "codex",
+    "sessionId": "01a14645-ad1e-7671-9d8e-ecf969afe917"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": "01a1464f-8a7d-76f3-8279-23dba4a6b816",
+    "sessionId": "01a14645-ad1e-7671-9d8e-ecf969afe917",
+    "status": "done",
+    "tokens": 26439,
+    "touchedFiles": []
+  },
+  "flux": "../../codex/resume.jsonl",
+  "items": [
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "aucun; `bye.txt` contient « au revoir » et a été commité avec le message « ajout de bye ». -- fin du tour --"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": 2716,
+      "engine": "codex",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 26439
+    }
+  ]
+}

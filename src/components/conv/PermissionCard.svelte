@@ -10,7 +10,9 @@
   import { app } from '../../lib/state.svelte';
   import { escouadeArgs, isEscouadeTool, toolArg, toolLabel } from '../../lib/tools';
   import type { PermissionItem, ToolItem } from '../../lib/types';
+  import { patchLines } from '../../lib/diff';
   import Markdown from './Markdown.svelte';
+  import PatchView from './PatchView.svelte';
 
   // `current`: several requests can wait at once, and the keyboard answers the first (as the message field does).
   let {
@@ -39,7 +41,8 @@
   const verdict = $derived.by(() => {
     const author = item.by;
     if (item.decision === 'deny') return author ? t('composer.permission.deniedBy', { author }) : t('composer.permission.denied');
-    if (item.decision === 'always') return t('composer.permission.alwaysAllowed');
+    if (item.decision === 'always')
+      return item.alwaysScope === 'session' ? t('composer.permission.sessionAllowed') : t('composer.permission.alwaysAllowed');
     return author ? t('composer.permission.allowedBy', { author }) : t('composer.permission.allowed');
   });
 
@@ -98,6 +101,7 @@
         <span class="arg mono">{item.title || summary}</span>
       </div>
       {#if item.description}<div class="desc">{item.description}</div>{/if}
+      {#if item.patch?.length}<PatchView lines={patchLines(item.patch)} />{/if}
     {/if}
     {#if item.reason}<div class="reason">{item.reason}</div>{/if}
     <div class="opts">
@@ -113,7 +117,11 @@
       </button>
       {#if item.canAlways}
         <button class="opt" disabled={busy} aria-keyshortcuts={keys ? ariaEnter(true) : undefined} onclick={() => decide('always')}>
-          {isPlan ? t('composer.permission.approvePlanAndEdits') : t('composer.permission.always')}
+          {isPlan
+            ? t('composer.permission.approvePlanAndEdits')
+            : item.alwaysScope === 'session'
+              ? t('composer.permission.forSession')
+              : t('composer.permission.always')}
           {#if keys}<kbd class="kbd" aria-hidden="true">{keyLabel('Ctrl+Shift+Enter')}</kbd>{/if}
         </button>
       {/if}

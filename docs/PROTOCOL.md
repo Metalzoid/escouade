@@ -415,6 +415,86 @@ Rien ici n'approche 1 à 2 s par frappe : la cause du poste où on l'a vue reste
 
 Refaire la mesure : `npx tauri build --debug --no-bundle`, puis `ESCOUADE_TERM_BENCH=1 npx playwright test tests/e2e/terminal-latency.spec.ts` (variables : `ESCOUADE_TERM_BENCH_AGENTS`, `…_TERMINALS`, `…_SCREENS`, `…_SCENARIO` = `flood` ou `flood-real`, `…_SHELL` = `pwsh`, `bash`, `wsl` ou `claude`, `…_LABEL`, et `ESCOUADE_E2E_EXE` pour un autre exécutable) ; le résultat est dans `test-results/terminal-latency-<label>.json`.
 
+## Codex app-server (ESC-37)
+
+Codex est le second harness (docs/ENGINES.md). Testé avec **Codex 0.163.0** (`tested()` : de la 0.163.0 à la 0.163.0), d'après l'essai réel du 2026-10-16 (ESC-22, docs/TODO-1.8.md, point 0) dont les flux sont dans `tests/fixtures/codex/`. Son schéma, `codex app-server generate-json-schema --experimental` de la 0.163.0, est gardé dans `tests/fixtures/engines/codex-0.163.0.schema.json` ; deux tests le tiennent (`engine/codex/schema_tests.rs`) : tout ce qu'Escouade envoie et lit y est, et tout champ des flux enregistrés aussi.
+
+### Lancement
+
+```
+codex app-server -c tools.update_plan.enabled=true
+      [-c mcp_servers.escouade.url=<url> -c mcp_servers.escouade.bearer_token_env_var=ESCOUADE_MCP_TOKEN
+       | -c mcp_servers.escouade.enabled=false]
+```
+
+Refusé, `enabled=false` n'est passé que si le `config.toml` du compte déclare une entrée `escouade` : sans elle, une entrée faite du seul `enabled` n'a pas de transport, et Codex ne démarre pas (« invalid transport in `mcp_servers.escouade` », vu à l'essai réel du 2026-10-17).
+
+Le programme est le binaire natif : sous Windows, le `codex.exe` du paquet de la plateforme, à côté du lanceur npm (`node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe`), lancé sur place pour qu'il trouve ses `codex-resources/` ; sinon le `codex` du PATH, puis celui de l'app de bureau (`%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`, souvent plus ancien). Il est mis dans le Job de l'agent dès son lancement : ses enfants y restent, bac à sable compris. L'environnement est celui des agents (réseau des réglages), plus `CODEX_HOME` pour un compte autre que Principal, et le jeton du serveur MCP d'Escouade dans `ESCOUADE_MCP_TOKEN`, jamais sur la ligne de commande. `update_plan` n'est plus offert au modèle par défaut (0.163) : sans ce `-c`, le bandeau « Plan » n'aurait pas d'étapes. Rien ne passe par la `config` de `thread/start`, qui ferait perdre les `-c` de `mcp_servers`.
+
+Dans une build de debug, `ESCOUADE_CODEX` (les e2e) donne le programme quand aucun chemin n'est réglé, ou `none` pour aucun : jamais celui de la machine. Les tests unitaires ne cherchent jamais le `codex` de la machine.
+
+### Le protocole
+
+JSON-RPC, une ligne par message sur stdio. Le process (`engine/codex/process.rs`) répond lui-même à ses requêtes et passe tout le reste à la traduction (`agent/codex.rs`) : les notifications, et les requêtes de Codex (approbations, questions), dont il garde l'id, la méthode et les paramètres jusqu'à la réponse.
+
+| Étape | Message | Ce qu'Escouade y met |
+|---|---|---|
+| Ouverture | `initialize` puis `initialized` | `clientInfo` (`escouade`), `capabilities.experimentalApi: true` (le mode Plan seul en a besoin) |
+| Conversation neuve | `thread/start` | `cwd`, `model`, `approvalPolicy`, `approvalsReviewer`, `sandbox`, `developerInstructions` (le protocole d'un ticket : Codex le garde dans le rollout, une reprise n'a pas à le redonner) |
+| Reprise | `thread/resume` | `threadId` (la session de l'agent) ; un fil que Codex ne trouve plus en donne un neuf, et la conversation dit « La conversation Codex n'a pas pu être reprise » |
+| Copie | `thread/fork` | `threadId` de l'original, `lastTurnId` (son dernier tour au moment de la copie, `fork_at`) ; la copie a son propre fil |
+| Modèles | `model/list` | lu une fois par process : le menu du composer (`Ready.catalog`) |
+| Un message | `turn/start` | `input` (texte, images en URL `data:`, fichiers texte en texte), `model`, `effort`, `summary: auto`, et le mode (ci-dessous) ; modèle, effort et mode valent à chaque tour |
+| Pendant un tour | `turn/steer` | `expectedTurnId` du tour en cours ; un message arrivé pendant que le tour démarre attend son id |
+| Interrompre | `turn/interrupt` | `threadId`, `turnId` ; Codex finit le tour en `interrupted` |
+| Quota | `account/rateLimits/read` | ses fenêtres, en compteurs (`{"meters": […]}`, que `usage::parse_windows` lit) |
+| Titre | `thread/name/set` | |
+
+Une requête refusée qu'Escouade n'attendait pas (`turn/start`, `turn/steer`) revient à la traduction comme une notification `error` (`refused`) : un tour qui n'a pas pu démarrer finit en erreur avec sa raison.
+
+### Les modes
+
+| Escouade | `approvalPolicy` | `sandboxPolicy` (`sandbox` du fil) | `approvalsReviewer` | `collaborationMode` |
+|---|---|---|---|---|
+| Plan | `on-request` | `readOnly` (`read-only`) | `user` | `plan` |
+| Demander | `on-request` | `workspaceWrite`, réseau coupé (`workspace-write`) | `user` | `default` |
+| Accepter les modifications | `on-request` | `workspaceWrite`, réseau coupé | `user` | `default` |
+| Auto | `on-request` | `workspaceWrite`, réseau coupé | `auto_review` | `default` |
+| Sans permissions | `never` | `dangerFullAccess` (`danger-full-access`) | `user` | `default` |
+
+En `workspace-write`, Codex protège tout `.git` : un agent en worktree ne peut pas commiter sans élévation (essayé). En « Demander », la carte d'un `git add` ou d'un `git commit` le dit (« git écrit dans le dépôt du projet, hors du bac à sable de Codex »). En « Édits auto » et en « Auto », Escouade accepte d'office `git add` et `git commit` dans le worktree de l'agent (`engine/codex/git.rs`), et rien d'autre : une commande acceptée ainsi tourne hors du bac à sable, avec le réseau. La décision porte sur la commande que Codex lancera (`params.command` de la demande : son argv joint comme le lirait un shell POSIX, `pwsh.exe -Command '<script>'` sous Windows, `bash -lc '<script>'` ailleurs), jamais sur son résumé (`commandActions`), qui doit dire la même chose. Le script est lu comme le lit son shell, guillemets compris (PowerShell prend aussi les guillemets typographiques pour des guillemets), et tout doute fait demander : un opérateur hors guillemets autre que `&&` entre deux commandes acceptées (`&`, `;`, `|`, `||`, `>`, `(`, `{`, `@`, `#`, `,`, `--%`…), `$`, l'accent grave ou un saut de ligne n'importe où, une option de git avant la sous-commande (`-c`, `-C`, `--git-dir`, `--work-tree`, `--exec-path`, `--config-env`…), une autre sous-commande que `add` et `commit` (`branch`, `tag`, `stash`, `checkout -b`… touchent ce que partagent tous les worktrees du projet), un mode interactif ou un commit sans message (il attendrait un éditeur). Le dépôt doit avoir une configuration que le bac à sable protège (`<worktree>/.git`, ou le dossier `.git` du projet ; un fichier `.git` qui pointerait vers le worktree ou un dossier temporaire est refusé), et un commit ne passe d'office que si ses hooks sont ceux de ce `.git` (`git rev-parse --git-path hooks` ; avec `core.hooksPath` dans le worktree, husky ou `.githooks/`, il demande). Ce qui n'est pas accepté d'office garde sur sa carte « git écrit dans le dépôt du projet, hors du bac à sable de Codex » quand c'est une commande git qui écrit. Le réseau (`push`, `fetch`, `ls-remote`…) et le reste demandent. Le mode que dit `thread/settings/updated` revient sur l'agent (« Demander » et « Édits auto » sont le même pour Codex : celui de l'agent est gardé).
+
+### Le flux
+
+Les messages d'un sous-agent arrivent sur la même connexion, sous son `threadId` : ils sont rangés sous sa `Task`, et la fin de son tour (`turn/completed` de son fil) n'est pas celle du tour de l'agent. Un fil inconnu est écarté.
+
+| Codex | Dans la conversation |
+|---|---|
+| `item/agentMessage/delta`, `item/completed` `agentMessage` | un `text`, en direct puis entier (`commentary` et `final_answer` pareils) ; le passage à lire d'une conversation vocale est mis à part par la partie commune |
+| `item/reasoning/summaryTextDelta` (ou `textDelta`), `item/completed` `reasoning` | un `thinking` dès ses premiers mots ; un raisonnement sans résumé n'est pas montré |
+| `commandExecution` | `Bash`, sa commande telle que le modèle l'a écrite (`commandActions[].command`), son résultat (`aggregatedOutput`), en erreur si `failed`, `declined` ou code de sortie non nul |
+| `fileChange` | un `Write` par fichier ajouté, un `Edit` sinon, avec son diff (`structuredPatch` comme Claude Code) et ses +N −M ; le fichier parmi ceux de l'agent |
+| `mcpToolCall` | `mcp__<serveur>__<outil>`, ses `arguments`, le texte de `result.content` ou `error.message` |
+| `webSearch`, `imageView`, `dynamicToolCall` | `WebSearch` (`query`), `Read` (`file_path`), l'outil sous son nom |
+| `subAgentActivity` `started` / `completed` | une `Task` (sa description : le nom de `agentPath`), sa ligne dans le bandeau « Plan », finie avec le dernier message du sous-agent comme rapport ; `collabAgentToolCall` (`wait`…) n'est pas montré |
+| `turn/plan/updated` | les tâches du bandeau « Plan » (`pending`, `inProgress`, `completed`), comme un `TodoWrite` |
+| `contextCompaction` | « Contexte compacté » |
+| `plan` (mode Plan) | à la fin du tour, la carte « Plan à approuver » (`ExitPlanMode`) : le tour reste ouvert ; approuvé, Escouade démarre son travail (« Mets le plan en œuvre. ») en « Demander » (en « Accepter les modifications » avec « Approuver et accepter les édits ») ; refusé, le message de refus part en mode Plan |
+| `item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval` | une carte de permission (`Bash` avec sa `reason`, `Edit` ou `Write` avec son diff, `Permissions` dite en mots) ; « Autoriser » `accept`, « Pour cette session » `acceptForSession` (pour une permission : `scope: session`), « Refuser » `decline` (Codex n'entend pas de raison : celle que l'utilisateur écrit lui est passée par `turn/steer`). `acceptWithExecpolicyAmendment` (une règle gardée pour toutes les sessions) n'est pas proposé |
+| `item/tool/requestUserInput` | la carte des questions, ses questions gardant leur `id` ; la réponse `{answers: {<id>: {answers: [<libellé>]}}}` |
+| `serverRequest/resolved` | une carte encore en attente est close (tour interrompu) |
+| `thread/tokenUsage/updated` | les tokens du tour : la différence des `total` de chaque fil (sous-agents compris) entre le début et la fin du tour ; la fenêtre de contexte (`modelContextWindow`) |
+| `account/rateLimits/updated` | les fenêtres du compte (libellées par `windowDurationMins`), et la remise à zéro d'une limite atteinte (`rateLimitReachedType`) |
+| `turn/completed` | la fin du tour : fini, `interrupted`, `failed` (son `error.message`, celui de l'API quand c'en est un), arrêté par la limite (`codexErrorInfo` `usageLimitExceeded` ou `rateLimitExceeded`) ; son id est le point de copie (`last_entry`) |
+
+En « Auto », une décision du relecteur automatique de Codex (`guardianWarning`, « Automatic approval review approved… ») est dite dans la conversation, puisque personne n'a été interrogé.
+
+Tout le reste est ignoré sans casser le tour : `turn/moderationMetadata`, `skills/changed`, `mcpServer/startupStatus/updated`, `remoteControl/status/changed`, `thread/readState/changed`, `turn/diff/updated`, `deprecationNotice`, et toute méthode, tout élément ou champ inconnus. Un flux enregistré (`{"dir", "msg"}` par ligne) se rejoue tel quel : seul ce que Codex a dit (`s2c`) est traduit.
+
+### Ce qui vient ensuite
+
+Les comptes Codex et leur quota hors d'un agent, le coût estimé, le serveur MCP d'Escouade déclaré pour l'utilisateur et les textes rédigés par `codex exec` viennent avec ESC-38 ; la vue terminal de Codex avec ESC-52. Le Principal de Codex n'est fait qu'au premier agent ou ticket Codex (`Core::accounts_of`).
+
 ## Serveur MCP d'Escouade
 
 Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude et les agents peuvent piloter Escouade » est activé, et s'arrête avec l'app.

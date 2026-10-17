@@ -105,8 +105,9 @@ test.describe('two accounts, a conversation stopped by the usage limit', () => {
   });
 });
 
-// The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings (its adapter is not written
-// yet, so nothing runs on it: its account is only listed, reserved and put in order).
+// The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings, which brings Codex's
+// Principal with it (ESC-37: a harness other than Claude Code has its Principal once it has accounts). No agent runs on
+// Codex here: its accounts are only listed, reserved and put in order.
 test.describe('the accounts of two harnesses', () => {
   test.use({
     preStart: {
@@ -142,9 +143,11 @@ test.describe('the accounts of two harnesses', () => {
     const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' });
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' });
     await expect(claude.getByRole('listitem')).toHaveCount(2);
-    await expect(codex.getByRole('listitem')).toHaveCount(1);
-    // Codex's account is the last active one of its harness: it stays on, whatever Claude Code has.
-    await expect(codex.getByRole('listitem', { name: 'Travail' }).getByRole('switch', { name: 'Actif' })).toBeDisabled();
+    await expect(codex.getByRole('listitem')).toHaveCount(2);
+    // Its Principal comes after the accounts already there.
+    await expect(codex.getByRole('listitem').last()).toHaveAccessibleName(/Principal/);
+    // Two active accounts of Codex: either may be turned off, whatever Claude Code has.
+    await expect(codex.getByRole('listitem', { name: 'Travail' }).getByRole('switch', { name: 'Actif' })).toBeEnabled();
     await expect(claude.getByRole('listitem', { name: 'Pro' }).getByRole('switch', { name: 'Actif' })).toBeEnabled();
 
     // Reserved to the project, as a Claude account is.
@@ -181,8 +184,12 @@ test.describe('the accounts of two harnesses', () => {
     // Codex alone: nothing it ran, nor any prompt of it.
     await harness.selectOption({ label: 'Codex' });
     await expect(prompts.locator('.kv')).toHaveText('0');
-    // Its accounts alone to choose from: a single one, so no choice to make.
-    await expect(page.getByRole('combobox', { name: 'Compte' })).toBeHidden();
+    // Its accounts alone to choose from: « Travail » and its Principal.
+    await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText([
+      'Tous les comptes',
+      'Travail',
+      'Principal',
+    ]);
     await harness.selectOption({ label: 'Claude Code' });
     await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText(['Tous les comptes', 'Principal', 'Pro']);
   });

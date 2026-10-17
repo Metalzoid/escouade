@@ -12,6 +12,8 @@ import { waitForPortToClose } from './port';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target', 'debug', 'escouade.exe');
 const FAKE = path.join(ROOT, 'tests', 'fixtures', 'fake-claude.cmd');
+/** The fake `codex app-server` (tests/fixtures/fake-codex.mjs), for a test that runs agents on Codex. */
+const FAKE_CODEX = path.join(ROOT, 'tests', 'fixtures', 'fake-codex.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -253,6 +255,9 @@ export const test = base.extend<{
       // the tests: the app never forces it off, and the fake CLI would see it whatever the setting (ESC-111).
       CLAUDE_CODE_ENABLE_TODO_TOOLS: undefined,
       ESCOUADE_USAGE_API: NO_USAGE_API,
+      // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
+      ESCOUADE_CODEX: 'none',
+      FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -376,4 +381,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE };
+export { expect, FAKE, FAKE_CODEX };

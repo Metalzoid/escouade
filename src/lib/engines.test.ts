@@ -20,7 +20,7 @@ import {
   writerOf,
   writerOptions,
 } from './engines';
-import { EFFORTS, MODES } from './models';
+import { EFFORTS, modelLabel, MODES } from './models';
 import { app } from './state.svelte';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
 
@@ -104,6 +104,37 @@ describe('the harnesses offered (ESC-29)', () => {
     expect(modelTakes(claude, 'claude-haiku-4-5-20251001', 'auto')).toBe(false);
     expect(modelTakes(claude, 'claude-opus-5-5', 'auto')).toBe(true);
     expect(modelTakes(bare, 'gpt-5.5', 'effort')).toBe(false);
+  });
+});
+
+describe('the models a harness lists for its account (ESC-37)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, effort: true } }];
+  });
+
+  it('take the place of those it declares, each with its own efforts', () => {
+    const codex = { engine: 'codex' as const, model: 'gpt-6-luna' };
+    // Until it has listed them: its declaration's.
+    expect(modelsOf(codex).map((m) => m.id)).toEqual(['gpt-5.5', 'gpt-5.5-mini']);
+    app.engineModels = {
+      codex: [
+        { id: 'gpt-6-luna', label: 'GPT-6-Luna', efforts: ['low', 'medium', 'high'], defaultEffort: 'medium', images: true, default: true },
+        { id: 'gpt-mini', label: 'GPT Mini', efforts: [], defaultEffort: null, images: false, default: false },
+      ],
+    };
+    expect(modelsOf(codex)).toEqual([
+      { id: 'gpt-6-luna', label: 'GPT-6-Luna' },
+      { id: 'gpt-mini', label: 'GPT Mini' },
+    ]);
+    expect(effortsOf(codex, EFFORTS).map((e) => e.value)).toEqual(['low', 'medium', 'high']);
+    expect(modelTakes(codex, 'gpt-6-luna', 'effort')).toBe(true);
+    expect(modelTakes(codex, 'gpt-mini', 'effort')).toBe(false);
+    expect(modelTakes(codex, 'gpt-mini', 'auto')).toBe(true);
+    // Named as its harness names it, wherever a model is shown.
+    expect(modelLabel('gpt-6-luna')).toBe('GPT-6-Luna');
+    // Claude Code's menu is its own still.
+    expect(modelsOf({ engine: 'claude' }).map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
   });
 });
 

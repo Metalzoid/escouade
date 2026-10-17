@@ -6344,13 +6344,14 @@ async fn with_every_account_past_the_threshold_the_autopilot_pauses_and_names_th
 async fn a_ticket_waits_for_the_accounts_of_its_own_harness_alone() {
     let h = harness("tk-accounts-engines");
     let (p, _) = h.project(false).await;
-    // An account of Codex beside Principal (Codex's adapter is not written yet: its agents run on
-    // the fake CLI as Claude Code's do, which is all the board needs here).
+    // An account of Codex beside Principal, its agents on the fake `codex app-server` (ESC-37):
+    // the ticket is launched on Codex by the autopilot, and its agent reports as Claude Code's does.
     let work = Account {
         id: "work".into(),
         name: "Work".into(),
         engine: EngineId::Codex,
         config_dir: h.dir.join("codex-work").to_string_lossy().into(),
+        claude_path: crate::engine::fake_codex(),
         ..Default::default()
     };
     h.set_settings(|s| {

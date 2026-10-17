@@ -1347,6 +1347,9 @@ pub struct PersistedState {
     pub ui: UiState,
     /// Claude Code's models as it last reported them, to label the aliases from the start.
     pub models: Vec<ModelInfo>,
+    /// The models of the harnesses that list those of their account (Codex: `model/list`), as
+    /// they last listed them: the composer's menu of their agents from the start.
+    pub engine_models: BTreeMap<EngineId, Vec<crate::engine::registry::ToldModel>>,
     /// Every project's tickets.
     pub tickets: Vec<Ticket>,
     /// The autopilot's pause as the app stopped: the next start holds the tickets back the same.
@@ -1831,6 +1834,17 @@ pub enum UiEvent {
     },
     Models {
         models: Vec<ModelInfo>,
+    },
+    /// The accounts as the backend changed them by itself (a harness's Principal made as it first
+    /// serves, `Core::accounts_of`).
+    Accounts {
+        accounts: Vec<Account>,
+        engine_order: Vec<EngineId>,
+    },
+    /// The models a harness listed for its account (`PersistedState::engine_models`).
+    EngineModels {
+        engine: EngineId,
+        models: Vec<crate::engine::registry::ToldModel>,
     },
     Ticket {
         ticket: Ticket,

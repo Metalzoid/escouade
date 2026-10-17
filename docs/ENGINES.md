@@ -15,6 +15,8 @@ Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec
 | `src-tauri/src/engine/oneshot.rs` | Les textes rédigés (one-shots) : `writer`, le harness de « Modèle des textes rédigés » parmi ceux trouvés ; `ask`, la question posée à un moteur dans son délai (90 s par défaut, `LIMIT`) et sa réponse bornée (`ANSWER_MAX`, 1 Mo) quel que soit le moteur ; `run`, le lancement d'un CLI qui lit la question sur son entrée, sa sortie lue jusqu'à cette borne. |
 | `src-tauri/src/engine/claude/` | Claude Code, première implémentation : `mod.rs` (le moteur `Claude`, ses arguments, ses messages, ses one-shots, et `EngineProcess` pour son process), `process.rs` (`ClaudeProcess` : le process stdio et ses requêtes de contrôle, l'ancien `claude.rs`), `locate.rs` (où est `claude`). |
 | `src-tauri/src/agent/claude.rs` | La traduction des frames de Claude Code (stream-json) en éléments de conversation : l'ancien corps de `AgentRt::handle_frame`. |
+| `src-tauri/src/engine/codex/` | Codex, second moteur (ESC-37) : `mod.rs` (le moteur `Codex`, ses capacités, la correspondance des modes, les modèles de `model/list`, ses messages), `process.rs` (`CodexProcess` : le client JSON-RPC de `codex app-server`, le fil et le tour en cours), `locate.rs` (le binaire natif derrière le lanceur npm), `bench.rs` (le faux `codex` sur le banc, ses flux réels rejoués), `schema_tests.rs` (le schéma de la 0.163.0). Le protocole : docs/PROTOCOL.md, « Codex app-server ». |
+| `src-tauri/src/agent/codex.rs` | La traduction des messages de Codex en éléments de conversation (`AgentRt::codex_frame`), et ses tests (`codex_tests.rs`). |
 | `src-tauri/src/engine/bench/` | Le banc de conformité (tests seulement) : les scénarios et leur pilote (`mod.rs`), le rejeu des flux enregistrés (`replay.rs`). Voir « Le banc de conformité ». |
 | `src-tauri/src/engine/claude/bench.rs` | Claude Code sur le banc, avec le faux `claude`, et le rejeu de ses flux (`tests/fixtures/replays/claude/`). |
 | `src-tauri/src/engine/minimal/`, `src-tauri/src/agent/minimal.rs` | Le faux moteur minimal (tests seulement) : le moins qu'un moteur écrive pour passer le banc. |
@@ -26,7 +28,7 @@ Le reste du backend (cœur, tickets, pilote auto, serveur MCP, stats, comptes) n
 
 ### `Engine` : le moteur
 
-Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` ; tant que seul Claude Code est écrit, chaque id rend Claude Code. `engine::default()` rend Claude Code.
+Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` : `codex` rend Codex (ESC-37), un harness pas encore écrit rend Claude Code. `engine::default()` rend Claude Code.
 
 | Méthode | Ce qu'elle fait | Claude Code |
 |---|---|---|
@@ -73,6 +75,8 @@ Le process lit son flux et le passe en `Value` à `on_frame`, sauf les réponses
 - les changements du bandeau « Plan » (`plan_apply`) ;
 - l'usage du tour, la fin de tour (`Effects.turn_end`), la limite (`Effects.limited`), le quota (`Effects.rate`).
 
+Le passage à lire à voix haute d'une conversation vocale (`<spoken>…</spoken>`, ESC-97) est mis à part par la partie commune, pour tout moteur : `AgentRt::push` le sort d'un texte de l'agent lui-même (pas d'un sous-agent) dès qu'il est écrit en entier (`streaming: false`), à l'ajout comme au patch. Un message envoyé pendant un tour n'est mis en file que chez un moteur qui le fait attendre (`caps.mid_turn` `queued`) ; chez Codex (`immediate`, `turn/steer`), il entre dans le tour en cours.
+
 Le nom des outils reste celui de Claude Code pour tous les moteurs (`Bash`, `Edit`, `Write`, `Task`, `mcp__<serveur>__<outil>`…, table dans docs/TODO-1.8.md, « Un moteur par agent ») : `tools.ts`, la ligne d'activité, `convsearch.rs` et les cartes ne changent pas.
 
 ## Les choix
@@ -113,7 +117,7 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 
 ## Le registre (ESC-28)
 
-`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code seul aujourd'hui), le moteur par défaut en premier.
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code et Codex aujourd'hui), le moteur par défaut en premier.
 
 ### Ce que chaque moteur déclare (`Engine`)
 
@@ -172,8 +176,10 @@ Ce que l'utilisateur voit des moteurs, toujours appelés « Harness » à l'écr
 | Champ | Méthode de `Engine` | Ce que l'interface en fait | Claude Code |
 |---|---|---|---|
 | `install` (`windows`, `unix`) | `install()` | La commande qui l'installe, sur l'écran « Aucun harness trouvé » et dans Réglages › Harness quand il est introuvable. | `irm https://claude.ai/install.ps1 \| iex`, `curl -fsSL https://claude.ai/install.sh \| bash` |
-| `models` (`id`, `label`, `effort`, `auto`) | `models()` | Le menu « Modèle » du composer, dans son ordre ; chaque modèle dit s'il prend un effort et le mode `auto` (`supports_effort`, `supports_auto`, un test vérifie l'accord). Le nom affiché devient la version que le moteur dit faire tourner (`ModelInfo`, `initialize`) quand il l'a dite. | les alias `fable`, `opus`, `sonnet`, `haiku` (Haiku sans effort ni `auto`) |
+| `models` (`id`, `label`, `effort`, `auto`) | `models()` (Codex : son modèle par défaut, jusqu'à la première liste de `model/list`) | Le menu « Modèle » du composer, dans son ordre ; chaque modèle dit s'il prend un effort et le mode `auto` (`supports_effort`, `supports_auto`, un test vérifie l'accord). Le nom affiché devient la version que le moteur dit faire tourner (`ModelInfo`, `initialize`) quand il l'a dite. | les alias `fable`, `opus`, `sonnet`, `haiku` (Haiku sans effort ni `auto`) |
 | `efforts` | `efforts()` | Le menu « Effort », vide (et masqué) sans `caps.effort`. | `low` à `max` |
+
+Un harness qui liste les modèles du compte les donne au démarrage de son process (`Ready.catalog`, des `ToldModel` : id, nom, efforts, effort par défaut, images, modèle par défaut ; Codex : `model/list`). Le cœur les garde par harness (`Core::engine_models`, sauvés avec l'état, `UiEvent::EngineModels`, `InitialState.engineModels`), et ils prennent la place des modèles déclarés : le menu « Modèle », les efforts de chaque modèle (`effortsOf`, `modelTakes`), et son nom partout où un modèle est montré (`modelLabel`, `toldLabel`). Un nouvel agent d'un tel harness part sur son modèle par défaut quand le modèle demandé n'est pas des siens (`Core::model_for`).
 
 `InitialState.enginesFound` (et la commande `claude_found`, relue quand le chemin est enregistré) liste les moteurs dont le programme est trouvé (`Core::engines_found` ; pour Claude Code, sur le compte où partent les nouveaux agents). C'est la seule liste que l'interface propose : un moteur absent n'apparaît que dans Réglages › Harness.
 
@@ -197,7 +203,7 @@ La fenêtre d'un ticket envoie `engine` (null : celui du projet) ; `TicketDraft.
 
 Chaque compte (`model::Account`) a son moteur (`engine`, Claude Code pour un compte d'avant la 1.8). Ce qui tient ses comptes à part, le moteur le déclare (`Engine::accounts`, `registry::AccountStore`) : un dossier de configuration par compte, passé à ses process par une variable (`ConfigDir { var }` : `CLAUDE_CONFIG_DIR` pour Claude Code, `CODEX_HOME` pour Codex). `accounts::launch_env` la pose ; une clé gardée dans le trousseau et passée par l'environnement (`CURSOR_API_KEY`) viendra avec le premier moteur qui en a besoin.
 
-Chaque moteur a son Principal, son installation habituelle, lancée sans dossier d'Escouade : `principal` pour Claude Code (l'id d'avant la 1.8), `principal-<moteur>` pour un autre (`accounts::principal_id`, `is_principal`). `accounts::normalize` le fait pour chaque moteur du registre, garde au moins un compte actif par moteur (aussi pour un moteur que cette version n'écrit pas, des comptes laissés par une version plus récente) et liste chaque moteur une fois dans `Settings.engine_order`.
+Chaque moteur a son Principal, son installation habituelle, lancée sans dossier d'Escouade : `principal` pour Claude Code (l'id d'avant la 1.8), `principal-<moteur>` pour un autre (`accounts::principal_id`, `is_principal`). Celui d'un moteur autre que Claude Code naît quand ce moteur sert pour la première fois, à son premier agent ou ticket (`Core::accounts_of`, qui le dit à la fenêtre par `UiEvent::Accounts`) : un moteur qui n'a jamais tourné n'apparaît dans aucun compte, ni dans l'« Ordre des harness », et n'est le moteur de secours d'aucun projet (ESC-37). `accounts::normalize` fait le Principal de Claude Code et de chaque moteur du registre qui a des comptes, garde au moins un compte actif par moteur (aussi pour un moteur que cette version n'écrit pas, des comptes laissés par une version plus récente) et liste chaque moteur une fois dans `Settings.engine_order`.
 
 ### Les choix restent dans le moteur
 
@@ -334,6 +340,7 @@ async fn the_fake_codex_passes_the_bench() {
 `run` joue chaque scénario que ses capacités demandent (`Scenario::applies`), chacun dans son dossier, et rend ceux qu'il a joués : le test dit lesquels il attend. Un faux qui ne joue pas un scénario demandé (`prompt` rend `None`) fait échouer le banc.
 
 - **Claude Code** : `engine/claude/bench.rs`, avec le faux `claude` (`tests/fixtures/fake-claude.mjs`, dont le message choisit le scénario ; « raisonnement » a été ajouté pour `Thinking`). Il joue les douze scénarios (`the_fake_claude_passes_the_bench`).
+- **Codex** : `engine/codex/bench.rs`, avec le faux `codex app-server` (`tests/fixtures/fake-codex.mjs`, son protocole JSON-RPC rejoué d'après les flux réels de la 0.163.0 ; « commande », « fichier », « question », « propose un plan », « sous-agent », « lent », « limite »…). Il joue les douze scénarios (`the_fake_codex_passes_the_bench`) : la fin du mode Plan est la carte `ExitPlanMode` que Codex n'a pas, le tour restant ouvert jusqu'à l'approbation, et le quota passe par `{"meters": […]}`, que `usage::parse_windows` lit pour tout moteur.
 - **Le faux moteur minimal** : `engine/minimal/` et sa traduction `agent/minimal.rs`, pour les tests seulement. C'est le moins qu'un moteur écrive pour passer le banc : un `Engine` (ses méthodes que le banc n'appelle pas sont `unreachable!`), un process joué sur un fil de l'app dans un protocole à lui (`start`, `thinking`, `say`, `call`, `done`, `ask`, `question`, `end`), des outils à lui (`shell`, `patch`, `agent`) nommés comme ceux de Claude Code (`Bash`, `Edit`, `Task`). Ses capacités n'ont ni copie, ni quota, ni mode `plan` : il joue les huit autres scénarios (`the_minimal_fake_engine_plugs_into_the_bench_and_passes_what_its_capabilities_call_for`). Il s'est branché par ses deux déclarations de module (`engine/mod.rs`, `agent.rs`), comme tout moteur, sans une ligne du cœur ni du banc.
 
 ### Les flux enregistrés
@@ -355,7 +362,7 @@ Un flux réel enregistré se rejoue dans la traduction d'un moteur et se compare
 - `items` : la conversation que font les frames, dans l'ordre, sans son `id` ni ses heures (`ts`, `startedAt`, `endedAt`, inventés à chaque rejeu). Un élément attendu n'est comparé que par ce qu'il dit : une clé qu'il omet n'est pas comparée (un objet en lui non plus ; une liste a sa longueur). Les nombres sont comparés à leur dernier bit près.
 - `agentAfter` (facultatif) : l'agent après la dernière frame, comparé de même.
 
-Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. `ESCOUADE_BLESS=1 cargo test --lib <test>` réécrit les cas d'après ce que font leurs frames (leurs `items`, et les clés de leur `agentAfter`, ou six d'entre elles s'il n'en a pas) au lieu de les comparer : le diff se relit avant d'être commité. Un test par moteur rejoue tous ses cas (`replay::check_all(&CLAUDE, "claude")`). Aujourd'hui : trois flux réels de Claude Code (sous-agent à qui l'on écrit, sous-agent arrêté, commande passée en arrière-plan) et un flux du faux moteur minimal, écrit à la main dans son protocole.
+Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. `ESCOUADE_BLESS=1 cargo test --lib <test>` réécrit les cas d'après ce que font leurs frames (leurs `items`, et les clés de leur `agentAfter`, ou six d'entre elles s'il n'en a pas) au lieu de les comparer : le diff se relit avant d'être commité. Un test par moteur rejoue tous ses cas (`replay::check_all(&CLAUDE, "claude")`). Aujourd'hui : trois flux réels de Claude Code (sous-agent à qui l'on écrit, sous-agent arrêté, commande passée en arrière-plan), quatre de Codex 0.163.0 (un tour complet avec commandes approuvées, sous-agent et plan ; le mode Plan avec sa question et son plan ; une reprise ; un tour en échec), lus dans leur forme d'enregistrement (`{"dir", "msg"}`, seul ce que Codex a dit est traduit), et un flux du faux moteur minimal, écrit à la main dans son protocole. Les heures du plan de l'agent (`startedAt`, `endedAt` de ses sous-agents) ne sont pas comparées non plus.
 
 ## Ajouter un moteur
 

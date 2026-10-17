@@ -79,6 +79,9 @@ export default {
     allow: 'Autoriser',
     approvePlan: 'Approuver le plan',
     always: 'Toujours autoriser',
+    /** Allowed for the rest of the session, the same request (Codex: `acceptForSession`). */
+    forSession: 'Pour cette session',
+    sessionAllowed: 'Autorisé pour cette session',
     approvePlanAndEdits: 'Approuver et accepter les édits',
     deny: 'Refuser',
     keepPlanning: 'Continuer à planifier',

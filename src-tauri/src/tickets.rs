@@ -1066,6 +1066,7 @@ impl<R: Runtime> Core<R> {
     /// it, in the order of the accounts: never one of another harness. Refused when no active
     /// account of the harness serves the project (all reserved to others, Principal too).
     pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
+        self.accounts_of(engine);
         let all = self.settings.read().clone();
         let project = self.project(project_id).ok();
         if !accounts::serves_any(&all, engine, Some(project_id)) {

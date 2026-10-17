@@ -618,6 +618,7 @@ impl EngineProcess for ClaudeProcess {
             Ok(Ready {
                 commands: resp["commands"].as_array().cloned().unwrap_or_default(),
                 models: resp["models"].clone(),
+                catalog: None,
             })
         })
     }

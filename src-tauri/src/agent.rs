@@ -19,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 mod claude;
+mod codex;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]
 mod minimal;
@@ -239,6 +240,8 @@ pub struct AgentRt {
     /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
     /// which a start now would give (`Core::mark_escouade_next`, ESC-91).
     pub(crate) escouade_next: bool,
+    /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
+    codex: codex::CodexState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -473,6 +476,7 @@ impl AgentRt {
             unprompted: None,
             without_escouade: false,
             escouade_next: false,
+            codex: codex::CodexState::default(),
         }
     }
 
@@ -559,6 +563,7 @@ impl AgentRt {
         self.queued = 0;
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
+        self.codex = codex::CodexState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }
@@ -772,9 +777,39 @@ impl AgentRt {
         true
     }
 
-    fn push(&mut self, op: ConvOp, fx: &mut Effects) {
+    fn push(&mut self, mut op: ConvOp, fx: &mut Effects) {
+        self.spoken_apart(&mut op);
         self.conv.apply(&op);
         fx.ops.push(op);
+    }
+
+    /// A text of the agent once written whole, whatever its harness: its passage to be read aloud
+    /// (`voice::spoken`), when it has one and is the agent's own (not a subagent's), kept apart from
+    /// the rest (`spoken`), as the conversation shows it and the voice reads it.
+    fn spoken_apart(&mut self, op: &mut ConvOp) {
+        let (target, change) = match op {
+            ConvOp::Append { item } => (item.clone(), item),
+            ConvOp::Patch { id, patch } => match self.conv.get(id) {
+                Some(item) => (item.clone(), patch),
+                None => return,
+            },
+            _ => return,
+        };
+        if target["kind"] != "text"
+            || !target["parent"].is_null()
+            || change["streaming"] != false
+            || !change["spoken"].is_null()
+        {
+            return;
+        }
+        let Some((rest, passage)) = change["text"]
+            .as_str()
+            .and_then(crate::voice::spoken::extract)
+        else {
+            return;
+        };
+        change["text"] = json!(rest);
+        change["spoken"] = json!(passage);
     }
 
     pub(crate) fn append(&mut self, item: Value, fx: &mut Effects) {
@@ -867,7 +902,12 @@ impl AgentRt {
         origin: Option<&str>,
         fx: &mut Effects,
     ) -> bool {
-        let queued = self.meta.status.is_active();
+        let active = self.meta.status.is_active();
+        // A harness whose running turn reads a message at once (Codex: `turn/steer`) queues none.
+        let steered = active
+            && engine::of(&self.meta).caps().mid_turn
+                == crate::engine::registry::MidTurn::Immediate;
+        let queued = active && !steered;
         let mut item = json!({ "kind": "user", "id": id, "text": text, "images": images, "ts": now_ms(), "queued": queued });
         if !files.is_empty() {
             item["files"] = json!(files);
@@ -880,7 +920,7 @@ impl AgentRt {
         self.append(item, fx);
         if queued {
             self.queued += 1;
-        } else {
+        } else if !steered {
             self.turn_text.clear();
             self.final_text.clear();
             self.interrupted = false;
@@ -1617,7 +1657,7 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
 
 /// What Claude is told of an action the user refused without saying why, in `lang` (the language
 /// of the texts for Claude).
-fn refused_action(lang: Lang) -> String {
+pub(crate) fn refused_action(lang: Lang) -> String {
     tr_in!(
         lang,
         "L'utilisateur a refusé cette action.",

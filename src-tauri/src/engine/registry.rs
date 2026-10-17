@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime};
 /// Every harness written, in the order the interface lists them. A harness gets its line with its
 /// adapter (docs/TODO-1.8.md, chapter 1).
 pub fn all() -> Vec<&'static dyn Engine> {
-    vec![&super::CLAUDE]
+    vec![&super::CLAUDE, &super::CODEX]
 }
 
 /// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
@@ -168,6 +168,24 @@ pub struct ModelDecl {
     pub effort: bool,
     /// It takes the mode `auto` (`Engine::supports_auto`).
     pub auto: bool,
+}
+
+/// A model as its harness lists it for the account (Codex: `model/list`), which the composer's
+/// menu of its agents offers in place of the declared ones (`ModelDecl`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToldModel {
+    /// The id its harness takes.
+    pub id: String,
+    /// Its name in the menu (`GPT-6-Luna`).
+    pub label: String,
+    /// The efforts it takes, in its harness's order (none: no menu « Effort »).
+    pub efforts: Vec<String>,
+    pub default_effort: Option<String>,
+    /// It reads images.
+    pub images: bool,
+    /// The one its harness runs unless told otherwise: the model of a new agent of it.
+    pub default: bool,
 }
 
 /// A version number (`2.1.301`), compared number by number (a missing one counts as 0).

@@ -67,6 +67,8 @@ export default defineZone('composer', {
     keepPlanningMessage: 'Keep planning: the plan doesn’t work for me yet.',
     allow: 'Allow',
     approvePlan: 'Approve the plan',
+    forSession: 'For this session',
+    sessionAllowed: 'Allowed for this session',
     always: 'Always allow',
     approvePlanAndEdits: 'Approve and accept edits',
     deny: 'Deny',

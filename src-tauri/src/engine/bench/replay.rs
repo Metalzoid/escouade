@@ -21,7 +21,8 @@
 //!   `startedAt`, `endedAt`), made up at each replay. Each expected item is compared with the one
 //!   made by what it says only: a key it leaves out is not compared (an object's keys within it
 //!   neither; a list has its length). Numbers are compared to their last bit.
-//! - `agentAfter` (optional): what the agent is after the last frame, compared the same way.
+//! - `agentAfter` (optional): what the agent is after the last frame, compared the same way
+//!   (without its times either).
 //!
 //! With `ESCOUADE_BLESS=1`, a case is written again from what its frames make (its `items` and the
 //! keys of its `agentAfter`, or a few of them when it has none) instead of compared: the diff is
@@ -112,10 +113,10 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
             item
         })
         .collect();
-    Replayed {
-        items,
-        agent: serde_json::to_value(&rt.meta).unwrap(),
-    }
+    // The times of its plan too (its subagents' `startedAt`, `endedAt`).
+    let mut agent = serde_json::to_value(&rt.meta).unwrap();
+    strip_times(&mut agent);
+    Replayed { items, agent }
 }
 
 /// Replays the case `case` through `engine` and compares what it made with what it expects (or

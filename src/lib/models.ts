@@ -1,7 +1,7 @@
 // Model / effort / permission-mode catalogs used by the composer and the settings.
 
 import { t } from './i18n';
-import { speakerOf } from './engines';
+import { speakerOf, toldLabel } from './engines';
 import type { ModelInfo } from './types';
 
 /** The aliases offered: Claude Code runs the latest model of the family it knows. */
@@ -98,12 +98,13 @@ export const MODES = [
 
 /**
  * "sonnet" → "Sonnet 5.5" once Claude Code has told which model the alias runs (`catalog`),
- * "claude-sonnet-5" → "Sonnet 5".
+ * "claude-sonnet-5" → "Sonnet 5", "gpt-6-luna" → "GPT-6-Luna" once Codex has listed it.
  */
 export function modelLabel(model: string, catalog: ModelInfo[] = []): string {
   const m = model.toLowerCase();
   const known = MODELS.find((x) => x.value === m);
-  if (!known) return displayModel(model);
+  // A model of a harness that lists its own (Codex): the name it gives it.
+  if (!known) return toldLabel(model) ?? displayModel(model);
   const id = resolveAlias(m, catalog);
   return id ? displayModel(id) : known.label;
 }

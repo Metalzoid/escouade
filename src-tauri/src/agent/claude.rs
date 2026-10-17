@@ -331,8 +331,7 @@ impl AgentRt {
                 });
             match (kind, streamed) {
                 ("text", Some(id)) => {
-                    let patch =
-                        final_text(block["text"].as_str().unwrap_or_default(), parent.is_none());
+                    let patch = final_text(block["text"].as_str().unwrap_or_default());
                     self.patch(&id, patch, fx)
                 }
                 ("thinking", Some(id)) => {
@@ -348,10 +347,7 @@ impl AgentRt {
                     let n = self.blocks.get(&mid).map_or(0, Vec::len);
                     let item = match kind {
                         "text" => {
-                            let mut item = final_text(
-                                block["text"].as_str().unwrap_or_default(),
-                                parent.is_none(),
-                            );
+                            let mut item = final_text(block["text"].as_str().unwrap_or_default());
                             item["kind"] = json!("text");
                             item["id"] = json!(format!("{mid}:a{n}"));
                             item["parent"] = json!(parent);
@@ -908,11 +904,8 @@ fn parse_rate_event(info: &Value) -> Vec<crate::model::QuotaMeter> {
     crate::model::claude_meters(parse("five_hour"), parse("seven_day"))
 }
 
-/// A text of the agent once written whole: its passage to be read aloud (`voice::spoken`), when it has one and is the
-/// agent's own (not a subagent's), apart from the rest.
-fn final_text(text: &str, own: bool) -> Value {
-    match crate::voice::spoken::extract(text).filter(|_| own) {
-        Some((rest, passage)) => json!({ "text": rest, "spoken": passage, "streaming": false }),
-        None => json!({ "text": text, "streaming": false }),
-    }
+/// A text of the agent once written whole (its passage to be read aloud is kept apart by
+/// `AgentRt::push`, for every harness).
+fn final_text(text: &str) -> Value {
+    json!({ "text": text, "streaming": false })
 }
