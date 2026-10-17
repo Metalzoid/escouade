@@ -206,8 +206,11 @@ export function tui(argv, log) {
     if (prompt.includes('permission')) {
       const input = { command: 'echo tui' };
       await hook('PreToolUse', { turn_id: turnId, tool_name: 'Bash', tool_input: input });
+      // Waiting for the answer before the hook says it waits: Escouade shows the card as the hook reaches it, and
+      // a key typed then is the answer, not a message.
+      const answered = new Promise((resolve) => (waiting = resolve));
       await hook('PermissionRequest', { turn_id: turnId, tool_name: 'Bash', tool_input: input });
-      await new Promise((resolve) => (waiting = resolve));
+      await answered;
       await hook('PostToolUse', { turn_id: turnId, tool_name: 'Bash', tool_input: input, tool_response: 'tui' });
       event({
         type: 'item_completed',

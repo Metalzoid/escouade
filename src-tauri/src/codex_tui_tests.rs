@@ -221,9 +221,13 @@ async fn codexs_view_follows_its_turns_and_goes_back_to_escouade_with_its_conver
         h.agent(&id).status == AgentStatus::Done && turns(h) == 3
     })
     .await;
-    assert!(items_of(&h, &id, "tool")
-        .iter()
-        .any(|t| t["name"] == "Bash" && t["status"] == "ok"));
+    // Its command comes from the rollout, which may be read a little after the Stop hook.
+    h.wait("its command done", |h| {
+        items_of(h, &id, "tool")
+            .iter()
+            .any(|t| t["name"] == "Bash" && t["status"] == "ok")
+    })
+    .await;
 
     // Interrupted from the window (Escape): the turn ends as interrupted. Sent once its message
     // is read from the rollout: the interface waits for it then.
