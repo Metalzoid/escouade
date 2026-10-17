@@ -126,11 +126,12 @@
             {/if}
           </div>
           <p class="licences" data-speech-licence>
-            {t('voice.speech.licence', { license: v.license })} ·
+            {v.license ? t('voice.speech.licence', { license: v.license }) : t('voice.speech.licenceNone')} ·
             {v.datasetLicense && !/^see /i.test(v.datasetLicense)
               ? t('voice.speech.dataset', { license: v.datasetLicense })
               : t('voice.speech.datasetUnknown')}
             {#if v.attribution}<br />{t('voice.speech.attribution', { text: v.attribution })}{/if}
+            {#if v.exception}<br /><span data-speech-exception>{t('voice.speech.exception')}</span>{/if}
           </p>
         {/if}
       </div>

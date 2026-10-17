@@ -133,7 +133,7 @@ Everything happens **on your machine**: the transcription by Whisper, as for dic
 
 In **Settings › Voice › Conversation**:
 
-- the **voice** of each language, among those whose license allows it: free model and dataset, no voice of a character, a known person or a brand (6 voices in French, 29 in English). For each one, its quality, its size, its speaker when it has several, “▶ Listen”, “Download” or “Delete”, its license and the credit it asks for;
+- the **voice** of each language, among those whose license allows it: free model and dataset, no voice of a character, a known person or a brand (7 voices in French, 29 in English). Only one is offered as an exception: **Fuze**, in French, high quality, with 14 styles (“normal” by default, joyeuse, colere, chuchote…); its model declares no license, and its dataset, under CC BY 4.0, was generated with ElevenLabs v4, which its settings say. For each one, its quality, its size, its speaker or style when it has several, “▶ Listen”, “Download” or “Delete”, its license and the credit it asks for;
 - the **speed** and **volume** of the reading;
 - the **delay before sending**: the silence after which what you said goes (0.5 to 3 s).
 

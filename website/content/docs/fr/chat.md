@@ -133,7 +133,7 @@ Tout se passe **sur ta machine** : la transcription par Whisper, comme la dicté
 
 Dans **Réglages › Voix › Conversation** :
 
-- la **voix** de chaque langue, parmi celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque (6 voix en français, 29 en anglais). Pour chacune, sa qualité, sa taille, son locuteur s’il y en a plusieurs, « ▶ Écouter », « Télécharger » ou « Effacer », sa licence et le crédit qu’elle demande ;
+- la **voix** de chaque langue, parmi celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque (7 voix en français, 29 en anglais). Une seule y est proposée par exception : **Fuze**, en français, de haute qualité, avec 14 styles (« normal » par défaut, joyeuse, colere, chuchote…) ; son modèle ne déclare aucune licence, et son jeu de données, sous CC BY 4.0, a été généré avec ElevenLabs v4, ce que ses réglages disent. Pour chacune, sa qualité, sa taille, son locuteur ou son style s’il y en a plusieurs, « ▶ Écouter », « Télécharger » ou « Effacer », sa licence et le crédit qu’elle demande ;
 - la **vitesse** et le **volume** de la lecture ;
 - le **délai avant l’envoi** : le silence après lequel ce que tu as dit part (de 0,5 à 3 s).
 

@@ -116,7 +116,7 @@ export default {
   /** Réglages › Voix, the conversation's part. */
   speech: {
     title: 'Conversation',
-    note: 'Les réponses sont lues sur ta machine par Piper : rien ne quitte ta machine. Les voix proposées sont celles dont la licence le permet (modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque) ; chacune se télécharge une fois, sa somme de contrôle vérifiée.',
+    note: 'Les réponses sont lues sur ta machine par Piper : rien ne quitte ta machine. Les voix proposées sont celles dont la licence le permet (modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque, sauf une exception, signalée) ; chacune se télécharge une fois, sa somme de contrôle vérifiée.',
     unavailable: 'La synthèse vocale n’est pas disponible : le moteur de la voix (ONNX Runtime) est introuvable dans l’app.',
     voiceFor: 'Voix en {lang}',
     voiceDesc: 'Celle qui lit les réponses quand la conversation se tient dans cette langue.',
@@ -130,9 +130,12 @@ export default {
     delete: 'Effacer',
     downloaded: 'Téléchargée',
     licence: 'Licence du modèle : {license}',
+    licenceNone: 'Licence du modèle : aucune déclarée',
     dataset: 'Jeu de données : {license}',
     datasetUnknown: 'Jeu de données : licence non précisée par la fiche officielle',
     attribution: 'Crédit : {text}',
+    exception:
+      'Proposée par exception à la règle des licences, décidée par Escouade le 17 octobre 2026 : son modèle ne déclare aucune licence et son jeu de données, sous CC BY 4.0, a été généré par une voix de synthèse (ElevenLabs v4).',
     rate: 'Vitesse',
     rateDesc: '1 : le rythme de la voix ; plus haut, elle lit plus vite.',
     volume: 'Volume',

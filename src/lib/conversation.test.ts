@@ -92,6 +92,7 @@ describe('the credits', () => {
       id: string;
       license: string;
       attribution: string | null;
+      exception?: boolean;
     }[];
     const credits = fs.readFileSync('CREDITS.md', 'utf8');
     expect(voices.length).toBeGreaterThan(10);
@@ -100,7 +101,13 @@ describe('the credits', () => {
       expect(line, v.id).toBeTruthy();
       expect(line).toContain(v.license);
       if (v.attribution) expect(line).toContain(v.attribution);
+      // A voice offered by exception: what its licences really are.
+      if (v.exception) {
+        expect(line).toContain('aucune déclarée (exception)');
+        expect(line).toContain('ElevenLabs v4');
+      }
     }
+    expect(credits).toContain('### Fuze, une exception');
     for (const engine of ['Piper', 'eSpeak NG', 'ONNX Runtime', 'whisper.cpp']) expect(credits).toContain(engine);
   });
 });

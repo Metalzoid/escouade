@@ -96,6 +96,42 @@ describe('Réglages › Voix, the conversation', () => {
     expect(saved.speakers).toEqual({ 'fr_FR-mls-medium': 3 });
   });
 
+  it('says honestly what the licences of a voice offered by exception are, and offers its styles', async () => {
+    const fuze = voice({
+      id: 'fuze-french-fr-multi-high',
+      locale: null,
+      name: 'Fuze - French (FR) Multi High',
+      quality: 'high',
+      speakers: 14,
+      speakerNames: ['normal', 'joyeuse', 'excited'],
+      repo: 'fox3000foxy/piper-checkpoints-fuzeiii',
+      license: '',
+      datasetLicense: 'CC BY 4.0',
+      datasetUrl: 'https://huggingface.co/datasets/fox3000foxy/fuze-eleven-v4-piper',
+      attribution: 'Fuze — dataset by fox3000foxy (CC BY 4.0), generated with ElevenLabs v4',
+      exception: true,
+    });
+    open({ speech_info: () => ({ ...SPEECH, voices: [...SPEECH.voices, fuze] }) });
+    const fr = await waitFor(() => {
+      const el = document.querySelector('[data-speech-lang="fr"]') as HTMLElement;
+      expect(el).toBeTruthy();
+      return el;
+    });
+    const select = within(fr).getByRole('combobox', { name: 'Voix en Français' }) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('fr_FR-siwis-medium'));
+    expect(fr.querySelector('[data-speech-exception]')).toBeNull();
+    await userEvent.selectOptions(select, 'fuze-french-fr-multi-high');
+    const licence = fr.querySelector('[data-speech-licence]')!.textContent!;
+    expect(licence).toContain('Licence du modèle : aucune déclarée');
+    expect(licence).toContain('Jeu de données : CC BY 4.0');
+    expect(licence).toContain('Crédit : Fuze — dataset by fox3000foxy (CC BY 4.0), generated with ElevenLabs v4');
+    expect(fr.querySelector('[data-speech-exception]')!.textContent).toContain('Proposée par exception à la règle des licences');
+    // Its styles by their names, « normal » first and chosen by default.
+    const speaker = within(fr).getByRole('combobox', { name: 'Locuteur' }) as HTMLSelectElement;
+    expect([...speaker.options].slice(0, 3).map((o) => o.text)).toEqual(['normal', 'joyeuse', 'excited']);
+    expect(speaker.value).toBe('0');
+  });
+
   it('downloads a voice from here', async () => {
     const backend = open({ speech_download: () => null });
     const en = await waitFor(() => {

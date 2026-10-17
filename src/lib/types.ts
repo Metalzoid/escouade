@@ -128,6 +128,8 @@ export interface SpeechVoice {
   datasetUrl: string | null;
   /** What must be shown with it (CC BY). */
   attribution: string | null;
+  /** Offered by a decision of the user against the rule of the licences (absent otherwise). */
+  exception?: boolean;
   downloaded: boolean;
 }
 

@@ -2879,5 +2879,42 @@
     "datasetLicense": "http://creativecommons.org/licenses/by-sa/4.0/",
     "datasetUrl": "https://github.com/marytts/upmc-pierre-data",
     "attribution": "https://github.com/marytts/upmc-pierre-data (http://creativecommons.org/licenses/by-sa/4.0/)"
+  },
+  {
+    "id": "fuze-french-fr-multi-high",
+    "lang": "fr",
+    "locale": null,
+    "name": "Fuze - French (FR) Multi High",
+    "quality": "high",
+    "speakers": 14,
+    "speakerNames": [
+      "normal",
+      "joyeuse",
+      "excited",
+      "colere",
+      "triste",
+      "surprise",
+      "interrogative",
+      "storytelling",
+      "moqueur",
+      "peur",
+      "chuchote",
+      "determine",
+      "fier",
+      "degoute"
+    ],
+    "sampleRate": 22050,
+    "repo": "fox3000foxy/piper-checkpoints-fuzeiii",
+    "onnx": "fuzeiii.onnx",
+    "json": "fuzeiii.onnx.json",
+    "onnxSize": 77080679,
+    "onnxSha256": "8920448e34b46cbfce0f46c6fa57fc91065d96bb795958071aeb7b79a4278225",
+    "jsonSize": 5384,
+    "jsonSha256": "35e1c8f17a5f19570d9e52d97b39b3f07be5c94bf9edec2890d9083f960d0f6b",
+    "license": "",
+    "datasetLicense": "CC BY 4.0",
+    "datasetUrl": "https://huggingface.co/datasets/fox3000foxy/fuze-eleven-v4-piper",
+    "attribution": "Fuze - French (FR) Multi High — dataset by fox3000foxy, https://huggingface.co/datasets/fox3000foxy/fuze-eleven-v4-piper (CC BY 4.0), generated with ElevenLabs v4",
+    "exception": true
   }
 ]

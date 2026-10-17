@@ -193,6 +193,43 @@ const CHECKED: &[(&str, &str)] = &[
     ),
 ];
 
+/// A voice offered by a decision of the user against the rule: one id and one file at a time, never a loosening of the
+/// rule, which still refuses every other voice of the same kind. What its licences are was read by hand, and replaces
+/// the catalog's fields.
+#[derive(Debug)]
+pub struct Exception {
+    pub id: &'static str,
+    /// The model the decision covers: another file under the same id is not admitted.
+    pub onnx_sha256: &'static str,
+    /// The licence its card declares (`None`: none).
+    pub model_licence: Option<&'static str>,
+    pub dataset_licence: &'static str,
+    pub dataset_url: &'static str,
+    pub credit: &'static str,
+}
+
+const EXCEPTIONS: &[Exception] = &[
+    // 2026-10-17, decided by the user after trying it on their machine (ESC-114): a French voice of high quality, with
+    // 14 styles. The rule refuses it: PiperHub puts it in the « fuze » universe, its model declares no licence on Hugging
+    // Face (« SandBlock Studios » on PiperHub, not certified), and its dataset, CC BY 4.0 on its card, was generated with
+    // ElevenLabs v4 (its voice « Fuze », a gaming YouTuber's style).
+    Exception {
+        id: "fuze-french-fr-multi-high",
+        onnx_sha256: "8920448e34b46cbfce0f46c6fa57fc91065d96bb795958071aeb7b79a4278225",
+        model_licence: None,
+        dataset_licence: "CC BY 4.0",
+        dataset_url: "https://huggingface.co/datasets/fox3000foxy/fuze-eleven-v4-piper",
+        credit: "Fuze - French (FR) Multi High — dataset by fox3000foxy, https://huggingface.co/datasets/fox3000foxy/fuze-eleven-v4-piper (CC BY 4.0), generated with ElevenLabs v4",
+    },
+];
+
+/// The exception decided for the voice `id` whose model is `sha256`, if any.
+pub fn exception(id: &str, sha256: Option<&str>) -> Option<&'static Exception> {
+    EXCEPTIONS
+        .iter()
+        .find(|e| e.id == id && Some(e.onnx_sha256) == sha256)
+}
+
 /// Why a voice is not offered, or that it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
@@ -232,6 +269,10 @@ pub fn admit(m: &Model, all: &[Model]) -> Verdict {
     {
         return Verdict::Unusable;
     }
+    let sha = m.files.onnx.as_ref().and_then(|f| f.sha256.as_deref());
+    if exception(&m.slug, sha).is_some() {
+        return Verdict::Admitted;
+    }
     let official = m.repo == OFFICIAL;
     let lower = format!("{} {} {} {}", m.slug, m.name, m.repo, m.onnx).to_lowercase();
     if let Some(name) = NOT_OURS.iter().find(|n| lower.contains(*n)) {
@@ -247,15 +288,13 @@ pub fn admit(m: &Model, all: &[Model]) -> Verdict {
         Licence::Permissive { .. } => {}
         other => return Verdict::ModelLicence(other),
     }
-    if !official {
-        let sha = m.files.onnx.as_ref().and_then(|f| f.sha256.as_deref());
-        if sha.is_some()
-            && all.iter().any(|o| {
-                o.repo == OFFICIAL && o.files.onnx.as_ref().and_then(|f| f.sha256.as_deref()) == sha
-            })
-        {
-            return Verdict::Copy;
-        }
+    if !official
+        && sha.is_some()
+        && all.iter().any(|o| {
+            o.repo == OFFICIAL && o.files.onnx.as_ref().and_then(|f| f.sha256.as_deref()) == sha
+        })
+    {
+        return Verdict::Copy;
     }
     let checked = official || CHECKED.iter().any(|(s, _)| *s == m.slug);
     match licence(dataset_licence(m)) {
@@ -294,6 +333,9 @@ pub struct VoiceInfo {
     pub dataset_url: Option<String>,
     /// What must be shown with it (CC BY): the work, its author or source, and the licence.
     pub attribution: Option<String>,
+    /// Offered by a decision of the user against the rule (`EXCEPTIONS`): Réglages › Voix says so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exception: bool,
 }
 
 /// `m`, admitted, as the app ships it.
@@ -311,6 +353,30 @@ pub fn voice_info(m: &Model) -> Option<VoiceInfo> {
         .then(|| stem.split('-').next().map(str::to_string))
         .flatten();
     let id = if official { stem } else { m.slug.clone() };
+    if let Some(e) = exception(&id, onnx.sha256.as_deref()) {
+        return Some(VoiceInfo {
+            id,
+            lang: m.lang.clone(),
+            locale,
+            name: m.name.clone(),
+            quality: m.quality.clone(),
+            speakers: m.speakers,
+            speaker_names: m.speaker_names.clone(),
+            sample_rate: m.sample_rate,
+            repo: m.repo.clone(),
+            onnx: m.onnx.clone(),
+            json: m.json.clone(),
+            onnx_size: onnx.size,
+            onnx_sha256: e.onnx_sha256.to_string(),
+            json_size: json.size,
+            json_sha256: json.sha256.clone()?,
+            license: e.model_licence.unwrap_or_default().to_string(),
+            dataset_license: Some(e.dataset_licence.to_string()),
+            dataset_url: Some(e.dataset_url.to_string()),
+            attribution: Some(e.credit.to_string()),
+            exception: true,
+        });
+    }
     let model_lic = model_licence(m).unwrap_or_default().to_string();
     let dataset_lic = dataset_licence(m).map(str::to_string);
     let dataset_url = m.card.as_ref().and_then(|c| c.dataset_url.clone());
@@ -356,13 +422,18 @@ pub fn voice_info(m: &Model) -> Option<VoiceInfo> {
         dataset_license: dataset_lic,
         dataset_url,
         attribution: (!credit.is_empty()).then(|| credit.join(" · ")),
+        exception: false,
     })
 }
 
 /// What the rule still says of a voice of the list as shipped: its licences (the dataset's when known) permissive,
 /// and its name none of a character, a person or a brand. A voice that no longer passes (the rule made stricter) is
-/// not offered, even before the list is written again.
+/// not offered, even before the list is written again. A voice of `EXCEPTIONS` passes, its id and its model those of
+/// the decision.
 pub fn allowed(v: &VoiceInfo) -> bool {
+    if exception(&v.id, Some(&v.onnx_sha256)).is_some() {
+        return true;
+    }
     let lower = format!("{} {} {}", v.id, v.name, v.repo).to_lowercase();
     matches!(licence(Some(&v.license)), Licence::Permissive { .. })
         && matches!(
@@ -458,6 +529,8 @@ mod tests {
             "alan-english-gb-medium",
             // Of the community, checked by hand.
             "colin-english-en-high",
+            // By a decision of the user (`EXCEPTIONS`).
+            "fuze-french-fr-multi-high",
         ] {
             assert_eq!(verdict(ok), Verdict::Admitted, "{ok}");
         }
@@ -491,7 +564,6 @@ mod tests {
             "eminem-english-en-medium",
             "astra-valorant-piper-tts",
             "itsrealfortune-french-fr-high",
-            "fuze-french-fr-multi-high",
         ] {
             assert!(
                 matches!(verdict(c), Verdict::Character(_)),
@@ -506,6 +578,70 @@ mod tests {
             verdict("sarah-atlas-english-us-medium"),
             Verdict::UnknownOrigin
         );
+    }
+
+    #[test]
+    fn an_exception_admits_its_voice_and_no_other_of_the_same_kind() {
+        let all = excerpt();
+        let fuze = all
+            .iter()
+            .find(|m| m.slug == "fuze-french-fr-multi-high")
+            .unwrap()
+            .clone();
+        assert_eq!(admit(&fuze, &all), Verdict::Admitted);
+        // The same voice under another id, or another model under its id: the rule again.
+        let mut other = fuze.clone();
+        other.slug = "fuze-french-fr-multi-medium".into();
+        assert!(
+            matches!(admit(&other, &all), Verdict::Character(_)),
+            "{:?}",
+            admit(&other, &all)
+        );
+        let mut other = fuze.clone();
+        other.files.onnx.as_mut().unwrap().sha256 = Some("0".repeat(64));
+        assert!(matches!(admit(&other, &all), Verdict::Character(_)));
+        // Its kind: a character's universe, no licence for its model, or a licence that is a company's name.
+        let mut other = all
+            .iter()
+            .find(|m| m.slug == "siwis-french-fr-medium")
+            .unwrap()
+            .clone();
+        other.slug = "someone-french-fr-multi-high".into();
+        other.repo = "someone/piper-checkpoints".into();
+        other.hub.universe = Some("someone".into());
+        assert_eq!(admit(&other, &all), Verdict::Character("someone".into()));
+        other.hub.universe = None;
+        other.hf.license = None;
+        other.hub.license = None;
+        assert_eq!(admit(&other, &all), Verdict::ModelLicence(Licence::Unknown));
+        other.hub.license = Some("SandBlock Studios".into());
+        assert_eq!(
+            admit(&other, &all),
+            Verdict::ModelLicence(Licence::Restricted)
+        );
+
+        // As shipped: its licences as read by hand, not PiperHub's « SandBlock Studios ».
+        let v = voice_info(&fuze).unwrap();
+        assert!(v.exception);
+        assert_eq!(v.license, "", "its model declares none");
+        assert_eq!(v.dataset_license.as_deref(), Some("CC BY 4.0"));
+        let credit = v.attribution.as_deref().unwrap();
+        assert!(
+            credit.contains("fox3000foxy") && credit.contains("ElevenLabs v4"),
+            "{credit}"
+        );
+        assert_eq!(&v, find("fuze-french-fr-multi-high").expect("shipped"));
+        assert_eq!(v.speakers, 14);
+        assert_eq!(v.speaker_names[0], "normal");
+        assert!(allowed(&v));
+        let mut w = v.clone();
+        w.id = "fuze-french-fr-multi-medium".into();
+        assert!(!allowed(&w));
+        let mut w = v.clone();
+        w.onnx_sha256 = "0".repeat(64);
+        assert!(!allowed(&w));
+        // The other voices of the list are not exceptions.
+        assert_eq!(shipped().iter().filter(|v| v.exception).count(), 1);
     }
 
     #[test]
@@ -589,6 +725,10 @@ mod tests {
         for v in list {
             assert_eq!(v.onnx_sha256.len(), 64, "{}", v.id);
             assert_eq!(v.json_sha256.len(), 64, "{}", v.id);
+            if v.exception {
+                assert!(exception(&v.id, Some(&v.onnx_sha256)).is_some(), "{}", v.id);
+                continue;
+            }
             assert!(
                 matches!(licence(Some(&v.license)), Licence::Permissive { .. }),
                 "{}",
