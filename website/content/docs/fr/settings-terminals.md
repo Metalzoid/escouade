@@ -55,4 +55,4 @@ Sans shell détecté, le bouton **+** affiche « Aucun shell détecté (PowerSh
 ## Ce qui est réglé ailleurs
 
 - **Le proxy dans les terminaux** : « Appliquer aussi le proxy aux terminaux intégrés » est dans l’onglet [« Réseau »](settings-network). Il vaut aussi pour les commandes de lancement et de worktree.
-- **Claude Code dans WSL** : sous Windows, quand le chemin de l’exécutable (onglet [« Claude Code »](settings-claude-code)) est vide et qu’aucun `claude` n’est trouvé sous Windows, Escouade en cherche un installé dans WSL, dans la distribution du champ « Distribution WSL » (la distribution par défaut s’il est vide).
+- **Claude Code dans WSL** : sous Windows, quand le chemin de l’exécutable (onglet [« Harness »](settings-claude-code)) est vide et qu’aucun `claude` n’est trouvé sous Windows, Escouade en cherche un installé dans WSL, dans la distribution du champ « Distribution WSL » (la distribution par défaut s’il est vide).

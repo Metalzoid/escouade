@@ -4,7 +4,7 @@ This page describes the settings window (its tabs, how to open it, how it saves)
 
 ## The settings window
 
-Escouade’s settings live in a single window, with one tab per topic. Open it with `Ctrl+,` (`⌘,` on macOS) or with the ⚙ button in the [status bar](interface). It opens on the “Claude Code” tab, unless a button opens it straight on the tab that concerns it: the ⚙ button in the header of the [Kanban](board) opens “Kanban”, and a project’s menu opens “Projects”. The shortcut does nothing while another dialog is open.
+Escouade’s settings live in a single window, with one tab per topic. Open it with `Ctrl+,` (`⌘,` on macOS) or with the ⚙ button in the [status bar](interface). It opens on the “Harness” tab, unless a button opens it straight on the tab that concerns it: the ⚙ button in the header of the [Kanban](board) opens “Kanban”, and a project’s menu opens “Projects”. The shortcut does nothing while another dialog is open.
 
 ### The tabs
 
@@ -13,7 +13,7 @@ The left column lists the tabs, with Escouade’s version at the bottom. The nam
 | Tab | What it sets |
 |---|---|
 | “Application” | Zoom, text size, and languages |
-| [“Claude Code”](settings-claude-code) | Executable, model, and default permissions |
+| [“Harness”](settings-claude-code) | Executable, model, and default permissions |
 | [“Accounts”](settings-accounts) | The accounts agents start on, saved as you change them |
 | [“Notifications”](settings-notifications) | Visual and sound alerts |
 | [“Projects”](settings-projects) | Settings specific to each project |

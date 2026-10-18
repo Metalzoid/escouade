@@ -1,6 +1,6 @@
-# Several Claude accounts
+# Several accounts
 
-Escouade can run your agents on several Claude accounts (personal, work, a client’s) and picks each new agent’s account by itself. This page explains how to add them, order them, reserve them to projects and resume an agent stopped by the usage limit on another account.
+Escouade can run your agents on several accounts of each harness (personal, work, a client’s) and picks each new agent’s account by itself. This page explains how to add them, order them, reserve them to projects and resume an agent stopped by the usage limit on another account.
 
 ## Why several accounts
 
@@ -92,6 +92,12 @@ Two accounts never mix. Not signed in itself, Copilot takes the GitHub CLI’s a
 
 Copilot counts in AI credits, by month: the “credits” bar says how much of them is used and when they come back (on the 1st of the month). They come from each call of its agents, else from a `copilot` of the account started at most every 5 minutes just long enough to read them, with no session nor model. Past “Pause above quota”, the autopilot pauses as for Claude Code’s windows. A turn stopped by the credits running out goes on by itself when they come back. If a session has a ceiling of credits (`--max-ai-credits`) and reaches it, a card offers to add as many credits, to lift the ceiling or to stop there.
 
+## OpenCode account
+
+OpenCode has a single account in Escouade: its “Main”, your usual OpenCode config and the providers you connected to it (“Sign in…” runs `opencode auth login`). It shows up with the first OpenCode agent or ticket.
+
+OpenCode has no quota: its cost is the one your providers give, 0 with a local model. The status bar shows, instead of the bars, its account’s cost for the day. To cap it, fill in “Daily budget ($)” on its block, in Settings › Accounts (empty by default): once the day’s cost reaches it, the autopilot pauses until midnight, as when a quota is used up, and the status bar shows it (“$0.42 / $5.00”). “Resume now” lifts the pause until midnight.
+
 ## Manage the accounts
 
 The “Accounts” tab of the settings lists the accounts. Each change is saved right away, without going through the saving of the other settings (“Cancel” doesn’t undo it). One row per account:
@@ -103,7 +109,7 @@ The “Accounts” tab of the settings lists the accounts. Each change is saved 
 | Active | A switch. An inactive account no longer receives new agents. The last active account can’t be switched off (“At least one account must be active.”). |
 | ↑ and ↓ | The order of the accounts. New agents try them in this order (“Move Pro up”, “Move Pro down”). |
 | Folder | The account’s configuration folder, read-only. |
-| Executable | The `claude` this account runs. Empty (“The one in the settings”), it takes the executable of the “Claude Code” tab. |
+| Executable | The `claude` this account runs. Empty (“The one in the settings”), it takes the executable of the “Harness” tab. |
 | Sign in… / Sign in again… | Opens the account’s sign-in (see above). |
 | Remove | Removes the account (see below). Missing for Main. |
 | Reserved to projects | The projects the account is reserved to (see below). |

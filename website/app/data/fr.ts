@@ -2,6 +2,7 @@
 // The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
 import { DOWNLOAD } from './site';
+import { docPath } from './docs';
 
 export const fr: Catalog = {
   meta: {
@@ -228,9 +229,9 @@ export const fr: Catalog = {
     title: 'Prêt en trois étapes.',
     steps: [
       {
-        title: 'Installe Claude Code',
-        text: 'Aujourd’hui, les agents d’Escouade tournent sur le Claude Code de ta machine : installe-le et connecte-toi une fois, avec ton abonnement Claude ou une clé API.',
-        link: { label: 'Documentation de Claude Code', href: 'https://code.claude.com/docs/fr/overview' },
+        title: 'Installe un harness',
+        text: 'Les agents d’Escouade tournent sur le harness de ta machine : Claude Code, et à partir de la 1.8 Codex, OpenCode ou GitHub Copilot CLI. Installe-le et connecte-toi une fois, avec ton propre compte.',
+        link: { label: 'Les quatre harness', href: docPath('fr', 'harness') },
       },
       {
         title: 'Installe Escouade',
@@ -246,16 +247,16 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'D’autres moteurs à côté de Claude Code, et ton hébergeur de code dans la boucle. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'D’autres harness à côté de Claude Code, et ton hébergeur de code dans la boucle. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
-        title: 'Codex, Copilot CLI, Cursor CLI et OpenCode',
-        text: 'Chaque agent tourne sur le moteur de ton choix, à côté de Claude Code : même conversation, mêmes cartes, même Kanban, mêmes worktrees, et les quotas de chacun dans la barre d’état.',
+        title: 'Codex, OpenCode et Copilot CLI',
+        text: 'Chaque agent tourne sur le harness de ton choix, à côté de Claude Code : même conversation, mêmes cartes, même Kanban, mêmes worktrees, et le quota ou le coût de chacun dans la barre d’état. Cursor CLI viendra ensuite.',
       },
       {
-        title: 'Un moteur par projet, agent ou ticket',
-        text: 'Un moteur par défaut pour chaque projet, un autre pour un agent ou un ticket, et le pilote auto qui suit, jusqu’à continuer sur un autre moteur quand un quota est épuisé.',
+        title: 'Un harness par projet, agent ou ticket',
+        text: 'Un harness par défaut pour chaque projet, un autre pour un agent ou un ticket, et le pilote auto qui suit, jusqu’à continuer sur un autre harness quand un quota est épuisé.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket et Gitea',
@@ -278,16 +279,16 @@ export const fr: Catalog = {
         a: 'Pas forcément. L’éditeur d’Escouade suffit pour relire et retoucher ce que font les agents (arborescence, onglets, recherche dans tous les fichiers, aller à une définition), mais il n’a ni serveur de langage ni extensions. Garde ton IDE pour le reste : chaque worktree est un vrai dossier, que tu ouvres où tu veux.',
       },
       {
-        q: 'Quel moteur fait tourner les agents ?',
-        a: 'Claude Code, aujourd’hui : Escouade lance celui de ta machine, avec ton abonnement Claude ou ta clé API. Codex, Copilot CLI, Cursor CLI et OpenCode arrivent avec la prochaine version (voir la feuille de route).',
+        q: 'Quel harness fait tourner les agents ?',
+        a: 'Celui de ta machine, avec ton propre compte : Claude Code (abonnement Claude ou clé API), et à partir de la 1.8 Codex (compte ChatGPT), OpenCode (le fournisseur de ton choix, modèles locaux compris) ou GitHub Copilot CLI (compte GitHub avec Copilot). Chaque agent a le sien, et la documentation les compare. Cursor CLI viendra plus tard.',
       },
       {
         q: 'C’est gratuit ?',
-        a: 'Oui, et open source, sous licence GPL-3.0 (ou ultérieure). Escouade utilise ton propre Claude Code : ton abonnement Claude ou ta clé API, sans intermédiaire.',
+        a: 'Oui, et open source, sous licence GPL-3.0 (ou ultérieure). Escouade utilise ton propre harness et ton propre compte, sans intermédiaire.',
       },
       {
         q: 'Où vont mes données ?',
-        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’à Claude Code lui-même, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub ou Linear, où un ticket importé reçoit son statut et des commentaires.',
+        a: 'Nulle part : projets, conversations et statistiques restent sur ta machine, dans ~/.escouade/. Le réseau ne sert qu’aux harness eux-mêmes, à la lecture de tes quotas, aux mises à jour et, si tu les connectes, à Jira, Trello, GitHub ou Linear, où un ticket importé reçoit son statut et des commentaires.',
       },
       {
         q: 'Et mes jetons Jira, Trello, GitHub ou Linear ?',
@@ -315,7 +316,7 @@ export const fr: Catalog = {
       },
       {
         q: 'C’est un produit Anthropic ?',
-        a: 'Non. Escouade est un projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',
+        a: 'Non. Escouade est un projet indépendant, non affilié à Anthropic, OpenAI ni GitHub. Claude et Claude Code sont des marques d’Anthropic, Codex d’OpenAI, GitHub Copilot de GitHub.',
       },
     ],
   },
@@ -327,7 +328,7 @@ export const fr: Catalog = {
     license: 'Licence GPL-3.0',
     privacy: 'Confidentialité',
     legal: 'Mentions légales',
-    note: 'Projet indépendant, non affilié à Anthropic. Claude et Claude Code sont des marques d’Anthropic.',
+    note: 'Projet indépendant, non affilié à Anthropic, OpenAI ni GitHub. Claude et Claude Code sont des marques d’Anthropic, Codex d’OpenAI, GitHub Copilot de GitHub.',
   },
 
   notFound: { title: 'Page introuvable', text: 'Cette adresse ne mène nulle part.', home: 'Retour à l’accueil' },
@@ -370,7 +371,7 @@ export const fr: Catalog = {
     },
     pageTitle: '{title} · Documentation d’Escouade',
     groups: {
-      start: { title: 'Démarrer', text: 'Ce qu’est Escouade, l’installer et faire tes premiers pas.' },
+      start: { title: 'Démarrer', text: 'Ce qu’est Escouade, l’installer, choisir ses harness et faire tes premiers pas.' },
       agents: {
         title: 'Agents et conversation',
         text: 'Lancer des agents, leur parler, suivre leur travail et être prévenu quand ils ont besoin de toi.',
@@ -383,13 +384,14 @@ export const fr: Catalog = {
         title: 'Kanban et automatisation',
         text: 'Confier des tickets au pilote auto, les tester, les valider, les importer, piloter Escouade par MCP.',
       },
-      usage: { title: 'Comptes et consommation', text: 'Plusieurs comptes Claude, les quotas, le coût et les statistiques.' },
+      usage: { title: 'Comptes et consommation', text: 'Plusieurs comptes par harness, les quotas, le coût et les statistiques.' },
       settings: { title: 'Réglages', text: 'Chaque onglet de la fenêtre des réglages, option par option.' },
       reference: { title: 'Référence', text: 'Les raccourcis, les données locales, les mises à jour et le dépannage.' },
     },
     pages: {
       introduction: 'Présentation',
       installation: 'Installation',
+      harness: 'Les harness',
       'quick-start': 'Prise en main',
       interface: 'L’interface',
       'managing-agents': 'Les agents',
@@ -397,7 +399,7 @@ export const fr: Catalog = {
       plan: 'L’avancée d’un plan',
       overview: 'Suivre ses agents',
       notifications: 'Notifications',
-      'claude-code-view': 'La vue Claude Code',
+      'claude-code-view': 'La vue terminal',
       'remote-control': 'Remote control',
       git: 'Git et commits',
       worktrees: 'Worktrees',
@@ -410,12 +412,12 @@ export const fr: Catalog = {
       testing: 'Tester et valider',
       integrations: 'Jira, Trello, GitHub, Linear',
       mcp: 'Le serveur MCP',
-      accounts: 'Comptes Claude',
+      accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',
       stats: 'Statistiques',
       'settings-application': 'Application',
-      'settings-claude-code': 'Claude Code',
-      'settings-accounts': 'Comptes Claude',
+      'settings-claude-code': 'Harness',
+      'settings-accounts': 'Comptes',
       'settings-notifications': 'Notifications',
       'settings-projects': 'Projets',
       'settings-board': 'Kanban',

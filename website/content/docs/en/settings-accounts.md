@@ -23,7 +23,7 @@ Each account has its own block in its harness’s group.
 | “Active” | Switch. An inactive account receives no new agent. Each harness keeps at least one active: the switch of the last active account of a group is grayed out (“Each harness needs at least one active account.”). | On |
 | ↑ and ↓ arrows | Move the account up or down in its group: the order of the group is its harness’s order of priority. | — |
 | “Folder” | The account’s configuration folder, shown but not editable. | — |
-| “Executable” | This account’s `claude`. Blank, it is the one in the “Claude Code” tab (the field says “The one in the settings”). Saved when you leave the field. | Blank |
+| “Executable” | This account’s `claude`. Blank, it is the one in the “Harness” tab (the field says “The one in the settings”). Saved when you leave the field. | Blank |
 | “Sign in…” or “Sign in again…” | Opens the account’s sign-in. | — |
 | “Remove” | Takes the account off the list (absent for each harness’s Main). | — |
 | “Reserved to projects” | One checkbox per open project, plus a ticked one, marked “(closed)”, for each closed project the account is still reserved to: the account only serves the projects ticked. | None ticked: “Every project” |
@@ -89,4 +89,4 @@ An account with a window past the threshold is set aside in favor of the next on
 
 When a turn stops on the usage limit, the agent’s card offers “Resume on” followed by an account, or “Resume on another account” with a menu when there are several: the agent goes on with its session on the other account. The accounts offered are the active ones of its harness, other than the agent’s own, that serve its project, are signed in, and stay under the pause threshold: the automatic switch between accounts stays within the harness.
 
-For a ticket’s agent, the “Resume a ticket’s agent stopped by the usage limit on another account” setting in the [“Claude Code”](settings-claude-code) tab does it by itself. A session doesn’t move from an account that runs Claude Code on Windows to one that runs it in WSL, or the other way around.
+For a ticket’s agent, the “Resume a ticket’s agent stopped by the usage limit on another account” setting in the [“Harness”](settings-claude-code) tab does it by itself. A session doesn’t move from an account that runs Claude Code on Windows to one that runs it in WSL, or the other way around.

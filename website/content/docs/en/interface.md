@@ -204,7 +204,7 @@ See [quotas and cost](usage) and [branches](branches).
 | Tab | Page |
 |---|---|
 | “Application” | [Application settings](settings-application) |
-| “Claude Code” | [Claude Code settings](settings-claude-code) |
+| “Harness” | [Harness settings](settings-claude-code) |
 | “Accounts” | [Claude accounts settings](settings-accounts) |
 | “Notifications” | [Notifications settings](settings-notifications) |
 | “Projects” | [Projects settings](settings-projects) |

@@ -85,7 +85,7 @@ When the pause is in effect, a strip under the Kanban header says why nothing st
 With several Claude accounts, the pause holds only if every account the project can use is held back, and the same threshold is used to choose the account new agents start on. See [accounts](accounts) and [quota tracking](usage).
 
 > [!NOTE]
-> The setting “Resume a ticket’s agent stopped by the usage limit on another account” isn’t in this tab. It’s in the [“Claude Code”](settings-claude-code) tab, and only appears with several accounts. It’s off by default.
+> The setting “Resume a ticket’s agent stopped by the usage limit on another account” isn’t in this tab. It’s in the [“Harness”](settings-claude-code) tab, and only appears with several accounts. It’s off by default.
 
 ## Agents
 
@@ -94,11 +94,11 @@ The agents that take this project’s tickets. See [the Kanban](board).
 | Setting | Effect | Default |
 |---|---|---|
 | “In parallel” | The number of tickets “In progress” at once: 1, 2, 3, 4, 5, or 6. Beyond that, “To do” tickets wait for a free slot. | 2 |
-| “Model” | The model of the ticket agents: “Default (…)”, which follows the default model of the “Claude Code” tab, or Fable, Opus, Sonnet, Haiku. | “Default” |
+| “Model” | The model of the ticket agents: “Default (…)”, which follows the default model of the “Harness” tab, or Fable, Opus, Sonnet, Haiku. | “Default” |
 | “Effort” | “Default”, or Low, Medium, High, Very high, Max. | “Default” |
 | “Mode” | “Default”, or the permission mode: Auto, Ask, Plan, Accept edits, Bypass. | “Default” |
 
-“Default” means the matching choice in the [“Claude Code”](settings-claude-code) tab: “Default model”, “Default effort”, and “Default permission mode”. Until you change them, those are Sonnet, Medium, and Auto.
+“Default” means the matching choice in the [“Harness”](settings-claude-code) tab: “Default model”, “Default effort”, and “Default permission mode”. Until you change them, those are Sonnet, Medium, and Auto.
 
 Permission modes are explained in [agents](managing-agents). In short:
 

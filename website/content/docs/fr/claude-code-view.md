@@ -1,6 +1,6 @@
-# La vue Claude Code
+# La vue terminal
 
-La vue Claude Code fait tourner un agent dans l’interface de Claude Code elle-même, dans un terminal, et le ramène dans la conversation d’Escouade sans perdre la session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
+La vue terminal fait tourner un agent dans l’interface de son harness (Claude Code, Codex, OpenCode ou Copilot CLI), dans un terminal, sans perdre sa session. Cette page explique comment changer de vue, ce qu’Escouade continue de suivre et ce qui change.
 
 ## À quoi ça sert
 
@@ -71,7 +71,7 @@ Le [remote control](remote-control) suit les mêmes règles que dans la vue Esco
 
 ## Ouvrir les nouveaux agents dans cette vue
 
-Dans Réglages › Harness, groupe « Nouveaux agents », le choix « Vue des nouveaux agents », « Escouade » (par défaut) ou « Terminal du harness », fait démarrer chaque nouvel agent dans la conversation d’Escouade ou dans cette vue. Chaque agent peut ensuite changer de vue depuis son en-tête. Les agents de ticket restent toujours dans la vue d’Escouade, comme ceux d’un harness qui n’a pas de vue terminal. Voir [les réglages de Claude Code](settings-claude-code).
+Dans Réglages › Harness, groupe « Nouveaux agents », le choix « Vue des nouveaux agents », « Escouade » (par défaut) ou « Terminal du harness », fait démarrer chaque nouvel agent dans la conversation d’Escouade ou dans cette vue. Chaque agent peut ensuite changer de vue depuis son en-tête. Les agents de ticket restent toujours dans la vue d’Escouade, comme ceux d’un harness qui n’a pas de vue terminal. Voir [les réglages des harness](settings-claude-code).
 
 ## La confiance du dossier
 
@@ -88,6 +88,15 @@ Un agent sur Codex a la même vue : le bouton s’appelle « Vue Codex » et l
 - **Interrompre** envoie `Échap`, comme chez Claude Code. Une image collée dans le terminal (PNG ou JPEG) y est tapée par son chemin.
 - **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », les sous-agents et le coût (Codex n’en donne pas).
 
+## Avec OpenCode
+
+Un agent sur OpenCode a sa vue : le bouton s’appelle « Vue OpenCode » et ouvre l’interface d’OpenCode (`opencode attach`) dans un terminal, branchée sur la session de l’agent, depuis l’en-tête de sa conversation ou le clic droit sur sa carte, même en plein tour. Contrairement aux autres vues, elle ne remplace pas le processus de l’agent : elle s’y ajoute.
+
+- **Le suivi.** Escouade garde le fil : la conversation, l’état de la carte, les notifications et le coût restent à jour pendant que tu travailles dans l’interface, et un message tapé là y apparaît avec tout son tour. Une permission répondue dans l’interface se ferme dans Escouade, et l’inverse.
+- **Le mot de passe** du serveur d’OpenCode passe par l’environnement de l’interface, jamais par sa ligne de commande.
+- **Revenir à la vue Escouade**, ou fermer le terminal, n’arrête que l’interface : le serveur d’OpenCode continue pour les autres agents.
+- **Une interface dont l’agent n’a plus de processus** (arrêté, relancé sur un autre serveur) s’arrête, et « Relancer » la rebranche.
+
 ## Avec Copilot CLI
 
 Un agent sur Copilot CLI a la même vue : le bouton s’appelle « Vue Copilot CLI » et lance l’interface de Copilot (`copilot`) dans le dossier de l’agent, sur son compte, avec son modèle et son effort. Les deux vues partagent la même session de Copilot : le terminal la reprend (`copilot --resume`), et le serveur de Copilot la reprend au retour dans la vue Escouade, dans le même dossier de Copilot (`COPILOT_HOME`). Ce qui change par rapport à Claude Code :
@@ -102,7 +111,7 @@ Un agent sur Copilot CLI a la même vue : le bouton s’appelle « Vue Copilot 
 
 ## Sous Windows avec WSL
 
-Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages de Claude Code](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :
+Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages des harness](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :
 
 ```ini
 [wsl2]

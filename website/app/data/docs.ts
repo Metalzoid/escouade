@@ -5,7 +5,7 @@
 import type { Lang } from './language';
 
 export const DOC_GROUPS = [
-  { id: 'start', pages: ['introduction', 'installation', 'quick-start', 'interface'] },
+  { id: 'start', pages: ['introduction', 'installation', 'harness', 'quick-start', 'interface'] },
   { id: 'agents', pages: ['managing-agents', 'chat', 'plan', 'overview', 'notifications', 'claude-code-view', 'remote-control'] },
   { id: 'code', pages: ['git', 'worktrees', 'branches', 'editor', 'terminals', 'launch'] },
   { id: 'board', pages: ['board', 'autopilot', 'testing', 'integrations', 'mcp'] },

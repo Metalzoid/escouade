@@ -30,7 +30,6 @@ const SAYS = {
     criteria: /critères d’acceptation/,
     status: /statut/,
     affiliation: 'non affilié à Anthropic',
-    docs: '/docs/fr/overview',
   },
   en: {
     autopilot: 'Autopilot',
@@ -39,7 +38,6 @@ const SAYS = {
     criteria: /acceptance criteria/,
     status: /status/,
     affiliation: 'not affiliated with Anthropic',
-    docs: '/docs/en/overview',
   },
 };
 
@@ -368,10 +366,10 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(pause?.['aria-pressed']).toBe('true');
   });
 
-  it('sends the first install step to Claude Code’s own documentation, in its language', () => {
+  it('sends the first install step to the page that compares the harnesses, in its language', () => {
     const link = text.install.steps[0].link!;
-    expect(link.href).toContain(says.docs);
-    expect(html).toContain(`href="${link.href}"`);
+    expect(link.href).toBe(docPath(lang, 'harness'));
+    expect(html).toContain(`href="${BASE}${link.href.slice(1)}"`);
     expect(html).toContain(escapeText(link.label));
   });
 

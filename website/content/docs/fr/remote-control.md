@@ -32,7 +32,7 @@ Deux interrupteurs, éteints au départ, activent le remote control sans passer 
 | « Remote control pour tous les agents » | Réglages › Harness, groupe « Remote control » | Ceux de tous les projets |
 | « Remote control pour les agents de ce projet » | Réglages › Projets, groupe « Remote control » (sous « Identité ») | Ceux du projet choisi |
 
-Comme les autres réglages, ils s’enregistrent avec « Enregistrer » (voir [les réglages de Claude Code](settings-claude-code) et [ceux des projets](settings-projects)).
+Comme les autres réglages, ils s’enregistrent avec « Enregistrer » (voir [les réglages des harness](settings-claude-code) et [ceux des projets](settings-projects)).
 
 Allumé, un réglage vaut pour :
 

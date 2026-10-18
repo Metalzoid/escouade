@@ -17,7 +17,7 @@ The tab has a single group, “Escouade”, with four lines.
 | “Usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
 | “Local data” | The folder where Escouade keeps its data: `~/.escouade/`. | — |
 
-If Claude Code isn’t found, give its path in the [“Claude Code”](settings-claude-code) tab.
+If Claude Code isn’t found, give its path in the [“Harness”](settings-claude-code) tab.
 
 ## Check for updates
 

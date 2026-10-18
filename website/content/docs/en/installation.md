@@ -11,7 +11,7 @@ The requirements of each system, installing on Windows, macOS and Linux, using a
 
 On top of that:
 
-- **Claude Code**, installed and signed in to your Claude account, the way you would for using it in a terminal (see the [Claude Code documentation](https://code.claude.com/docs/en/overview)). Escouade starts the `claude` of your machine.
+- **A harness**, installed and signed in to your account, the way you would for using it in a terminal: Claude Code (see the [Claude Code documentation](https://code.claude.com/docs/en/overview)), or Codex, OpenCode or GitHub Copilot CLI (see [below](#the-other-harnesses)). Escouade starts the one on your machine.
 - **Git**: Escouade uses it for diffs, commits, branches and worktrees. If a project’s folder is not a repository, Escouade initializes one when you create the project.
 - **Optional on Windows**: PowerShell 7 (without it, the built-in terminals use Windows PowerShell) and WSL.
 
@@ -31,23 +31,21 @@ Escouade looks for `claude` in this order:
 
 The path in the settings accepts `~` for your home folder, and on Windows it can leave out `.exe` or `.cmd`. Leave the field blank to detect it automatically. The line under the field says where Escouade found `claude` (“Found: …”) or, when it is not found, the path forms it accepts.
 
-Without Claude Code, the welcome screen says so, so does an agent’s empty conversation, and the Kanban starts no tickets (“Claude Code not found — no tickets will start”). Install it or set its path in the settings: when you save another path, these messages update without restarting Escouade.
+Without any harness, the welcome screen says “No harness found” with each one’s install command, and the Kanban starts no tickets (“No harness found — no tickets will start”); an agent whose harness is gone says so in its conversation. Install one or set Claude Code’s path in the settings: when you save another path, these messages update without restarting Escouade.
 
-### Codex, the other harness
+### The other harnesses
 
-Escouade also runs its agents on **Codex**, OpenAI’s CLI, beside Claude Code. It’s optional: install it with npm (`npm install -g @openai/codex`) and sign in (`codex login`), and it shows in Settings › Harness. Escouade was tested with Codex 0.163.0: an older version is refused, with the command that updates it, and a newer one is used with a warning. The Codex desktop app often installs an older version, which the `PATH` may find first: install npm’s then.
+Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode and GitHub Copilot CLI, and a single harness is enough. Install the ones you want and sign in to them; they then show in Settings › Harness, with their version and their state.
 
-Escouade starts Codex’s app-server (`codex app-server`), one per agent, through its native binary (on Windows, the `codex.exe` of the npm package, not its launcher). Once Codex is found, “New agent ▾” offers “New agent on Codex”, a ticket has its “Harness” field, and a project its “Default harness”. Its models and their efforts are those Codex lists for your account, and Escouade’s modes say what they mean there:
+| Harness | Installation | Sign-in | Tested with |
+|---|---|---|---|
+| Codex | `npm install -g @openai/codex` | `codex login` (ChatGPT account) | 0.163.0 |
+| OpenCode | `npm install -g opencode-ai` | `opencode auth login` (a provider, or Ollama’s local models) | 1.19.3 |
+| Copilot CLI | `npm install -g @github/copilot` | `copilot login` (GitHub account with Copilot) | 1.0.98 |
 
-| Mode | With Codex |
-|---|---|
-| Plan | Codex’s Plan mode: it studies, may ask you questions, then proposes its plan, changing nothing (read-only sandbox). |
-| Ask | Sandbox: writing in the agent’s folder, network off. A command that leaves it asks, `git add` and `git commit` included (Codex protects the whole `.git` folder). |
-| Accept edits | The same, and Escouade accepts at once `git add` and `git commit` in the agent’s worktree, when the command is nothing else (no option of git before the subcommand, no other command but `&&` between them) and its hooks are the repository’s; the network and the rest ask. |
-| Auto | Codex’s automatic reviewer decides on the requests for you. |
-| Bypass | Codex asks nothing and leaves its sandbox. |
+Escouade starts the native binary the npm package installs (on Windows, not its launcher). A version older than the tested one is refused, with the command that updates it; a newer one is used with a warning. The Codex desktop app often installs an older version, which the `PATH` may find first: install npm’s then. OpenCode 2 isn’t supported yet.
 
-A request from Codex has three buttons: “Allow”, “For this session” (the same request doesn’t come back during the session) and “Deny”. A message sent while it works goes into its turn instead of waiting. Codex doesn’t read PDFs. Its accounts are added as Claude Code’s are (see [several accounts](accounts#codex-accounts)), its quota shows in the status bar, and the cost of its turns is estimated from OpenAI’s public prices.
+What each one does, its modes and what protects it, its cost and quota: see [the harnesses](harness).
 
 ## Installing Escouade
 
@@ -118,9 +116,9 @@ If `claude` is still not found, set its path in Settings › Harness.
 
 ## First launch
 
-As long as no project exists, Escouade opens a welcome screen: its logo, the sentence “Add a project to run Claude Code agents, follow their questions, and open terminals.” and the “+ Add a project” button.
+As long as no project exists, Escouade opens a welcome screen: its logo, the sentence “Add a project to run agents, follow their questions, and open terminals.” and the “+ Add a project” button.
 
-- If Claude Code is not found, a warning says so: “Claude Code couldn’t be found on this machine. Install it (`irm https://claude.ai/install.ps1 | iex`) or set its path in the settings.” Then open the settings with the ⚙ button of the status bar or `Ctrl+,`, Claude Code tab. On macOS, `Ctrl` becomes `⌘`.
+- If no harness is found, a warning says so: “No harness found”, with each one’s install command. Then open the settings with the ⚙ button of the status bar or `Ctrl+,`, “Harness” tab. On macOS, `Ctrl` becomes `⌘`.
 - Click “+ Add a project” to open the “New project” window. The [quick start](quick-start) describes it field by field and goes all the way to the first commit.
 - Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › About (see the [“About” settings](settings-about)).
 

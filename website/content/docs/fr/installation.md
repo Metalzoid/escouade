@@ -1,6 +1,6 @@
 # Installation
 
-Les prérequis de chaque système, l’installation sous Windows, macOS et Linux, l’utilisation d’un Claude Code installé dans WSL, le PATH sous macOS, puis ce que tu vois au premier lancement et d’où viennent les mises à jour.
+Les prérequis de chaque système, les harness à installer, l’installation sous Windows, macOS et Linux, l’utilisation d’un Claude Code installé dans WSL, le PATH sous macOS, puis ce que tu vois au premier lancement et d’où viennent les mises à jour.
 
 ## Prérequis
 
@@ -11,7 +11,7 @@ Les prérequis de chaque système, l’installation sous Windows, macOS et Linux
 
 En plus :
 
-- **Claude Code**, installé et connecté à ton compte Claude, comme tu le ferais pour l’utiliser dans un terminal (voir la [documentation de Claude Code](https://code.claude.com/docs/fr/overview)). Escouade lance le `claude` de ta machine.
+- **Un harness**, installé et connecté à ton compte, comme tu le ferais pour l’utiliser dans un terminal : Claude Code (voir la [documentation de Claude Code](https://code.claude.com/docs/fr/overview)), ou Codex, OpenCode ou GitHub Copilot CLI (voir [plus bas](#les-autres-harness)). Escouade lance celui de ta machine.
 - **Git** : Escouade s’en sert pour les diffs, les commits, les branches et les worktrees. Si le dossier d’un projet n’est pas un dépôt, Escouade en initialise un quand tu crées le projet.
 - **Facultatif sous Windows** : PowerShell 7 (à défaut, les terminaux intégrés utilisent Windows PowerShell) et WSL.
 
@@ -31,23 +31,21 @@ Escouade cherche `claude` dans cet ordre :
 
 Le chemin des réglages accepte `~` pour ton dossier personnel, et sous Windows il peut se passer de `.exe` ou de `.cmd`. Laisse le champ vide pour la détection automatique. La ligne sous le champ dit où Escouade a trouvé `claude` (« Trouvé : … ») ou, s’il est introuvable, les formes de chemin acceptées.
 
-Sans Claude Code, l’écran d’accueil le dit, la conversation vide d’un agent aussi, et le Kanban ne démarre aucun ticket (« Claude Code introuvable — aucun ticket ne démarre »). Installe-le ou indique son chemin dans les réglages : quand tu enregistres un autre chemin, ces messages se mettent à jour sans redémarrer Escouade.
+Sans aucun harness, l’écran d’accueil dit « Aucun harness trouvé » avec la commande d’installation de chacun, et le Kanban ne démarre aucun ticket (« Aucun harness trouvé — aucun ticket ne démarre ») ; un agent dont le harness a disparu le dit dans sa conversation. Installe-en un ou indique le chemin de Claude Code dans les réglages : quand tu enregistres un autre chemin, ces messages se mettent à jour sans redémarrer Escouade.
 
-### Codex, l’autre harness
+### Les autres harness
 
-Escouade fait aussi tourner ses agents sur **Codex**, le CLI d’OpenAI, à côté de Claude Code. Il est facultatif : installe-le par npm (`npm install -g @openai/codex`) et connecte-le (`codex login`), puis il apparaît dans Réglages › Harness. Escouade a été testé avec Codex 0.163.0 : une version plus ancienne est refusée, avec la commande qui la met à jour, et une plus récente est utilisée avec un avertissement. L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : installe alors celle de npm.
+Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur Codex, OpenCode et GitHub Copilot CLI, et un seul harness lui suffit. Installe ceux que tu veux et connecte-les ; ils apparaissent alors dans Réglages › Harness, avec leur version et leur état.
 
-Escouade lance l’app-server de Codex (`codex app-server`), un par agent, par son binaire natif (sous Windows, le `codex.exe` du paquet npm, pas son lanceur). Dès que Codex est trouvé, « Nouvel agent ▾ » propose « Nouvel agent sur Codex », un ticket a son champ « Harness », et un projet son « Harness par défaut ». Ses modèles et leurs efforts sont ceux que Codex liste pour ton compte, et les modes d’Escouade disent ce qu’ils veulent dire chez lui :
+| Harness | Installation | Connexion | Testé avec |
+|---|---|---|---|
+| Codex | `npm install -g @openai/codex` | `codex login` (compte ChatGPT) | 0.163.0 |
+| OpenCode | `npm install -g opencode-ai` | `opencode auth login` (un fournisseur, ou les modèles locaux d’Ollama) | 1.19.3 |
+| Copilot CLI | `npm install -g @github/copilot` | `copilot login` (compte GitHub avec Copilot) | 1.0.98 |
 
-| Mode | Chez Codex |
-|---|---|
-| Plan | Le mode Plan de Codex : il étudie, peut te poser des questions, puis propose son plan, sans rien modifier (bac à sable en lecture seule). |
-| Demander | Bac à sable : écriture dans le dossier de l’agent, réseau coupé. Une commande qui en sort demande, `git add` et `git commit` compris (Codex protège tout le dossier `.git`). |
-| Édits auto | Pareil, et Escouade accepte d’office `git add` et `git commit` dans le worktree de l’agent, quand la commande n’est que cela (sans option de git avant la sous-commande, sans autre commande que `&&` entre elles) et que ses hooks sont ceux du dépôt ; le réseau et le reste demandent. |
-| Auto | Le relecteur automatique de Codex décide des demandes à ta place. |
-| Bypass | Codex ne demande rien et sort de son bac à sable. |
+Escouade lance le binaire natif que le paquet npm installe (sous Windows, pas son lanceur). Une version plus ancienne que celle testée est refusée, avec la commande qui la met à jour ; une plus récente est utilisée avec un avertissement. L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : installe alors celle de npm. OpenCode 2 n’est pas encore pris en charge.
 
-Une demande de Codex a trois boutons : « Autoriser », « Pour cette session » (la même demande ne revient plus pendant la session) et « Refuser ». Un message envoyé pendant qu’il travaille entre dans son tour au lieu d’attendre. Codex ne lit pas les PDF. Ses comptes s’ajoutent comme ceux de Claude Code (voir [plusieurs comptes](accounts#comptes-codex)), son quota s’affiche dans la barre de statut, et le coût de ses tours est estimé d’après le tarif public d’OpenAI.
+Ce que chacun fait, ses modes et ce qui le protège, son coût et son quota : voir [les harness](harness).
 
 ## Installer Escouade
 
@@ -118,9 +116,9 @@ Si `claude` reste introuvable, indique son chemin dans Réglages › Harness.
 
 ## Premier lancement
 
-Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son logo, la phrase « Ajoute un projet pour y lancer des agents Claude Code, suivre leurs questions et ouvrir des terminaux. » et le bouton « + Ajouter un projet ».
+Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son logo, la phrase « Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux. » et le bouton « + Ajouter un projet ».
 
-- Si Claude Code n’est pas trouvé, un avertissement le dit : « Claude Code est introuvable sur ce poste. Installe-le (`irm https://claude.ai/install.ps1 | iex`) ou indique son chemin dans les réglages. » Ouvre alors les réglages avec le bouton ⚙ de la barre d’état ou `Ctrl+,`, onglet Claude Code. Sous macOS, `Ctrl` devient `⌘`.
+- Si aucun harness n’est trouvé, un avertissement le dit : « Aucun harness trouvé », avec la commande d’installation de chacun. Ouvre alors les réglages avec le bouton ⚙ de la barre d’état ou `Ctrl+,`, onglet « Harness ». Sous macOS, `Ctrl` devient `⌘`.
 - Clique sur « + Ajouter un projet » pour ouvrir la fenêtre « Nouveau projet ». La [prise en main](quick-start) la décrit champ par champ et va jusqu’au premier commit.
 - Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › À propos (voir [les réglages « À propos »](settings-about)).
 

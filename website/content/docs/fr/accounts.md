@@ -1,6 +1,6 @@
-# Plusieurs comptes Claude
+# Plusieurs comptes
 
-Escouade peut lancer tes agents sur plusieurs comptes Claude (personnel, travail, client) et choisit seule celui de chaque nouvel agent. Cette page explique comment les ajouter, les ordonner, les réserver à des projets et reprendre un agent arrêté par la limite d’usage sur un autre compte.
+Escouade peut lancer tes agents sur plusieurs comptes de chaque harness (personnel, travail, client) et choisit seule celui de chaque nouvel agent. Cette page explique comment les ajouter, les ordonner, les réserver à des projets et reprendre un agent arrêté par la limite d’usage sur un autre compte.
 
 ## À quoi servent plusieurs comptes
 
@@ -92,6 +92,12 @@ Deux comptes ne se mélangent pas. Faute de connexion à lui, Copilot prend de l
 
 Copilot compte en crédits d’IA, par mois : la barre « crédits » dit ce qui en est utilisé et quand ils reviennent (le 1ᵉʳ du mois). Ils viennent de chaque appel de ses agents, sinon d’un `copilot` du compte lancé au plus toutes les 5 minutes le temps de les lire, sans session ni modèle. Au-delà de « Pause au-delà du quota », le pilote auto se met en pause comme pour les fenêtres de Claude Code. Un tour arrêté par les crédits épuisés reprend seul à leur retour. Si une session a un plafond de crédits (`--max-ai-credits`) et l’atteint, une carte propose d’ajouter autant de crédits, de lever le plafond ou d’arrêter là.
 
+## Compte OpenCode
+
+OpenCode n’a qu’un compte dans Escouade : son « Principal », ta config habituelle d’OpenCode et les fournisseurs que tu y as connectés (« Se connecter… » lance `opencode auth login`). Il apparaît au premier agent ou ticket OpenCode.
+
+OpenCode n’a pas de quota : son coût est celui que donnent tes fournisseurs, 0 avec un modèle local. La barre d’état montre, à la place des barres, le coût du jour de son compte. Pour le borner, remplis « Budget par jour ($) » sur son bloc, dans Réglages › Comptes (vide par défaut) : une fois le coût du jour atteint, le pilote auto se met en pause jusqu’à minuit, comme au quota épuisé, et la barre d’état le montre (« 0,42 $ / 5,00 $ »). « Reprendre maintenant » lève la pause jusqu’à minuit.
+
 ## Gérer les comptes
 
 L’onglet « Comptes » des réglages liste les comptes. Chaque changement est enregistré tout de suite, sans passer par l’enregistrement des autres réglages (« Annuler » ne le défait pas). Une ligne par compte :
@@ -103,7 +109,7 @@ L’onglet « Comptes » des réglages liste les comptes. Chaque changement es
 | Actif | Un interrupteur. Un compte inactif ne reçoit plus de nouvel agent. Le dernier compte actif ne peut pas être coupé (« Il faut au moins un compte actif. »). |
 | ↑ et ↓ | L’ordre des comptes. Les nouveaux agents les essaient dans cet ordre (« Monter Pro », « Descendre Pro »). |
 | Dossier | Le dossier de configuration du compte, en lecture seule. |
-| Exécutable | Le `claude` que ce compte lance. Vide (« Celui des réglages »), il prend l’exécutable de l’onglet « Claude Code ». |
+| Exécutable | Le `claude` que ce compte lance. Vide (« Celui des réglages »), il prend l’exécutable de l’onglet « Harness ». |
 | Se connecter… / Se reconnecter… | Ouvre la connexion du compte (voir plus haut). |
 | Supprimer | Retire le compte (voir plus bas). Absent pour Principal. |
 | Réservé aux projets | Les projets auxquels le compte est réservé (voir plus bas). |

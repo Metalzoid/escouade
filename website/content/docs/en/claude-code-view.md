@@ -1,6 +1,6 @@
-# The Claude Code view
+# The terminal view
 
-The Claude Code view runs an agent in Claude Code’s own interface, in a terminal, and brings it back to Escouade’s conversation without losing the session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
+The terminal view runs an agent in its harness’s interface (Claude Code, Codex, OpenCode or Copilot CLI), in a terminal, without losing its session. This page explains how to switch views, what Escouade keeps tracking, and what changes.
 
 ## What it’s for
 
@@ -71,7 +71,7 @@ A message sent to the agent from elsewhere, for example through the [MCP server]
 
 ## Opening new agents in this view
 
-In Settings › Harness, group “New agents”, the “New agents’ view” choice, “Escouade” (the default) or “Harness terminal”, makes each new agent start in Escouade’s conversation or in this view. Each agent can then switch views from its header. Ticket agents always stay in Escouade’s view, and so do the agents of a harness that has no terminal view. See [the Claude Code settings](settings-claude-code).
+In Settings › Harness, group “New agents”, the “New agents’ view” choice, “Escouade” (the default) or “Harness terminal”, makes each new agent start in Escouade’s conversation or in this view. Each agent can then switch views from its header. Ticket agents always stay in Escouade’s view, and so do the agents of a harness that has no terminal view. See [the harness settings](settings-claude-code).
 
 ## Folder trust
 
@@ -88,6 +88,15 @@ An agent on Codex has the same view: the button is called “Codex view” and s
 - **Interrupting** sends `Esc`, as with Claude Code. An image pasted in the terminal (PNG or JPEG) is typed there by its path.
 - **Not tracked in this view**: the “Plan” banner, subagents and cost (Codex gives none).
 
+## With OpenCode
+
+An agent on OpenCode has its view: the button is called “OpenCode view” and opens OpenCode’s interface (`opencode attach`) in a terminal, plugged into the agent’s session, from its conversation’s header or the right-click on its card, even mid-turn. Unlike the other views, it doesn’t replace the agent’s process: it adds to it.
+
+- **Tracking.** Escouade keeps the thread: the conversation, the card’s state, the notifications and the cost stay up to date while you work in the interface, and a message typed there shows up with its whole turn. A permission answered in the interface closes in Escouade, and the other way round.
+- **The password** of OpenCode’s server goes through the interface’s environment, never through its command line.
+- **Going back to the Escouade view**, or closing the terminal, only stops the interface: OpenCode’s server goes on for the other agents.
+- **An interface whose agent has no process anymore** (stopped, restarted on another server) stops, and “Restart” plugs it back in.
+
 ## With Copilot CLI
 
 An agent on Copilot CLI has the same view: the button is called “Copilot CLI view” and starts Copilot’s interface (`copilot`) in the agent’s folder, on its account, with its model and effort. Both views share the same Copilot session: the terminal resumes it (`copilot --resume`), and Copilot’s server resumes it back in the Escouade view, in the same Copilot folder (`COPILOT_HOME`). What differs from Claude Code:
@@ -102,7 +111,7 @@ An agent on Copilot CLI has the same view: the button is called “Copilot CLI v
 
 ## On Windows with WSL
 
-When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the Claude Code settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:
+When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the harness settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:
 
 ```ini
 [wsl2]

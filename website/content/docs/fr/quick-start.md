@@ -68,7 +68,7 @@ Les modes de permission décident quand Claude te demande l’autorisation d’a
 | « Édits auto » | Les modifications de fichiers sont acceptées sans demander. |
 | « Bypass » | Aucune demande de permission. |
 
-Un nouvel agent démarre avec les valeurs de Réglages › Harness : « Modèle par défaut » (Sonnet), « Effort par défaut » (Moyen) et « Mode de permission par défaut » (Auto). Voir les [réglages de Claude Code](settings-claude-code) et [les agents](managing-agents).
+Un nouvel agent démarre avec les valeurs de Réglages › Harness : « Modèle par défaut » (Sonnet), « Effort par défaut » (Moyen) et « Mode de permission par défaut » (Auto). Voir les [réglages des harness](settings-claude-code) et [les agents](managing-agents).
 
 > [!WARNING]
 > En mode « Bypass », Claude agit sans aucune demande de permission : Escouade te le rappelle quand tu le choisis. Réserve-le aux environnements sûrs.

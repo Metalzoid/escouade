@@ -204,7 +204,7 @@ Voir [les quotas et le coût](usage) et [les branches](branches).
 | Onglet | Page |
 |---|---|
 | « Application » | [Réglages de l’application](settings-application) |
-| « Claude Code » | [Réglages de Claude Code](settings-claude-code) |
+| « Harness » | [Réglages des harness](settings-claude-code) |
 | « Comptes » | [Réglages des comptes Claude](settings-accounts) |
 | « Notifications » | [Réglages des notifications](settings-notifications) |
 | « Projets » | [Réglages des projets](settings-projects) |

@@ -14,7 +14,7 @@ The problems Escouade runs into most often, each with its symptom, its cause, an
 2. Otherwise, the `PATH`, then the usual installer locations. On Windows: `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe`, and `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. On macOS and Linux: `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`.
 3. On Windows, failing that, a Claude Code installed in WSL (see below).
 
-**Fix.** Install Claude Code and sign in, or give its path in Settings › Harness (see the [Claude Code settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
+**Fix.** Install Claude Code and sign in, or give its path in Settings › Harness (see the [Harness settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
 
 A Claude account can have its own executable (Settings › Accounts, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
 

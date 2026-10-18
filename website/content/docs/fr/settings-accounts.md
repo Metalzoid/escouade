@@ -23,7 +23,7 @@ Chaque compte a son bloc dans le groupe de son harness.
 | « Actif » | Interrupteur. Un compte inactif ne reçoit aucun nouvel agent. Il en faut au moins un d’actif par harness : l’interrupteur du dernier compte actif d’un groupe est grisé (« Il faut au moins un compte actif par harness. »). | Activé |
 | Flèches ↑ et ↓ | Montent ou descendent le compte dans son groupe : l’ordre du groupe est l’ordre de priorité de son harness. | — |
 | « Dossier » | Le dossier de configuration du compte, affiché sans pouvoir être modifié. | — |
-| « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de l’onglet « Claude Code » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
+| « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de l’onglet « Harness » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
 | « Se connecter… » ou « Se reconnecter… » | Ouvre la connexion du compte. | — |
 | « Supprimer » | Retire le compte de la liste (absent pour le Principal de chaque harness). | — |
 | « Réservé aux projets » | Une case par projet ouvert, plus une case cochée, marquée « (fermé) », pour chaque projet fermé auquel le compte reste réservé : le compte ne sert que les projets cochés. | Aucune case cochée : « Tous les projets » |
@@ -89,4 +89,4 @@ Un compte dont une fenêtre a passé le seuil est écarté au profit du suivant 
 
 Quand un tour s’arrête sur la limite d’usage, la carte de l’agent propose « Reprendre sur » suivi d’un compte, ou « Reprendre sur un autre compte » avec un menu quand il y en a plusieurs : l’agent repart avec sa session sur l’autre compte. Sont proposés les comptes actifs de son harness, autres que celui de l’agent, qui servent son projet, sont connectés et restent sous le seuil de pause : la bascule automatique entre comptes reste dans le même harness.
 
-Pour un agent de ticket, le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » de l’onglet [« Claude Code »](settings-claude-code) le fait tout seul. Une session ne passe pas d’un compte qui fait tourner Claude Code sous Windows à un compte qui le fait tourner dans WSL, ni l’inverse.
+Pour un agent de ticket, le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » de l’onglet [« Harness »](settings-claude-code) le fait tout seul. Une session ne passe pas d’un compte qui fait tourner Claude Code sous Windows à un compte qui le fait tourner dans WSL, ni l’inverse.

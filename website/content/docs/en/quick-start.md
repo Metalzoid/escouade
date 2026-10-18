@@ -68,7 +68,7 @@ The permission modes decide when Claude asks you for permission to act:
 | “Accept edits” | File edits are accepted without asking. |
 | “Bypass” | No permission requests. |
 
-A new agent starts with the values of Settings › Harness: “Default model” (Sonnet), “Default effort” (Medium) and “Default permission mode” (Auto). See the [Claude Code settings](settings-claude-code) and [agents](managing-agents).
+A new agent starts with the values of Settings › Harness: “Default model” (Sonnet), “Default effort” (Medium) and “Default permission mode” (Auto). See the [Harness settings](settings-claude-code) and [agents](managing-agents).
 
 > [!WARNING]
 > In “Bypass” mode, Claude acts without any permission request: Escouade reminds you of it when you choose it. Keep it for safe environments.

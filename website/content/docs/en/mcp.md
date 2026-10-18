@@ -210,4 +210,4 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 - [The autopilot](autopilot): the rules the tools take over.
 - [The Kanban](board): the tickets the tools create and move.
 - [Kanban settings](settings-board): what `get_board` reads and `set_board` changes.
-- [Claude Code settings](settings-claude-code): where the switch is.
+- [Harness settings](settings-claude-code): where the switch is.

@@ -14,7 +14,7 @@ Les problèmes que rencontre le plus souvent Escouade, chacun avec son symptôme
 2. Sinon, le `PATH`, puis les emplacements habituels des installeurs. Sous Windows : `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe` et `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. Sous macOS et Linux : `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude` et `/usr/local/bin/claude`.
 3. Sous Windows, à défaut, un Claude Code installé dans WSL (voir plus bas).
 
-**Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Harness (voir les [réglages Claude Code](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
+**Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Harness (voir les [réglages des harness](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
 
 Un compte Claude peut avoir son propre exécutable (Réglages › Comptes, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
 

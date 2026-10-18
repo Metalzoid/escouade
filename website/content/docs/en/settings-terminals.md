@@ -55,4 +55,4 @@ With no shell detected, the **+** button shows “No shell found (PowerShell 7, 
 ## What is set elsewhere
 
 - **The proxy in terminals**: “Also apply the proxy to the built-in terminals” is in the [“Network”](settings-network) tab. It also applies to launch and worktree commands.
-- **Claude Code in WSL**: on Windows, when the executable path (the [“Claude Code”](settings-claude-code) tab) is empty and no `claude` is found on Windows, Escouade looks for one installed in WSL, in the distribution from the “WSL distribution” field (the default distribution if it’s empty).
+- **Claude Code in WSL**: on Windows, when the executable path (the [“Harness”](settings-claude-code) tab) is empty and no `claude` is found on Windows, Escouade looks for one installed in WSL, in the distribution from the “WSL distribution” field (the default distribution if it’s empty).

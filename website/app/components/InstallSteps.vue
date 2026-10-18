@@ -1,5 +1,8 @@
 <script setup lang="ts">
 const { text } = useLang();
+const asset = useAsset();
+// A page of this site is under its base URL; another site is linked as it is.
+const href = (h: string) => (h.startsWith('/') ? asset(h) : h);
 </script>
 
 <template>
@@ -11,7 +14,7 @@ const { text } = useLang();
           <span class="n" aria-hidden="true">{{ i + 1 }}</span>
           <h3>{{ s.title }}</h3>
           <p>{{ s.text }}</p>
-          <a v-if="s.link" class="arrow" :href="s.link.href">{{ s.link.label }}</a>
+          <a v-if="s.link" class="arrow" :href="href(s.link.href)">{{ s.link.label }}</a>
         </li>
       </ol>
     </div>

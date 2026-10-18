@@ -85,7 +85,7 @@ Quand la pause joue, une bande sous l’en-tête du Kanban dit pourquoi rien ne 
 Avec plusieurs comptes Claude, la pause ne tient que si tous les comptes que le projet peut utiliser sont retenus, et le même seuil sert à choisir le compte sur lequel partent les nouveaux agents. Voir [les comptes](accounts) et [le suivi du quota](usage).
 
 > [!NOTE]
-> Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » n’est pas dans cet onglet. Il est dans l’onglet [« Claude Code »](settings-claude-code), et n’apparaît qu’avec plusieurs comptes. Il est désactivé par défaut.
+> Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » n’est pas dans cet onglet. Il est dans l’onglet [« Harness »](settings-claude-code), et n’apparaît qu’avec plusieurs comptes. Il est désactivé par défaut.
 
 ## Agents
 
@@ -94,11 +94,11 @@ Les agents qui prennent les tickets de ce projet. Voir [le Kanban](board).
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « En parallèle » | Le nombre de tickets « En cours » en même temps : 1, 2, 3, 4, 5 ou 6. Au-delà, les tickets « À faire » attendent une place libre. | 2 |
-| « Modèle » | Le modèle des agents de ticket : « Par défaut (…) », qui suit le modèle par défaut de l’onglet « Claude Code », ou Fable, Opus, Sonnet, Haiku. | « Par défaut » |
+| « Modèle » | Le modèle des agents de ticket : « Par défaut (…) », qui suit le modèle par défaut de l’onglet « Harness », ou Fable, Opus, Sonnet, Haiku. | « Par défaut » |
 | « Effort » | « Par défaut », ou Bas, Moyen, Élevé, Très élevé, Max. | « Par défaut » |
 | « Mode » | « Par défaut », ou le mode de permission : Auto, Demander, Plan, Édits auto, Bypass. | « Par défaut » |
 
-« Par défaut » veut dire le choix correspondant de l’onglet [« Claude Code »](settings-claude-code) : « Modèle par défaut », « Effort par défaut » et « Mode de permission par défaut ». Tant que tu n’y touches pas, ce sont Sonnet, Moyen et Auto.
+« Par défaut » veut dire le choix correspondant de l’onglet [« Harness »](settings-claude-code) : « Modèle par défaut », « Effort par défaut » et « Mode de permission par défaut ». Tant que tu n’y touches pas, ce sont Sonnet, Moyen et Auto.
 
 Les modes de permission sont expliqués dans [les agents](managing-agents). En bref :
 

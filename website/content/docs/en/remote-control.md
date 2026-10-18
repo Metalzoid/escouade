@@ -32,7 +32,7 @@ Two switches, off to begin with, turn remote control on without going through ea
 | “Remote control for all agents” | Settings › Harness, “Remote control” group | Those of every project |
 | “Remote control for this project’s agents” | Settings › Projects, “Remote control” group (under “Identity”) | Those of the project chosen |
 
-Like the other settings, they are saved with “Save” (see [Claude Code settings](settings-claude-code) and [project settings](settings-projects)).
+Like the other settings, they are saved with “Save” (see [Harness settings](settings-claude-code) and [project settings](settings-projects)).
 
 Once on, a setting applies to:
 

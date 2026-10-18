@@ -50,7 +50,7 @@ On every start, Escouade also adds to the agent’s system prompt a protocol tha
 
 ### Model, effort, and permissions
 
-In Settings › Kanban, the “Agents” group sets the agents of the project’s tickets: “Model”, “Effort”, and “Mode” (of permission). Left on “Default”, they follow the defaults of Settings › Harness (see [Claude Code settings](settings-claude-code)).
+In Settings › Kanban, the “Agents” group sets the agents of the project’s tickets: “Model”, “Effort”, and “Mode” (of permission). Left on “Default”, they follow the defaults of Settings › Harness (see [Harness settings](settings-claude-code)).
 
 Ticket agents stay in Escouade’s view. If one of them asks for a permission or asks a question, its card turns amber with “Question waiting for your answer”, you are notified, and you answer in its conversation (see [Chat](chat)).
 

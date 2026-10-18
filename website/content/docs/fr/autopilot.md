@@ -50,7 +50,7 @@ Ce message, comme les suivants, est écrit dans « Langue des textes rédigés 
 
 ### Modèle, effort et permissions
 
-Dans Réglages › Kanban, le groupe « Agents » règle les agents des tickets du projet : « Modèle », « Effort » et « Mode » (de permission). Laissés à « Par défaut », ils suivent les valeurs par défaut de Réglages › Harness (voir [Réglages de Claude Code](settings-claude-code)).
+Dans Réglages › Kanban, le groupe « Agents » règle les agents des tickets du projet : « Modèle », « Effort » et « Mode » (de permission). Laissés à « Par défaut », ils suivent les valeurs par défaut de Réglages › Harness (voir [Réglages des harness](settings-claude-code)).
 
 Les agents des tickets restent dans la vue d’Escouade. Si l’un d’eux demande une autorisation ou pose une question, sa carte passe en ambre avec « Question en attente de ta réponse », tu es prévenu, et tu réponds dans sa conversation (voir [Le chat](chat)).
 

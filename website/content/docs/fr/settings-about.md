@@ -17,7 +17,7 @@ L’onglet n’a qu’un groupe, « Escouade », avec quatre lignes.
 | « Statistiques d’usage » | « Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code. » À droite, le bouton « En détail » (il ouvre la page [Confidentialité](/privacy/)) et un interrupteur. | Désactivé tant que tu n’as pas accepté la question du premier démarrage |
 | « Données locales » | Le dossier où Escouade garde ses données : `~/.escouade/`. | — |
 
-Si Claude Code est introuvable, indique son chemin dans l’onglet [« Claude Code »](settings-claude-code).
+Si Claude Code est introuvable, indique son chemin dans l’onglet [« Harness »](settings-claude-code).
 
 ## Rechercher une mise à jour
 

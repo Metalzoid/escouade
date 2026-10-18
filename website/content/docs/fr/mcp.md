@@ -210,4 +210,4 @@ Sont aussi refusées, et notées : une requête sans jeton (« Requête refusé
 - [Le pilote auto](autopilot) : les règles que les outils reprennent.
 - [Le Kanban](board) : les tickets que les outils créent et déplacent.
 - [Réglages du Kanban](settings-board) : ce que `get_board` lit et que `set_board` change.
-- [Réglages de Claude Code](settings-claude-code) : où se trouve l’interrupteur.
+- [Réglages des harness](settings-claude-code) : où se trouve l’interrupteur.
