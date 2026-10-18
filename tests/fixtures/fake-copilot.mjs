@@ -84,7 +84,7 @@ if (argv[0] === 'login') {
 } else if (!server && !argv.includes('--output-format')) {
   // Copilot's interface (« Vue Copilot »).
   const { tui } = await import('./fake-copilot-tui.mjs');
-  tui(argv);
+  tui(argv, { free: isFree() });
 } else if (!server) {
   // `copilot -p`: one question read from the input, its answer a JSON stream.
   const model = optionOf('--model') || 'auto';

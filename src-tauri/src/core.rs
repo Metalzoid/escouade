@@ -5715,7 +5715,7 @@ impl<R: Runtime> Core<R> {
         let lock = self.spawn_lock(id);
         let guard = lock.lock().await;
         let h = self.agents.write().remove(id).ok_or_else(agent_not_found)?;
-        let (pid, worktree, ports, killed, interface) = {
+        let (pid, worktree, ports, killed, interface, meta) = {
             let mut rt = h.lock();
             rt.gen += 1;
             let killed = rt.proc.take();
@@ -5733,6 +5733,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.port_base,
                 killed,
                 interface,
+                rt.meta.clone(),
             )
         };
         // Refused at once, without waiting for its process to end.
@@ -5754,6 +5755,7 @@ impl<R: Runtime> Core<R> {
         self.stop_setup(id).await;
         let _ = std::fs::remove_file(self.data.setup_log(id));
         self.forget_pastes(id);
+        self.forget_interface(&meta);
         // The files joined to its messages (the copies; never a file of the user's own).
         self.forget_attachments(id);
         self.forget_sidechains(id);

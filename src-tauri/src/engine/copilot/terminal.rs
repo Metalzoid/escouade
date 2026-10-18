@@ -20,7 +20,7 @@
 use super::super::terminal::{bracketed, TerminalArgs, TerminalLaunch, TerminalView};
 use super::super::{BoxFuture, Program};
 use super::process::{frame, read_frame};
-use super::{args as server_args, SECRETS};
+use super::{args as server_args, takes_effort, SECRETS};
 use crate::agent::{AgentRt, Effects, HookOutcome};
 use crate::tui::Registered;
 use anyhow::{anyhow, bail, Context, Result};
@@ -52,6 +52,8 @@ const EFFORTS: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh",
 /// How long a hook may run, and the copy of a session take.
 const HOOK_LIMIT_SECS: u64 = 10;
 const COPY_LIMIT: Duration = Duration::from_secs(30);
+/// How long the account's models may take to be listed, before its interface starts.
+const LIST_LIMIT: Duration = Duration::from_secs(20);
 /// How long after a first Escape the second goes, which interrupts the turn.
 const INTERRUPT_AGAIN: Duration = Duration::from_millis(400);
 
@@ -63,6 +65,20 @@ pub static COPILOT_TERMINAL: CopilotTerminal = CopilotTerminal;
 /// The plugin of the agent's interface, beside its private file.
 pub(crate) fn plugin_dir(private_file: &Path) -> PathBuf {
     private_file.with_extension("copilot-plugin")
+}
+
+/// The name of the folder of the data of the plugin `plugin` (given by `--plugin-dir`) in
+/// `plugin-data/_direct` of the account's folder: the SHA-256 of its source as Copilot writes it,
+/// `{"source":"local","path":"<its folder>"}` (tried on 1.0.98, ESC-122: the folder resolved,
+/// absolute as Escouade gives it).
+pub(crate) fn plugin_data_id(plugin: &Path) -> String {
+    use sha2::Digest as _;
+    let path = serde_json::to_string(&plugin.to_string_lossy()).unwrap_or_default();
+    let source = format!(r#"{{"source":"local","path":{path}}}"#);
+    sha2::Sha256::digest(source.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// The line that runs `command` for `event`, in PowerShell (Windows) or in a POSIX shell.
@@ -114,7 +130,7 @@ pub(crate) fn tui_args(l: &TerminalLaunch, plugin: Option<&Path>) -> Vec<String>
     if !m.model.is_empty() && m.model != "auto" {
         a.extend(["--model".into(), m.model.clone()]);
     }
-    if EFFORTS.contains(&m.effort.as_str()) {
+    if EFFORTS.contains(&m.effort.as_str()) && takes_effort(&m.model) {
         a.extend(["--reasoning-effort".into(), m.effort.clone()]);
     }
     // As Escouade's rules answer in its view: writes in its folder in « Édits auto » and « Auto »,
@@ -203,32 +219,9 @@ pub(crate) async fn fork_session(
     of: &str,
     at: Option<&str>,
 ) -> Result<String> {
-    use tokio::io::BufReader;
-    let launch = program.launch(cwd, &server_args(), env)?;
-    let mut cmd = tokio::process::Command::new(&launch.program);
-    cmd.args(&launch.args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    for (k, v) in &launch.env {
-        cmd.env(k, v);
-    }
-    #[cfg(windows)]
-    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-    crate::job::isolate(&mut cmd);
-    crate::proc::no_inherited_fds(&mut cmd);
-    let mut child = cmd.spawn().context("copilot --server")?;
-    let job = crate::job::Job::for_child(&child);
-    let mut stdin = child.stdin.take().context("stdin")?;
-    let mut stdout = BufReader::new(child.stdout.take().context("stdout")?);
+    let mut server = Server::start(program, cwd, env)?;
     let talk = async {
-        let mut rpc = Rpc {
-            stdin: &mut stdin,
-            stdout: &mut stdout,
-            next: 0,
-        };
+        let mut rpc = server.rpc();
         let mut ask = async |method: &str, params: Value| rpc.ask(method, params).await;
         ask("connect", json!({})).await?;
         let mut fork = json!({ "sessionId": of, "name": "Escouade" });
@@ -254,11 +247,119 @@ pub(crate) async fn fork_session(
     };
     let answer = tokio::time::timeout(COPY_LIMIT, talk)
         .await
-        .map_err(|_| anyhow!("copilot did not copy the session in time"))?;
-    let _ = child.start_kill();
-    let _ = child.wait().await;
-    drop(job);
-    answer
+        .map_err(|_| anyhow!("copilot did not copy the session in time"));
+    server.stop().await;
+    answer?
+}
+
+/// The models the account of `env` lists (`models.list` of a server of its own, started then
+/// stopped, in `cwd`): none on a Free account (tried on 1.0.98: none with a token, `auto` alone
+/// signed in by `copilot login`).
+pub(crate) async fn listed_models(
+    program: &Program,
+    cwd: &str,
+    env: &[(String, String)],
+) -> Result<Vec<String>> {
+    let mut server = Server::start(program, cwd, env)?;
+    let talk = async {
+        let mut rpc = server.rpc();
+        rpc.ask("connect", json!({})).await?;
+        let listed = rpc.ask("models.list", json!({})).await?;
+        let _ = rpc.ask("runtime.shutdown", json!({})).await;
+        Ok::<_, anyhow::Error>(
+            listed["models"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|m| m["id"].as_str().map(str::to_string))
+                .collect(),
+        )
+    };
+    let answer = tokio::time::timeout(LIST_LIMIT, talk)
+        .await
+        .map_err(|_| anyhow!("copilot did not list its models in time"));
+    server.stop().await;
+    answer?
+}
+
+/// The models each account lists (by its `COPILOT_HOME`, empty for the user's own), asked once
+/// for the app's run: a plan changed (Free to Pro) is seen at the next start.
+static LISTED: parking_lot::Mutex<Vec<(String, Vec<String>)>> = parking_lot::Mutex::new(Vec::new());
+
+/// The arguments `args` of an interface, its model `auto` (and no effort, which `auto` does not
+/// take) when the account does not list it (`listed`): Copilot CLI 1.0.98 takes a `--model` its
+/// account does not list as `auto`, but says so in red at its start (« ✗ Model "gpt-6-luna" from
+/// --model flag is not available. Using "auto" instead. », a Free account, ESC-122).
+pub(crate) fn model_of_account(mut args: Vec<String>, listed: &[String]) -> Vec<String> {
+    let Some(i) = args.iter().position(|a| a == "--model") else {
+        return args;
+    };
+    let Some(model) = args.get(i + 1) else {
+        return args;
+    };
+    if !takes_effort(model) || listed.iter().any(|m| m == model) {
+        return args;
+    }
+    args[i + 1] = "auto".into();
+    if let Some(e) = args.iter().position(|a| a == "--reasoning-effort") {
+        args.drain(e..(e + 2).min(args.len()));
+    }
+    args
+}
+
+/// A server of Copilot's (`copilot --server --stdio`) of the account of `env`, in `cwd`.
+struct Server {
+    child: tokio::process::Child,
+    job: Option<crate::job::Job>,
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::io::BufReader<tokio::process::ChildStdout>,
+}
+
+impl Server {
+    fn start(program: &Program, cwd: &str, env: &[(String, String)]) -> Result<Self> {
+        let launch = program.launch(cwd, &server_args(), env)?;
+        let mut cmd = tokio::process::Command::new(&launch.program);
+        cmd.args(&launch.args)
+            .current_dir(cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        for (k, v) in &launch.env {
+            cmd.env(k, v);
+        }
+        #[cfg(windows)]
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+        crate::job::isolate(&mut cmd);
+        crate::proc::no_inherited_fds(&mut cmd);
+        let mut child = cmd.spawn().context("copilot --server")?;
+        let job = crate::job::Job::for_child(&child);
+        let stdin = child.stdin.take().context("stdin")?;
+        let stdout = tokio::io::BufReader::new(child.stdout.take().context("stdout")?);
+        Ok(Self {
+            child,
+            job,
+            stdin,
+            stdout,
+        })
+    }
+
+    fn rpc(
+        &mut self,
+    ) -> Rpc<'_, tokio::process::ChildStdin, tokio::io::BufReader<tokio::process::ChildStdout>>
+    {
+        Rpc {
+            stdin: &mut self.stdin,
+            stdout: &mut self.stdout,
+            next: 0,
+        }
+    }
+
+    async fn stop(mut self) {
+        let _ = self.child.start_kill();
+        let _ = self.child.wait().await;
+        drop(self.job);
+    }
 }
 
 /// Requests to a server of Copilot's, one at a time, each answer awaited.
@@ -366,6 +467,61 @@ impl TerminalView for CopilotTerminal {
             }
             Ok(Vec::new())
         })
+    }
+
+    /// A model named (not `auto`) that its account does not list goes as `auto` (ESC-122); the
+    /// models listed once for each account. Not listed (no answer in time): as it is.
+    fn for_account<'a>(
+        &'a self,
+        program: &'a Program,
+        cwd: &'a str,
+        args: Vec<String>,
+        env: &'a [(String, String)],
+    ) -> BoxFuture<'a, Vec<String>> {
+        Box::pin(async move {
+            let named = args
+                .windows(2)
+                .any(|w| w[0] == "--model" && takes_effort(&w[1]));
+            if !named {
+                return args;
+            }
+            let home = env
+                .iter()
+                .rfind(|(k, _)| k == "COPILOT_HOME")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default();
+            let known = LISTED
+                .lock()
+                .iter()
+                .find(|(h, _)| *h == home)
+                .map(|(_, l)| l.clone());
+            let listed = match known {
+                Some(l) => l,
+                None => match listed_models(program, cwd, env).await {
+                    Ok(l) => {
+                        LISTED.lock().push((home, l.clone()));
+                        l
+                    }
+                    Err(e) => {
+                        log::warn!("copilot: models of the account not listed: {e:#}");
+                        return args;
+                    }
+                },
+            };
+            model_of_account(args, &listed)
+        })
+    }
+
+    /// Its plugin, and the folder of the plugin's data Copilot made for it in the account's folder
+    /// and leaves there, empty (ESC-122): never one Copilot wrote something in.
+    fn forget(&self, private_file: &Path, config_dir: &Path) {
+        let plugin = plugin_dir(private_file);
+        let data = config_dir
+            .join("plugin-data")
+            .join("_direct")
+            .join(plugin_data_id(&plugin));
+        let _ = std::fs::remove_dir(data);
+        let _ = std::fs::remove_dir_all(plugin);
     }
 
     /// An account of its own (a `COPILOT_HOME` of its own) on its own sign-in, as its server: the
@@ -562,6 +718,66 @@ mod tests {
             .iter()
             .any(|a| a == "--model" || a == "--plugin-dir"));
         assert!(resumed.files.is_empty());
+    }
+
+    #[test]
+    fn a_model_its_account_does_not_list_goes_as_auto_without_an_effort() {
+        let args = |model: &str| -> Vec<String> {
+            [
+                "--resume",
+                "s1",
+                "--model",
+                model,
+                "--reasoning-effort",
+                "high",
+                "--allow-all",
+            ]
+            .map(String::from)
+            .to_vec()
+        };
+        // A Free account lists none (a token) or `auto` alone (`copilot login`), tried (ESC-122).
+        for listed in [vec![], vec!["auto".to_string()]] {
+            assert_eq!(
+                model_of_account(args("gpt-6-luna"), &listed),
+                ["--resume", "s1", "--model", "auto", "--allow-all"]
+            );
+        }
+        // Listed, or `auto` already: as they are.
+        let paid = ["auto", "gpt-6-luna", "gpt-5-mini"].map(String::from);
+        assert_eq!(
+            model_of_account(args("gpt-6-luna"), &paid),
+            args("gpt-6-luna")
+        );
+        assert_eq!(model_of_account(args("auto"), &[]), args("auto"));
+        let none = ["--resume", "s1"].map(String::from).to_vec();
+        assert_eq!(model_of_account(none.clone(), &[]), none);
+    }
+
+    #[test]
+    fn the_folder_of_its_plugins_data_is_named_as_copilot_names_it() {
+        // As Copilot CLI 1.0.98 named it, for this `--plugin-dir` (ESC-122).
+        assert_eq!(
+            plugin_data_id(Path::new(
+                r"C:\Users\guill\AppData\Local\Temp\esc122\plug\a1.copilot-plugin"
+            )),
+            "f80c2e5503860b741dc7be243d8483040555b6d8455b2939e86854ee98da12b1"
+        );
+    }
+
+    #[test]
+    fn an_agent_on_auto_goes_without_an_effort() {
+        let meta = AgentMeta {
+            model: "auto".into(),
+            effort: "medium".into(),
+            ..Default::default()
+        };
+        let args = launch_of(&meta, Some("u-1"), None).args;
+        assert!(
+            !args
+                .iter()
+                .any(|a| a == "--model" || a == "--reasoning-effort"),
+            "{args:?}"
+        );
     }
 
     #[test]

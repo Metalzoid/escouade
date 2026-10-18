@@ -8,6 +8,8 @@
 //   `& '<program>' <argument>` (or `'<program>' <argument>`) runs the program itself, any other through a shell.
 //   Each hook it runs is added to <COPILOT_HOME>/fake-tui-hooks.jsonl ({event, from}), and each launch to
 //   <COPILOT_HOME>/fake-tui-launches.jsonl ({argv, cwd, hookUrl, hookToken}: whether those variables were given).
+//   As Copilot CLI 1.0.98 does, a plugin of `--plugin-dir` gets a folder of its data, left empty:
+//   <COPILOT_HOME>/plugin-data/_direct/<SHA-256 of {"source":"local","path":"<its folder, resolved>"}> (ESC-122).
 // - On a folder that neither it nor a folder above it is in the `trustedFolders` of <COPILOT_HOME>/config.json, it
 //   first shows `fake-copilot-trust` and waits: Enter trusts it for this process (« 1. Yes »), Down then Enter
 //   remembers it (written in config.json as Copilot does), Ctrl+C quits. Then it shows `fake-copilot-tui`.
@@ -19,6 +21,9 @@
 //   `permission.requested`, notification `permission_prompt`) and goes on once the next Enter comes (postToolUse);
 //   "question" asks the user (`user_input.requested`), answered by the next line; "lent" makes the turn wait for
 //   Escape twice (« esc again to interrupt »), which interrupts it (`abort`, no agentStop); "/quit" ends the process, as two Ctrl+C do (sessionEnd).
+// - On a Free account (`free`: no model listed), a `--model` that is not `auto` is refused as Copilot CLI 1.0.98
+//   refuses it, said under its first line: « ✗ Model "<model>" from --model flag is not available. Using "auto"
+//   instead. » (ESC-122), and it runs on `auto`.
 // - `--resume <id>` of a session with no event in COPILOT_HOME fails as Copilot does: « Error: No session, task, or
 //   name matched '<id>'. … », exit code 1.
 
@@ -76,7 +81,7 @@ function programOf(line) {
   return null;
 }
 
-export function tui(argv) {
+export function tui(argv, { free = false } = {}) {
   const home = process.env.COPILOT_HOME;
   if (!home) {
     process.stderr.write('fake copilot: COPILOT_HOME is needed\n');
@@ -109,8 +114,14 @@ export function tui(argv) {
   }
   const id = resumed || flag('--session-id') || crypto.randomUUID();
   const cwd = process.cwd();
-  const model = flag('--model') || 'gpt-6-luna';
+  const asked = flag('--model');
+  const refused = free && asked && asked !== 'auto' ? asked : null;
+  const model = refused ? 'auto' : asked || 'gpt-6-luna';
   const hooks = hooksOf(flag('--plugin-dir'), home);
+  if (flag('--plugin-dir')) {
+    const source = JSON.stringify({ source: 'local', path: path.resolve(flag('--plugin-dir')) });
+    fs.mkdirSync(path.join(home, 'plugin-data', '_direct', crypto.createHash('sha256').update(source).digest('hex')), { recursive: true });
+  }
 
   // Its session, as the fake server keeps it.
   const file = path.join(states, `${id}.json`);
@@ -155,6 +166,7 @@ export function tui(argv) {
   let trusting = !trusted();
   let remember = false;
   process.stdout.write(trusting ? '\x1b[?2004hfake-copilot-trust\r\n' : '\x1b[?2004hfake-copilot-tui\r\n');
+  if (refused) process.stdout.write(`✗ Model "${refused}" from --model flag is not available. Using "auto" instead.\r\n`);
 
   let first = true;
   let waiting = null;

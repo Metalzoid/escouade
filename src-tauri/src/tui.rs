@@ -1361,6 +1361,8 @@ impl<R: Runtime> Core<R> {
                 });
             }
         }
+        // What its account would refuse (Copilot CLI: a model a Free account does not list).
+        let args = view.for_account(&program, &cwd, args, &env).await;
         let info = TermInfo {
             id: new_id(),
             // No project's: the window lists it with no project's terminals.
@@ -1538,6 +1540,16 @@ impl<R: Runtime> Core<R> {
     /// Where the images pasted in the interfaces are kept.
     pub(crate) fn pastes_dir(&self) -> PathBuf {
         self.data.root().join("tui").join("pastes")
+    }
+
+    /// What the interface of the deleted agent `m` left behind, its harness says
+    /// (`TerminalView::forget`: Copilot CLI's plugin, and its folder in the account's).
+    pub(crate) fn forget_interface(&self, m: &AgentMeta) {
+        let Ok((view, _)) = view_of(m) else { return };
+        let settings = self.settings.read().clone();
+        let account = accounts::get(&settings, &m.account);
+        let file = self.data.root().join("tui").join(format!("{}.json", m.id));
+        view.forget(&file, &accounts::config_dir(&account, &settings));
     }
 
     /// Removes the images pasted in the interface of the agent `id`, which is deleted.

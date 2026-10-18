@@ -111,6 +111,22 @@ pub trait TerminalView: Send + Sync {
     ) -> BoxFuture<'a, Result<Vec<String>>> {
         Box::pin(async { Ok(Vec::new()) })
     }
+    /// Its arguments `args` (with its environment `env`) once those its account would refuse are
+    /// changed, just before it starts: as they are, unless its harness checks some first (Copilot
+    /// CLI: a model its account does not list).
+    fn for_account<'a>(
+        &'a self,
+        _program: &'a Program,
+        _cwd: &'a str,
+        args: Vec<String>,
+        _env: &'a [(String, String)],
+    ) -> BoxFuture<'a, Vec<String>> {
+        Box::pin(async { args })
+    }
+    /// What its interface left of the agent once the agent is deleted: beside its private file
+    /// `private_file`, and in the folder `config_dir` of its account. Nothing, unless its harness
+    /// keeps something there.
+    fn forget(&self, _private_file: &Path, _config_dir: &Path) {}
     /// The copy of the session `of` (up to its entry `at`, all of it with none) made before the
     /// interface starts, in `cwd` with `env`, when it cannot copy one itself: the copy's id. None:
     /// it copies a session itself (`TerminalView::launch`, from `AgentMeta::fork_of`).

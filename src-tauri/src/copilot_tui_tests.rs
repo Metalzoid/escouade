@@ -73,6 +73,11 @@ async fn copilot_agent(h: &Harness, trusted: bool) -> (String, PathBuf) {
 
 /// The interface of the agent opened as the window does, until it shows `first`: its terminal.
 async fn open_copilot(h: &Harness, id: &str, first: &str) -> TermInfo {
+    open_copilot_screen(h, id, first).await.0
+}
+
+/// `open_copilot`, with what its terminal shows.
+async fn open_copilot_screen(h: &Harness, id: &str, first: &str) -> (TermInfo, Arc<Mutex<String>>) {
     let screen = Arc::new(Mutex::new(String::new()));
     let sink = screen.clone();
     let info = h
@@ -97,7 +102,7 @@ async fn open_copilot(h: &Harness, id: &str, first: &str) -> TermInfo {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    info
+    (info, screen)
 }
 
 fn jsonl(file: &Path) -> Vec<Value> {
@@ -264,6 +269,102 @@ async fn copilots_view_follows_its_turns_and_goes_back_to_escouade_with_its_conv
     tokio::time::sleep(Duration::from_millis(800)).await;
     assert_eq!(users(&h, &id).len(), 5);
     assert_eq!(turns(&h), 5);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn on_a_free_account_copilots_view_opens_on_auto_without_a_word_about_its_model() {
+    // ESC-122, seen for real: an agent of a Free account on GPT-6 Luna (the menu's first, its account
+    // listing none) opened its view with `--model gpt-6-luna`, and Copilot said in red « ✗ Model
+    // "gpt-6-luna" from --model flag is not available. Using "auto" instead. ».
+    let h = harness("tui-copilot-free");
+    let (p, repo) = h.project(false).await;
+    let home = copilot_account(&h, &repo, true);
+    std::fs::write(home.join("fake.json"), r#"{"free": true}"#).unwrap();
+    // With an effort, which `auto` does not take.
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Copilot),
+                account: Some("cp".into()),
+                model: Some("gpt-6-luna".into()),
+                effort: Some("high".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    assert_eq!(h.agent(&id).model, "gpt-6-luna");
+    let refused = "from --model flag is not available";
+
+    // A new session in its view.
+    let (_, screen) = open_copilot_screen(&h, &id, "fake-copilot-tui").await;
+    h.wait("its session named", |h| {
+        let argv = argv_of(&last_launch(&home));
+        argv[0] == "--session-id" && h.agent(&id).session_id.as_deref() == Some(argv[1].as_str())
+    })
+    .await;
+    let argv = argv_of(&last_launch(&home));
+    assert_eq!(flag(&argv, "--model").as_deref(), Some("auto"), "{argv:?}");
+    assert!(!argv.iter().any(|a| a == "--reasoning-effort"), "{argv:?}");
+    h.core
+        .send_message(&id, "Bonjour".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn over", |h| {
+        h.agent(&id).status == AgentStatus::Done && !items_of(h, &id, "turn").is_empty()
+    })
+    .await;
+    assert!(
+        !plain_text(&screen.lock()).contains(refused),
+        "{}",
+        plain_text(&screen.lock())
+    );
+
+    // Back in Escouade's view, then in Copilot's again: its session resumed, on `auto` too.
+    h.core.set_agent_view(&id, false).await.unwrap();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let (_, screen) = open_copilot_screen(&h, &id, "fake-copilot-tui").await;
+    let argv = argv_of(&last_launch(&home));
+    assert_eq!(argv[0], "--resume", "{argv:?}");
+    assert_eq!(flag(&argv, "--model").as_deref(), Some("auto"), "{argv:?}");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(
+        !plain_text(&screen.lock()).contains(refused),
+        "{}",
+        plain_text(&screen.lock())
+    );
+    // The agent keeps its model: Escouade's view would run it, were the account to list it.
+    assert_eq!(h.agent(&id).model, "gpt-6-luna");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_deleted_agent_leaves_no_folder_of_its_plugin_in_its_copilot_account() {
+    // ESC-122, seen after ESC-52: each plugin of `--plugin-dir` left an empty folder of its data in
+    // the account's `plugin-data/_direct`, never removed by Copilot.
+    let h = harness("tui-copilot-forget");
+    let (id, home) = copilot_agent(&h, true).await;
+    let direct = home.join("plugin-data").join("_direct");
+    // Another plugin's, with its data: never touched.
+    std::fs::create_dir_all(direct.join("other")).unwrap();
+    std::fs::write(direct.join("other").join("data.json"), "{}").unwrap();
+    open_copilot(&h, &id, "fake-copilot-tui").await;
+    let plugin = PathBuf::from(flag(&argv_of(&last_launch(&home)), "--plugin-dir").unwrap());
+    let ours = direct.join(crate::engine::copilot::terminal::plugin_data_id(&plugin));
+    assert!(
+        ours.is_dir(),
+        "{:?}",
+        std::fs::read_dir(&direct).unwrap().collect::<Vec<_>>()
+    );
+
+    h.core.delete_agent(&id, false).await.unwrap();
+    assert!(!ours.exists());
+    assert!(!plugin.exists());
+    assert!(direct.join("other").join("data.json").is_file());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -691,4 +792,164 @@ async fn real_copilot_view() {
 /// The agent's id, for the closures of `real_copilot_view`.
 fn h_id<'a>(_h: &Harness, id: &'a str) -> &'a str {
     id
+}
+
+/// Real run (ESC-122), by hand: « Vue Copilot » of an agent of a Free account on GPT-6 Luna (with
+/// an effort), with the real Copilot CLI (`ESCOUADE_REAL_COPILOT`), on its Principal: a home of
+/// the trial's (`ESCOUADE_TEST_REAL_HOME`), whose `.copilot` is the real one's `COPILOT_HOME`, and
+/// the token of `gh auth token` (`GH_TOKEN`, never printed) in the environment of this process
+/// alone, an account of Escouade's own emptying them. `cargo test --lib
+/// real_copilot_view_on_a_free_account -- --ignored --nocapture`. Its interface opens on a
+/// new session, then resumes it after a short turn (its only credits): never a word about its
+/// model.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_copilot_view_on_a_free_account() {
+    let program = std::env::var("ESCOUADE_REAL_COPILOT")
+        .expect("ESCOUADE_REAL_COPILOT: the path of the real copilot.exe");
+    let trial = PathBuf::from(
+        std::env::var("ESCOUADE_TEST_REAL_HOME").expect("ESCOUADE_TEST_REAL_HOME: a trial's home"),
+    );
+    assert!(
+        dirs::home_dir().is_none_or(|h| h != trial),
+        "a home of the trial's, never the user's"
+    );
+    let home = PathBuf::from(std::env::var("COPILOT_HOME").expect("COPILOT_HOME"));
+    assert_eq!(home, trial.join(".copilot"), "its Principal's folder");
+    assert!(std::env::var("GH_TOKEN").is_ok_and(|t| !t.is_empty()));
+    let h = harness("tui-copilot-real-free");
+    let (p, repo) = h.project(false).await;
+    // Its folder trusted, as « Yes, and remember this folder » writes it: no question first.
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(
+        home.join("config.json"),
+        json!({ "trustedFolders": [repo] }).to_string(),
+    )
+    .unwrap();
+    let mut s = h.core.settings.read().clone();
+    s.accounts.push(Account {
+        id: crate::accounts::principal_id(EngineId::Copilot),
+        name: "Principal".into(),
+        engine: EngineId::Copilot,
+        claude_path: program,
+        ..Default::default()
+    });
+    h.core.save_settings(s).unwrap();
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Copilot),
+                account: Some(crate::accounts::principal_id(EngineId::Copilot)),
+                model: Some("gpt-6-luna".into()),
+                effort: Some("medium".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let refused = "from --model flag is not available";
+    // Its interface opened until it waits for a prompt (its footer), then a moment more.
+    let open = || {
+        let (h, id) = (&h, id.clone());
+        async move {
+            let screen = Arc::new(Mutex::new(String::new()));
+            let sink = screen.clone();
+            let started = Instant::now();
+            let info = h
+                .core
+                .open_agent_terminal(&id, (140, 40), false, move |b| {
+                    sink.lock().push_str(&String::from_utf8_lossy(&b))
+                })
+                .await
+                .unwrap();
+            println!("opened in {:?}", started.elapsed());
+            let mut answered = false;
+            while !plain_text(&screen.lock()).contains("/ commands") {
+                if !answered && screen.lock().contains("\x1b[6n") {
+                    h.core.pty.write(&info.id, b"\x1b[1;1R").unwrap();
+                    answered = true;
+                }
+                assert!(
+                    started.elapsed() < Duration::from_secs(90),
+                    "{}",
+                    plain_text(&screen.lock())
+                );
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            tokio::time::sleep(Duration::from_secs(6)).await;
+            screen
+        }
+    };
+    let tail = |screen: &Mutex<String>| {
+        let text = plain_text(&screen.lock());
+        let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+        lines[lines.len().saturating_sub(12)..].join("\n")
+    };
+    // A new session.
+    let screen = open().await;
+    println!("new session:\n{}", tail(&screen));
+    assert!(!plain_text(&screen.lock()).contains(refused));
+
+    // A short turn, then Escouade's view and Copilot's again: its session resumed.
+    let start = Instant::now();
+    while let Err(e) = h
+        .core
+        .send_message(
+            &id,
+            "Réponds seulement par le mot : prêt.".into(),
+            Vec::new(),
+        )
+        .await
+    {
+        println!("not sent yet: {e:#}");
+        assert!(start.elapsed() < Duration::from_secs(60));
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    h.wait("its turn over", |h| {
+        !items_of(h, &id, "turn").is_empty() && !h.agent(&id).status.is_active()
+    })
+    .await;
+    let session = h.agent(&id).session_id.clone().unwrap();
+    println!("session {session}");
+    h.core.set_agent_view(&id, false).await.unwrap();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let screen = open().await;
+    // Its history comes once the session is read.
+    let start = Instant::now();
+    while !plain_text(&screen.lock()).contains("prêt") {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "{}",
+            tail(&screen)
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    println!("resumed:\n{}", tail(&screen));
+    assert!(!plain_text(&screen.lock()).contains(refused));
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+    println!("cost: {}", h.agent(&id).cost);
+
+    // Deleted: the folder Copilot made for the data of its plugin goes with it.
+    let plugin = crate::engine::copilot::terminal::plugin_dir(
+        &h.core.data.root().join("tui").join(format!("{id}.json")),
+    );
+    let direct = home.join("plugin-data").join("_direct");
+    let ours = direct.join(crate::engine::copilot::terminal::plugin_data_id(&plugin));
+    assert!(
+        ours.is_dir(),
+        "{:?}",
+        std::fs::read_dir(&direct).map(|d| d.flatten().map(|e| e.file_name()).collect::<Vec<_>>())
+    );
+    h.core.delete_agent(&id, false).await.unwrap();
+    assert!(!ours.exists());
+    println!(
+        "left in plugin-data/_direct: {:?}",
+        std::fs::read_dir(&direct).map(|d| d.count())
+    );
 }
