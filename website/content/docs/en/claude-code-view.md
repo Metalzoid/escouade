@@ -88,6 +88,18 @@ An agent on Codex has the same view: the button is called “Codex view” and s
 - **Interrupting** sends `Esc`, as with Claude Code. An image pasted in the terminal (PNG or JPEG) is typed there by its path.
 - **Not tracked in this view**: the “Plan” banner, subagents and cost (Codex gives none).
 
+## With Copilot CLI
+
+An agent on Copilot CLI has the same view: the button is called “Copilot CLI view” and starts Copilot’s interface (`copilot`) in the agent’s folder, on its account, with its model and effort. Both views share the same Copilot session: the terminal resumes it (`copilot --resume`), and Copilot’s server resumes it back in the Escouade view, in the same Copilot folder (`COPILOT_HOME`). What differs from Claude Code:
+
+- **Tracking.** Copilot runs its hooks as commands: Escouade gives it `escouade-hook`, installed with the app, in a plugin of the agent’s own, given to this interface alone on its command line (`--plugin-dir`). Nothing is written to your Copilot folder (neither `hooks/` nor `settings.json`), and your own Copilot sessions don’t see them. Without the token Escouade gives the interface, `escouade-hook` does nothing anyway, even with your `GH_TOKEN` in its environment. The agent’s card says when it works, when it waits for your permission, your answer to a question or your verdict on a plan, and when it’s done; its conversation and its cost come from the session’s log (`session-state/<session>/events.jsonl` in Copilot’s folder), read continuously.
+- **Folder trust.** On a folder Copilot doesn’t know, its interface asks at every start whether you trust the folder. Escouade never answers for you, and types no message until it knows the question is past: “Copilot asks whether you trust this folder: answer in its terminal, then send your message again.” “Yes, and remember this folder” spares you the question at the next starts; with “Yes” alone, nothing is recorded, and Escouade waits until you’ve typed a first message in the terminal yourself.
+- **Modes.** “Bypass” starts the interface with `--allow-all`, “Plan” in plan mode, “Auto edits” with writes allowed (`--allow-tool=write`), “Auto” in autopilot with writes, `git add` and `git commit` allowed, as Escouade does in its view.
+- **The agent’s added instructions** aren’t given to the interface: Copilot has no option for them, and only gets them back in the Escouade view.
+- **A copy** (“Duplicate conversation”) is made by Copilot before the interface starts, then resumed by it.
+- **Interrupting** sends `Esc` twice, as Copilot asks (“esc again to interrupt”).
+- **Not tracked in this view**: the “Plan” banner (Copilot’s tasks).
+
 ## On Windows with WSL
 
 When Claude Code is installed in WSL, Escouade launches it through `wsl.exe` (see [the Claude Code settings](settings-claude-code)). Live tracking of the Claude Code view then requires WSL’s mirrored networking: without it, the interface’s hooks don’t reach the app. The settings point it out under the `claude` path (“WSL’s network is NAT…”). To switch to mirrored mode, add this to `%UserProfile%\.wslconfig`, then run `wsl --shutdown`:

@@ -123,3 +123,24 @@ fn a_refusal_or_no_server_still_ends_quietly() {
         assert!(out.stdout.is_empty() && out.stderr.is_empty());
     }
 }
+
+#[test]
+fn the_event_its_argument_names_goes_in_the_query() {
+    let (url, served) = one_request(200);
+    let mut c = program();
+    c.arg("agentStop")
+        .env(TOKEN_VAR, "tok-2")
+        .env(URL_VAR, &url)
+        // What Copilot's hooks get from its process: never a reason to post anything else.
+        .env("GH_TOKEN", "gho_not_a_token");
+    let event = r#"{"sessionId":"s1","stopReason":"end_turn"}"#;
+    let out = run(c, event.as_bytes());
+    assert_eq!(out.status.code(), Some(0));
+    let got = served.join().unwrap();
+    assert!(
+        got.starts_with("POST /hook?event=agentStop HTTP/1.1"),
+        "{got}"
+    );
+    assert!(got.ends_with(event), "{got}");
+    assert!(!got.contains("gho_not_a_token"), "{got}");
+}

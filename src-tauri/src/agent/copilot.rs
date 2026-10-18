@@ -34,7 +34,10 @@ pub(crate) struct CopilotState {
     /// The last event of its own kept by Copilot: where a copy of it starts from.
     last_event: Option<String>,
     /// The turn was stopped (`abort`).
-    aborted: bool,
+    pub(super) aborted: bool,
+    /// What its interface asks the user, as its `permissionRequest` hook told it (« Vue Copilot »),
+    /// until its `notification` says it waits for the answer.
+    pub(super) asked: Option<String>,
     /// What went wrong in the turn, as Copilot said it.
     error: Option<String>,
     /// The task lists read, numbered.
@@ -193,7 +196,7 @@ impl AgentRt {
     }
 
     /// One event of the session (`session.event`).
-    fn cp_event(&mut self, e: &Value, fx: &mut Effects) {
+    pub(super) fn cp_event(&mut self, e: &Value, fx: &mut Effects) {
         let Some(kind) = e["type"].as_str() else {
             return;
         };
@@ -763,7 +766,7 @@ impl AgentRt {
     }
 
     /// The end of the agent's turn (`session.idle`, or a message refused).
-    fn cp_turn_end(&mut self, fx: &mut Effects) {
+    pub(super) fn cp_turn_end(&mut self, fx: &mut Effects) {
         let st = &mut self.copilot;
         let interrupted = std::mem::take(&mut self.interrupted) || std::mem::take(&mut st.aborted);
         let error = std::mem::take(&mut st.error).filter(|_| !interrupted);
@@ -1031,7 +1034,12 @@ fn form_questions(schema: &Value, lang: Lang) -> Vec<Value> {
 
 /// The tool Claude Code would have called for Copilot's `tool` (`server`: the MCP server it is of),
 /// and its input as Claude Code's.
-fn tool_of(tool: &str, args: &Value, server: Option<&str>, cwd: &str) -> (String, Value) {
+pub(super) fn tool_of(
+    tool: &str,
+    args: &Value,
+    server: Option<&str>,
+    cwd: &str,
+) -> (String, Value) {
     if let Some(server) = server.filter(|s| !s.is_empty()) {
         let name = crate::engine::mcp::tool_name(server, &mcp_tool(server, tool));
         return (name, args.clone());

@@ -468,6 +468,19 @@ pub fn tui_settings(port: u16, engine: &dyn Engine, access: &Escouade) -> Value 
     claude_terminal::settings(&hook_url(port), TOKEN_VAR, access)
 }
 
+/// The key of a hook's payload that holds the event its command named (`escouade-hook <event>`,
+/// posted as `?event=<event>`): Copilot's payloads do not say it.
+pub(crate) const EVENT_KEY: &str = "escouade_hook_event";
+
+/// The event of a hook's query (`event=<name>`), a name of letters and digits only.
+fn event_of_query(query: &str) -> Option<String> {
+    query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("event="))
+        .filter(|e| !e.is_empty() && e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map(str::to_string)
+}
+
 /// The address of the hooks' server on `port`.
 fn hook_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{PATH}")
@@ -1217,6 +1230,8 @@ impl<R: Runtime> Core<R> {
         let config_dir = accounts::config_dir(&account, &settings);
         self.settle_session(view, id, &settings, &account, &program, &config_dir)
             .await;
+        self.copy_first(view, h, id, &program, &settings, &account)
+            .await;
         let started = now_ms();
         let (meta, new_session, remote, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();
@@ -1305,7 +1320,16 @@ impl<R: Runtime> Core<R> {
         let written = match &started_from.file {
             Some(bytes) => std::fs::write(&settings_file, bytes).map_err(anyhow::Error::from),
             None => Ok(()),
-        };
+        }
+        .and_then(|()| {
+            for (path, bytes) in &started_from.files {
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
+                }
+                std::fs::write(path, bytes)?;
+            }
+            Ok(())
+        });
         if let Err(e) = written {
             if let Some(t) = access.token() {
                 self.mcp.release_agent(id, t);
@@ -2028,6 +2052,56 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The copy of a conversation whose interface cannot make it itself (Copilot's): made before it
+    /// starts (`TerminalView::copy_first`), and resumed then as the agent's own session. Failed, the
+    /// interface starts a new session, which the conversation says.
+    async fn copy_first(
+        self: &Arc<Self>,
+        view: &'static dyn TerminalView,
+        h: &AgentHandle,
+        id: &str,
+        program: &crate::engine::Program,
+        settings: &Settings,
+        account: &Account,
+    ) {
+        let (of, at, cwd) = {
+            let rt = h.lock();
+            match (&rt.meta.session_id, &rt.meta.fork_of) {
+                (None, Some(of)) => (of.clone(), rt.meta.fork_at.clone(), rt.meta.cwd.clone()),
+                _ => return,
+            }
+        };
+        let mut env = [settings.agent_env(), accounts::launch_env(account)].concat();
+        no_proxy(&mut env);
+        let Some(copy) = view.copy_first(program, &cwd, &env, &of, at.as_deref()) else {
+            return;
+        };
+        let copied = copy.await;
+        let _ = self.with_agent(id, |rt, fx| {
+            match copied {
+                Ok(session) => {
+                    log::info!("agent {id}: session {of} copied into {session} for its interface");
+                    rt.meta.session_id = Some(session);
+                    rt.meta.fork_of = None;
+                    rt.meta.fork_at = None;
+                }
+                Err(e) => {
+                    log::warn!("agent {id}: session {of} not copied for its interface: {e:#}");
+                    rt.forget_session();
+                    let text = tr!(
+                        "La conversation n’a pas pu être copiée ({error}) : l’interface part d’une nouvelle session.",
+                        "The conversation could not be copied ({error}): the interface starts a new session.",
+                        error = format!("{e:#}")
+                    );
+                    rt.notice("warn", text, fx);
+                }
+            }
+            fx.save = true;
+            fx.agent_changed = true;
+            Ok(())
+        });
+    }
+
     /// Before the stream resumes the agent's session (its launch lock held), once its interface is
     /// gone: a session the interface named and never wrote (no message sent in it, so Claude Code
     /// has no transcript of it) is given up without a word, and the stream starts a new one.
@@ -2079,7 +2153,8 @@ impl<R: Runtime> Core<R> {
             let rt = h.lock();
             let (view, harness) = view_of(&rt.meta)?;
             if rt.tui.is_some() {
-                if let Some(why) = view.paste_refusal(&config_dir, &cwd) {
+                let spoke = rt.tui.as_ref().is_some_and(|t| t.spoke);
+                if let Some(why) = view.paste_refusal(&config_dir, &cwd, spoke) {
                     bail!(why);
                 }
             }
@@ -2142,13 +2217,23 @@ impl<R: Runtime> Core<R> {
         let h = self.agent(id)?;
         let term = {
             let rt = h.lock();
-            let key = view_of(&rt.meta).ok().map(|(v, _)| v.interrupt_key());
-            rt.tui.as_ref().map(|t| t.term_id.clone()).zip(key)
+            let view = view_of(&rt.meta).ok().map(|(v, _)| v);
+            rt.tui.as_ref().map(|t| t.term_id.clone()).zip(view)
         };
-        match term {
-            Some((t, key)) => self.pty.write(&t, key).map(|_| true),
-            None => Ok(false),
+        let Some((t, view)) = term else {
+            return Ok(false);
+        };
+        self.pty.write(&t, view.interrupt_key())?;
+        if let Some(gap) = view.interrupt_again() {
+            let (pty, key) = (self.pty.clone(), view.interrupt_key());
+            std::thread::spawn(move || {
+                std::thread::sleep(gap);
+                if let Err(e) = pty.write(&t, key) {
+                    log::debug!("terminal {t}: interruption not confirmed: {e:#}");
+                }
+            });
         }
+        Ok(true)
     }
 }
 
@@ -2228,6 +2313,7 @@ async fn answer<R: Runtime>(
     if req.method() != Method::POST || req.uri().path() != PATH {
         return reply(StatusCode::NOT_FOUND, "{}");
     }
+    let event = req.uri().query().and_then(event_of_query);
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -2244,9 +2330,12 @@ async fn answer<R: Runtime>(
         Ok(b) => b.to_bytes(),
         Err(_) => return reply(StatusCode::PAYLOAD_TOO_LARGE, "{}"),
     };
-    let Ok(hook) = serde_json::from_slice::<Value>(&body) else {
+    let Ok(mut hook) = serde_json::from_slice::<Value>(&body) else {
         return reply(StatusCode::BAD_REQUEST, "{}");
     };
+    if let (Some(event), Some(map)) = (event, hook.as_object_mut()) {
+        map.insert(EVENT_KEY.into(), Value::String(event));
+    }
     // Off the connection: the interface does not wait for what Escouade makes of it.
     tauri::async_runtime::spawn_blocking(move || core.on_tui_hook(&agent, hook));
     reply(StatusCode::OK, "{}")
@@ -2725,6 +2814,21 @@ mod tests {
             json!([{ "serverName": "escouade" }]),
             "{s}"
         );
+    }
+
+    #[test]
+    fn the_event_a_hook_names_in_its_query_is_read_whole_and_plain() {
+        assert_eq!(
+            event_of_query("event=agentStop").as_deref(),
+            Some("agentStop")
+        );
+        assert_eq!(
+            event_of_query("x=1&event=sessionEnd").as_deref(),
+            Some("sessionEnd")
+        );
+        assert_eq!(event_of_query("event="), None);
+        assert_eq!(event_of_query("event=a%20b"), None);
+        assert_eq!(event_of_query("other=agentStop"), None);
     }
 
     #[test]

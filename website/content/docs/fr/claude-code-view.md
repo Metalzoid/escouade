@@ -88,6 +88,18 @@ Un agent sur Codex a la même vue : le bouton s’appelle « Vue Codex » et l
 - **Interrompre** envoie `Échap`, comme chez Claude Code. Une image collée dans le terminal (PNG ou JPEG) y est tapée par son chemin.
 - **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan », les sous-agents et le coût (Codex n’en donne pas).
 
+## Avec Copilot CLI
+
+Un agent sur Copilot CLI a la même vue : le bouton s’appelle « Vue Copilot CLI » et lance l’interface de Copilot (`copilot`) dans le dossier de l’agent, sur son compte, avec son modèle et son effort. Les deux vues partagent la même session de Copilot : le terminal la reprend (`copilot --resume`), et le serveur de Copilot la reprend au retour dans la vue Escouade, dans le même dossier de Copilot (`COPILOT_HOME`). Ce qui change par rapport à Claude Code :
+
+- **Le suivi.** Copilot lance ses hooks comme des commandes : Escouade lui donne `escouade-hook`, installée avec l’app, dans un plugin propre à l’agent, passé à cette seule interface par sa ligne de commande (`--plugin-dir`). Rien n’est écrit dans ton dossier de Copilot (ni `hooks/`, ni `settings.json`), et tes propres sessions de Copilot ne les voient pas. Sans le jeton qu’Escouade donne à l’interface, `escouade-hook` ne fait d’ailleurs rien, même avec ton `GH_TOKEN` dans son environnement. La carte de l’agent dit quand il travaille, quand il attend ton autorisation, ta réponse à une question ou ton avis sur un plan, et quand il a fini ; sa conversation et son coût viennent du journal de la session (`session-state/<session>/events.jsonl` dans le dossier de Copilot), relu en continu.
+- **La confiance du dossier.** Sur un dossier que Copilot ne connaît pas, son interface demande à chaque lancement si tu fais confiance au dossier. Escouade ne répond jamais à ta place, et ne tape aucun message tant qu’il ne sait pas la question passée : « Copilot demande si tu fais confiance à ce dossier : réponds dans son terminal, puis renvoie ton message. » « Yes, and remember this folder » évite la question aux lancements suivants ; avec « Yes » seul, rien n’est enregistré, et Escouade attend que tu aies écrit toi-même un premier message dans le terminal.
+- **Les modes.** « Bypass » lance l’interface avec `--allow-all`, « Plan » en mode plan, « Édits auto » avec les écritures autorisées (`--allow-tool=write`), « Auto » en autopilot avec les écritures, `git add` et `git commit` autorisés, comme Escouade le fait dans sa vue.
+- **Les consignes ajoutées** de l’agent ne sont pas données à l’interface : Copilot n’a pas d’option pour elles, et les reprend seulement dans la vue Escouade.
+- **Une copie** (« Dupliquer la conversation ») est faite par Copilot avant que l’interface ne démarre, puis reprise par elle.
+- **Interrompre** envoie `Échap` deux fois, comme Copilot le demande (« esc again to interrupt »).
+- **Ce qui n’est pas suivi dans cette vue** : le bandeau « Plan » (les tâches de Copilot).
+
 ## Sous Windows avec WSL
 
 Quand Claude Code est installé dans WSL, Escouade le lance par `wsl.exe` (voir [les réglages de Claude Code](settings-claude-code)). Le suivi en direct de la vue Claude Code demande alors le réseau miroir de WSL : sans lui, les hooks de l’interface n’atteignent pas l’app. Les réglages le signalent sous le chemin de `claude` (« Le réseau de WSL est en NAT… »). Pour passer en mode miroir, ajoute ceci à `%UserProfile%\.wslconfig`, puis lance `wsl --shutdown` :

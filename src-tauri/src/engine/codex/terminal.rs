@@ -357,6 +357,7 @@ impl TerminalView for CodexTerminal {
             file: None,
             // `escouade-hook` posts to the hooks' server at this address.
             env: vec![(l.hooks.url_var.to_string(), l.hooks.url.to_string())],
+            files: Vec::new(),
         }
     }
 
@@ -439,7 +440,7 @@ impl TerminalView for CodexTerminal {
         Ok(())
     }
 
-    fn paste_refusal(&self, config_dir: &Path, cwd: &str) -> Option<String> {
+    fn paste_refusal(&self, config_dir: &Path, cwd: &str, _spoke: bool) -> Option<String> {
         asks_trust(config_dir, cwd).then(|| {
             tr!(
                 "Codex demande si tu fais confiance à ce dossier : réponds dans son terminal, puis renvoie ton message.",

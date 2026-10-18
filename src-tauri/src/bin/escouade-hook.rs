@@ -4,6 +4,9 @@
 //! address of `ESCOUADE_HOOK_URL`, with the token of `ESCOUADE_HOOK_TOKEN`, both given to the
 //! interface Escouade starts.
 //!
+//! Its argument, when it has one, is the name of the event (Copilot's payloads do not say it):
+//! posted as `?event=<name>`, a name of letters and digits only.
+//!
 //! Without the token it exits at once and does nothing: a hook declared where the user's own
 //! sessions read it too leaves them alone. It always exits with 0 and writes nothing, whatever
 //! happens: the harness goes on as without it, and decides nothing on its word.
@@ -26,10 +29,20 @@ fn main() {
     let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
     if let Some(token) = var(TOKEN_VAR) {
         if let Some(url) = var(URL_VAR) {
+            let url = with_event(&url, std::env::args().nth(1).as_deref());
             let _ = post(&url, &token, std::io::stdin().lock());
         }
     }
     std::process::exit(0);
+}
+
+/// The address `url` with the event `event` in its query; as it is with none, or with a name that
+/// is not letters and digits only.
+fn with_event(url: &str, event: Option<&str>) -> String {
+    match event.filter(|e| !e.is_empty() && e.chars().all(|c| c.is_ascii_alphanumeric())) {
+        Some(e) => format!("{url}?event={e}"),
+        None => url.to_string(),
+    }
 }
 
 /// Where an address of the hooks' server points: `http://127.0.0.1:<port><path>` (the loopback
@@ -156,6 +169,21 @@ mod tests {
             String::from_utf8_lossy(&got).into_owned()
         });
         (url, served)
+    }
+
+    #[test]
+    fn the_event_named_by_its_argument_goes_in_the_query() {
+        let url = "http://127.0.0.1:4120/hook";
+        assert_eq!(
+            with_event(url, Some("agentStop")),
+            "http://127.0.0.1:4120/hook?event=agentStop"
+        );
+        assert_eq!(with_event(url, None), url);
+        for refused in ["", "a&b=c", "stop now", "é"] {
+            assert_eq!(with_event(url, Some(refused)), url, "{refused}");
+        }
+        let t = target(&with_event(url, Some("agentStop"))).unwrap();
+        assert_eq!(t.path, "/hook?event=agentStop");
     }
 
     #[test]

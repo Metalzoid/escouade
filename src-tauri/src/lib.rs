@@ -23,6 +23,8 @@ mod conv;
 mod convsearch;
 #[cfg(test)]
 mod copilot_tests;
+#[cfg(test)]
+mod copilot_tui_tests;
 mod core;
 #[cfg(test)]
 mod core_tests;

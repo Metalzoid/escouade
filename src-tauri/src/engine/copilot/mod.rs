@@ -14,6 +14,7 @@ mod locate;
 mod process;
 #[cfg(test)]
 mod schema_tests;
+pub(crate) mod terminal;
 
 #[cfg(test)]
 pub(crate) use bench::fake_copilot;
@@ -161,7 +162,7 @@ pub fn caps() -> EngineCaps {
         quota_windows: Vec::new(),
         // Its nano-AIU at the end of each turn (`session.usage_checkpoint`).
         cost: CostKind::Exact,
-        terminal_view: false,
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -483,7 +484,7 @@ impl Engine for Copilot {
     }
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
-        None
+        Some(&terminal::COPILOT_TERMINAL)
     }
 
     fn install(&self) -> Install {

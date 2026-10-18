@@ -180,3 +180,76 @@ test.describe('an agent on Copilot CLI', () => {
     expect(modes.at(-2)).toBe('enqueue');
   });
 });
+
+test.describe('« Vue Copilot CLI » (ESC-48)', () => {
+  test.use({ appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT } });
+
+  /** A file of the fake interface in its COPILOT_HOME (one JSON a line). */
+  const tuiLog = (app: App, name: string): any[] => {
+    const file = path.join(app.root, 'copilot', name);
+    return fs.existsSync(file)
+      ? fs
+          .readFileSync(file, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+      : [];
+  };
+
+  test('opens Copilot’s interface on the agent’s session, follows its turn on the card, and comes back with the conversation', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newCopilotAgent(page);
+    await send(page, 'bonjour Copilot');
+    await expect(page.getByText('Copilot a reçu : bonjour Copilot')).toBeVisible();
+    const session = sent(app, 'session.create').length;
+    expect(session).toBe(1);
+
+    await page.getByRole('button', { name: 'Vue Copilot CLI' }).click();
+    const view = page.locator('main .tui');
+    await expect(view.locator('.xterm')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => tuiLog(app, 'fake-tui-launches.jsonl').length, { timeout: 20_000 }).toBe(1);
+    // The agent's session resumed, Escouade's hooks in a plugin of its own, their address and token in its environment.
+    const launch = tuiLog(app, 'fake-tui-launches.jsonl')[0];
+    expect(launch.argv[0]).toBe('--resume');
+    expect(launch.argv).toContain('--plugin-dir');
+    expect([launch.hookUrl, launch.hookToken]).toEqual([true, true]);
+    // The folder trusted in the interface by the user (« Yes, and remember this folder »): written in its config. The
+    // terminal is drawn on a canvas: what the fake does is read from its files.
+    const config = path.join(app.root, 'copilot', 'config.json');
+    await view.locator('.xterm').click();
+    await expect
+      .poll(
+        async () => {
+          await page.keyboard.press('ArrowDown');
+          await page.keyboard.press('Enter');
+          return fs.existsSync(config) && fs.readFileSync(config, 'utf8').includes('trustedFolders');
+        },
+        { timeout: 20_000, intervals: [1_000] },
+      )
+      .toBe(true);
+
+    // A message typed there that asks a permission: the card says it waits, then that it is done.
+    await page.keyboard.type('permission ?');
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(() => page.locator('.card').allTextContents(), { timeout: 20_000 })
+      .toContainEqual(expect.stringMatching(/Copilot.*Question/s));
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(() => page.locator('.card').allTextContents(), { timeout: 20_000 })
+      .toContainEqual(expect.stringMatching(/Copilot.*Terminé/s));
+    expect(tuiLog(app, 'fake-tui-hooks.jsonl').map((h) => h.event)).toContain('agentStop');
+
+    // Back in Escouade's view: the turn of the interface in the conversation, its message once; the same session resumed.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByText('Fini : permission ?')).toBeVisible();
+    await expect(page.locator('main.conv .bubble', { hasText: /^\s*permission \?\s*$/ })).toHaveCount(1);
+    await send(page, 'encore');
+    await expect(page.getByText('Copilot a reçu : encore')).toBeVisible();
+    expect(sent(app, 'session.create')).toHaveLength(1);
+    expect(sent(app, 'session.resume').at(-1).sessionId).toBe(launch.argv[1]);
+  });
+});

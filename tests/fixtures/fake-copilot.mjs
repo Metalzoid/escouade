@@ -11,7 +11,9 @@
 //   sous-agent — tasks (sql, session.todos_changed) and a subagent (task, subagent.*);
 //   lent — a long turn: stopped by session.abort, or ended by a message sent `immediate`;
 //   modèle — says the model it runs.
-// Sessions are kept in $COPILOT_HOME/session-state/<id>.json (resume, fork). Each message received
+// Sessions are kept in $COPILOT_HOME/session-state/<id>.json (resume, fork), and their events written to
+// $COPILOT_HOME/session-state/<id>/events.jsonl as Copilot writes them. Without --server, it is Copilot's interface
+// (« Vue Copilot », fake-copilot-tui.mjs). Each message received
 // is written to $FAKE_COPILOT_LOG when set. FAKE_COPILOT_AUTH: `none` (not signed in) or `gh-cli`.
 // FAKE_COPILOT_FREE=1: no model listed (a Free account).
 import fs from 'node:fs';
@@ -22,7 +24,13 @@ if (process.argv.includes('--version')) {
   console.log(`GitHub Copilot CLI ${process.env.FAKE_COPILOT_VERSION || '1.0.98'}.`);
   process.exit(0);
 }
-if (logFileOf()) fs.appendFileSync(logFileOf(), JSON.stringify({ launch: { argv: process.argv.slice(2), cwd: process.cwd() } }) + '\n');
+const server = process.argv.includes('--server');
+if (!server) {
+  const { tui } = await import('./fake-copilot-tui.mjs');
+  tui(process.argv.slice(2));
+}
+if (server && logFileOf())
+  fs.appendFileSync(logFileOf(), JSON.stringify({ launch: { argv: process.argv.slice(2), cwd: process.cwd() } }) + '\n');
 function logFileOf() {
   return process.env.FAKE_COPILOT_LOG;
 }
@@ -37,27 +45,28 @@ const log = (dir, msg) => {
 
 // ----- framing -----
 let buf = Buffer.alloc(0);
-process.stdin.on('data', (d) => {
-  buf = Buffer.concat([buf, d]);
-  for (;;) {
-    const sep = buf.indexOf('\r\n\r\n');
-    if (sep < 0) return;
-    const m = /content-length:\s*(\d+)/i.exec(buf.slice(0, sep).toString());
-    const len = m ? +m[1] : 0;
-    if (buf.length < sep + 4 + len) return;
-    const body = buf.slice(sep + 4, sep + 4 + len).toString('utf8');
-    buf = buf.slice(sep + 4 + len);
-    let msg;
-    try {
-      msg = JSON.parse(body);
-    } catch {
-      continue;
+if (server)
+  process.stdin.on('data', (d) => {
+    buf = Buffer.concat([buf, d]);
+    for (;;) {
+      const sep = buf.indexOf('\r\n\r\n');
+      if (sep < 0) return;
+      const m = /content-length:\s*(\d+)/i.exec(buf.slice(0, sep).toString());
+      const len = m ? +m[1] : 0;
+      if (buf.length < sep + 4 + len) return;
+      const body = buf.slice(sep + 4, sep + 4 + len).toString('utf8');
+      buf = buf.slice(sep + 4 + len);
+      let msg;
+      try {
+        msg = JSON.parse(body);
+      } catch {
+        continue;
+      }
+      log('c2s', msg);
+      onMessage(msg);
     }
-    log('c2s', msg);
-    onMessage(msg);
-  }
-});
-process.stdin.on('end', () => process.exit(0));
+  });
+if (server) process.stdin.on('end', () => process.exit(0));
 
 function write(msg) {
   const body = Buffer.from(JSON.stringify({ jsonrpc: '2.0', ...msg }), 'utf8');
@@ -78,6 +87,9 @@ function load(id) {
 }
 function save(s) {
   fs.writeFileSync(path.join(states, `${s.id}.json`), JSON.stringify({ ...s, busy: undefined, queue: undefined }));
+  // Its log, as Copilot writes it: the events it keeps.
+  fs.mkdirSync(path.join(states, s.id), { recursive: true });
+  fs.writeFileSync(path.join(states, s.id, 'events.jsonl'), s.events.map((e) => JSON.stringify(e) + '\n').join(''));
 }
 function open(params, id = crypto.randomUUID(), events = []) {
   const s = {

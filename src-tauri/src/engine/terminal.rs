@@ -63,6 +63,9 @@ pub struct TerminalArgs {
     pub args: Vec<String>,
     /// What its private file (`TerminalLaunch::private_file`) holds; None: no file.
     pub file: Option<Vec<u8>>,
+    /// Other files of its own the core writes before it starts (their folders made): paths beside
+    /// its private file, and what each holds.
+    pub files: Vec<(PathBuf, Vec<u8>)>,
     /// The variables it gets besides its account's, the token's and the MCP server's.
     pub env: Vec<(String, String)>,
 }
@@ -101,6 +104,19 @@ pub trait TerminalView: Send + Sync {
         _env: &'a [(String, String)],
     ) -> BoxFuture<'a, Result<Vec<String>>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    /// The copy of the session `of` (up to its entry `at`, all of it with none) made before the
+    /// interface starts, in `cwd` with `env`, when it cannot copy one itself: the copy's id. None:
+    /// it copies a session itself (`TerminalView::launch`, from `AgentMeta::fork_of`).
+    fn copy_first<'a>(
+        &'a self,
+        _program: &'a Program,
+        _cwd: &'a str,
+        _env: &'a [(String, String)],
+        _of: &'a str,
+        _at: Option<&'a str>,
+    ) -> Option<BoxFuture<'a, Result<String>>> {
+        None
     }
     /// Escouade names a new session before the interface starts (its log is then known before any
     /// hook); false: the interface names its own, which its first hook tells.
@@ -141,9 +157,10 @@ pub trait TerminalView: Send + Sync {
     // ----- the paste and the interruption -----
 
     /// Why a message may not be pasted in it now, though it is up (in the agent's folder `cwd`,
-    /// its account's configuration folder `config_dir`): a question of its own on its screen,
-    /// which a text typed would answer. None: it may.
-    fn paste_refusal(&self, _config_dir: &Path, _cwd: &str) -> Option<String> {
+    /// its account's configuration folder `config_dir`; `spoke`: it told something since it
+    /// started, a hook or an entry of its log): a question of its own on its screen, which a text
+    /// typed would answer. None: it may.
+    fn paste_refusal(&self, _config_dir: &Path, _cwd: &str, _spoke: bool) -> Option<String> {
         None
     }
 
@@ -156,6 +173,11 @@ pub trait TerminalView: Send + Sync {
     fn image_types(&self) -> &'static [&'static str];
     /// The key that interrupts its turn.
     fn interrupt_key(&self) -> &'static [u8];
+    /// When its interrupt key has to be pressed again to confirm (Copilot: « esc again to
+    /// interrupt »), how long after the first: None, once is enough.
+    fn interrupt_again(&self) -> Option<std::time::Duration> {
+        None
+    }
     /// The key that ends it for good when sent twice, `quit_gap` apart.
     fn quit_key(&self) -> &'static [u8];
 }

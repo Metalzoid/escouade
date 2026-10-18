@@ -384,8 +384,10 @@ impl AgentRt {
         if !self.meta.status.is_active() {
             return;
         }
-        if self.meta.engine == EngineId::Codex {
-            return self.codex_tui_end(fx);
+        match self.meta.engine {
+            EngineId::Codex => return self.codex_tui_end(fx),
+            EngineId::Copilot => return self.copilot_tui_end(fx),
+            _ => {}
         }
         let mut models = serde_json::Map::new();
         for (model, u) in self.tui_usage.values() {

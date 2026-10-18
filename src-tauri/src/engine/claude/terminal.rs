@@ -141,6 +141,7 @@ impl TerminalView for ClaudeTerminal {
             args: tui_args(l.meta, l.session, l.remote, l.private_file),
             file: Some(serde_json::to_vec_pretty(&settings).unwrap_or_default()),
             env: Vec::new(),
+            files: Vec::new(),
         }
     }
 
