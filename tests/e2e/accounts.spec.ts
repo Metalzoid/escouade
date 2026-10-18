@@ -155,12 +155,12 @@ test.describe('the accounts of two harnesses', () => {
     const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
     await expect.poll(() => settings().accounts.find((a: { id: string }) => a.id === 'work')?.projects).toEqual([expect.any(String)]);
 
-    // « Ordre des harness »: Codex first, kept by the backend.
+    // « Ordre des harness »: every harness Escouade knows (OpenCode too, ESC-44), Codex first, kept by the backend.
     const order = dialog.getByRole('list', { name: 'Ordre des harness' });
-    await expect(order.getByRole('listitem')).toHaveText([/Claude Code/, /Codex/]);
+    await expect(order.getByRole('listitem')).toHaveText([/Claude Code/, /Codex/, /OpenCode/]);
     await order.getByRole('button', { name: 'Monter Codex' }).click();
-    await expect(order.getByRole('listitem')).toHaveText([/Codex/, /Claude Code/]);
-    await expect.poll(() => settings().engineOrder).toEqual(['codex', 'claude']);
+    await expect(order.getByRole('listitem')).toHaveText([/Codex/, /Claude Code/, /OpenCode/]);
+    await expect.poll(() => settings().engineOrder).toEqual(['codex', 'claude', 'opencode']);
     // The groups follow it.
     await expect
       .poll(() => dialog.getByRole('list', { name: /^Comptes / }).evaluateAll((ls) => ls.map((l) => l.getAttribute('aria-label'))))

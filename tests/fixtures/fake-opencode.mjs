@@ -1,0 +1,557 @@
+#!/usr/bin/env node
+// A fake `opencode serve` (OpenCode 1.19.3's HTTP API and its event stream `/global/event`), as the real streams
+// of tests/fixtures/opencode/ show it: what the conformance bench (src-tauri/src/engine/opencode/bench.rs) and the
+// end-to-end tests drive instead of OpenCode.
+//
+// `opencode --version` says its version (`FAKE_OPENCODE_VERSION`: another one, like `opencode v2.0.32`); `opencode models
+// --verbose` lists its models;
+// `opencode serve --port 0` listens on 127.0.0.1 and says where (« opencode server listening on http://… »), behind
+// `OPENCODE_SERVER_PASSWORD` (Basic `opencode:<password>`, 401 otherwise). Its sessions are kept by folder in
+// `<FAKE_OPENCODE_HOME | XDG_DATA_HOME | tmp/fake-opencode>/<hash of the folder>.json`, so that a server started again resumes
+// them. It answers `/config/providers`, `/config`, `/session` (create, get, patch, messages, fork, prompt_async,
+// abort), `/permission/:id/reply`, `/question/:id/reply`, `/instance/dispose`. What a prompt plays is picked by its
+// message (French words, as the scenarios of the fake `claude`):
+// - "raisonnement": a reasoning (by deltas), then a reply;
+// - "commande": `rm -rf build` (bash), which asks its permission under a rule `ask`: run once allowed, refused
+//   otherwise (the message given said back);
+// - "fichier": an edit of src/app.ts (written for real when it is there: `const a = 2;`), under the rules of `edit`;
+// - "question": a question (`question.asked`), its answer said back;
+// - "propose un plan", or the agent `plan`: a plan written by the plan agent; "Mets le plan en œuvre" /
+//   "Implement the plan": a plain reply;
+// - "étapes": a task list of three (`todowrite`, `todo.updated`), done one after the other;
+// - "sous-agent": a subagent (`task`, a session of its own with its events), its report;
+// - "lent": a reply, then `sleep 30` (bash, allowed), unless aborted (`MessageAbortedError`);
+// - anything else: « Bonjour, tu as dit : <message> ».
+// FAKE_OPENCODE_LOG: a file each launch appends to: {"launch": {argv, cwd, pid, config, password}} (config: its
+// OPENCODE_CONFIG_CONTENT; password: whether it has one), then {"req": {method, path, directory, body}} for each
+// request.
+
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+
+const VERSION = '1.19.3';
+const argv = process.argv.slice(2);
+if (argv.includes('--version') || argv[0] === '-v') {
+  process.stdout.write(`${process.env.FAKE_OPENCODE_VERSION || VERSION}\n`);
+  process.exit(0);
+}
+if (argv[0] !== 'serve' && argv[0] !== 'models') {
+  process.stderr.write(`fake opencode: only serve, models and --version are played (${argv.join(' ')})\n`);
+  process.exit(2);
+}
+
+const LOG = process.env.FAKE_OPENCODE_LOG;
+const log = (entry) => LOG && fs.appendFileSync(LOG, JSON.stringify(entry) + '\n');
+let config = null;
+try {
+  config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT || 'null');
+} catch {
+  config = 'unreadable';
+}
+const PASSWORD = process.env.OPENCODE_SERVER_PASSWORD || '';
+if (argv[0] === 'serve') log({ launch: { argv, cwd: process.cwd(), pid: process.pid, config, password: !!PASSWORD } });
+
+const HOME = process.env.FAKE_OPENCODE_HOME || process.env.XDG_DATA_HOME || path.join(os.tmpdir(), 'fake-opencode');
+fs.mkdirSync(HOME, { recursive: true });
+// The sessions of each folder, in a file of their own (the tests run many servers at once).
+const stores = new Map();
+function storeOf(dir) {
+  const key = crypto.createHash('sha1').update(path.resolve(dir).toLowerCase()).digest('hex').slice(0, 16);
+  if (!stores.has(key)) {
+    let all = {};
+    try {
+      all = JSON.parse(fs.readFileSync(path.join(HOME, `${key}.json`), 'utf8'));
+    } catch {}
+    stores.set(key, { key, all });
+  }
+  return stores.get(key);
+}
+const sessionOf = (dir, sid) => storeOf(dir).all[sid];
+function save(dir) {
+  const st = storeOf(dir);
+  fs.writeFileSync(path.join(HOME, `${st.key}.json`), JSON.stringify(st.all));
+}
+
+let serial = 0;
+const id = (prefix) => `${prefix}_${Date.now().toString(16)}${String(++serial).padStart(4, '0')}${process.pid}`;
+const now = () => Date.now();
+
+const BUILT_IN = {
+  providers: [
+    {
+      id: 'ollama',
+      name: 'Ollama (local)',
+      source: 'config',
+      models: {
+        'qwen3-coder:30b-32k': {
+          id: 'qwen3-coder:30b-32k',
+          providerID: 'ollama',
+          name: 'Qwen3 Coder 30b (32k)',
+          capabilities: { reasoning: false, attachment: false, toolcall: true, input: { text: true, image: false } },
+          limit: { context: 32768, output: 8192 },
+          status: 'active',
+        },
+        'gpt-oss:20b-32k': {
+          id: 'gpt-oss:20b-32k',
+          providerID: 'ollama',
+          name: 'gpt-oss 20b (32k)',
+          capabilities: { reasoning: true, attachment: false, toolcall: true, input: { text: true, image: false } },
+          limit: { context: 32768, output: 8192 },
+          status: 'active',
+          variants: { low: { reasoningEffort: 'low' }, medium: { reasoningEffort: 'medium' }, high: { reasoningEffort: 'high' } },
+        },
+      },
+    },
+    {
+      id: 'lmstudio',
+      name: 'LM Studio (local)',
+      source: 'config',
+      models: {
+        'devstral-small': {
+          id: 'devstral-small',
+          providerID: 'lmstudio',
+          name: 'Devstral Small',
+          capabilities: { reasoning: false, attachment: true, toolcall: true, input: { text: true, image: true } },
+          limit: { context: 65536, output: 8192 },
+          status: 'active',
+        },
+      },
+    },
+  ],
+  default: { ollama: 'qwen3-coder:30b-32k', lmstudio: 'devstral-small' },
+};
+// An account's own providers (`<OPENCODE_CONFIG_DIR>/providers.json`, as `/config/providers` answers), else the built-in
+// ones; its launches noted there too (`launches.jsonl`), for the tests of the core.
+const ACCOUNT = process.env.OPENCODE_CONFIG_DIR;
+let PROVIDERS = BUILT_IN;
+try {
+  PROVIDERS = JSON.parse(fs.readFileSync(path.join(ACCOUNT, 'providers.json'), 'utf8'));
+} catch {}
+if (ACCOUNT) {
+  fs.mkdirSync(ACCOUNT, { recursive: true });
+  fs.appendFileSync(path.join(ACCOUNT, 'launches.jsonl'), JSON.stringify({ argv, config }) + '\n');
+}
+
+// `opencode models --verbose`: each model's `<provider>/<model>` line, then its JSON.
+if (argv[0] === 'models') {
+  log({ models: { argv } });
+  {
+    for (const p of PROVIDERS.providers) {
+      for (const [mid, m] of Object.entries(p.models)) process.stdout.write(`${p.id}/${mid}\n${JSON.stringify(m, null, 2)}\n`);
+    }
+  }
+  process.exit(0);
+}
+
+// The event stream's clients, and the events sent to them.
+const clients = new Set();
+function emit(directory, type, properties) {
+  const line = `data: ${JSON.stringify({ directory, payload: { id: id('evt'), type, properties } })}\n\n`;
+  for (const res of clients) res.write(line);
+}
+
+// What waits for an answer: permissions and questions, by id.
+const asked = new Map();
+// The turn under way of each session: whether it was aborted, and what wakes it.
+const turns = new Map();
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The action of the rules of `session` for `permission` on `pattern` (the last that matches wins). */
+function action(session, permission, pattern) {
+  const glob = (g) => new RegExp('^' + g.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 's');
+  let found = null;
+  for (const r of session.permission || []) {
+    if ((r.permission === permission || r.permission === '*') && glob(r.pattern).test(pattern)) found = r.action;
+  }
+  if ((session.approved || []).some((p) => glob(p).test(pattern))) return 'allow';
+  return found || (permission === 'external_directory' ? 'ask' : 'allow');
+}
+
+function sessionInfo(s) {
+  const { messages, approved, ...info } = s;
+  return info;
+}
+
+function newSession(directory, body = {}) {
+  const sid = id('ses');
+  const s = {
+    id: sid,
+    slug: 'fake',
+    version: VERSION,
+    directory,
+    title: body.title || `New session - ${new Date().toISOString()}`,
+    parentID: body.parentID,
+    permission: body.permission || [],
+    time: { created: now(), updated: now() },
+    messages: [],
+  };
+  storeOf(directory).all[sid] = s;
+  save(directory);
+  emit(directory, 'session.created', { sessionID: sid, info: sessionInfo(s) });
+  return s;
+}
+
+/** One turn of `session`, from the prompt `body`. */
+async function play(s, body) {
+  const dir = s.directory;
+  const sid = s.id;
+  const text = (body.parts || [])
+    .filter((p) => p.type === 'text')
+    .map((p) => p.text)
+    .join('\n');
+  const turn = { aborted: false, wake: null };
+  // Settled once the turn is aborted, whenever it is (`/session/:id/abort`).
+  turn.stopped = new Promise((resolve) => (turn.wake = resolve));
+  turns.set(sid, turn);
+  const user = {
+    id: id('msg'),
+    sessionID: sid,
+    role: 'user',
+    time: { created: now() },
+    agent: body.agent,
+    model: body.model,
+    system: body.system,
+  };
+  s.messages.push({ info: user, parts: [{ id: id('prt'), type: 'text', text, messageID: user.id, sessionID: sid }] });
+  emit(dir, 'message.updated', { sessionID: sid, info: user });
+  emit(dir, 'message.part.updated', { sessionID: sid, part: s.messages.at(-1).parts[0], time: now() });
+  emit(dir, 'session.status', { sessionID: sid, status: { type: 'busy' } });
+  const plan = body.agent === 'plan' || /propose un plan/i.test(text);
+  const agent = plan ? 'plan' : 'build';
+  const msg = {
+    id: id('msg'),
+    parentID: user.id,
+    sessionID: sid,
+    role: 'assistant',
+    agent,
+    mode: agent,
+    modelID: body.model?.modelID,
+    providerID: body.model?.providerID,
+    time: { created: now() },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  };
+  const parts = [];
+  s.messages.push({ info: msg, parts });
+  emit(dir, 'message.updated', { sessionID: sid, info: msg });
+  const part = (p) => {
+    const full = { id: p.id || id('prt'), messageID: msg.id, sessionID: sid, ...p };
+    const at = parts.findIndex((x) => x.id === full.id);
+    if (at >= 0) parts[at] = full;
+    else parts.push(full);
+    emit(dir, 'message.part.updated', { sessionID: sid, part: full, time: now() });
+    return full;
+  };
+  const say = async (words, kind = 'text') => {
+    const p = part({ type: kind, text: '', time: { start: now() } });
+    let all = '';
+    for (const w of words.match(/\S+\s*/g) || [words]) {
+      if (turn.aborted) break;
+      all += w;
+      emit(dir, 'message.part.delta', { sessionID: sid, messageID: msg.id, partID: p.id, field: 'text', delta: w });
+      await sleep(5);
+    }
+    part({ ...p, text: all, time: { start: p.time.start, end: now() } });
+  };
+  const tool = (name, input, callID = id('call')) => {
+    const p = part({ type: 'tool', tool: name, callID, state: { status: 'pending', input: {}, raw: '' } });
+    return part({ ...p, state: { status: 'running', input, time: { start: now() } } });
+  };
+  const done = (p, output, metadata = {}) =>
+    part({
+      ...p,
+      state: { status: 'completed', input: p.state.input, output, metadata, title: '', time: { start: p.state.time.start, end: now() } },
+    });
+  const failed = (p, error) =>
+    part({ ...p, state: { status: 'error', input: p.state.input, error, time: { start: p.state.time.start, end: now() } } });
+  /** Waits for the answer to the permission `permission` on `pattern` when its rules ask; its reply. */
+  const permit = async (p, permission, pattern, metadata, always) => {
+    if (turn.aborted) return { reply: 'aborted' };
+    const act = action(s, permission, pattern);
+    if (act === 'allow') return { reply: 'once' };
+    if (act === 'deny') return { reply: 'reject', message: 'denied by a rule' };
+    const rid = id('per');
+    const answer = new Promise((resolve) => asked.set(rid, { kind: 'permission', resolve, session: s, always }));
+    emit(dir, 'permission.asked', {
+      id: rid,
+      sessionID: sid,
+      permission,
+      patterns: [pattern],
+      metadata,
+      always,
+      tool: { messageID: msg.id, callID: p.callID },
+    });
+    const r = await Promise.race([answer, turn.stopped.then(() => ({ reply: 'aborted' }))]);
+    asked.delete(rid);
+    if (r.reply !== 'aborted') emit(dir, 'permission.replied', { sessionID: sid, requestID: rid, reply: r.reply });
+    return r;
+  };
+  const finish = (error) => {
+    part({
+      type: 'step-finish',
+      reason: 'stop',
+      tokens: { total: 130, input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } },
+      cost: 0,
+    });
+    msg.tokens = { input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } };
+    msg.finish = 'stop';
+    msg.time.completed = now();
+    emit(dir, 'message.updated', { sessionID: sid, info: msg });
+    if (error) emit(dir, 'session.error', { sessionID: sid, error });
+    emit(dir, 'session.status', { sessionID: sid, status: { type: 'idle' } });
+    emit(dir, 'session.idle', { sessionID: sid });
+    turns.delete(sid);
+    save(dir);
+  };
+  const aborted = () => finish({ name: 'MessageAbortedError', data: { message: 'Aborted' } });
+
+  part({ type: 'step-start' });
+  if (plan) {
+    await say('Voici mon plan :\n\n1. Lire le code\n2. Écrire le correctif\n3. Lancer les tests');
+  } else if (/raisonnement/i.test(text)) {
+    await say('Je réfléchis à la question avant de répondre.', 'reasoning');
+    await say('Voici ma réponse réfléchie.');
+  } else if (/commande/i.test(text)) {
+    const p = tool('bash', { command: 'rm -rf build', description: 'Supprime build' });
+    const r = await permit(p, 'bash', 'rm -rf build', { command: 'rm -rf build' }, ['rm *']);
+    if (r.reply === 'aborted') return aborted();
+    if (r.reply === 'reject') {
+      failed(
+        p,
+        r.message
+          ? `The user rejected permission to use this specific tool call with the following feedback: ${r.message}`
+          : 'The user rejected permission to use this specific tool call.',
+      );
+      await say(`Je ne lance pas la commande${r.message ? ` : ${r.message}` : '.'}`);
+    } else {
+      done(p, 'build supprimé', { exit: 0, output: 'build supprimé' });
+      await say('La commande est passée.');
+    }
+  } else if (/fichier/i.test(text)) {
+    const file = path.join(dir, 'src', 'app.ts');
+    const p = tool('edit', { filePath: file, oldString: 'const a = 1;', newString: 'const a = 2;' });
+    const r = await permit(
+      p,
+      'edit',
+      path.relative(dir, file).split(path.sep).join('/'),
+      { filepath: file, diff: '@@ -1 +1 @@\n-const a = 1;\n+const a = 2;\n' },
+      ['*'],
+    );
+    if (r.reply === 'aborted') return aborted();
+    if (r.reply === 'reject') {
+      failed(p, 'The user rejected permission to use this specific tool call.');
+    } else {
+      try {
+        if (fs.existsSync(file)) fs.writeFileSync(file, 'const a = 2;\n');
+      } catch {}
+      const patch = `Index: ${file}\n===================================================================\n--- ${file}\n+++ ${file}\n@@ -1,1 +1,1 @@\n-const a = 1;\n+const a = 2;\n`;
+      done(p, 'Edit applied successfully.', { diff: patch, filediff: { file, patch, additions: 1, deletions: 1 } });
+      part({ type: 'patch', hash: 'fake', files: [file.split(path.sep).join('/')] });
+    }
+    await say('Le fichier est modifié.');
+  } else if (/question/i.test(text)) {
+    const p = tool('question', { questions: [] });
+    const rid = id('que');
+    const questions = [
+      {
+        question: 'Quel langage préfères-tu ?',
+        header: 'Langage',
+        options: [
+          { label: 'Python', description: 'Simple et lisible' },
+          { label: 'Rust', description: 'Rapide et sûr' },
+        ],
+        multiple: false,
+      },
+    ];
+    const answer = new Promise((resolve) => asked.set(rid, { kind: 'question', resolve, session: s }));
+    emit(dir, 'question.asked', { id: rid, sessionID: sid, questions, tool: { messageID: msg.id, callID: p.callID } });
+    const r = await Promise.race([answer, turn.stopped.then(() => null)]);
+    asked.delete(rid);
+    if (!r) return aborted();
+    emit(dir, 'question.replied', { sessionID: sid, requestID: rid, answers: r.answers });
+    const chosen = (r.answers?.[0] || []).join(', ');
+    done(p, `User has answered your questions: "${questions[0].question}"="${chosen}".`, { answers: r.answers });
+    await say(`Tu as choisi : ${chosen}`);
+  } else if (/étapes/i.test(text)) {
+    const steps = ['Lire le code', 'Écrire le correctif', 'Lancer les tests'];
+    for (let n = 0; n <= steps.length; n++) {
+      const todos = steps.map((content, i) => ({
+        content,
+        status: i < n ? 'completed' : i === n ? 'in_progress' : 'pending',
+        priority: 'high',
+      }));
+      const p = tool('todowrite', { todos });
+      emit(dir, 'todo.updated', { sessionID: sid, todos });
+      done(p, JSON.stringify(todos, null, 2), { todos });
+      await sleep(Number(process.env.FAKE_OPENCODE_STEP_MS || 50));
+    }
+    await say('Les trois étapes sont faites.');
+  } else if (/sous-agent/i.test(text)) {
+    const callID = id('call');
+    const p = tool('task', { description: 'Explorer le dépôt', prompt: 'Liste les fichiers', subagent_type: 'explore' }, callID);
+    const child = newSession(dir, { parentID: sid, title: 'Explorer le dépôt (@explore subagent)' });
+    part({ ...p, state: { ...p.state, metadata: { parentSessionId: sid, sessionId: child.id } } });
+    const cmsg = { id: id('msg'), sessionID: child.id, role: 'assistant', agent: 'explore', time: { created: now() } };
+    emit(dir, 'session.status', { sessionID: child.id, status: { type: 'busy' } });
+    emit(dir, 'message.updated', { sessionID: child.id, info: cmsg });
+    const cpart = (q) =>
+      emit(dir, 'message.part.updated', {
+        sessionID: child.id,
+        part: { id: id('prt'), messageID: cmsg.id, sessionID: child.id, ...q },
+        time: now(),
+      });
+    cpart({
+      type: 'tool',
+      tool: 'glob',
+      callID: id('call'),
+      state: {
+        status: 'completed',
+        input: { pattern: '**/*' },
+        output: 'README.md',
+        metadata: { count: 1 },
+        title: '',
+        time: { start: now(), end: now() },
+      },
+    });
+    // Slowed down by FAKE_OPENCODE_SUB_MS: the subagent is seen running.
+    await sleep(Number(process.env.FAKE_OPENCODE_SUB_MS || 0));
+    cpart({ type: 'text', text: 'Un seul fichier : README.md.', time: { start: now(), end: now() } });
+    cpart({
+      type: 'step-finish',
+      reason: 'stop',
+      tokens: { total: 60, input: 50, output: 10, reasoning: 0, cache: { read: 0, write: 0 } },
+      cost: 0,
+    });
+    emit(dir, 'session.status', { sessionID: child.id, status: { type: 'idle' } });
+    emit(dir, 'session.idle', { sessionID: child.id });
+    done(p, `<task id="${child.id}" state="completed">\n<task_result>\nUn seul fichier : README.md.\n</task_result>\n</task>`, {
+      parentSessionId: sid,
+      sessionId: child.id,
+    });
+    await say('Le sous-agent a fini.');
+  } else if (/lent/i.test(text)) {
+    await say('Je commence une commande longue.');
+    const p = tool('bash', { command: 'sleep 30', description: 'Attend' });
+    const r = await permit(p, 'bash', 'sleep 30', { command: 'sleep 30' }, ['sleep *']);
+    if (r.reply === 'aborted') return aborted();
+    const woke = await Promise.race([sleep(30_000).then(() => false), turn.stopped.then(() => true)]);
+    if (woke) {
+      done(p, 'User aborted the command', { exit: null });
+      return aborted();
+    }
+    done(p, '(no output)', { exit: 0 });
+    await say('Fini.');
+  } else if (/Mets le plan en œuvre|Implement the plan/i.test(text)) {
+    await say("C'est fait.");
+  } else {
+    await say(`Bonjour, tu as dit : ${text}${body.variant ? ` (variante ${body.variant})` : ''}`);
+  }
+  if (turn.aborted) return aborted();
+  finish();
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', (d) => (data += d));
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : null);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  const auth = req.headers.authorization || '';
+  const expected = 'Basic ' + Buffer.from(`opencode:${PASSWORD}`).toString('base64');
+  if (PASSWORD && auth !== expected) {
+    res.writeHead(401).end('Unauthorized');
+    return;
+  }
+  const body = await readBody(req);
+  const dir = url.searchParams.get('directory') || process.cwd();
+  const p = url.pathname;
+  log({ req: { method: req.method, path: p, directory: url.searchParams.get('directory'), body } });
+  const json = (v, status = 200) => {
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(v));
+  };
+  const notFound = () => json({ name: 'NotFoundError', data: { message: `not found: ${p}` } }, 404);
+  let m;
+  if (req.method === 'GET' && p === '/global/event') {
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+    res.write(`data: ${JSON.stringify({ payload: { id: id('evt'), type: 'server.connected', properties: {} } })}\n\n`);
+    clients.add(res);
+    req.on('close', () => clients.delete(res));
+    return;
+  }
+  if (req.method === 'GET' && p === '/config/providers') return json(PROVIDERS);
+  if (req.method === 'GET' && p === '/config') return json({ ...(config && typeof config === 'object' ? config : {}) });
+  if (req.method === 'POST' && p === '/instance/dispose') return json(true);
+  if (req.method === 'POST' && p === '/session') return json(sessionInfo(newSession(dir, body || {})));
+  if ((m = p.match(/^\/session\/([^/]+)$/))) {
+    const s = sessionOf(dir, m[1]);
+    if (!s) return notFound();
+    if (req.method === 'GET') return json(sessionInfo(s));
+    if (req.method === 'PATCH') {
+      if (body?.title !== undefined) s.title = body.title;
+      if (body?.permission) s.permission = [...(s.permission || []), ...body.permission];
+      save(s.directory);
+      emit(s.directory, 'session.updated', { sessionID: s.id, info: sessionInfo(s) });
+      return json(sessionInfo(s));
+    }
+  }
+  if ((m = p.match(/^\/session\/([^/]+)\/(message|fork|prompt_async|abort)$/))) {
+    const s = sessionOf(dir, m[1]);
+    if (!s) return notFound();
+    switch (m[2]) {
+      case 'message':
+        return json(s.messages);
+      case 'fork': {
+        const copy = newSession(s.directory, { title: `${s.title} (fork #1)` });
+        const at = body?.messageID ? s.messages.findIndex((x) => x.info.id === body.messageID) : -1;
+        copy.messages = JSON.parse(JSON.stringify(at < 0 ? s.messages : s.messages.slice(0, at)));
+        save(s.directory);
+        return json(sessionInfo(copy));
+      }
+      case 'prompt_async':
+        res.writeHead(204).end();
+        play(s, body || {}).catch((e) => process.stderr.write(`fake opencode: ${e.stack}\n`));
+        return;
+      case 'abort': {
+        const t = turns.get(s.id);
+        if (t) {
+          t.aborted = true;
+          t.wake();
+        }
+        return json(true);
+      }
+    }
+  }
+  if ((m = p.match(/^\/(permission|question)\/([^/]+)\/reply$/)) && req.method === 'POST') {
+    const a = asked.get(m[2]);
+    if (!a) return notFound();
+    if (m[1] === 'permission' && body?.reply === 'always') {
+      const s = a.session;
+      s.approved = [...(s.approved || []), ...(a.always || [])];
+    }
+    a.resolve(body || {});
+    return json(true);
+  }
+  notFound();
+});
+
+server.listen(0, '127.0.0.1', () => {
+  const { port } = server.address();
+  if (!PASSWORD) process.stdout.write('Warning: OPENCODE_SERVER_PASSWORD is not set; server is unsecured.\n');
+  process.stdout.write(`opencode server listening on http://127.0.0.1:${port}\n`);
+});

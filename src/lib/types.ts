@@ -40,6 +40,8 @@ export interface Settings {
   handoverOnLimit: boolean;
   /** « Modèle de passation », by harness: the model an agent handed over to it runs on; absent: its best (the first of its menu). */
   handoverModels: Partial<Record<EngineId, string>>;
+  /** The models marked as favorites, by harness, in the order they were marked: first in the composer's menu. */
+  favoriteModels?: Partial<Record<EngineId, string[]>>;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
@@ -434,6 +436,8 @@ export interface ToldModel {
   images: boolean;
   /** The one its harness runs unless told otherwise. */
   default: boolean;
+  /** The provider it comes from, when its harness has several (OpenCode: `Ollama (local)`). */
+  provider?: string;
 }
 
 /** What a harness declares, as the window gets it at its start. */
@@ -462,7 +466,7 @@ export interface EngineInfo extends EngineDecl {
   /** Its version as it tells it, null when not found or not told. */
   version: string | null;
   /** absent, refused for a version older than the tested ones, no account signed in, newer than the tested ones (taken with a warning), ready. */
-  state: 'absent' | 'tooOld' | 'notConnected' | 'untested' | 'ready';
+  state: 'absent' | 'tooOld' | 'unsupported' | 'notConnected' | 'untested' | 'ready';
   /** What its state means: the refusal and its reason, the warning. */
   note: string | null;
 }

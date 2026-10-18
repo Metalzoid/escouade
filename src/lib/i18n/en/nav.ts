@@ -100,7 +100,13 @@ export default defineZone('nav', {
 
   menu: { swatch: '{label} {n}' },
 
-  dropdown: { label: '{caption}: {shown}' },
+  dropdown: {
+    label: '{caption}: {shown}',
+    search: 'Search',
+    none: 'No match',
+    favorite: 'Add to favorites',
+    unfavorite: 'Remove from favorites',
+  },
 
   project: {
     closeTitle: 'Close “{name}”?',

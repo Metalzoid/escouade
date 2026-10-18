@@ -1,6 +1,7 @@
 // What a harness can do, as it declares it (`EngineCaps`, docs/ENGINES.md): the window shows a function from these,
 // never from the name of the agent's harness. A function its harness lacks is hidden, not greyed out.
 
+import { api } from './ipc';
 import { app } from './state.svelte';
 import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
 
@@ -164,4 +165,39 @@ export function writerOf(chosen: EngineId | null | undefined): EngineId | null {
 /** The choices of « Modèle des textes rédigés »: the model each harness found writes them with (`Claude Haiku`). */
 export function writerOptions(): { value: EngineId; label: string }[] {
   return offered().map((e) => ({ value: e.id, label: e.writer || e.name }));
+}
+
+/** The models of `engine` marked as favorites, in the order they were marked. */
+export function favoritesOf(engine: EngineId | null | undefined): string[] {
+  const id = engine ?? engineOf(null)?.id;
+  return (id && app.settings.favoriteModels?.[id]) || [];
+}
+
+/** `model` of `engine` marked as a favorite, or no longer: kept at once (not part of the settings' draft). */
+export async function setFavorite(engine: EngineId, model: string, favorite: boolean): Promise<void> {
+  const all = await app.run(api.favoriteModelSet(engine, model, favorite));
+  if (all) app.settings = { ...app.settings, favoriteModels: all };
+}
+
+/** Whether the menu of the models of `who` takes a search and favorites: its harness lists many, or from several providers. */
+export function searchesModels(who: { engine: EngineId | null | undefined }): boolean {
+  const told = toldOf(who);
+  return told.length > 8 || told.some((m) => !!m.provider);
+}
+
+/**
+ * The models of the composer's menu for `who`, the favorites first (in their order), each with its provider: what
+ * `modelsOf` gives, for a harness that lists them from its providers (OpenCode).
+ */
+export function modelMenu(who: {
+  engine: EngineId | null | undefined;
+}): { id: string; label: string; provider?: string; favorite: boolean }[] {
+  const favorites = favoritesOf(who.engine);
+  const told = toldOf(who);
+  const all = told.length ? told.map((m) => ({ id: m.id, label: m.label, provider: m.provider })) : modelsOf(who);
+  const rank = (id: string) => {
+    const i = favorites.indexOf(id);
+    return i < 0 ? favorites.length : i;
+  };
+  return all.map((m) => ({ ...m, favorite: favorites.includes(m.id) })).sort((a, b) => rank(a.id) - rank(b.id));
 }

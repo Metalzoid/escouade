@@ -24,7 +24,7 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { EFFORTS, MODES, modeTitle, modelOptions } from '../lib/models';
-  import { can, capsOf, effortsOf, modelsOf, modelTakes, modesOf, speakerOf } from '../lib/engines';
+  import { can, capsOf, effortsOf, modelMenu, modelsOf, modelTakes, modesOf, searchesModels, setFavorite, speakerOf } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
@@ -85,6 +85,13 @@
   const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
   // The menus are those of the agent's harness: its models, its efforts, its modes.
   const effortOk = $derived(modelTakes(agent, agent.model, 'effort'));
+  // A harness that lists the models of its providers (OpenCode): a search, the favorites first, each with its provider.
+  const manyModels = $derived(searchesModels(agent));
+  const modelChoices = $derived(
+    manyModels
+      ? modelMenu(agent).map((m) => ({ value: m.id, label: m.label, detail: m.provider, favorite: m.favorite }))
+      : modelOptions(app.models, modelsOf(agent)),
+  );
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));
   const modeOptions = $derived(
@@ -576,7 +583,9 @@
       <Dropdown
         caption={t('common.model')}
         value={agent.model}
-        options={modelOptions(app.models, modelsOf(agent))}
+        options={modelChoices}
+        searchable={manyModels}
+        onFavorite={manyModels ? (v, fav) => void setFavorite(agent.engine ?? 'claude', v, fav) : undefined}
         open={menu === 'model'}
         showCaption={!tight}
         onToggle={() => toggleMenu('model')}

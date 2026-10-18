@@ -121,7 +121,13 @@ export default {
   menu: { swatch: '{label} {n}' },
 
   // The picker whose menu opens upwards: « Modèle : Opus ».
-  dropdown: { label: '{caption} : {shown}' },
+  dropdown: {
+    label: '{caption} : {shown}',
+    search: 'Rechercher',
+    none: 'Aucun résultat',
+    favorite: 'Ajouter aux favoris',
+    unfavorite: 'Retirer des favoris',
+  },
 
   // Closing a project.
   project: {

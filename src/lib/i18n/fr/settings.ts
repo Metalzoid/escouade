@@ -100,9 +100,17 @@ export default {
   claude: {
     /** Each harness's group, under its name: its state, and what to do when it is not ready. */
     state: 'État',
+    /** The models of a harness that lists those of its providers (OpenCode). */
+    models: {
+      label: 'Modèles',
+      desc: 'Ceux des fournisseurs connectés à {engine}. Les favoris (★) viennent en premier dans le menu du composer.',
+      search: 'Rechercher un modèle',
+      none: 'Aucun modèle lu pour l’instant : ils le sont au premier agent de ce harness.',
+    },
     states: {
       absent: 'Introuvable',
       tooOld: 'Trop ancien',
+      unsupported: 'Non pris en charge',
       notConnected: 'Non connecté',
       untested: 'Version non testée',
       ready: 'Prêt',

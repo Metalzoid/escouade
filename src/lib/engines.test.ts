@@ -10,10 +10,14 @@ import {
   effortsOf,
   engineOf,
   engineOptions,
+  favoritesOf,
+  modelMenu,
   modelsOf,
   modelTakes,
   modesOf,
   offered,
+  searchesModels,
+  setFavorite,
   showsCost,
   showsMark,
   speakerOf,
@@ -22,7 +26,7 @@ import {
 } from './engines';
 import { EFFORTS, modelLabel, MODES } from './models';
 import { app } from './state.svelte';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
 
 describe('the capabilities of a harness', () => {
   beforeEach(() => {
@@ -217,5 +221,59 @@ describe('« Modèle des textes rédigés »', () => {
     expect(writerOf('claude')).toBe('codex');
     app.enginesFound = [];
     expect(writerOf('claude')).toBeNull();
+  });
+});
+
+describe('the models of the providers of a harness (ESC-44)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'opencode', models: [], caps: { ...BARE_ENGINE.caps, effort: true } }];
+  });
+
+  it('are searched, the favorites first in their order, each with its provider', async () => {
+    const oc = { engine: 'opencode' as const, model: 'ollama/qwen' };
+    expect(searchesModels(oc)).toBe(false);
+    app.engineModels = {
+      opencode: [
+        {
+          id: 'ollama/gpt-oss',
+          label: 'gpt-oss',
+          efforts: ['low', 'high'],
+          defaultEffort: null,
+          images: false,
+          default: false,
+          provider: 'Ollama (local)',
+        },
+        { id: 'ollama/qwen', label: 'Qwen', efforts: [], defaultEffort: null, images: false, default: true, provider: 'Ollama (local)' },
+        {
+          id: 'lmstudio/devstral',
+          label: 'Devstral',
+          efforts: [],
+          defaultEffort: null,
+          images: true,
+          default: false,
+          provider: 'LM Studio',
+        },
+      ],
+    };
+    expect(searchesModels(oc)).toBe(true);
+    expect(modelMenu(oc).map((m) => m.id)).toEqual(['ollama/gpt-oss', 'ollama/qwen', 'lmstudio/devstral']);
+    app.settings = { ...app.settings, favoriteModels: { opencode: ['lmstudio/devstral', 'ollama/qwen'] } };
+    const menu = modelMenu(oc);
+    expect(menu.map((m) => [m.id, m.favorite])).toEqual([
+      ['lmstudio/devstral', true],
+      ['ollama/qwen', true],
+      ['ollama/gpt-oss', false],
+    ]);
+    expect(menu[0].provider).toBe('LM Studio');
+    expect(favoritesOf('opencode')).toEqual(['lmstudio/devstral', 'ollama/qwen']);
+    // A variant is the effort of the model that has it.
+    expect(effortsOf({ engine: 'opencode', model: 'ollama/gpt-oss' }, EFFORTS).map((e) => e.value)).toEqual(['low', 'high']);
+    expect(modelTakes(oc, 'ollama/qwen', 'effort')).toBe(false);
+    // Marked at once, through the backend.
+    const backend = fakeBackend({ favorite_model_set: () => ({ opencode: ['ollama/gpt-oss'] }) });
+    await setFavorite('opencode', 'ollama/gpt-oss', true);
+    expect(backend.called('favorite_model_set')[0].args).toEqual({ engine: 'opencode', model: 'ollama/gpt-oss', favorite: true });
+    expect(favoritesOf('opencode')).toEqual(['ollama/gpt-oss']);
   });
 });

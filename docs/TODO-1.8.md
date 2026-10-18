@@ -582,7 +582,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Codex : un `codex app-server` par agent, lancé par son binaire natif (sous Windows, le `codex.exe` du paquet de la plateforme, pas `codex.cmd`), avec `-c tools.update_plan.enabled=true` et `capabilities.experimentalApi` (pour le mode Plan seulement). Ses enfants restent dans le Job, bac à sable compris (vérifié). Les événements des sous-agents arrivent sur la même connexion : tout se trie par `threadId`.
   - Copilot : un `copilot --server --stdio` par agent (par la crate du SDK si elle laisse Escouade lancer le process, voir point 0).
   - Cursor : un `agent acp` par agent.
-  - OpenCode : un `opencode serve` par agent, sur `127.0.0.1`, avec un port libre et un mot de passe tiré au hasard, sauf si l'essai du point 0 le montre trop coûteux. Le backend lit son flux SSE `/event`. Essai du point 0 (ESC-25) : 0,7 Go par serveur inactif, et un serveur sert plusieurs worktrees ; proposé à la place : un serveur par compte OpenCode, chaque agent une session, le flux lu sur `/global/event`.
+  - OpenCode : un `opencode serve` par agent, sur `127.0.0.1`, avec un port libre et un mot de passe tiré au hasard, sauf si l'essai du point 0 le montre trop coûteux. Le backend lit son flux SSE `/event`. Essai du point 0 (ESC-25) : 0,7 Go par serveur inactif, et un serveur sert plusieurs worktrees ; proposé à la place : un serveur par compte OpenCode, chaque agent une session, le flux lu sur `/global/event`. Fait ainsi (ESC-44, docs/PROTOCOL.md, « OpenCode serve ») : le serveur est dans un Job à lui, partagé par les agents du compte, si bien que le CPU et la RAM ne sont plus comptés par agent pour OpenCode.
   - Dans tous les cas, le process est dans le Job de l'agent, ce qui garde le CPU et la RAM par agent et tue tout l'arbre d'un coup.
   - L'arrêt pour inactivité et la reprise restent ceux d'aujourd'hui (`thread/resume`, `resume_session`, ou session rouverte par son id).
 - [x] **Versions** : Codex : 0.163.0, son schéma dans `tests/fixtures/engines/codex-0.163.0.schema.json` et ses deux tests (ESC-37).
@@ -605,8 +605,8 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Codex : `model/list`, avec `supportedReasoningEfforts` et `inputModalities`.
   - Copilot : `models.list`, avec ses efforts, ses capacités et son multiplicateur de facturation (écrit à côté du modèle : un modèle qui coûte trois fois plus le dit).
   - Cursor : `agent models`, les modèles du compte (Auto compris). Le changement en cours de session dépend du point 0.
-  - OpenCode : les modèles des seuls fournisseurs connectés, avec une recherche et des favoris dans les réglages, car la liste peut être longue.
-- [x] **Effort** : celui du modèle choisi (efforts de raisonnement de Codex et de Copilot, `variant` d'OpenCode). Le menu est masqué si le modèle n'en a pas. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
+  - OpenCode : les modèles des seuls fournisseurs connectés, avec une recherche et des favoris dans les réglages, car la liste peut être longue. Fait (ESC-44) : `GET /config/providers` ; le menu du composer a une recherche, chaque modèle son fournisseur et une étoile, les favoris en premier ; Réglages › Harness › OpenCode › « Modèles » les liste aussi, avec une recherche (`favoriteModels` des réglages, gardé à chaque étoile).
+- [x] **Effort** : celui du modèle choisi (efforts de raisonnement de Codex et de Copilot, `variant` d'OpenCode). Le menu est masqué si le modèle n'en a pas. Codex : fait (ESC-37) ; OpenCode : fait (ESC-44, les `variants` du modèle, envoyés en `variant` au prompt) ; les autres harness sont reportés (décidé le 2026-10-17).
 - [x] **Modes** : Escouade garde ses cinq modes. Chaque moteur dit lesquels il prend et comment. Le titre du mode dans le menu explique ce qu'il veut dire pour ce moteur, bac à sable compris. À confirmer par les essais : Codex : fait (ESC-37), table dans docs/PROTOCOL.md, « Les modes ».
 
   | Escouade | Codex | Copilot | Cursor | OpenCode |
@@ -639,7 +639,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [x] **Message pendant un tour** : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : « maintenant » passe par `turn/steer`.
   - Copilot : « maintenant » passe par `immediate`, « ensuite » par `enqueue`.
-  - Ailleurs, Escouade met le message en file jusqu'à la fin du tour, et c'est le cas pour OpenCode v1 si l'essai le demande.
+  - Ailleurs, Escouade met le message en file jusqu'à la fin du tour, et c'est le cas pour OpenCode v1 (fait, ESC-44 : l'essai a montré qu'OpenCode prend le message au vol et perd la demande du premier).
 
 ### Permissions et questions
 - [x] **Codex** : Fait (ESC-37) : « Pour cette session » est le `acceptForSession` de Codex, et la carte d'un `git add` ou `git commit` le dit hors du bac à sable.
@@ -656,12 +656,12 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Boutons : « Autoriser » (`approve-once`), « Pour cette session » (`approve-for-session`), « Refuser » (`reject`).
   - `approve-permanently` et `approve-for-location` (écrits dans la config de Copilot) : à proposer ou non, voir « Décisions ».
 - [ ] **Cursor** : `session/request_permission` donne une carte selon le `kind` de l'outil : la commande, la modification avec son diff, le fichier lu, l'adresse, l'outil MCP. Boutons : « Autoriser » (`allow-once`), « Toujours » (`allow-always`, qui écrit dans `~/.cursor/cli-config.json` : voir « Décisions »), « Refuser » (`reject-once`).
-- [ ] **OpenCode** : `permission.asked` donne une carte. Boutons : « Autoriser » (`once`), « Toujours » (`always`, qui écrit le motif retenu, `patterns`), « Refuser » (`reject`, avec le message saisi).
+- [x] **OpenCode** (ESC-44) : `permission.asked` donne une carte. Boutons : « Autoriser » (`once`), « Toujours autoriser » (`always`, qui garde pour la session le motif retenu, `always`, que la carte dit), « Refuser » (`reject`, avec le message saisi).
 - [x] **Questions** : la carte de question existante reçoit : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : `item/tool/requestUserInput` (`questions[]` avec `id`, `header`, `question`, `options` avec leur description, `isOther`, `isSecret`), réponse `{answers: {<id>: {answers: [<libellé>]}}}`. Ces questions n'arrivent qu'en mode Plan (essayé) : le dire dans la doc. La fin d'un plan est un élément `plan` (texte Markdown), qui devient la carte « Plan à approuver ».
   - Copilot : `user_input.requested` (choix et réponse libre) et `elicitation.requested` (un formulaire de plusieurs champs, qui demande une carte un peu plus riche).
   - Cursor : `cursor/ask_question` (une extension, qui attend la réponse).
-  - OpenCode : `question.asked`.
+  - OpenCode : `question.asked` (fait, ESC-44).
 - [ ] **Fin d'un plan** : chez Copilot, `exit_plan_mode.requested` (résumé, plan, actions proposées) devient la carte « Plan à approuver » qu'Escouade montre déjà pour Claude. Chez Cursor, `cursor/create_plan`, qui attend la réponse, de même.
 - [ ] Les notifications, la liste « À répondre » de la vue d'ensemble et le pilote auto ne changent pas : ils lisent les demandes normalisées.
 
@@ -669,7 +669,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [x] **Codex** : `turn/plan/updated` (les étapes d'`update_plan` et leur statut) donne les tâches, à condition de lancer Codex avec `-c tools.update_plan.enabled=true` (sinon le modèle n'a pas l'outil). Les sous-agents viennent de `subAgentActivity` (`started` / `completed`, `agentThreadId`, `agentPath`) ; leurs éléments et leurs tours arrivent sur la même connexion, sous leur propre `threadId`, ce qui donne leur activité comme les sous-agents de Claude. Fait (ESC-37).
 - [ ] **Copilot** : `session.todos_changed` dit que les tâches ont changé, puis Escouade les lit (`plan.readSqlTodosWithDependencies`, dépendances comprises). Les sous-agents viennent de `subagent.*` et de l'`agentId` de chaque événement.
 - [ ] **Cursor** : `cursor/update_todos` (ou le `plan` d'ACP) donne les tâches, `cursor/task` les sous-agents (à confirmer au point 0).
-- [ ] **OpenCode** : `todo.updated` (`pending`, `in_progress`, `completed`, `cancelled`) donne les tâches. L'outil `task` et les sessions enfants donnent les sous-agents, avec leurs tokens et leurs outils.
+- [x] **OpenCode** (ESC-44) : `todo.updated` (`pending`, `in_progress`, `completed`, `cancelled`) donne les tâches. L'outil `task` et les sessions enfants donnent les sous-agents, avec leurs tokens et leurs outils.
 - [ ] Les fichiers de plan (superpowers) se lisent sur le disque comme aujourd'hui, quel que soit le moteur. Faire un essai réel avec superpowers sous Codex, sous Copilot (qui lit `.claude/skills`) et sous Cursor.
 
 ### Comptes et quotas
@@ -748,6 +748,7 @@ But : « je n'ai plus de quota Claude, je passe sur Codex ». Aujourd'hui, un ag
   - Copilot : `--additional-mcp-config @<fichier privé>` (comme le `--mcp-config` de Claude : un fichier 0600, oublié à la fin du process), ou `mcpServers` à la création de session. Réglage désactivé : `--disable-mcp-server escouade`.
   - Cursor : une entrée HTTP dans les `mcpServers` de `session/new`, avec l'en-tête `Authorization`, si le point 0 montre que Cursor les prend. Réglage désactivé : rien de passé (pour une entrée `escouade` de l'utilisateur, voir point 0).
   - OpenCode : `OPENCODE_CONFIG_CONTENT`, avec une entrée `remote` et l'en-tête `Authorization: Bearer {env:ESCOUADE_MCP_TOKEN}`. Réglage désactivé : `enabled:false`.
+  - **À régler par ESC-45** (relevé à la relecture d'ESC-44) : le serveur `opencode serve` est commun aux agents d'un compte (ESC-44). Une entrée MCP de sa config (`OPENCODE_CONFIG_CONTENT`) vaut pour toutes ses sessions : elle ne peut porter ni le jeton propre à un agent (le serveur MCP d'Escouade sait qui l'appelle par ce jeton) ni l'interrupteur MCP de son projet (deux agents de projets différents sur un même serveur). ESC-45 doit trouver comment identifier l'agent : une entrée par dossier (`POST /mcp?directory=`, chaque agent ayant le sien, à essayer), un en-tête par session, ou un serveur par projet s'il le faut. Jusque-là, Escouade garde son serveur hors d'OpenCode (`mcp.escouade.enabled: false`).
 - [ ] Leurs appels prennent le nom `mcp__escouade__<outil>` dans la conversation, donc la carte de permission et les libellés des outils d'Escouade marchent tels quels.
 - [ ] **« <Moteur> peut piloter Escouade »** (déclaration pour l'utilisateur, après tout le reste) :
   - [x] Codex (ESC-50, fait le 2026-10-17) : une entrée dans le `config.toml` de chaque compte actif, par une édition qui garde les commentaires (`toml_edit`, `engine/userconfig.rs`) : `codex mcp add` (0.163.0) ne prend qu'une URL et `--bearer-token-env-var`, pas d'en-tête. Le jeton y passe par `http_headers = { Authorization = "Bearer …" }` : `bearer_token` est refusé pour une entrée HTTP. Interrupteur « Codex peut piloter Escouade » (`Settings.mcp_harnesses`), sous « Claude et les agents… » dont il dépend ; désactiver change le jeton d'abord. Essai réel : le vrai Codex liste les 34 outils d'Escouade depuis l'entrée (`authStatus: bearerToken`), et `~/.codex/config.toml` revient identique (SHA-256 comparé). Un agent Codex lancé avec ses `-c` envoie son propre jeton même quand l'entrée de l'utilisateur est là.
@@ -828,11 +829,11 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Leur texte ne nomme plus d'outil propre à Claude Code.
 
 ### Tests
-- [x] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length`), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota. `fake-codex.mjs` : fait (ESC-37), il passe les douze scénarios du banc ; les autres faux sont reportés avec leurs harness.
+- [x] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length`), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota. `fake-codex.mjs` : fait (ESC-37), il passe les douze scénarios du banc ; `fake-opencode.mjs` : fait (ESC-44), il passe les dix qui s'appliquent (OpenCode n'a pas de quota : ni limite ni quota) ; les autres faux sont reportés avec leurs harness.
 - [ ] **Tests unitaires** : chaque traduction (flux réel enregistré → éléments de conversation ; pour Codex, ceux de `tests/fixtures/codex/`, et le rollout de la vue terminal), la correspondance des modes, l'estimation du coût, le libellé des fenêtres de quota.
 - [ ] **e2e** : Codex : `tests/e2e/codex.spec.ts` (un agent de bout en bout, la question et le plan du mode Plan, un ticket lancé sur Codex par le pilote auto, la conversation vocale), ESC-37.
   - Un agent sur Codex : message, approbation d'une commande, diff, fin de tour.
-  - Le même sur Copilot, sur Cursor, puis sur OpenCode.
+  - Le même sur Copilot, sur Cursor, puis sur OpenCode (OpenCode : fait, ESC-44, `tests/e2e/opencode.spec.ts` : conversation, permission, question, tâches et sous-agent, message gardé pendant un tour, reprise, modèles cherchés et favoris, variant, OpenCode 2 refusé).
   - Un ticket lancé sur Codex par le pilote auto.
   - Les stats filtrées par moteur.
 - [ ] **Avant la release, un essai réel par moteur** : un vrai compte, un ticket en worktree jusqu'au commit et au merge, un plan avec sous-agents.

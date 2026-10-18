@@ -153,7 +153,12 @@ fn claude_code_declares_what_it_does_today_as_the_window_tests_take_it() {
 fn every_harness_declares_its_installer_and_its_composers_models_and_efforts() {
     for (e, decl) in all().into_iter().zip(declared()) {
         assert!(!decl.install.windows.is_empty() && !decl.install.unix.is_empty());
-        assert!(!decl.models.is_empty(), "{} has no model", e.name());
+        // OpenCode's are those of the providers connected to it, listed by its server only.
+        assert!(
+            !decl.models.is_empty() || e.id() == crate::model::EngineId::Opencode,
+            "{} has no model",
+            e.name()
+        );
         for m in &decl.models {
             assert_eq!(m.effort, e.supports_effort(m.id), "{}", m.id);
             assert_eq!(m.auto, e.supports_auto(m.id), "{}", m.id);

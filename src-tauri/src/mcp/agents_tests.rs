@@ -209,9 +209,18 @@ fn keeps_the_token_off_the_command_line(engine: &dyn Engine) {
 
 #[test]
 fn no_engine_puts_the_token_on_the_command_line() {
-    for engine in crate::engine::registry::all() {
+    for engine in gives_the_server() {
         keeps_the_token_off_the_command_line(engine);
     }
+}
+
+/// The engines that give their agents Escouade's server: all but OpenCode, which keeps it out of
+/// its server's config until ESC-45 (`engine/opencode`, `config_content`).
+fn gives_the_server() -> Vec<&'static dyn Engine> {
+    crate::engine::registry::all()
+        .into_iter()
+        .filter(|e| e.id() != EngineId::Opencode)
+        .collect()
 }
 
 #[test]
@@ -258,7 +267,7 @@ fn escouades_tools_are_named_mcp_escouade_tool_whatever_the_engine() {
     );
     // What refuses them to Claude Code is the start of those names.
     assert_eq!(crate::engine::claude_all_tools(), "mcp__escouade");
-    for engine in crate::engine::registry::all() {
+    for engine in gives_the_server() {
         // Every engine names the server `escouade` where it gives it: its tools then take the
         // names the window reads (the permission card, the labels, the search).
         let file = engine.grant_file("http://127.0.0.1:1/mcp", "t");

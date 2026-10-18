@@ -90,6 +90,9 @@ pub struct Settings {
     /// « Modèle de passation »: the model an agent handed over to a harness runs on there, by
     /// harness; none (or one it does not list): its best (`Engine::handover_model`).
     pub handover_models: std::collections::BTreeMap<EngineId, String>,
+    /// The models marked as favorites, by harness (OpenCode lists every model of its connected
+    /// providers): first in the composer's menu, in the order they were marked.
+    pub favorite_models: std::collections::BTreeMap<EngineId, Vec<String>>,
     /// « Statistiques d’usage » (`telemetry`): None until the user answered the question
     /// of the first start (settings saved before it have none: they are asked too).
     pub telemetry: Option<bool>,
@@ -440,6 +443,7 @@ impl Default for Settings {
             switch_on_limit: false,
             handover_on_limit: false,
             handover_models: Default::default(),
+            favorite_models: Default::default(),
             telemetry: None,
             attach_max_mb: 0,
             attach_warn_mb: 200,

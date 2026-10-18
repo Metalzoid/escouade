@@ -1,0 +1,86 @@
+{
+  "about": "Le bash de Git Bash, une écriture hors du worktree sans demande, puis un second message envoyé pendant une commande du premier tour (pris au vol par OpenCode : un seul idle).",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\esc25\\wt-agent1",
+    "engine": "opencode",
+    "mode": "default",
+    "model": "ollama/qwen3-coder:30b-32k"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": "msg_14b473d0b001Gzk55S0d0JcXDJ",
+    "sessionId": "ses_eb4b91f4fffeAk2Fj16VdkjMiF",
+    "status": "done",
+    "tokens": 43336,
+    "touchedFiles": []
+  },
+  "flux": "../../opencode/mid-turn.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "The user wants to run a bash command and copy its output. We need to run the command exactly as given, using bash tool.\n\nWe must use the bash tool with command: echo $0; echo $SHELL; uname -s; command -v node git; echo hors > ../hors-worktree.txt; echo fait\n\nNeed to run in the repository. We can call bash tool. Use workdir default. For Windows environment but bash tool is used. Since we are inside repository C:\\Users\\user\\AppData\\Local\\Temp\\esc25\\wt-agent1. Running the command will create file ../hors-worktree.txt relative to current. That would go one level up from this dir: ../ corresponds to C:\\Users\\user\\AppData\\Local\\Temp\\esc25 maybe. That file will be created. The user requests \"recopie sa sortie\" so must output the printed lines. Let's run.\n\n"
+    },
+    {
+      "input": {
+        "command": "echo $0; echo $SHELL; uname -s; command -v node git; echo hors > ../hors-worktree.txt; echo fait"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "/usr/bin/bash\n/bin/bash.exe\nMINGW64_NT-10.0-26200\n/c/Program Files/nodejs/node\n/mingw64/bin/git\nfait"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "/usr/bin/bash\n/bin/bash.exe\nMINGW64_NT-10.0-26200\n/c/Program Files/nodejs/node\n/mingw64/bin/git\nfait"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "opencode",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 21642
+    },
+    {
+      "input": {
+        "command": "sleep 15 && echo dormi"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "dormi"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "second"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "opencode",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 21694
+    }
+  ]
+}

@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime};
 /// Every harness written, in the order the interface lists them. A harness gets its line with its
 /// adapter (docs/TODO-1.8.md, chapter 1).
 pub fn all() -> Vec<&'static dyn Engine> {
-    vec![&super::CLAUDE, &super::CODEX]
+    vec![&super::CLAUDE, &super::CODEX, &super::OPENCODE]
 }
 
 /// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
@@ -186,6 +186,9 @@ pub struct ToldModel {
     pub images: bool,
     /// The one its harness runs unless told otherwise: the model of a new agent of it.
     pub default: bool,
+    /// The provider it comes from, when its harness has several (OpenCode: `Ollama (local)`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 /// A version number (`2.1.301`), compared number by number (a missing one counts as 0).
@@ -259,6 +262,8 @@ pub enum EngineState {
     Absent,
     /// Its version is older than the tested ones: refused.
     TooOld,
+    /// A line of it Escouade does not drive (OpenCode 2): refused.
+    Unsupported,
     /// Found, but no account is signed in.
     NotConnected,
     /// Newer than the tested ones: taken, with a warning.
@@ -338,6 +343,12 @@ pub fn state_of(
 ) -> (EngineState, Option<String>) {
     if !found {
         return (EngineState::Absent, None);
+    }
+    if let Some(why) = version
+        .and_then(Version::find)
+        .and_then(|v| engine.unsupported_line(lang, &v))
+    {
+        return (EngineState::Unsupported, Some(why));
     }
     let range = version
         .and_then(Version::find)
@@ -442,7 +453,15 @@ async fn ask_version(engine: &dyn Engine, program: &Program) -> Option<String> {
 /// Refused, with its reason in the interface's language, when the version of `program` is older
 /// than the ones `engine` was tested with; taken when it is tested, newer, or unknown.
 pub async fn check(engine: &dyn Engine, program: &Program) -> anyhow::Result<()> {
-    match version(engine, program).await {
+    let read = version(engine, program).await;
+    if let Some(why) = read
+        .as_deref()
+        .and_then(Version::find)
+        .and_then(|v| engine.unsupported_line(i18n::ui(), &v))
+    {
+        return Err(anyhow::anyhow!(why));
+    }
+    match read {
         Some(v) if engine.tested().place(&Version::parse(&v)) == Range::Older => {
             Err(anyhow::anyhow!(too_old(i18n::ui(), engine, &v)))
         }

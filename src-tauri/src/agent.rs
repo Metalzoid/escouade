@@ -24,6 +24,7 @@ mod codex_tui;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]
 mod minimal;
+mod opencode;
 pub mod sidechain;
 mod transcript;
 
@@ -243,6 +244,8 @@ pub struct AgentRt {
     pub(crate) escouade_next: bool,
     /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
     codex: codex::CodexState,
+    /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
+    opencode: opencode::OpencodeState,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -478,6 +481,7 @@ impl AgentRt {
             without_escouade: false,
             escouade_next: false,
             codex: codex::CodexState::default(),
+            opencode: opencode::OpencodeState::default(),
         }
     }
 
@@ -565,6 +569,7 @@ impl AgentRt {
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.codex = codex::CodexState::default();
+        self.opencode = opencode::OpencodeState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();
     }

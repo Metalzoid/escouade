@@ -278,6 +278,18 @@ pub fn engine_order_set(core: CoreState, order: Vec<EngineId>) -> Res<Vec<Engine
     core.set_engine_order(&order).map_err(err)
 }
 
+/// `model` of `engine` marked as a favorite (or no longer); the favorites as they then are.
+#[tauri::command(async)]
+pub fn favorite_model_set(
+    core: CoreState,
+    engine: EngineId,
+    model: String,
+    favorite: bool,
+) -> Res<std::collections::BTreeMap<EngineId, Vec<String>>> {
+    core.set_favorite_model(engine, &model, favorite)
+        .map_err(err)
+}
+
 /// The account removed (its folder stays on the disk); the accounts as they then are.
 #[tauri::command(async)]
 pub fn account_remove(core: CoreState, id: String) -> Res<Vec<ClaudeAccount>> {

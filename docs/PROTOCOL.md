@@ -495,6 +495,86 @@ Tout le reste est ignoré sans casser le tour : `turn/moderationMetadata`, `skil
 
 Les comptes Codex et leur quota hors d'un agent, le coût estimé, le serveur MCP d'Escouade déclaré pour l'utilisateur et les textes rédigés par `codex exec` viennent avec ESC-38 ; la vue terminal de Codex avec ESC-52. Le Principal de Codex n'est fait qu'au premier agent ou ticket Codex (`Core::accounts_of`).
 
+## OpenCode serve (ESC-44)
+
+OpenCode est le troisième harness (docs/ENGINES.md). Testé avec **OpenCode 1.19.3** (`tested()` : de la 1.19.3 à la 1.19.3, paquet npm `opencode-ai`), d'après l'essai réel du 2026-10-17 avec des modèles locaux par Ollama (ESC-25, docs/TODO-1.8.md, point 0, « OpenCode ») dont les flux sont dans `tests/fixtures/opencode/` et rejoués depuis `tests/fixtures/replays/opencode/`. Le schéma OpenAPI de la 1.19.3 (`GET /doc`) est dans `tests/fixtures/engines/opencode-1.19.3.openapi.json`.
+
+**OpenCode 2** (`@opencode/cli`, `opencode --version` : `opencode v2.0.32`) est une autre API, encore expérimentale : il est reconnu à sa version (2 ou plus) et refusé avec sa raison (`Engine::unsupported_line`) : état « Non pris en charge » dans Réglages › Harness, et l'agent ne démarre pas.
+
+### Lancement : un serveur par compte
+
+```
+opencode serve --hostname 127.0.0.1 --port 0
+```
+
+Un serveur sert tous les agents d'un même compte (même programme, même environnement : `engine/opencode/server.rs`). Il est lancé au premier agent et arrêté avec le dernier, dans un Job (tout son arbre est tué avec lui), dans un dossier à lui (`escouade-opencode` du dossier temporaire) : jamais celui d'un agent, qu'un worktree supprimé trouverait tenu. Chaque agent est une session dans son dossier (`?directory=<dossier>` sur chaque requête) ; quand le dernier agent d'un dossier s'en va, Escouade le dit au serveur (`POST /instance/dispose`), qui lâche le dossier. Un serveur qui tombe arrête tous ses agents (ils redémarrent au message suivant, leur session reprise). Repli possible si un serveur commun pose problème : un serveur par agent (0,7 Go chacun).
+
+- `--port 0` prend 4096 s'il est libre, sinon un port au hasard : l'adresse est lue sur sa sortie (`opencode server listening on http://127.0.0.1:<port>`).
+- `OPENCODE_SERVER_PASSWORD` : tiré au hasard (24 octets) pour chaque serveur, en Basic `opencode:<mot de passe>`. Il ne sort jamais d'Escouade (`GET /config` rend la config résolue, jeton du serveur MCP compris).
+- `OPENCODE_CONFIG_CONTENT` (fusionnée avec la config de l'utilisateur) : `model` et `small_model` (le modèle du premier agent : sans eux, OpenCode part sur OpenCode Zen sans compte, vu à l'essai), `autoupdate: false`, `share: "disabled"`, `permission` (les règles de « Demander », pour toutes les sessions du serveur : celle d'un sous-agent ne prend pas les règles de la session de son agent, et sans elles ses commandes passaient sans question, vu à l'essai réel), et `mcp.escouade.enabled: false` (le serveur MCP d'Escouade vient avec ESC-45). Plus `OPENCODE_DISABLE_AUTOUPDATE=1` et `OPENCODE_ENABLE_QUESTION_TOOL=1`.
+- Le programme est le binaire natif : sous Windows, l'`opencode.exe` du paquet npm (`node_modules/opencode-ai/bin/opencode.exe`, à côté du lanceur `opencode.cmd`), sinon l'`opencode` du PATH. Dans une build de debug, `ESCOUADE_OPENCODE` (les e2e) donne le programme quand aucun chemin n'est réglé, ou `none` pour aucun.
+- Le flux est lu sur `/global/event` (SSE, enveloppe `{directory, payload}`), et chaque événement va à l'agent dont il concerne la session, ou à celui dont la session a ouvert celle d'un sous-agent (`session.created` avec `parentID`).
+
+### Les sessions
+
+| Étape | Requête | Ce qu'Escouade y met |
+|---|---|---|
+| Conversation neuve | `POST /session` | `title` (« Escouade » : un titre donné n'est pas écrit par un modèle) et `permission`, les règles du mode |
+| Reprise | `GET /session/:id` | la session de l'agent ; introuvable, une neuve est ouverte et la conversation dit « La session OpenCode n'a pas pu être reprise » ; ses règles sont redonnées (`PATCH`) |
+| Copie | `GET /session/:id/message`, puis `POST /session/:id/fork` | OpenCode copie les messages d'avant celui qu'il reçoit : Escouade lui donne celui qui suit le dernier message de l'original au moment de la copie (`fork_at`), aucun quand c'est le dernier ; la copie reçoit les règles de son mode (OpenCode ne les copie pas) |
+| Modèles | `GET /config/providers`, `GET /config` | lus une fois par serveur : le menu du composer (`Ready.catalog`) |
+| Un message | `POST /session/:id/prompt_async` | `parts` (texte, images en `file` avec une URL `data:`, fichiers texte en texte), `model` (`providerID`, `modelID`), `agent` (`plan` en mode Plan, `build` sinon), `variant` (l'effort, si le modèle l'a), `system` (les consignes ajoutées, le protocole d'un ticket : elles ne valent que pour ce prompt) |
+| Interrompre | `POST /session/:id/abort` | OpenCode tue la commande en cours et finit le tour (`MessageAbortedError`) |
+| Mode | `PATCH /session/:id` | `permission` : OpenCode fusionne les règles, la dernière qui correspond l'emporte ; chaque mode les redonne toutes |
+| Permission | `POST /permission/:id/reply` | `once`, `always` (OpenCode garde pour la session le motif qu'il proposait, `always`), `reject` avec le message de refus |
+| Question | `POST /question/:id/reply` | `answers` : pour chaque question, dans l'ordre, les libellés choisis |
+| Titre | `PATCH /session/:id` | `title` |
+
+**Un message pendant un tour** serait pris au vol par OpenCode, et la demande du premier perdue (`mid-turn.jsonl`) : Escouade le garde (`caps.mid_turn` `queued`) et l'envoie, avec les autres gardés, dès la fin du tour. La fin du tour est le `session.idle` de la session de l'agent, une fois celle-ci vue occupée (`session.status` `busy`) depuis le dernier message : celui d'un sous-agent arrive avant, et un `idle` du tour précédent peut arriver après le message suivant.
+
+**Le modèle** est toujours donné : celui de l'agent s'il est parmi ceux des fournisseurs connectés, sinon celui par défaut (le `model` de la config de l'utilisateur, sinon le défaut du premier fournisseur), que la conversation reprend (`escouade.model`). Un agent dont le modèle n'est d'aucun fournisseur connecté (vide, celui d'un autre harness après une passation, un nouvel agent avant qu'un serveur ait listé les modèles) prend, avant son lancement, le modèle par défaut que liste `opencode models --verbose` (sans serveur, sans appel à un modèle : `Engine::list_models`, `Core::settle_model`) ; sans aucun fournisseur connecté, il est refusé avant qu'un serveur démarre, et le message le dit. Ainsi aucun serveur ne tourne sans `model` ni `small_model`, que les agents suivants du compte réutiliseraient. Ce qu'OpenCode fait de lui-même avec un modèle est couvert : un titre ou un nom (`small_model`, et Escouade donne de toute façon le titre de ses sessions), ce qui retombe sur le modèle par défaut (`model`) ; la compaction prend le modèle de la session, donc celui de l'agent.
+
+### Les modes
+
+OpenCode n'a pas de bac à sable : seules ses règles de permission protègent (`rules` d'`engine/opencode/mod.rs`), et le menu le dit.
+
+| Escouade | Agent | `bash` | `git add *`, `git commit *` | `edit` | `webfetch` | `external_directory` |
+|---|---|---|---|---|---|---|
+| Demander | `build` | `ask` | `ask` | `allow` | `ask` | `ask` |
+| Accepter les modifications | `build` | `ask` | `allow` | `allow` | `ask` | `ask` |
+| Plan | `plan` | `ask` | `ask` | `ask` | `ask` | `ask` |
+| Sans permissions | `build` | `allow` | `allow` | `allow` | `allow` | `allow` |
+
+Comme chez Codex, les fichiers du dossier de l'agent changent sans question en « Demander », et `git add` et `git commit` passent d'office en « Accepter les modifications ». « Auto » n'est pas proposé (OpenCode n'a pas de relecteur). Un sous-agent suit les règles de « Demander » de la config du serveur, quel que soit le mode de son agent : ses commandes demandent, et sa carte est rangée sous sa `Task`. En Plan, un tour fini par l'agent `plan` (son message dit `agent: plan`) reste ouvert sur la carte « Plan à approuver » (`ExitPlanMode`) : approuvé, le mode passe à « Demander » (« Accepter les modifications » avec « Approuver et accepter les édits ») et Escouade envoie « Mets le plan en œuvre. » ; refusé, le message de refus part en mode Plan.
+
+### Le flux
+
+| OpenCode | Dans la conversation |
+|---|---|
+| `message.updated` | le rôle de chaque message (les parts d'un message `user` sont les mots de l'utilisateur, déjà montrés) ; le dernier message de l'agent, son point de copie (`last_entry`) |
+| `message.part.delta` (`field: text`), `message.part.updated` `text` / `reasoning` | un `text` ou un `thinking`, en direct puis entier (`time.end`) |
+| part `tool` | à `running`, l'appel sous le nom de Claude Code : `bash` `Bash`, `edit` `Edit` (son diff, `metadata.filediff.patch`), `write` `Write`, `read` `Read`, `grep` `Grep`, `glob` `Glob`, `list` `LS`, `patch` / `apply_patch` `Edit`, `webfetch` `WebFetch`, `websearch` `WebSearch`, `todowrite` `TodoWrite`, `task` `Task`, `skill` `Skill`, `escouade_<outil>` `mcp__escouade__<outil>` ; à `completed` ou `error`, son résultat (une commande en erreur si son code de sortie n'est pas nul) ; un fichier changé parmi ceux de l'agent |
+| part `step-finish` | les tokens et le coût de chaque étape, additionnés par tour, sous-agents compris ; le contexte de l'agent (`input` et cache) |
+| part `patch` | ses fichiers parmi ceux de l'agent |
+| `todo.updated` | les tâches du bandeau « Plan » (`pending`, `in_progress`, `completed` ; `cancelled` compte comme faite, un statut inconnu comme à faire) |
+| `task` et `session.created` (`parentID`) | une `Task`, sa ligne dans le bandeau « Plan » ; les messages et outils de la session enfant (liée par `metadata.sessionId`) sont rangés sous elle, ses tokens et ses outils comptés ; son rapport est le `<task_result>` de la sortie |
+| `permission.asked` | une carte : `Bash` (la commande), `Edit` (le fichier, son diff), `WebFetch` (l'adresse), `Permissions` pour un chemin hors du dossier (« Hors du dossier de l'agent : … ») ; elle dit le motif que « Toujours autoriser » retiendra quand ce n'est pas la demande elle-même. Une demande d'un sous-agent est montrée dans l'agent et dans le sous-agent |
+| `question.asked` | la carte des questions (`multiple` : plusieurs choix) |
+| `permission.replied`, `question.replied`, `question.rejected` | une carte répondue ailleurs (`opencode attach`) dit la réponse et se ferme |
+| `session.status` `busy` | le tour en cours (un tour lancé ailleurs aussi) |
+| `session.error` | `MessageAbortedError` : le tour est interrompu ; une autre erreur (`UnknownError`, `ProviderAuthError`, `APIError`…) : sa première ligne, dite à la fin du tour |
+| `session.idle` | la fin du tour (voir plus haut) |
+
+Tout le reste est ignoré sans casser le tour : `plugin.added`, `catalog.updated`, `server.heartbeat`, `session.diff`, `file.edited`, `file.watcher.updated`, `integration.updated`, `reference.updated`, `project.directories.updated`, et tout type ou champ inconnu. Un flux enregistré (`{"dir", "msg"}` par ligne) se rejoue tel quel : les événements, et la session qu'a faite son `POST /session`.
+
+### L'essai réel
+
+`real_opencode` (`src-tauri/src/opencode_tests.rs`, à la main : `ESCOUADE_REAL_OPENCODE` = l'`opencode.exe` 1.19.3, et `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` vers un dossier dont la config déclare le fournisseur `ollama`, pour ne rien écrire dans les dossiers d'OpenCode de l'utilisateur), fait le 2026-10-18 avec `qwen3-coder:30b-32k` sur Ollama : « Réponds seulement : A » (réponse « A »), `git status --short` demandé puis autorisé (la carte dit « « Toujours autoriser » retiendra : git status * »), une question « Quelle couleur ? » répondue « bleu », deux tâches de `todowrite` faites dans le bandeau, et un sous-agent `explore` (ses deux commandes demandées sous sa `Task`, 5 outils et 25 888 tokens comptés), en 85 s. Rien n'a été écrit dans `~/.config/opencode` ni `~/.local/share/opencode`, et aucun `opencode` ne restait après l'arrêt.
+
+### Ce qui vient ensuite
+
+Le coût du jour dans la barre d'état, le garde-fou sans quota, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `opencode run` viennent avec ESC-45 ; la vue terminal d'OpenCode (`opencode attach`) plus tard. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
+
 ## Serveur MCP d'Escouade
 
 Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude et les agents peuvent piloter Escouade » est activé, et s'arrête avec l'app.

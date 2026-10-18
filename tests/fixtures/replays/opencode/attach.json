@@ -1,0 +1,129 @@
+{
+  "about": "Le serveur pendant qu’opencode attach y est branché : une permission répondue dans l’interface, puis par l’API, puis un message tapé dans l’interface (un tour qu’Escouade n’a pas lancé).",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\esc25\\wt-agent1",
+    "engine": "opencode",
+    "mode": "default",
+    "model": "ollama/qwen3-coder:30b-32k"
+  },
+  "agentAfter": {
+    "cost": 0.0,
+    "lastEntry": "msg_14b521cc6001cF63zsEaihG4E8",
+    "sessionId": "ses_eb4ae3457ffesTQHOEUQdaEkWf",
+    "status": "done",
+    "tokens": 53577,
+    "touchedFiles": []
+  },
+  "flux": "../../opencode/attach.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "User wants to run git status --short via bash tool and output the result. We need to use bash tool. The command \"git status --short\" in current working directory which is the repo root. So call bash with command."
+    },
+    {
+      "input": {
+        "command": "git status --short"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "?? test_calc.py"
+      },
+      "status": "ok"
+    },
+    {
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": "« Toujours autoriser » retiendra : git status *",
+      "input": {
+        "command": "git status --short"
+      },
+      "kind": "permission",
+      "reason": null,
+      "toolName": "Bash",
+      "toolUseId": "call_l20vwwen"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "```\n?? test_calc.py\n```\n"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "opencode",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 21334
+    },
+    {
+      "canAlways": true,
+      "decision": "allow",
+      "defaultNo": false,
+      "description": "« Toujours autoriser » retiendra : git log *",
+      "input": {
+        "command": "git log --oneline -1"
+      },
+      "kind": "permission",
+      "reason": null,
+      "toolName": "Bash",
+      "toolUseId": "call_obd0e6gt"
+    },
+    {
+      "input": {
+        "command": "git log --oneline -1"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "cffc2ad fix add"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "```\ncffc2ad fix add\n```\n"
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "opencode",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 21467
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Coucou depuis l'interface."
+    },
+    {
+      "cost": 0.0,
+      "durationMs": null,
+      "engine": "opencode",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 10776
+    }
+  ]
+}

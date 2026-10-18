@@ -153,6 +153,8 @@ export const api = {
   accountReorder: (ids: string[]) => invoke<Account[]>('account_reorder', { ids }),
   /** « Ordre des harness » set; the order as it then is. */
   engineOrderSet: (order: EngineId[]) => invoke<EngineId[]>('engine_order_set', { order }),
+  favoriteModelSet: (engine: EngineId, model: string, favorite: boolean) =>
+    invoke<Partial<Record<EngineId, string[]>>>('favorite_model_set', { engine, model, favorite }),
   /** The account removed, its folder left on the disk; refused while an agent not archived runs on it. */
   accountRemove: (id: string) => invoke<Account[]>('account_remove', { id }),
   accountStatus: (id: string) => invoke<AccountStatus>('account_status', { id }),

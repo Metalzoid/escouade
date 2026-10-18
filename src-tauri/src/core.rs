@@ -1787,6 +1787,28 @@ impl<R: Runtime> Core<R> {
         self.save_settings(s)
     }
 
+    /// `model` of `engine` marked as a favorite, or no longer; the favorites as they then are
+    /// (kept at once, as the accounts are).
+    pub fn set_favorite_model(
+        self: &Arc<Self>,
+        engine: EngineId,
+        model: &str,
+        favorite: bool,
+    ) -> Result<std::collections::BTreeMap<EngineId, Vec<String>>> {
+        let mut s = self.settings.read().clone();
+        let list = s.favorite_models.entry(engine).or_default();
+        list.retain(|m| m != model);
+        if favorite {
+            list.push(model.to_string());
+        }
+        if list.is_empty() {
+            s.favorite_models.remove(&engine);
+        }
+        let favorites = s.favorite_models.clone();
+        self.save_settings(s)?;
+        Ok(favorites)
+    }
+
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
@@ -2510,6 +2532,10 @@ impl<R: Runtime> Core<R> {
         })?;
         // A version older than the tested ones is refused, with its reason.
         engine::registry::check(harness, &program).await?;
+        // A model none of its harness's: the one its account runs by default, as its harness lists
+        // them (OpenCode, whose server never starts without a model of its own).
+        let env = [settings.agent_env(), accounts::launch_env(&account)].concat();
+        self.settle_model(h, harness, &program, env).await;
         let (mut spawn, gen, engine) = {
             let mut rt = h.lock();
             rt.gen += 1;
@@ -2624,6 +2650,56 @@ impl<R: Runtime> Core<R> {
             ),
         }
         Ok(proc)
+    }
+
+    /// The agent of `h` on a model of its harness: when it has none of those its harness offers
+    /// (a new agent before any listed them, one handed over from another harness), the default one
+    /// its account lists by a process of its own (`Engine::list_models`), kept for the composer
+    /// too. Nothing for a harness that lists none so, nor when the listing fails.
+    async fn settle_model(
+        &self,
+        h: &AgentHandle,
+        harness: &dyn crate::engine::Engine,
+        program: &crate::engine::Program,
+        env: Vec<(String, String)>,
+    ) {
+        if harness.id() == EngineId::Claude {
+            return;
+        }
+        let model = h.lock().meta.model.clone();
+        let known = self
+            .engine_models
+            .read()
+            .get(&harness.id())
+            .is_some_and(|told| told.iter().any(|m| m.id == model))
+            || harness.models().iter().any(|m| m.id == model);
+        if known {
+            return;
+        }
+        let dir = std::env::temp_dir();
+        let listed = match harness.list_models(program.clone(), env, &dir).await {
+            Ok(Some(list)) => list,
+            Ok(None) => return,
+            Err(e) => {
+                log::warn!("{}: models not listed: {e:#}", harness.name());
+                return;
+            }
+        };
+        self.set_engine_models(harness.id(), listed.clone());
+        if listed.iter().any(|m| m.id == model) {
+            return;
+        }
+        let Some(pick) = listed.iter().find(|m| m.default).or(listed.first()) else {
+            return;
+        };
+        log::info!(
+            "{}: model {model:?} is none of its, {} instead",
+            harness.name(),
+            pick.id
+        );
+        h.lock().meta.model = pick.id.clone();
+        self.emit_agent(h);
+        self.request_save();
     }
 
     /// Keeps the models Claude Code reported at a process start, for every label of the UI. What it

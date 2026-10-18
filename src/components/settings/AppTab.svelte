@@ -15,6 +15,7 @@
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import McpSection from './McpSection.svelte';
+  import ModelFavorites from './ModelFavorites.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
 
@@ -144,7 +145,7 @@
             <span
               class="mono version"
               class:warn={shown.state === 'untested' || shown.state === 'notConnected'}
-              class:bad={shown.state === 'tooOld'}
+              class:bad={shown.state === 'tooOld' || shown.state === 'unsupported'}
               data-state={shown.state}
               aria-describedby="engine-version-{decl.id}">{shown.version ?? '—'}</span
             >
@@ -153,11 +154,20 @@
             label={t('settings.claude.state')}
             desc={account ? t('settings.claude.signInDesc', { account: accountName(account) }) : undefined}
           >
-            <span class="state" class:ok={shown.state === 'ready'} class:bad={shown.state === 'tooOld'} data-engine-state={shown.state}
-              >{t(`settings.claude.states.${shown.state}`)}</span
+            <span
+              class="state"
+              class:ok={shown.state === 'ready'}
+              class:bad={shown.state === 'tooOld' || shown.state === 'unsupported'}
+              data-engine-state={shown.state}>{t(`settings.claude.states.${shown.state}`)}</span
             >
             <button class="btn" disabled={!account} onclick={() => signIn(decl.id)}>{t('settings.claude.signIn')}</button>
           </Row>
+          {#if !decl.models.length}
+            <!-- A harness that lists the models of its providers (OpenCode): searched, favorites marked. -->
+            <Row label={t('settings.claude.models.label')} desc={t('settings.claude.models.desc', { engine: decl.name })}>
+              <ModelFavorites engine={decl.id} />
+            </Row>
+          {/if}
         {:else if own ? located && !located.path : info?.state === 'absent'}
           <Row label={t('settings.claude.install')} desc={t('settings.claude.installDesc')}>
             <span class="state bad" data-engine-state="absent">{t('settings.claude.states.absent')}</span>

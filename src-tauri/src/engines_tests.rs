@@ -134,7 +134,7 @@ async fn a_state_saved_before_the_harnesses_loads_on_claude_code_and_loses_nothi
 }
 
 /// An account for every harness beside Principal: an agent of a harness goes to its accounts
-/// alone (ESC-30). Their adapters are not written yet, so their agents run on the fake CLI.
+/// alone (ESC-30). Codex and OpenCode run their fakes, the others (not written yet) the fake CLI.
 fn accounts_for_every_harness(h: &Harness) {
     h.set_settings(|s| {
         for engine in [
@@ -148,11 +148,12 @@ fn accounts_for_every_harness(h: &Harness) {
                 name: format!("{engine} work"),
                 engine,
                 config_dir: h.dir.join(engine.as_str()).to_string_lossy().into(),
-                // Codex runs its fake; the harnesses not written yet run Claude Code's.
-                claude_path: if engine == EngineId::Codex {
-                    crate::engine::fake_codex()
-                } else {
-                    String::new()
+                // Codex and OpenCode run their fakes; the harnesses not written yet run Claude
+                // Code's.
+                claude_path: match engine {
+                    EngineId::Codex => crate::engine::fake_codex(),
+                    EngineId::Opencode => crate::engine::fake_opencode(),
+                    _ => String::new(),
                 },
                 ..Default::default()
             });

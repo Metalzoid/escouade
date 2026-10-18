@@ -957,7 +957,7 @@ fn file_change(change: &Value) -> (&'static str, Value, Value) {
 }
 
 /// The hunks of a unified diff, as Claude Code's `structuredPatch` lists them.
-fn hunks_of(diff: &str) -> Value {
+pub(super) fn hunks_of(diff: &str) -> Value {
     let mut hunks: Vec<Value> = Vec::new();
     for line in diff.lines() {
         if let Some(head) = line.strip_prefix("@@ ") {

@@ -68,6 +68,14 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &CODEX_SHARED_DIRS,
             login: &["login"],
         },
+        // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
+        EngineId::Opencode => Store {
+            home: ".config/opencode",
+            var: "OPENCODE_CONFIG_DIR",
+            files: &[],
+            dirs: &[],
+            login: &["auth", "login"],
+        },
         _ => Store {
             home: ".claude",
             var: CONFIG_DIR_VAR,
@@ -1684,6 +1692,16 @@ impl<R: Runtime> Core<R> {
                 connected: signed.is_some(),
                 stamp: signed.as_ref().and_then(|s| s.stamp.clone()),
                 email: signed.and_then(|s| s.email),
+                dir: dir.to_string_lossy().into_owned(),
+            });
+        }
+        // OpenCode signs in to no account of its own: its providers are its config's.
+        if account.engine == EngineId::Opencode {
+            let dir = config_dir(&account, &settings);
+            return Ok(AccountStatus {
+                connected: true,
+                stamp: None,
+                email: None,
                 dir: dir.to_string_lossy().into_owned(),
             });
         }

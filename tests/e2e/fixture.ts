@@ -14,6 +14,8 @@ const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target
 const FAKE = path.join(ROOT, 'tests', 'fixtures', 'fake-claude.cmd');
 /** The fake `codex app-server` (tests/fixtures/fake-codex.mjs), for a test that runs agents on Codex. */
 const FAKE_CODEX = path.join(ROOT, 'tests', 'fixtures', 'fake-codex.cmd');
+/** The fake `opencode serve` (tests/fixtures/fake-opencode.mjs), for a test that runs agents on OpenCode. */
+const FAKE_OPENCODE = path.join(ROOT, 'tests', 'fixtures', 'fake-opencode.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -262,6 +264,10 @@ export const test = base.extend<{
       // Codex's Principal is a folder of the test's (its `config.toml`, « Codex peut piloter Escouade »), never the user's ~/.codex.
       CODEX_HOME: path.join(root, 'codex'),
       FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
+      // The same for OpenCode (`appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE }`); its sessions kept in the test's folder.
+      ESCOUADE_OPENCODE: 'none',
+      FAKE_OPENCODE_LOG: path.join(root, 'fake-opencode.jsonl'),
+      FAKE_OPENCODE_HOME: path.join(root, 'fake-opencode'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -386,4 +392,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX };
+export { expect, FAKE, FAKE_CODEX, FAKE_OPENCODE };

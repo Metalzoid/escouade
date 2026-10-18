@@ -11,6 +11,7 @@ mod claude;
 pub(crate) mod codex;
 pub mod mcp;
 pub mod oneshot;
+pub(crate) mod opencode;
 mod program;
 pub mod registry;
 pub mod terminal;
@@ -33,6 +34,9 @@ pub(crate) use codex::{
     id_key as codex_request_id, meters as codex_meters, mode_of as codex_mode_of, plan_approval,
 };
 pub use mcp::Escouade;
+#[cfg(test)]
+pub(crate) use opencode::fake_opencode;
+pub use opencode::OPENCODE;
 pub use program::{Located, Program};
 pub use terminal::TerminalView;
 
@@ -73,13 +77,14 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names. Claude Code and Codex are written: the others get theirs with
+/// The engine `id` names. Claude Code, Codex and OpenCode are written: the others get theirs with
 /// their adapter (docs/TODO-1.8.md, chapter 1), and until then nothing makes an agent of theirs
 /// (the interface offers none).
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
-        EngineId::Claude | EngineId::Copilot | EngineId::Cursor | EngineId::Opencode => &CLAUDE,
+        EngineId::Opencode => &OPENCODE,
+        EngineId::Claude | EngineId::Copilot | EngineId::Cursor => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
     }
@@ -289,6 +294,15 @@ pub trait Engine: Send + Sync {
     /// The versions Escouade was tested with: an older one is refused (`oldest_reason` says why),
     /// a newer one taken with a warning (`registry`).
     fn tested(&self) -> registry::Tested;
+    /// Why `version` is refused whatever the tested range, in `lang`: a line of the harness
+    /// Escouade does not drive (OpenCode 2). None for the others.
+    fn unsupported_line(
+        &self,
+        _lang: crate::i18n::Lang,
+        _version: &registry::Version,
+    ) -> Option<String> {
+        None
+    }
     /// Why a version older than `tested().oldest` is refused, in `lang`.
     fn oldest_reason(&self, lang: crate::i18n::Lang) -> String;
     /// The command that updates it, as the refusal tells it.
@@ -323,6 +337,18 @@ pub trait Engine: Send + Sync {
     /// given (`handover`).
     fn context_window(&self, _model: &str) -> u64 {
         200_000
+    }
+
+    /// The models of an account none of whose agents has listed them yet, read by a process of its
+    /// own (`program` with `env`, in `dir`): what an agent whose model is none of them starts on.
+    /// None when the harness reads none so (its processes list them at their start, `Ready`).
+    fn list_models<'a>(
+        &'a self,
+        _program: Program,
+        _env: Vec<(String, String)>,
+        _dir: &'a Path,
+    ) -> BoxFuture<'a, Result<Option<Vec<registry::ToldModel>>>> {
+        Box::pin(async { Ok(None) })
     }
 
     /// The quota of an account none of whose agents runs, read by a process of its own (`program`

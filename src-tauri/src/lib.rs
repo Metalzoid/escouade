@@ -43,6 +43,8 @@ mod menus;
 mod model;
 mod navigation;
 mod notify;
+#[cfg(test)]
+mod opencode_tests;
 mod paths;
 mod plan;
 #[cfg(test)]
@@ -354,6 +356,7 @@ pub fn run() {
             commands::account_update,
             commands::account_reorder,
             commands::engine_order_set,
+            commands::favorite_model_set,
             commands::account_remove,
             commands::account_status,
             commands::account_login,

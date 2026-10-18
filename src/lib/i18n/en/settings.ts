@@ -82,9 +82,16 @@ export default defineZone('settings', {
 
   claude: {
     state: 'State',
+    models: {
+      label: 'Models',
+      desc: 'Those of the providers connected to {engine}. Favorites (★) come first in the composer’s menu.',
+      search: 'Search a model',
+      none: 'No model read yet: they are with the first agent of this harness.',
+    },
     states: {
       absent: 'Not found',
       tooOld: 'Too old',
+      unsupported: 'Not supported',
       notConnected: 'Not signed in',
       untested: 'Untested version',
       ready: 'Ready',

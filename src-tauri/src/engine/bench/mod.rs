@@ -90,6 +90,11 @@ pub(crate) trait Target: Sync {
     /// before and after; for `Quota`, none is sent. None: its fake does not play it, and the bench
     /// fails if the scenario applies to it.
     fn prompt(&self, scenario: Scenario) -> Option<String>;
+    /// The model of its agents, when its harness has its own ids (OpenCode: `<provider>/<model>`);
+    /// None: Claude Code's `sonnet`, which its fake takes.
+    fn model(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Plays every scenario that applies to the engine of `target`, each in a folder of its own under
@@ -121,7 +126,7 @@ fn prompt(target: &dyn Target, scenario: Scenario) -> String {
 
 async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
     let text = || prompt(target, scenario);
-    let mut run = Run::start(target, dir, meta(dir), scenario).await;
+    let mut run = Run::start(target, dir, meta_of(target, dir), scenario).await;
     match scenario {
         Scenario::Text => {
             let end = run.turn(&text()).await;
@@ -256,7 +261,7 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
                 assert!(run.rt.meta.last_entry.is_some(), "where a copy forks it");
             }
             // The copy, as `Core::fork_agent` makes it: the original's session and its last entry.
-            let mut copy = meta(dir);
+            let mut copy = meta_of(target, dir);
             copy.fork_of = Some(session.clone());
             copy.fork_at = run.rt.meta.last_entry.clone();
             run.stop().await;
@@ -283,6 +288,15 @@ async fn play(target: &dyn Target, scenario: Scenario, dir: &Path) {
         }
     }
     run.stop().await;
+}
+
+/// A new agent of `target` in `dir`, on its model.
+fn meta_of(target: &dyn Target, dir: &Path) -> AgentMeta {
+    let mut m = meta(dir);
+    if let Some(model) = target.model() {
+        m.model = model;
+    }
+    m
 }
 
 /// A new agent in `dir`.
