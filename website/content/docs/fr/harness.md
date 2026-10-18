@@ -28,7 +28,7 @@ Quel que soit le harness, l’agent a la même conversation : la réponse et le 
 | Testé avec | 2.1.283 à 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 |
 | Compte | abonnement Claude ou clé API | compte ChatGPT | les fournisseurs connectés à OpenCode, modèles locaux compris | compte GitHub avec Copilot, Free compris |
 | Plusieurs comptes | oui | oui | non | oui |
-| Modèles | Fable, Opus, Sonnet, Haiku | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur |
+| Modèles | ceux que Claude Code liste pour chaque compte | ceux que Codex liste pour ton compte | ceux de tes fournisseurs, avec recherche et favoris | ceux que Copilot liste, avec leur multiplicateur |
 | Modes | les cinq | les cinq | quatre (pas d’Auto) | les cinq |
 | Ce qui protège | ses permissions | son bac à sable | ses règles de permission | les règles d’Escouade |
 | Message pendant un tour | attend la fin du tour | entre dans le tour | attend la fin du tour | entre dans le tour |
@@ -46,7 +46,7 @@ Installe Claude Code avec son script (`irm https://claude.ai/install.ps1 | iex` 
 
 ### Modèles et modes
 
-Fable, Opus, Sonnet et Haiku, affichés avec la version que Claude Code fait tourner, et leurs efforts (Haiku n’en a pas). Les cinq modes ont leur sens d’origine : « Auto » (un classifieur accepte les actions sûres), « Demander », « Plan », « Édits auto » et « Bypass » (voir [les modes de permission](managing-agents#modes-de-permission)). Ce sont les permissions de Claude Code qui protègent.
+Les modèles sont ceux que le Claude Code de chaque compte liste dans son `/model`, avec leur nom, leurs efforts et le mode « Auto » de chacun : un modèle qu’un compte a en plus (Mythos, par exemple) apparaît dans le Composer de ses agents, un modèle qu’il n’a pas n’y est pas. Escouade les lit au démarrage et à l’ajout d’un compte, sans rien consommer, puis à chaque démarrage d’agent. Le Kanban et les tickets proposent ceux des comptes actifs. Un agent qui passe sur un compte qui n’a pas son modèle prend le modèle par défaut, et sa conversation le dit. Avant la première lecture, la liste est Fable, Opus, Sonnet et Haiku. Les cinq modes ont leur sens d’origine : « Auto » (un classifieur accepte les actions sûres), « Demander », « Plan », « Édits auto » et « Bypass » (voir [les modes de permission](managing-agents#modes-de-permission)). Ce sont les permissions de Claude Code qui protègent.
 
 ### Coût, quota et vue
 

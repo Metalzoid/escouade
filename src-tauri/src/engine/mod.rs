@@ -27,7 +27,10 @@ pub(crate) mod minimal;
 mod userconfig_tests;
 
 pub(crate) use claude::terminal as claude_terminal;
-pub use claude::{told_auto as claude_told_auto, CLAUDE};
+pub use claude::{
+    catalog as claude_catalog, read_models as claude_read_models, told_auto as claude_told_auto,
+    told_effort as claude_told_effort, told_model as claude_told_model, CLAUDE,
+};
 pub(crate) use codex::git as codex_git;
 pub use codex::CODEX;
 #[cfg(test)]
@@ -187,6 +190,9 @@ pub struct Spawn {
     /// Who it is and the account it runs on, for the log.
     pub label: String,
     pub account: String,
+    /// Whether its model takes an effort, as the `claude` of its account told it (ESC-124); None:
+    /// its harness's rule (`Engine::supports_effort`).
+    pub takes_effort: Option<bool>,
 }
 
 impl Spawn {
@@ -205,6 +211,7 @@ impl Spawn {
             escouade: Escouade::Denied { file: None },
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
+            takes_effort: None,
         }
     }
 }

@@ -5156,16 +5156,34 @@ async fn the_models_claude_code_runs_reach_the_ui_and_are_kept_for_the_next_laun
         .cloned()
         .unwrap();
     assert_eq!(
-        event["models"][1],
-        json!({ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "supportsAutoMode": true })
+        event["models"][3],
+        json!({ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "displayName": "Sonnet 5.5",
+                "supportsAutoMode": true, "supportsEffort": true,
+                "supportedEffortLevels": ["low", "medium", "high", "xhigh", "max"] })
     );
     h.core.save_now();
     let app = mock_app();
     let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     let models = reloaded.models.read().clone();
-    assert_eq!(models.len(), 3);
-    assert_eq!(models[1].value, "sonnet");
-    assert_eq!(models[1].resolved_model, "claude-sonnet-5-5");
+    assert_eq!(models.len(), 6);
+    assert_eq!(models[3].value, "sonnet");
+    assert_eq!(models[3].resolved_model, "claude-sonnet-5-5");
+    // The menu of its account too (ESC-124), `default` aside.
+    let menu: Vec<String> = reloaded.account_models.read()["principal"]
+        .catalog
+        .iter()
+        .map(|m| m.id.clone())
+        .collect();
+    assert_eq!(
+        menu,
+        [
+            "opus",
+            "fable",
+            "sonnet",
+            "haiku",
+            "claude-haiku-4-5-20251001"
+        ]
+    );
 }
 
 #[tokio::test]
@@ -10369,4 +10387,147 @@ async fn the_written_texts_go_to_claude_code_while_it_is_the_only_harness_found_
     let raw: Value =
         serde_json::from_slice(&std::fs::read(h.core.data.settings_file()).unwrap()).unwrap();
     assert_eq!(raw["writerEngine"], "codex");
+}
+
+/// The models the fake `claude` of `account` lists: those it has more (`add`), less those it lacks
+/// (`remove`), as <dir>/fake-models.json says (ESC-124).
+fn fake_models(account: &Account, add: Value, remove: &[&str]) {
+    std::fs::create_dir_all(&account.config_dir).unwrap();
+    std::fs::write(
+        Path::new(&account.config_dir).join("fake-models.json"),
+        json!({ "add": add, "remove": remove }).to_string(),
+    )
+    .unwrap();
+}
+
+/// Mythos, a model one account has more: two efforts, the mode `auto`.
+fn mythos() -> Value {
+    json!([{ "value": "mythos", "resolvedModel": "claude-mythos-1", "displayName": "Mythos",
+             "supportsEffort": true, "supportedEffortLevels": ["high", "max"], "supportsAutoMode": true }])
+}
+
+#[tokio::test]
+async fn the_models_of_each_claude_account_are_read_without_a_turn_and_its_agents_menu_is_its_own()
+{
+    let h = harness("accounts-models-read");
+    let pro = second_account(&h);
+    // Pro has Mythos more, and no Fable.
+    fake_models(&pro, mythos(), &["fable"]);
+    h.core.read_claude_models("principal").await;
+    h.core.read_claude_models("pro").await;
+    let menu = |account: &str| -> Vec<String> {
+        h.core.account_models.read()[account]
+            .catalog
+            .iter()
+            .map(|m| m.id.clone())
+            .collect()
+    };
+    assert_eq!(
+        menu("principal"),
+        [
+            "opus",
+            "fable",
+            "sonnet",
+            "haiku",
+            "claude-haiku-4-5-20251001"
+        ]
+    );
+    assert_eq!(
+        menu("pro"),
+        [
+            "opus",
+            "sonnet",
+            "haiku",
+            "claude-haiku-4-5-20251001",
+            "mythos"
+        ]
+    );
+    let told = h.core.account_models.read()["pro"].clone();
+    assert_eq!(told.version, "2.1.301");
+    let m = told.catalog.iter().find(|m| m.id == "mythos").unwrap();
+    assert_eq!(
+        (m.label.as_str(), m.efforts.clone()),
+        ("Mythos", vec!["high".to_string(), "max".to_string()])
+    );
+    // What it takes, as told: an effort and the mode auto; Haiku 4.5 neither.
+    assert!(h.core.takes_effort(EngineId::Claude, "pro", "mythos"));
+    assert!(h.core.takes_auto(EngineId::Claude, "pro", "mythos"));
+    assert!(!h
+        .core
+        .takes_effort(EngineId::Claude, "pro", "claude-haiku-4-5"));
+    // The window is told, account by account.
+    let told_ui = h
+        .events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "accountModels" && e["account"] == "pro")
+        .count();
+    assert_eq!(told_ui, 1);
+    // No turn, no session: nothing was asked of the model.
+    assert!(!Path::new(&pro.config_dir).join("projects").exists());
+    assert!(h.core.agents.read().is_empty());
+    // Read again unchanged: the window is not told again.
+    h.core.read_claude_models("pro").await;
+    let again = h
+        .events
+        .lock()
+        .iter()
+        .filter(|e| e["type"] == "accountModels" && e["account"] == "pro")
+        .count();
+    assert_eq!(again, 1);
+}
+
+#[tokio::test]
+async fn an_agent_moved_to_an_account_without_its_model_takes_the_default_one_and_its_conversation_says_so(
+) {
+    let h = harness("accounts-models-moved");
+    // In its worktree: its own log of launches.
+    let (p, _) = h.project(true).await;
+    let (pro, team) = pro_out_of_quota_and_team(&h);
+    // Pro has Mythos; Équipe does not.
+    fake_models(&pro, mythos(), &[]);
+    fake_models(&team, json!([]), &[]);
+    h.core.read_claude_models("pro").await;
+    h.core.read_claude_models("equipe").await;
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                account: Some("pro".into()),
+                model: Some("mythos".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    turn_over(&h, &id, "la limite").await;
+    // On Pro, its model stays.
+    assert_eq!(h.agent(&id).model, "mythos");
+    let argv = h.launches(Path::new(&h.agent(&id).cwd)).pop().unwrap();
+    let after = |argv: &[String], flag: &str| {
+        let at = argv.iter().position(|x| x == flag).unwrap();
+        argv[at + 1].clone()
+    };
+    assert_eq!(after(&argv, "--model"), "mythos");
+    assert!(h.notices(&id, "info").iter().all(|n| !n.contains("mythos")));
+
+    h.core.resume_on_account(&id, "equipe").await.unwrap();
+    h.wait("the resume's turn", |h| {
+        h.agent(&id).moved_from.is_none() && !h.agent(&id).status.is_active()
+    })
+    .await;
+    // On Équipe: the default model (the settings', which it has), told in its conversation.
+    assert_eq!(h.agent(&id).account, "equipe");
+    assert_eq!(h.agent(&id).model, "sonnet");
+    let argv = h.launches(Path::new(&h.agent(&id).cwd)).pop().unwrap();
+    assert_eq!(after(&argv, "--model"), "sonnet");
+    let said = h.notices(&id, "info");
+    assert!(
+        said.iter()
+            .any(|n| n.contains("mythos") && n.contains("Sonnet 5.5") && n.contains("Équipe")),
+        "{said:?}"
+    );
 }

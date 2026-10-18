@@ -14,6 +14,7 @@ pub(crate) use process::{ClaudeProcess, SpawnOpts};
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
+    ToldModel,
 };
 #[cfg(test)]
 use super::Program;
@@ -244,7 +245,17 @@ pub fn told_auto(told: &[crate::model::ModelInfo], model: &str) -> Option<bool> 
     if told.iter().all(|m| m.supports_auto_mode.is_none()) {
         return None;
     }
+    told_model(told, model).map(|t| t.supports_auto_mode == Some(true))
+}
+
+/// The model `model` names among those a `claude` told: by its alias or its full id (with or
+/// without its date), its long context (`[1m]`) aside.
+pub fn told_model<'a>(
+    told: &'a [crate::model::ModelInfo],
+    model: &str,
+) -> Option<&'a crate::model::ModelInfo> {
     let m = model.to_lowercase();
+    let m = m.strip_suffix("[1m]").unwrap_or(&m);
     let dated = format!("{m}-");
     told.iter()
         .find(|t| t.value.to_lowercase() == m)
@@ -254,7 +265,98 @@ pub fn told_auto(told: &[crate::model::ModelInfo], model: &str) -> Option<bool> 
                 r == m || r.starts_with(&dated)
             })
         })
-        .map(|t| t.supports_auto_mode == Some(true))
+}
+
+/// Whether `model` takes an effort, as a `claude` told it (`supportsEffort`, absent for a model
+/// without one, ESC-124). None when it tells no names of its models (a list read before), or
+/// does not list `model`: the rule decides (`supports_effort`).
+pub fn told_effort(told: &[crate::model::ModelInfo], model: &str) -> Option<bool> {
+    if told.iter().all(|m| m.display_name.is_empty()) {
+        return None;
+    }
+    told_model(told, model).map(|t| t.supports_effort == Some(true))
+}
+
+/// The composer's menu of the agents of an account, as its `claude` told its models
+/// (`initialize`, ESC-124): in its order and by the names of its `/model`, each with its
+/// efforts; `default` (Claude Code's choice, the same model as another) is not one, but marks
+/// the one it runs. Empty when it tells no names (a list read before ESC-124): the fixed one
+/// serves.
+pub fn catalog(told: &[crate::model::ModelInfo]) -> Vec<ToldModel> {
+    if told.iter().all(|m| m.display_name.is_empty()) {
+        return Vec::new();
+    }
+    let default = told
+        .iter()
+        .find(|m| m.value == "default")
+        .map(|m| m.resolved_model.as_str());
+    let mut marked = false;
+    let mut out = Vec::new();
+    for m in told.iter().filter(|m| m.value != "default") {
+        if out.iter().any(|o: &ToldModel| o.id == m.value) {
+            continue;
+        }
+        let is_default = !marked && default == Some(m.resolved_model.as_str());
+        marked |= is_default;
+        let efforts = if m.supports_effort == Some(true) {
+            m.supported_effort_levels.clone()
+        } else {
+            Vec::new()
+        };
+        out.push(ToldModel {
+            id: m.value.clone(),
+            label: if m.display_name.is_empty() {
+                m.value.clone()
+            } else {
+                m.display_name.clone()
+            },
+            efforts,
+            default_effort: None,
+            images: true,
+            default: is_default,
+            provider: None,
+            multiplier: None,
+            price: None,
+        });
+    }
+    if !marked {
+        if let Some(first) = out.first_mut() {
+            first.default = true;
+        }
+    }
+    out
+}
+
+/// What the `claude` of `program` (with `env`, in `dir`) tells of its models, read by a
+/// process of its own that is given no turn: `initialize` alone, which asks nothing of the API
+/// (ESC-121, ESC-124), then it is stopped. No session is written, no MCP server started.
+pub async fn read_models(
+    program: super::Program,
+    env: Vec<(String, String)>,
+    dir: &std::path::Path,
+) -> Result<Value> {
+    let mut args: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
+    args.extend(
+        ["--no-session-persistence", "--strict-mcp-config"]
+            .iter()
+            .map(|s| s.to_string()),
+    );
+    let opts = SpawnOpts {
+        args,
+        program,
+        cwd: dir.to_string_lossy().into_owned(),
+        env,
+    };
+    let p = ClaudeProcess::spawn(opts, |_| {}, |_, _| {})?;
+    let resp = ClaudeProcess::control(
+        &p,
+        json!({ "subtype": "initialize" }),
+        Duration::from_secs(60),
+    )
+    .await;
+    p.close_input();
+    p.kill();
+    Ok(resp?["models"].clone())
 }
 
 /// The arguments of the conversation of `s`: its model, effort and mode, its added instructions,
@@ -262,7 +364,7 @@ pub fn told_auto(told: &[crate::model::ModelInfo], model: &str) -> Option<bool> 
 fn conversation_args(s: &Spawn) -> Vec<String> {
     let mut a: Vec<String> = CLAUDE_BASE_ARGS.iter().map(|s| s.to_string()).collect();
     a.extend(["--model".into(), s.model.clone()]);
-    if supports_effort(&s.model) {
+    if s.takes_effort.unwrap_or_else(|| supports_effort(&s.model)) {
         a.extend(["--effort".into(), s.effort.clone()]);
     }
     a.extend(["--permission-mode".into(), s.mode.clone()]);
@@ -845,7 +947,94 @@ mod tests {
             value: value.into(),
             resolved_model: resolved.into(),
             supports_auto_mode: auto,
+            ..Default::default()
         }
+    }
+
+    /// The models of the `initialize` of Claude Code 2.1.302 on this machine's Principal (real
+    /// trial of ESC-124, abridged), with a model more (`mythos`, as another account has it) and
+    /// Fable less.
+    fn told_2_1_302() -> Vec<ModelInfo> {
+        let efforts = json!(["low", "medium", "high", "xhigh", "max"]);
+        ModelInfo::list(&json!([
+            { "value": "default", "resolvedModel": "claude-opus-5-5", "displayName": "Default (recommended)",
+              "supportsEffort": true, "supportedEffortLevels": efforts, "supportsAutoMode": true },
+            { "value": "opus", "resolvedModel": "claude-opus-5-5", "displayName": "Opus 5.5",
+              "supportsEffort": true, "supportedEffortLevels": efforts, "supportsAutoMode": true },
+            { "value": "mythos", "resolvedModel": "claude-mythos-1", "displayName": "Mythos",
+              "supportsEffort": true, "supportedEffortLevels": ["high", "max"], "supportsAutoMode": true },
+            { "value": "haiku", "resolvedModel": "claude-haiku-5-5", "displayName": "Haiku 5.5",
+              "supportsEffort": true, "supportedEffortLevels": efforts, "supportsAutoMode": true },
+            { "value": "claude-haiku-4-5-20251001", "resolvedModel": "claude-haiku-4-5-20251001",
+              "displayName": "Haiku 4.5", "supportsThinkingOff": true },
+        ]))
+    }
+
+    #[test]
+    fn the_menu_of_an_account_is_what_its_claude_lists() {
+        let list = told_2_1_302();
+        let menu = catalog(&list);
+        let ids: Vec<&str> = menu.iter().map(|m| m.id.as_str()).collect();
+        // In its order, `default` aside; a model more is there, the one it lacks is not.
+        assert_eq!(
+            ids,
+            ["opus", "mythos", "haiku", "claude-haiku-4-5-20251001"]
+        );
+        let labels: Vec<&str> = menu.iter().map(|m| m.label.as_str()).collect();
+        assert_eq!(labels, ["Opus 5.5", "Mythos", "Haiku 5.5", "Haiku 4.5"]);
+        // `default` marks the one it runs.
+        let defaults: Vec<&str> = menu
+            .iter()
+            .filter(|m| m.default)
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(defaults, ["opus"]);
+        // Each with its efforts; none for the one that takes none.
+        assert_eq!(menu[1].efforts, ["high", "max"]);
+        assert!(menu[3].efforts.is_empty());
+        assert!(menu.iter().all(|m| m.images));
+        // Without `default`: its first.
+        let without: Vec<ModelInfo> = list
+            .iter()
+            .filter(|m| m.value != "default")
+            .cloned()
+            .collect();
+        assert!(catalog(&without)[0].default);
+        // A list kept before ESC-124 (no names) makes none: the fixed one serves.
+        let old = vec![told("opus", "claude-opus-5-5", Some(true))];
+        assert!(catalog(&old).is_empty());
+        assert!(catalog(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_effort_follows_what_the_claude_of_the_account_told_of_its_models() {
+        let list = told_2_1_302();
+        assert_eq!(told_effort(&list, "haiku"), Some(true));
+        assert_eq!(told_effort(&list, "claude-haiku-4-5"), Some(false));
+        assert_eq!(told_effort(&list, "mythos"), Some(true));
+        assert_eq!(told_effort(&list, "opus[1m]"), Some(true));
+        // Not listed, or a list without names: the rule.
+        assert_eq!(told_effort(&list, "sonnet"), None);
+        assert_eq!(
+            told_effort(&[told("haiku", "claude-haiku-5-5", Some(true))], "haiku"),
+            None
+        );
+        // Its process is given the effort as told, else by the rule.
+        let m = AgentMeta {
+            model: "haiku".into(),
+            effort: "high".into(),
+            mode: "auto".into(),
+            ..Default::default()
+        };
+        let mut s = Spawn::of(&m, Program::Native(std::path::PathBuf::new()), Vec::new());
+        assert!(!conversation_args(&s).contains(&"--effort".to_string()));
+        s.takes_effort = Some(true);
+        let a = conversation_args(&s);
+        let at = a.iter().position(|x| x == "--effort").unwrap();
+        assert_eq!(a[at + 1], "high");
+        s.model = "mythos-sans-effort".into();
+        s.takes_effort = Some(false);
+        assert!(!conversation_args(&s).contains(&"--effort".to_string()));
     }
 
     #[test]

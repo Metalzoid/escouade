@@ -1,7 +1,7 @@
 // Model / effort / permission-mode catalogs used by the composer and the settings.
 
 import { t } from './i18n';
-import { speakerOf, toldLabel } from './engines';
+import { claudeToldModels, speakerOf, toldLabel } from './engines';
 import type { ModelInfo } from './types';
 
 /** The aliases offered: Claude Code runs the latest model of the family it knows. */
@@ -110,14 +110,13 @@ export function modelLabel(model: string, catalog: ModelInfo[] = []): string {
 }
 
 /**
- * The models of a harness's menu (its declaration's, Claude Code's aliases by default), each labelled with the version
- * the harness runs for it once it has told (`catalog`), else with its declared name.
+ * The models of a harness's menu (by default Claude Code's: those its active accounts told, ESC-124, else its aliases),
+ * each labelled with the version the harness runs for it once it has told (`catalog`), else with its given name.
  */
-export function modelOptions(
-  catalog: ModelInfo[],
-  models: { id: string; label: string }[] = MODELS.map((m) => ({ id: m.value, label: m.label })),
-): { value: string; label: string }[] {
-  return models.map((m) => {
+export function modelOptions(catalog: ModelInfo[], models?: { id: string; label: string }[]): { value: string; label: string }[] {
+  const told = models ?? claudeToldModels();
+  const list = models || told.length ? told : MODELS.map((m) => ({ id: m.value, label: m.label }));
+  return list.map((m) => {
     const id = resolveAlias(m.id.toLowerCase(), catalog);
     return { value: m.id, label: id ? displayModel(id) : m.label };
   });

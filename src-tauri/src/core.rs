@@ -1512,7 +1512,14 @@ impl<R: Runtime> Core<R> {
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),
             engine_models: RwLock::new(state.engine_models),
-            account_models: RwLock::new(state.account_models),
+            // The menus as the names they keep make them (a list kept before ESC-124 makes none).
+            account_models: RwLock::new(
+                state
+                    .account_models
+                    .into_iter()
+                    .map(|(id, m)| (id, crate::model::AccountModels::new(m.version, m.models)))
+                    .collect(),
+            ),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
@@ -2555,6 +2562,9 @@ impl<R: Runtime> Core<R> {
                 [settings.agent_env(), accounts::launch_env(&account)].concat(),
             );
             spawn.account = account.id.clone();
+            spawn.takes_effort =
+                Some(self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model))
+                    .filter(|_| rt.meta.engine == EngineId::Claude && !rt.meta.effort.is_empty());
             (spawn, rt.gen, engine::of(&rt.meta))
         };
         if !Path::new(&spawn.cwd).is_dir() {
@@ -2670,13 +2680,14 @@ impl<R: Runtime> Core<R> {
     /// its account lists by a process of its own (`Engine::list_models`), kept for the composer
     /// too. Nothing for a harness that lists none so, nor when the listing fails.
     async fn settle_model(
-        &self,
+        self: &Arc<Self>,
         h: &AgentHandle,
         harness: &dyn crate::engine::Engine,
         program: &crate::engine::Program,
         env: Vec<(String, String)>,
     ) {
         if harness.id() == EngineId::Claude {
+            self.fit_claude_model(h);
             return;
         }
         let model = h.lock().meta.model.clone();
@@ -2729,13 +2740,11 @@ impl<R: Runtime> Core<R> {
         self.request_save();
     }
 
-    /// Keeps what the `claude` of `account` (at `version`) told of its models at a process start:
-    /// which take the mode `auto` (`takes_auto`).
+    /// Keeps what the `claude` of `account` (at `version`) told of its models at a process start
+    /// or a reading of its own (`read_claude_models`): which take the mode `auto` (`takes_auto`),
+    /// and the menu of its agents.
     fn set_account_models(&self, account: &str, version: String, reported: &Value) {
-        let models = crate::model::AccountModels {
-            version,
-            models: ModelInfo::list(reported),
-        };
+        let models = crate::model::AccountModels::new(version, ModelInfo::list(reported));
         let mut all = self.account_models.write();
         if all.get(account) == Some(&models) {
             return;
@@ -2764,6 +2773,145 @@ impl<R: Runtime> Core<R> {
             }
         }
         crate::engine::by_id(engine).supports_auto(model)
+    }
+
+    /// Whether `model` takes an effort on `engine` for an agent of `account`: as the `claude` of
+    /// the account last told it (ESC-124: Haiku 5.5 takes one), else as its harness's rule has it.
+    pub(crate) fn takes_effort(&self, engine: EngineId, account: &str, model: &str) -> bool {
+        if engine == EngineId::Claude {
+            let told = self
+                .account_models
+                .read()
+                .get(account)
+                .and_then(|m| crate::engine::claude_told_effort(&m.models, model));
+            if let Some(told) = told {
+                return told;
+            }
+        }
+        crate::engine::by_id(engine).supports_effort(model)
+    }
+
+    /// The agent of `h` on a model of its Claude account (ESC-124): when the `claude` of the
+    /// account told its models and lists none that its model names (a model of another account it
+    /// moved to, ESC-88), the default one, as the settings name it when the account has it, else
+    /// as its `claude` runs it; its conversation says so. Nothing while the account told none.
+    pub(crate) fn fit_claude_model(self: &Arc<Self>, h: &AgentHandle) {
+        let (id, account, model) = {
+            let rt = h.lock();
+            (
+                rt.meta.id.clone(),
+                rt.meta.account.clone(),
+                rt.meta.model.clone(),
+            )
+        };
+        let account = accounts::get(&self.settings.read(), &account);
+        let Some(told) = self.account_models.read().get(&account.id).cloned() else {
+            return;
+        };
+        let listed = |m: &str| crate::engine::claude_told_model(&told.models, m).is_some();
+        if told.catalog.is_empty() || listed(&model) {
+            return;
+        }
+        let wanted = self.settings.read().default_model.clone();
+        let Some(pick) = told
+            .catalog
+            .iter()
+            .find(|m| m.id == wanted)
+            .or_else(|| told.catalog.iter().find(|m| m.default))
+            .or(told.catalog.first())
+            .cloned()
+        else {
+            return;
+        };
+        log::info!(
+            "agent {id}: model {model:?} not listed by account {}, {} instead",
+            account.id,
+            pick.id
+        );
+        let lang = crate::i18n::ui();
+        let name = accounts::name_in(lang, &account);
+        let takes = self.takes_effort(EngineId::Claude, &account.id, &pick.id);
+        let _ = self.with_agent(&id, |rt, fx| {
+            rt.meta.model = pick.id.clone();
+            if takes && rt.meta.effort.is_empty() {
+                rt.meta.effort = pick
+                    .efforts
+                    .iter()
+                    .find(|e| e.as_str() == "medium")
+                    .or(pick.efforts.first())
+                    .cloned()
+                    .unwrap_or_default();
+            }
+            rt.notice(
+                "info",
+                tr_in!(
+                    lang,
+                    "Le compte {account} n’a pas le modèle {model} : l’agent passe sur {pick}, son modèle par défaut.",
+                    "The {account} account doesn’t have the {model} model: the agent goes on {pick}, its default model.",
+                    account = name,
+                    model = model,
+                    pick = pick.label
+                ),
+                fx,
+            );
+            Ok(())
+        });
+    }
+
+    /// What the `claude` of the Claude account `id` tells of its models, read without a turn
+    /// (`engine::claude_read_models`, ESC-124) and kept: at the start of the app, once an account
+    /// is made or signed in. Nothing for an account that is not Claude Code's, switched off, or
+    /// whose `claude` is not found.
+    pub async fn read_claude_models(self: &Arc<Self>, id: &str) {
+        let settings = self.settings.read().clone();
+        let Some(account) = settings.accounts.iter().find(|a| a.id == id).cloned() else {
+            return;
+        };
+        if account.engine != EngineId::Claude || !account.active {
+            return;
+        }
+        let found = {
+            let (account, settings) = (account.clone(), settings.clone());
+            tokio::task::spawn_blocking(move || accounts::program(&account, &settings))
+                .await
+                .ok()
+                .flatten()
+        };
+        let Some(program) = found else { return };
+        let harness = crate::engine::by_id(EngineId::Claude);
+        // One older than the tested ones is not started, as an agent's is not.
+        if let Err(e) = engine::registry::check(harness, &program).await {
+            log::info!("account {id}: models not read: {e:#}");
+            return;
+        }
+        let version = engine::registry::version(harness, &program)
+            .await
+            .unwrap_or_default();
+        let env = [settings.agent_env(), accounts::launch_env(&account)].concat();
+        let dir = std::env::temp_dir();
+        match crate::engine::claude_read_models(program, env, &dir).await {
+            Ok(models) if !models.is_null() => {
+                self.set_account_models(&account.id, version, &models);
+            }
+            Ok(_) => {}
+            Err(e) => log::warn!("account {id}: models not read: {e:#}"),
+        }
+    }
+
+    /// `read_claude_models` of every active Claude account, in the background.
+    pub fn read_all_claude_models(self: &Arc<Self>) {
+        let ids: Vec<String> = self
+            .settings
+            .read()
+            .accounts
+            .iter()
+            .filter(|a| a.engine == EngineId::Claude && a.active)
+            .map(|a| a.id.clone())
+            .collect();
+        for id in ids {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move { c.read_claude_models(&id).await });
+        }
     }
 
     /// A harness other than Claude Code that serves for the first time (a new agent, a ticket on
@@ -4495,7 +4643,10 @@ impl<R: Runtime> Core<R> {
                 let rt = h.lock();
                 (rt.meta.model.clone(), engine::of(&rt.meta))
             };
-            if let Some(e) = effort.filter(|_| engine.supports_effort(&current_model)) {
+            let account = h.lock().meta.account.clone();
+            if let Some(e) =
+                effort.filter(|_| self.takes_effort(engine.id(), &account, &current_model))
+            {
                 p.set_effort(&e).await?;
             }
             if let Some(m) = mode {

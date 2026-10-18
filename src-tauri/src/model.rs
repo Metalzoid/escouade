@@ -1356,16 +1356,42 @@ pub struct ModelInfo {
     /// absent for a model without it); None when it says nothing of it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_auto_mode: Option<bool>,
+    /// Its name in Claude Code's `/model` (`Opus 5.5`, `Default (recommended)`), empty when it
+    /// tells none (ESC-124).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub display_name: String,
+    /// Whether it takes an effort (`supportsEffort`, absent for a model without one), and which
+    /// (`supportedEffortLevels`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_effort: Option<bool>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub supported_effort_levels: Vec<String>,
 }
 
-/// What the `claude` of an account told of its models at its last process start (ESC-121): the
-/// version that told it, and its models with their mode `auto` (`engine::claude::told_auto`).
+/// What the `claude` of an account told of its models at its last reading (ESC-121, ESC-124): the
+/// version that told it, its models with their mode `auto` (`engine::claude::told_auto`), and
+/// the menu of its agents they make (`engine::claude::catalog`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AccountModels {
     /// Its version (`2.1.302`), empty when it was not read.
     pub version: String,
     pub models: Vec<ModelInfo>,
+    /// The composer's menu of the account's agents, as `claude` told them: empty while it told
+    /// none (a list read before ESC-124, which kept no names), when the fixed one serves.
+    pub catalog: Vec<crate::engine::registry::ToldModel>,
+}
+
+impl AccountModels {
+    /// What `claude` at `version` told of `models`, with the menu they make.
+    pub fn new(version: String, models: Vec<ModelInfo>) -> Self {
+        let catalog = crate::engine::claude_catalog(&models);
+        AccountModels {
+            version,
+            models,
+            catalog,
+        }
+    }
 }
 
 impl ModelInfo {

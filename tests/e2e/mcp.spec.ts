@@ -140,8 +140,9 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   expect(after.token).not.toBe(before.token);
 });
 
-/** The launches of an agent's process (a stream), apart from `claude mcp …` and the one-shot calls (naming…). */
-const streams = (app: App) => app.launches().filter((l) => l.argv.includes('--input-format'));
+/** The launches of an agent's process (a stream), apart from `claude mcp …`, the one-shot calls (naming…) and the readings of an account's models (ESC-124: no session). */
+const streams = (app: App) =>
+  app.launches().filter((l) => l.argv.includes('--input-format') && !l.argv.includes('--no-session-persistence'));
 const optionValue = (argv: string[], name: string) => argv[argv.indexOf(name) + 1];
 
 test('the one switch reaches agents already running: their conversation says so, and « Relancer » resumes the session with the tools', async ({

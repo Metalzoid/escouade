@@ -1302,7 +1302,8 @@ pub(super) async fn delete_ticket<R: Runtime>(
 
 // ---------- agents ----------
 
-/// A model as Claude Code names it, one the window offers when it knows the list.
+/// A model as Claude Code names it, one the window offers when it knows the list: what a
+/// `claude` last reported, or that of an account told (ESC-124: a model of one account only).
 fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<String>, ToolError> {
     let Some(m) = asked.map(str::trim).filter(|m| !m.is_empty()) else {
         return Ok(None);
@@ -1318,7 +1319,14 @@ fn model<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Result<Option<Strin
             "“{m}” is not a model name."
         )));
     }
-    let known = core.models.read().clone();
+    let mut known = core.models.read().clone();
+    for told in core.account_models.read().values() {
+        for m in &told.models {
+            if !known.iter().any(|k| k.value == m.value) {
+                known.push(m.clone());
+            }
+        }
+    }
     if known.is_empty() {
         return Ok(Some(m.to_string()));
     }

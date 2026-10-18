@@ -582,6 +582,40 @@ describe('Composer', () => {
     expect(screen.getByText('indisponible avec ce modèle')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toBeEnabled();
   });
+
+  it('offers the models the claude of the agent’s account told: one more, one less, each with its efforts (ESC-124)', async () => {
+    const { a } = setup({ model: 'mythos', effort: 'high', account: 'pro' });
+    const told = (id: string, label: string, efforts: string[]) => ({
+      id,
+      label,
+      efforts,
+      defaultEffort: null,
+      images: true,
+      default: false,
+    });
+    app.accountModels = {
+      pro: {
+        version: '2.1.302',
+        models: [],
+        catalog: [told('opus', 'Opus 5.5', ['low', 'medium', 'high', 'xhigh', 'max']), told('mythos', 'Mythos', ['high', 'max'])],
+      },
+      // Another account's: not this agent's.
+      principal: { version: '2.1.302', models: [], catalog: [told('fable', 'Fable 5.1', ['low'])] },
+    };
+    expect(a.account).toBe('pro');
+    await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
+    const names = screen.getAllByRole('menuitemradio').map((o) => o.textContent?.replace('✓', '').trim());
+    expect(names.some((n) => n?.startsWith('Mythos'))).toBe(true);
+    expect(names.some((n) => n?.startsWith('Opus 5.5'))).toBe(true);
+    expect(names.some((n) => n?.startsWith('Fable'))).toBe(false);
+    expect(names.some((n) => n?.startsWith('Sonnet'))).toBe(false);
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(screen.getByRole('button', { name: /^Effort/ }));
+    expect(screen.getAllByRole('menuitemradio').map((o) => o.textContent?.replace('✓', '').trim())).toEqual([
+      'Élevé Réflexion approfondie',
+      'Max Réflexion maximale, plus de tokens',
+    ]);
+  });
 });
 
 describe('Composer in a narrow column (split layout)', () => {

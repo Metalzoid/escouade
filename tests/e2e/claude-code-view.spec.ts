@@ -12,9 +12,9 @@ function interfaces(app: App) {
   return app.launches().filter((l) => l.argv.includes('--settings') && !l.argv.includes('stream-json'));
 }
 
-/** The launches of the stream's process. */
+/** The launches of the stream's process (not the readings of an account's models, without a session: ESC-124). */
 function streams(app: App) {
-  return app.launches().filter((l) => l.argv.includes('stream-json'));
+  return app.launches().filter((l) => l.argv.includes('stream-json') && !l.argv.includes('--no-session-persistence'));
 }
 
 const flag = (argv: string[], name: string) => argv.find((a) => a.startsWith(`${name}=`))?.slice(name.length + 1);

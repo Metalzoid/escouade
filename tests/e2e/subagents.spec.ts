@@ -113,7 +113,8 @@ test('a subagent that runs is read, answered and stopped from its own view', asy
   await expect(sub.crumbs.locator('[aria-current="page"]')).toHaveText('Surveiller le serveur');
   await expect(sub.state).toHaveText('En cours');
   await expect(sub.fact('Type')).toHaveText('Explore');
-  await expect(sub.fact('Modèle')).toHaveText('Haiku');
+  // Named with the version the claude of its account runs for the alias (it lists `haiku`, as Claude Code 2.1.302 does).
+  await expect(sub.fact('Modèle')).toHaveText('Haiku 5.5');
   await expect(view.locator('.prompt .k')).toHaveText('Consigne');
   await expect(sub.prompt).toHaveText('Surveille le serveur de dev\net dis-moi quand il répond.');
   await expect(sub.stop).toBeVisible();

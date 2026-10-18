@@ -26,7 +26,7 @@ import {
   writerOptions,
 } from './engines';
 import { setLang } from './i18n';
-import { EFFORTS, modelLabel, MODES } from './models';
+import { EFFORTS, modelLabel, modelOptions, MODES } from './models';
 import { app } from './state.svelte';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
 
@@ -145,6 +145,87 @@ describe('the mode auto as the claude of the account told it (ESC-121)', () => {
     expect(modelTakes(principal, 'sonnet', 'auto')).toBe(true);
     // Another harness keeps its declaration.
     expect(modelTakes({ engine: 'codex', account: 'pro' }, 'haiku', 'auto')).toBe(true);
+  });
+});
+
+describe('the models of Claude Code as the claude of each account told them (ESC-124)', () => {
+  const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
+  const told = (id: string, label: string, more: Partial<import('./types').ToldModel> = {}) => ({
+    id,
+    label,
+    efforts,
+    defaultEffort: null,
+    images: true,
+    default: false,
+    ...more,
+  });
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings = {
+      ...app.settings,
+      accounts: [
+        { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
+        { id: 'pro', name: 'Pro', configDir: 'C:/pro', claudePath: '', active: true },
+        { id: 'off', name: 'Éteint', configDir: 'C:/off', claudePath: '', active: false },
+      ],
+    };
+    app.accountModels = {
+      // Principal has no Fable; Pro has Mythos more, which takes two efforts, and Haiku 4.5, which takes none.
+      principal: {
+        version: '2.1.302',
+        models: [],
+        catalog: [told('opus', 'Opus 5.5', { default: true }), told('sonnet', 'Sonnet 5.5'), told('haiku', 'Haiku 5.5')],
+      },
+      pro: {
+        version: '2.1.302',
+        models: [],
+        catalog: [
+          told('opus', 'Opus 5.5', { default: true }),
+          told('mythos', 'Mythos', { efforts: ['high', 'max'] }),
+          told('claude-haiku-4-5-20251001', 'Haiku 4.5', { efforts: [] }),
+        ],
+      },
+      off: { version: '2.1.302', models: [], catalog: [told('secret', 'Secret')] },
+    };
+  });
+
+  it('the composer of an agent shows its account’s: a model more is there, one it lacks is not', () => {
+    const principal = { engine: 'claude' as const, account: 'principal' };
+    const pro = { engine: 'claude' as const, account: 'pro', model: 'mythos' };
+    expect(modelsOf(principal).map((m) => m.id)).toEqual(['opus', 'sonnet', 'haiku']);
+    expect(modelsOf(pro)).toEqual([
+      { id: 'opus', label: 'Opus 5.5' },
+      { id: 'mythos', label: 'Mythos' },
+      { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+    ]);
+    // Each with its efforts, as told: Haiku 5.5 takes one, Haiku 4.5 none.
+    expect(effortsOf(pro, EFFORTS).map((e) => e.value)).toEqual(['high', 'max']);
+    expect(modelTakes(principal, 'haiku', 'effort')).toBe(true);
+    expect(modelTakes(pro, 'claude-haiku-4-5-20251001', 'effort')).toBe(false);
+    // Named as its claude names it, wherever it is shown, by its full id too (the statistics').
+    expect(modelLabel('mythos')).toBe('Mythos');
+    app.accountModels = {
+      ...app.accountModels,
+      pro: {
+        ...app.accountModels.pro,
+        models: [{ value: 'mythos', resolvedModel: 'claude-mythos-1', displayName: 'Mythos', supportsAutoMode: true }],
+      },
+    };
+    expect(modelLabel('claude-mythos-1')).toBe('Mythos');
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
+  });
+
+  it('an account that told none yet, as before the first reading: the fixed list', () => {
+    const fresh = { engine: 'claude' as const, account: 'nouveau' };
+    expect(modelsOf(fresh).map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
+    app.accountModels = {};
+    expect(modelOptions([]).map((m) => m.value)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
+  });
+
+  it('the Kanban, a ticket and the settings offer those of the active accounts, each once', () => {
+    expect(modelOptions([]).map((m) => m.value)).toEqual(['opus', 'sonnet', 'haiku', 'mythos', 'claude-haiku-4-5-20251001']);
+    expect(modelOptions([]).find((m) => m.value === 'mythos')?.label).toBe('Mythos');
   });
 });
 

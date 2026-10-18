@@ -1250,6 +1250,10 @@ impl<R: Runtime> Core<R> {
             .await;
         self.copy_first(view, h, id, &program, &settings, &account)
             .await;
+        // A model its Claude account does not list: the default one, said (ESC-124).
+        if harness.id() == crate::model::EngineId::Claude {
+            self.fit_claude_model(h);
+        }
         let started = now_ms();
         let (meta, new_session, remote, cwd, name, gen, transcript, since) = {
             let mut rt = h.lock();

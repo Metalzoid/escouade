@@ -115,13 +115,34 @@ const limited = () => configDir !== null && fs.existsSync(path.join(configDir, '
 // Failing with an error of the API, for as long as the file is there.
 const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
 // The alias haiku as `initialize` lists it, when <dir>/fake-haiku says which: « 5-5 » as from 2.1.293 on (Haiku 5.5, with
-// the mode auto), « 4-5 » as before (Haiku 4.5, without it); not listed otherwise.
+// the mode auto and its efforts), « 4-5 » as before (Haiku 4.5, without either); else Haiku 5.5 with the mode auto but no
+// effort (as the rule of Escouade has it).
 const haikuListed = () => {
   const file = configDir && path.join(configDir, 'fake-haiku');
   const which = file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim() : '';
-  if (which === '5-5') return [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', displayName: 'Haiku 5.5', supportsAutoMode: true }];
+  if (which === '5-5')
+    return [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', displayName: 'Haiku 5.5', supportsAutoMode: true, ...efforts }];
   if (which === '4-5') return [{ value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5' }];
-  return [];
+  return [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', displayName: 'Haiku 5.5', supportsAutoMode: true }];
+};
+const efforts = { supportsEffort: true, supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] };
+// The models `initialize` lists, as Claude Code 2.1.302 does (abridged): an alias, the model it runs, its name in `/model`,
+// its efforts, whether it takes the mode auto. The account's <dir>/fake-models.json (<FAKE_CLAUDE_HOME> for Principal)
+// changes them: {"add": [models listed after these], "remove": [values not listed]} (ESC-124: a model more, one less).
+const modelsListed = () => {
+  const listed = [
+    { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', supportsAutoMode: true, ...efforts },
+    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', supportsAutoMode: true, ...efforts },
+    { value: 'fable', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1', supportsAutoMode: true, ...efforts },
+    { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5', supportsAutoMode: true, ...efforts },
+    ...haikuListed(),
+    { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5' },
+  ];
+  const dir = configDir || process.env.FAKE_CLAUDE_HOME;
+  const file = dir && path.join(dir, 'fake-models.json');
+  if (!file || !fs.existsSync(file)) return listed;
+  const change = JSON.parse(fs.readFileSync(file, 'utf8'));
+  return [...listed.filter((m) => !(change.remove ?? []).includes(m.value)), ...(change.add ?? [])];
 };
 
 // `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
@@ -2082,13 +2103,7 @@ function startSession() {
                 { name: 'compact', description: 'Compacte le contexte', argumentHint: '' },
                 { name: 'review', description: 'Revue de code', argumentHint: '[pr]' },
               ],
-              // As Claude Code 2.1.302 lists them (abridged): an alias, the model it runs, whether it takes the mode auto.
-              models: [
-                { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', supportsAutoMode: true },
-                { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5', supportsAutoMode: true },
-                { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1', supportsAutoMode: true },
-                ...haikuListed(),
-              ],
+              models: modelsListed(),
               account: {},
             }),
           );

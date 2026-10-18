@@ -25,9 +25,11 @@ function twoAccounts(name: string) {
   };
 }
 
-/** The `CLAUDE_CONFIG_DIR` of each agent's process so far, in order (the one-shot questions, `claude -p`, left out). */
-const processes = (launches: { argv: string[]; configDir: string | null }[]) =>
-  launches.filter((l) => !l.argv.includes('-p')).map((l) => l.configDir);
+/** Whether a launch of the fake `claude` is an agent's process: not a one-shot question (`claude -p`), nor a reading of the models of an account (`initialize` alone, without a session: ESC-124). */
+const isAgent = (l: { argv: string[] }) => !l.argv.includes('-p') && !l.argv.includes('--no-session-persistence');
+
+/** The `CLAUDE_CONFIG_DIR` of each agent's process so far, in order. */
+const processes = (launches: { argv: string[]; configDir: string | null }[]) => launches.filter(isAgent).map((l) => l.configDir);
 
 test.describe('two accounts, the first out of quota', () => {
   const NAME = 'Pro de l’équipe plateforme (partagé)';
@@ -51,7 +53,7 @@ test.describe('two accounts, the first out of quota', () => {
     await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
     expect(processes(app.launches())).toEqual([principal, pro]);
     // The session went along: the second account resumed it.
-    const resumed = app.launches().filter((l) => !l.argv.includes('-p'))[1];
+    const resumed = app.launches().filter(isAgent)[1];
     expect(resumed.argv.some((a) => a.startsWith('--resume='))).toBe(true);
     // The conversation says so.
     await review.getByRole('button', { name: /DEM-1/ }).click();
@@ -192,5 +194,73 @@ test.describe('the accounts of two harnesses', () => {
     ]);
     await harness.selectOption({ label: 'Claude Code' });
     await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText(['Tous les comptes', 'Principal', 'Pro']);
+  });
+});
+
+test.describe('two accounts whose claude does not list the same models (ESC-124)', () => {
+  // Principal has no Fable; Pro has Mythos more, which takes two efforts. Neither is out of quota.
+  test.use({
+    preStart: {
+      run: (root) => {
+        for (const dir of [principalDir(root), proDir(root)]) {
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, '.credentials.json'), SIGNED_IN);
+        }
+        fs.writeFileSync(path.join(principalDir(root), 'fake-models.json'), JSON.stringify({ remove: ['fable'] }));
+        const mythos = {
+          value: 'mythos',
+          resolvedModel: 'claude-mythos-1',
+          displayName: 'Mythos',
+          supportsEffort: true,
+          supportedEffortLevels: ['high', 'max'],
+          supportsAutoMode: true,
+        };
+        fs.writeFileSync(path.join(proDir(root), 'fake-models.json'), JSON.stringify({ add: [mythos] }));
+        return { accounts: [{ id: 'pro', name: 'Pro', configDir: proDir(root), claudePath: '', active: true }] };
+      },
+    },
+  });
+
+  test('the composer offers those of the agent’s account, and an agent moved to one without its model takes the default one', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    const model = page.getByRole('button', { name: /^Modèle/ });
+    const option = (name: RegExp) => page.getByRole('menuitemradio', { name });
+    // On Principal: what its claude listed at the start of the app, before any turn: no Fable, no Mythos.
+    await model.click();
+    await expect(option(/Fable/)).toHaveCount(0, { timeout: 30_000 });
+    await expect(option(/Mythos/)).toHaveCount(0);
+    await expect(option(/Opus 5\.5/)).toBeVisible();
+    await expect(option(/Haiku 4\.5/)).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // On Pro: Fable is there, and Mythos, with its two efforts.
+    await page.getByRole('button', { name: /^Compte/ }).click();
+    await option(/^Pro/).click();
+    await model.click();
+    await expect(option(/Fable 5\.1/)).toBeVisible();
+    await option(/Mythos/).click();
+    await expect(page.getByRole('button', { name: 'Modèle : Mythos' })).toBeVisible();
+    await page.getByRole('button', { name: /^Effort/ }).click();
+    await expect(page.getByRole('menuitemradio')).toHaveText([/^✓?\s*Élevé/, /^✓?\s*Max/]);
+    await page.keyboard.press('Escape');
+
+    // Back on Principal, which has no Mythos: the default model, and its conversation says so.
+    await page.getByRole('button', { name: /^Compte/ }).click();
+    await option(/^Principal/).click();
+    await expect(
+      page.getByText('Le compte Principal n’a pas le modèle mythos : l’agent passe sur Sonnet 5.5, son modèle par défaut.'),
+    ).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole('button', { name: 'Modèle : Sonnet 5.5' })).toBeVisible();
+    // The model asked to its process is that one, and no turn was needed to read the lists.
+    await send(page, 'Bonjour');
+    await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible({ timeout: 30_000 });
+    const agentRuns = app.launches().filter(isAgent);
+    const last = agentRuns.at(-1)!.argv;
+    expect(last[last.indexOf('--model') + 1]).toBe('sonnet');
   });
 });

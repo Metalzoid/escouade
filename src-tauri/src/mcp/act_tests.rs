@@ -982,11 +982,11 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     let unknown = refused(
         &c,
         "create_agent",
-        json!({ "project": p.id, "message": "x", "model": "opus" }),
+        json!({ "project": p.id, "message": "x", "model": "inconnu" }),
     )
     .await;
     assert!(
-        unknown.contains("opus") && unknown.contains("sonnet"),
+        unknown.contains("inconnu") && unknown.contains("sonnet"),
         "{unknown}"
     );
     let odd = refused(

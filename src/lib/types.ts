@@ -1075,13 +1075,20 @@ export interface ModelInfo {
   resolvedModel: string;
   /** It takes the permission mode `auto`, as Claude Code tells it (absent for a model without it, or a version that tells it of none). */
   supportsAutoMode?: boolean;
+  /** Its name in Claude Code's `/model` ("Opus 5.5"), absent when it tells none. */
+  displayName?: string;
+  /** It takes an effort (absent: none), and which. */
+  supportsEffort?: boolean;
+  supportedEffortLevels?: string[];
 }
 
-/** What the `claude` of an account told of its models at its last process start: its version and its models. */
+/** What the `claude` of an account told of its models at its last reading: its version, its models, and the menu they make. */
 export interface AccountModels {
   /** "2.1.302", empty when it was not read. */
   version: string;
   models: ModelInfo[];
+  /** The composer's menu of the account's agents, in its order (`default` aside, marking the one it runs): empty while it told none, when the declared models serve (`engine::claude::catalog`). */
+  catalog?: ToldModel[];
 }
 
 export interface UiState {

@@ -106,17 +106,41 @@ export function showsMark(): boolean {
   return enginesInUse().size > 1;
 }
 
-/** The models the harness of `who` listed for its account (Codex: `model/list`), none until it has. */
-function toldOf(who: { engine: EngineId | null | undefined }): ToldModel[] {
+/**
+ * The models the harness of `who` listed for its account (Codex: `model/list`), none until it has. Claude Code: those the
+ * `claude` of the account of `who` told (ESC-124); without an account (the Kanban, a ticket, the settings), those of its
+ * active accounts, each once, in their order.
+ */
+function toldOf(who: { engine: EngineId | null | undefined; account?: string }): ToldModel[] {
   const id = who.engine ?? engineOf(null)?.id;
+  if (id === 'claude') return claudeTold(who.account);
   return (id && app.engineModels[id]) || [];
+}
+
+/** The models of Claude Code the `claude` of its active accounts told (ESC-124), each once: the Kanban's, a ticket's, the settings' menu. */
+export function claudeToldModels(): { id: string; label: string }[] {
+  return claudeTold(undefined).map((m) => ({ id: m.id, label: m.label }));
+}
+
+/** The models the `claude` of `account` told (ESC-124), or of every active Claude account when none is said. */
+function claudeTold(account: string | undefined): ToldModel[] {
+  if (account) return app.accountModels[account]?.catalog ?? [];
+  const out: ToldModel[] = [];
+  for (const a of app.settings.accounts ?? []) {
+    if ((a.engine ?? 'claude') !== 'claude' || !a.active) continue;
+    for (const m of app.accountModels[a.id]?.catalog ?? []) if (!out.some((o) => o.id === m.id)) out.push(m);
+  }
+  return out;
 }
 
 /**
  * What `model` costs beside the others, as its harness bills it (Copilot): its multiplier (`×3`), else its tier of
  * price; nothing for a harness that tells neither. With what it means, for its title.
  */
-export function modelCost(who: { engine: EngineId | null | undefined }, model: string): { label: string; title: string } | undefined {
+export function modelCost(
+  who: { engine: EngineId | null | undefined; account?: string },
+  model: string,
+): { label: string; title: string } | undefined {
   const m = toldOf(who).find((x) => x.id === model);
   if (!m) return undefined;
   const n = m.multiplier !== undefined ? Number(m.multiplier) : NaN;
@@ -131,27 +155,36 @@ export function modelCost(who: { engine: EngineId | null | undefined }, model: s
   return undefined;
 }
 
-/** The name a harness that lists its models gives `model` (`gpt-6-luna` → `GPT-6-Luna`), if one does. */
+/** The name a harness that lists its models gives `model` (`gpt-6-luna` → `GPT-6-Luna`, `mythos` → `Mythos`), if one does. */
 export function toldLabel(model: string): string | undefined {
-  for (const list of Object.values(app.engineModels)) {
+  const lists = [...Object.values(app.engineModels), ...Object.values(app.accountModels).map((a) => a.catalog)];
+  for (const list of lists) {
     const found = list?.find((m) => m.id === model);
     if (found) return found.label;
+  }
+  // By the full id Claude Code ran it under (the statistics': `claude-mythos-1`), the name its `/model` gives it.
+  for (const told of Object.values(app.accountModels)) {
+    const found = told.models.find((m) => m.value !== 'default' && m.resolvedModel === model && m.displayName);
+    if (found) return found.displayName;
   }
   return undefined;
 }
 
 /**
- * The models of the composer's menu for the harness of `who`: those it listed for its account when it lists them, else
- * those it declares (none for a harness the backend does not know).
+ * The models of the composer's menu for the harness of `who`: those it listed for its account when it lists them (Claude
+ * Code: those of the account of `who`), else those it declares (none for a harness the backend does not know).
  */
-export function modelsOf(who: { engine: EngineId | null | undefined }): { id: string; label: string }[] {
+export function modelsOf(who: { engine: EngineId | null | undefined; account?: string }): { id: string; label: string }[] {
   const told = toldOf(who);
   if (told.length) return told.map((m) => ({ id: m.id, label: m.label }));
   return engineOf(who.engine)?.models ?? [];
 }
 
 /** The efforts of the harness of `who`, among `all` (in their order): none when it takes none. */
-export function effortsOf<T extends { value: string }>(who: { engine: EngineId | null | undefined; model?: string }, all: T[]): T[] {
+export function effortsOf<T extends { value: string }>(
+  who: { engine: EngineId | null | undefined; model?: string; account?: string },
+  all: T[],
+): T[] {
   const decl = engineOf(who.engine);
   if (!decl?.caps.effort) return [];
   // Those of its model, as its harness listed it.
@@ -212,7 +245,7 @@ export async function setFavorite(engine: EngineId, model: string, favorite: boo
 }
 
 /** Whether the menu of the models of `who` takes a search and favorites: its harness lists many, or from several providers. */
-export function searchesModels(who: { engine: EngineId | null | undefined }): boolean {
+export function searchesModels(who: { engine: EngineId | null | undefined; account?: string }): boolean {
   const told = toldOf(who);
   return told.length > 8 || told.some((m) => !!m.provider);
 }
@@ -223,6 +256,7 @@ export function searchesModels(who: { engine: EngineId | null | undefined }): bo
  */
 export function modelMenu(who: {
   engine: EngineId | null | undefined;
+  account?: string;
 }): { id: string; label: string; provider?: string; favorite: boolean }[] {
   const favorites = favoritesOf(who.engine);
   const told = toldOf(who);

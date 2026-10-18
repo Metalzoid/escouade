@@ -111,7 +111,8 @@ test('a superpowers plan run shows the “Plan” banner between the header and 
   expect(fs.readFileSync(path.join(app.repo, ...PLAN.split('/')), 'utf8')).toContain('# Démo Implementation Plan');
   expect(fs.existsSync(path.join(app.repo, '.superpowers', 'sdd', '2026-10-10-demo'))).toBe(false);
   // The agent was started with the task list tools (the setting is on by default), the question that names it was not.
-  const [agent, ...asked] = app.launches().filter((l) => !l.argv.includes('-p'));
+  // The readings of the models of the account at the start (ESC-124: `initialize` alone, without a session) aside.
+  const [agent, ...asked] = app.launches().filter((l) => !l.argv.includes('-p') && !l.argv.includes('--no-session-persistence'));
   expect(agent).toMatchObject({ todoTools: '1' });
   expect(asked).toHaveLength(0);
   expect(

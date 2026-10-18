@@ -28,7 +28,7 @@ Whatever the harness, the agent has the same conversation: the answer and the re
 | Tested with | 2.1.283 to 2.1.301 | 0.163.0 | 1.19.3 | 1.0.98 |
 | Account | Claude subscription or API key | ChatGPT account | the providers connected to OpenCode, local models included | GitHub account with Copilot, Free included |
 | Several accounts | yes | yes | no | yes |
-| Models | Fable, Opus, Sonnet, Haiku | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier |
+| Models | those Claude Code lists for each account | those Codex lists for your account | your providers’, with search and favorites | those Copilot lists, with their multiplier |
 | Modes | all five | all five | four (no Auto) | all five |
 | What protects | its permissions | its sandbox | its permission rules | Escouade’s rules |
 | Message during a turn | waits for the end of the turn | enters the turn | waits for the end of the turn | enters the turn |
@@ -46,7 +46,7 @@ Install Claude Code with its script (`irm https://claude.ai/install.ps1 | iex` o
 
 ### Models and modes
 
-Fable, Opus, Sonnet and Haiku, shown with the version Claude Code runs, and their efforts (Haiku has none). The five modes have their original meaning: “Auto” (a classifier approves safe actions), “Ask”, “Plan”, “Accept edits” and “Bypass” (see [the permission modes](managing-agents#permission-modes)). Claude Code’s permissions are what protects.
+The models are those the Claude Code of each account lists in its `/model`, with their name, their efforts and whether each takes the “Auto” mode: a model one account has more (Mythos, say) shows in its agents’ Composer, a model it lacks does not. Escouade reads them at startup and when an account is added, without using anything, then at each agent start. The Kanban and the tickets offer those of the active accounts. An agent that moves to an account without its model takes the default one, and its conversation says so. Before the first reading, the list is Fable, Opus, Sonnet and Haiku. The five modes have their original meaning: “Auto” (a classifier approves safe actions), “Ask”, “Plan”, “Accept edits” and “Bypass” (see [the permission modes](managing-agents#permission-modes)). Claude Code’s permissions are what protects.
 
 ### Cost, quota and view
 

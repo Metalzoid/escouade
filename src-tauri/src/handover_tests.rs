@@ -410,13 +410,13 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
         .insert(EngineId::Claude, "haiku".into());
     h.core.account_models.write().insert(
         "pro".into(),
-        crate::model::AccountModels {
-            version: "2.1.292".into(),
-            models: crate::model::ModelInfo::list(&json!([
+        crate::model::AccountModels::new(
+            "2.1.292".into(),
+            crate::model::ModelInfo::list(&json!([
                 { "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "supportsAutoMode": true },
                 { "value": "haiku", "resolvedModel": "claude-haiku-4-5-20251001" },
             ])),
-        },
+        ),
     );
     h.core.agent(&id).unwrap().lock().meta.mode = "auto".into();
     h.core

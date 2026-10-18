@@ -3361,3 +3361,131 @@ fn notices_of(h: &Harness, id: &str) -> Vec<String> {
         .map(|i| i["text"].as_str().unwrap_or_default().to_lowercase())
         .collect()
 }
+
+/// ESC-124, tried for real: the models Escouade reads of the `claude` of Principal, without a turn
+/// (`Core::read_claude_models`), are those its `/model` shows. Run by hand, as `real_claude_view`
+/// (`ESCOUADE_REAL_CLAUDE`, `ESCOUADE_TEST_REAL_HOME`, out of any Claude Code session); nothing is
+/// asked of the model: `initialize` alone, then `/model` opened and closed.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_claude_models() {
+    use std::time::{Duration, Instant};
+    let program = std::env::var("ESCOUADE_REAL_CLAUDE").expect("ESCOUADE_REAL_CLAUDE");
+    let home = std::env::var("ESCOUADE_TEST_REAL_HOME").expect("ESCOUADE_TEST_REAL_HOME");
+    let home = std::path::Path::new(&home).join(".claude");
+    let h = harness("tui-claude-real-models");
+    let (p, _) = h.project(false).await;
+    let mut s = h.core.settings.read().clone();
+    s.claude_path = program;
+    s.mcp_enabled = false;
+    h.core.save_settings(s).unwrap();
+    let start = Instant::now();
+    h.core.read_claude_models("principal").await;
+    let told = h.core.account_models.read()["principal"].clone();
+    println!("read in {:?}, version {}", start.elapsed(), told.version);
+    for m in &told.catalog {
+        println!(
+            "  {} = {:?}{} efforts {:?}, auto {:?}",
+            m.id,
+            m.label,
+            if m.default { " (default)" } else { "" },
+            m.efforts,
+            crate::engine::claude_told_auto(&told.models, &m.id)
+        );
+    }
+    assert!(told.catalog.len() >= 4, "{told:#?}");
+    // Its `/model`, in its own interface.
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                model: Some("haiku".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let screen = Arc::new(parking_lot::Mutex::new(String::new()));
+    let sink = screen.clone();
+    let info = h
+        .core
+        .open_agent_terminal(&id, (140, 60), false, move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
+        .await
+        .unwrap();
+    let session = h.agent(&id).session_id.unwrap();
+    let registered = || {
+        std::fs::read_dir(home.join("sessions"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|f| std::fs::read_to_string(f.path()).is_ok_and(|c| c.contains(&session)))
+    };
+    let (mut answered, mut trusted) = (false, false);
+    let start = Instant::now();
+    while !registered() {
+        let text = plain_text(&screen.lock());
+        if !answered && screen.lock().contains("\x1b[6n") {
+            h.core.pty.write(&info.id, b"\x1b[1;1R").unwrap();
+            answered = true;
+        }
+        if !trusted && text.contains("Itrustthisfolder") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            h.core.pty.write(&info.id, b"\x1b[B").unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            h.core.pty.write(&info.id, b"\r").unwrap();
+            trusted = true;
+        }
+        assert!(start.elapsed() < Duration::from_secs(60), "{text}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    tokio::time::sleep(Duration::from_secs(8)).await;
+    let before = screen.lock().len();
+    h.core.pty.write(&info.id, b"/model").unwrap();
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    h.core.pty.write(&info.id, b"\r").unwrap();
+    // Its picker, once the interface is ready for it (its hooks of the start run first).
+    let opened = |s: &str| {
+        let bare: String = plain_text(s).split_whitespace().collect();
+        bare.contains("Selectmodel")
+    };
+    let start = Instant::now();
+    while !opened(&screen.lock()[before..]) {
+        let text = plain_text(&screen.lock()[before..]);
+        assert!(start.elapsed() < Duration::from_secs(60), "{text}");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let picker = plain_text(&screen.lock()[before..]);
+    println!("/model:\n{picker}");
+    h.core.pty.write(&info.id, b"\x1b").unwrap();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    h.core.pty.kill(&info.id);
+    // Every model read is in it, by the name of the menu, in its order after « Default »; the last
+    // ones below its fold (« … +3 models »).
+    let bare: String = picker.chars().filter(|c| !c.is_whitespace()).collect();
+    let menu = &bare[bare.find("Selectmodel").expect("the picker")..];
+    let below: usize = menu
+        .split_once("…+")
+        .and_then(|(_, rest)| rest.split_once("models"))
+        .and_then(|(n, _)| n.parse().ok())
+        .unwrap_or(0);
+    let shown = told.catalog.len() - below;
+    let mut at = menu.find("Default(recommended)").expect("Default");
+    for (i, m) in told.catalog.iter().take(shown).enumerate() {
+        let entry = format!("{}.{}", i + 2, m.label.replace(' ', ""));
+        let found = menu[at..].find(&entry);
+        assert!(found.is_some(), "{entry} not in /model after {at}: {menu}");
+        at += found.unwrap();
+    }
+    println!(
+        "/model: Default, then the {shown} first of the {} read, {below} below its fold",
+        told.catalog.len()
+    );
+}

@@ -1312,6 +1312,10 @@ impl<R: Runtime> Core<R> {
             accounts,
             engine_order,
         });
+        if engine == EngineId::Claude {
+            let (c, id) = (self.clone(), made.id.clone());
+            tauri::async_runtime::spawn(async move { c.read_claude_models(&id).await });
+        }
         Ok(made)
     }
 
@@ -1867,6 +1871,7 @@ impl<R: Runtime> Core<R> {
             );
         }
         let (me, term) = (Arc::downgrade(self), info.id.clone());
+        let (signed, engine) = (account.id.clone(), account.engine);
         self.pty.spawn_program(
             info.clone(),
             &program,
@@ -1881,6 +1886,12 @@ impl<R: Runtime> Core<R> {
                 if let Some(core) = me.upgrade() {
                     core.hub
                         .emit(crate::model::UiEvent::TerminalExit { id: term, code });
+                    // Signed in: the models of its account (ESC-124).
+                    if engine == EngineId::Claude {
+                        tauri::async_runtime::spawn(async move {
+                            core.read_claude_models(&signed).await
+                        });
+                    }
                 }
             },
         )?;

@@ -305,6 +305,8 @@ pub fn run() {
             // thread, which neither the window nor the board then waits for (`wsl::find` keeps it).
             let warm = core.clone();
             tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
+            // What the `claude` of each account tells of its models, without a turn (ESC-124).
+            core.read_all_claude_models();
             updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 // « Zoom de l’interface », before the window shows: never drawn at 100 % first, nor
