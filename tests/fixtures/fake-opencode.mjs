@@ -21,7 +21,14 @@
 // - "étapes": a task list of three (`todowrite`, `todo.updated`), done one after the other;
 // - "sous-agent": a subagent (`task`, a session of its own with its events), its report;
 // - "lent": a reply, then `sleep 30` (bash, allowed), unless aborted (`MessageAbortedError`);
+// - "deux appels": two calls to the model (a `read`, then the reply), each its `step-finish`;
+// - "outil escouade <outil>": that tool of the MCP server the session's folder was given (`POST /mcp`), called;
 // - anything else: « Bonjour, tu as dit : <message> ».
+// Each call to the model costs what its tokens cost at the prices of the prompt's model (`cost` of its provider's model,
+// per million tokens: none for the built-in local ones). `POST /mcp?directory=` connects a remote MCP server for that folder
+// alone (initialize, tools/list, with its headers), `GET /mcp` and `POST /mcp/:name/disconnect` as OpenCode has them.
+// `opencode run` and `opencode session delete` are played too (see below). FAKE_OPENCODE_PROVIDERS: a file of the providers
+// of every account without its own `providers.json`.
 // FAKE_OPENCODE_LOG: a file each launch appends to: {"launch": {argv, cwd, pid, config, password}} (config: its
 // OPENCODE_CONFIG_CONTENT; password: whether it has one), then {"req": {method, path, directory, body}} for each
 // request.
@@ -38,8 +45,8 @@ if (argv.includes('--version') || argv[0] === '-v') {
   process.stdout.write(`${process.env.FAKE_OPENCODE_VERSION || VERSION}\n`);
   process.exit(0);
 }
-if (!['serve', 'models', 'attach'].includes(argv[0])) {
-  process.stderr.write(`fake opencode: only serve, models, attach and --version are played (${argv.join(' ')})\n`);
+if (!['serve', 'models', 'attach', 'run', 'session'].includes(argv[0])) {
+  process.stderr.write(`fake opencode: only serve, models, attach, run, session and --version are played (${argv.join(' ')})\n`);
   process.exit(2);
 }
 
@@ -218,7 +225,12 @@ const ACCOUNT = process.env.OPENCODE_CONFIG_DIR;
 let PROVIDERS = BUILT_IN;
 try {
   PROVIDERS = JSON.parse(fs.readFileSync(path.join(ACCOUNT, 'providers.json'), 'utf8'));
-} catch {}
+} catch {
+  // Those of every account (FAKE_OPENCODE_PROVIDERS: a file), Principal's included (the end-to-end tests).
+  try {
+    PROVIDERS = JSON.parse(fs.readFileSync(process.env.FAKE_OPENCODE_PROVIDERS, 'utf8'));
+  } catch {}
+}
 if (ACCOUNT) {
   fs.mkdirSync(ACCOUNT, { recursive: true });
   fs.appendFileSync(path.join(ACCOUNT, 'launches.jsonl'), JSON.stringify({ argv, config }) + '\n');
@@ -232,6 +244,57 @@ if (argv[0] === 'models') {
       for (const [mid, m] of Object.entries(p.models)) process.stdout.write(`${p.id}/${mid}\n${JSON.stringify(m, null, 2)}\n`);
     }
   }
+  process.exit(0);
+}
+
+// The sessions `opencode run` kept, which `opencode session delete <id>` deletes (`<HOME>/run-sessions.json`).
+const RUNS = path.join(HOME, 'run-sessions.json');
+const runSessions = () => {
+  try {
+    return JSON.parse(fs.readFileSync(RUNS, 'utf8'));
+  } catch {
+    return [];
+  }
+};
+if (argv[0] === 'session') {
+  if (argv[1] !== 'delete' || !argv[2]) process.exit(2);
+  const all = runSessions();
+  if (!all.includes(argv[2])) {
+    process.stderr.write(`Session not found: ${argv[2]}\n`);
+    process.exit(1);
+  }
+  fs.writeFileSync(RUNS, JSON.stringify(all.filter((s) => s !== argv[2])));
+  log({ deleted: argv[2] });
+  process.stdout.write(`Session ${argv[2]} deleted\n`);
+  process.exit(0);
+}
+// `opencode run --format json --model <provider/model> --agent <agent> …`, its message read from its input: a session kept
+// (`run-sessions.json`), then « Réponse d’OpenCode (<model>) : <message> » as a part `text`; a model none of the providers
+// has, or the message « échoue », ends on an event `error`. Noted in FAKE_OPENCODE_LOG and the account's `launches.jsonl`
+// with its message (`{"run": {argv, cwd, config, prompt}}`).
+if (argv[0] === 'run') {
+  let prompt = '';
+  for await (const chunk of process.stdin) prompt += chunk;
+  const opt = (name) => {
+    const at = argv.indexOf(name);
+    return at >= 0 ? argv[at + 1] : undefined;
+  };
+  const model = opt('--model') || '';
+  log({ run: { argv, cwd: process.cwd(), config, prompt } });
+  if (ACCOUNT) fs.appendFileSync(path.join(ACCOUNT, 'launches.jsonl'), JSON.stringify({ run: { argv, config, prompt } }) + '\n');
+  const sid = `ses_run${Date.now().toString(16)}${process.pid}`;
+  fs.writeFileSync(RUNS, JSON.stringify([...runSessions(), sid]));
+  const out = (v) => process.stdout.write(JSON.stringify({ timestamp: Date.now(), sessionID: sid, ...v }) + '\n');
+  const [pid, ...rest] = model.split('/');
+  const known = PROVIDERS.providers.find((p) => p.id === pid)?.models?.[rest.join('/')];
+  if (!known || /échoue/.test(prompt)) {
+    out({ type: 'error', error: { name: 'UnknownError', data: { message: 'Unexpected server error. Check server logs for details.' } } });
+    process.exit(1);
+  }
+  const part = { id: 'prt_run', messageID: 'msg_run', sessionID: sid };
+  out({ type: 'step_start', part: { ...part, id: 'prt_start', type: 'step-start' } });
+  out({ type: 'text', part: { ...part, type: 'text', text: `Réponse d’OpenCode (${model}) : ${prompt.trim()}` } });
+  out({ type: 'step_finish', part: { ...part, id: 'prt_end', type: 'step-finish', reason: 'stop', cost: 0 } });
   process.exit(0);
 }
 
@@ -284,8 +347,76 @@ function newSession(directory, body = {}) {
   return s;
 }
 
+/** What `tokens` cost on the prompt's model, at its prices per million tokens (`cost`, as OpenCode's models have them): 0 for a
+ * model without a price (a local one). */
+function priceOf(model, tokens) {
+  const m = PROVIDERS.providers.find((p) => p.id === model?.providerID)?.models?.[model?.modelID];
+  const c = m?.cost;
+  if (!c) return 0;
+  return (
+    (tokens.input * (c.input || 0) +
+      tokens.output * (c.output || 0) +
+      tokens.cache.read * (c.cache_read || 0) +
+      tokens.cache.write * (c.cache_write || 0)) /
+    1e6
+  );
+}
+
+// The MCP servers added by `POST /mcp`, by folder (an instance's own): `{name: {status, url, headers, tools, session}}`.
+const mcps = new Map();
+const mcpOf = (dir) => {
+  const key = path.resolve(dir).toLowerCase();
+  if (!mcps.has(key)) mcps.set(key, {});
+  return mcps.get(key);
+};
+/** A JSON-RPC request (`id`) or notification to a remote MCP server, as OpenCode's client sends it: its result. */
+async function mcpCall(e, method, params, id) {
+  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(e.headers || {}) };
+  if (e.session) headers['mcp-session-id'] = e.session;
+  const msg = id === undefined ? { jsonrpc: '2.0', method, params } : { jsonrpc: '2.0', id, method, params };
+  const r = await fetch(e.url, { method: 'POST', headers, body: JSON.stringify(msg) });
+  const session = r.headers.get('mcp-session-id');
+  if (session) e.session = session;
+  const text = await r.text();
+  if (!r.ok) throw new Error(`${r.status} ${text}`);
+  if (id === undefined) return null;
+  const answers = text.includes('data:')
+    ? text
+        .split('\n')
+        .filter((l) => l.startsWith('data:'))
+        .map((l) => JSON.parse(l.slice(5)))
+    : [JSON.parse(text)];
+  const answer = answers.find((a) => a.id === id);
+  if (!answer) throw new Error(`no answer to ${method}`);
+  if (answer.error) throw new Error(answer.error.message);
+  return answer.result;
+}
+/** `config` (a remote MCP server) connected for the folder: initialized, its tools listed. */
+async function connect(config) {
+  const e = { status: 'disabled', url: config.url, headers: config.headers || {}, tools: [] };
+  if (config.enabled === false) return e;
+  try {
+    await mcpCall(
+      e,
+      'initialize',
+      { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'opencode', version: VERSION } },
+      1,
+    );
+    await mcpCall(e, 'notifications/initialized', {});
+    e.tools = ((await mcpCall(e, 'tools/list', {}, 2)).tools || []).map((t) => t.name);
+    e.status = 'connected';
+  } catch (err) {
+    e.status = 'failed';
+    e.error = String(err.message || err);
+  }
+  return e;
+}
+const statusOf = (e) => (e.status === 'failed' ? { status: 'failed', error: e.error } : { status: e.status });
+const statuses = (dir) => Object.fromEntries(Object.entries(mcpOf(dir)).map(([n, e]) => [n, statusOf(e)]));
+
 /** One turn of `session`, from the prompt `body`. */
 async function play(s, body) {
+  let m;
   const dir = s.directory;
   const sid = s.id;
   const text = (body.parts || [])
@@ -379,13 +510,14 @@ async function play(s, body) {
     if (r.reply !== 'aborted') emit(dir, 'permission.replied', { sessionID: sid, requestID: rid, reply: r.reply });
     return r;
   };
+  /** One call to the model over: its tokens, and its cost at the model's prices. */
+  const step = (reason, tokens) => {
+    const cost = priceOf(body.model, tokens);
+    part({ type: 'step-finish', reason, tokens: { total: tokens.input + tokens.output + tokens.cache.read, ...tokens }, cost });
+    msg.cost += cost;
+  };
   const finish = (error) => {
-    part({
-      type: 'step-finish',
-      reason: 'stop',
-      tokens: { total: 130, input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } },
-      cost: 0,
-    });
+    step('stop', { input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } });
     msg.tokens = { input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } };
     msg.finish = 'stop';
     msg.time.completed = now();
@@ -534,6 +666,28 @@ async function play(s, body) {
     }
     done(p, '(no output)', { exit: 0 });
     await say('Fini.');
+  } else if (/deux appels/i.test(text)) {
+    // A first call to the model ends on a tool, the turn's second one replies.
+    const p = tool('read', { filePath: path.join(dir, 'README.md') });
+    done(p, '<file>\n00001| Fake\n</file>');
+    step('tool-calls', { input: 1000, output: 50, reasoning: 0, cache: { read: 0, write: 0 } });
+    part({ type: 'step-start' });
+    await say('Le fichier est lu.');
+  } else if ((m = text.match(/outil escouade (\w+)/i))) {
+    // A tool of Escouade's server, through the entry of the session's folder (`POST /mcp`).
+    const e = mcpOf(dir).escouade;
+    if (e?.status !== 'connected' || !e.tools.includes(m[1])) {
+      await say('Escouade n’est pas là.');
+    } else {
+      const p = tool(`escouade_${m[1]}`, {});
+      try {
+        const r = await mcpCall(e, 'tools/call', { name: m[1], arguments: {} }, 3);
+        done(p, (r.content || []).map((c) => c.text).join('\n'));
+      } catch (err) {
+        failed(p, String(err.message || err));
+      }
+      await say('L’outil a répondu.');
+    }
   } else if (/Mets le plan en œuvre|Implement the plan/i.test(text)) {
     await say("C'est fait.");
   } else {
@@ -585,7 +739,23 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && p === '/config/providers') return json(PROVIDERS);
   if (req.method === 'GET' && p === '/config') return json({ ...(config && typeof config === 'object' ? config : {}) });
-  if (req.method === 'POST' && p === '/instance/dispose') return json(true);
+  if (req.method === 'POST' && p === '/instance/dispose') {
+    // The folder's instance goes, and the MCP servers added to it.
+    mcps.delete(path.resolve(dir).toLowerCase());
+    return json(true);
+  }
+  if (p === '/mcp' && req.method === 'GET') return json(statuses(dir));
+  if (p === '/mcp' && req.method === 'POST') {
+    if (!body?.name || body.config?.type !== 'remote') return json({ name: 'BadRequest', data: { message: 'a remote server' } }, 400);
+    mcpOf(dir)[body.name] = await connect(body.config);
+    return json(statuses(dir));
+  }
+  if ((m = p.match(/^\/mcp\/([^/]+)\/disconnect$/)) && req.method === 'POST') {
+    const e = mcpOf(dir)[m[1]];
+    if (!e) return notFound();
+    e.status = 'disabled';
+    return json(true);
+  }
   if (req.method === 'POST' && p === '/session') return json(sessionInfo(newSession(dir, body || {})));
   if ((m = p.match(/^\/session\/([^/]+)$/))) {
     const s = sessionOf(dir, m[1]);

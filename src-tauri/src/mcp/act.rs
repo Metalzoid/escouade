@@ -407,6 +407,10 @@ fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
             "Le pilote auto est en pause jusqu’à {until} : les crédits du mois sont utilisés à {pct} %. Réessaie à ce moment-là.",
             "The autopilot is paused until {until}: the month’s credits are {pct}% used. Try again then."
         ),
+        PauseReason::Budget => tr!(
+            "Le pilote auto est en pause jusqu’à {until} : le budget du jour est atteint ({pct} %). Réessaie à ce moment-là, ou relève le budget dans Réglages › Comptes.",
+            "The autopilot is paused until {until}: the day’s budget is reached ({pct}%). Try again then, or raise the budget in Settings › Accounts."
+        ),
     }
 }
 

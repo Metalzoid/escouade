@@ -50,6 +50,7 @@ export function pauseLabel(p: AutopilotPause, now: number): string {
   if (p.reason === 'limit') return t('boardSettings.pause.limit', { time: fTime(p.until) });
   const values = { pct: fPct(p.pct ?? 100), when: fWhen(p.until, now) };
   if (p.reason === 'credits') return t('boardSettings.pause.credits', values);
+  if (p.reason === 'budget') return t('boardSettings.pause.budget', values);
   return t('boardSettings.pause.window', { ...values, window: windowName(p.minutes ?? 300) });
 }
 

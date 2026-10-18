@@ -22,6 +22,11 @@ export default defineZone('accounts', {
     add: 'Add an account…',
     reserved: 'Reserved to projects',
     reservedAll: 'Every project',
+    budget: 'Daily budget ($)',
+    budgetNone: 'None',
+    budgetHint:
+      'Once reached, the autopilot pauses until midnight, as when a quota is used up. Empty: no budget. A local model costs nothing.',
+    budgetInvalid: 'The daily budget is an amount in dollars, positive.',
     closedProject: '{name} (closed)',
     /** `{names}`: the projects, each quoted (`quoted`) and listed as a sentence does. */
     noAccount: {

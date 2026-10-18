@@ -25,6 +25,7 @@ fn codex_accounts(h: &Harness) {
                 claude_path: crate::engine::fake_codex(),
                 active: true,
                 projects: Vec::new(),
+                daily_budget: None,
             });
         }
     });

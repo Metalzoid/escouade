@@ -529,6 +529,7 @@ async fn one_shot(ask: OneShot<'_>) -> Result<String> {
         system,
         prompt,
         limit: _,
+        model: _,
     } = ask;
     let (model, tools) = match weight {
         Weight::Light => ("haiku", ""),

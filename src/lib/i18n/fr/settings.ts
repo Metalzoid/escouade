@@ -94,6 +94,12 @@ export default {
     writer: 'Modèle des textes rédigés',
     writerHelp:
       'Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness installés sont proposés.',
+    /** For a harness whose models are those of the providers connected to it (OpenCode). */
+    writerModel: 'Modèle',
+    writerModelHelp:
+      'Un modèle des fournisseurs connectés à OpenCode, toujours donné : sans lui, OpenCode en choisirait un lui-même. Sans aucun modèle, pas de texte rédigé.',
+    writerModelDefault: 'Par défaut ({model})',
+    writerModelNone: 'Par défaut (lu au premier texte)',
   },
 
   // The « Harness » tab (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode: « Harness » in French too).

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { keyLabel } from '../lib/platform';
   import { accountName, metersShown, meterName, newAgentAccount, principalId, quotaTip, statusEngine } from '../lib/accounts';
-  import { fAgo, fBytes, fPct } from '../lib/format';
+  import { capsOf, engineName } from '../lib/engines';
+  import { fAgo, fBytes, fPct, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
   import { gitSync, syncInfo, type SyncOp } from '../lib/git-sync.svelte';
@@ -41,7 +42,20 @@
   const shown = $derived(newAgentAccount(undefined, engine) ?? app.settings.accounts?.find((a) => a.id === app.usage.current[engine]));
   const current = $derived(several ? shown : undefined);
   const currentName = $derived(current ? accountName(current) : '');
-  const meters = $derived(metersShown(app.usage.accounts.find((u) => u.id === (shown?.id ?? principalId(engine))) ?? null, engine));
+  const shownUsage = $derived(app.usage.accounts.find((u) => u.id === (shown?.id ?? principalId(engine))) ?? null);
+  const meters = $derived(metersShown(shownUsage, engine));
+  // A harness without a quota (OpenCode, which goes through the providers' APIs): its account's cost of the day stands in
+  // for the bars, out of its « Budget par jour ($) » when it has one.
+  const day = $derived.by(() => {
+    if (capsOf(engine)?.quota !== 'none' || !shownUsage) return null;
+    const cost = shownUsage.todayCost;
+    const budget = shownUsage.dailyBudget || null;
+    const harness = engineName(engine);
+    const tip = budget
+      ? t('shell.status.dayBudgetTip', { harness, cost: fUsd(cost), budget: fUsd(budget) })
+      : t('shell.status.dayCostTip', { harness, cost: fUsd(cost) });
+    return { cost, budget, over: !!budget && cost >= budget, tip, harness };
+  });
   let panelOpen = $state(false);
   // Down to one account: nothing left to compare.
   $effect(() => {
@@ -50,7 +64,10 @@
   // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
   // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
   // in its tooltip, one line each, but while the panel that writes them is open).
-  const quotaLines = $derived(meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })));
+  const quotaLines = $derived([
+    ...meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })),
+    ...(day ? [day.tip] : []),
+  ]);
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -120,6 +137,14 @@
     {#if i}<span class="vsep"></span>{/if}
     <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} {focusable} />
   {/each}
+  {#if day}
+    {#if several}<span class="d">·</span>{/if}
+    <span class="day" class:over={day.over} use:tip={several ? undefined : day.tip}
+      >{#if !several}<span>{day.harness}</span>{/if}<span class="v"
+        >{fUsd(day.cost)}{#if day.budget}<span class="d">{` / ${fUsd(day.budget)}`}</span>{/if}</span
+      ></span
+    >
+  {/if}
 {/snippet}
 
 <footer class="bar mono">
@@ -150,7 +175,7 @@
         ></span
       >
     {/if}
-    {#if several || meters.length}<span class="vsep"></span>{/if}
+    {#if several || meters.length || day}<span class="vsep"></span>{/if}
     {#if several}
       <!-- The panel's button: its bars are only seen here (their values are in the panel, which the keyboard opens). -->
       <button
@@ -167,7 +192,7 @@
         {@render quotas(false)}
       </button>
       <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
-    {:else if meters.length}
+    {:else if meters.length || day}
       <span class="it group">{@render quotas(true)}</span>
     {/if}
     <span class="vsep"></span>
@@ -293,6 +318,15 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+  .day {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* The day's budget reached: the autopilot waits for midnight. */
+  .day.over .v {
+    color: var(--wait);
   }
   .link {
     border: none;

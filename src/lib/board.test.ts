@@ -62,6 +62,11 @@ describe('board labels', () => {
     expect(pauseLabel({ reason: 'limit', pct: null, until: about }, now)).toBe(
       "Pilote auto en pause : limite d'usage atteinte (reprise vers 14:30)",
     );
+    // The day's budget of OpenCode reached: until midnight, the share of it spent.
+    const midnight = new Date(2026, 9, 4, 0, 0).getTime();
+    expect(pauseLabel({ reason: 'budget', pct: 104, until: midnight }, now)).toBe(
+      'Pilote auto en pause : budget du jour atteint (104 %, reprise le dimanche 4 octobre à 00:00)',
+    );
     // A weekly window that ends another day says which, its use as the status bar rounds it.
     const monday = new Date(2026, 9, 5, 9, 0).getTime();
     expect(pauseLabel({ reason: 'window', minutes: 10080, pct: 95.6, until: monday }, now)).toBe(

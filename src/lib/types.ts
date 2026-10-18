@@ -57,6 +57,8 @@ export interface Settings {
   /** « Modèle des textes rédigés »: the harness the texts written by a model go to; null, or one not found: Claude Code
    * when it is found (its Haiku), else the first found (`writerOf`). */
   writerEngine: EngineId | null;
+  /** The model of the texts, for a harness that takes the one Escouade chooses (OpenCode: `<provider>/<model>`); empty: its default one. */
+  writerModel?: string;
   /** The accounts of every harness, in the order new agents try them; Principal (id "principal") always among them. */
   accounts: Account[];
   /**
@@ -207,6 +209,11 @@ export interface Account {
   active: boolean;
   /** « Réservé aux projets »: the only projects whose new agents and tickets may go to it; empty: every project. Never Principal's. */
   projects?: string[];
+  /**
+   * « Budget par jour ($) », for a harness without a quota (OpenCode): once its turns of the day cost this much, the
+   * autopilot pauses until midnight. None: no budget.
+   */
+  dailyBudget?: number | null;
 }
 
 /** Whether a Claude account is signed in to claude.ai, as its tab shows it. */
@@ -460,6 +467,8 @@ export interface EngineDecl {
   efforts: string[];
   /** The model that writes the texts (« Modèle des textes rédigés »): `Claude Haiku`. */
   writer: string;
+  /** Its texts go to the model chosen in the settings (`writerModel`): OpenCode. */
+  writerTakesModel?: boolean;
   /** The user config « <harness> peut piloter Escouade » writes in, for the Principal (`~/.codex/config.toml`); null: no switch of its own. */
   mcpConfig?: string | null;
 }
@@ -1253,14 +1262,16 @@ export interface AccountUsage {
   reason: string | null;
   /** What its turns cost today. */
   todayCost: number;
+  /** Its « Budget par jour ($) », when it has one. */
+  dailyBudget?: number | null;
   /** When its windows were last read (0: not since the app started). */
   updatedAt: number;
 }
 
 /** Why no ticket of any board starts, and until when: a quota window over « Pause au-delà du quota », or a usage limit with no resume planned. */
 export interface AutopilotPause {
-  /** A window over the threshold (of `minutes`), the month's credits, or a usage limit. */
-  reason: 'window' | 'credits' | 'limit';
+  /** A window over the threshold (of `minutes`), the month's credits, a usage limit, or the day's budget of an account without a quota. */
+  reason: 'window' | 'credits' | 'limit' | 'budget';
   /** The window's length, for a window. */
   minutes?: number;
   /** The window's use, 0-100 (null after a limit). */

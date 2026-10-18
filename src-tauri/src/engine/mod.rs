@@ -246,6 +246,9 @@ pub struct OneShot<'a> {
     pub prompt: &'a str,
     /// Past it, the process is killed with all it started.
     pub limit: Duration,
+    /// The model it is asked of, for a harness that takes the one Escouade chooses
+    /// (`Engine::writer_takes_model`: OpenCode); empty for the others, which pick their own.
+    pub model: String,
 }
 
 /// The room of the instructions added to an agent (`Engine::instructions_room`): at most `max`,
@@ -396,6 +399,12 @@ pub trait Engine: Send + Sync {
     /// The model that answers its one-shot questions of `weight`, as the interface names it
     /// (« Modèle des textes rédigés »: `Claude Haiku`).
     fn writer(&self, weight: Weight) -> &'static str;
+    /// Its one-shot questions go to the model Escouade chooses (`OneShot::model`: the setting
+    /// « Modèle » of the texts, else its default one), rather than one of its own: OpenCode, whose
+    /// models are those of the providers connected to it.
+    fn writer_takes_model(&self) -> bool {
+        false
+    }
 
     // ----- Escouade's MCP server, for its agents (`engine::mcp`) -----
 

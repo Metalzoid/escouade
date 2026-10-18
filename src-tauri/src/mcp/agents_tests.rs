@@ -214,8 +214,9 @@ fn no_engine_puts_the_token_on_the_command_line() {
     }
 }
 
-/// The engines that give their agents Escouade's server: all but OpenCode, which keeps it out of
-/// its server's config until ESC-45 (`engine/opencode`, `config_content`).
+/// The engines that give their agents Escouade's server at the launch of their process: all but
+/// OpenCode, whose server is shared by the agents of an account and gives each agent's folder its
+/// entry by its API (`engine/opencode/process.rs`, `give_escouade`; tested in `opencode_tests`).
 fn gives_the_server() -> Vec<&'static dyn Engine> {
     crate::engine::registry::all()
         .into_iter()
@@ -710,6 +711,7 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
             claude_path: crate::engine::fake_codex(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         })
     });
     let id = h

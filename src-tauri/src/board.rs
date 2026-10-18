@@ -545,6 +545,10 @@ impl Hold {
                         hold.lift(m, end);
                     }
                 }
+                // The day's budget too, until midnight.
+                if let Some((until, _)) = over_budget(u, now) {
+                    hold.lifted_other.insert(BUDGET.into(), until);
+                }
             }
             self.set(id, hold);
         }
@@ -560,6 +564,18 @@ fn over_until(w: &RateWindow, threshold: u32, now: i64) -> Option<i64> {
     w.resets_at
         .map(|end| end + RESUME_MARGIN_MS)
         .filter(|until| over && *until > now)
+}
+
+/// The key of the day's budget among what "Reprendre maintenant" lifted (`AccountHold::lifted_other`).
+const BUDGET: &str = "budget";
+
+/// The account's turns of the day cost its « Budget par jour ($) » or more at `now`: until the
+/// next midnight, and how much of it is spent (percent). A cost of another day holds nothing back.
+fn over_budget(u: &AccountUsage, now: i64) -> Option<(i64, f64)> {
+    let budget = u.daily_budget.filter(|b| *b > 0.0)?;
+    let (start, end) = crate::stats::day_bounds(now);
+    (u.today_start == start && u.today_cost + 1e-9 >= budget)
+        .then(|| (end, u.today_cost / budget * 100.0))
 }
 
 /// The window is used `threshold` percent or more at `now`, until an end still to come (and its
@@ -695,11 +711,16 @@ pub fn account_pause(
     now: i64,
 ) -> Option<AutopilotPause> {
     let held = hold.of(id);
-    // An account of a harness without a quota has no meter: nothing holds it back but a limit.
-    let meters = usage
-        .iter()
-        .find(|u| u.id == id)
-        .map(|u| u.meters.as_slice());
+    // An account of a harness without a quota has no meter: nothing holds it back but a limit,
+    // and its day's budget.
+    let account = usage.iter().find(|u| u.id == id);
+    let meters = account.map(|u| u.meters.as_slice());
+    let budget = account
+        .and_then(|u| over_budget(u, now))
+        .filter(|(until, _)| {
+            // Lifted by "Reprendre maintenant" until the midnight it had then.
+            held.lifted_other.get(BUDGET) != Some(until)
+        });
     let mut pauses: Vec<AutopilotPause> = meters
         .unwrap_or_default()
         .iter()
@@ -726,6 +747,15 @@ pub fn account_pause(
             reason: PauseReason::Limit,
             minutes: None,
             pct: None,
+            until,
+            accounts: Vec::new(),
+        });
+    }
+    if let Some((until, pct)) = budget {
+        pauses.push(AutopilotPause {
+            reason: PauseReason::Budget,
+            minutes: None,
+            pct: Some(pct),
             until,
             accounts: Vec::new(),
         });
@@ -2325,6 +2355,55 @@ mod tests {
         assert_eq!(
             autopilot_pause(&none, 0, &hold, NOW).map(|p| p.reason),
             Some(PauseReason::Limit)
+        );
+    }
+
+    #[test]
+    fn the_days_budget_of_an_account_without_a_quota_pauses_the_autopilot_until_midnight() {
+        let (start, midnight) = crate::stats::day_bounds(NOW);
+        let spent = |cost: f64, budget: Option<f64>| {
+            vec![AccountUsage {
+                id: "principal".into(),
+                today_cost: cost,
+                today_start: start,
+                daily_budget: budget,
+                ..Default::default()
+            }]
+        };
+        let free = Hold::default();
+        // No budget, or under it: nothing holds the tickets back.
+        assert_eq!(autopilot_pause(&spent(50.0, None), 95, &free, NOW), None);
+        assert_eq!(
+            autopilot_pause(&spent(4.99, Some(5.0)), 95, &free, NOW),
+            None
+        );
+        // Reached: until midnight, the share of the budget spent told.
+        let over = spent(6.0, Some(5.0));
+        let pause = autopilot_pause(&over, 95, &free, NOW).unwrap();
+        assert_eq!(
+            (pause.reason, pause.until, pause.pct.map(|p| p.round())),
+            (PauseReason::Budget, midnight, Some(120.0))
+        );
+        assert!(account_pause(&spent(5.0, Some(5.0)), "principal", 95, &free, NOW).is_some());
+        // A local model costs nothing: never reached.
+        assert_eq!(
+            autopilot_pause(&spent(0.0, Some(0.01)), 95, &free, NOW),
+            None
+        );
+        // The cost of another day holds nothing back (read again at the next tick).
+        let mut yesterday = over.clone();
+        yesterday[0].today_start = start - 86_400_000;
+        assert_eq!(autopilot_pause(&yesterday, 95, &free, NOW), None);
+        // "Reprendre maintenant" lifts it until midnight; the next day's budget holds again.
+        let mut hold = Hold::default();
+        hold.lift(&over, 95, NOW);
+        assert_eq!(autopilot_pause(&over, 95, &hold, NOW), None);
+        let mut tomorrow = over.clone();
+        tomorrow[0].today_start = midnight;
+        let later = midnight + 3_600_000;
+        assert_eq!(
+            autopilot_pause(&tomorrow, 95, &hold, later).map(|p| p.reason),
+            Some(PauseReason::Budget)
         );
     }
 

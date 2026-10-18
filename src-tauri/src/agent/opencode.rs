@@ -30,6 +30,10 @@ pub(crate) struct OpencodeState {
     kinds: HashMap<String, String>,
     /// The tokens and tools of each subagent, by its call.
     child_tokens: HashMap<String, u64>,
+    /// The context window of each model of the server (`limit.context`), by its id.
+    contexts: HashMap<String, u64>,
+    /// The steps already counted (`step-finish` parts, by id): one told again is not counted twice.
+    steps: std::collections::HashSet<String>,
     child_tools: HashMap<String, u64>,
     /// The agent's last message: where a copy forks it, and the plan of the mode Plan.
     last_message: Option<String>,
@@ -108,6 +112,15 @@ impl AgentRt {
                     }
                 }
             }
+            "escouade.contexts" => {
+                if let Some(all) = p["contexts"].as_object() {
+                    self.opencode.contexts = all
+                        .iter()
+                        .filter_map(|(k, v)| Some((k.clone(), v.as_u64()?)))
+                        .collect();
+                }
+                self.oc_window(fx);
+            }
             "escouade.mode" => {
                 if let Some(mode) = p["mode"].as_str() {
                     if self.meta.mode != mode {
@@ -157,6 +170,13 @@ impl AgentRt {
             }
             "message.part.updated" if !matches!(owner, Owner::Other) => {
                 self.oc_part(&p["part"], parent, fx);
+            }
+            // A subagent's session not linked to its call yet: its cost is the turn's all the same.
+            "message.part.updated"
+                if p["part"]["type"] == "step-finish"
+                    && sid.is_some_and(|s| self.opencode.unlinked.iter().any(|c| c == s)) =>
+            {
+                self.oc_step(&p["part"]);
             }
             "message.part.delta" if !matches!(owner, Owner::Other) => {
                 let (Some(part), Some(text)) = (p["partID"].as_str(), p["delta"].as_str()) else {
@@ -427,18 +447,13 @@ impl AgentRt {
             }
             "tool" => self.oc_tool(part, parent, fx),
             "step-finish" => {
-                let t = &part["tokens"];
-                let n = |v: &Value| v.as_u64().unwrap_or(0);
-                let (input, output) = (n(&t["input"]), n(&t["output"]) + n(&t["reasoning"]));
-                let cache = n(&t["cache"]["read"]) + n(&t["cache"]["write"]);
-                let u = &mut self.opencode.usage;
-                u.input += input;
-                u.cache += cache;
-                u.output += output;
-                u.cost += part["cost"].as_f64().unwrap_or(0.0);
+                let Some((input, cache, output)) = self.oc_step(part) else {
+                    return;
+                };
                 match &parent {
                     None => {
                         self.context_tokens = input + cache;
+                        self.oc_window(fx);
                         fx.agent_changed = true;
                     }
                     Some(call) => {
@@ -462,6 +477,40 @@ impl AgentRt {
                 self.notice("info", tr!("Contexte compacté", "Context compacted"), fx);
             }
             _ => {}
+        }
+    }
+
+    /// A call to the model over (a part `step-finish`): its tokens and its cost added to the turn's,
+    /// once (told again, a stream read anew, it is not counted twice). Its input, cache and output
+    /// tokens; none when it was counted already.
+    fn oc_step(&mut self, part: &Value) -> Option<(u64, u64, u64)> {
+        if let Some(pid) = part["id"].as_str() {
+            if self.opencode.steps.len() > 4096 {
+                self.opencode.steps.clear();
+            }
+            if !self.opencode.steps.insert(pid.to_string()) {
+                return None;
+            }
+        }
+        let t = &part["tokens"];
+        let n = |v: &Value| v.as_u64().unwrap_or(0);
+        let (input, output) = (n(&t["input"]), n(&t["output"]) + n(&t["reasoning"]));
+        let cache = n(&t["cache"]["read"]) + n(&t["cache"]["write"]);
+        let u = &mut self.opencode.usage;
+        u.input += input;
+        u.cache += cache;
+        u.output += output;
+        u.cost += part["cost"].as_f64().unwrap_or(0.0);
+        Some((input, cache, output))
+    }
+
+    /// The agent's context window: its model's (`limit.context`), when OpenCode knows it.
+    fn oc_window(&mut self, fx: &mut Effects) {
+        if let Some(n) = self.opencode.contexts.get(&self.meta.model).copied() {
+            if self.context_window != n {
+                self.context_window = n;
+                fx.agent_changed = true;
+            }
         }
     }
 

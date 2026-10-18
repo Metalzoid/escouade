@@ -426,10 +426,25 @@ impl UsageSnapshot {
     /// What the turns cost today (`by_account`: what the statistics say), in total and for each
     /// account of the snapshot; an account with no turn today has none.
     pub fn set_today(&mut self, by_account: &std::collections::HashMap<String, f64>) {
+        self.set_today_at(by_account, crate::model::now_ms());
+    }
+
+    /// `set_today`, the costs being those of the day of `now`.
+    pub fn set_today_at(&mut self, by_account: &std::collections::HashMap<String, f64>, now: i64) {
+        let (start, _) = crate::stats::day_bounds(now);
         self.today_cost = by_account.values().sum();
         for a in &mut self.accounts {
             a.today_cost = by_account.get(&a.id).copied().unwrap_or(0.0);
+            a.today_start = start;
         }
+    }
+
+    /// The day the costs are of is over at `now`: they are to be read again.
+    pub fn day_over(&self, now: i64) -> bool {
+        let (start, _) = crate::stats::day_bounds(now);
+        self.accounts
+            .iter()
+            .any(|a| a.today_start != 0 && a.today_start != start)
     }
 
     /// What a reading of the account's quota found, at `now`.
@@ -465,6 +480,7 @@ impl UsageSnapshot {
                     },
                 };
                 u.engine = a.engine;
+                u.daily_budget = a.daily_budget.filter(|b| *b > 0.0);
                 u
             })
             .collect();

@@ -511,7 +511,7 @@ Un serveur sert tous les agents d'un même compte (même programme, même enviro
 
 - `--port 0` prend 4096 s'il est libre, sinon un port au hasard : l'adresse est lue sur sa sortie (`opencode server listening on http://127.0.0.1:<port>`).
 - `OPENCODE_SERVER_PASSWORD` : tiré au hasard (24 octets) pour chaque serveur, en Basic `opencode:<mot de passe>`. Il ne sort jamais d'Escouade (`GET /config` rend la config résolue, jeton du serveur MCP compris).
-- `OPENCODE_CONFIG_CONTENT` (fusionnée avec la config de l'utilisateur) : `model` et `small_model` (le modèle du premier agent : sans eux, OpenCode part sur OpenCode Zen sans compte, vu à l'essai), `autoupdate: false`, `share: "disabled"`, `permission` (les règles de « Demander », pour toutes les sessions du serveur : celle d'un sous-agent ne prend pas les règles de la session de son agent, et sans elles ses commandes passaient sans question, vu à l'essai réel), et `mcp.escouade.enabled: false` (le serveur MCP d'Escouade vient avec ESC-45). Plus `OPENCODE_DISABLE_AUTOUPDATE=1` et `OPENCODE_ENABLE_QUESTION_TOOL=1`.
+- `OPENCODE_CONFIG_CONTENT` (fusionnée avec la config de l'utilisateur) : `model` et `small_model` (le modèle du premier agent : sans eux, OpenCode part sur OpenCode Zen sans compte, vu à l'essai), `autoupdate: false`, `share: "disabled"`, `permission` (les règles de « Demander », pour toutes les sessions du serveur : celle d'un sous-agent ne prend pas les règles de la session de son agent, et sans elles ses commandes passaient sans question, vu à l'essai réel), et `mcp.escouade.enabled: false` (le serveur MCP d'Escouade est gardé hors de tous les dossiers, une entrée `escouade` de l'utilisateur comprise : chaque agent reçoit la sienne par l'API, voir « Le serveur MCP d'Escouade » plus bas). Plus `OPENCODE_DISABLE_AUTOUPDATE=1` et `OPENCODE_ENABLE_QUESTION_TOOL=1`.
 - Le programme est le binaire natif : sous Windows, l'`opencode.exe` du paquet npm (`node_modules/opencode-ai/bin/opencode.exe`, à côté du lanceur `opencode.cmd`), sinon l'`opencode` du PATH. Dans une build de debug, `ESCOUADE_OPENCODE` (les e2e) donne le programme quand aucun chemin n'est réglé, ou `none` pour aucun.
 - Le flux est lu sur `/global/event` (SSE, enveloppe `{directory, payload}`), et chaque événement va à l'agent dont il concerne la session, ou à celui dont la session a ouvert celle d'un sous-agent (`session.created` avec `parentID`).
 
@@ -554,7 +554,7 @@ Comme chez Codex, les fichiers du dossier de l'agent changent sans question en �
 | `message.updated` | le rôle de chaque message (les parts d'un message `user` sont les mots de l'utilisateur, déjà montrés) ; le dernier message de l'agent, son point de copie (`last_entry`) |
 | `message.part.delta` (`field: text`), `message.part.updated` `text` / `reasoning` | un `text` ou un `thinking`, en direct puis entier (`time.end`) |
 | part `tool` | à `running`, l'appel sous le nom de Claude Code : `bash` `Bash`, `edit` `Edit` (son diff, `metadata.filediff.patch`), `write` `Write`, `read` `Read`, `grep` `Grep`, `glob` `Glob`, `list` `LS`, `patch` / `apply_patch` `Edit`, `webfetch` `WebFetch`, `websearch` `WebSearch`, `todowrite` `TodoWrite`, `task` `Task`, `skill` `Skill`, `escouade_<outil>` `mcp__escouade__<outil>` ; à `completed` ou `error`, son résultat (une commande en erreur si son code de sortie n'est pas nul) ; un fichier changé parmi ceux de l'agent |
-| part `step-finish` | les tokens et le coût de chaque étape, additionnés par tour, sous-agents compris ; le contexte de l'agent (`input` et cache) |
+| part `step-finish` | les tokens et le coût de chaque étape (chaque appel au modèle), additionnés par tour, sous-agents compris (même une session enfant pas encore liée à sa `Task`), une part redite (même `id`) comptée une fois ; le contexte de l'agent (`input` et cache), sur la fenêtre de son modèle (`limit.context` de `/config/providers`) |
 | part `patch` | ses fichiers parmi ceux de l'agent |
 | `todo.updated` | les tâches du bandeau « Plan » (`pending`, `in_progress`, `completed` ; `cancelled` compte comme faite, un statut inconnu comme à faire) |
 | `task` et `session.created` (`parentID`) | une `Task`, sa ligne dans le bandeau « Plan » ; les messages et outils de la session enfant (liée par `metadata.sessionId`) sont rangés sous elle, ses tokens et ses outils comptés ; son rapport est le `<task_result>` de la sortie |
@@ -572,13 +572,49 @@ Tout le reste est ignoré sans casser le tour : `plugin.added`, `catalog.updated
 
 `real_opencode` (`src-tauri/src/opencode_tests.rs`, à la main : `ESCOUADE_REAL_OPENCODE` = l'`opencode.exe` 1.19.3, et `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` vers un dossier dont la config déclare le fournisseur `ollama`, pour ne rien écrire dans les dossiers d'OpenCode de l'utilisateur), fait le 2026-10-18 avec `qwen3-coder:30b-32k` sur Ollama : « Réponds seulement : A » (réponse « A »), `git status --short` demandé puis autorisé (la carte dit « « Toujours autoriser » retiendra : git status * »), une question « Quelle couleur ? » répondue « bleu », deux tâches de `todowrite` faites dans le bandeau, et un sous-agent `explore` (ses deux commandes demandées sous sa `Task`, 5 outils et 25 888 tokens comptés), en 85 s. Rien n'a été écrit dans `~/.config/opencode` ni `~/.local/share/opencode`, et aucun `opencode` ne restait après l'arrêt.
 
+### Le coût et le garde-fou (ESC-45)
+
+Le coût d'un tour est celui qu'OpenCode donne (`cost` de chaque `step-finish`, au prix du fournisseur ; 0 avec un modèle local), sans estimation d'Escouade (`caps.cost` `exact`). Il va aux stats avec la colonne `engine` `opencode` (filtre « Harness », vue « Par harness ») et au coût du jour. OpenCode n'a pas de quota d'abonnement (`caps.quota` `none`) : la barre d'état montre, à la place des barres, le coût du jour du compte de l'agent affiché, sur son budget quand il en a un.
+
+**Garde-fou** (décidé par l'utilisateur le 2026-10-18) : « Budget par jour ($) » dans Réglages › Comptes, pour un compte d'un harness sans quota (`Account::daily_budget`), vide par défaut. Rempli, et le coût du jour du compte l'atteint, le compte est retenu jusqu'à minuit (heure locale) comme à un quota épuisé (`board::account_pause`, `PauseReason::Budget`) : le pilote auto ne lance plus de ticket sur lui, et les outils MCP qui démarreraient un ticket ou un agent le refusent en disant pourquoi ; « Reprendre maintenant » le lève jusqu'à minuit. Passé minuit, le coût du jour est relu (`UsageSnapshot::day_over`) et le compte repart. Un modèle local (coût 0) ne l'atteint jamais.
+
+### Le serveur MCP d'Escouade (ESC-45)
+
+Le serveur `opencode serve` est commun aux agents d'un compte : une entrée de sa config (`OPENCODE_CONFIG_CONTENT`) vaudrait pour toutes ses sessions, et ne pourrait porter ni le jeton propre à un agent (le serveur MCP d'Escouade sait qui l'appelle par ce jeton) ni la décision de lui donner ou non le serveur. Essayé sur la 1.19.3 (2026-10-18, deux dossiers sur un serveur, un petit serveur MCP qui note l'en-tête reçu) : `POST /mcp?directory=<dossier>` ajoute un serveur MCP **à l'instance de ce dossier seulement**. Le dossier A s'est connecté avec le jeton A, le dossier B avec le jeton B, un dossier C n'en avait aucun ; `POST /mcp/:nom/disconnect` le coupe pour son dossier ; `POST /instance/dispose` le retire avec l'instance. Une session du dossier A, avec `qwen3-coder:30b-32k`, a appelé l'outil `escouade_whoami` et reçu sa réponse, avec le jeton A. Rien n'est écrit dans la config sur le disque.
+
+Escouade s'en sert ainsi (`process::give_escouade`) :
+
+- la config du serveur garde `mcp.escouade.enabled: false` pour tous les dossiers ;
+- un agent à qui le serveur est donné (`Escouade::Granted`, son jeton à lui) reçoit, à son ouverture, `POST /mcp?directory=<son dossier>` avec `{"name": "escouade", "config": {"type": "remote", "url", "enabled": true, "headers": {"Authorization": "Bearer <son jeton>"}, "oauth": false}}`. Le jeton ne passe ni sur une ligne de commande ni dans un fichier : seulement dans cette requête à `127.0.0.1`, derrière le mot de passe du serveur ;
+- un agent refusé (`Escouade::Denied`) ne reçoit rien ; si l'instance de son dossier avait gardé une entrée, elle est coupée (`disconnect`) ;
+- un dossier n'a qu'un agent par serveur (`server::acquire`) : un second agent dans le même dossier (deux agents sans worktree) a son propre serveur, avec sa propre entrée. Un dossier en train d'être lâché (`dispose` sans réponse encore) compte comme occupé ;
+- l'entrée part avec l'instance quand le dernier agent du dossier s'en va, comme le jeton à l'arrêt du process.
+
+Ses outils s'appellent `escouade_<outil>` chez OpenCode, `mcp__escouade__<outil>` dans la conversation. Testé avec le faux (`opencode_tests::escouades_server_is_given_…` : un agent refusé et un agent permis de deux projets sur le même serveur, puis un second agent dans le même dossier, chacun pris pour lui-même par `whoami`) et pour de vrai (`real_opencode_writes_and_drives_escouade`, 2026-10-18 : `whoami` rend l'id de l'agent).
+
+### Les textes rédigés (ESC-45)
+
+« Modèle des textes rédigés » sur OpenCode : `opencode run` (`engine/opencode/run.rs`), essayé sur la 1.19.3 le 2026-10-18 :
+
+```
+opencode run --format json --model <fournisseur/modèle> --agent escouade-writer --title Escouade
+```
+
+- La question arrive sur son entrée (OpenCode l'ajoute au message), jamais sur la ligne de commande.
+- `OPENCODE_CONFIG_CONTENT` : `model` et `small_model` (le modèle choisi), `mcp.escouade.enabled: false`, et un agent `escouade-writer` dont le `prompt` est la consigne (pas de prompt système d'OpenCode : 178 tokens en tout pour un nom, au lieu d'environ 10 700) et dont les outils sont coupés (`tools: {"*": false}`, `permission: {"*": "deny"}`) ; pour un texte écrit après lecture du dossier (`Weight::Reading`), seuls `read`, `glob`, `grep` et `list` sont permis. Un texte court se pose dans un dossier vide à lui (`escouade-opencode/writer` du dossier temporaire).
+- La réponse est le texte du dernier message du flux `--format json` (`type: text`) ; un événement `error` (un modèle inconnu : `UnknownError`) refuse la réponse, avec son message.
+- Chaque `opencode run` garde une session dans l'historique d'OpenCode : Escouade la supprime aussitôt (`opencode session delete <id>`, 1,2 s).
+- **Le modèle** est toujours donné : celui de Réglages › Application › « Modèle » (`Settings.writer_model`, la liste des modèles des fournisseurs connectés) tant qu'il en fait partie, sinon le modèle par défaut (`Core::writer_model`, après `opencode models --verbose` si aucun n'est connu). Sans aucun modèle, aucun `opencode run` n'est lancé et le texte est refusé : OpenCode partirait sinon sur OpenCode Zen sans compte.
+
+Essai réel (`real_opencode_writes_and_drives_escouade`, `qwen3-coder:30b-32k`) : « enregistrer-bouton-ne-fonctionne-pas » pour « Corrige le bouton Enregistrer qui ne sauve pas les réglages », l'historique d'OpenCode inchangé ensuite (`opencode session list`).
+
 ### Vue OpenCode (ESC-46)
 
 `opencode attach <adresse du serveur> --session <session de l'agent> --dir <son dossier>`, dans un terminal intégré, avec l'environnement du compte et `OPENCODE_SERVER_PASSWORD` (jamais dans les arguments ni dans le journal). C'est un client de plus du serveur : Escouade garde le sien (`/global/event`), et le traducteur sait déjà ce que l'interface fait (un tour commencé ailleurs, une carte répondue ailleurs, ci-dessus). Le process de l'agent est démarré d'abord s'il ne tournait pas : l'interface a besoin de sa session. Une interface est arrêtée quand son agent n'a plus de process depuis 3 s, ou quand le process est sur un autre serveur (adresse ou mot de passe changés) ; jamais le serveur avec elle. Voir docs/ENGINES.md, « La vue OpenCode ».
 
 ### Ce qui vient ensuite
 
-Le coût du jour dans la barre d'état, le garde-fou sans quota, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `opencode run` viennent avec ESC-45. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
+« OpenCode peut piloter Escouade » (une entrée dans sa config globale) vient plus tard. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
 
 ## Serveur MCP d'Escouade
 

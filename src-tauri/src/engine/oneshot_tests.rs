@@ -161,6 +161,7 @@ fn question(limit: Duration) -> OneShot<'static> {
         system: "Réponds par un nom.",
         prompt: "Corriger le bug",
         limit,
+        model: String::new(),
     }
 }
 

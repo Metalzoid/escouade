@@ -52,6 +52,9 @@ pub(super) struct Server {
     owners: Mutex<HashMap<String, String>>,
     /// How many agents work in each folder (OpenCode keeps an instance of each, which watches it).
     dirs: Mutex<HashMap<String, usize>>,
+    /// The folders let go (`POST /instance/dispose`) that have not answered yet: not to be given
+    /// to an agent before, whose MCP entry would go with the instance.
+    disposing: Mutex<std::collections::HashSet<String>>,
     /// The models of its connected providers, once read (`GET /config/providers`).
     pub(super) catalog: tokio::sync::Mutex<Option<Value>>,
 }
@@ -60,21 +63,39 @@ pub(super) struct Server {
 type Running = HashMap<String, (Arc<Server>, usize)>;
 static SERVERS: Mutex<Option<Running>> = Mutex::new(None);
 
-/// The server of `key`, started by `start` when none runs; one more agent uses it.
+/// A server of `key` for one more agent, which works in `dir`: one that runs and has no agent in
+/// that folder, else one started by `start` (given its own key). A folder has one agent per
+/// server: Escouade's MCP entry is given folder by folder (`POST /mcp?directory=`), with the
+/// agent's own token, and two agents in one folder (neither in a worktree) would share it.
 pub(super) fn acquire(
     key: &str,
-    start: impl FnOnce() -> Result<Arc<Server>>,
+    dir: &str,
+    start: impl FnOnce(&str) -> Result<Arc<Server>>,
 ) -> Result<Arc<Server>> {
     let mut all = SERVERS.lock();
     let map = all.get_or_insert_with(HashMap::new);
-    if let Some((server, users)) = map.get_mut(key) {
-        if !server.exited.load(Ordering::Acquire) {
-            *users += 1;
-            return Ok(server.clone());
+    let mut n = 0;
+    let own = loop {
+        let k = if n == 0 {
+            key.to_string()
+        } else {
+            format!("{key}#{n}")
+        };
+        match map.get_mut(&k) {
+            Some((server, users)) if !server.exited.load(Ordering::Acquire) => {
+                if !server.holds(dir) {
+                    *users += 1;
+                    server.enter(dir);
+                    return Ok(server.clone());
+                }
+            }
+            _ => break k,
         }
-    }
-    let server = start()?;
-    map.insert(key.to_string(), (server.clone(), 1));
+        n += 1;
+    };
+    let server = start(&own)?;
+    server.enter(dir);
+    map.insert(own, (server.clone(), 1));
     Ok(server)
 }
 
@@ -173,6 +194,7 @@ impl Server {
             listeners: Mutex::default(),
             owners: Mutex::default(),
             dirs: Mutex::default(),
+            disposing: Mutex::default(),
             catalog: tokio::sync::Mutex::new(None),
         });
         let tail = Arc::new(Mutex::new(VecDeque::<String>::new()));
@@ -383,8 +405,23 @@ impl Server {
     }
 
     /// One more agent works in `dir`.
-    pub(super) fn enter(&self, dir: &str) {
+    fn enter(&self, dir: &str) {
         *self.dirs.lock().entry(dir.to_string()).or_default() += 1;
+    }
+
+    /// An agent works in `dir`, or its instance is being let go.
+    fn holds(&self, dir: &str) -> bool {
+        self.dirs.lock().contains_key(dir) || self.disposing.lock().contains(dir)
+    }
+
+    /// `dir` is being let go (`done`: no longer).
+    pub(super) fn disposing(&self, dir: &str, done: bool) {
+        let mut d = self.disposing.lock();
+        if done {
+            d.remove(dir);
+        } else {
+            d.insert(dir.to_string());
+        }
     }
 
     /// One agent less works in `dir`: whether it was the last.

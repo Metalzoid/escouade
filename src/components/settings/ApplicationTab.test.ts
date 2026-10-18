@@ -202,6 +202,37 @@ describe('the « Application » tab', () => {
       expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
     });
 
+    it('chooses the model of a harness that takes the one given, among those of its account (ESC-45)', async () => {
+      const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, name: 'OpenCode', writer: 'OpenCode', writerTakesModel: true };
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, OPENCODE];
+      app.enginesFound = ['claude', 'codex', 'opencode'];
+      app.engineModels = {
+        // Codex picks its own: no menu for it.
+        codex: [{ id: 'gpt-x', label: 'GPT-X', efforts: [], defaultEffort: null, images: false, default: true }],
+        opencode: [
+          { id: 'ollama/qwen', label: 'Qwen', efforts: [], defaultEffort: null, images: false, default: true, provider: 'Ollama (local)' },
+          { id: 'paid/coder', label: 'Coder', efforts: [], defaultEffort: null, images: false, default: false, provider: 'Paid' },
+        ],
+      };
+      const backend = fakeBackend({ save_settings: () => [] });
+      render(SettingsModal, { tab: 'app' });
+      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
+      await userEvent.click(choice(WRITER, 'Nu mini'));
+      expect(within(panel()).queryByRole('combobox', { name: 'Modèle' })).toBeNull();
+      await userEvent.click(choice(WRITER, 'OpenCode'));
+      const menu = within(panel()).getByRole('combobox', { name: 'Modèle' });
+      expect([...menu.querySelectorAll('option')].map((o) => o.textContent)).toEqual([
+        'Par défaut (Qwen)',
+        'Qwen · Ollama (local)',
+        'Coder · Paid',
+      ]);
+      expect(menu).toHaveValue('');
+      expect(panel()).toHaveTextContent('sans lui, OpenCode en choisirait un lui-même');
+      await userEvent.selectOptions(menu, 'paid/coder');
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ writerEngine: 'opencode', writerModel: 'paid/coder' });
+    });
+
     it('is not shown when no harness is installed', () => {
       app.enginesFound = [];
       fakeBackend();

@@ -1167,6 +1167,10 @@ impl<R: Runtime> Core<R> {
     /// The autopilot's pause looked at again, as the quotas are read and by the timer: the window
     /// is told when it changed, and once it is over, what may start starts.
     pub fn pause_tick(self: &Arc<Self>) {
+        // Past midnight, the day's costs are read again: a day's budget holds no longer.
+        if self.usage.lock().day_over(self.pause_now()) {
+            self.settle_usage();
+        }
         if self.refresh_pause() {
             self.schedule();
         }

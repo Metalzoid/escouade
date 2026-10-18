@@ -15,6 +15,8 @@ export default {
     /** `{window}`: the window by its length, as `window` says it. */
     window: 'Pilote auto en pause : quota {window} à {pct} (reprise {when})',
     credits: 'Pilote auto en pause : crédits du mois à {pct} (reprise {when})',
+    /** The day's budget of an account without a quota (OpenCode), reached: until midnight. */
+    budget: 'Pilote auto en pause : budget du jour atteint ({pct}, reprise {when})',
   },
 
   // A window of the quota by its length, in the pause above.

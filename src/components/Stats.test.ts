@@ -637,6 +637,37 @@ describe('Stats by harness (ESC-30)', () => {
     await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: 'work', engine: 'codex' }));
   });
 
+  it('filters OpenCode, whose cost is exact (ESC-45)', async () => {
+    const OPENCODE: EngineDecl = { ...BARE_ENGINE, id: 'opencode', name: 'OpenCode', caps: { ...BARE_ENGINE.caps, cost: 'exact' } };
+    app.engines = [CLAUDE_ENGINE, OPENCODE];
+    app.settings.accounts = [PRINCIPAL, { ...WORK, id: 'principal-opencode', name: 'Principal', engine: 'opencode' }];
+    const backend = fakeBackend({
+      stats: (a: { range: string; engine: string | null }): StatsView => ({
+        ...view(a.range),
+        ...(a.engine === 'opencode' ? { tokens: 1_180, cost: 0.0042, costAll: 0.0042 } : {}),
+        byEngine: [
+          { engine: 'claude', tokens: 54_500, cost: 1.6, turns: 3, agents: 2 },
+          { engine: 'opencode', tokens: 1_180, cost: 0.0042, turns: 1, agents: 1 },
+        ],
+        engines: ['claude', 'opencode'],
+        accounts: ['principal', 'principal-opencode'],
+      }),
+    });
+    render(Stats);
+    const engine = await screen.findByRole('combobox', { name: 'Harness' });
+    expect(
+      within(engine)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les harness', 'Claude Code', 'OpenCode']);
+    await screen.findByRole('table', { name: 'Par harness' });
+    expect(lines('Par harness')[1]).toEqual(['OpenCode', '1,2 k', '0,004 $', '1', '1']);
+    await userEvent.selectOptions(engine, 'OpenCode');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null, engine: 'opencode' }));
+    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
+    expect(kpis.queryByText('estimé')).not.toBeInTheDocument();
+  });
+
   it('puts the harnesses side by side, the cost of one that only estimates it marked so', async () => {
     fakeBackend({ stats: both });
     render(Stats);

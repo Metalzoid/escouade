@@ -10,6 +10,7 @@
 
 use super::server::{self, Listener, Server};
 use super::{agent_of, rules, split_model, Settings};
+use crate::engine::mcp::{self, Escouade};
 use crate::engine::terminal::Attach;
 use crate::engine::{
     BoxFuture, EngineProcess, Message, OnExit, OnFrame, PermissionAnswer, Ready, Remote, Start,
@@ -62,6 +63,8 @@ struct Inner {
     instructions: Option<String>,
     /// The title of a new session: given, it is not written by a model (`small_model`).
     title: String,
+    /// Escouade's MCP server for it: given in its folder, with its own token, or kept out.
+    escouade: Escouade,
     state: Mutex<State>,
     on_frame: OnFrame,
     on_exit: Mutex<Option<OnExit>>,
@@ -82,6 +85,7 @@ pub(super) struct Opts {
     pub settings: Settings,
     pub instructions: Option<String>,
     pub title: String,
+    pub escouade: Escouade,
 }
 
 /// Hears the server for the session (weakly: a session dropped is not kept alive by it).
@@ -111,6 +115,7 @@ impl OpencodeProcess {
             settings,
             instructions,
             title,
+            escouade,
         } = opts;
         Arc::new(OpencodeProcess {
             inner: Arc::new(Inner {
@@ -119,6 +124,7 @@ impl OpencodeProcess {
                 start,
                 instructions,
                 title,
+                escouade,
                 state: Mutex::new(State {
                     settings,
                     ..Default::default()
@@ -127,7 +133,8 @@ impl OpencodeProcess {
                 on_exit: Mutex::new(Some(on_exit)),
                 exited: AtomicBool::new(false),
                 released: AtomicBool::new(false),
-                entered: AtomicBool::new(false),
+                // Counted by `server::acquire`.
+                entered: AtomicBool::new(true),
                 let_go: Arc::new(AtomicBool::new(true)),
             }),
         })
@@ -297,6 +304,7 @@ impl Inner {
             && self.server.is_alive()
         {
             self.let_go.store(false, Ordering::Release);
+            self.server.disposing(&self.cwd, false);
             let (me, done) = (self.clone(), self.let_go.clone());
             tokio::spawn(async move {
                 let said = me
@@ -306,6 +314,7 @@ impl Inner {
                 if let Err(e) = said {
                     log::debug!("opencode: dispose: {e:#}");
                 }
+                me.server.disposing(&me.cwd, true);
                 done.store(true, Ordering::Release);
             });
         }
@@ -321,6 +330,44 @@ impl Inner {
         // its `on_exit` takes.
         if let Some(f) = self.on_exit.lock().take() {
             later(move || f(code, said));
+        }
+    }
+
+    /// Escouade's MCP server given to its folder's instance, as the agent itself (its own token,
+    /// which the server identifies it by), or kept out of it: the server is shared, its config
+    /// (`mcp.escouade.enabled: false`) holds for every folder, and an entry added by the API holds
+    /// for one folder alone (tried on 1.19.3, docs/PROTOCOL.md). An agent has its folder to itself on
+    /// its server (`server::acquire`), and the entry goes with the instance when the agent leaves.
+    /// A failure is logged: the agent works on without Escouade's tools.
+    async fn give_escouade(&self) {
+        let srv = &self.server;
+        match &self.escouade {
+            Escouade::Granted { url, token, .. } => {
+                let body = entry(url, token);
+                match srv.call(Method::POST, "/mcp", &self.cwd, Some(body)).await {
+                    Ok(said) if said[mcp::SERVER]["status"] == "connected" => {}
+                    Ok(said) => log::warn!(
+                        "opencode: Escouade's server not connected in {}: {}",
+                        self.cwd,
+                        said[mcp::SERVER]
+                    ),
+                    Err(e) => log::warn!("opencode: Escouade's server: {e:#}"),
+                }
+            }
+            Escouade::Denied { .. } => {
+                // Its config keeps it out; one an instance would still have, disconnected.
+                let status = srv.call(Method::GET, "/mcp", &self.cwd, None).await;
+                let on = status.as_ref().is_ok_and(|s| {
+                    s.get(mcp::SERVER)
+                        .is_some_and(|e| e["status"] != "disabled")
+                });
+                if on {
+                    let path = format!("/mcp/{}/disconnect", mcp::SERVER);
+                    if let Err(e) = srv.call(Method::POST, &path, &self.cwd, None).await {
+                        log::warn!("opencode: Escouade's server kept: {e:#}");
+                    }
+                }
+            }
         }
     }
 
@@ -514,8 +561,7 @@ impl EngineProcess for OpencodeProcess {
             inner
                 .server
                 .listen(&id, Arc::new(Hears(Arc::downgrade(inner))));
-            inner.server.enter(&inner.cwd);
-            inner.entered.store(true, Ordering::Release);
+            inner.give_escouade().await;
             // A copy or a resumed session takes the rules of its mode (a copy has none).
             if how != "new" {
                 inner.set_rules();
@@ -527,6 +573,11 @@ impl EngineProcess for OpencodeProcess {
             let catalog = super::read_catalog(&inner.server, &inner.cwd).await;
             let models = match catalog {
                 Ok(c) => {
+                    // The window of each model: the agent's context is told out of its model's.
+                    (inner.on_frame)(json!({
+                        "type": "escouade.contexts",
+                        "properties": { "sessionID": id, "contexts": c.contexts },
+                    }));
                     let mut s = inner.state.lock();
                     s.variants = c
                         .models
@@ -731,6 +782,21 @@ impl EngineProcess for OpencodeProcess {
     fn reply(&self, _request_id: &str, _answer: std::result::Result<Value, String>) -> Result<()> {
         Ok(())
     }
+}
+
+/// Escouade's MCP entry of an agent (`POST /mcp`): its server, reached with the agent's token.
+pub(super) fn entry(url: &str, token: &str) -> Value {
+    json!({
+        "name": mcp::SERVER,
+        "config": {
+            "type": "remote",
+            "url": url,
+            "enabled": true,
+            "headers": { "Authorization": format!("Bearer {token}") },
+            // Its own: no OAuth to look for.
+            "oauth": false,
+        },
+    })
 }
 
 /// What the agent is told when its plan is approved.

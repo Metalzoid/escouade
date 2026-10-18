@@ -128,6 +128,7 @@ pub fn principal_of(engine: EngineId) -> Account {
         claude_path: String::new(),
         active: true,
         projects: Vec::new(),
+        daily_budget: None,
     }
 }
 
@@ -749,6 +750,7 @@ pub fn create_of(
         claude_path: String::new(),
         active: true,
         projects: Vec::new(),
+        daily_budget: None,
     })
 }
 
@@ -1264,7 +1266,18 @@ impl<R: Runtime> Core<R> {
             }
             let lower = name.to_lowercase();
             let others = || s.accounts.iter().filter(|a| a.id != account.id);
-            if others().any(|a| names_of(a).contains(&lower)) {
+            // Each harness has its Principal, all named « Principal »: one does not take the name
+            // from the others.
+            let principal = s
+                .accounts
+                .iter()
+                .find(|a| a.id == account.id)
+                .is_some_and(is_principal);
+            let both_principals = |a: &Account| principal && is_principal(a);
+            if others()
+                .filter(|a| !both_principals(a))
+                .any(|a| names_of(a).contains(&lower))
+            {
                 return Err(name_taken(name));
             }
             // Each harness keeps one: its agents go to no other harness's.
@@ -1285,6 +1298,14 @@ impl<R: Runtime> Core<R> {
             a.name = name.to_string();
             a.claude_path = account.claude_path.trim().to_string();
             a.active = account.active;
+            a.daily_budget = match account.daily_budget {
+                Some(b) if !b.is_finite() || b < 0.0 => bail!(tr!(
+                    "Le budget par jour est un montant en dollars, positif.",
+                    "The daily budget is an amount in dollars, positive."
+                )),
+                // 0 or none: no budget.
+                b => b.filter(|b| *b > 0.0),
+            };
             // Principal too: a project none serves then starts nothing (`serves_any`).
             a.projects.clear();
             for p in account
@@ -1807,6 +1828,7 @@ mod tests {
             claude_path: String::new(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         }
     }
 
@@ -1828,6 +1850,7 @@ mod tests {
                 claude_path: String::new(),
                 active: true,
                 projects: Vec::new(),
+                daily_budget: None,
             }]
         );
         assert_eq!(principal(), s.accounts[0]);
@@ -2222,6 +2245,7 @@ mod tests {
                 claude_path: String::new(),
                 active: true,
                 projects: Vec::new(),
+                daily_budget: None,
             }
         );
         assert!(Path::new(&made.config_dir).is_absolute());

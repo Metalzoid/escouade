@@ -815,4 +815,34 @@ describe('StatusBar quotas of the harness shown (ESC-30)', () => {
     expect(screen.getByText('Travail')).toBeInTheDocument();
     expect(screen.getByText(/Aujourd'hui|Aujourd’hui/)).toBeInTheDocument();
   });
+
+  it('shows the cost of the day of the account of a harness without a quota, out of its daily budget (ESC-45)', () => {
+    setUp('codex');
+    app.settings.accounts = [PRINCIPAL, { ...WORK, dailyBudget: 2 }];
+    app.usage = {
+      ...app.usage,
+      accounts: [app.usage.accounts[0], usageOf('work', { engine: 'codex', todayCost: 2.5, dailyBudget: 2 })],
+    };
+    render(StatusBar);
+    const button = screen.getByRole('button', { name: 'Quotas par compte (compte en cours : Travail)' });
+    expect(button.textContent?.replace(/\s+/g, ' ')).toMatch(/2,50 \$ \/ 2,00 \$/);
+    // Reached: told, the autopilot waits for midnight.
+    expect(button.querySelector('.day.over')).not.toBeNull();
+    expect(button.getAttribute('data-tip')?.replace(/\s+/g, ' ')).toContain(
+      'Harness nu n’a pas de quota : son compte a coûté 2,50 $ aujourd’hui, sur un budget de 2,00 $ par jour',
+    );
+  });
+
+  it('names the harness beside its cost of the day with a single account, and no budget', () => {
+    setUp('codex');
+    app.settings.accounts = [WORK];
+    app.usage = { ...app.usage, accounts: [usageOf('work', { engine: 'codex', todayCost: 0.42 })] };
+    render(StatusBar);
+    const day = screen.getByText('Harness nu').closest('.day')!;
+    expect(day.textContent?.replace(/\s+/g, ' ')).toMatch(/Harness nu ?0,42 \$$/);
+    expect(day.classList.contains('over')).toBe(false);
+    expect(day.getAttribute('data-tip')?.replace(/\s+/g, ' ')).toBe(
+      'Harness nu n’a pas de quota : son compte a coûté 0,42 $ aujourd’hui, sans budget par jour.',
+    );
+  });
 });

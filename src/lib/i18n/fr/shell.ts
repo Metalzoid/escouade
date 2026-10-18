@@ -120,6 +120,10 @@ export default {
     /** One line of the tooltip: `{name}`: the agent; `{memory}` and `{cpu}`: the amounts. */
     procRow: '{name} : {memory} · {cpu}',
     today: "Aujourd'hui",
+    /** A harness without a quota (OpenCode): its account's cost of the day, in the place of the bars. */
+    dayCostTip: '{harness} n’a pas de quota : son compte a coûté {cost} aujourd’hui, sans budget par jour.',
+    dayBudgetTip:
+      '{harness} n’a pas de quota : son compte a coûté {cost} aujourd’hui, sur un budget de {budget} par jour (atteint, le pilote auto attend minuit).',
     /** The branch against its remote. */
     sync: {
       tracked: 'Suit {upstream} : {behind} à tirer, {ahead} à pousser',

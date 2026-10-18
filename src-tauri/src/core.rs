@@ -2122,9 +2122,21 @@ impl<R: Runtime> Core<R> {
         if !fx.turns.is_empty() {
             self.stats
                 .record_turns(&self.account_of(id), id, project_id, &fx.turns);
-            let mut u = self.usage.lock();
-            u.set_today(&self.stats.today_by_account());
-            self.hub.emit(UiEvent::Usage { usage: u.clone() });
+            {
+                let mut u = self.usage.lock();
+                u.set_today(&self.stats.today_by_account());
+                self.hub.emit(UiEvent::Usage { usage: u.clone() });
+            }
+            // A day's budget may just have been reached (`board::account_pause`).
+            if self
+                .usage
+                .lock()
+                .accounts
+                .iter()
+                .any(|a| a.daily_budget.is_some())
+            {
+                self.pause_tick();
+            }
         }
         if let Some(windows) = fx.rate {
             // The quota of the account the agent's process runs on.
@@ -2754,6 +2766,8 @@ impl<R: Runtime> Core<R> {
             accounts: accounts.0,
             engine_order: accounts.1,
         });
+        // Its usage too: the status bar shows its account (its cost of the day, ESC-45).
+        self.settle_usage();
     }
 
     /// Keeps the models a harness listed for its account at a process start (Codex: `model/list`):
@@ -5359,6 +5373,11 @@ impl<R: Runtime> Core<R> {
             anyhow!(tr!("{name} introuvable", "{name} not found"))
         })?;
         let env = [settings.claude_env(), accounts::launch_env(&account)].concat();
+        let model = if engine.writer_takes_model() {
+            self.writer_model(engine, &program, env.clone()).await
+        } else {
+            String::new()
+        };
         engine::oneshot::ask(
             engine,
             OneShot {
@@ -5369,9 +5388,55 @@ impl<R: Runtime> Core<R> {
                 system,
                 prompt,
                 limit,
+                model,
             },
         )
         .await
+    }
+
+    /// The model the texts of `harness` are written by (`Engine::writer_takes_model`): the one the
+    /// settings name while it is one of its account's, else its default one, its models listed
+    /// first when none is known yet (`opencode models`, no model asked anything). Empty when it
+    /// has none: no text is asked then (OpenCode would pick one itself, OpenCode Zen without an
+    /// account).
+    async fn writer_model(
+        &self,
+        harness: &dyn crate::engine::Engine,
+        program: &crate::engine::Program,
+        env: Vec<(String, String)>,
+    ) -> String {
+        let chosen = self.settings.read().writer_model.clone();
+        let pick = |told: &[crate::engine::registry::ToldModel]| {
+            told.iter()
+                .find(|m| !chosen.is_empty() && m.id == chosen)
+                .or(told.iter().find(|m| m.default))
+                .or(told.first())
+                .map(|m| m.id.clone())
+        };
+        let known = self
+            .engine_models
+            .read()
+            .get(&harness.id())
+            .cloned()
+            .unwrap_or_default();
+        let listed_chosen = chosen.is_empty() || known.iter().any(|m| m.id == chosen);
+        if !known.is_empty() && listed_chosen {
+            return pick(&known).unwrap_or_default();
+        }
+        match harness
+            .list_models(program.clone(), env, &std::env::temp_dir())
+            .await
+        {
+            Ok(Some(listed)) => {
+                self.set_engine_models(harness.id(), listed.clone());
+                pick(&listed).unwrap_or_default()
+            }
+            Ok(None) => pick(&known).unwrap_or_default(),
+            Err(e) => {
+                log::warn!("{}: models not listed: {e:#}", harness.name());
+                pick(&known).unwrap_or_default()
+            }
+        }
     }
 
     /// A short name for the task, or None when the model did not answer with one.
@@ -7554,7 +7619,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The quotas settled again as the settings now are, and told to the window.
-    fn settle_usage(&self) {
+    pub(crate) fn settle_usage(&self) {
         self.update_usage(|_| {});
     }
 

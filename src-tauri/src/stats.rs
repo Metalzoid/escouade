@@ -534,6 +534,16 @@ fn agent_lists(
     (agents, tickets)
 }
 
+/// The local midnight that starts the day of `ms`, and the next one: the day `today_by_account`
+/// sums, and the end of a day's budget.
+pub fn day_bounds(ms: i64) -> (i64, i64) {
+    let day = Local
+        .timestamp_millis_opt(ms)
+        .single()
+        .map_or_else(|| Local::now().date_naive(), |t| t.date_naive());
+    (local_ms(day), local_ms(day + chrono::Days::new(1)))
+}
+
 fn local_ms(d: NaiveDate) -> i64 {
     let naive = d.and_hms_opt(0, 0, 0).expect("midnight");
     Local

@@ -20,6 +20,7 @@ fn opencode_account(h: &Harness) {
             claude_path: crate::engine::fake_opencode(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         });
     });
 }
@@ -351,6 +352,7 @@ async fn real_opencode() {
             claude_path: real.clone(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         });
     });
     let id = h
@@ -500,6 +502,7 @@ async fn no_server_starts_without_a_model_of_its_providers_and_a_server_always_h
             claude_path: crate::engine::fake_opencode(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         });
     });
     // A model of another harness (a handover, a setting of Claude Code's).
@@ -623,6 +626,7 @@ async fn the_opencode_view_joins_the_agents_session_beside_escouade() {
             claude_path: crate::engine::fake_opencode(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         });
     });
     let id = h
@@ -864,6 +868,7 @@ async fn real_opencode_view() {
             claude_path: real.clone(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         });
     });
     let id = h
@@ -994,5 +999,519 @@ async fn real_opencode_view() {
             crate::text::truncate(text, 120)
         );
     }
+    h.core.stop_for_good();
+}
+
+/// An account of OpenCode in `h.dir/<id>`, whose providers are `providers` (as `/config/providers`
+/// answers them), with `budget` as its « Budget par jour ($) ».
+fn account_with(
+    h: &Harness,
+    id: &str,
+    providers: Value,
+    budget: Option<f64>,
+) -> std::path::PathBuf {
+    let dir = h.dir.join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("providers.json"), providers.to_string()).unwrap();
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: id.into(),
+            name: id.into(),
+            engine: EngineId::Opencode,
+            config_dir: dir.to_string_lossy().into_owned(),
+            claude_path: crate::engine::fake_opencode(),
+            active: true,
+            projects: Vec::new(),
+            daily_budget: budget,
+        });
+    });
+    dir
+}
+
+/// A provider of paid models: $3 and $15 a million tokens in and out, $0.30 read from the cache.
+fn paid() -> Value {
+    json!({
+        "providers": [{ "id": "paid", "name": "Paid", "source": "api", "models": { "coder": {
+            "id": "coder", "providerID": "paid", "name": "Coder",
+            "capabilities": { "input": { "text": true, "image": false } },
+            "cost": { "input": 3, "output": 15, "cache_read": 0.3 },
+            "limit": { "context": 200000, "output": 32000 }, "status": "active",
+        } } }],
+        "default": { "paid": "coder" },
+    })
+}
+
+async fn agent_on(h: &Harness, project: &str, account: &str) -> String {
+    let id = h
+        .core
+        .create_agent_with(
+            project,
+            AgentOptions {
+                engine: Some(EngineId::Opencode),
+                account: Some(account.into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.ensure_process(&id).await.unwrap();
+    id
+}
+
+#[tokio::test]
+async fn an_opencode_turn_costs_its_steps_and_the_days_budget_pauses_its_tickets() {
+    let h = harness("esc45-cost");
+    let (p, _) = h.project(false).await;
+    account_with(&h, "oc-paid", paid(), Some(0.004));
+    let id = agent_on(&h, &p.id, "oc-paid").await;
+    assert_eq!(h.agent(&id).model, "paid/coder");
+    // Its account alone serves OpenCode (the Principal of OpenCode made meanwhile, off).
+    h.set_settings(|s| {
+        for a in &mut s.accounts {
+            if a.id == "principal-opencode" {
+                a.active = false;
+            }
+        }
+    });
+    // Under the budget: nothing holds its tickets back.
+    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    // Two calls to the model: (1000 in, 50 out) then (100 in, 10 out, 20 read from the cache).
+    h.turn(&id, "deux appels").await;
+    let cost = (1000.0 * 3.0 + 50.0 * 15.0 + 100.0 * 3.0 + 10.0 * 15.0 + 20.0 * 0.3) / 1e6;
+    let turn = h
+        .items(&id)
+        .into_iter()
+        .rev()
+        .find(|i| i["kind"] == "turn")
+        .unwrap();
+    assert!(
+        (turn["cost"].as_f64().unwrap() - cost).abs() < 1e-12,
+        "{turn}"
+    );
+    assert_eq!(turn["tokens"], 1000 + 50 + 100 + 10 + 20);
+    let a = h.agent(&id);
+    assert!((a.cost - cost).abs() < 1e-12);
+    // Its window: its model's limit.
+    assert_eq!(
+        h.core.agent(&id).unwrap().lock().view().context_window,
+        200_000
+    );
+    // The day's cost, of its account and in all.
+    let usage = h.core.usage.lock().clone();
+    let of = usage.account("oc-paid").unwrap();
+    assert!((of.today_cost - cost).abs() < 1e-12);
+    assert!((usage.today_cost - cost).abs() < 1e-12);
+    assert_eq!(of.daily_budget, Some(0.004));
+    // The statistics of OpenCode alone, and beside Claude Code's.
+    let stats = h.core.stats_view_by("7d", None, Some("opencode"));
+    assert!((stats.cost - cost).abs() < 1e-12);
+    assert_eq!(stats.tokens, 1180);
+    assert!(stats.engines.contains(&"opencode".to_string()));
+    let all = h.core.stats_view_by("7d", None, None);
+    let share = all
+        .by_engine
+        .iter()
+        .find(|e| e.engine == "opencode")
+        .unwrap();
+    assert_eq!(share.turns, 1);
+    assert!(h.core.stats_view_by("7d", None, Some("codex")).cost == 0.0);
+
+    // Over the day's budget: its tickets wait for midnight, as at a quota used up; Claude Code's do not.
+    let held = h
+        .core
+        .project_hold(&p.id, EngineId::Opencode)
+        .expect("held");
+    assert_eq!(held.pause.reason, PauseReason::Budget);
+    assert_eq!(held.pause.until, crate::stats::day_bounds(now_ms()).1);
+    assert!(h.core.project_hold(&p.id, EngineId::Claude).is_none());
+    // The budget raised in the account's settings: free again.
+    let mut acct = h
+        .core
+        .settings
+        .read()
+        .accounts
+        .iter()
+        .find(|a| a.id == "oc-paid")
+        .cloned()
+        .unwrap();
+    acct.daily_budget = Some(5.0);
+    h.core.update_claude_account(acct.clone()).unwrap();
+    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    // Nor a negative one, and 0 is none.
+    acct.daily_budget = Some(-1.0);
+    assert!(h.core.update_claude_account(acct.clone()).is_err());
+    acct.daily_budget = Some(0.0);
+    let saved = h.core.update_claude_account(acct).unwrap();
+    assert_eq!(
+        saved
+            .iter()
+            .find(|a| a.id == "oc-paid")
+            .unwrap()
+            .daily_budget,
+        None
+    );
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn a_local_model_costs_nothing_and_never_reaches_the_budget() {
+    let h = harness("esc45-local");
+    let (p, _) = h.project(false).await;
+    // The built-in providers of the fake: Ollama's, without a price.
+    let dir = h.dir.join("oc-local");
+    std::fs::create_dir_all(&dir).unwrap();
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "oc-local".into(),
+            name: "Local".into(),
+            engine: EngineId::Opencode,
+            config_dir: dir.to_string_lossy().into_owned(),
+            claude_path: crate::engine::fake_opencode(),
+            active: true,
+            projects: Vec::new(),
+            daily_budget: Some(0.01),
+        });
+    });
+    let id = agent_on(&h, &p.id, "oc-local").await;
+    h.set_settings(|s| {
+        for a in &mut s.accounts {
+            if a.id == "principal-opencode" {
+                a.active = false;
+            }
+        }
+    });
+    h.turn(&id, "deux appels").await;
+    assert_eq!(h.agent(&id).cost, 0.0);
+    assert_eq!(
+        h.core.agent(&id).unwrap().lock().view().context_window,
+        32768
+    );
+    assert!(h.core.project_hold(&p.id, EngineId::Opencode).is_none());
+    h.core.stop_for_good();
+}
+
+/// What the agent's last call of `whoami` (Escouade's test tool, through OpenCode) answered, if it
+/// made one: the caller Escouade's server took it for.
+fn whoami(h: &Harness, id: &str) -> Option<Value> {
+    let items = h.items(id);
+    let call = items
+        .iter()
+        .rev()
+        .find(|i| i["name"] == "mcp__escouade__whoami")?;
+    let text = serde_json::to_string(call).unwrap();
+    let at = text.find("caller")?;
+    let start = text[..at].rfind('{')?;
+    let end = start + text[start..].find('}')? + 1;
+    serde_json::from_str(&text[start..end].replace("\\\"", "\"")).ok()
+}
+
+#[tokio::test]
+async fn escouades_server_is_given_to_each_agent_in_its_folder_with_its_own_token_or_kept_out() {
+    let h = harness("esc45-mcp");
+    let (p1, _) = h.project(false).await;
+    let p2 = h.second_project().await;
+    let dir = account_with(&h, "oc-mcp", paid(), None);
+    // The switch off: an agent of the second project starts without Escouade's server.
+    let refused = agent_on(&h, &p2.id, "oc-mcp").await;
+    h.turn(&refused, "outil escouade whoami").await;
+    assert!(texts(&h, &refused).contains(&"Escouade n’est pas là.".to_string()));
+
+    // On: an agent of the first project, on the same account (the same server), reaches it as
+    // itself, with its own token.
+    h.core.set_mcp_enabled(true).unwrap();
+    let allowed = agent_on(&h, &p1.id, "oc-mcp").await;
+    h.turn(&allowed, "outil escouade whoami").await;
+    assert_eq!(
+        whoami(&h, &allowed),
+        Some(json!({ "caller": "agent", "agent": allowed })),
+        "{:#?}",
+        h.items(&allowed)
+    );
+    let serves = |dir: &std::path::Path| {
+        launches(dir)
+            .iter()
+            .filter(|l| l["argv"][0] == "serve")
+            .count()
+    };
+    assert_eq!(serves(&dir), 1, "one server for both");
+    // The server's config keeps it out of every folder; only the allowed agent's has it.
+    let config = &launches(&dir)
+        .into_iter()
+        .find(|l| l["argv"][0] == "serve")
+        .unwrap()["config"];
+    assert_eq!(config["mcp"]["escouade"]["enabled"], false);
+    assert!(!config.to_string().contains("Bearer"), "{config}");
+    h.turn(&refused, "outil escouade whoami").await;
+    assert_eq!(
+        texts(&h, &refused)
+            .iter()
+            .filter(|t| *t == "Escouade n’est pas là.")
+            .count(),
+        2
+    );
+
+    // A second agent in the same folder (no worktrees): a server of its own, its own token.
+    let other = agent_on(&h, &p1.id, "oc-mcp").await;
+    assert_eq!(h.agent(&other).cwd, h.agent(&allowed).cwd);
+    h.turn(&other, "outil escouade whoami").await;
+    assert_eq!(
+        whoami(&h, &other),
+        Some(json!({ "caller": "agent", "agent": other }))
+    );
+    assert_eq!(serves(&dir), 2);
+    h.turn(&allowed, "outil escouade whoami").await;
+    assert_eq!(
+        whoami(&h, &allowed),
+        Some(json!({ "caller": "agent", "agent": allowed }))
+    );
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn the_texts_written_by_opencode_go_through_opencode_run_on_a_model_always_given() {
+    let h = harness("esc45-writer");
+    let (p, _) = h.project(false).await;
+    let mut providers = paid();
+    providers["providers"][0]["models"]["fast"] = json!({
+        "id": "fast", "providerID": "paid", "name": "Fast", "limit": { "context": 100000 },
+    });
+    let dir = account_with(&h, "oc-writer", providers, None);
+    h.set_settings(|s| {
+        s.writer_engine = Some(EngineId::Opencode);
+        for a in &mut s.accounts {
+            if a.engine == EngineId::Opencode && a.id != "oc-writer" {
+                a.active = false;
+            }
+        }
+    });
+    let runs = || -> Vec<Value> {
+        launches(&dir)
+            .into_iter()
+            .filter_map(|l| l.get("run").cloned())
+            .collect()
+    };
+    // No model chosen: the default one of its providers, listed without a server.
+    let answer = h
+        .core
+        .one_shot("Nomme la tâche.", "ajouter un bouton", None, Some(&p.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        answer,
+        "Réponse d’OpenCode (paid/coder) : ajouter un bouton"
+    );
+    let asked = runs();
+    assert_eq!(asked.len(), 1);
+    let run = &asked[0];
+    let argv: Vec<&str> = run["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap())
+        .collect();
+    assert!(
+        argv.windows(2).any(|w| w == ["--model", "paid/coder"]),
+        "{argv:?}"
+    );
+    assert!(
+        argv.windows(2).any(|w| w == ["--format", "json"]),
+        "{argv:?}"
+    );
+    // The question by its input, the instructions as the prompt of Escouade's agent, without a tool.
+    assert_eq!(run["prompt"], "ajouter un bouton");
+    assert!(!argv.iter().any(|a| a.contains("ajouter")), "{argv:?}");
+    let config = &run["config"];
+    assert_eq!(config["model"], "paid/coder");
+    assert_eq!(config["small_model"], "paid/coder");
+    assert_eq!(
+        config["agent"]["escouade-writer"]["prompt"],
+        "Nomme la tâche."
+    );
+    assert_eq!(config["agent"]["escouade-writer"]["tools"]["*"], false);
+    assert_eq!(config["mcp"]["escouade"]["enabled"], false);
+    // Its session deleted from OpenCode's history.
+    let deleted = |n: usize| {
+        launches(&dir)
+            .iter()
+            .filter(|l| l["argv"][0] == "session" && l["argv"][1] == "delete")
+            .count()
+            == n
+    };
+    assert!(deleted(1), "{:?}", launches(&dir));
+
+    // The model chosen in the settings.
+    h.set_settings(|s| s.writer_model = "paid/fast".into());
+    let answer = h
+        .core
+        .one_shot("Nomme.", "autre", None, Some(&p.id))
+        .await
+        .unwrap();
+    assert_eq!(answer, "Réponse d’OpenCode (paid/fast) : autre");
+    // One of no provider any more: the default one again.
+    h.set_settings(|s| s.writer_model = "gone/model".into());
+    let answer = h
+        .core
+        .one_shot("Nomme.", "encore", None, Some(&p.id))
+        .await
+        .unwrap();
+    assert!(
+        answer.starts_with("Réponse d’OpenCode (paid/coder)"),
+        "{answer}"
+    );
+    // OpenCode's failure is told.
+    let e = h
+        .core
+        .one_shot("Nomme.", "échoue", None, Some(&p.id))
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{e:#}").contains("Unexpected server error"),
+        "{e:#}"
+    );
+    assert!(deleted(4));
+
+    // No provider connected: no text, and no `opencode run` asked (OpenCode would pick a model itself).
+    std::fs::write(
+        dir.join("providers.json"),
+        r#"{ "providers": [], "default": {} }"#,
+    )
+    .unwrap();
+    h.core.engine_models.write().remove(&EngineId::Opencode);
+    let before = runs().len();
+    let e = h
+        .core
+        .one_shot("Nomme.", "rien", None, Some(&p.id))
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{e:#}").contains("Aucun modèle d’OpenCode"),
+        "{e:#}"
+    );
+    assert_eq!(runs().len(), before);
+    h.core.stop_for_good();
+}
+
+/// Real run (ESC-45), as `real_opencode` (`ESCOUADE_REAL_OPENCODE`, `XDG_*`, Ollama's
+/// `qwen3-coder:30b-32k`): a text written by `opencode run` (its session gone from OpenCode's
+/// history afterwards), then an agent that calls Escouade's test tool `whoami` through the entry of
+/// its folder and is taken for itself. By hand only:
+/// `cargo test --lib real_opencode_writes -- --ignored --nocapture`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_opencode_writes_and_drives_escouade() {
+    let real = std::env::var("ESCOUADE_REAL_OPENCODE").expect("ESCOUADE_REAL_OPENCODE");
+    assert!(std::env::var("XDG_CONFIG_HOME").is_ok(), "XDG_*");
+    let h = harness("esc45-real");
+    let (p, _) = h.project(false).await;
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "principal-opencode".into(),
+            name: "Principal".into(),
+            engine: EngineId::Opencode,
+            config_dir: String::new(),
+            claude_path: real.clone(),
+            active: true,
+            projects: Vec::new(),
+            daily_budget: None,
+        });
+        s.writer_engine = Some(EngineId::Opencode);
+        s.writer_model = "ollama/qwen3-coder:30b-32k".into();
+    });
+    let sessions = || {
+        let out = std::process::Command::new(&real)
+            .args(["session", "list"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).matches("ses_").count()
+    };
+    let before = sessions();
+    let name = h
+        .core
+        .one_shot(
+            "Answer with a short kebab-case name of 2 to 4 words for the task, nothing else.",
+            "Corrige le bouton Enregistrer qui ne sauve pas les réglages",
+            None,
+            Some(&p.id),
+        )
+        .await
+        .unwrap();
+    println!("NAME {name}");
+    assert!(!name.is_empty() && name.len() < 80, "{name}");
+    assert_eq!(sessions(), before, "its session deleted");
+
+    h.core.set_mcp_enabled(true).unwrap();
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Opencode),
+                model: Some("ollama/qwen3-coder:30b-32k".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core
+        .send_message(
+            &id,
+            "Call the tool escouade_whoami once, then repeat exactly what it returned.".into(),
+            vec![],
+        )
+        .await
+        .unwrap();
+    wait_long(&h, "the call of whoami", 900, |h| {
+        whoami(h, &id).is_some() || h.items(&id).iter().any(|i| i["kind"] == "turn")
+    })
+    .await;
+    println!("WHOAMI {:?}", whoami(&h, &id));
+    println!("ITEMS {:#?}", h.items(&id));
+    assert_eq!(
+        whoami(&h, &id),
+        Some(json!({ "caller": "agent", "agent": id }))
+    );
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn the_principal_of_opencode_takes_a_budget_though_claude_codes_is_named_principal_too() {
+    let h = harness("esc45-principal");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let _id = new_agent(&h, &p.id).await;
+    let mut principal = h
+        .core
+        .settings
+        .read()
+        .accounts
+        .iter()
+        .find(|a| a.id == "principal-opencode")
+        .cloned()
+        .unwrap();
+    assert_eq!(principal.name, "Principal");
+    // Made at its first agent, its usage with it: the status bar shows its cost of the day.
+    let usage = h.core.usage.lock().clone();
+    let of = usage.account("principal-opencode").expect("its usage");
+    assert_eq!(of.engine, EngineId::Opencode);
+    principal.daily_budget = Some(3.0);
+    let saved = h.core.update_claude_account(principal.clone()).unwrap();
+    let got = saved.iter().find(|a| a.id == "principal-opencode").unwrap();
+    assert_eq!(got.daily_budget, Some(3.0));
+    assert_eq!(
+        h.core
+            .usage
+            .lock()
+            .account("principal-opencode")
+            .unwrap()
+            .daily_budget,
+        Some(3.0)
+    );
+    // Another account of Claude Code may still not take its name.
+    principal.name = "principal".into();
+    assert!(h.core.update_claude_account(principal).is_ok());
     h.core.stop_for_good();
 }

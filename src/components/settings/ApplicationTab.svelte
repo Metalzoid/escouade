@@ -23,6 +23,15 @@
   ]);
   /** « Modèle des textes rédigés »: the harnesses found. */
   const writers = $derived(writerOptions());
+  /** The harness the texts go to, when it takes the model chosen here (OpenCode): its models, as its account listed them. */
+  const writer = $derived(writerOf(s.writerEngine) ?? writers[0]?.value ?? null);
+  const writerModels = $derived(
+    writer && app.engines.find((e) => e.id === writer)?.writerTakesModel ? (app.engineModels[writer] ?? []) : null,
+  );
+  /** Its default model (« Par défaut »), named. */
+  const writerDefault = $derived(writerModels?.find((m) => m.default));
+  /** What the menu shows: the model chosen while it is one of them, else the default. */
+  const writerModel = $derived(writerModels?.some((m) => m.id === s.writerModel) ? (s.writerModel ?? '') : '');
   const percent = (n: number) => t('settings.app.percent', { n });
   /** The steps the window cannot hold are not offered (`zoomState.fit`). */
   const zoomOptions = $derived(
@@ -98,6 +107,26 @@
         bind:value={() => writerOf(s.writerEngine) ?? writers[0].value, (v) => (s.writerEngine = v)}
       />
     </Row>
+    {#if writerModels}
+      <Row label={t('settings.app.writerModel')} desc={t('settings.app.writerModelHelp')}>
+        <select
+          class="field select"
+          aria-label={t('settings.app.writerModel')}
+          disabled={!writerModels.length}
+          value={writerModel}
+          onchange={(e) => (s.writerModel = e.currentTarget.value)}
+        >
+          <option value=""
+            >{writerDefault
+              ? t('settings.app.writerModelDefault', { model: writerDefault.label })
+              : t('settings.app.writerModelNone')}</option
+          >
+          {#each writerModels as m (m.id)}
+            <option value={m.id}>{m.provider ? `${m.label} · ${m.provider}` : m.label}</option>
+          {/each}
+        </select>
+      </Row>
+    {/if}
   </Group>
 {/if}
 
@@ -107,6 +136,14 @@
     padding: 0 16px 12px;
     font-size: 11.5px;
     color: var(--wait);
+  }
+  .select {
+    width: 260px;
+    max-width: 50%;
+    flex: none;
+    height: 32px;
+    background: var(--panel);
+    font-size: 12px;
   }
   .input {
     width: 90px;

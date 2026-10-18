@@ -11,7 +11,7 @@
     PRINCIPAL,
     projectsWithoutAccount,
   } from '../../lib/accounts';
-  import { engineName } from '../../lib/engines';
+  import { capsOf, engineName } from '../../lib/engines';
   import { fList, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -149,6 +149,27 @@
     };
   }
 
+  /** A harness without a quota (OpenCode): a budget of the day stands in for it. */
+  const noQuota = (engine: EngineId) => capsOf(engine)?.quota === 'none';
+
+  /** « Budget par jour ($) » left: empty (or 0) for none; refused, as it was. */
+  async function commitBudget(a: Account, input: HTMLInputElement) {
+    const typed = input.value.trim().replace(',', '.');
+    const budget = typed === '' ? null : Number(typed);
+    const shown = a.dailyBudget ? String(a.dailyBudget) : '';
+    if ((budget || null) === (a.dailyBudget || null)) {
+      input.value = shown;
+      return;
+    }
+    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) {
+      refused[a.id] = t('accounts.tab.budgetInvalid');
+      input.value = shown;
+      return;
+    }
+    delete refused[a.id];
+    if (!(await save({ ...plain(a), dailyBudget: budget || null }))) input.value = shown;
+  }
+
   const blurOnEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
   };
@@ -228,6 +249,24 @@
               <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
             {/if}
           </div>
+          {#if noQuota(g.engine)}
+            <div class="line">
+              <label class="k" for="account-budget-{a.id}">{t('accounts.tab.budget')}</label>
+              <input
+                id="account-budget-{a.id}"
+                class="field mono budget"
+                type="text"
+                inputmode="decimal"
+                spellcheck="false"
+                placeholder={t('accounts.tab.budgetNone')}
+                aria-describedby="account-budget-hint-{a.id}"
+                value={a.dailyBudget ? String(a.dailyBudget) : ''}
+                onkeydown={blurOnEnter}
+                onblur={(e) => commitBudget(a, e.currentTarget)}
+              />
+              <span class="k hint" id="account-budget-hint-{a.id}">{t('accounts.tab.budgetHint')}</span>
+            </div>
+          {/if}
           {#if app.projects.length || closedOnes.length}
             <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
               <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
@@ -371,6 +410,19 @@
     padding: 0 10px;
     background: var(--panel);
     font-size: 12px;
+  }
+  .budget {
+    width: 90px;
+    flex: none;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--panel);
+    font-size: 12px;
+  }
+  .hint {
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.4;
   }
   .btn {
     height: 28px;

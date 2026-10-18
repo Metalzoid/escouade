@@ -12,6 +12,7 @@
 mod bench;
 mod locate;
 mod process;
+mod run;
 mod server;
 
 #[cfg(test)]
@@ -158,12 +159,15 @@ pub(crate) fn answers(input: &Value) -> Value {
 /// (`model` of `GET /config`) marked, each with its variants.
 pub(crate) struct Catalog {
     pub models: Vec<ToldModel>,
+    /// The context window of each model (`limit.context`), by its id, when OpenCode knows it.
+    pub contexts: std::collections::BTreeMap<String, u64>,
 }
 
 /// `catalog` from what the server answered.
 pub(crate) fn catalog(providers: &Value, config: &Value) -> Catalog {
     let chosen = config["model"].as_str();
     let mut models = Vec::new();
+    let mut contexts = std::collections::BTreeMap::new();
     for p in providers["providers"].as_array().into_iter().flatten() {
         let Some(pid) = p["id"].as_str() else {
             continue;
@@ -184,6 +188,9 @@ pub(crate) fn catalog(providers: &Value, config: &Value) -> Catalog {
                 .map(|v| v.keys().cloned().collect())
                 .unwrap_or_default();
             efforts.sort_by_key(|e| EFFORTS.iter().position(|x| x == e).unwrap_or(EFFORTS.len()));
+            if let Some(n) = m["limit"]["context"].as_u64().filter(|n| *n > 0) {
+                contexts.insert(format!("{pid}/{mid}"), n);
+            }
             models.push(ToldModel {
                 id: format!("{pid}/{mid}"),
                 label: m["name"].as_str().unwrap_or(mid).to_string(),
@@ -210,7 +217,7 @@ pub(crate) fn catalog(providers: &Value, config: &Value) -> Catalog {
     for m in &mut models {
         m.default = Some(&m.id) == default.as_ref();
     }
-    Catalog { models }
+    Catalog { models, contexts }
 }
 
 /// The models `opencode models --verbose` lists (`<provider>/<model>`, then its JSON), as
@@ -353,7 +360,8 @@ pub fn caps() -> EngineCaps {
 }
 
 /// What the server is given on top of the user's config (`OPENCODE_CONFIG_CONTENT`, merged with
-/// it): Escouade's server kept out for now (ESC-45 gives it), no share nor update of its own,
+/// it): Escouade's server kept out of every folder (an entry of the user's own included), each
+/// agent's folder given its own by the API (`process::give_escouade`), no share nor update of its own,
 /// and the model of the agent that starts it, which OpenCode would otherwise pick itself (OpenCode
 /// Zen without an account, tried).
 fn config_content(model: &str) -> Value {
@@ -426,13 +434,6 @@ fn parts(text: &str, attachments: &[Attachment]) -> Result<Value> {
         parts.push(json!({ "type": "text", "text": text }));
     }
     Ok(Value::Array(parts))
-}
-
-fn not_yet() -> String {
-    tr!(
-        "OpenCode ne le fait pas encore dans Escouade",
-        "OpenCode doesn’t do it in Escouade yet"
-    )
 }
 
 /// The server of the agents started with `program` and `env` (an account's): one per account.
@@ -582,7 +583,7 @@ impl Engine for Opencode {
             bail!(process::no_model(i18n::ui()));
         }
         let key = server_key(&spawn.program, &spawn.env);
-        let server = server::acquire(&key, || {
+        let server = server::acquire(&key, &spawn.cwd, |own| {
             let mut env = spawn.env.clone();
             env.push((
                 "OPENCODE_CONFIG_CONTENT".into(),
@@ -598,7 +599,7 @@ impl Engine for Opencode {
                 dir.display(),
                 spawn.account
             );
-            server::Server::start(&key, &spawn.program, &dir.to_string_lossy(), env)
+            server::Server::start(own, &spawn.program, &dir.to_string_lossy(), env)
         })?;
         log::info!(
             "{}: a session of OpenCode in {} (account {})",
@@ -619,6 +620,7 @@ impl Engine for Opencode {
             settings,
             instructions,
             title: "Escouade".into(),
+            escouade: spawn.escouade.clone(),
         };
         let p: Process = OpencodeProcess::new(opts, on_frame, on_exit);
         Ok(p)
@@ -637,9 +639,13 @@ impl Engine for Opencode {
         None
     }
 
-    /// The texts written by a model come with ESC-45 (`opencode run`).
-    fn one_shot<'a>(&'a self, _ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
-        Box::pin(async move { bail!(not_yet()) })
+    /// `opencode run`, on the model Escouade chooses (`run`).
+    fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
+        Box::pin(run::one_shot(ask))
+    }
+
+    fn writer_takes_model(&self) -> bool {
+        true
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {
@@ -654,7 +660,8 @@ impl Engine for Opencode {
         None
     }
 
-    /// Kept out for now, by its server's config (`config_content`).
+    /// Nothing at the launch of a server shared by agents: each agent's folder is given its entry,
+    /// with its own token, by the API (`process::give_escouade`).
     fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
         mcp::Launch::default()
     }

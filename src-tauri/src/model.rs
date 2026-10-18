@@ -57,6 +57,9 @@ pub struct Settings {
     /// « Modèle des textes rédigés »: the harness the one-shot questions go to (`engine::oneshot`).
     /// None, or one not found: Claude Code when it is found (its Haiku), else the first found.
     pub writer_engine: Option<EngineId>,
+    /// The model of the texts, for a harness that takes the one Escouade chooses (OpenCode:
+    /// `<provider>/<model>`); empty, or none of its models: its default one.
+    pub writer_model: String,
     /// « Claude et les agents peuvent piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
     pub mcp_enabled: bool,
     /// « <harness> peut piloter Escouade »: the other harnesses the server is declared in for the
@@ -173,6 +176,11 @@ pub struct Account {
     /// to it (a client's account kept to that client's projects); empty: every project. Principal's
     /// too: a project no active account serves then starts nothing (`accounts::serves_any`).
     pub projects: Vec<String>,
+    /// « Budget par jour ($) », for a harness without a quota (OpenCode): once its turns of the day
+    /// cost this much, the autopilot pauses until midnight, as at a quota used up
+    /// (`board::account_pause`). None (or 0): no budget.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_budget: Option<f64>,
 }
 
 /// The dictation's settings.
@@ -268,6 +276,7 @@ impl Default for Account {
             claude_path: String::new(),
             active: true,
             projects: Vec::new(),
+            daily_budget: None,
         }
     }
 }
@@ -441,6 +450,7 @@ impl Default for Settings {
             language: "system".into(),
             claude_language: "ui".into(),
             writer_engine: None,
+            writer_model: String::new(),
             mcp_enabled: false,
             mcp_harnesses: Vec::new(),
             mcp_port: 0,
@@ -1549,6 +1559,8 @@ pub enum PauseReason {
     /// The month's credits.
     Credits,
     Limit,
+    /// The day's budget of an account of a harness without a quota (`Account::daily_budget`).
+    Budget,
 }
 
 /// What holds the autopilot back on one account besides the quota windows read, or no longer does
@@ -1715,6 +1727,13 @@ pub struct AccountUsage {
     pub reason: Option<String>,
     /// What its turns cost today (`UsageSnapshot::set_today`).
     pub today_cost: f64,
+    /// Its « Budget par jour ($) » (`Account::daily_budget`), when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_budget: Option<f64>,
+    /// The start of the day `today_cost` is of (local midnight, ms): a budget holds nothing back
+    /// once that day is over, before the cost is read again.
+    #[serde(skip)]
+    pub today_start: i64,
     /// When its windows were last read, ms since epoch (0: not in this run).
     pub updated_at: i64,
     /// What `connected` and `reason` tell, kept to write them again in another language.

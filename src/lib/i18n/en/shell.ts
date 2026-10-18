@@ -117,6 +117,9 @@ export default defineZone('shell', {
     procs: { one: '{count} agent · {memory} · {cpu} CPU', other: '{count} agents · {memory} · {cpu} CPU' },
     procRow: '{name}: {memory} · {cpu}',
     today: 'Today',
+    dayCostTip: '{harness} has no quota: its account cost {cost} today, with no daily budget.',
+    dayBudgetTip:
+      '{harness} has no quota: its account cost {cost} today, out of a daily budget of {budget} (once reached, the autopilot waits for midnight).',
     /** The branch against its remote. */
     sync: {
       tracked: 'Tracking {upstream}: {behind} to pull, {ahead} to push',

@@ -108,6 +108,40 @@ describe('AccountsTab', () => {
     expect(b.called('account_update')).toHaveLength(2);
   });
 
+  it('gives an account of a harness without a quota a budget of the day, saved as the backend has it (ESC-45)', async () => {
+    const OC: Account = { id: 'oc', name: 'Local', engine: 'codex', configDir: 'C:\\oc', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, OC] };
+    const b = backend({
+      account_status: (a: { id: string }) => (a.id === 'oc' ? { connected: true, email: null, dir: 'C:\\oc', stamp: null } : status()(a)),
+      account_update: (a: { account: Account }) => [PRINCIPAL, a.account],
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    // Claude Code has its quota: no budget.
+    expect(within(row('Principal')).queryByRole('textbox', { name: 'Budget par jour ($)' })).not.toBeInTheDocument();
+    const field = within(row('Local')).getByRole('textbox', { name: 'Budget par jour ($)' });
+    expect(field).toHaveAttribute('placeholder', 'Aucun');
+    expect(field).toHaveAccessibleDescription(/pilote auto se met en pause jusqu’à minuit/);
+    await userEvent.type(field, '2,5');
+    await userEvent.tab();
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(1));
+    expect(b.called('account_update')[0].args.account).toEqual({ ...OC, dailyBudget: 2.5 });
+    await waitFor(() => expect(app.settings.accounts[1].dailyBudget).toBe(2.5));
+    // Not an amount: refused, as it was.
+    const now = within(row('Local')).getByRole('textbox', { name: 'Budget par jour ($)' });
+    await userEvent.clear(now);
+    await userEvent.type(now, '-3');
+    await userEvent.tab();
+    expect(await within(row('Local')).findByRole('alert')).toHaveTextContent('Le budget par jour est un montant en dollars, positif.');
+    expect(now).toHaveValue('2.5');
+    expect(b.called('account_update')).toHaveLength(1);
+    // Emptied: no budget.
+    await userEvent.clear(now);
+    await userEvent.tab();
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(2));
+    expect(b.called('account_update')[1].args.account.dailyBudget).toBeNull();
+  });
+
   it('puts the name back when the backend refuses it', async () => {
     backend({ account_update: () => Promise.reject('Un compte s’appelle déjà « Principal ».') });
     render(SettingsModal, { tab: 'accounts' });

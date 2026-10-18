@@ -3,6 +3,7 @@
 // log (FAKE_OPENCODE_LOG).
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, FAKE_OPENCODE, send, test, type App } from './fixture';
@@ -222,5 +223,75 @@ test.describe('OpenCode 2', () => {
     const group = dialog.locator('section[data-engine="opencode"]');
     await expect(group.locator('[data-engine-state]')).toHaveText('Non pris en charge');
     await expect(group.getByText(refusal)).toBeVisible();
+  });
+});
+
+/** A provider of paid models for every account of the fake (its cost: $3 and $15 a million tokens in and out). */
+const PAID = path.join(os.tmpdir(), `esc45-paid-providers-${process.pid}.json`);
+fs.writeFileSync(
+  PAID,
+  JSON.stringify({
+    providers: [
+      {
+        id: 'paid',
+        name: 'Paid',
+        source: 'api',
+        models: {
+          coder: {
+            id: 'coder',
+            providerID: 'paid',
+            name: 'Coder',
+            capabilities: { input: { text: true, image: false } },
+            cost: { input: 3, output: 15, cache_read: 0.3 },
+            limit: { context: 200000, output: 32000 },
+            status: 'active',
+          },
+        },
+      },
+    ],
+    default: { paid: 'coder' },
+  }),
+);
+
+test.describe('OpenCode, its cost and its budget (ESC-45)', () => {
+  test.use({ appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE, FAKE_OPENCODE_PROVIDERS: PAID } });
+
+  test('the status bar shows its cost of the day, out of the daily budget of its account; its texts take the model chosen', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newOpencodeAgent(page);
+    // Two calls to the model: (1000 in, 50 out) then (100 in, 10 out, 20 read from the cache), at the model's prices.
+    await send(page, 'deux appels');
+    await expect(page.getByText('Le fichier est lu.')).toBeVisible();
+    await expect(page.getByTestId('turn-done')).toContainText(/0,004\s\$/);
+    await expect(page.getByTestId('turn-done')).not.toContainText('estimé');
+    // No quota: the account's cost of the day stands in for the bars.
+    const day = page.locator('footer.bar .day');
+    await expect(day).toContainText(/0,004\s\$/);
+    await expect(day).not.toHaveClass(/over/);
+
+    // « Budget par jour ($) » in its account's settings: reached, the status bar says it.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    const opencode = settings.getByRole('list', { name: 'Comptes OpenCode' });
+    // Claude Code's accounts have their quota: no budget for them.
+    await expect(
+      settings.getByRole('list', { name: 'Comptes Claude Code' }).getByRole('textbox', { name: 'Budget par jour ($)' }),
+    ).toHaveCount(0);
+    const budget = opencode.getByRole('textbox', { name: 'Budget par jour ($)' });
+    await expect(budget).toHaveAttribute('placeholder', 'Aucun');
+    await budget.fill('0,002');
+    await budget.press('Tab');
+    await expect(day).toHaveClass(/over/);
+    await expect(day).toContainText(/0,004\s\$\s\/\s0,002\s\$/);
+
+    // The texts written by OpenCode: its model chosen among those of its providers.
+    await settings.getByRole('tab', { name: 'Application' }).click();
+    await settings.getByRole('group', { name: 'Modèle des textes rédigés' }).getByRole('button', { name: 'OpenCode' }).click();
+    const model = settings.getByRole('combobox', { name: 'Modèle' });
+    await expect(model.locator('option')).toHaveText(['Par défaut (Coder)', 'Coder · Paid']);
   });
 });

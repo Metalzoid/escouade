@@ -404,6 +404,71 @@ fn the_mode_plan_ends_on_a_plan_to_approve() {
 }
 
 #[test]
+fn a_turns_cost_and_tokens_are_its_steps_each_counted_once_and_its_window_its_models() {
+    let mut rt = agent("C:/p");
+    start(&mut rt);
+    // The window of each model, as the server lists them.
+    let fxs = feed(
+        &mut rt,
+        &[ev(
+            "escouade.contexts",
+            json!({ "sessionID": S, "contexts": { "ollama/qwen3-coder:30b-32k": 32768, "x/y": 200000 } }),
+        )],
+    );
+    assert_eq!(rt.context_window, 32768);
+    assert!(fxs[0].agent_changed);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "deux appels", 0, &[], &mut fx);
+    let step = |id: &str, session: &str, input: u64, output: u64, read: u64, cost: f64| {
+        ev(
+            "message.part.updated",
+            json!({ "sessionID": session, "part": {
+                "id": id, "messageID": "msg_a", "sessionID": session, "type": "step-finish",
+                "tokens": { "input": input, "output": output, "reasoning": 2, "cache": { "read": read, "write": 0 } },
+                "cost": cost,
+            } }),
+        )
+    };
+    let fxs = feed(
+        &mut rt,
+        &[
+            ev(
+                "session.status",
+                json!({ "sessionID": S, "status": { "type": "busy" } }),
+            ),
+            step("prt_1", S, 1000, 50, 0, 0.0031),
+            // The same step told again: counted once.
+            step("prt_1", S, 1000, 50, 0, 0.0031),
+            // A subagent's session, under its call.
+            ev(
+                "session.created",
+                json!({ "sessionID": "ses_child", "info": { "id": "ses_child", "parentID": S } }),
+            ),
+            step("prt_c", "ses_child", 300, 20, 0, 0.0009),
+            step("prt_2", S, 40, 10, 1000, 0.0012),
+            ev("session.idle", json!({ "sessionID": S })),
+        ],
+    );
+    let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!((row.input, row.cache, row.output), (1340, 1000, 86));
+    assert!((row.cost - 0.0052).abs() < 1e-12, "{}", row.cost);
+    assert!((rt.meta.cost - 0.0052).abs() < 1e-12);
+    assert_eq!(rt.meta.tokens, 1340 + 1000 + 86);
+    // The context is the agent's last call's, out of its model's window.
+    assert_eq!((rt.context_tokens, rt.context_window), (1040, 32768));
+    let turn = rt
+        .conv
+        .items()
+        .into_iter()
+        .rev()
+        .find(|i| i["kind"] == "turn")
+        .unwrap();
+    assert!((turn["cost"].as_f64().unwrap() - 0.0052).abs() < 1e-12);
+}
+
+#[test]
 fn a_path_of_windows_or_of_posix_is_absolute_on_every_system() {
     let cwd = "/work/wt";
     for path in [

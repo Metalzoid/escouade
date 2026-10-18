@@ -42,5 +42,6 @@
   ],
   "efforts": ["low", "medium", "high", "xhigh", "max"],
   "writer": "Claude Haiku",
+  "writerTakesModel": false,
   "mcpConfig": null
 }

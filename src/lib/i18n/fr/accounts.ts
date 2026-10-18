@@ -25,6 +25,12 @@ export default {
     add: 'Ajouter un compte…',
     reserved: 'Réservé aux projets',
     reservedAll: 'Tous les projets',
+    /** For a harness without a quota (OpenCode), which goes through the providers' APIs. */
+    budget: 'Budget par jour ($)',
+    budgetNone: 'Aucun',
+    budgetHint:
+      'Atteint, le pilote auto se met en pause jusqu’à minuit, comme au quota épuisé. Vide : aucun budget. Un modèle local ne coûte rien.',
+    budgetInvalid: 'Le budget par jour est un montant en dollars, positif.',
     /** Un projet fermé (son historique est gardé) auquel le compte reste réservé : coché, jusqu'à ce qu'on le décoche ou que l'historique soit effacé. */
     closedProject: '{name} (fermé)',
     /** `{names}` : les projets, chacun entre guillemets (`quoted`) et énumérés comme dans une phrase. */
