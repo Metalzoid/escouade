@@ -864,9 +864,18 @@ impl AgentRt {
     }
 }
 
-/// A path as OpenCode gave it, absolute (it may give one relative to the agent's folder).
+/// A path as OpenCode gave it, absolute (it may give one relative to the agent's folder). One of
+/// Windows (`C:\…`, `\\server\…`) or of a POSIX system (`/…`) is absolute on every system: an
+/// OpenCode of WSL, or a stream recorded elsewhere, reads the same.
 fn absolute(path: &str, cwd: &str) -> String {
-    if path.is_empty() || std::path::Path::new(path).is_absolute() || path.starts_with('/') {
+    let b = path.as_bytes();
+    let drive =
+        b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
+    if path.is_empty()
+        || drive
+        || path.starts_with(['/', '\\'])
+        || std::path::Path::new(path).is_absolute()
+    {
         return path.to_string();
     }
     std::path::Path::new(cwd)

@@ -402,3 +402,21 @@ fn the_mode_plan_ends_on_a_plan_to_approve() {
     );
     assert_eq!(rt.meta.mode, "default");
 }
+
+#[test]
+fn a_path_of_windows_or_of_posix_is_absolute_on_every_system() {
+    let cwd = "/work/wt";
+    for path in [
+        r"C:\Users\user\wt\calc.py",
+        "C:/Users/user/wt/calc.py",
+        r"\server\share\calc.py",
+        "/home/user/wt/calc.py",
+    ] {
+        assert_eq!(absolute(path, cwd), path);
+    }
+    assert_eq!(
+        absolute("calc.py", cwd),
+        std::path::Path::new(cwd).join("calc.py").to_string_lossy()
+    );
+    assert_eq!(absolute("", cwd), "");
+}
