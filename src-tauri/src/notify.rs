@@ -391,12 +391,20 @@ pub fn window_attended<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 pub fn flash<R: Runtime>(app: &AppHandle<R>) {
+    if crate::paths::hidden_window() {
+        return;
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.request_user_attention(Some(tauri::UserAttentionType::Critical));
     }
 }
 
+/// Brings the window forward, shown and focused. Not a window kept out of sight
+/// (`paths::hidden_window`): it stays where it is, never taking the focus from the user's app.
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
+    if crate::paths::hidden_window() {
+        return;
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
@@ -509,10 +517,46 @@ pub fn tray_icon<R: Runtime>(app: &AppHandle<R>, waiting: usize) -> Option<Image
     Some(Image::new_owned(rgba, w, h))
 }
 
+/// Where a window kept out of sight goes across: right of every screen (`right_edges`, in
+/// physical pixels).
+fn out_of_sight_x(right_edges: &[i32]) -> i32 {
+    // No screen known: farther right than any desktop reaches.
+    right_edges.iter().copied().max().unwrap_or(16_000).max(0) + 200
+}
+
+/// Shows the main window out of sight (`paths::hidden_window`), at its usual size (some tests
+/// depend on it): right of every screen, with no button in the taskbar, and without taking the
+/// focus (`show` would take it). Windows only, as the end-to-end tests.
+pub fn show_out_of_sight<R: Runtime>(w: &tauri::WebviewWindow<R>) {
+    let edges: Vec<i32> = w
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| m.position().x + m.size().width as i32)
+        .collect();
+    let _ = w.set_skip_taskbar(true);
+    let _ = w.set_position(tauri::PhysicalPosition::new(out_of_sight_x(&edges), 0));
+    #[cfg(windows)]
+    if let Ok(hwnd) = w.hwnd() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        // SAFETY: the window's own handle, on the thread the app is set up on.
+        unsafe { ShowWindow(hwnd.0 as _, SW_SHOWNOACTIVATE) };
+    }
+    // The shell gives a window its button as it shows.
+    let _ = w.set_skip_taskbar(true);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_window_out_of_sight_goes_right_of_every_screen() {
+        assert_eq!(out_of_sight_x(&[1920, 4480, -1280]), 4680);
+        assert_eq!(out_of_sight_x(&[-1920]), 200);
+        assert_eq!(out_of_sight_x(&[]), 16_200);
+    }
 
     #[test]
     fn chime_is_a_valid_wav() {

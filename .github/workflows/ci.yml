@@ -95,14 +95,15 @@ jobs:
           if ($v) { "::notice::WebView2 runtime $v" } else { "::warning::WebView2 runtime not found" }
 
       # WebView2 150+ ignores the WEBVIEW2_* variables (and the per-user policy) in elevated processes,
-      # and CI runners are elevated: open the app's DevTools port through the machine policy instead.
+      # and CI runners are elevated: open the app's DevTools port through the machine policy instead,
+      # with the options that keep its window drawing out of sight (RENDER_UNSEEN in tests/e2e/fixture.ts).
       - name: Open the app's WebView2 DevTools port
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
           New-Item -Path $key -Force | Out-Null
-          New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222' -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling' -PropertyType String -Force | Out-Null
 
       # A test that fails runs again twice (playwright.config.ts): the one that passes then is reported
       # as flaky, and its trace is kept.

@@ -228,6 +228,18 @@ fn sandbox_dir_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<
         .map(PathBuf::from)
 }
 
+/// The window of a sandboxed run kept out of the user's way (end-to-end tests run while they work):
+/// `$ESCOUADE_HIDDEN_WINDOW` set, which only a sandboxed run hears. The window opens off every
+/// screen, never takes the focus, has no button in the taskbar, and the app no tray icon.
+pub fn hidden_window() -> bool {
+    hidden_window_from(|k| std::env::var_os(k))
+}
+
+fn hidden_window_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    sandbox_dir_from(&var).is_some()
+        && var("ESCOUADE_HIDDEN_WINDOW").is_some_and(|v| !v.is_empty() && v != "0")
+}
+
 /// The data folder in `home`. A development build never moves the user's data (the installed app
 /// may still be the old one): it uses the folder under the new name if there is one.
 fn data_dir_in(home: &Path, debug: bool, notes: &mut Vec<String>) -> PathBuf {
@@ -1154,6 +1166,33 @@ mod tests {
         );
         assert_eq!(sandbox_dir_from(env(&[("ESCOUADE_DATA_DIR", "")])), None);
         assert_eq!(sandbox_dir_from(env(&[])), None);
+    }
+
+    #[test]
+    fn only_a_sandboxed_run_may_hide_its_window() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| std::ffi::OsString::from(v))
+            }
+        };
+        const SANDBOX: (&str, &str) = ("ESCOUADE_DATA_DIR", "C:/e");
+        const HIDDEN: (&str, &str) = ("ESCOUADE_HIDDEN_WINDOW", "1");
+        assert!(hidden_window_from(env(&[SANDBOX, HIDDEN])));
+        assert!(hidden_window_from(env(&[("CCM_DATA_DIR", "C:/c"), HIDDEN])));
+        // The user's own app never opens out of sight, whatever its environment.
+        assert!(!hidden_window_from(env(&[HIDDEN])));
+        assert!(!hidden_window_from(env(&[SANDBOX])));
+        assert!(!hidden_window_from(env(&[
+            SANDBOX,
+            ("ESCOUADE_HIDDEN_WINDOW", "0")
+        ])));
+        assert!(!hidden_window_from(env(&[
+            SANDBOX,
+            ("ESCOUADE_HIDDEN_WINDOW", "")
+        ])));
     }
 
     #[test]

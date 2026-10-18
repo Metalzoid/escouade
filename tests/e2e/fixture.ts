@@ -195,6 +195,19 @@ const LABELS = {
 /** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
 const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
 
+/**
+ * The app's window is kept out of sight (off every screen, never focused, no taskbar button): the tests run while the user
+ * works, without taking their keyboard. `ESCOUADE_E2E_SHOW=1` shows it, in front, to watch a test.
+ */
+export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_SHOW !== '0';
+
+/**
+ * WebView2 draws and runs its timers in full even though its window is not seen: Chromium slows down a window it takes for
+ * hidden or covered. Off the screens, the window was drawn without them in short tests (ESC-126): they keep it so in the long
+ * ones. The same in ci.yml, where they reach WebView2 by the machine policy.
+ */
+const RENDER_UNSEEN = '--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling';
+
 /** How long `restart()` leaves the app to write its state before it ends it. */
 const SAVE_MS = 1500;
 
@@ -254,7 +267,8 @@ export const test = base.extend<{
       // Sent "from claude.ai" to an agent once its Remote Control is on.
       FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
       WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${RENDER_UNSEEN}`,
+      ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
       // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
       // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
       CLAUDE_CONFIG_DIR: path.join(root, 'claude'),

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, SHOW, test } from './fixture';
 
 const STEPS = [80, 90, 100, 110, 125, 150, 175, 200];
 const BRANCH = 'ticket/esc-112-une-branche-au-nom-bien-trop-long-pour-tenir-dans-la-barre-d-etat';
@@ -128,12 +128,13 @@ test('the zoom of Réglages › Application grows the whole interface at once, n
 
 test('the terminals and the editor have their own font size, set at once and fitted to their place', async ({ app }) => {
   const { page } = app;
-  // The sizes the terminals' pseudo-consoles are told.
+  // The sizes the terminals' pseudo-consoles are told: the one they start at, then each new one (a terminal started at the size
+  // of its place is told none until it changes). Seen as they go (a route has missed some).
   const resizes: { cols: number; rows: number }[] = [];
-  await page.route(/ipc[.]localhost[/]term_resize/, async (route) => {
-    const body = JSON.parse(route.request().postData() ?? '{}');
+  page.on('request', (r) => {
+    if (!/ipc[.]localhost[/]term_(spawn|resize)/.test(r.url())) return;
+    const body = JSON.parse(r.postData() ?? '{}');
     resizes.push({ cols: body.cols, rows: body.rows });
-    await route.continue().catch(() => {});
   });
   await addProject(page, app.repo);
   // A long branch name, which the status bar has to make room for.
@@ -232,4 +233,35 @@ test('the terminals and the editor have their own font size, set at once and fit
   expect(branch.text).toContain(BRANCH);
   expect(branch.shown).toBeLessThan(branch.whole);
   await cdp.send('Emulation.clearDeviceMetricsOverride');
+});
+
+test('the window kept out of sight draws, and the page has the focus as in front, at its usual size', async ({ app }) => {
+  const { page } = app;
+  // The tests run with the window off every screen and never focused (fixture.ts), unless ESCOUADE_E2E_SHOW asks to see it.
+  const state = await page.evaluate(
+    () =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        const now = (frame: boolean) => ({
+          frame,
+          focus: document.hasFocus(),
+          visibility: document.visibilityState,
+          width: innerWidth,
+          height: innerHeight,
+          // Where the window is, right of the left edge of the screen it is nearest to.
+          offScreen: screenX >= (screen as Screen & { availLeft: number }).availLeft + screen.width,
+        });
+        const t = setTimeout(() => resolve(now(false)), 2000);
+        requestAnimationFrame(() => (clearTimeout(t), resolve(now(true))));
+      }),
+  );
+  expect(state).toMatchObject({ frame: true, focus: true, visibility: 'visible', offScreen: !SHOW });
+  // The size of tauri.conf.json, as big as the screen allows: the interface's minimum at least.
+  expect(state.width as number).toBeGreaterThanOrEqual(1000);
+  expect(state.height as number).toBeGreaterThanOrEqual(600);
+  // A field focused in the page has the focus, as in a window in front.
+  await page
+    .getByRole('button', { name: /Ajouter un projet/ })
+    .first()
+    .focus();
+  await expect(page.getByRole('button', { name: /Ajouter un projet/ }).first()).toBeFocused();
 });

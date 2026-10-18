@@ -199,6 +199,10 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
         .iter()
         .find(|w| w.label == "main")
         .ok_or(tauri::Error::WindowNotFound)?;
+    // Out of sight (`paths::hidden_window`), its WebView does not take the focus as it is made:
+    // that would take it from the user's app, the window still hidden.
+    let mut window = window.clone();
+    window.focus &= !paths::hidden_window();
     // Only the dev server's address is the app's besides its own.
     let dev = if tauri::is_dev() {
         config.build.dev_url.clone()
@@ -210,7 +214,7 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
         dev: dev.clone(),
     });
     let main = navigation::guard(
-        WebviewWindowBuilder::from_config(app.handle(), window)?,
+        WebviewWindowBuilder::from_config(app.handle(), &window)?,
         dev,
     )
     .build()?;
@@ -286,7 +290,9 @@ pub fn run() {
                 }),
             )));
             app.manage(updates::Updates::started(after_update));
-            build_tray(app)?;
+            if !paths::hidden_window() {
+                build_tray(app)?;
+            }
             // In place of Tauri's default, in English. Should it fail, the default stays: its Edit
             // menu keeps copy and paste working in the WebView.
             #[cfg(target_os = "macos")]
@@ -317,6 +323,7 @@ pub fn run() {
                     log::warn!("zoom not set: {e}");
                 }
                 match window {
+                    _ if paths::hidden_window() => notify::show_out_of_sight(&w),
                     updates::Window::Front => {
                         let _ = w.show();
                         let _ = w.set_focus();

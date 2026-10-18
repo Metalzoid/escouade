@@ -1792,13 +1792,24 @@ mod tests {
     }
 
     /// What a PowerShell script of the tests does before it waits: a console program only says it
-    /// runs (its process id in `pid_file`), a window program opens a form first (and says "none"
-    /// when Windows shows it no window: no desktop to show it on).
+    /// runs (its process id in `pid_file`), a window program shows a form first (and says "none"
+    /// when Windows shows it no window: no desktop to show it on). The form is shown off the
+    /// screens, without the focus nor a button in the taskbar: the user at the machine sees
+    /// nothing, the app a window. (The first `ShowWindow` of a process started hidden hides.)
     fn script_text(pid_file: &Path, window: bool) -> String {
         let pid_file = pid_file.display();
         if window {
             format!(
-                "Add-Type -AssemblyName System.Windows.Forms\r\n$f = New-Object Windows.Forms.Form\r\n$f.Show()\r\nSet-Content -Path '{pid_file}' -Value $(if ($f.Visible) {{ $PID }} else {{ 'none' }})\r\nStart-Sleep 60\r\n"
+                "Add-Type -AssemblyName System.Windows.Forms\r\n\
+                 Add-Type -Name W -Namespace Esc -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr h, int c); [DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(IntPtr h);'\r\n\
+                 $f = New-Object Windows.Forms.Form\r\n\
+                 $f.ShowInTaskbar = $false\r\n\
+                 $f.StartPosition = 'Manual'\r\n\
+                 $f.Location = New-Object Drawing.Point(-30000, -30000)\r\n\
+                 [void][Esc.W]::ShowWindow($f.Handle, 0)\r\n\
+                 [void][Esc.W]::ShowWindow($f.Handle, 4)\r\n\
+                 Set-Content -Path '{pid_file}' -Value $(if ([Esc.W]::IsWindowVisible($f.Handle)) {{ $PID }} else {{ 'none' }})\r\n\
+                 Start-Sleep 60\r\n"
             )
         } else {
             format!("Set-Content -Path '{pid_file}' -Value $PID\r\nStart-Sleep 60\r\n")
@@ -1816,11 +1827,10 @@ mod tests {
     }
 
     /// The command that runs `script` in a PowerShell of its own, outside the console of the
-    /// terminal: hidden (a console program) or showing its window.
-    fn start_command(script: &Path, hidden: bool) -> String {
-        let style = if hidden { " -WindowStyle Hidden" } else { "" };
+    /// terminal, its console hidden (a window program shows its own window).
+    fn start_command(script: &Path) -> String {
         format!(
-            "Start-Process powershell{style} -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"'",
+            "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"'",
             script.display()
         )
     }
@@ -1869,14 +1879,14 @@ mod tests {
         let (window_script, window_file) = write_script(&dir, "window", true);
         pty.write(
             "t5",
-            format!("{}\r", start_command(&console_script, true)).as_bytes(),
+            format!("{}\r", start_command(&console_script)).as_bytes(),
         )
         .unwrap();
         let console = told_pid(&console_file).unwrap();
         reaper.0.push(console);
         pty.write(
             "t5",
-            format!("{}\r", start_command(&window_script, false)).as_bytes(),
+            format!("{}\r", start_command(&window_script)).as_bytes(),
         )
         .unwrap();
         let Some(window) = told_pid(&window_file) else {
@@ -1911,11 +1921,8 @@ mod tests {
         let dir = crate::paths::test_dir("pty-dropped-kills-nothing");
         let mut reaper = Reaper::default();
         let (script, pid_file) = write_script(&dir, "console", false);
-        pty.write(
-            "t6",
-            format!("{}\r", start_command(&script, true)).as_bytes(),
-        )
-        .unwrap();
+        pty.write("t6", format!("{}\r", start_command(&script)).as_bytes())
+            .unwrap();
         let program = told_pid(&pid_file).unwrap();
         reaper.0.push(program);
         assert!(alive(program), "{}", out.lock());
@@ -1952,8 +1959,8 @@ mod tests {
             &program,
             format!(
                 "{}\r\n{}\r\nwhile (-not ((Test-Path '{}') -and (Test-Path '{}'))) {{ Start-Sleep -Milliseconds 100 }}\r\nStart-Sleep 1\r\n",
-                start_command(&console_script, true),
-                start_command(&window_script, false),
+                start_command(&console_script),
+                start_command(&window_script),
                 console_file.display(),
                 window_file.display(),
             ),
