@@ -742,7 +742,7 @@ pub struct Ticket {
     pub title: String,
     pub description: String,
     pub criteria: Vec<Criterion>,
-    /// The features in place so far, as its agent last listed them (3 to 8 short lines); the
+    /// The features in place so far, as its agent last listed them (1 to 8 short lines); the
     /// agent writes it `avancement`.
     #[serde(alias = "avancement")]
     pub progress: Vec<String>,

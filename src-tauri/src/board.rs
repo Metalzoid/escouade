@@ -125,6 +125,15 @@ pub struct Report {
 const PROGRESS_ITEMS: usize = 8;
 const PROGRESS_ITEM_BYTES: usize = 120;
 
+/// The places of the protocol's example of a progress list, in both languages: an agent that
+/// gives them back as they are has listed nothing (ESC-123).
+const EXAMPLE_PROGRESS: [&str; 4] = [
+    "<ce que tu as fait>",
+    "<autre chose faite>",
+    "<what you did>",
+    "<another thing done>",
+];
+
 /// The content of the last ```escouade block of `text`, if it is closed.
 fn last_block(text: &str) -> Option<&str> {
     let start = text.rfind(FENCE)?;
@@ -165,7 +174,7 @@ fn progress_from(v: &Value) -> Option<Vec<String>> {
         .iter()
         .filter_map(Value::as_str)
         .map(|item| one_line(item, PROGRESS_ITEM_BYTES))
-        .filter(|item| !item.is_empty())
+        .filter(|item| !item.is_empty() && !EXAMPLE_PROGRESS.contains(&item.as_str()))
         .take(PROGRESS_ITEMS)
         .collect();
     (!items.is_empty()).then_some(items)
@@ -1460,9 +1469,10 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
          À la fin de CHAQUE réponse, termine par un bloc de code ouvert par ```escouade et fermé par ``` \
          qui contient un JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"vérifié par …\"}}, \
          {{\"n\": 2, \"ok\": false, \"note\": \"ce qui manque\"}}], \
-         \"avancement\": [\"Tokens d'accès signés\", \"Middleware réécrit\", \"Adaptateur des sessions\"]}} \
+         \"avancement\": [\"<ce que tu as fait>\", \"<autre chose faite>\"]}} \
          avec un élément par critère dans \"criteres\" (n à partir de 1). \
-         Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) des fonctionnalités en place jusque-là.",
+         Dans « avancement », liste ce que tu as fait toi-même dans ce ticket jusque-là, \
+         en 1 à 8 éléments courts de tes mots : les places entre < > sont à remplir, ne recopie pas l'exemple.",
         "You are working autonomously on Escouade ticket {key} “{title}”. \
          Acceptance criteria ({n}): {criteria}. \
          Check each criterion yourself (tests, runs) before declaring it met. \
@@ -1471,9 +1481,10 @@ fn protocol(lang: Lang, t: &Ticket, criteria: &str, ports: Option<u16>, isola: b
          At the end of EVERY answer, finish with a code block opened by ```escouade and closed by ``` \
          that holds a JSON {{\"criteres\": [{{\"n\": 1, \"ok\": true, \"note\": \"checked by …\"}}, \
          {{\"n\": 2, \"ok\": false, \"note\": \"what is missing\"}}], \
-         \"avancement\": [\"Signed access tokens\", \"Middleware rewritten\", \"Session adapter\"]}} \
+         \"avancement\": [\"<what you did>\", \"<another thing done>\"]}} \
          with one item per criterion in \"criteres\" (n from 1). \
-         Add “avancement” to the report: the brief list (3 to 8 short items) of the features in place so far.",
+         In “avancement”, list what you yourself did in this ticket so far, \
+         in 1 to 8 short items of your own words: the places between < > are to fill in, don’t copy the example.",
         key = t.key,
         title = one_line(&t.title, 200),
         n = t.criteria.len(),
@@ -3771,35 +3782,75 @@ mod tests {
 
     #[test]
     fn the_protocol_asks_for_a_short_progress_list_with_the_report() {
-        for ports in [None, Some(4100)] {
-            let p = protocol_prompt(&ticket(2, 5), ports);
-            assert!(!p.contains('\n') && !p.contains('\r'), "{p}");
-            assert!(
-                p.contains(
-                    "Ajoute au bilan « avancement » : la liste succincte (3 à 8 éléments courts) \
-                     des fonctionnalités en place jusque-là."
-                ),
-                "{ports:?}: {p}"
-            );
-            // The key is in the example of the block, next to the criteria, with three items…
-            let example = p.find("{\"criteres\": [").expect("the example");
-            let key = p[example..]
-                .find("\"avancement\": [\"")
-                .expect("the key in the example");
-            assert!(
-                p[example..][..key].contains("\"ok\": false"),
-                "{ports:?}: {p}"
-            );
-            let items = &p[example + key..];
-            let items = &items[..items.find("]}").expect("the end of the example")];
-            assert_eq!(items.matches("\", \"").count(), 2, "{ports:?}: {items}");
-            // …and "one element per criterion" is said of the criteria, not of the whole block.
-            assert!(
-                p.contains("un élément par critère dans \"criteres\" (n à partir de 1)"),
-                "{ports:?}: {p}"
-            );
-            assert!(escaped_len(&p) <= PROTOCOL_BUDGET, "{ports:?}");
+        for lang in [Lang::Fr, Lang::En] {
+            for ports in [None, Some(4100)] {
+                let p = protocol_for_claude(lang, &ticket(2, 5), ports, false);
+                assert!(!p.contains('\n') && !p.contains('\r'), "{p}");
+                let ask = match lang {
+                    Lang::Fr => {
+                        "Dans « avancement », liste ce que tu as fait toi-même dans ce ticket jusque-là, \
+                         en 1 à 8 éléments courts de tes mots : les places entre < > sont à remplir, \
+                         ne recopie pas l'exemple."
+                    }
+                    Lang::En => {
+                        "In “avancement”, list what you yourself did in this ticket so far, \
+                         in 1 to 8 short items of your own words: the places between < > are to fill in, \
+                         don’t copy the example."
+                    }
+                };
+                assert!(p.contains(ask), "{lang:?} {ports:?}: {p}");
+                // The key is in the example of the block, next to the criteria, with places to fill in
+                // and no work that could pass for the agent's own (ESC-123: a local model copied
+                // « Tokens d'accès signés, Middleware réécrit… » as what it had done)…
+                let example = p.find("{\"criteres\": [").expect("the example");
+                let key = p[example..]
+                    .find("\"avancement\": [\"")
+                    .expect("the key in the example");
+                assert!(
+                    p[example..][..key].contains("\"ok\": false"),
+                    "{lang:?} {ports:?}: {p}"
+                );
+                let items = &p[example + key + "\"avancement\": ".len()..];
+                let items = &items[..=items.find(']').expect("the end of the example")];
+                let items: Vec<String> = serde_json::from_str(items).expect(items);
+                assert_eq!(items.len(), 2, "{items:?}");
+                assert!(
+                    items.iter().all(|i| i.starts_with('<')
+                        && i.ends_with('>')
+                        && EXAMPLE_PROGRESS.contains(&i.as_str())),
+                    "{items:?}"
+                );
+                for old in ["Tokens", "Middleware", "Adaptateur", "adapter"] {
+                    assert!(!p.contains(old), "{lang:?} {ports:?}: {p}");
+                }
+                // …and "one element per criterion" is said of the criteria, not of the whole block.
+                let per = match lang {
+                    Lang::Fr => "un élément par critère dans \"criteres\" (n à partir de 1)",
+                    Lang::En => "one item per criterion in \"criteres\" (n from 1)",
+                };
+                assert!(p.contains(per), "{lang:?} {ports:?}: {p}");
+                assert!(escaped_len(&p) <= PROTOCOL_BUDGET, "{ports:?}");
+            }
         }
+    }
+
+    #[test]
+    fn the_places_of_the_example_are_not_kept_as_progress() {
+        let progress = |json: &str| parse_report(&block(json)).and_then(|r| r.progress);
+        // Copied as they are, in either language, they are dropped; a list of only them is no list.
+        assert_eq!(
+            progress(
+                r#"{"avancement": ["<ce que tu as fait>", "Fichier bonjour.txt ajouté", " <another thing done> "]}"#
+            ),
+            Some(vec!["Fichier bonjour.txt ajouté".to_string()])
+        );
+        let all = EXAMPLE_PROGRESS.map(|s| format!("\"{s}\"")).join(", ");
+        assert_eq!(progress(&format!("{{\"avancement\": [{all}]}}")), None);
+        // An item of the agent's own between < > stays.
+        assert_eq!(
+            progress(r#"{"avancement": ["<Button> réécrit"]}"#),
+            Some(vec!["<Button> réécrit".to_string()])
+        );
     }
 
     #[test]

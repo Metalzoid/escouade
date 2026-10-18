@@ -241,6 +241,11 @@ async function ticket(app: App, h: Harness) {
     }
   }
   await snap(page, `${h}-ticket-review`);
+  // What was done is the agent's work, not the protocol's example copied (ESC-123: a local model did so).
+  const steps = (await review.locator('.card', { hasText: 'DEM-1' }).first().locator('.steps').allTextContents()).join(' | ');
+  console.log(`${h}: what was done: ${steps.replace(/\s+/g, ' ')}`);
+  expect(steps).toMatch(/bonjour/i);
+  expect(steps).not.toMatch(/Tokens d|Middleware|Adaptateur des sessions|<ce que tu as fait>|<autre chose faite>/);
   const done = page.getByRole('region', { name: 'Terminé' });
   const validate = review.getByRole('button', { name: 'Valider et merger' });
   await validate.click();
