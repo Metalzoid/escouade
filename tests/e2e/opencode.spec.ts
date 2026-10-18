@@ -87,6 +87,10 @@ test.describe('an agent on OpenCode', () => {
     const plan = page.locator('main.conv .plan');
     const before = requests(app, 'POST', /prompt_async$/).length;
     await send(page, 'étapes');
+    // Folded in a window under its height (the 1024 × 768 screen of the Windows runner): unfolded to read its tasks.
+    await expect(plan).toContainText('/3 tâches');
+    const fold = plan.locator('button.fold');
+    if ((await fold.getAttribute('aria-expanded')) === 'false') await fold.click();
     await expect(plan).toContainText('Lire le code');
     await send(page, 'et ensuite');
     // Held by Escouade while the turn runs (OpenCode would take it into the turn, the first request lost).
