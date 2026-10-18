@@ -224,6 +224,10 @@ If you see the delay and the log notes nothing, the time was not spent in Escoua
 
 The log is `~/.escouade/app.log` (`C:\Users\<you>\.escouade\app.log` on Windows). Each line carries the date, the level, and the text: startup and version, agent stops, errors, migrations, updates. When it goes over about 5 MB, the next startup files it under the name `app.old.log`. Any text editor opens it.
 
+### Asking a question
+
+For a question, an idea or a hand, join [Escouade’s Discord](https://discord.gg/m3KYtN8gxP).
+
 ### Reporting a bug
 
 Open an issue on [GitHub](https://github.com/guillaume-gagnaire/escouade/issues) with:

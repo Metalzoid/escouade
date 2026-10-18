@@ -20,6 +20,7 @@ export const fr: Catalog = {
     roadmap: 'Feuille de route',
     faq: 'FAQ',
     github: 'GitHub',
+    discord: 'Discord',
     docs: 'Documentation',
     download: 'Télécharger',
     language: 'Langue',
@@ -325,6 +326,7 @@ export const fr: Catalog = {
 
   footer: {
     github: 'GitHub',
+    discord: 'Discord',
     license: 'Licence GPL-3.0',
     privacy: 'Confidentialité',
     legal: 'Mentions légales',

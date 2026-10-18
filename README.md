@@ -2,7 +2,7 @@
 
 Un environnement de développement agentique (ADE) : une application Windows, macOS et Linux où tu développes avec des agents de bout en bout. Tu planifies dans un Kanban de tickets, des agents codent en parallèle, chacun dans son worktree, tu relis et testes leur travail, tu le livres (commit, merge, pull request) et tu pilotes l'ensemble : notifications, quotas, coût, statistiques, serveur MCP. Les agents tournent sur le harness de ton choix : [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai) ou [GitHub Copilot CLI](https://github.com/github/copilot-cli) (Cursor CLI viendra plus tard). Gratuit et open source, en français et en anglais.
 
-Site : [escouade.dev](https://escouade.dev/) · Documentation : [escouade.dev/docs](https://escouade.dev/docs/)
+Site : [escouade.dev](https://escouade.dev/) · Documentation : [escouade.dev/docs](https://escouade.dev/docs/) · Discord : [discord.gg/m3KYtN8gxP](https://discord.gg/m3KYtN8gxP)
 
 Escouade s'appelait auparavant « Claude Code Manager » : la mise à jour remplace l'ancienne installation et garde tes réglages et tes conversations. Projet indépendant, non affilié à Anthropic, OpenAI ni GitHub ; Claude et Claude Code sont des marques d'Anthropic, Codex d'OpenAI, GitHub Copilot de GitHub.
 

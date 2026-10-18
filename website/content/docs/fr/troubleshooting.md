@@ -224,6 +224,10 @@ Si tu vois le retard et que le journal ne note rien, le temps n’est pas passé
 
 Le journal est `~/.escouade/app.log` (`C:\Users\<toi>\.escouade\app.log` sous Windows). Chaque ligne porte la date, le niveau et le texte : démarrage et version, arrêts d’agents, erreurs, migrations, mises à jour. Quand il dépasse environ 5 Mo, le démarrage suivant le range sous le nom `app.old.log`. Tout éditeur de texte l’ouvre.
 
+### Poser une question
+
+Pour une question, une idée ou un coup de main, rejoins le [Discord d’Escouade](https://discord.gg/m3KYtN8gxP).
+
 ### Signaler un bug
 
 Ouvre une issue sur [GitHub](https://github.com/guillaume-gagnaire/escouade/issues) avec :

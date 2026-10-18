@@ -19,6 +19,7 @@ export const en: Catalog = {
     roadmap: 'Roadmap',
     faq: 'FAQ',
     github: 'GitHub',
+    discord: 'Discord',
     docs: 'Docs',
     download: 'Download',
     language: 'Language',
@@ -321,6 +322,7 @@ export const en: Catalog = {
 
   footer: {
     github: 'GitHub',
+    discord: 'Discord',
     license: 'GPL-3.0 license',
     privacy: 'Privacy',
     legal: 'Legal notice',

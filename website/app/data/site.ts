@@ -3,6 +3,8 @@
 import { LANGS, type Lang } from './language';
 
 export const REPO = 'https://github.com/guillaume-gagnaire/escouade';
+/** The Discord server of Escouade's community. */
+export const DISCORD = 'https://discord.gg/m3KYtN8gxP';
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
 export const NEXT = '1.8';

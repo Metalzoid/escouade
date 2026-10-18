@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { docPath } from '~/data/docs';
 import { legalPath, privacyPath } from '~/data/privacy';
-import { REPO } from '~/data/site';
+import { DISCORD, REPO } from '~/data/site';
 
 const { lang, text } = useLang();
 </script>
@@ -16,6 +16,7 @@ const { lang, text } = useLang();
           <NuxtLink :to="privacyPath(lang)">{{ text.footer.privacy }}</NuxtLink>
           <NuxtLink :to="legalPath(lang)">{{ text.footer.legal }}</NuxtLink>
           <a :href="REPO">{{ text.footer.github }}</a>
+          <a :href="DISCORD">{{ text.footer.discord }}</a>
           <a :href="`${REPO}/blob/main/LICENSE`">{{ text.footer.license }}</a>
         </nav>
       </div>

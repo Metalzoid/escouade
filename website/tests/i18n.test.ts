@@ -45,6 +45,8 @@ describe('catalogs', () => {
         'install.steps[1].link.href',
         'header.github',
         'footer.github',
+        'header.discord',
+        'footer.discord',
         'demo.status.question',
         'demo.agents',
         'demo.tokens',

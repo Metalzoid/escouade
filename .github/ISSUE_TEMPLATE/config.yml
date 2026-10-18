@@ -1,0 +1,6 @@
+# GitHub's page for a new issue: a blank issue as before, and Escouade's Discord for a question.
+blank_issues_enabled: true
+contact_links:
+  - name: Discord d’Escouade
+    url: https://discord.gg/m3KYtN8gxP
+    about: Une question, une idée, un coup de main ? Viens en parler sur le Discord. (A question, an idea, a hand? Join the Discord.)
