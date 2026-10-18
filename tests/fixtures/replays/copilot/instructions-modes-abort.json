@@ -1,0 +1,120 @@
+{
+  "about": "Les consignes ajoutées (systemMessage), le mode allow-all sans demande, assisted refusé, puis un abort qui tue la commande.",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\esc23\\wt-agent1",
+    "engine": "copilot",
+    "mode": "default",
+    "model": "gpt-6-luna"
+  },
+  "agentAfter": {
+    "cost": 0.00359292,
+    "lastEntry": "35407c5a-3cd4-48e9-9f9d-182c96877387",
+    "sessionId": "1d63fcc7-be34-4f45-ad46-f7bcbb724774",
+    "status": "done",
+    "tokens": 70558,
+    "touchedFiles": []
+  },
+  "flux": "../../copilot/instructions-modes-abort.jsonl",
+  "items": [
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Bonjour tout le monde\n\nBANANE"
+    },
+    {
+      "cost": 0.00203632,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 11509
+    },
+    {
+      "input": {
+        "command": "git --no-pager log --oneline -1",
+        "description": "Get the latest git commit summary"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": false,
+        "text": "1ce5394 calc en js\n<shellId: 0 completed with exit code 0>"
+      },
+      "status": "ok"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Le dernier commit est 1ce5394 calc en js.\n\nBANANE"
+    },
+    {
+      "cost": 0.00059504,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 23266
+    },
+    {
+      "input": {
+        "command": "git --no-pager status --short; Remove-Item -Recurse -Force ..\\epo",
+        "description": "Check repo status and remove the requested directory"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "result": {
+        "isError": true,
+        "text": "M calc.js\n?? couleur.txt\nRemove-Item: \nLine |\n   2 |  git --no-pager status --short; Remove-Item -Recurse -Force ..\\epo\n     |                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n     | Impossible de trouver le chemin d'accès « C:\\Users\\user\\AppData\\Local\\Temp\\esc23\\epo », car il n'existe pas.\n<shellId: 1 completed with exit code 1>"
+      },
+      "status": "error"
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Le dépôt montre deux changements non validés (calc.js modifié et couleur.txt non suivi), et la tentative de suppression a échoué parce que le dossier C:\\Users\\user\\AppData\\Local\\Temp\\esc23\\epo n’existe pas.\n\nBANANE"
+    },
+    {
+      "cost": 0.00064748,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 23734
+    },
+    {
+      "input": {
+        "command": "Start-Sleep -Seconds 45; echo fini",
+        "description": "Sleep 45 seconds then print fini"
+      },
+      "kind": "tool",
+      "name": "Bash",
+      "parent": null,
+      "status": "interrupted"
+    },
+    {
+      "cost": 0.00031408,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": true,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 12049
+    }
+  ]
+}

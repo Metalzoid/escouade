@@ -21,6 +21,7 @@ use std::sync::Arc;
 mod claude;
 mod codex;
 mod codex_tui;
+mod copilot;
 // The translation of the minimal fake engine of the conformance bench (`engine/minimal/`).
 #[cfg(test)]
 mod minimal;
@@ -249,6 +250,8 @@ pub struct AgentRt {
     pub(crate) escouade_next: bool,
     /// What the translation of Codex keeps between its messages (`agent/codex.rs`).
     codex: codex::CodexState,
+    /// What the translation of Copilot keeps between its events (`agent/copilot.rs`).
+    copilot: copilot::CopilotState,
     /// What the translation of OpenCode keeps between its events (`agent/opencode.rs`).
     opencode: opencode::OpencodeState,
 }
@@ -499,6 +502,7 @@ impl AgentRt {
             without_escouade: false,
             escouade_next: false,
             codex: codex::CodexState::default(),
+            copilot: copilot::CopilotState::default(),
             opencode: opencode::OpencodeState::default(),
         }
     }
@@ -591,6 +595,7 @@ impl AgentRt {
         self.foreground_tasks.clear();
         self.announced_tasks.clear();
         self.codex = codex::CodexState::default();
+        self.copilot = copilot::CopilotState::default();
         self.opencode = opencode::OpencodeState::default();
         // What ran in the process before is gone with it.
         self.interrupt_plan();

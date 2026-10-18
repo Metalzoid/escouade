@@ -18,6 +18,8 @@ Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec
 | `src-tauri/src/engine/codex/` | Codex, second moteur (ESC-37) : `mod.rs` (le moteur `Codex`, ses capacités, la correspondance des modes, les modèles de `model/list`, ses messages), `process.rs` (`CodexProcess` : le client JSON-RPC de `codex app-server`, le fil et le tour en cours), `locate.rs` (le binaire natif derrière le lanceur npm), `bench.rs` (le faux `codex` sur le banc, ses flux réels rejoués), `schema_tests.rs` (le schéma de la 0.163.0). Le protocole : docs/PROTOCOL.md, « Codex app-server ». |
 | `src-tauri/src/agent/codex.rs` | La traduction des messages de Codex en éléments de conversation (`AgentRt::codex_frame`), et ses tests (`codex_tests.rs`). |
 | `src-tauri/src/engine/opencode/` | OpenCode, troisième moteur (ESC-44) : `mod.rs` (le moteur `Opencode`, ses capacités, les règles de permission de chaque mode, les modèles des fournisseurs connectés, ses messages, OpenCode 2 refusé), `server.rs` (le `opencode serve` d'un compte, partagé par ses agents : son mot de passe, son flux `/global/event` rendu à la session de chaque agent), `process.rs` (`OpencodeProcess` : la session d'un agent, ses messages gardés pendant un tour, le serveur MCP d'Escouade donné à son dossier, ESC-45), `run.rs` (les textes rédigés par `opencode run`, ESC-45), `locate.rs` (le binaire natif derrière le lanceur npm), `bench.rs` (le faux `opencode` sur le banc, ses flux réels rejoués). Le protocole : docs/PROTOCOL.md, « OpenCode serve ». |
+| `src-tauri/src/engine/copilot/` | GitHub Copilot CLI, quatrième moteur (ESC-39) : `mod.rs` (le moteur `Copilot`, ses capacités, ses modes, les modèles et leur multiplicateur, « Pour cette session » par type de permission, les valeurs d'un formulaire, ses messages), `process.rs` (`CopilotProcess` : le client du protocole du SDK, en-têtes `Content-Length`, la session d'un agent, les requêtes de Copilot au client), `locate.rs` (le binaire natif derrière le lanceur npm), `bench.rs` (le faux `copilot` sur le banc, ses flux réels rejoués), `schema_tests.rs` (les méthodes et les champs lus, contre les schémas gardés). Le protocole : docs/PROTOCOL.md, « Copilot SDK ». |
+| `src-tauri/src/agent/copilot.rs` | La traduction des événements de Copilot en éléments de conversation (`AgentRt::copilot_frame`) et les règles qui répondent sans carte aux demandes sûres, et ses tests (`copilot_tests.rs`) ; l'essai réel `real_copilot` est dans `src-tauri/src/copilot_tests.rs`. |
 | `src-tauri/src/agent/opencode.rs` | La traduction des événements d'OpenCode en éléments de conversation (`AgentRt::opencode_frame`), et ses tests (`opencode_tests.rs`) ; les tests par le cœur sont dans `src-tauri/src/opencode_tests.rs` (l'essai réel `real_opencode` aussi). |
 | `src-tauri/src/engine/bench/` | Le banc de conformité (tests seulement) : les scénarios et leur pilote (`mod.rs`), le rejeu des flux enregistrés (`replay.rs`). Voir « Le banc de conformité ». |
 | `src-tauri/src/engine/claude/bench.rs` | Claude Code sur le banc, avec le faux `claude`, et le rejeu de ses flux (`tests/fixtures/replays/claude/`). |
@@ -30,7 +32,7 @@ Le reste du backend (cœur, tickets, pilote auto, serveur MCP, stats, comptes) n
 
 ### `Engine` : le moteur
 
-Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` : `codex` rend Codex (ESC-37), `opencode` OpenCode (ESC-44), un harness pas encore écrit rend Claude Code. `engine::default()` rend Claude Code.
+Un objet par moteur, sans état (`static CLAUDE: Claude`). `engine::of(&meta)` donne celui d'un agent, `engine::default()` celui de ce qui n'a pas encore d'agent (une question sur un projet, les options d'un ticket). `engine::of` lit `AgentMeta.engine` (lot 2, ESC-27) par `engine::by_id` : `codex` rend Codex (ESC-37), `opencode` OpenCode (ESC-44), `copilot` Copilot CLI (ESC-39), un harness pas encore écrit rend Claude Code. `engine::default()` rend Claude Code.
 
 | Méthode | Ce qu'elle fait | Claude Code |
 |---|---|---|
@@ -119,7 +121,7 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 
 ## Le registre (ESC-28)
 
-`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code, Codex et OpenCode aujourd'hui), le moteur par défaut en premier. Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs écrits (Claude Code, Codex, Copilot CLI et OpenCode aujourd'hui), le moteur par défaut en premier. Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
 
 ### Ce que chaque moteur déclare (`Engine`)
 

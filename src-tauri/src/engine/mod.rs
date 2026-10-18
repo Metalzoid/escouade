@@ -9,6 +9,7 @@
 
 mod claude;
 pub(crate) mod codex;
+pub(crate) mod copilot;
 pub mod mcp;
 pub mod oneshot;
 pub(crate) mod opencode;
@@ -33,6 +34,10 @@ pub(crate) use codex::{fake_codex, is_plan_approval as codex_is_plan_approval};
 pub(crate) use codex::{
     id_key as codex_request_id, meters as codex_meters, mode_of as codex_mode_of, plan_approval,
 };
+#[cfg(test)]
+pub(crate) use copilot::fake_copilot;
+pub use copilot::COPILOT;
+pub(crate) use copilot::{no as copilot_no, yes as copilot_yes};
 pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;
@@ -77,14 +82,15 @@ pub fn of(meta: &AgentMeta) -> &'static dyn Engine {
     by_id(meta.engine)
 }
 
-/// The engine `id` names. Claude Code, Codex and OpenCode are written: the others get theirs with
+/// The engine `id` names. Claude Code, Codex, OpenCode and Copilot CLI are written: the others get theirs with
 /// their adapter (docs/TODO-1.8.md, chapter 1), and until then nothing makes an agent of theirs
 /// (the interface offers none).
 pub fn by_id(id: EngineId) -> &'static dyn Engine {
     match id {
         EngineId::Codex => &CODEX,
         EngineId::Opencode => &OPENCODE,
-        EngineId::Claude | EngineId::Copilot | EngineId::Cursor => &CLAUDE,
+        EngineId::Copilot => &COPILOT,
+        EngineId::Claude | EngineId::Cursor => &CLAUDE,
         #[cfg(test)]
         EngineId::Bench => &minimal::MINIMAL,
     }

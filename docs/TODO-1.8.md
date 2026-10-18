@@ -644,7 +644,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   | OpenCode | `bash`, `edit`, `write`, `read`, `grep`, `glob`, `list`, `patch`, `webfetch`, `todowrite`, `task` | leur équivalent chez Claude Code |
 - [x] **Process** : Codex : fait (ESC-37, docs/PROTOCOL.md, « Codex app-server »).
   - Codex : un `codex app-server` par agent, lancé par son binaire natif (sous Windows, le `codex.exe` du paquet de la plateforme, pas `codex.cmd`), avec `-c tools.update_plan.enabled=true` et `capabilities.experimentalApi` (pour le mode Plan seulement). Ses enfants restent dans le Job, bac à sable compris (vérifié). Les événements des sous-agents arrivent sur la même connexion : tout se trie par `threadId`.
-  - Copilot : un `copilot --server --stdio` par agent (par la crate du SDK si elle laisse Escouade lancer le process, voir point 0).
+  - Copilot : un `copilot --server --stdio` par agent, par un client maison (fait, ESC-39, docs/PROTOCOL.md, « Copilot SDK ») : le `copilot.exe` natif du paquet npm, dans le Job de l'agent, avec `--no-auto-update`, `--disable-builtin-mcps`, `--disallow-temp-dir` et `--secret-env-vars`.
   - Cursor : un `agent acp` par agent.
   - OpenCode : un `opencode serve` par agent, sur `127.0.0.1`, avec un port libre et un mot de passe tiré au hasard, sauf si l'essai du point 0 le montre trop coûteux. Le backend lit son flux SSE `/event`. Essai du point 0 (ESC-25) : 0,7 Go par serveur inactif, et un serveur sert plusieurs worktrees ; proposé à la place : un serveur par compte OpenCode, chaque agent une session, le flux lu sur `/global/event`. Fait ainsi (ESC-44, docs/PROTOCOL.md, « OpenCode serve ») : le serveur est dans un Job à lui, partagé par les agents du compte, si bien que le CPU et la RAM ne sont plus comptés par agent pour OpenCode.
   - Dans tous les cas, le process est dans le Job de l'agent, ce qui garde le CPU et la RAM par agent et tue tout l'arbre d'un coup.
@@ -667,18 +667,18 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
 - [x] **Modèles** : le menu liste ceux du moteur de l'agent. Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Claude : les alias, comme aujourd'hui.
   - Codex : `model/list`, avec `supportedReasoningEfforts` et `inputModalities`.
-  - Copilot : `models.list`, avec ses efforts, ses capacités et son multiplicateur de facturation (écrit à côté du modèle : un modèle qui coûte trois fois plus le dit).
+  - Copilot (fait, ESC-39) : `models.list`, avec ses efforts, ses capacités et son multiplicateur de facturation (écrit à côté du modèle : `×3`). Sur un compte Free, `models.list` et `session.model.list` sont vides : le menu garde ses modèles déclarés (`gpt-6-luna`, `gpt-5-mini`), avec leur catégorie de prix (`modelPriceCategories` : « coût bas »). Le modèle est toujours donné, jamais `auto`.
   - Cursor : `agent models`, les modèles du compte (Auto compris). Le changement en cours de session dépend du point 0.
   - OpenCode : les modèles des seuls fournisseurs connectés, avec une recherche et des favoris dans les réglages, car la liste peut être longue. Fait (ESC-44) : `GET /config/providers` ; le menu du composer a une recherche, chaque modèle son fournisseur et une étoile, les favoris en premier ; Réglages › Harness › OpenCode › « Modèles » les liste aussi, avec une recherche (`favoriteModels` des réglages, gardé à chaque étoile).
 - [x] **Effort** : celui du modèle choisi (efforts de raisonnement de Codex et de Copilot, `variant` d'OpenCode). Le menu est masqué si le modèle n'en a pas. Codex : fait (ESC-37) ; OpenCode : fait (ESC-44, les `variants` du modèle, envoyés en `variant` au prompt) ; les autres harness sont reportés (décidé le 2026-10-17).
-- [x] **Modes** : Escouade garde ses cinq modes. Chaque moteur dit lesquels il prend et comment. Le titre du mode dans le menu explique ce qu'il veut dire pour ce moteur, bac à sable compris. À confirmer par les essais : Codex : fait (ESC-37), table dans docs/PROTOCOL.md, « Les modes ».
+- [x] **Modes** : Escouade garde ses cinq modes. Chaque moteur dit lesquels il prend et comment. Le titre du mode dans le menu explique ce qu'il veut dire pour ce moteur, bac à sable compris. À confirmer par les essais : Codex : fait (ESC-37), table dans docs/PROTOCOL.md, « Les modes » ; Copilot : fait (ESC-39), docs/PROTOCOL.md, « Copilot SDK ».
 
   | Escouade | Codex | Copilot | Cursor | OpenCode |
   |---|---|---|---|---|
-  | Plan | `collaborationMode: plan` (expérimental, essayé), bac à sable `read-only` | mode `plan` | mode `plan` | agent `plan` |
-  | Demander | `on-request`, `workspace-write` | `manual` | mode `agent`, chaque outil demandé | agent `build`, `edit` et `bash` en `ask` |
-  | Accepter les modifications | `workspace-write` : les écritures du bac à sable passent, une commande qui en sort demande ; Escouade accepte d'office `git add` et `git commit` dans le worktree de l'agent | `manual`, les demandes `write` du dossier de l'agent acceptées d'office (ou `--allow-tool write`) | mode `agent`, les écritures du dossier de l'agent acceptées d'office par Escouade | `edit` en `allow`, `bash` en `ask` |
-  | Auto | `on-request` + `approvalsReviewer: auto_review` | `assisted` ou `autopilot` (voir point 0) | absent (masqué) | absent (masqué) |
+  | Plan | `collaborationMode: plan` (expérimental, essayé), bac à sable `read-only` | mode `plan`, `manual` ; les lectures du dossier de l'agent passent | mode `plan` | agent `plan` |
+  | Demander | `on-request`, `workspace-write` | `manual` ; les lectures et écritures du dossier de l'agent passent, le reste demande | mode `agent`, chaque outil demandé | agent `build`, `edit` et `bash` en `ask` |
+  | Accepter les modifications | `workspace-write` : les écritures du bac à sable passent, une commande qui en sort demande ; Escouade accepte d'office `git add` et `git commit` dans le worktree de l'agent | `manual`, avec en plus `git add` et `git commit` du worktree acceptés d'office | mode `agent`, les écritures du dossier de l'agent acceptées d'office par Escouade | `edit` en `allow`, `bash` en `ask` |
+  | Auto | `on-request` + `approvalsReviewer: auto_review` | mode `autopilot`, `manual` avec les règles d'« Édits auto » (pas `assisted` : expérimental, raté sur Free) | absent (masqué) | absent (masqué) |
   | Sans permissions | `never`, `danger-full-access` | `allow-all` | `--force` (en ACP, à vérifier) | tout en `allow` |
 
   Le mode `ask` de Cursor (questions, lecture seule) n'a pas d'équivalent dans Escouade : il n'est pas proposé.
@@ -688,7 +688,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Le réseau est coupé en `workspace-write` (un `npm install` ou un `git fetch` demande aussi) : le titre du mode le dit.
   - « Sans permissions » (`never`, `danger-full-access`) devrait commiter sans rien demander, puisqu'il n'y a plus de bac à sable (attendu, pas essayé).
   - Le mode Plan demande `experimentalApi` sur la connexion. Il se règle par tour : il vaut au tour suivant, comme le modèle.
-- [ ] **Changement à chaud** : avec Codex, il vaut à partir du tour suivant (`turn/start`). Avec Copilot, tout de suite (`model.switchTo`, `mode.set`). Avec OpenCode, à chaque prompt. Avec Cursor, selon le point 0. Le menu le dit quand un tour est en cours.
+- [ ] **Changement à chaud** : avec Codex, il vaut à partir du tour suivant (`turn/start`). Avec Copilot, tout de suite (`model.switchTo`, `mode.set` et `permissions.setMode`, fait, ESC-39). Avec OpenCode, à chaque prompt. Avec Cursor, selon le point 0. Le menu le dit quand un tour est en cours.
 - [ ] **Commandes `/`** :
   - Claude : comme aujourd'hui.
   - Codex : ses skills (`skills/list`), envoyés comme élément `skill`.
@@ -702,7 +702,7 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - Documents texte : collés comme texte.
 - [x] **Message pendant un tour** : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : « maintenant » passe par `turn/steer`.
-  - Copilot : « maintenant » passe par `immediate`, « ensuite » par `enqueue`.
+  - Copilot (fait, ESC-39) : un message pendant un tour passe par `immediate` (le tour en cours le lit tout de suite, `caps.mid_turn` `immediate`), un message hors tour par `enqueue`.
   - Ailleurs, Escouade met le message en file jusqu'à la fin du tour, et c'est le cas pour OpenCode v1 (fait, ESC-44 : l'essai a montré qu'OpenCode prend le message au vol et perd la demande du premier).
 
 ### Permissions et questions
@@ -712,26 +712,26 @@ Critère d'ensemble : à la fin, avec Claude seul, rien ne change pour l'utilisa
   - `item/permissions/requestApproval` donne une carte qui dit ce qui est demandé.
   - Boutons : « Autoriser » (`accept`), « Pour cette session » (`acceptForSession`), « Refuser » (`decline`). `acceptWithExecpolicyAmendment` (une règle gardée dans `~/.codex/rules`, pour toutes les sessions) n'est pas proposé, comme le « Toujours » des autres moteurs (voir « Décisions »).
   - L'attente se lit aussi dans `thread/status/changed` (`activeFlags: ["waitingOnApproval"]`), et `serverRequest/resolved` dit qu'une demande est close, même si c'est Codex qui l'a close (tour interrompu).
-- [ ] **Copilot** : `permission.requested` donne une carte selon son `kind`.
+- [x] **Copilot** (ESC-39) : `permission.requested` donne une carte selon son `kind`. En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade répondent sans carte aux lectures du dossier de l'agent, à ses écritures (sauf en mode Plan), et à `git add` et `git commit` de son worktree en « Édits auto » et « Auto ». « Pour cette session » est masqué quand Copilot ne l'offre pas (`canOfferSessionApproval: false`, une commande de `git status` par exemple).
   - Shell : la commande entière et les chemins qu'elle touche.
   - Écriture : le diff.
   - Lecture et URL : le chemin ou l'adresse.
   - MCP : le serveur, l'outil, et s'il ne fait que lire.
   - Boutons : « Autoriser » (`approve-once`), « Pour cette session » (`approve-for-session`), « Refuser » (`reject`).
-  - `approve-permanently` et `approve-for-location` (écrits dans la config de Copilot) : à proposer ou non, voir « Décisions ».
+  - `approve-permanently` et `approve-for-location` (écrits dans la config de Copilot) : non proposés, voir « Décisions » (décidé le 2026-10-18).
 - [ ] **Cursor** : `session/request_permission` donne une carte selon le `kind` de l'outil : la commande, la modification avec son diff, le fichier lu, l'adresse, l'outil MCP. Boutons : « Autoriser » (`allow-once`), « Toujours » (`allow-always`, qui écrit dans `~/.cursor/cli-config.json` : voir « Décisions »), « Refuser » (`reject-once`).
 - [x] **OpenCode** (ESC-44) : `permission.asked` donne une carte. Boutons : « Autoriser » (`once`), « Toujours autoriser » (`always`, qui garde pour la session le motif retenu, `always`, que la carte dit), « Refuser » (`reject`, avec le message saisi).
 - [x] **Questions** : la carte de question existante reçoit : Codex : fait (ESC-37) ; les autres harness sont reportés (décidé le 2026-10-17).
   - Codex : `item/tool/requestUserInput` (`questions[]` avec `id`, `header`, `question`, `options` avec leur description, `isOther`, `isSecret`), réponse `{answers: {<id>: {answers: [<libellé>]}}}`. Ces questions n'arrivent qu'en mode Plan (essayé) : le dire dans la doc. La fin d'un plan est un élément `plan` (texte Markdown), qui devient la carte « Plan à approuver ».
-  - Copilot : `user_input.requested` (choix et réponse libre) et `elicitation.requested` (un formulaire de plusieurs champs, qui demande une carte un peu plus riche).
+  - Copilot (fait, ESC-39) : `user_input.requested` (choix et réponse libre, écrite dans le champ du message) et `elicitation.requested` (un formulaire de plusieurs champs : la carte de question a alors un champ à remplir par valeur libre, des choix pour une liste ou un oui/non, le serveur qui demande et les champs obligatoires ; les valeurs repartent typées comme le schéma). La question et la fin de plan arrivent deux fois (l'événement et la requête au client) : une seule carte, les deux reçoivent la réponse, la première gagne.
   - Cursor : `cursor/ask_question` (une extension, qui attend la réponse).
   - OpenCode : `question.asked` (fait, ESC-44).
-- [ ] **Fin d'un plan** : chez Copilot, `exit_plan_mode.requested` (résumé, plan, actions proposées) devient la carte « Plan à approuver » qu'Escouade montre déjà pour Claude. Chez Cursor, `cursor/create_plan`, qui attend la réponse, de même.
+- [ ] **Fin d'un plan** : chez Copilot, `exit_plan_mode.requested` (résumé, plan, actions proposées) devient la carte « Plan à approuver » qu'Escouade montre déjà pour Claude (fait, ESC-39 : « Approuver le plan » passe en « Demander », « Approuver et accepter les édits » en « Édits auto » avec `autoApproveEdits`, « Continuer à planifier » renvoie le message ; la requête `exitPlanMode.request` reçoit la même réponse). Chez Cursor, `cursor/create_plan`, qui attend la réponse, de même.
 - [ ] Les notifications, la liste « À répondre » de la vue d'ensemble et le pilote auto ne changent pas : ils lisent les demandes normalisées.
 
 ### Plan, tâches, sous-agents (bandeau « Plan » de la 1.7)
 - [x] **Codex** : `turn/plan/updated` (les étapes d'`update_plan` et leur statut) donne les tâches, à condition de lancer Codex avec `-c tools.update_plan.enabled=true` (sinon le modèle n'a pas l'outil). Les sous-agents viennent de `subAgentActivity` (`started` / `completed`, `agentThreadId`, `agentPath`) ; leurs éléments et leurs tours arrivent sur la même connexion, sous leur propre `threadId`, ce qui donne leur activité comme les sous-agents de Claude. Fait (ESC-37).
-- [ ] **Copilot** : `session.todos_changed` dit que les tâches ont changé, puis Escouade les lit (`plan.readSqlTodosWithDependencies`, dépendances comprises). Les sous-agents viennent de `subagent.*` et de l'`agentId` de chaque événement.
+- [x] **Copilot** (ESC-39) : `session.todos_changed` dit que les tâches ont changé, puis Escouade les lit (`plan.readSqlTodosWithDependencies`, dépendances comprises). Les sous-agents viennent de `subagent.*` et de l'`agentId` de chaque événement.
 - [ ] **Cursor** : `cursor/update_todos` (ou le `plan` d'ACP) donne les tâches, `cursor/task` les sous-agents (à confirmer au point 0).
 - [x] **OpenCode** (ESC-44) : `todo.updated` (`pending`, `in_progress`, `completed`, `cancelled`) donne les tâches. L'outil `task` et les sessions enfants donnent les sous-agents, avec leurs tokens et leurs outils.
 - [ ] Les fichiers de plan (superpowers) se lisent sur le disque comme aujourd'hui, quel que soit le moteur. Faire un essai réel avec superpowers sous Codex, sous Copilot (qui lit `.claude/skills`) et sous Cursor.
@@ -894,11 +894,11 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - Leur texte ne nomme plus d'outil propre à Claude Code.
 
 ### Tests
-- [x] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length`), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota. `fake-codex.mjs` : fait (ESC-37), il passe les douze scénarios du banc ; `fake-opencode.mjs` : fait (ESC-44), il passe les dix qui s'appliquent (OpenCode n'a pas de quota : ni limite ni quota) ; les autres faux sont reportés avec leurs harness.
+- [x] **Faux moteurs** : `fake-codex.mjs` (app-server JSON-RPC), `fake-copilot.mjs` (JSON-RPC à en-têtes `Content-Length` ; fait, ESC-39 : il passe les dix scénarios qui s'appliquent, le quota venant avec ESC-40), `fake-cursor.mjs` (ACP, JSON-RPC sur stdio, avec les extensions `cursor/*`) et `fake-opencode.mjs` (serveur HTTP + SSE), avec leurs `.cmd`. Mêmes scénarios que le faux `claude` : texte, raisonnement, commande avec approbation, modification de fichier, question, interruption, plan, limite, reprise, copie, quota. `fake-codex.mjs` : fait (ESC-37), il passe les douze scénarios du banc ; `fake-opencode.mjs` : fait (ESC-44), il passe les dix qui s'appliquent (OpenCode n'a pas de quota : ni limite ni quota) ; les autres faux sont reportés avec leurs harness.
 - [ ] **Tests unitaires** : chaque traduction (flux réel enregistré → éléments de conversation ; pour Codex, ceux de `tests/fixtures/codex/`, et le rollout de la vue terminal), la correspondance des modes, l'estimation du coût, le libellé des fenêtres de quota.
 - [ ] **e2e** : Codex : `tests/e2e/codex.spec.ts` (un agent de bout en bout, la question et le plan du mode Plan, un ticket lancé sur Codex par le pilote auto, la conversation vocale), ESC-37.
   - Un agent sur Codex : message, approbation d'une commande, diff, fin de tour.
-  - Le même sur Copilot, sur Cursor, puis sur OpenCode (OpenCode : fait, ESC-44, `tests/e2e/opencode.spec.ts` : conversation, permission, question, tâches et sous-agent, message gardé pendant un tour, reprise, modèles cherchés et favoris, variant, OpenCode 2 refusé).
+  - Le même sur Copilot, sur Cursor, puis sur OpenCode (Copilot : fait, ESC-39, `tests/e2e/copilot.spec.ts` : conversation, permissions par type avec le diff d'une écriture hors du dossier, question, formulaire, plan à approuver, tâches et sous-agent, reprise, modèles et leur multiplicateur, modes, message `immediate` pendant un tour ; OpenCode : fait, ESC-44, `tests/e2e/opencode.spec.ts` : conversation, permission, question, tâches et sous-agent, message gardé pendant un tour, reprise, modèles cherchés et favoris, variant, OpenCode 2 refusé).
   - Un ticket lancé sur Codex par le pilote auto.
   - Les stats filtrées par moteur.
 - [ ] **Avant la release, un essai réel par moteur** : un vrai compte, un ticket en worktree jusqu'au commit et au merge, un plan avec sous-agents.
@@ -918,7 +918,7 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   - **Client maison** (JSON-RPC 2.0, en-têtes `Content-Length`, protocole 3). Donne tout le protocole du SDK : permissions typées (`read`, `write` avec le diff, `shell`, `url`, `mcp`), questions, formulaires, fin de plan, tâches (`sql`), sous-agents, compaction, quota et crédits à chaque appel, coût exact (`totalNanoAiu`), `systemMessage`, `mcpServers` par session, copie (`sessions.fork`). Même forme que l'adaptateur Codex (ESC-37) et son faux moteur ; aucune dépendance de plus ni changement du `rust-version` ; Escouade ne lit que les champs dont elle a besoin, ce qui tient mieux à un CLI qui sort une version tous les deux ou trois jours. Perd : les types tout faits ; Escouade écrit les siens (une vingtaine de méthodes, une trentaine d'événements), tenus par un test contre le schéma gardé (`tests/fixtures/engines/copilot-1.0.98.*.schema.json`).
   - **Crate `github-copilot-sdk`** (1.0.22, `default-features = false`, `Client::from_streams`). Donne la même chose que le client maison, avec les types générés de tout le protocole (32 000 lignes) et ses gestionnaires (permissions, questions, fin de plan). Perd : `rust-version` 1.88 → 1.94, 167 crates dans l'arbre, des préversions presque chaque jour qu'il faudra suivre, un CLI épinglé par la crate (`cli-version.txt`), et des types stricts qui peuvent casser sur un champ nouveau.
   - **ACP** (`copilot --acp --stdio`, en préversion). Donne : un client commun avec Cursor (et OpenCode s'il y passait), la connexion annoncée par `copilot login` dans un terminal, les commandes `/` de Copilot. Perd : crédits, quota et coût ; permissions typées (ni diff, ni chemin, ni serveur MCP) ; tâches (`plan` vide) ; formulaires et fin de plan ; sous-agents ; copie ; consignes ajoutées ; choix du modèle (absent sur Free).
-- [ ] **« Toujours » chez Copilot** : proposer `approve-permanently` et `approve-for-location`, qui écrivent dans la config de Copilot, ou seulement l'accord pour la session ?
+- [x] **« Toujours » chez Copilot** (décidé par l'utilisateur le 2026-10-18) : **pas de « Toujours »**. La carte n'a que « Autoriser » (`approve-once`), « Pour cette session » (`approve-for-session`, avec ce que Copilot retient selon le type : les commandes, la lecture, l'écriture, l'outil MCP, le domaine d'une adresse) et « Refuser » (`reject`, avec le message saisi). `approve-permanently` et `approve-for-location`, qui écrivent une règle durable dans la config de Copilot, ne sont pas proposés, comme `acceptWithExecpolicyAmendment` chez Codex. Fait ainsi (ESC-39, `engine/copilot`, `session_approval`).
 - [ ] **« Toujours » chez Cursor** : proposer `allow-always`, qui écrit dans `~/.cursor/cli-config.json` (la config globale, même quand le projet a la sienne), ou seulement un accord pour la session, tenu par Escouade ?
 - [ ] **ACP comme voie commune** : Cursor ne se pilote bien que par ACP, que parlent aussi Copilot CLI (`copilot --acp`, en préversion) et OpenCode (`opencode acp`).
   - Pour : un seul client ACP d'Escouade, plus les extensions de chaque moteur, servirait aux trois, au lieu du SDK de Copilot et du serveur HTTP d'OpenCode. Moins de code, et d'autres moteurs plus tard au même prix.

@@ -17,7 +17,12 @@ use std::time::{Duration, SystemTime};
 /// Every harness written, in the order the interface lists them. A harness gets its line with its
 /// adapter (docs/TODO-1.8.md, chapter 1).
 pub fn all() -> Vec<&'static dyn Engine> {
-    vec![&super::CLAUDE, &super::CODEX, &super::OPENCODE]
+    vec![
+        &super::CLAUDE,
+        &super::CODEX,
+        &super::COPILOT,
+        &super::OPENCODE,
+    ]
 }
 
 /// A mode of Escouade a harness takes (`auto`, `default`, `plan`, `acceptEdits`,
@@ -189,6 +194,14 @@ pub struct ToldModel {
     /// The provider it comes from, when its harness has several (OpenCode: `Ollama (local)`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
+    /// What it costs beside the others, as its harness bills it (Copilot: `billing.multiplier`,
+    /// `1` the base rate, written `×3` beside it in the menu).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiplier: Option<String>,
+    /// Its tier of price, when its harness tells no multiplier (Copilot: `low`, `medium`,
+    /// `high`, `very_high`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<String>,
 }
 
 /// A version number (`2.1.301`), compared number by number (a missing one counts as 0).

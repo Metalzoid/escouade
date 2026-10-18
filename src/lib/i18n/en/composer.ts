@@ -88,5 +88,21 @@ export default defineZone('composer', {
     submit: 'Submit',
     unanswered: 'Question left unanswered',
     answeredBy: 'Answered by {author} through Escouade',
+    form: 'Form from {source}',
+    formNoSource: 'Form',
+    required: 'required',
+    fieldPlaceholder: 'Your answer',
+    numberPlaceholder: 'A number',
+  },
+
+  model: {
+    multiplier: '×{n}',
+    multiplierTitle: 'Costs {n} times the base rate',
+    price: {
+      low: 'low cost',
+      medium: 'medium cost',
+      high: 'high cost',
+      veryHigh: 'very high cost',
+    },
   },
 });

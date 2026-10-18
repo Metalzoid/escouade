@@ -68,6 +68,14 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &CODEX_SHARED_DIRS,
             login: &["login"],
         },
+        // Its accounts, their sign-in and what they share come with ESC-40.
+        EngineId::Copilot => Store {
+            home: ".copilot",
+            var: "COPILOT_HOME",
+            files: &[],
+            dirs: &[],
+            login: &["login"],
+        },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
         EngineId::Opencode => Store {
             home: ".config/opencode",
@@ -1721,8 +1729,9 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             });
         }
-        // OpenCode signs in to no account of its own: its providers are its config's.
-        if account.engine == EngineId::Opencode {
+        // OpenCode signs in to no account of its own: its providers are its config's. Copilot keeps
+        // its sign-in in the keychain: its process says when it has none (ESC-40 reads it).
+        if matches!(account.engine, EngineId::Opencode | EngineId::Copilot) {
             let dir = config_dir(&account, &settings);
             return Ok(AccountStatus {
                 connected: true,

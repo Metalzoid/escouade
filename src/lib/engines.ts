@@ -1,6 +1,8 @@
 // What a harness can do, as it declares it (`EngineCaps`, docs/ENGINES.md): the window shows a function from these,
 // never from the name of the agent's harness. A function its harness lacks is hidden, not greyed out.
 
+import { t } from './i18n';
+import { intlLocale } from './i18n/locale.svelte';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
@@ -107,6 +109,25 @@ export function showsMark(): boolean {
 function toldOf(who: { engine: EngineId | null | undefined }): ToldModel[] {
   const id = who.engine ?? engineOf(null)?.id;
   return (id && app.engineModels[id]) || [];
+}
+
+/**
+ * What `model` costs beside the others, as its harness bills it (Copilot): its multiplier (`×3`), else its tier of
+ * price; nothing for a harness that tells neither. With what it means, for its title.
+ */
+export function modelCost(who: { engine: EngineId | null | undefined }, model: string): { label: string; title: string } | undefined {
+  const m = toldOf(who).find((x) => x.id === model);
+  if (!m) return undefined;
+  const n = m.multiplier !== undefined ? Number(m.multiplier) : NaN;
+  if (Number.isFinite(n)) {
+    const shown = n.toLocaleString(intlLocale(), { maximumFractionDigits: 2 });
+    return { label: t('composer.model.multiplier', { n: shown }), title: t('composer.model.multiplierTitle', { n: shown }) };
+  }
+  if (m.price) {
+    const label = t(`composer.model.price.${m.price === 'very_high' ? 'veryHigh' : m.price}`);
+    return { label, title: label };
+  }
+  return undefined;
 }
 
 /** The name a harness that lists its models gives `model` (`gpt-6-luna` → `GPT-6-Luna`), if one does. */

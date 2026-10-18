@@ -1,0 +1,60 @@
+{
+  "about": "La session reprise par un autre process (session.resume), un tour, puis sa copie (sessions.fork) reprise à son tour.",
+  "agent": {
+    "cwd": "C:\\Users\\user\\AppData\\Local\\Temp\\esc23\\wt-agent1",
+    "engine": "copilot",
+    "mode": "default",
+    "model": "gpt-6-luna"
+  },
+  "agentAfter": {
+    "cost": 0.00241845,
+    "lastEntry": "859a91c2-c844-4c2b-abe9-276fe751c7ad",
+    "sessionId": "a2ed6fe4-5be0-4a4a-8b68-36a6576bae5f",
+    "status": "done",
+    "tokens": 25893,
+    "touchedFiles": []
+  },
+  "flux": "../../copilot/resume-fork.jsonl",
+  "items": [
+    {
+      "kind": "thinking",
+      "parent": null,
+      "streaming": false,
+      "text": "**Confirming French phrases**\n\nI'm checking if I need to output three-word French phrases. \"Au revoir, à bientôt\" counts as three words: Au (1) revoir (2) à (3) bientôt (4). \"Adieu, bonne continuation\" also has three: Adieu (1), bonne (2), continuation (3). It seems the task is straightforward, and I don’t need to add anything extra like \"BANANE,\" which might have been a previous misunderstanding. I think it’s best to stick to the exact three words for clarity."
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Adieu, bonne continuation."
+    },
+    {
+      "cost": 0.0016873,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 13211
+    },
+    {
+      "kind": "text",
+      "parent": null,
+      "streaming": false,
+      "text": "Dis bonjour en trois mots."
+    },
+    {
+      "cost": 0.00073115,
+      "durationMs": null,
+      "engine": "copilot",
+      "error": null,
+      "interrupted": false,
+      "isError": false,
+      "kind": "turn",
+      "limited": false,
+      "tokens": 12682
+    }
+  ]
+}

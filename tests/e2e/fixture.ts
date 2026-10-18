@@ -16,6 +16,8 @@ const FAKE = path.join(ROOT, 'tests', 'fixtures', 'fake-claude.cmd');
 const FAKE_CODEX = path.join(ROOT, 'tests', 'fixtures', 'fake-codex.cmd');
 /** The fake `opencode serve` (tests/fixtures/fake-opencode.mjs), for a test that runs agents on OpenCode. */
 const FAKE_OPENCODE = path.join(ROOT, 'tests', 'fixtures', 'fake-opencode.cmd');
+/** The fake `copilot --server --stdio` (tests/fixtures/fake-copilot.mjs), for a test that runs agents on Copilot CLI. */
+const FAKE_COPILOT = path.join(ROOT, 'tests', 'fixtures', 'fake-copilot.cmd');
 
 export interface App {
   /** The window of the app: a new one after each `restart()` (read `app.page` again, do not keep the old one). */
@@ -268,6 +270,11 @@ export const test = base.extend<{
       ESCOUADE_OPENCODE: 'none',
       FAKE_OPENCODE_LOG: path.join(root, 'fake-opencode.jsonl'),
       FAKE_OPENCODE_HOME: path.join(root, 'fake-opencode'),
+      // The same for Copilot CLI (`appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT }`): never the machine's, its Principal
+      // (`COPILOT_HOME`) a folder of the test's, never the user's ~/.copilot.
+      ESCOUADE_COPILOT: 'none',
+      COPILOT_HOME: path.join(root, 'copilot'),
+      FAKE_COPILOT_LOG: path.join(root, 'fake-copilot.jsonl'),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -392,4 +399,4 @@ export async function send(page: Page, text: string) {
   await box.press('Enter');
 }
 
-export { expect, FAKE, FAKE_CODEX, FAKE_OPENCODE };
+export { expect, FAKE, FAKE_CODEX, FAKE_COPILOT, FAKE_OPENCODE };

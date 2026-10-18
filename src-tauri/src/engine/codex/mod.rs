@@ -162,6 +162,8 @@ pub(crate) fn catalog(list: &Value) -> Option<Vec<ToldModel>> {
                     .is_some_and(|a| a.iter().any(|x| x == "image")),
                 default: m["isDefault"] == true,
                 provider: None,
+                multiplier: None,
+                price: None,
             })
         })
         .collect();

@@ -42,6 +42,53 @@ describe('QuestionCard', () => {
     ]);
   });
 
+  it('fills the fields of a form of an MCP server and sends them by question', async () => {
+    const backend = fakeBackend();
+    const form = item({
+      form: { message: 'Qui es-tu ?', source: 'essai' },
+      questions: [
+        { id: 'prenom', question: 'Prénom', header: '', options: [], field: 'text', required: true },
+        { id: 'age', question: 'Âge', header: '', options: [], field: 'number', required: false },
+        {
+          id: 'abonne',
+          question: 'Abonné',
+          header: '',
+          options: [
+            { label: 'Oui', description: '' },
+            { label: 'Non', description: '' },
+          ],
+          required: false,
+        },
+      ],
+    });
+    render(QuestionCard, { item: form, agentId: 'a1', pending: true });
+    expect(screen.getByText('Formulaire de essai')).toBeInTheDocument();
+    expect(screen.getByText('Qui es-tu ?')).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Valider' });
+    // The required field empty: not yet.
+    expect(submit).toBeDisabled();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Prénom' }), 'Camille');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Âge' }), '30');
+    await userEvent.click(screen.getByRole('button', { name: 'Oui' }));
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    expect(backend.called('answer_question')).toEqual([
+      { cmd: 'answer_question', args: { id: 'a1', requestId: 'req-1', answers: { Prénom: 'Camille', Âge: '30', Abonné: 'Oui' } } },
+    ]);
+  });
+
+  it('sends a form whose optional fields are left empty', async () => {
+    const backend = fakeBackend();
+    const form = item({
+      form: { message: 'Un détail ?' },
+      questions: [{ id: 'note', question: 'Note', header: '', options: [], field: 'text', required: false }],
+    });
+    render(QuestionCard, { item: form, agentId: 'a1', pending: true });
+    expect(screen.getByText('Formulaire')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Valider' }));
+    expect(backend.called('answer_question')[0].args).toEqual({ id: 'a1', requestId: 'req-1', answers: { Note: '' } });
+  });
+
   it('names the agent as its harness does: Claude for Claude Code, another one its own', () => {
     fakeBackend();
     resetApp({ agents: [agent({ id: 'a1', engine: 'claude' }), agent({ id: 'a2', engine: 'codex' })] });

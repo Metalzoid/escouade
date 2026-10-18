@@ -949,7 +949,7 @@ impl AgentRt {
 /// Windows (`C:\…`, `\\server\…`) or of a POSIX system (`/…`) is absolute on every system, and a
 /// relative one is joined with the separator of the agent's folder's kind: an OpenCode of WSL, or
 /// a stream recorded elsewhere, reads the same.
-fn absolute(path: &str, cwd: &str) -> String {
+pub(super) fn absolute(path: &str, cwd: &str) -> String {
     let of_windows = |p: &str| {
         let b = p.as_bytes();
         (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/'))
@@ -963,7 +963,7 @@ fn absolute(path: &str, cwd: &str) -> String {
 }
 
 /// The first file a patch of `patch` / `apply_patch` changes (`*** Update File: <path>`).
-fn patch_file(text: &str) -> Option<&str> {
+pub(super) fn patch_file(text: &str) -> Option<&str> {
     text.lines().find_map(|l| {
         ["*** Update File: ", "*** Add File: ", "*** Delete File: "]
             .iter()

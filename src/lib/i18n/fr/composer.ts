@@ -103,5 +103,23 @@ export default {
     unanswered: 'Question restée sans réponse',
     /** Answered through the MCP server, not by the user in the window (see `permission.allowedBy`). */
     answeredBy: 'Répondu par {author} via Escouade',
+    /** A form of an MCP server (Copilot: `elicitation`): its fields to fill. */
+    form: 'Formulaire de {source}',
+    formNoSource: 'Formulaire',
+    required: 'obligatoire',
+    fieldPlaceholder: 'Ta réponse',
+    numberPlaceholder: 'Un nombre',
+  },
+
+  /** What a model costs beside the others, beside its name in the menu (Copilot). */
+  model: {
+    multiplier: '×{n}',
+    multiplierTitle: 'Coûte {n} fois le tarif de base',
+    price: {
+      low: 'coût bas',
+      medium: 'coût moyen',
+      high: 'coût élevé',
+      veryHigh: 'coût très élevé',
+    },
   },
 } as const satisfies Tree;

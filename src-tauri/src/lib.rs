@@ -21,6 +21,8 @@ mod codex_tui_tests;
 mod commands;
 mod conv;
 mod convsearch;
+#[cfg(test)]
+mod copilot_tests;
 mod core;
 #[cfg(test)]
 mod core_tests;

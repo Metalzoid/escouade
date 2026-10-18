@@ -449,6 +449,10 @@ export interface ToldModel {
   default: boolean;
   /** The provider it comes from, when its harness has several (OpenCode: `Ollama (local)`). */
   provider?: string;
+  /** What it costs beside the others (Copilot: `billing.multiplier`, `1` the base rate). */
+  multiplier?: string;
+  /** Its tier of price, when its harness tells no multiplier (Copilot). */
+  price?: 'low' | 'medium' | 'high' | 'very_high';
 }
 
 /** What a harness declares, as the window gets it at its start. */
@@ -1331,6 +1335,10 @@ export interface Question {
   header?: string;
   options: QuestionOption[];
   multiSelect?: boolean;
+  /** A field of a form (Copilot: `elicitation`): its name, and what is written in it when it has no choices. */
+  id?: string;
+  field?: 'text' | 'number';
+  required?: boolean;
 }
 
 interface Base {
@@ -1380,6 +1388,8 @@ export interface QuestionItem extends Base {
   sub?: string;
   questions: Question[];
   answers: Record<string, string> | null;
+  /** A form of an MCP server (Copilot: `elicitation`): its message and the server that asks. */
+  form?: { message?: string; source?: string };
   /** Who answered, when it was a client of the MCP server and not the user in the window (an agent's name, « Claude (hors Escouade) »). */
   by?: string;
   cancelled?: boolean;

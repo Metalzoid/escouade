@@ -199,6 +199,8 @@ pub(crate) fn catalog(providers: &Value, config: &Value) -> Catalog {
                 images: m["capabilities"]["input"]["image"] == true,
                 default: false,
                 provider: Some(pname.clone()),
+                multiplier: None,
+                price: None,
             });
         }
     }

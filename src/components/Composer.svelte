@@ -24,7 +24,19 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { EFFORTS, MODES, modeTitle, modelOptions } from '../lib/models';
-  import { can, capsOf, effortsOf, modelMenu, modelsOf, modelTakes, modesOf, searchesModels, setFavorite, speakerOf } from '../lib/engines';
+  import {
+    can,
+    capsOf,
+    effortsOf,
+    modelCost,
+    modelMenu,
+    modelsOf,
+    modelTakes,
+    modesOf,
+    searchesModels,
+    setFavorite,
+    speakerOf,
+  } from '../lib/engines';
   import { keyLabel } from '../lib/platform';
   import { observeWidth } from '../lib/resize';
   import { app } from '../lib/state.svelte';
@@ -90,7 +102,11 @@
   const modelChoices = $derived(
     manyModels
       ? modelMenu(agent).map((m) => ({ value: m.id, label: m.label, detail: m.provider, favorite: m.favorite }))
-      : modelOptions(app.models, modelsOf(agent)),
+      : modelOptions(app.models, modelsOf(agent)).map((o) => {
+          // What it costs beside the others, when its harness bills by model (Copilot: `×3`).
+          const cost = modelCost(agent, o.value);
+          return cost ? { ...o, detail: cost.label, title: cost.title } : o;
+        }),
   );
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));

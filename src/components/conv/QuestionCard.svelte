@@ -13,6 +13,8 @@
   let { item, agentId, pending, current = true }: { item: QuestionItem; agentId: string; pending: boolean; current?: boolean } = $props();
 
   let picks = $state<Record<string, string[]>>({});
+  /** What is written in the fields of a form (a question with `field`), by question. */
+  let texts = $state<Record<string, string>>({});
   let busy = $state(false);
   let card = $state<HTMLElement>();
   /** The question the Alt+digit keys are for: the one being answered. */
@@ -21,8 +23,14 @@
   const keys = $derived(pending && current);
   // « Claude attend ta réponse », its agent named as its harness names it.
   const waiting = $derived(t('composer.question.waiting', { engine: speakerOf(app.agents[agentId]?.engine) }));
-  const needsConfirm = $derived(item.questions.length > 1 || item.questions.some((q) => q.multiSelect));
-  const answered = (q: Question) => (picks[q.question] ?? []).length > 0;
+  // A form of an MCP server: who asks, and its fields to fill.
+  const formTitle = $derived(
+    item.form ? (item.form.source ? t('composer.question.form', { source: item.form.source }) : t('composer.question.formNoSource')) : '',
+  );
+  const needsConfirm = $derived(item.questions.length > 1 || item.questions.some((q) => q.multiSelect || q.field));
+  // A field a form leaves optional (`required: false`) is answered empty too.
+  const answered = (q: Question) =>
+    q.required === false || (q.field ? (texts[q.question] ?? '').trim() !== '' : (picks[q.question] ?? []).length > 0);
   const complete = $derived(item.questions.every(answered));
   const firstUnanswered = () => item.questions.findIndex((q) => !answered(q));
 
@@ -50,7 +58,9 @@
     busy = true;
     // The card is about to go: the focus it holds would be lost with it.
     const held = !!card?.contains(document.activeElement);
-    const answers = Object.fromEntries(item.questions.map((q) => [q.question, (picks[q.question] ?? []).join(', ')]));
+    const answers = Object.fromEntries(
+      item.questions.map((q) => [q.question, q.field ? (texts[q.question] ?? '').trim() : (picks[q.question] ?? []).join(', ')]),
+    );
     await app.run(api.answerQuestion(agentId, item.id, answers));
     busy = false;
     if (held) app.focusComposer++;
@@ -87,10 +97,35 @@
 {#if pending}
   <div class="card pending" data-testid="question-pending" role="group" aria-label={waiting} bind:this={card}>
     <div class="title"><span class="pulse" style="width:8px;height:8px"></span>{waiting}</div>
+    {#if item.form}
+      <div class="form-head" data-testid="question-form">
+        <span class="chip">{formTitle}</span>
+        {#if item.form.message}<div class="text">{item.form.message}</div>{/if}
+      </div>
+    {/if}
     {#each item.questions as q, qi (qi)}
       <div class="q">
         {#if q.header && item.questions.length > 1}<span class="chip">{q.header}</span>{/if}
-        <div class="text">{q.question}</div>
+        <div class="text">
+          {q.question}{#if q.required && item.form}<span class="req"> · {t('composer.question.required')}</span>{/if}
+        </div>
+        {#if q.field}
+          <input
+            class="field"
+            data-own-keys
+            inputmode={q.field === 'number' ? 'decimal' : 'text'}
+            placeholder={q.field === 'number' ? t('composer.question.numberPlaceholder') : t('composer.question.fieldPlaceholder')}
+            aria-label={q.question}
+            disabled={busy}
+            bind:value={texts[q.question]}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' && complete) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+        {/if}
         <div class="opts">
           {#each q.options as o, j (j)}
             {@const on = (picks[q.question] ?? []).includes(o.label)}
@@ -228,6 +263,29 @@
     margin-left: 2px;
     color: inherit;
     opacity: 0.7;
+  }
+  .form-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .req {
+    font-size: 11.5px;
+    color: var(--dim);
+  }
+  .field {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line2);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    max-width: 360px;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--wait);
   }
   .descs {
     display: flex;

@@ -11,6 +11,7 @@ import {
   engineOf,
   engineOptions,
   favoritesOf,
+  modelCost,
   modelMenu,
   modelsOf,
   modelTakes,
@@ -24,6 +25,7 @@ import {
   writerOf,
   writerOptions,
 } from './engines';
+import { setLang } from './i18n';
 import { EFFORTS, modelLabel, MODES } from './models';
 import { app } from './state.svelte';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
@@ -139,6 +141,34 @@ describe('the models a harness lists for its account (ESC-37)', () => {
     expect(modelLabel('gpt-6-luna')).toBe('GPT-6-Luna');
     // Claude Code's menu is its own still.
     expect(modelsOf({ engine: 'claude' }).map((m) => m.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku']);
+  });
+});
+
+describe('what a model costs beside the others (ESC-39)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'copilot', caps: { ...BARE_ENGINE.caps, effort: true } }];
+  });
+
+  it('is its multiplier, else its tier of price, else nothing', () => {
+    const copilot = { engine: 'copilot' as const };
+    app.engineModels = {
+      copilot: [
+        { id: 'sonnet', label: 'Claude Sonnet 4.5', efforts: [], defaultEffort: null, images: true, default: true, multiplier: '3' },
+        { id: 'mini', label: 'GPT-5 mini', efforts: [], defaultEffort: null, images: false, default: false, multiplier: '0.33' },
+        { id: 'luna', label: 'GPT-6 Luna', efforts: [], defaultEffort: null, images: false, default: false, price: 'low' },
+        { id: 'plain', label: 'Plain', efforts: [], defaultEffort: null, images: false, default: false },
+      ],
+    };
+    expect(modelCost(copilot, 'sonnet')).toEqual({ label: '×3', title: 'Coûte 3 fois le tarif de base' });
+    expect(modelCost(copilot, 'mini')?.label).toBe('×0,33');
+    expect(modelCost(copilot, 'luna')?.label).toBe('coût bas');
+    expect(modelCost(copilot, 'plain')).toBeUndefined();
+    expect(modelCost({ engine: 'claude' }, 'opus')).toBeUndefined();
+    setLang('en');
+    expect(modelCost(copilot, 'mini')?.label).toBe('×0.33');
+    expect(modelCost(copilot, 'luna')?.label).toBe('low cost');
+    setLang('fr');
   });
 });
 

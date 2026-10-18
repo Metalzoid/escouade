@@ -639,6 +639,92 @@ Essai réel (`real_opencode_writes_and_drives_escouade`, `qwen3-coder:30b-32k`) 
 
 « OpenCode peut piloter Escouade » (une entrée dans sa config globale) vient plus tard. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
 
+## Copilot SDK (ESC-39)
+
+GitHub Copilot CLI est le quatrième harness (docs/ENGINES.md), piloté par un **client maison** du protocole de son SDK (choisi par l'utilisateur le 2026-10-18 sur la proposition d'ESC-23, ni la crate `github-copilot-sdk` ni ACP : docs/TODO-1.8.md, « Décisions »). Testé avec **Copilot CLI 1.0.98** (`tested()` : de la 1.0.98 à la 1.0.98, paquet npm `@github/copilot`), d'après les essais réels du 2026-10-18 sur un compte Copilot Free (ESC-23, docs/TODO-1.8.md, point 0, « Copilot CLI ») dont les flux sont dans `tests/fixtures/copilot/` et rejoués depuis `tests/fixtures/replays/copilot/`. Les schémas du protocole (SDK 1.0.22, protocole 3) sont dans `tests/fixtures/engines/copilot-1.0.98.api.schema.json` et `copilot-1.0.98.session-events.schema.json` ; `engine/copilot/schema_tests.rs` vérifie que les méthodes et les champs dont Escouade se sert y sont, et que celles qu'ils ne décrivent pas (`auth.getStatus`, `session.create`, `session.resume`, celles du SDK) ont été répondues aux essais réels.
+
+### Lancement : un process par agent
+
+```
+copilot --server --stdio --no-auto-update --disable-builtin-mcps --disallow-temp-dir --secret-env-vars=GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN
+```
+
+- Le programme est le binaire natif : sous Windows, le `copilot.exe` du paquet de la plateforme (`node_modules/@github/copilot/node_modules/@github/copilot-win32-x64/copilot.exe`, à côté du lanceur `copilot.cmd` ou `copilot.ps1`), sinon le `copilot` du PATH. Il est dans le Job de l'agent. Dans une build de debug, `ESCOUADE_COPILOT` (les e2e) donne le programme quand aucun chemin n'est réglé, ou `none` pour aucun.
+- `--disable-builtin-mcps` : sans lui, Copilot branche son serveur MCP GitHub avec le compte. `--disallow-temp-dir` : sans lui, le dossier temporaire du système est ouvert sans demande. `--secret-env-vars` : ces variables sont retirées des commandes et des serveurs MCP de l'agent.
+- **Pas de bac à sable en mode serveur** dans la 1.0.98 (essayé : `sandboxApplied: false` à chaque commande, `--sandbox` et `settings.json` ou pas) : seules les règles d'Escouade protègent, et le menu des modes le dit.
+- Le message est encadré par des en-têtes `Content-Length` (JSON-RPC 2.0). `connect` (`protocolVersion: 3`, sinon refusé avec la commande de mise à jour), puis `auth.getStatus` : **jamais un jeton dans un journal** (`account.getAllUsers` et `account.getCurrentAuth` le rendent en clair : Escouade n'appelle ni l'un ni l'autre, et ne journalise que la méthode d'un message). Non connecté, l'agent ne démarre pas (« connecte-toi avec copilot login ») ; connecté par le compte du GitHub CLI (`authType: gh-cli`, ce que Copilot fait seul faute de connexion à lui), la conversation le dit.
+- L'arrêt doux envoie `runtime.shutdown`, puis ferme l'entrée.
+
+### Les sessions
+
+| Étape | Requête | Ce qu'Escouade y met |
+|---|---|---|
+| Conversation neuve | `session.create` | `workingDirectory` (le dossier de l'agent), `model` (toujours : sans lui, `auto` choisit seul), `reasoningEffort`, `streaming`, `requestPermission`, `requestUserInput`, `requestElicitation`, `requestExitPlanMode`, `systemMessage` (`append`, les consignes ajoutées) |
+| Reprise | `session.resume` | les mêmes, `systemMessage` compris (Copilot l'oublie sinon, essayé) ; introuvable, une neuve est ouverte et la conversation dit « La session Copilot n'a pas pu être reprise » ; puis `session.model.switchTo` sur le modèle de l'agent |
+| Copie | `sessions.readPersistedEvents`, `sessions.fork`, puis `session.resume` | Copilot copie les événements d'avant celui qu'il reçoit (`toEventId`, exclusif) : Escouade lui donne celui qui suit le dernier événement gardé de l'original à la fin de son dernier tour (`last_entry`), aucun quand c'est le dernier |
+| Modes | `session.permissions.setMode`, `session.mode.set` | voir « Les modes » ; aussitôt, même pendant un tour |
+| Serveur MCP | `session.mcp.disable` | `escouade` : une entrée de l'utilisateur de ce nom est coupée pour la session (le serveur d'Escouade vient avec ESC-40 ; `--disable-mcp-server` est sans effet en mode serveur, essayé) |
+| Modèles | `models.list`, `session.model.list` | le menu du composer (`Ready.catalog`), voir plus bas |
+| Un message | `session.send` | `prompt` (le texte, les fichiers texte joints en texte), `attachments` (les images, en `blob`), `mode` : `immediate` pendant un tour (le tour en cours le lit tout de suite : `caps.mid_turn` `immediate`), `enqueue` sinon ; refusé, le tour finit en erreur avec le message de Copilot |
+| Interrompre | `session.abort` | Copilot tue la commande en cours (`abort`, `agent.interrupted`), puis `session.idle` avec `aborted` |
+| Modèle, effort | `session.model.switchTo` | `modelId`, `reasoningEffort` : aussitôt |
+| Permission | `session.permissions.handlePendingPermissionRequest` | `approve-once` ; `approve-for-session` avec ce que Copilot retient (`commands` et leurs `commandIdentifiers`, `read`, `write`, `mcp` et son outil, le `domain` d'une adresse) ; `reject` avec le message de refus. Jamais `approve-permanently` ni `approve-for-location` (une règle durable dans la config de Copilot : décidé le 2026-10-18) |
+| Question | `session.ui.handlePendingUserInput` | `answer`, `wasFreeform` (une réponse qui n'est pas un des choix) ; la requête `userInput.request` de la même question reçoit la même réponse |
+| Formulaire | `session.ui.handlePendingElicitation` | `action: accept`, `content` : chaque champ typé comme son schéma (`number`, `integer`, `boolean` par « Oui », une liste) |
+| Fin d'un plan | `session.ui.handlePendingExitPlanMode` | « Approuver le plan » : `approved`, `selectedAction: interactive`, le mode passe à « Demander » ; « Approuver et accepter les édits » : `autoApproveEdits`, « Édits auto » ; « Continuer à planifier » : `approved: false` et le message ; la requête `exitPlanMode.request` reçoit la même réponse |
+| Tâches | `session.plan.readSqlTodosWithDependencies` | lues à chaque `session.todos_changed` (une à la fois, relues si elles ont changé pendant) |
+| Titre | `session.name.set` | `name` |
+
+**La question et la fin d'un plan arrivent deux fois** : l'événement de la session (`user_input.requested`, `exit_plan_mode.requested`) et une requête de Copilot au client (`userInput.request`, `exitPlanMode.request`). Escouade en fait une seule carte, celle de l'événement, et répond aux deux : la première réponse gagne (l'autre reçoit `success: false`). Toute autre requête de Copilot au client est refusée (`-32601`).
+
+**Les modèles** : `models.list` (ou `session.model.list`) donne chaque modèle avec ses efforts (`supportedReasoningEfforts`, `defaultReasoningEffort`), s'il lit les images (`capabilities.supports.vision`) et son **multiplicateur de facturation** (`billing.multiplier`), écrit à côté de son nom dans le menu (`×3`, `×0,33`) ; un modèle que sa politique désactive est écarté. Sur un compte Free, les deux listes sont vides (essayé) : le menu garde les modèles déclarés (`gpt-6-luna`, `gpt-5-mini`, ceux des essais), chacun avec sa catégorie de prix (`modelPriceCategories` : « coût bas »). Le premier est celui d'un nouvel agent ; `auto` n'est jamais proposé.
+
+### Les modes
+
+En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (`cp_safe` d'`agent/copilot.rs`) répondent sans carte aux demandes sûres, comme le bac à sable de Codex.
+
+| Escouade | Mode de l'agent | Permissions | Sans carte |
+|---|---|---|---|
+| Demander | `interactive` | `manual` | les lectures et écritures du dossier de l'agent |
+| Accepter les modifications | `interactive` | `manual` | les mêmes, plus `git add` et `git commit` de son worktree |
+| Plan | `plan` | `manual` | les lectures du dossier de l'agent |
+| Auto | `autopilot` (il enchaîne jusqu'à `task_complete`) | `manual` | comme « Accepter les modifications » |
+| Sans permissions | `interactive` | `allow-all` | tout (Copilot ne demande rien) |
+
+`assisted` n'est pas proposé : expérimental (`--experimental`), et son juge a échoué à chaque demande sur un compte Free. Un changement de mode de Copilot (`session.mode_changed`) revient dans celui de l'agent : sorti du mode Plan, « Demander ».
+
+### Le flux
+
+| Copilot (`session.event`) | Dans la conversation |
+|---|---|
+| `assistant.message_delta`, `assistant.message` | un `text`, en direct puis entier ; le dernier, la réponse du tour |
+| `assistant.reasoning_delta`, `assistant.reasoning` | un `thinking` (un raisonnement donné entier sans mots, le blob opaque du modèle, est écarté) |
+| `tool.execution_start` | l'appel sous le nom de Claude Code : `powershell` et `bash` `Bash`, `view` `Read`, `glob` `Glob`, `grep` et `rg` `Grep`, `create` `Write`, `edit` `Edit`, `apply_patch` `Edit` (`Write` pour un fichier ajouté), `web_fetch` `WebFetch`, `task` `Task`, `skill` `Skill`, un outil d'un serveur MCP (`mcpServerName`) `mcp__<serveur>__<outil>` ; `sql` garde son nom ; `ask_user` et `exit_plan_mode` ont leur carte |
+| `tool.execution_complete` | son résultat (en erreur si `success` est faux ou si le code de sortie n'est pas nul) ; pour une écriture, son diff (`detailedContent`) et ses fichiers (`fileEdits`) parmi ceux de l'agent, sauf ceux hors de son dossier (le `plan.md` de la session) |
+| `subagent.started` | lie l'`agentId` du sous-agent à son `Task` : ses événements (qui portent cet `agentId`) sont rangés sous lui ; ses tokens et ses outils viennent de `subagent.completed`, son rapport de son dernier message |
+| `permission.requested` | une carte selon le type : `Bash` (la commande, les chemins et adresses qu'elle touche, une redirection vers un fichier), `Edit` ou `Write` (le fichier et son diff ; « Hors du dossier de l'agent »), `Read` (le chemin), `WebFetch` (l'adresse), `mcp__<serveur>__<outil>` (ses arguments, et s'il ne fait que lire) ; « Pour cette session » est masqué quand Copilot ne l'offre pas (`canOfferSessionApproval: false`). Une demande d'un sous-agent est montrée dans l'agent et dans le sous-agent |
+| `user_input.requested` | la carte de question (`choices` ; une réponse libre s'écrit dans le champ du message) |
+| `elicitation.requested` | la carte d'un formulaire : le serveur qui demande, son message, un champ à remplir par valeur libre, des choix pour une liste ou un oui/non, les champs obligatoires d'abord |
+| `exit_plan_mode.requested` | la carte « Plan à approuver » (`ExitPlanMode`, son `planContent`, sinon son résumé) ; le tour l'attend |
+| `*.completed` | une carte répondue autrement (par la requête au client, ou close par Copilot) dit la réponse et se ferme |
+| `session.todos_changed` | les tâches lues (`escouade.todos`) dans le bandeau « Plan » (`pending`, `in_progress`, `done`) |
+| `assistant.usage` | les tokens de chaque appel (sous-agents compris), additionnés par tour, et son coût (`copilotUsage.totalNanoAiu` : crédits = nano-AIU / 10⁹, dollars = crédits × 0,01 ; leur somme est le `session.usage_checkpoint`) |
+| `session.usage_info` | la fenêtre de contexte (`tokenLimit`, `currentTokens`) |
+| `session.model_change` | le modèle de l'agent (jamais `auto`) |
+| `session.compaction_complete` | « Contexte compacté » |
+| `abort`, `session.error` | un tour interrompu ; une erreur, dite à la fin du tour |
+| `session.idle` (sans `agentId`) | la fin du tour ; son dernier événement gardé (non `ephemeral`) est le point de copie |
+
+Tout le reste est ignoré sans casser le tour (`model.*`, `session.lifecycle`, `host.event`, `sandbox.decision`, `hook.*`, `pending_messages.modified`, `session.background_tasks_changed`, et tout type ou champ inconnu). Un flux enregistré (`{"dir", "msg"}` par ligne) se rejoue tel quel : les événements, la session qu'a ouverte la réponse à `session.create` ou `session.resume`, et les tâches lues.
+
+### L'essai réel
+
+`real_copilot` (`src-tauri/src/copilot_tests.rs`, à la main : `ESCOUADE_REAL_COPILOT` = le `copilot.exe` 1.0.98, une `COPILOT_HOME` jetable et le jeton du GitHub CLI dans l'environnement du seul process d'essai, `GH_TOKEN`), fait le 2026-10-18 sur un compte Free avec `gpt-6-luna` : « Réponds seulement : A » (réponse « A ») ; `git status --short` demandé par une carte `Bash` puis autorisé ; une question `ask_user` « Quelle couleur ? » répondue « bleu » (l'événement et la requête au client : une seule carte) ; en mode Plan, une lecture du dossier passée sans carte, le `plan.md` de la session écrit sans demande, deux tâches par `sql`, puis la carte « Plan à approuver », refusée : Copilot a revu son plan et l'a redemandé (le test refuse désormais chaque plan jusqu'à la fin du tour). Les trois premiers tours ont compté 66 141 tokens. Aucun jeton dans le journal de l'essai ; ce que Copilot a ajouté à `%LOCALAPPDATA%copilot` (son cache commun au poste, six fichiers) a été retiré, et aucun `copilot` ne restait.
+
+### Ce qui vient ensuite
+
+Les comptes (`COPILOT_HOME`, `copilot login` dans un terminal intégré), la barre des crédits du mois et le pilote auto qui en tient compte, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `copilot -p` viennent avec ESC-40 ; la vue terminal de Copilot plus tard. Le Principal de Copilot est `~/.copilot`, lancé sans la variable.
+
 ## Serveur MCP d'Escouade
 
 Escouade sert ses outils à Claude Code (un terminal, un autre outil, ses propres agents) en MCP « Streamable HTTP », par le SDK officiel `rmcp` (3.5) derrière `hyper` (`src-tauri/src/mcp/`). Il tourne quand « Claude et les agents peuvent piloter Escouade » est activé, et s'arrête avec l'app.
