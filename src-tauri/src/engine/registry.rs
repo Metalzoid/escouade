@@ -323,10 +323,6 @@ pub struct EngineDecl {
     pub writer: &'static str,
     /// Its texts go to the model chosen in the settings (`Engine::writer_takes_model`: OpenCode).
     pub writer_takes_model: bool,
-    /// The user config Escouade declares its server in, as the window names it for the Principal
-    /// (« Codex peut piloter Escouade »: `~/.codex/config.toml`); None: no switch of its own
-    /// (Claude Code's declaration goes with « Claude et les agents peuvent piloter Escouade »).
-    pub mcp_config: Option<&'static str>,
 }
 
 pub fn declared() -> Vec<EngineDecl> {
@@ -343,7 +339,6 @@ pub fn declared() -> Vec<EngineDecl> {
             efforts: e.efforts().to_vec(),
             writer: e.writer(super::Weight::Light),
             writer_takes_model: e.writer_takes_model(),
-            mcp_config: e.user_config().map(|u| u.shown),
         })
         .collect()
 }

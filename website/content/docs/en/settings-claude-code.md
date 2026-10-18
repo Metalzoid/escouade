@@ -149,29 +149,25 @@ While it is on, the “Remote control for this project’s agents” switch of e
 
 For an agent in the [Claude Code view](claude-code-view), the change takes effect the next time its interface starts. The page on [remote control](remote-control) gives the detail: where it comes from, how to set an agent apart, and what happens at restart.
 
-## Escouade in Claude
+## MCP server
 
-This group lets Claude Code, in a terminal, in another tool, or in an Escouade agent, read your projects, agents, and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
+This group lets Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and create tickets or start agents, through Escouade’s [MCP server](mcp).
 
-### Claude and the agents can drive Escouade
+### Agents can drive Escouade
 
-The switch is off by default. It gives the server to Claude Code outside Escouade (a terminal, another tool) and to every Escouade agent, of every project, with a token of its own: there is nothing to allow in a project’s settings. It saves right away, without going through “Save”: turning it on declares the server in the Claude Code config of each active account, which a “Cancel” could not undo. Turning it off changes the token, removes the server from each account and keeps it away from the agents: those already running lose the tools at once.
+The switch is off by default; it is the only one, for every harness. It gives the server to each Escouade agent, in every project, with a token of its own: there is nothing to allow in a project’s settings. It also declares it in the config of each active account of each harness installed: `~/.claude.json` (Claude Code, through `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) for the Main account, the rest of the file and its comments kept. A harness installed or an account added later is declared at once. It saves right away, without “Save”: turning it on writes into these files, which “Cancel” could not undo. Turning it off changes the token, takes the entry out everywhere (each file back to what it was, byte for byte) and keeps the server away from the agents: those already running lose the tools at once.
 
 An agent already running gets the tools the next time its process starts: its conversation then shows “Escouade’s tools at the next start” with “Restart”, which resumes its session in a new process, and a line under the switch says how many agents are in that case (“1 agent already running gets the tools the next time its process starts: “Restart” on its conversation.”). See [Escouade’s agents and the server](mcp#escouade-s-agents-and-the-server).
 
-With the switch on, a line below it says where the declaration stands:
+With the switch on, the list below gives each declaration:
 
-- “Declaring in Claude…” while Escouade writes the server into Claude Code’s config;
-- “Declared in Claude · Main account, Pro account” when it is done for the accounts listed;
-- “Not declared for the Pro account: ” followed by the reason, when it failed for an account: the window then shows the command to run by hand (introduced by “Run it by hand in PowerShell:”, or “… in sh:” on macOS), with the token masked, and the “Copy the command” button copies the real command (“Command copied”);
-- “The server did not start: ” followed by the reason, in place of the lines above.
+- “Declaring in the harnesses installed…” while Escouade writes the entries;
+- then one line per account of each harness, “Codex · Main account” for example, with its file and its state, “Declared” or “Not declared”;
+- for an account where it failed, “Not declared for the Pro account:” followed by the reason, and what to do by hand: for Claude Code the command to run (“Run it by hand in PowerShell:”, or “… in sh:” on macOS) and “Copy the command” (“Command copied”); for the others the entry to add to the file (“Add it by hand to …:”) and “Copy the entry” (“Entry copied”). The token is masked on screen; the button copies the real one. A file that is not valid TOML or JSON is left alone;
+- “The server did not start:” followed by the reason, in place of the list.
 
 > [!WARNING]
-> The token is written in plain text in Claude Code’s config (`~/.claude.json` for the Main account). Turning it off changes the token.
-
-### Codex can drive Escouade
-
-When Codex is installed, a second switch, “Codex can drive Escouade”, also declares the server in the `config.toml` of each active Codex account (`~/.codex/config.toml` for the Main account): Codex outside Escouade (a terminal, its app) then gets the same tools. It stays greyed out while “Claude and the agents can drive Escouade” is off (“First turn on “Claude and the agents can drive Escouade”.”), and saves right away too. Escouade writes the entry itself and keeps the rest of the file, comments included. The line below says “Declaring in Codex…” then “Declared in Codex · Main account”; for an account where it fails (a `config.toml` that is not valid TOML, left as it is), it shows the entry to add by hand (“Add it by hand to …:”), the token masked, and “Copy the entry” copies the real one (“Entry copied”). The token is written there in plain text, which the switch’s description says. Turning it off first changes the token, then removes the entry: the file is back to what it was. The detail is on the [MCP server](mcp#codex-can-drive-escouade) page.
+> The token is written in plain text in each of these files. Turning it off changes the token.
 
 ## MCP activity
 

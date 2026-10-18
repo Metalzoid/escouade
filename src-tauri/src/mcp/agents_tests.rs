@@ -759,8 +759,19 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
         .to_string();
     assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
     assert!(admitted(port, &token).await);
+    // On, the switch declared the server in the account's own config too (Codex is installed,
+    // ESC-119); off, it takes it out.
+    assert!(std::fs::read_to_string(home.join("config.toml"))
+        .unwrap()
+        .contains("[mcp_servers.escouade]"));
     // Off: nothing of the server, and no token.
     drives(&h, false);
+    h.wait("the entry taken out of the account's config", |_| {
+        !std::fs::read_to_string(home.join("config.toml"))
+            .unwrap_or_default()
+            .contains("[mcp_servers.escouade]")
+    })
+    .await;
     settled(&h, &id).await;
     h.turn(&id, "encore").await;
     let launch = codex_launches(&home).pop().unwrap();

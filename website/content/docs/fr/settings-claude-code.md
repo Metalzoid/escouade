@@ -149,29 +149,25 @@ Tant qu’il est allumé, l’interrupteur « Remote control pour les agents de
 
 Pour un agent en [vue Claude Code](claude-code-view), le changement vaut au prochain lancement de son interface. La page sur [le remote control](remote-control) donne le détail : d’où il vient, comment mettre un agent à part et ce qui se passe au redémarrage.
 
-## Escouade dans Claude
+## Serveur MCP
 
-Ce groupe laisse Claude Code, dans un terminal, dans un autre outil ou dans un agent d’Escouade, lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
+Ce groupe laisse les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lire tes projets, tes agents et tes tickets, et créer des tickets ou lancer des agents, par le [serveur MCP](mcp) d’Escouade.
 
-### Claude et les agents peuvent piloter Escouade
+### Les agents peuvent piloter Escouade
 
-L’interrupteur est désactivé par défaut. Il donne le serveur à Claude Code hors d’Escouade (un terminal, un autre outil) et à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer déclare le serveur dans la config de Claude Code de chaque compte actif, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire le serveur de chaque compte et l’écarte des agents : ceux déjà lancés perdent les outils tout de suite.
+L’interrupteur est désactivé par défaut ; c’est le seul, il vaut pour tous les harness. Il donne le serveur à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il le déclare aussi dans la config de chaque compte actif de chaque harness installé : `~/.claude.json` (Claude Code, par `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer écrit dans ces fichiers, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire l’entrée partout (chaque fichier redevient celui d’avant, à l’octet près) et écarte le serveur des agents : ceux déjà lancés perdent les outils tout de suite.
 
 Un agent déjà lancé reçoit les outils au prochain démarrage de son processus : sa conversation affiche alors « Outils d’Escouade au prochain démarrage » avec « Relancer », qui reprend sa session dans un nouveau processus, et une ligne sous l’interrupteur dit combien d’agents sont dans ce cas (« 1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation. »). Voir [Les agents d’Escouade et le serveur](mcp#les-agents-d-escouade-et-le-serveur).
 
-Interrupteur allumé, une ligne dessous dit où en est la déclaration :
+Interrupteur allumé, la liste dessous donne chaque déclaration :
 
-- « Déclaration dans Claude… » pendant qu’Escouade écrit le serveur dans la config de Claude Code ;
-- « Déclaré dans Claude · compte Principal, compte Pro » quand c’est fait pour les comptes listés ;
-- « Pas déclaré pour le compte Pro : » suivi de la raison, quand ça a échoué pour un compte : la fenêtre montre alors la commande à lancer à la main (introduite par « À lancer à la main dans PowerShell : », ou « … dans sh : » sous macOS), avec le jeton masqué, et le bouton « Copier la commande » copie la vraie commande (« Commande copiée ») ;
-- « Le serveur n’a pas démarré : » suivi de la raison, à la place des lignes précédentes.
+- « Déclaration dans les harness installés… » pendant qu’Escouade écrit les entrées ;
+- puis une ligne par compte de chaque harness, « Codex · compte Principal » par exemple, avec son fichier et son état, « Déclaré » ou « Pas déclaré » ;
+- pour un compte où ça a échoué, « Pas déclaré pour le compte Pro : » suivi de la raison, et ce qu’il faut faire à la main : pour Claude Code la commande à lancer (« À lancer à la main dans PowerShell : », ou « … dans sh : » sous macOS) et « Copier la commande » (« Commande copiée ») ; pour les autres l’entrée à ajouter au fichier (« À ajouter à la main dans … : ») et « Copier l’entrée » (« Entrée copiée »). Le jeton est masqué à l’écran ; le bouton copie le vrai. Un fichier qui n’est pas un TOML ou un JSON valide n’est pas touché ;
+- « Le serveur n’a pas démarré : » suivi de la raison, à la place de la liste.
 
 > [!WARNING]
-> Le jeton est écrit en clair dans la config de Claude Code (`~/.claude.json` pour le compte Principal). Désactiver change le jeton.
-
-### Codex peut piloter Escouade
-
-Quand Codex est installé, un second interrupteur, « Codex peut piloter Escouade », déclare aussi le serveur dans le `config.toml` de chaque compte Codex actif (`~/.codex/config.toml` pour le compte Principal) : Codex hors d’Escouade (un terminal, son app) reçoit alors les mêmes outils. Il reste grisé tant que « Claude et les agents peuvent piloter Escouade » est éteint (« Active d’abord « Claude et les agents peuvent piloter Escouade ». »), et s’enregistre tout de suite lui aussi. Escouade écrit l’entrée lui-même et garde le reste du fichier, commentaires compris. La ligne dessous dit « Déclaration dans Codex… » puis « Déclaré dans Codex · compte Principal » ; pour un compte où ça échoue (un `config.toml` qui n’est pas un TOML valide, laissé tel quel), elle montre l’entrée à ajouter à la main (« À ajouter à la main dans … : »), jeton masqué, et « Copier l’entrée » copie la vraie (« Entrée copiée »). Le jeton y est écrit en clair, ce que la description de l’interrupteur dit. Le désactiver change d’abord le jeton, puis retire l’entrée : le fichier redevient celui d’avant. Le détail est sur la page du [serveur MCP](mcp#codex-peut-piloter-escouade).
+> Le jeton est écrit en clair dans chacun de ces fichiers. Désactiver change le jeton.
 
 ## Activité MCP
 

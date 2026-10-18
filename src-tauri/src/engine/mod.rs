@@ -10,6 +10,7 @@
 mod claude;
 pub(crate) mod codex;
 pub(crate) mod copilot;
+pub mod jsonc;
 pub mod mcp;
 pub mod oneshot;
 pub(crate) mod opencode;

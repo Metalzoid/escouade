@@ -17,7 +17,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 
 | Événement | Quand | Informations ajoutées |
 |---|---|---|
-| `app_started` | À chaque démarrage | La langue de l’interface (`fr` ou `en`), le nombre de comptes Claude, le nombre de projets, si « Claude et les agents peuvent piloter Escouade » (le serveur MCP) est activé (oui ou non), si un projet est dans WSL (oui ou non) |
+| `app_started` | À chaque démarrage | La langue de l’interface (`fr` ou `en`), le nombre de comptes Claude, le nombre de projets, si « Les agents peuvent piloter Escouade » (le serveur MCP) est activé (oui ou non), si un projet est dans WSL (oui ou non) |
 | `app_active` | Une fois par jour, tant que l’app reste ouverte | — |
 | `project_created` | Un projet est créé | — |
 | `agent_created` | Un agent est créé | `worktree` : avec un worktree ou non (oui ou non) |
@@ -35,7 +35,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `claude_code_view` | Un agent passe à la vue Claude Code | — |
 | `file_saved` | Un fichier est enregistré dans l’éditeur | — |
 | `code_searched` | Une recherche dans le code | — |
-| `mcp_enabled` | « Claude et les agents peuvent piloter Escouade » est activé | — |
+| `mcp_enabled` | « Les agents peuvent piloter Escouade » est activé | — |
 | `integration_connected` | Un service est connecté | `service` : `jira`, `trello`, `github` ou `linear` |
 | `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github` ou `linear` |
 | `account_created` | Un compte Claude est ajouté | — |

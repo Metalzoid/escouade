@@ -1,9 +1,11 @@
-//! « Codex peut piloter Escouade »: the server declared in the `config.toml` of each Codex account,
-//! beside Claude Code's declaration, kept in step with the switches (ESC-50).
+//! « Les agents peuvent piloter Escouade » (ESC-119): the one switch declares the server in every
+//! harness installed, in each of its active accounts: Claude Code by `claude mcp add`, Codex in
+//! its `config.toml` (ESC-50), OpenCode in its `opencode.json`, Copilot CLI in its
+//! `mcp-config.json`, kept in step with the settings.
 
 use super::install::{current, wanted, Entry, MASK};
 use crate::core_tests::{harness, Harness};
-use crate::engine::{Engine, CLAUDE, CODEX};
+use crate::engine::{Engine, CLAUDE, CODEX, COPILOT, OPENCODE};
 use crate::model::*;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -12,9 +14,48 @@ use std::sync::atomic::Ordering;
 const USERS: &str =
     "# mon modèle\nmodel = \"gpt-5\"\n\n[mcp_servers.node_repl]\ncommand = 'node.exe' # le mien\n";
 
-/// Principal's `config.toml` in a test: in the core's data folder (`Core::user_config_file`).
+/// What the user had in OpenCode's `opencode.json`: comments, a server of theirs.
+const USERS_OPENCODE: &str = "{\n  // mon modèle\n  \"model\": \"ollama/qwen3-coder\",\n  \"mcp\": {\n    \"node\": { \"type\": \"local\", \"command\": [\"node\"] } // le mien\n  }\n}\n";
+
+/// What the user had in Copilot's `mcp-config.json`, as `copilot mcp add` writes it.
+const USERS_COPILOT: &str = "{\n  \"mcpServers\": {\n    \"essai\": {\n      \"tools\": [\n        \"*\"\n      ],\n      \"type\": \"http\",\n      \"url\": \"http://127.0.0.1:1/mcp\"\n    }\n  }\n}";
+
+/// A Principal's user config in a test: in the core's data folder (`Core::user_config_file`).
+fn principal_file(h: &Harness, engine: EngineId, file: &str) -> PathBuf {
+    h.dir
+        .join("data")
+        .join(format!("{}-home", engine.as_str()))
+        .join(file)
+}
+
 fn principal_toml(h: &Harness) -> PathBuf {
-    h.dir.join("data").join("codex-home").join("config.toml")
+    principal_file(h, EngineId::Codex, "config.toml")
+}
+
+fn opencode_json(h: &Harness) -> PathBuf {
+    principal_file(h, EngineId::Opencode, "opencode.json")
+}
+
+fn copilot_json(h: &Harness) -> PathBuf {
+    principal_file(h, EngineId::Copilot, "mcp-config.json")
+}
+
+fn claude_json(h: &Harness) -> PathBuf {
+    h.dir.join("data").join("claude-home").join(".claude.json")
+}
+
+fn write(path: &PathBuf, text: &str) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, text).unwrap();
+}
+
+fn read(path: &PathBuf) -> String {
+    std::fs::read_to_string(path).unwrap()
+}
+
+/// The harnesses the test says are installed (no program of theirs is found in a unit test).
+fn installed(h: &Harness, engines: &[EngineId]) {
+    *h.core.mcp.installed.lock() = engines.to_vec();
 }
 
 fn runs(h: &Harness) -> usize {
@@ -42,8 +83,7 @@ fn now_wanted(h: &Harness) -> Entry {
 /// Principal's `config.toml` with the user's own lines, and a second Codex account, its own
 /// folder, and a third one switched off.
 fn codex_accounts(h: &Harness) -> (PathBuf, PathBuf) {
-    std::fs::create_dir_all(principal_toml(h).parent().unwrap()).unwrap();
-    std::fs::write(principal_toml(h), USERS).unwrap();
+    write(&principal_toml(h), USERS);
     let (pro, off) = (h.dir.join("codex-pro"), h.dir.join("codex-off"));
     let mut s = h.core.settings.read().clone();
     s.accounts
@@ -62,155 +102,164 @@ fn codex_accounts(h: &Harness) -> (PathBuf, PathBuf) {
     (pro.join("config.toml"), off.join("config.toml"))
 }
 
-#[tokio::test]
-async fn codex_gets_the_server_in_the_config_toml_of_each_active_account_with_its_own_switch() {
-    let h = harness("mcp-codex-on");
-    let (pro, off) = codex_accounts(&h);
-    let claude_json = h.dir.join("data").join("claude-home").join(".claude.json");
-
-    // « Claude et les agents… » alone: Claude Code gets it, Codex's accounts nothing.
-    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    assert_eq!(current(&CLAUDE, &claude_json), Some(now_wanted(&h)));
-    assert_eq!(std::fs::read_to_string(principal_toml(&h)).unwrap(), USERS);
-    assert!(!pro.exists());
-    assert!(h
-        .core
+/// The accounts the window is told of, harness by harness, with whether each is declared.
+fn told(h: &Harness) -> Vec<(EngineId, String, bool)> {
+    h.core
         .mcp
         .declared()
-        .iter()
-        .all(|d| d.engine == EngineId::Claude));
+        .into_iter()
+        .map(|d| (d.engine, d.account, d.ok))
+        .collect()
+}
 
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
-    assert_eq!(h.core.settings.read().mcp_harnesses, [EngineId::Codex]);
+#[tokio::test]
+async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_active_account() {
+    let h = harness("mcp-all-on");
+    let (pro, off) = codex_accounts(&h);
+    write(&opencode_json(&h), USERS_OPENCODE);
+    write(&copilot_json(&h), USERS_COPILOT);
+    installed(
+        &h,
+        &[EngineId::Codex, EngineId::Opencode, EngineId::Copilot],
+    );
+
+    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     let want = now_wanted(&h);
+    assert_eq!(current(&CLAUDE, &claude_json(&h)), Some(want.clone()));
     for file in [principal_toml(&h), pro.clone()] {
         assert_eq!(current(&CODEX, &file), Some(want.clone()), "{file:?}");
     }
     assert!(!off.exists(), "an account switched off gets nothing");
+    assert_eq!(current(&OPENCODE, &opencode_json(&h)), Some(want.clone()));
+    assert_eq!(current(&COPILOT, &copilot_json(&h)), Some(want.clone()));
     // The user's lines and comments as they were, the entry after them.
-    let text = std::fs::read_to_string(principal_toml(&h)).unwrap();
-    assert!(text.starts_with(USERS), "{text}");
-    // The window is told each account, with what to paste by hand (its token hidden) and where.
+    assert!(read(&principal_toml(&h)).starts_with(USERS));
+    let oc = read(&opencode_json(&h));
+    assert!(
+        oc.contains("\"node\": { \"type\": \"local\", \"command\": [\"node\"] },\n    \"escouade\": {\n      \"type\": \"remote\""),
+        "{oc}"
+    );
+    assert!(oc.contains("    } // le mien\n  }\n}\n"), "{oc}");
+
+    // The window is told each account of each harness, with its file and what to paste by hand.
+    assert_eq!(
+        told(&h),
+        [
+            (EngineId::Claude, "principal".into(), true),
+            (EngineId::Codex, "principal-codex".into(), true),
+            (EngineId::Codex, "codex-pro".into(), true),
+            (EngineId::Copilot, "principal-copilot".into(), true),
+            (EngineId::Opencode, "principal-opencode".into(), true),
+        ]
+    );
     let declared = h.core.mcp.declared();
-    let codex: Vec<_> = declared
-        .iter()
-        .filter(|d| d.engine == EngineId::Codex)
-        .collect();
-    assert_eq!(
-        codex
-            .iter()
-            .map(|d| (d.account.as_str(), d.ok))
-            .collect::<Vec<_>>(),
-        [("principal-codex", true), ("codex-pro", true)]
-    );
-    assert_eq!(
-        codex[1].file.as_deref(),
-        Some(pro.to_string_lossy().as_ref())
-    );
+    let by = |account: &str| declared.iter().find(|d| d.account == account).unwrap();
+    assert_eq!(by("principal").file, claude_json(&h).to_string_lossy());
+    assert!(!by("principal").paste);
     assert!(
-        codex[1].command.contains("[mcp_servers.escouade]"),
+        by("principal").command.contains("claude"),
         "{}",
-        codex[1].command
+        by("principal").command
     );
+    assert_eq!(by("codex-pro").file, pro.to_string_lossy());
+    assert!(by("codex-pro").paste);
+    assert!(by("codex-pro").command.contains("[mcp_servers.escouade]"));
+    let copilot = by("principal-copilot");
+    assert_eq!(copilot.file, copilot_json(&h).to_string_lossy());
     assert!(
-        codex[1].command.contains(&format!("Bearer {MASK}")),
+        copilot.command.contains("\"mcpServers\""),
         "{}",
-        codex[1].command
+        copilot.command
     );
+    assert!(copilot.command.contains(&format!("Bearer {MASK}")));
+    assert!(by("principal-opencode")
+        .command
+        .contains("\"type\": \"remote\""));
     let everything = serde_json::to_string(&*h.events.lock()).unwrap();
     assert!(
         !everything.contains(&want.token),
         "a token went to the window"
     );
     // « Copier » gives the real one.
-    let real = h.core.mcp_manual_command("codex-pro").unwrap();
-    assert!(real.contains(&format!("Bearer {}", want.token)), "{real}");
-    // Claude Code's declaration is still there, with the same token.
-    assert_eq!(current(&CLAUDE, &claude_json), Some(want));
+    for account in ["codex-pro", "principal-opencode", "principal-copilot"] {
+        let real = h.core.mcp_manual_command(account).unwrap();
+        assert!(real.contains(&format!("Bearer {}", want.token)), "{real}");
+    }
     h.core.shutdown();
 }
 
 #[tokio::test]
-async fn turning_codex_off_changes_the_token_first_then_leaves_its_files_as_they_were() {
-    let h = harness("mcp-codex-off");
-    let (pro, _) = codex_accounts(&h);
-    let claude_json = h.dir.join("data").join("claude-home").join(".claude.json");
+async fn turned_off_the_token_changes_first_then_every_file_is_as_it_was_byte_for_byte() {
+    let h = harness("mcp-all-off");
+    let (pro, off) = codex_accounts(&h);
+    write(&opencode_json(&h), USERS_OPENCODE);
+    write(&copilot_json(&h), USERS_COPILOT);
+    installed(
+        &h,
+        &[EngineId::Codex, EngineId::Opencode, EngineId::Copilot],
+    );
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
     let old = h.core.mcp.external_token().unwrap();
     assert!(h.core.mcp.caller(&old).is_some());
+    // A leftover in the account switched off (it was on once).
+    write(&off, &format!("[mcp_servers.escouade]\nurl = \"http://127.0.0.1:1/mcp\"\nhttp_headers = {{ Authorization = \"Bearer {old}\" }}\n"));
 
     // The run cannot start yet: what happens is the switch's own.
     let held = h.core.mcp.declaring.lock().await;
     let before = runs(&h);
-    h.core.set_mcp_harness(EngineId::Codex, false).unwrap();
-    // The old token opens nothing at once, though it is still in Codex's files.
+    h.core.set_mcp_enabled(false).unwrap();
+    // The old token opens nothing at once, though it is still in the files.
     assert_eq!(h.core.mcp.caller(&old), None);
-    assert_eq!(current(&CODEX, &principal_toml(&h)).unwrap().token, old);
+    assert_eq!(current(&COPILOT, &copilot_json(&h)).unwrap().token, old);
     drop(held);
     run_after(&h, before).await;
 
-    // Codex's files as they were: Principal's the user's own, byte for byte; the other one emptied.
-    assert_eq!(std::fs::read_to_string(principal_toml(&h)).unwrap(), USERS);
-    assert_eq!(std::fs::read_to_string(&pro).unwrap(), "");
-    assert!(h.core.settings.read().mcp_harnesses.is_empty());
-    // Claude Code keeps the server, with the new token.
+    assert_eq!(read(&principal_toml(&h)), USERS);
+    assert_eq!(read(&pro), "");
+    assert_eq!(current(&CODEX, &off), None);
+    assert_eq!(read(&opencode_json(&h)), USERS_OPENCODE);
+    assert_eq!(read(&copilot_json(&h)), USERS_COPILOT);
+    assert_eq!(current(&CLAUDE, &claude_json(&h)), None);
+    assert!(h.core.mcp.declared().is_empty());
+
+    // On again: every harness gets the new token.
+    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     let new = h.core.mcp.external_token().unwrap();
     assert_ne!(new, old);
-    assert_eq!(current(&CLAUDE, &claude_json).unwrap().token, new);
-    assert!(h
-        .core
-        .mcp
-        .declared()
-        .iter()
-        .all(|d| d.engine == EngineId::Claude));
-    h.core.shutdown();
-}
-
-#[tokio::test]
-async fn turning_the_server_off_takes_it_out_of_codex_too_and_on_again_puts_it_back() {
-    let h = harness("mcp-codex-all-off");
-    let (pro, off) = codex_accounts(&h);
-    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
-    let old = h.core.mcp.external_token().unwrap();
-    // A leftover in the account switched off (it was on once).
-    std::fs::create_dir_all(off.parent().unwrap()).unwrap();
-    std::fs::write(&off, format!("[mcp_servers.escouade]\nurl = \"http://127.0.0.1:1/mcp\"\nhttp_headers = {{ Authorization = \"Bearer {old}\" }}\n")).unwrap();
-
-    after(&h, |h| h.core.set_mcp_enabled(false).unwrap()).await;
-    assert_eq!(std::fs::read_to_string(principal_toml(&h)).unwrap(), USERS);
-    for file in [&pro, &off] {
-        assert_eq!(current(&CODEX, file), None, "{file:?}");
+    for (engine, file) in [
+        (&CODEX as &dyn Engine, principal_toml(&h)),
+        (&OPENCODE, opencode_json(&h)),
+        (&COPILOT, copilot_json(&h)),
+        (&CLAUDE, claude_json(&h)),
+    ] {
+        assert_eq!(current(engine, &file).unwrap().token, new, "{file:?}");
     }
-    assert_eq!(h.core.mcp.caller(&old), None);
-    // Its own switch is kept: on again, Codex gets the new token.
-    assert_eq!(h.core.settings.read().mcp_harnesses, [EngineId::Codex]);
-    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    let new = h.core.mcp.external_token().unwrap();
-    assert_eq!(current(&CODEX, &principal_toml(&h)).unwrap().token, new);
     h.core.shutdown();
 }
 
 #[tokio::test]
-async fn with_no_codex_account_yet_its_principal_config_is_the_one_declared_in() {
-    let h = harness("mcp-codex-principal");
+async fn a_harness_not_installed_gets_nothing_until_it_is_then_at_once_and_an_account_added_too() {
+    let h = harness("mcp-later");
+    write(&copilot_json(&h), USERS_COPILOT);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
-    assert_eq!(current(&CODEX, &principal_toml(&h)), Some(now_wanted(&h)));
-    // No Principal of Codex saved for it (it is made at Codex's first agent).
+    // Only Claude Code is installed: no file of another harness is touched, or made.
+    assert_eq!(read(&copilot_json(&h)), USERS_COPILOT);
+    assert!(!principal_toml(&h).exists() && !opencode_json(&h).exists());
+    assert_eq!(told(&h), [(EngineId::Claude, "principal".into(), true)]);
+
+    // Copilot installed since (in a terminal): back to the window, it is declared (the window
+    // showing the declarations, or Réglages › Harness, sees to it too).
+    installed(&h, &[EngineId::Copilot]);
+    let before = runs(&h);
+    h.core.declare_on_focus();
+    run_after(&h, before).await;
+    assert_eq!(current(&COPILOT, &copilot_json(&h)), Some(now_wanted(&h)));
+    // The focus again at once brings no run: one a minute at most.
+    let before = runs(&h);
+    h.core.declare_on_focus();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(runs(&h), before);
+    // No Principal of Copilot saved for it (it is made at its first agent).
     assert!(h
         .core
         .settings
@@ -218,58 +267,86 @@ async fn with_no_codex_account_yet_its_principal_config_is_the_one_declared_in()
         .accounts
         .iter()
         .all(|a| a.engine == EngineId::Claude));
-    assert!(h.core.mcp_manual_command("principal-codex").is_ok());
+    assert!(h.core.mcp_manual_command("principal-copilot").is_ok());
+
+    // A Copilot account added: declared in its folder at once.
+    let dir = h.dir.join("copilot-pro");
+    after(&h, |h| {
+        let mut s = h.core.settings.read().clone();
+        s.accounts
+            .push(crate::accounts::principal_of(EngineId::Copilot));
+        s.accounts.push(Account {
+            id: "copilot-pro".into(),
+            name: "Pro".into(),
+            engine: EngineId::Copilot,
+            config_dir: dir.to_string_lossy().into(),
+            active: true,
+            ..Default::default()
+        });
+        h.core.save_settings(s).unwrap();
+    })
+    .await;
+    let pro = dir.join("mcp-config.json");
+    assert_eq!(current(&COPILOT, &pro), Some(now_wanted(&h)));
+
+    // Removed: its entry leaves its file (made by Escouade: the file goes).
+    let before = runs(&h);
+    h.core.remove_claude_account("copilot-pro").unwrap();
+    h.wait("the removal", |h| runs(h) > before + 1).await;
+    assert!(!pro.exists());
+    assert!(current(&COPILOT, &copilot_json(&h)).is_some());
     h.core.shutdown();
 }
 
 #[tokio::test]
-async fn a_codex_config_that_is_no_toml_is_told_and_left_alone() {
-    let h = harness("mcp-codex-invalid");
-    std::fs::create_dir_all(principal_toml(&h).parent().unwrap()).unwrap();
-    std::fs::write(principal_toml(&h), "model = = 1\n").unwrap();
+async fn a_config_that_cannot_be_read_is_told_with_what_to_paste_and_left_alone() {
+    let h = harness("mcp-invalid");
+    write(&principal_toml(&h), "model = = 1\n");
+    write(&copilot_json(&h), "{\"mcpServers\": [");
+    installed(&h, &[EngineId::Codex, EngineId::Copilot]);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
-    let d = h
-        .core
-        .mcp
-        .declared()
-        .into_iter()
-        .find(|d| d.engine == EngineId::Codex)
-        .expect("Codex's account told");
-    assert!(!d.ok);
-    assert!(
-        d.error.as_deref().unwrap_or_default().contains("TOML"),
-        "{d:?}"
-    );
-    assert_eq!(
-        std::fs::read_to_string(principal_toml(&h)).unwrap(),
-        "model = = 1\n"
-    );
+    let declared = h.core.mcp.declared();
+    for (engine, says) in [(EngineId::Codex, "TOML"), (EngineId::Copilot, "JSON")] {
+        let d = declared.iter().find(|d| d.engine == engine).unwrap();
+        assert!(!d.ok);
+        assert!(
+            d.error.as_deref().unwrap_or_default().contains(says),
+            "{d:?}"
+        );
+        assert!(
+            d.paste && d.command.contains(&format!("Bearer {MASK}")),
+            "{d:?}"
+        );
+    }
+    assert_eq!(read(&principal_toml(&h)), "model = = 1\n");
+    assert_eq!(read(&copilot_json(&h)), "{\"mcpServers\": [");
+    // The other harnesses are declared all the same.
+    assert!(declared
+        .iter()
+        .any(|d| d.engine == EngineId::Claude && d.ok));
     h.core.shutdown();
 }
 
 #[tokio::test]
-async fn only_a_harness_with_a_user_config_has_a_switch_and_the_window_never_flips_it() {
-    let h = harness("mcp-codex-refused");
-    assert!(h.core.set_mcp_harness(EngineId::Claude, true).is_err());
-    assert!(h.core.set_mcp_harness(EngineId::Cursor, true).is_err());
-    assert!(h.core.settings.read().mcp_harnesses.is_empty());
-    assert!(CODEX.user_config().is_some() && CLAUDE.user_config().is_none());
-
+async fn the_window_never_flips_the_switch_and_settings_of_before_keep_it() {
+    let h = harness("mcp-window");
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
     let mut stale = h.core.settings.read().clone();
-    stale.mcp_harnesses.clear();
+    stale.mcp_enabled = false;
     stale.sound = !stale.sound;
     h.core.save_window_settings(stale).unwrap();
-    assert_eq!(h.core.settings.read().mcp_harnesses, [EngineId::Codex]);
+    assert!(h.core.settings.read().mcp_enabled);
     h.core.shutdown();
+
+    // Settings saved before the one switch (ESC-50): the switches of each harness are dropped, the
+    // server's switch says for all of them.
+    for on in [true, false] {
+        let old =
+            format!("{{\"mcpEnabled\": {on}, \"mcpHarnesses\": [\"codex\"], \"sound\": false}}");
+        let s: Settings = serde_json::from_str(&old).unwrap();
+        assert_eq!(s.mcp_enabled, on);
+        assert!(!serde_json::to_string(&s).unwrap().contains("mcpHarnesses"));
+    }
 }
 
 /// Real run (ESC-50): « Codex peut piloter Escouade » on the machine's own `~/.codex/config.toml`,
@@ -397,8 +474,7 @@ async fn real_codex_drives_escouade() {
 async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and_the_file_is_written_once(
 ) {
     let h = harness("mcp-codex-link");
-    std::fs::create_dir_all(principal_toml(&h).parent().unwrap()).unwrap();
-    std::fs::write(principal_toml(&h), USERS).unwrap();
+    write(&principal_toml(&h), USERS);
     // A Codex account that shares its Principal's settings (`accounts::link_file`).
     let dir = h.dir.join("codex-lie");
     std::fs::create_dir_all(&dir).unwrap();
@@ -423,11 +499,8 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
             .is_symlink()
     };
 
+    installed(&h, &[EngineId::Codex]);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, true).unwrap()
-    })
-    .await;
     assert!(is_link(), "the link is still a link");
     let text = std::fs::read_to_string(principal_toml(&h)).unwrap();
     assert_eq!(text.matches("[mcp_servers.escouade]").count(), 1, "{text}");
@@ -443,10 +516,7 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
     assert_eq!(codex.len(), 2);
     assert!(codex.iter().all(|d| d.ok), "{codex:?}");
     let real = std::fs::canonicalize(principal_toml(&h)).unwrap();
-    assert_eq!(
-        codex[1].file.as_deref(),
-        Some(real.to_string_lossy().as_ref())
-    );
+    assert_eq!(codex[1].file, real.to_string_lossy());
 
     // The linked account removed: Principal still wants the entry, it stays.
     let before = runs(&h);
@@ -455,11 +525,175 @@ async fn an_account_whose_config_toml_is_a_link_to_principals_keeps_its_link_and
     h.wait("the removal", |h| runs(h) > before + 1).await;
     assert!(current(&CODEX, &principal_toml(&h)).is_some());
 
-    after(&h, |h| {
-        h.core.set_mcp_harness(EngineId::Codex, false).unwrap()
-    })
-    .await;
+    after(&h, |h| h.core.set_mcp_enabled(false).unwrap()).await;
     assert!(is_link(), "the link is still a link");
     assert_eq!(std::fs::read_to_string(principal_toml(&h)).unwrap(), USERS);
+    h.core.shutdown();
+}
+
+/// What `program` said, run with `args` in `cwd` and `env` (only these variables added), until it
+/// ends, `done` says what was awaited happened (it is stopped then: a model may go on), or
+/// `minutes` pass: its output and error output, cut to their end. Written to files, the process
+/// waited for alone: what it leaves running (OpenCode does) would hold pipes open.
+async fn run_real(
+    program: &str,
+    args: &[&str],
+    cwd: &std::path::Path,
+    env: &[(&str, String)],
+    minutes: u64,
+    done: impl Fn() -> bool,
+) -> String {
+    let (out, err) = (cwd.join("out.txt"), cwd.join("err.txt"));
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args)
+        .current_dir(cwd)
+        // OpenCode takes its folder from `PWD` when there is one (the shell's that runs the tests).
+        .env("PWD", cwd)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::fs::File::create(&out).unwrap())
+        .stderr(std::fs::File::create(&err).unwrap())
+        .kill_on_drop(true);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let mut child = cmd.spawn().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(minutes * 60);
+    let status = loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            break format!("{status}");
+        }
+        if done() || std::time::Instant::now() > deadline {
+            let _ = child.kill().await;
+            break "stopped".to_string();
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    };
+    let text = format!(
+        "{status:?}\n{}\n--- stderr ---\n{}",
+        std::fs::read_to_string(&out).unwrap_or_default(),
+        std::fs::read_to_string(&err).unwrap_or_default()
+    );
+    let cut = text.len().saturating_sub(4000);
+    text[text.ceil_char_boundary(cut)..].to_string()
+}
+
+/// The calls of `tool` the server answered, outside Escouade (Escouade's own token).
+fn called(h: &Harness, tool: &str) -> usize {
+    h.core
+        .mcp
+        .activity
+        .entries()
+        .iter()
+        .filter(|e| e.tool == tool && e.outcome == "ok")
+        .count()
+}
+
+/// Real run (ESC-119): OpenCode, started outside Escouade with nothing but a disposable
+/// `XDG_*` whose `opencode.jsonc` is the user's (comments, Ollama as provider) plus the entry
+/// Escouade wrote, calls Escouade's `list_projects`; taken out, the file is as it was, byte for
+/// byte. `ESCOUADE_REAL_OPENCODE`: the native `opencode`; Ollama's `qwen3-coder:30b-32k` must
+/// be there. By hand only (`cargo test --lib real_opencode_drives -- --ignored --nocapture`).
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_opencode_drives_escouade_from_the_entry_escouade_wrote() {
+    let program = std::env::var("ESCOUADE_REAL_OPENCODE").expect("ESCOUADE_REAL_OPENCODE");
+    let h = harness("mcp-opencode-real");
+    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
+    let want = now_wanted(&h);
+    let xdg = h.dir.join("xdg");
+    let file = xdg.join("config").join("opencode").join("opencode.jsonc");
+    let users = "{\n  // Ollama, en local\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"provider\": {\n    \"ollama\": {\n      \"npm\": \"@ai-sdk/openai-compatible\",\n      \"options\": { \"baseURL\": \"http://127.0.0.1:11434/v1\" },\n      \"models\": { \"qwen3-coder:30b-32k\": { \"tool_call\": true, \"limit\": { \"context\": 32768, \"output\": 8192 } } },\n    },\n  },\n  \"model\": \"ollama/qwen3-coder:30b-32k\",\n  \"small_model\": \"ollama/qwen3-coder:30b-32k\",\n  \"enabled_providers\": [\"ollama\"], // rien d'autre\n}\n";
+    write(&file, users);
+    let user = OPENCODE.user_config().unwrap();
+    // Where Escouade writes it: the user's `opencode.jsonc`, the one there.
+    assert_eq!(user.file_in(file.parent().unwrap()), file);
+    user.add(&file, &want).unwrap();
+    println!("{}", crate::mcp::install::mask_bearer(&read(&file)));
+    let env: Vec<(&str, String)> = ["config", "data", "state", "cache"]
+        .iter()
+        .map(|d| {
+            let var = match *d {
+                "config" => "XDG_CONFIG_HOME",
+                "data" => "XDG_DATA_HOME",
+                "state" => "XDG_STATE_HOME",
+                _ => "XDG_CACHE_HOME",
+            };
+            (var, xdg.join(d).to_string_lossy().into_owned())
+        })
+        .collect();
+    let work = h.dir.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let said = run_real(
+        &program,
+        &[
+            "run",
+            "Call the tool escouade_list_projects once, then say how many projects it returned.",
+        ],
+        &work,
+        &env,
+        15,
+        || called(&h, "list_projects") >= 1,
+    )
+    .await;
+    println!("{}", crate::mcp::install::mask_bearer(&said));
+    assert!(called(&h, "list_projects") >= 1, "no call of list_projects");
+
+    user.remove(&file).unwrap();
+    assert_eq!(read(&file), users, "the file as it was, byte for byte");
+    h.core.shutdown();
+}
+
+/// Real run (ESC-119): Copilot CLI, started outside Escouade (`copilot -p`) with a disposable
+/// `COPILOT_HOME` whose `mcp-config.json` is as `copilot mcp remove` leaves it plus the entry
+/// Escouade wrote, calls Escouade's `list_projects`; taken out, the file is as it was, byte for
+/// byte. `ESCOUADE_REAL_COPILOT`: the native `copilot`; signed in by `gh auth token` (the
+/// GitHub CLI's), given to its process alone. Uses a request of the account's. By hand only
+/// (`cargo test --lib real_copilot_drives -- --ignored --nocapture`).
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_copilot_drives_escouade_from_the_entry_escouade_wrote() {
+    let program = std::env::var("ESCOUADE_REAL_COPILOT").expect("ESCOUADE_REAL_COPILOT");
+    let gh = std::process::Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+        .unwrap();
+    let token = String::from_utf8_lossy(&gh.stdout).trim().to_string();
+    assert!(!token.is_empty(), "gh auth token");
+    let h = harness("mcp-copilot-real");
+    after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
+    let want = now_wanted(&h);
+    let home = h.dir.join("copilot-home");
+    let file = home.join("mcp-config.json");
+    let users = "{\n  \"mcpServers\": {}\n}";
+    write(&file, users);
+    let user = COPILOT.user_config().unwrap();
+    user.add(&file, &want).unwrap();
+    println!("{}", crate::mcp::install::mask_bearer(&read(&file)));
+    let work = h.dir.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let said = run_real(
+        &program,
+        &[
+            "-p",
+            "Call the list_projects tool of the escouade MCP server once, then say how many projects it returned.",
+            "--allow-all-tools",
+        ],
+        &work,
+        &[
+            ("COPILOT_HOME", home.to_string_lossy().into_owned()),
+            ("GH_TOKEN", token.clone()),
+        ],
+        10,
+        || called(&h, "list_projects") >= 1,
+    )
+    .await;
+    println!(
+        "{}",
+        crate::mcp::install::mask_bearer(&said.replace(&token, "<gh>"))
+    );
+    assert!(called(&h, "list_projects") >= 1, "no call of list_projects");
+
+    user.remove(&file).unwrap();
+    assert_eq!(read(&file), users, "the file as it was, byte for byte");
     h.core.shutdown();
 }

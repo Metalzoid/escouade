@@ -34,8 +34,12 @@ export interface App {
   root: string;
   /** Principal's `.claude.json`: where the fake `claude mcp add` declares Escouade's server (the app's `CLAUDE_CONFIG_DIR` is a test folder). */
   claudeJson: string;
-  /** Principal's `config.toml` of Codex: where « Codex peut piloter Escouade » declares the server (`CODEX_HOME` is a test folder). */
+  /** Principal's `config.toml` of Codex: where « Les agents peuvent piloter Escouade » declares the server (`CODEX_HOME` is a test folder). */
   codexToml: string;
+  /** OpenCode's global config, where the switch declares the server (`XDG_CONFIG_HOME` is a test folder). */
+  opencodeJson: string;
+  /** Principal's `mcp-config.json` of Copilot CLI (`COPILOT_HOME` is a test folder). */
+  copilotJson: string;
   /** Launches of the fake CLI: argv, cwd, its process id (a new session of it is `sess-<pid>`), the proxy, the Claude Code folder (`CLAUDE_CONFIG_DIR`) and the task list variable it received (null when unset). */
   launches: () => {
     argv: string[];
@@ -263,13 +267,16 @@ export const test = base.extend<{
       ESCOUADE_USAGE_API: NO_USAGE_API,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
-      // Codex's Principal is a folder of the test's (its `config.toml`, « Codex peut piloter Escouade »), never the user's ~/.codex.
+      // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.
       CODEX_HOME: path.join(root, 'codex'),
       FAKE_CODEX_LOG: path.join(root, 'fake-codex.jsonl'),
       // The same for OpenCode (`appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE }`); its sessions kept in the test's folder.
       ESCOUADE_OPENCODE: 'none',
       FAKE_OPENCODE_LOG: path.join(root, 'fake-opencode.jsonl'),
       FAKE_OPENCODE_HOME: path.join(root, 'fake-opencode'),
+      // OpenCode's global config (`opencode.json`, where the switch declares the server): a folder of the test's,
+      // never the user's ~/.config/opencode, even when the switch takes the entry out of a harness not installed.
+      XDG_CONFIG_HOME: path.join(root, 'xdg'),
       // The same for Copilot CLI (`appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT }`): never the machine's, its Principal
       // (`COPILOT_HOME`) a folder of the test's, never the user's ~/.copilot.
       ESCOUADE_COPILOT: 'none',
@@ -313,6 +320,8 @@ export const test = base.extend<{
         root,
         claudeJson: path.join(root, 'claude', '.claude.json'),
         codexToml: path.join(root, 'codex', 'config.toml'),
+        opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
+        copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
         launches,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.

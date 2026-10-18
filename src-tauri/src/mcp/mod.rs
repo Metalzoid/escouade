@@ -160,16 +160,17 @@ pub struct McpServer<R: Runtime> {
     /// takes the entry out of every account (the token was changed when it was turned off,
     /// `turned_off`).
     withdraw: AtomicBool,
-    /// The harnesses whose « <harness> peut piloter Escouade » was turned off since the last
-    /// declaration run, the server still on: that run takes the entry out of their accounts (the
-    /// token was changed, `harness_off`).
-    withdraw_from: Mutex<Vec<crate::model::EngineId>>,
     /// Where the server stands in each active account of each harness it is declared in, as the
     /// last run left it.
     declared: Mutex<Vec<install::Declaration>>,
+    /// When the window last brought a declaration run (`Core::declare_on_focus`).
+    focus_run: Mutex<Option<std::time::Instant>>,
     /// How many declaration runs are over (tests wait for the one they cause).
     #[cfg(test)]
     runs: std::sync::atomic::AtomicUsize,
+    /// The harnesses the tests say are installed (a unit test finds no program of its own).
+    #[cfg(test)]
+    pub(crate) installed: Mutex<Vec<crate::model::EngineId>>,
     pub activity: activity::Activity,
     /// What a connection may take, read at each start (tests make them small).
     limits: Mutex<http::Limits>,
@@ -187,10 +188,12 @@ impl<R: Runtime> McpServer<R> {
             acting: tokio::sync::Mutex::new(()),
             declaring: tokio::sync::Mutex::new(()),
             withdraw: AtomicBool::new(false),
-            withdraw_from: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
             #[cfg(test)]
             runs: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            installed: Mutex::new(Vec::new()),
+            focus_run: Mutex::new(None),
             activity: activity::Activity::default(),
             limits: Mutex::new(http::Limits::default()),
         }
@@ -314,20 +317,6 @@ impl<R: Runtime> McpServer<R> {
             self.remove_agent_configs();
         }
         self.withdraw.store(true, Ordering::Release);
-    }
-
-    /// « <harness> peut piloter Escouade » turned off, the server still on: the token changes now,
-    /// as when the server is turned off (an entry left in the harness's config opens nothing from
-    /// this instant), and the next declaration run takes the entry out of its accounts, and
-    /// declares the new token in the others. The agents keep theirs.
-    pub(crate) fn harness_off(&self, engine: crate::model::EngineId) {
-        if let Err(e) = self.renew_external_token() {
-            log::error!("mcp: token not changed: {e:#}");
-        }
-        let mut from = self.withdraw_from.lock();
-        if !from.contains(&engine) {
-            from.push(engine);
-        }
     }
 
     /// Where the server stands in each active account of each harness it is declared in, as the

@@ -60,12 +60,11 @@ pub struct Settings {
     /// The model of the texts, for a harness that takes the one Escouade chooses (OpenCode:
     /// `<provider>/<model>`); empty, or none of its models: its default one.
     pub writer_model: String,
-    /// « Claude et les agents peuvent piloter Escouade »: the MCP server runs (`mcp`), declared in Claude Code.
+    /// « Les agents peuvent piloter Escouade »: the MCP server runs (`mcp`), given to Escouade's
+    /// agents and declared in the user config of every harness installed, account by account
+    /// (`mcp::install`). A `mcpHarnesses` of before (« <harness> peut piloter Escouade », ESC-50)
+    /// is dropped at the load: the one switch says for all (ESC-119).
     pub mcp_enabled: bool,
-    /// « <harness> peut piloter Escouade »: the other harnesses the server is declared in for the
-    /// user, in the user config of each of their accounts (`Engine::user_config`), while
-    /// `mcp_enabled` is on. The backend's own, like `mcp_enabled` (`Core::set_mcp_harness`).
-    pub mcp_harnesses: Vec<EngineId>,
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
     pub mcp_port: u16,
@@ -452,7 +451,6 @@ impl Default for Settings {
             writer_engine: None,
             writer_model: String::new(),
             mcp_enabled: false,
-            mcp_harnesses: Vec::new(),
             mcp_port: 0,
             accounts: Vec::new(),
             engine_order: Vec::new(),

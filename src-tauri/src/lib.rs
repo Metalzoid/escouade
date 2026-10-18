@@ -337,6 +337,12 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Back to the window: a harness installed meanwhile (in a terminal) gets Escouade's server.
+            if let WindowEvent::Focused(true) = event {
+                if let Some(core) = window.try_state::<Arc<Core>>() {
+                    core.declare_on_focus();
+                }
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Closed to the tray: no one sees the dictation any more, it stops.
                 if let Some(v) = window.try_state::<Arc<voice::Voice>>() {
@@ -498,7 +504,6 @@ pub fn run() {
             commands::mcp_activity,
             commands::mcp_clear_activity,
             commands::mcp_set_enabled,
-            commands::mcp_set_harness,
             commands::telemetry_set,
             commands::mcp_declare_status,
             commands::mcp_manual_command,

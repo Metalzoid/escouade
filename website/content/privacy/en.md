@@ -17,7 +17,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 
 | Event | When | Props added |
 |---|---|---|
-| `app_started` | At each start | The interface language (`fr` or `en`), the number of Claude accounts, the number of projects, whether “Claude and the agents can drive Escouade” (the MCP server) is on (yes or no), whether a project is in WSL (yes or no) |
+| `app_started` | At each start | The interface language (`fr` or `en`), the number of Claude accounts, the number of projects, whether “Agents can drive Escouade” (the MCP server) is on (yes or no), whether a project is in WSL (yes or no) |
 | `app_active` | Once a day while the app stays open | — |
 | `project_created` | A project is created | — |
 | `agent_created` | An agent is created | `worktree`: with a worktree or not (yes or no) |
@@ -35,7 +35,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `claude_code_view` | An agent switches to the Claude Code view | — |
 | `file_saved` | A file is saved in the editor | — |
 | `code_searched` | A search in the code | — |
-| `mcp_enabled` | “Claude and the agents can drive Escouade” is turned on | — |
+| `mcp_enabled` | “Agents can drive Escouade” is turned on | — |
 | `integration_connected` | A service is connected | `service`: `jira`, `trello`, `github` or `linear` |
 | `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github` or `linear` |
 | `account_created` | A Claude account is added | — |

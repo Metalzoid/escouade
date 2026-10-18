@@ -1,10 +1,10 @@
 # The MCP server
 
-Escouade’s MCP server lets Claude (in a terminal, in another tool, or as an Escouade agent) read your projects, agents, and tickets, create, edit, start, approve, and delete tickets, set a project’s Kanban, and drive agents, including answering their requests, under the same guardrails as the autopilot.
+Escouade’s MCP server lets Claude Code, Codex, OpenCode, Copilot CLI and Escouade’s agents read your projects, agents, and tickets, create, edit, start, approve, and delete tickets, set a project’s Kanban, and drive agents, including answering their requests, under the same guardrails as the autopilot.
 
 ## What it is for
 
-MCP (Model Context Protocol) is the protocol through which Claude Code calls tools. Escouade embeds an MCP server: once declared in Claude Code, it gives Claude the tools listed below.
+MCP (Model Context Protocol) is the protocol through which a harness (Claude Code, Codex, OpenCode, Copilot CLI) calls tools. Escouade embeds an MCP server: once declared in a harness, it gives it the tools listed below.
 
 - **Claude in a terminal**: you run `claude` wherever you like and talk to it about Escouade (“list the tickets to review in the api project”, “create a ticket to limit login attempts, then start it”).
 - **Another tool** that speaks MCP can connect the same way (see [Token and network](#token-and-network)).
@@ -12,43 +12,65 @@ MCP (Model Context Protocol) is the protocol through which Claude Code calls too
 
 The server runs on your machine alone. It only serves to read and to give orders; it runs no command of its own choosing and deletes no project or agent. For a ticket, it does what the Kanban’s buttons do, approving (the tests, then the merge) and deleting included. It can answer an agent’s request on your behalf, but never with “Always allow”: a lasting permission rule stays your decision, in the window.
 
-## Turning on “Claude and the agents can drive Escouade”
+## Turning on “Agents can drive Escouade”
 
-One switch gives the server to Claude outside Escouade and to the Escouade agents of every project.
+One switch gives the server to Escouade’s agents in every project, and declares it in every harness installed: Claude Code, Codex, OpenCode and Copilot CLI, started outside Escouade (a terminal, their app).
 
-1. Open Settings › Harness. The “Escouade in Claude” group has the “Claude and the agents can drive Escouade” switch.
-2. Turn it on. It is saved at once, without “Save”: the declaration writes into the Claude Code config of each account, which “Cancel” could not undo.
+1. Open Settings › Harness. The “MCP server” group has the “Agents can drive Escouade” switch.
+2. Turn it on. It saves right away, without “Save”: the declaration writes into the config of each account of each harness, which “Cancel” could not undo.
 
-Escouade then starts the server and declares it in Claude Code for each active account, with the command `claude mcp add --scope user --transport http escouade <address> --header "Authorization: Bearer <token>"`, run the way the account runs Claude Code (its executable, its configuration folder). The entry lands in the account’s `.claude.json` (`~/.claude.json` for “Main”). The tab says “Declared in Claude · Main account, Pro account”.
+Escouade then starts the server and declares it in each active account of each harness installed:
 
-- An entry that is already up to date is left as it is. A different one (another port, another token) is replaced. An account added or reactivated later receives the declaration.
-- If it fails for an account, the tab says so (“Not declared for the Pro account: …”) and shows the command to run by hand (“Run it by hand in PowerShell:”), written for PowerShell on Windows and for `sh` elsewhere. The token is masked on screen; “Copy the command” copies the real one.
-- Turning the switch off changes the token at once, then removes the entry from every account. The agents already running lose the tools at once too (their tokens are forgotten): turned on again, the switch gives them back the next time their process starts (“Restart”). Deleting an account removes its own.
-- If the server does not start, the tab says so (“The server did not start: …”).
+| Harness | File (Main account) | How |
+| --- | --- | --- |
+| Claude Code | `~/.claude.json` | `claude mcp add --scope user --transport http escouade <address> --header "Authorization: Bearer <token>"`, run as the account runs Claude Code (its program, its configuration folder) |
+| Codex | `~/.codex/config.toml` | written by Escouade, `[mcp_servers.escouade]` |
+| OpenCode | `~/.config/opencode/opencode.json` (under `$XDG_CONFIG_HOME` when it is set; the `opencode.jsonc` there, if there is one) | written by Escouade, `mcp.escouade` |
+| Copilot CLI | `~/.copilot/mcp-config.json` | written by Escouade, `mcpServers.escouade` |
 
-Claude Code knows the server as `escouade`: its tools are called `mcp__escouade__<tool>` (for example `mcp__escouade__list_tickets`).
-
-> [!NOTE]
-> On Windows with Claude Code in WSL, Escouade’s MCP tools need WSL’s mirrored network: `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`. Settings › Harness reminds you when WSL’s network is NAT.
-
-## “Codex can drive Escouade”
-
-Codex outside Escouade (a terminal, its app) can drive Escouade too, with the same tools and the same token as Claude outside Escouade.
-
-1. First turn on “Claude and the agents can drive Escouade”: Codex’s switch depends on it, and stays greyed out without it.
-2. In the same group, turn on “Codex can drive Escouade”. It only shows when Codex is installed, and is saved at once, too.
-
-`codex mcp add` takes no header, so Escouade writes the entry itself in the `config.toml` of each active Codex account (`~/.codex/config.toml` for “Main”, otherwise in the account’s folder), and keeps the rest of the file as it is, comments, order and line endings included:
+Another account has the same file in its folder. For Codex, OpenCode and Copilot CLI, whose command line cannot declare a server with its header, Escouade writes the entry itself and keeps all the rest of the file as it was, comments, order and line endings included; a file linked to the Main account’s stays a link. The entries:
 
 ```toml
+# Codex
 [mcp_servers.escouade]
 url = "http://127.0.0.1:<port>/mcp"
 http_headers = { Authorization = "Bearer <token>" }
 ```
 
-The tab says “Declared in Codex · Main account”. A file that is not valid TOML is left alone: the tab says so, with the entry to add by hand (“Copy the entry” copies the real one, token included). The token is written **in plain text** in that file. Turning “Codex can drive Escouade” off first changes the token (the old one opens nothing from then on), then removes the entry from every Codex account, whose file is back to what it was, byte for byte, and declares the new token in Claude Code. Turning “Claude and the agents can drive Escouade” off removes Codex’s entry too; its switch stays on, and puts it back the next time.
+```jsonc
+// OpenCode
+"mcp": {
+  "escouade": {
+    "type": "remote",
+    "url": "http://127.0.0.1:<port>/mcp",
+    "headers": { "Authorization": "Bearer <token>" }
+  }
+}
+// Copilot CLI
+"mcpServers": {
+  "escouade": {
+    "type": "http",
+    "url": "http://127.0.0.1:<port>/mcp",
+    "headers": { "Authorization": "Bearer <token>" }
+  }
+}
+```
 
-Escouade’s agents on Codex do not need this switch: they get the server through their process’s options, with their own token, which wins over the entry’s.
+The token is written **in plain text** in each of these files, which the group’s note says.
+
+Under the switch, the tab lists each declaration: the harness and the account (“Codex · Main account”), the file, and its state, “Declared” or “Not declared”.
+
+- An entry already up to date is left as it is. A different entry (another port, another token) is replaced. An account added or switched back on later gets the declaration, and so does a harness installed later: when you come back to Escouade’s window, or as soon as it shows this tab or the list of harnesses in Settings › Harness.
+- If it fails for an account, the tab says why (“Not declared for the Pro account: …”) and what to do by hand: for Claude Code, the command to run (“Run it by hand in PowerShell:”), written for PowerShell on Windows and for `sh` elsewhere; for the others, the entry to add to the file (“Add it by hand to …:”). The token is masked on screen; “Copy the command” or “Copy the entry” copies the real one. A file that is not valid TOML or JSON is left alone.
+- Turning the switch off changes the token at once (the old one opens nothing any more), then takes the entry out of each account of each harness: each file is back to what it was, byte for byte; a file Escouade had made is deleted. Agents already running lose the tools at once too (their tokens are forgotten): turned back on, the switch gives them back at their process’s next start (“Restart”). Removing an account takes its entry out.
+- If the server does not start, the tab says so (“The server did not start: …”).
+
+Claude Code knows the server as `escouade`: its tools are called `mcp__escouade__<tool>` (for example `mcp__escouade__list_tickets`); in OpenCode, `escouade_<tool>`.
+
+Escouade’s agents, whatever their harness, do not use these entries: they get the server through their process’s options, with their own token, which wins (see [Escouade’s agents and the server](#escouade-s-agents-and-the-server)).
+
+> [!NOTE]
+> On Windows with Claude Code in WSL, Escouade’s MCP tools need WSL’s mirrored networking: `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`. Settings › Harness reminds you when WSL’s network is in NAT mode.
 
 ## The tools
 
@@ -139,7 +161,7 @@ The tools that act follow the rules of the window and of the autopilot:
 - **Escouade’s agents** only act in their own project, Kanban included (they read the others, except the images and the files of their tickets, the output of their background tasks, and the report of their subagents, of which `list_background_work` only shows the type, the status, and the duration of each line), do not write to themselves, do not stop themselves, stop neither their own background tasks nor their own subagents, do not write to the latter, and do not answer their own requests. You do not write to an archived agent.
 - **Subagents and background tasks.** Each tool is refused where the window refuses, with the same text. `stop_background_work` is for a line that is no longer running, a subagent in the foreground, a task Claude Code has not given yet, an agent in the Claude Code view, with no process, or archived. `message_subagent` is for a subagent that is no longer running, is in the foreground, or has no task given, an agent in the Claude Code view or archived, a `subagent` that is a background task, and, last of all, when the agent’s Claude account is held back (so a client does not retry at 2 pm only to be refused anyway); an empty text, or one of more than 32,000 characters, like the text of `send_message`, is an error. `get_background_output` only reads the `<task>.output` file of the task, never another file or a network path. An Escouade agent stops neither its own background tasks nor its own subagents and does not write to the latter, only acts in its own project, only reads outputs and reports in that one, and sees only the type, the status, and the duration of each line of `list_background_work` in the others (a command may carry a secret). Every call is logged in the MCP activity, without the message’s text or the output.
 - **The Kanban’s flow.** Each tool is refused where the window refuses: `approve_ticket` and `reject_ticket` for a ticket that is not in “To review”, whose agent is working, or whose approval is already running; `resume_ticket` for a ticket that is not “In progress”, is not blocked, or whose agent is waiting for its quota to reset; `resolve_conflict` for a ticket with no conflict; `dismiss_block` for a ticket that is not blocked; `delete_ticket` for a ticket whose approval is running. A message the flow sends to an agent (`reject_ticket`, `resolve_conflict`, `resume_ticket`) only goes while that agent’s Claude account is not held back. An Escouade agent neither approves nor sends back its own ticket (approving would merge its work without a review), and does not act on it either with `resume_ticket`, `resolve_conflict`, `dismiss_block`, and `delete_ticket`: it is up to you or another client. Any client of the server can approve a ticket, and `delete_ticket` deletes as the window does, a ticket of any column. Every call is logged in the MCP activity.
-- **Answering a request.** Once “Claude and the agents can drive Escouade” is on, any client of the server sees the requests of every project and can answer them, Claude outside Escouade as well as the agents, with no extra setting; an agent only answers those of the agents of its own project, never its own. `answer_permission` only offers `allow` and `deny`: “Always allow” stays your decision, in the window. A request that no longer waits for an answer (you answered it in the window, another client did, or the agent no longer runs) is refused, and if two answers arrive at the same time, only one goes through. An agent in the Claude Code view has nothing to answer here: its requests are in its terminal.
+- **Answering a request.** Once “Agents can drive Escouade” is on, any client of the server sees the requests of every project and can answer them, Claude outside Escouade as well as the agents, with no extra setting; an agent only answers those of the agents of its own project, never its own. `answer_permission` only offers `allow` and `deny`: “Always allow” stays your decision, in the window. A request that no longer waits for an answer (you answered it in the window, another client did, or the agent no longer runs) is refused, and if two answers arrive at the same time, only one goes through. An agent in the Claude Code view has nothing to answer here: its requests are in its terminal.
 - **No tool** runs a command of its own choosing or deletes a project or an agent: an agent pushed by booby-trapped content cannot use them to escalate its rights. The exceptions are answering the agents’ requests and the Kanban’s flow. With the switch on, an agent can allow, one request at a time and never for good, what another agent of its project asks; it can also approve (the tests, then the merge) or delete the ticket of another agent of its project, as you would in the window.
 - **What comes from the server is never taken for you.** A message sent to an agent (`send_message`, the first message of `create_agent`, or the text `message_subagent` has passed on to a subagent) is read by the agent and shown in its conversation under “Message from `<author>`:”, the author being the name of the agent sending it or “Claude (outside Escouade)”. A ticket created or split by the server ends with “Created by `<author>` through Escouade”, a ticket it modified with “Modified by `<author>` through Escouade”, on its card as in its agent’s protocol. The card of a request the server answered says who did (“Allowed by `<author>` through Escouade”, “Denied by `<author>` through Escouade”, “Answered by `<author>` through Escouade”), and a refusal, like each answer to a question, tells Claude who it comes from, not that it is you (“Refused by `<author>` through Escouade”, “SQLite (answer from `<author>` through Escouade)”).
 
@@ -147,7 +169,7 @@ A permission request for an Escouade tool names it in plain words (“Escouade �
 
 ## Escouade’s agents and the server
 
-The “Claude and the agents can drive Escouade” switch also serves Escouade’s agents, those of every project: there is nothing to allow in a project’s settings.
+The “Agents can drive Escouade” switch also serves Escouade’s agents, those of every project: there is nothing to allow in a project’s settings.
 
 - **On**, each agent receives the server when its process starts, with a token of its own: it acts in its own name, never as Claude outside Escouade. It reads the tickets and the agents, and can create tickets or start other agents, which uses quota, and take the tickets of its project through to their approval, except its own. It also sees the questions and permission requests of the agents of every project, and can answer those of the agents of its own project.
 - **Off**, the agents already running lose the tools at once, and Escouade keeps its server away from every agent that starts, even when an `escouade` entry is left in your Claude Code config: its tools are refused, and the server itself is not loaded (Escouade starts the agent with Claude Code’s `deniedMcpServers` setting). The agent therefore gets neither the tools nor the server’s instructions.
@@ -179,7 +201,7 @@ Also refused, and logged: a request without a token (“Request refused: no toke
 ## Token and network
 
 - The server only listens on `127.0.0.1`, on a free port between 47000 and 47999, chosen at the first start and then kept (it only changes when its own is taken, and the declaration is then redone in every account).
-- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in Claude Code’s config (`~/.claude.json` for “Main”), and in Codex’s `config.toml` when “Codex can drive Escouade” is on. An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
+- Every request carries a token, in the `Authorization: Bearer` header. Claude outside Escouade’s token is kept in the system keychain; when it refuses it, and on Linux, in `~/.escouade/mcp-token.json`, readable by you alone. It is also written in plain text in the config of each harness installed the switch declares it in (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` for “Main”). An agent’s token is its own, lives in memory and in a configuration file under `~/.escouade/mcp/` that the app removes when its process stops. An agent without the tools starts with `~/.escouade/mcp-refused.json`, which keeps the server out.
 - A request sent by a web page (`Origin` header) or addressed to a name other than `127.0.0.1` or `localhost` is refused, even with a token: a site you visit cannot call the server.
 - Another MCP client connects to `http://127.0.0.1:<port>/mcp` with the same header. The address and the token can be read in the account’s `.claude.json`, in the `escouade` entry, or in the command the tab offers when the declaration fails.
 

@@ -35,7 +35,7 @@ Changes go into a draft: nothing applies until you click “Save”. A dot on a 
 
 ### What saves right away
 
-Three places do not wait for the button. The “Accounts” tab, where each change goes through the moment you make it, and the “Claude and the agents can drive Escouade” switch on the “Claude Code” tab, because a “Cancel” could not undo what they write to disk. And the “Display” group of the “Application” tab, which also changes from the keyboard, settings window open or not: what you pick there shows and saves right away.
+Three places do not wait for the button. The “Accounts” tab, where each change goes through the moment you make it, and the “Agents can drive Escouade” switch on the “Harness” tab, because a “Cancel” could not undo what they write to disk. And the “Display” group of the “Application” tab, which also changes from the keyboard, settings window open or not: what you pick there shows and saves right away.
 
 ## The “Application” tab
 

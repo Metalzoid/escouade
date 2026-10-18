@@ -413,12 +413,12 @@ fn user_input(text: &str, attachments: &[Attachment]) -> Result<Value> {
 /// reaches the server with its header; an agent's `-c … bearer_token_env_var` wins over it (its
 /// own token sent, not the user's).
 static USER_CONFIG: UserConfig = UserConfig {
-    file: "config.toml",
-    shown: "~/.codex/config.toml",
+    files: &["config.toml"],
     format: Format::Toml,
     servers: &["mcp_servers"],
     url: "url",
     headers: "http_headers",
+    fixed: &[],
 };
 
 impl Engine for Codex {

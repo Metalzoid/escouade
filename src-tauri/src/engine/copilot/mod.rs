@@ -25,6 +25,7 @@ use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
+use super::userconfig::{Format, UserConfig};
 use super::{
     mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
     Weight,
@@ -626,6 +627,19 @@ fn escouade_launch(escouade: &Escouade) -> mcp::Launch {
     }
 }
 
+/// « Les agents peuvent piloter Escouade »: the entry in each account's `mcp-config.json`, as
+/// `copilot mcp add --transport http` writes it (its `tools` left out: all of them, tried on
+/// 1.0.98). An agent of Escouade has its own (`--additional-mcp-config`, which wins), or turns
+/// this one off (`session.mcp.disable`).
+static USER_CONFIG: UserConfig = UserConfig {
+    files: &["mcp-config.json"],
+    format: Format::Jsonc,
+    servers: &["mcpServers"],
+    url: "url",
+    headers: "headers",
+    fixed: &[("type", "http")],
+};
+
 impl Engine for Copilot {
     fn id(&self) -> EngineId {
         EngineId::Copilot
@@ -812,6 +826,10 @@ impl Engine for Copilot {
 
     fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch {
         escouade_launch(escouade)
+    }
+
+    fn user_config(&self) -> Option<&'static UserConfig> {
+        Some(&USER_CONFIG)
     }
 }
 

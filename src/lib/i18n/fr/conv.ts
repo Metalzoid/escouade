@@ -50,7 +50,7 @@ export default {
   /** An agent whose process started without Escouade’s tools, which its next start gives (ESC-91). */
   escouadeNext: {
     title: 'Outils d’Escouade au prochain démarrage',
-    text: 'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
+    text: 'Son process a démarré sans les outils d’Escouade, que « Les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
     /** A turn, a question or the setup of its worktree under way: it ends by itself. */
     busy: 'Il pourra être relancé quand il aura fini ce qu’il fait.',
     /**

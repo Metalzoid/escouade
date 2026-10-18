@@ -193,11 +193,14 @@ pub fn save_settings(
 // ---------- Harnesses ----------
 
 /// Every harness with what is found of it here: its program, its version, its state (`registry`).
-/// Asked by the user: versions are read again.
+/// Asked by the user: versions are read again, and a harness installed since gets Escouade's
+/// server (« Les agents peuvent piloter Escouade », `declare_in_harnesses`).
 #[tauri::command]
 pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::EngineInfo>> {
     crate::engine::registry::forget();
-    Ok(core.engines().await)
+    let engines = core.engines().await;
+    core.declare_in_harnesses();
+    Ok(engines)
 }
 
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
@@ -1945,9 +1948,9 @@ pub fn mcp_clear_activity(core: CoreState) {
     core.mcp.activity.clear();
 }
 
-/// « Claude et les agents peuvent piloter Escouade » turned on or off: saved at once, not through the settings
-/// modal's draft (it writes into the Claude Code config of each account, which « Annuler » could
-/// not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
+/// « Les agents peuvent piloter Escouade » turned on or off: saved at once, not through the
+/// settings modal's draft (it writes into the config of each account of every harness installed,
+/// which « Annuler » could not take back). The declaration follows by itself (`mcp_declare_status`, `mcpDeclared`).
 #[tauri::command(async)]
 pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
     core.set_mcp_enabled(enabled).map_err(err)?;
@@ -1957,23 +1960,19 @@ pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
     Ok(())
 }
 
-/// « <harness> peut piloter Escouade » turned on or off, saved at once like `mcp_set_enabled`: it
-/// writes into the user config of each account of the harness.
-#[tauri::command(async)]
-pub fn mcp_set_harness(core: CoreState, engine: crate::model::EngineId, on: bool) -> Res<()> {
-    core.set_mcp_harness(engine, on).map_err(err)
-}
-
 /// The answer to « Statistiques d’usage », at the first start.
 #[tauri::command(async)]
 pub fn telemetry_set(core: CoreState, consent: bool) -> Res<()> {
     core.set_telemetry(consent).map_err(err)
 }
 
-/// Where the server stands in each active account's Claude Code: declared, or why not and the
-/// command to run by hand, its token hidden.
+/// Where the server stands in each active account of each harness installed: declared, or why not
+/// and the command to run (or the entry to paste) by hand, its token hidden. Asked when the window
+/// shows it: a harness installed since, or a file changed by hand, is seen to by a new run, which
+/// the window hears of (`mcpDeclared`).
 #[tauri::command]
 pub fn mcp_declare_status(core: CoreState) -> Vec<crate::mcp::install::Declaration> {
+    core.declare_in_harnesses();
     core.mcp.declared()
 }
 

@@ -1,10 +1,10 @@
 # Le serveur MCP
 
-Le serveur MCP d’Escouade laisse Claude (dans un terminal, un autre outil ou un agent d’Escouade) lire tes projets, agents et tickets, créer, modifier, lancer, valider et supprimer des tickets, régler le Kanban et piloter des agents, y compris répondre à leurs demandes, sous les mêmes garde-fous que le pilote auto.
+Le serveur MCP d’Escouade laisse Claude Code, Codex, OpenCode, Copilot CLI et les agents d’Escouade lire tes projets, agents et tickets, créer, modifier, lancer, valider et supprimer des tickets, régler le Kanban et piloter des agents, y compris répondre à leurs demandes, sous les mêmes garde-fous que le pilote auto.
 
 ## À quoi il sert
 
-MCP (Model Context Protocol) est le protocole par lequel Claude Code appelle des outils. Escouade embarque un serveur MCP : une fois déclaré dans Claude Code, il donne à Claude les outils de la liste plus bas.
+MCP (Model Context Protocol) est le protocole par lequel un harness (Claude Code, Codex, OpenCode, Copilot CLI) appelle des outils. Escouade embarque un serveur MCP : une fois déclaré dans un harness, il lui donne les outils de la liste plus bas.
 
 - **Claude dans un terminal** : tu lances `claude` où tu veux et tu lui parles d’Escouade (« liste les tickets à tester du projet api », « crée un ticket pour limiter les tentatives de connexion, puis lance-le »).
 - **Un autre outil** qui parle MCP peut se connecter de la même façon (voir [Jeton et réseau](#jeton-et-reseau)).
@@ -12,43 +12,65 @@ MCP (Model Context Protocol) est le protocole par lequel Claude Code appelle des
 
 Le serveur tourne sur ta machine seule. Il ne sert qu’à lire et à commander ; il ne lance aucune commande de son choix et ne supprime ni projet ni agent. Pour un ticket, il fait ce que font les boutons du Kanban, valider (les tests, puis la fusion) et supprimer compris. Il peut répondre à la demande d’un agent à ta place, mais jamais par « Toujours autoriser » : une règle de permission qui dure reste ta décision, dans la fenêtre.
 
-## Activer « Claude et les agents peuvent piloter Escouade »
+## Activer « Les agents peuvent piloter Escouade »
 
-Un seul interrupteur donne le serveur à Claude hors d’Escouade et aux agents d’Escouade de tous les projets.
+Un seul interrupteur donne le serveur aux agents d’Escouade de tous les projets, et le déclare dans chaque harness installé : Claude Code, Codex, OpenCode et Copilot CLI, lancés hors d’Escouade (un terminal, leur app).
 
-1. Ouvre Réglages › Harness. Le groupe « Escouade dans Claude » a l’interrupteur « Claude et les agents peuvent piloter Escouade ».
-2. Allume-le. Il s’enregistre tout de suite, sans « Enregistrer » : la déclaration écrit dans la config de Claude Code de chaque compte, ce qu’« Annuler » ne pourrait pas défaire.
+1. Ouvre Réglages › Harness. Le groupe « Serveur MCP » a l’interrupteur « Les agents peuvent piloter Escouade ».
+2. Allume-le. Il s’enregistre tout de suite, sans « Enregistrer » : la déclaration écrit dans la config de chaque compte de chaque harness, ce qu’« Annuler » ne pourrait pas défaire.
 
-Escouade démarre alors le serveur et le déclare dans Claude Code pour chaque compte actif, avec la commande `claude mcp add --scope user --transport http escouade <adresse> --header "Authorization: Bearer <jeton>"`, lancée comme le compte lance Claude Code (son exécutable, son dossier de configuration). L’entrée se range dans le `.claude.json` du compte (`~/.claude.json` pour « Principal »). L’onglet dit « Déclaré dans Claude · compte Principal, compte Pro ».
+Escouade démarre alors le serveur et le déclare dans chaque compte actif de chaque harness installé :
 
-- Une entrée déjà à jour est laissée telle quelle. Une entrée différente (un autre port, un autre jeton) est remplacée. Un compte ajouté ou réactivé plus tard reçoit la déclaration.
-- Si elle échoue pour un compte, l’onglet le dit (« Pas déclaré pour le compte Pro : … ») et affiche la commande à lancer à la main (« À lancer à la main dans PowerShell : »), écrite pour PowerShell sous Windows et pour `sh` ailleurs. Le jeton y est masqué à l’écran ; « Copier la commande » copie la vraie.
-- Éteindre l’interrupteur change le jeton tout de suite, puis retire l’entrée de chaque compte. Les agents déjà lancés perdent les outils tout de suite eux aussi (leurs jetons sont oubliés) : rallumé, l’interrupteur les leur rend au prochain démarrage de leur processus (« Relancer »). Supprimer un compte retire la sienne.
-- Si le serveur ne démarre pas, l’onglet le dit (« Le serveur n’a pas démarré : … »).
+| Harness | Fichier (compte Principal) | Comment |
+| --- | --- | --- |
+| Claude Code | `~/.claude.json` | `claude mcp add --scope user --transport http escouade <adresse> --header "Authorization: Bearer <jeton>"`, lancée comme le compte lance Claude Code (son exécutable, son dossier de configuration) |
+| Codex | `~/.codex/config.toml` | écrit par Escouade, `[mcp_servers.escouade]` |
+| OpenCode | `~/.config/opencode/opencode.json` (sous `$XDG_CONFIG_HOME` quand il est défini ; l’`opencode.jsonc` qui est là, s’il y en a un) | écrit par Escouade, `mcp.escouade` |
+| Copilot CLI | `~/.copilot/mcp-config.json` | écrit par Escouade, `mcpServers.escouade` |
 
-Claude Code connaît le serveur sous le nom `escouade` : ses outils s’appellent `mcp__escouade__<outil>` (par exemple `mcp__escouade__list_tickets`).
-
-> [!NOTE]
-> Sous Windows avec Claude Code dans WSL, les outils MCP d’Escouade demandent le réseau miroir de WSL : `networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`, puis `wsl --shutdown`. Réglages › Harness le rappelle quand le réseau de WSL est en NAT.
-
-## « Codex peut piloter Escouade »
-
-Codex hors d’Escouade (un terminal, son app) peut lui aussi piloter Escouade, avec les mêmes outils et le même jeton que Claude hors Escouade.
-
-1. Allume d’abord « Claude et les agents peuvent piloter Escouade » : l’interrupteur de Codex en dépend, et reste grisé sans lui.
-2. Dans le même groupe, allume « Codex peut piloter Escouade ». Il n’apparaît que si Codex est installé, et s’enregistre tout de suite, lui aussi.
-
-`codex mcp add` ne prend pas d’en-tête : Escouade écrit donc lui-même l’entrée dans le `config.toml` de chaque compte Codex actif (`~/.codex/config.toml` pour « Principal », sinon dans le dossier du compte), et garde tout le reste du fichier tel quel, commentaires, ordre et fins de ligne compris :
+Un autre compte a le même fichier dans son dossier. Pour Codex, OpenCode et Copilot CLI, dont la ligne de commande ne sait pas déclarer un serveur avec son en-tête, Escouade écrit l’entrée lui-même et garde tout le reste du fichier tel quel, commentaires, ordre et fins de ligne compris ; un fichier lié à celui de « Principal » reste un lien. Les entrées :
 
 ```toml
+# Codex
 [mcp_servers.escouade]
 url = "http://127.0.0.1:<port>/mcp"
 http_headers = { Authorization = "Bearer <jeton>" }
 ```
 
-L’onglet dit « Déclaré dans Codex · compte Principal ». Un fichier qui n’est pas un TOML valide n’est pas touché : l’onglet le dit, avec l’entrée à ajouter à la main (« Copier l’entrée » copie la vraie, jeton compris). Le jeton est écrit **en clair** dans ce fichier. Éteindre « Codex peut piloter Escouade » change d’abord le jeton (l’ancien n’ouvre plus rien tout de suite), puis retire l’entrée de chaque compte Codex, qui retrouve le fichier d’avant à l’octet près, et déclare le nouveau jeton dans Claude Code. Éteindre « Claude et les agents peuvent piloter Escouade » retire aussi l’entrée de Codex ; son interrupteur reste allumé, et la remet au prochain allumage.
+```jsonc
+// OpenCode
+"mcp": {
+  "escouade": {
+    "type": "remote",
+    "url": "http://127.0.0.1:<port>/mcp",
+    "headers": { "Authorization": "Bearer <jeton>" }
+  }
+}
+// Copilot CLI
+"mcpServers": {
+  "escouade": {
+    "type": "http",
+    "url": "http://127.0.0.1:<port>/mcp",
+    "headers": { "Authorization": "Bearer <jeton>" }
+  }
+}
+```
 
-Les agents d’Escouade sur Codex n’ont pas besoin de cet interrupteur : ils reçoivent le serveur par les options de leur processus, avec leur propre jeton, qui l’emporte sur celui de l’entrée.
+Le jeton est écrit **en clair** dans chacun de ces fichiers, ce que la note du groupe dit.
+
+Sous l’interrupteur, l’onglet liste chaque déclaration : le harness et le compte (« Codex · compte Principal »), le fichier, et son état, « Déclaré » ou « Pas déclaré ».
+
+- Une entrée déjà à jour est laissée telle quelle. Une entrée différente (un autre port, un autre jeton) est remplacée. Un compte ajouté ou réactivé plus tard reçoit la déclaration, et un harness installé plus tard aussi : quand tu reviens dans la fenêtre d’Escouade, ou dès qu’elle montre cet onglet ou la liste des harness de Réglages › Harness.
+- Si elle échoue pour un compte, l’onglet dit pourquoi (« Pas déclaré pour le compte Pro : … ») et ce qu’il faut faire à la main : pour Claude Code, la commande à lancer (« À lancer à la main dans PowerShell : »), écrite pour PowerShell sous Windows et pour `sh` ailleurs ; pour les autres, l’entrée à ajouter au fichier (« À ajouter à la main dans … : »). Le jeton y est masqué à l’écran ; « Copier la commande » ou « Copier l’entrée » copie la vraie. Un fichier qui n’est pas un TOML ou un JSON valide n’est pas touché.
+- Éteindre l’interrupteur change le jeton tout de suite (l’ancien n’ouvre plus rien), puis retire l’entrée de chaque compte de chaque harness : chaque fichier redevient celui d’avant, à l’octet près ; un fichier qu’Escouade avait créé est supprimé. Les agents déjà lancés perdent les outils tout de suite eux aussi (leurs jetons sont oubliés) : rallumé, l’interrupteur les leur rend au prochain démarrage de leur processus (« Relancer »). Supprimer un compte retire la sienne.
+- Si le serveur ne démarre pas, l’onglet le dit (« Le serveur n’a pas démarré : … »).
+
+Claude Code connaît le serveur sous le nom `escouade` : ses outils s’appellent `mcp__escouade__<outil>` (par exemple `mcp__escouade__list_tickets`) ; dans OpenCode, `escouade_<outil>`.
+
+Les agents d’Escouade, quel que soit leur harness, n’utilisent pas ces entrées : ils reçoivent le serveur par les options de leur processus, avec leur propre jeton, qui l’emporte (voir [Les agents d’Escouade et le serveur](#les-agents-d-escouade-et-le-serveur)).
+
+> [!NOTE]
+> Sous Windows avec Claude Code dans WSL, les outils MCP d’Escouade demandent le réseau miroir de WSL : `networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`, puis `wsl --shutdown`. Réglages › Harness le rappelle quand le réseau de WSL est en NAT.
 
 ## Les outils
 
@@ -139,7 +161,7 @@ Les outils qui agissent suivent les règles de la fenêtre et du pilote auto :
 - **Les agents d’Escouade** n’agissent que dans leur propre projet, Kanban compris (ils lisent les autres, sauf les images et les fichiers de leurs tickets, la sortie de leurs tâches de fond et le rapport de leurs sous-agents, dont `list_background_work` ne montre que le type, l’état et la durée de chaque ligne), ne s’écrivent pas à eux-mêmes, ne s’arrêtent pas eux-mêmes, n’arrêtent ni leurs propres tâches de fond ni leurs propres sous-agents, n’écrivent pas à ces derniers et ne répondent pas à leurs propres demandes. On n’écrit pas à un agent archivé.
 - **Les sous-agents et les tâches de fond.** Chaque outil est refusé là où la fenêtre refuse, avec le même texte. `stop_background_work` l’est pour une ligne qui ne tourne plus, un sous-agent au premier plan, une tâche que Claude Code n’a pas encore donnée, un agent en vue Claude Code, sans processus ou archivé. `message_subagent` l’est pour un sous-agent qui ne tourne plus, qui est au premier plan ou qui n’a pas de tâche donnée, un agent en vue Claude Code ou archivé, un `subagent` qui est une tâche de fond, et, en dernier seulement, quand le compte Claude de l’agent est retenu (un client ne va pas réessayer à 14 h pour être refusé de toute façon) ; un texte vide ou de plus de 32 000 caractères, comme celui de `send_message`, est une erreur. `get_background_output` ne lit que le fichier `<tâche>.output` de la tâche, jamais un autre fichier ni un chemin réseau. Un agent d’Escouade n’arrête ni ses propres tâches de fond ni ses propres sous-agents et n’écrit pas à ces derniers, n’agit que dans son propre projet, ne lit que dans celui-là les sorties et les rapports, et ne voit des autres que le type, l’état et la durée de chaque ligne de `list_background_work` (une commande peut porter un secret). Chaque appel est noté dans l’activité MCP, sans le texte du message ni la sortie.
 - **Le flux du Kanban.** Chaque outil est refusé là où la fenêtre refuse : `approve_ticket` et `reject_ticket` pour un ticket qui n’est pas « À tester », dont l’agent travaille ou dont la validation tourne déjà ; `resume_ticket` pour un ticket qui n’est pas « En cours », qui n’est pas bloqué ou dont l’agent attend la remise à zéro de son quota ; `resolve_conflict` pour un ticket sans conflit ; `dismiss_block` pour un ticket qui n’est pas bloqué ; `delete_ticket` pour un ticket dont la validation tourne (« La validation de ce ticket est en cours : attends sa fin pour le supprimer. »). Un message que le flux envoie à un agent (`reject_ticket`, `resolve_conflict`, `resume_ticket`) n’est remis que tant que le compte Claude de cet agent n’est pas retenu. Un agent d’Escouade ne valide ni ne renvoie son propre ticket (valider, ce serait fusionner son travail sans relecture), et n’agit pas non plus sur lui avec `resume_ticket`, `resolve_conflict`, `dismiss_block` et `delete_ticket` : c’est à toi ou à un autre client de le faire. Tout client du serveur peut valider un ticket, et `delete_ticket` supprime comme la fenêtre, un ticket de n’importe quelle colonne. Chaque appel est noté dans l’activité MCP.
-- **Répondre à une demande.** Une fois « Claude et les agents peuvent piloter Escouade » allumé, tout client du serveur voit les demandes de tous les projets et peut y répondre, Claude hors Escouade comme les agents, sans réglage de plus ; un agent ne répond qu’à celles des agents de son propre projet, jamais aux siennes. `answer_permission` n’offre que `allow` et `deny` : « Toujours autoriser » reste ta décision, dans la fenêtre. Une demande qui n’attend plus de réponse (tu y as répondu dans la fenêtre, un autre client aussi, ou l’agent ne tourne plus) est refusée, et si deux réponses arrivent en même temps, une seule passe. Un agent en vue Claude Code n’a rien à répondre ici : ses demandes sont dans son terminal.
+- **Répondre à une demande.** Une fois « Les agents peuvent piloter Escouade » allumé, tout client du serveur voit les demandes de tous les projets et peut y répondre, Claude hors Escouade comme les agents, sans réglage de plus ; un agent ne répond qu’à celles des agents de son propre projet, jamais aux siennes. `answer_permission` n’offre que `allow` et `deny` : « Toujours autoriser » reste ta décision, dans la fenêtre. Une demande qui n’attend plus de réponse (tu y as répondu dans la fenêtre, un autre client aussi, ou l’agent ne tourne plus) est refusée, et si deux réponses arrivent en même temps, une seule passe. Un agent en vue Claude Code n’a rien à répondre ici : ses demandes sont dans son terminal.
 - **Aucun outil** ne lance une commande de son choix ni ne supprime un projet ou un agent : un agent poussé par un contenu piégé ne peut donc pas s’en servir pour monter en droits. Les exceptions sont la réponse aux demandes des agents et le flux du Kanban. Avec l’interrupteur allumé, un agent peut autoriser, une demande à la fois et jamais pour de bon, ce qu’un autre agent de son projet demande ; il peut aussi valider (les tests, puis la fusion) ou supprimer le ticket d’un autre agent de son projet, comme tu le ferais dans la fenêtre.
 - **Ce qui vient du serveur n’est jamais pris pour toi.** Un message envoyé à un agent (`send_message`, premier message de `create_agent`, ou texte que `message_subagent` fait transmettre à un sous-agent) est lu par l’agent et montré dans sa conversation sous « Message de `<auteur>` : », l’auteur étant le nom de l’agent qui l’envoie ou « Claude (hors Escouade) ». Un ticket créé ou découpé par le serveur se termine par « Créé par `<auteur>` via Escouade », un ticket modifié par « Modifié par `<auteur>` via Escouade », sur sa carte comme dans le protocole de son agent. La carte d’une demande à laquelle le serveur a répondu dit qui l’a fait (« Autorisé par `<auteur>` via Escouade », « Refusé par `<auteur>` via Escouade », « Répondu par `<auteur>` via Escouade »), et un refus, comme chaque réponse à une question, dit à Claude de qui il vient, pas que c’est toi (« Refusé par `<auteur>` via Escouade », « SQLite (réponse de `<auteur>` via Escouade) »).
 
@@ -147,7 +169,7 @@ Une demande d’autorisation d’un outil d’Escouade le nomme en clair (« Es
 
 ## Les agents d’Escouade et le serveur
 
-L’interrupteur « Claude et les agents peuvent piloter Escouade » sert aussi les agents d’Escouade, ceux de tous les projets : il n’y a rien à permettre dans les réglages d’un projet.
+L’interrupteur « Les agents peuvent piloter Escouade » sert aussi les agents d’Escouade, ceux de tous les projets : il n’y a rien à permettre dans les réglages d’un projet.
 
 - **Allumé**, chaque agent reçoit le serveur au démarrage de son processus, avec un jeton à lui : il agit en son nom, jamais comme Claude hors Escouade. Il lit les tickets et les agents, et peut créer des tickets ou lancer d’autres agents, ce qui dépense du quota, et mener les tickets de son projet à leur validation, sauf le sien. Il voit aussi les questions et les demandes d’autorisation des agents de tous les projets, et peut répondre à celles des agents de son propre projet.
 - **Éteint**, les agents déjà lancés perdent les outils tout de suite, et Escouade tient son serveur à l’écart de chaque agent qui démarre, même si une entrée `escouade` reste dans ta config de Claude Code : ses outils sont refusés, et le serveur lui-même n’est pas chargé (Escouade démarre l’agent avec le réglage `deniedMcpServers` de Claude Code). L’agent ne reçoit donc ni les outils, ni les instructions du serveur.
@@ -179,7 +201,7 @@ Sont aussi refusées, et notées : une requête sans jeton (« Requête refusé
 ## Jeton et réseau
 
 - Le serveur n’écoute que sur `127.0.0.1`, sur un port libre entre 47000 et 47999, choisi au premier démarrage puis gardé (il en change seulement quand le sien est pris, et la déclaration est alors refaite dans chaque compte).
-- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; quand il le refuse, et sous Linux, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de Claude Code (`~/.claude.json` pour « Principal »), et dans le `config.toml` de Codex quand « Codex peut piloter Escouade » est allumé. Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
+- Chaque requête porte un jeton, dans l’en-tête `Authorization: Bearer`. Celui de Claude hors Escouade est gardé dans le trousseau du système ; quand il le refuse, et sous Linux, dans `~/.escouade/mcp-token.json`, lisible par toi seul. Il est aussi écrit en clair dans la config de chaque harness installé où l’interrupteur le déclare (`~/.claude.json`, `~/.codex/config.toml`, `~/.config/opencode/opencode.json`, `~/.copilot/mcp-config.json` pour « Principal »). Celui d’un agent est propre à cet agent, vit en mémoire et dans un fichier de configuration sous `~/.escouade/mcp/` que l’app retire quand son processus s’arrête. Un agent sans les outils démarre avec `~/.escouade/mcp-refused.json`, qui écarte le serveur.
 - Une requête envoyée par une page web (en-tête `Origin`) ou adressée à un autre nom que `127.0.0.1` ou `localhost` est refusée, même avec un jeton : un site que tu visites ne peut pas appeler le serveur.
 - Un autre client MCP se connecte à `http://127.0.0.1:<port>/mcp` avec le même en-tête. L’adresse et le jeton se lisent dans l’entrée `escouade` du `.claude.json` du compte, ou dans la commande que l’onglet propose quand la déclaration échoue.
 

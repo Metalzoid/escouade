@@ -22,6 +22,7 @@ use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel, Version,
 };
+use super::userconfig::{Format, UserConfig};
 use super::{
     mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
     Weight,
@@ -452,6 +453,19 @@ fn server_dir() -> std::path::PathBuf {
     dir
 }
 
+/// « Les agents peuvent piloter Escouade »: the entry in OpenCode's global config
+/// (`$XDG_CONFIG_HOME/opencode`, `accounts::config_dir`), in its `opencode.json` or the
+/// `opencode.jsonc` the user has (tried on 1.19.3: both are read, comments and trailing commas
+/// too). Escouade's own servers keep it off (`config_content`), each agent's folder given its own.
+static USER_CONFIG: UserConfig = UserConfig {
+    files: &["opencode.json", "opencode.jsonc", "config.json"],
+    format: Format::Jsonc,
+    servers: &["mcp"],
+    url: "url",
+    headers: "headers",
+    fixed: &[("type", "remote")],
+};
+
 impl Engine for Opencode {
     fn id(&self) -> EngineId {
         EngineId::Opencode
@@ -666,6 +680,10 @@ impl Engine for Opencode {
     /// with its own token, by the API (`process::give_escouade`).
     fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
         mcp::Launch::default()
+    }
+
+    fn user_config(&self) -> Option<&'static UserConfig> {
+        Some(&USER_CONFIG)
     }
 }
 

@@ -3,17 +3,15 @@ import { defineZone } from '../types';
 // The MCP server: its switch, what it was asked, and how its tools read in the conversation.
 export default defineZone('mcp', {
   section: {
-    title: 'Escouade in Claude',
-    enable: 'Claude and the agents can drive Escouade',
+    title: 'MCP server',
+    enable: 'Agents can drive Escouade',
     enableDesc:
-      'Claude Code outside Escouade (a terminal, another tool) and every Escouade agent read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
-    harness: '{harness} can drive Escouade',
-    harnessDesc:
-      '{harness} outside Escouade (a terminal, its app) gets the same tools, declared in the config of each active {harness} account ({file} for the Main account), the rest of the file and its comments kept. The token is written there in plain text. Turning it off changes the token, then takes the entry out.',
-    harnessNeedsServer: 'First turn on “Claude and the agents can drive Escouade”.',
-    declared: 'Declared in {harness} · {accounts}',
-    account: '{name} account',
-    working: 'Declaring in {harness}…',
+      'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
+    list: 'Declarations in the harnesses',
+    working: 'Declaring in the harnesses installed…',
+    where: '{harness} · {name} account',
+    declared: 'Declared',
+    failed: 'Not declared',
     notDeclared: 'Not declared for the {name} account: {error}',
     serverFailed: 'The server did not start: {error}',
     nextStart: {
@@ -27,7 +25,7 @@ export default defineZone('mcp', {
     copyEntry: 'Copy the entry',
     copiedEntry: 'Entry copied',
     copyFailed: 'Copy failed: {error}',
-    note: 'The token is written in plain text in Claude Code’s config (~/.claude.json for the Main account). Turning it off changes the token.',
+    note: 'Escouade declares its server in the config of each active account of every harness installed: ~/.claude.json (Claude Code, through claude mcp add), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) for the Main account, the rest of the file and its comments kept. The token is written there in plain text. Turning it off changes the token, then takes the entry out everywhere. A harness installed or an account added later is declared at once.',
   },
   activity: {
     title: 'MCP activity',

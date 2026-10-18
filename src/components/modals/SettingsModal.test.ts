@@ -316,7 +316,7 @@ describe('SettingsModal', () => {
     const headings = within(panel())
       .getAllByRole('heading')
       .map((h) => h.textContent);
-    expect(headings.slice(-3)).toEqual(['Remote control', 'Escouade dans Claude', 'Activité MCP']);
+    expect(headings.slice(-3)).toEqual(['Remote control', 'Serveur MCP', 'Activité MCP']);
     expect(tab('Harness')).not.toHaveClass('changed');
     await userEvent.click(all);
     expect(all).toHaveAttribute('aria-checked', 'true');

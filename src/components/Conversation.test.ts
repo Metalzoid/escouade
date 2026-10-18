@@ -1849,7 +1849,7 @@ describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
     const region = banner()!;
     expect(region).not.toBeNull();
     expect(region).toHaveTextContent(
-      'Son process a démarré sans les outils d’Escouade, que « Claude et les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
+      'Son process a démarré sans les outils d’Escouade, que « Les agents peuvent piloter Escouade » lui donne maintenant : relance-le pour qu’il les ait. Sa session est reprise et sa conversation reste.',
     );
     // At rest with nothing in the background, nothing stops it: neither phrase of the wait is there.
     expect(region).not.toHaveTextContent('Il pourra être relancé');
@@ -2019,7 +2019,7 @@ describe('« Outils d’Escouade au prochain démarrage » (ESC-91)', () => {
     render(Conversation, { agent: a, project: project() });
     const region = screen.getByRole('region', { name: 'Escouade’s tools at the next start' });
     expect(region).toHaveTextContent(
-      'Its process started without Escouade’s tools, which “Claude and the agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays.',
+      'Its process started without Escouade’s tools, which “Agents can drive Escouade” now gives it: restart it to give it the tools. Its session is resumed and its conversation stays.',
     );
     expect(within(region).getByRole('button', { name: 'Restart' })).toBeEnabled();
     setLang('fr');

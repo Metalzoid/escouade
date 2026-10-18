@@ -1,22 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { accountName, principalId } from '../../lib/accounts';
-  import { offered, speakerOf } from '../../lib/engines';
+  import { speakerOf } from '../../lib/engines';
   import { fDateTime, fTime } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { maskToken, mcp } from '../../lib/mcp.svelte';
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
-  import type { EngineId, McpDeclaration } from '../../lib/types';
+  import type { McpDeclaration } from '../../lib/types';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import { tip } from '../../lib/tip';
 
-  // « Escouade dans Claude »: Claude Code drives Escouade through its MCP server, declared in the Claude Code of each
-  // active account, and each other harness found that has its own switch (« Codex peut piloter Escouade ») in its user
-  // config; and « Activité MCP »: what the server was asked. The switches are saved at once, not through the modal's
-  // draft: the declaration writes into the config of each account's harness, which « Annuler » could not take back.
+  // « Serveur MCP »: one switch, « Les agents peuvent piloter Escouade » (ESC-119), gives the server to Escouade's agents
+  // and declares it in every harness installed, in each of its active accounts; under it, each declaration, with its
+  // file and what to paste by hand when it failed. Then « Activité MCP »: what the server was asked. The switch is saved
+  // at once, not through the modal's draft: the declaration writes into the config of each account's harness, which
+  // « Annuler » could not take back.
 
   const on = $derived(app.settings.mcpEnabled);
   let busy = $state(false);
@@ -34,24 +35,6 @@
     if (saved) app.settings.mcpEnabled = next;
   }
 
-  /** The harnesses found with a switch of their own, and whether it is on. */
-  const others = $derived(
-    offered()
-      .filter((e) => e.mcpConfig)
-      .map((e) => ({ decl: e, on: !!app.settings.mcpHarnesses?.includes(e.id) })),
-  );
-  let busyHarness = $state<EngineId | null>(null);
-
-  async function toggleHarness(engine: EngineId, next: boolean) {
-    if (busyHarness) return;
-    busyHarness = engine;
-    const saved = await app.run(api.mcpSetHarness(engine, next).then(() => true));
-    busyHarness = null;
-    if (!saved) return;
-    const rest = (app.settings.mcpHarnesses ?? []).filter((e) => e !== engine);
-    app.settings.mcpHarnesses = next ? [...rest, engine] : rest;
-  }
-
   /**
    * The account's name as shown: a harness's Principal not saved yet (made at its first agent) as Principal, any other
    * by its id when the window does not know it any more.
@@ -62,18 +45,6 @@
     return d.account === principalId(d.engine) ? t('accounts.principal') : d.account;
   }
 
-  /** The harnesses the server is to be declared in now: those of the switch above (Claude Code), then those whose own switch is on. */
-  const wantedIn = $derived<EngineId[]>([
-    ...app.engines.filter((e) => !e.mcpConfig).map((e) => e.id),
-    ...others.filter((o) => o.on).map((o) => o.decl.id),
-  ]);
-  /** Where it stands, harness by harness: the accounts it is declared in, and those it failed in. */
-  const byHarness = $derived(
-    wantedIn.map((engine) => {
-      const of = mcp.declared.filter((d) => d.engine === engine);
-      return { engine, of, declared: of.filter((d) => d.ok), failed: of.filter((d) => !d.ok) };
-    }),
-  );
   /** The agents already running whose next start gives them the tools (ESC-91). */
   const nextStart = $derived(Object.values(app.agents).filter((a) => a.escouadeNext).length);
   /** The most recent first. */
@@ -88,7 +59,7 @@
     if (!command) return;
     try {
       await navigator.clipboard.writeText(command);
-      app.toast(t(d.file ? 'mcp.section.copiedEntry' : 'mcp.section.copied'), 'ok');
+      app.toast(t(d.paste ? 'mcp.section.copiedEntry' : 'mcp.section.copied'), 'ok');
     } catch (e) {
       app.toast(t('mcp.section.copyFailed', { error: String(e) }), 'error');
     }
@@ -100,52 +71,32 @@
     <button class="switch" class:on role="switch" aria-checked={on} aria-label={t('mcp.section.enable')} disabled={busy} onclick={toggle}
     ></button>
   </Row>
-  {#each others as o (o.decl.id)}
-    {@const label = t('mcp.section.harness', { harness: o.decl.name })}
-    <Row
-      {label}
-      hint={on ? '' : t('mcp.section.harnessNeedsServer')}
-      desc={t('mcp.section.harnessDesc', { harness: o.decl.name, file: o.decl.mcpConfig ?? '' })}
-    >
-      <button
-        class="switch"
-        class:on={o.on}
-        role="switch"
-        aria-checked={o.on}
-        aria-label={label}
-        disabled={!on || busyHarness !== null}
-        onclick={() => toggleHarness(o.decl.id, !o.on)}
-      ></button>
-    </Row>
-  {/each}
   {#if on}
     <div class="state">
       {#if mcp.status.error}
         <p class="bad" role="alert">{t('mcp.section.serverFailed', { error: mcp.status.error })}</p>
+      {:else if !mcp.declared.length}
+        <p class="muted" role="status">{t('mcp.section.working')}</p>
       {:else}
-        {#each byHarness as h (h.engine)}
-          {#if !h.of.length}
-            <p class="muted" role="status">{t('mcp.section.working', { harness: speakerOf(h.engine) })}</p>
-          {/if}
-          {#if h.declared.length}
-            <p class="good" role="status">
-              {t('mcp.section.declared', {
-                harness: speakerOf(h.engine),
-                accounts: h.declared.map((d) => t('mcp.section.account', { name: nameOf(d) })).join(', '),
-              })}
-            </p>
-          {/if}
-          {#each h.failed as d (d.account)}
-            <div class="fail">
-              <p class="bad" role="alert">{t('mcp.section.notDeclared', { name: nameOf(d), error: maskToken(d.error ?? '') })}</p>
-              <span class="how">{d.file ? t('mcp.section.paste', { file: d.file }) : t('mcp.section.command', { shell })}</span>
-              <code class="cmd mono">{maskToken(d.command)}</code>
-              <div>
-                <button class="btn" onclick={() => copy(d)}>{t(d.file ? 'mcp.section.copyEntry' : 'mcp.section.copy')}</button>
+        <ul class="decls" aria-label={t('mcp.section.list')}>
+          {#each mcp.declared as d (d.account)}
+            <li class:failed={!d.ok}>
+              <div class="head">
+                <span class="where">{t('mcp.section.where', { harness: speakerOf(d.engine), name: nameOf(d) })}</span>
+                <span class="mark" class:good={d.ok} class:bad={!d.ok}>{t(d.ok ? 'mcp.section.declared' : 'mcp.section.failed')}</span>
               </div>
-            </div>
+              <span class="file mono">{d.file}</span>
+              {#if !d.ok}
+                <p class="bad" role="alert">{t('mcp.section.notDeclared', { name: nameOf(d), error: maskToken(d.error ?? '') })}</p>
+                <span class="how">{d.paste ? t('mcp.section.paste', { file: d.file }) : t('mcp.section.command', { shell })}</span>
+                <code class="cmd mono">{maskToken(d.command)}</code>
+                <div>
+                  <button class="btn" onclick={() => copy(d)}>{t(d.paste ? 'mcp.section.copyEntry' : 'mcp.section.copy')}</button>
+                </div>
+              {/if}
+            </li>
           {/each}
-        {/each}
+        </ul>
       {/if}
       {#if nextStart}
         <p class="muted">{t('mcp.section.nextStart', { count: nextStart })}</p>
@@ -200,11 +151,43 @@
   .bad {
     color: var(--del);
   }
-  .fail {
+  .decls {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .decls li {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: 4px;
+  }
+  .decls li.failed {
     gap: 6px;
+  }
+  .head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    font-size: 12px;
+  }
+  .where {
+    font-weight: 600;
+  }
+  .mark {
+    margin-left: auto;
+    font-size: 11.5px;
+  }
+  .file {
+    max-width: 100%;
+    font-size: 11.5px;
+    color: var(--dim);
+    overflow-wrap: anywhere;
+    user-select: text;
   }
   .how {
     font-size: 11.5px;

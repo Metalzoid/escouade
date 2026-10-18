@@ -19,7 +19,8 @@ const declaration = (account: string, over: Partial<McpDeclaration> = {}): McpDe
   ok: true,
   error: null,
   command: 'claude mcp add',
-  file: null,
+  file: 'C:\\Users\\ada\\.claude.json',
+  paste: false,
   ...over,
 });
 

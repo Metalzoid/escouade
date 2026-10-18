@@ -66,10 +66,8 @@ export interface Settings {
    * of the groups of « Comptes ». Changed by `engine_order_set`, not by the settings modal's draft.
    */
   engineOrder?: EngineId[];
-  /** « Claude et les agents peuvent piloter Escouade »: the MCP server runs and is declared in each active account's Claude Code. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
+  /** « Les agents peuvent piloter Escouade »: the MCP server runs, given to the agents and declared in each active account of every harness installed. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
-  /** « <harness> peut piloter Escouade »: the other harnesses the server is declared in too. Changed by `mcp_set_harness`, not by the settings modal's draft. */
-  mcpHarnesses?: EngineId[];
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
@@ -473,8 +471,6 @@ export interface EngineDecl {
   writer: string;
   /** Its texts go to the model chosen in the settings (`writerModel`): OpenCode. */
   writerTakesModel?: boolean;
-  /** The user config « <harness> peut piloter Escouade » writes in, for the Principal (`~/.codex/config.toml`); null: no switch of its own. */
-  mcpConfig?: string | null;
 }
 
 /** A harness with what is found of it here (Réglages). */
@@ -1576,8 +1572,10 @@ export interface McpDeclaration {
    * `file`), its token already hidden (`mcp_manual_command` gives the real one when it is copied).
    */
   command: string;
-  /** The user config to paste `command` in; null: `command` is to be run. */
-  file: string | null;
+  /** The user config the entry is in, the token written there in plain text: `.claude.json`, `config.toml`, `opencode.json`, `mcp-config.json`. */
+  file: string;
+  /** `command` is the entry to paste in `file`; else a command to run. */
+  paste: boolean;
 }
 
 /** What the step running of a worktree's setup wrote: its rank (from 0), how many lines so far, and the last of them. */

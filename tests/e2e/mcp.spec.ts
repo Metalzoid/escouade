@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE_CODEX, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_CODEX, FAKE_COPILOT, FAKE_OPENCODE, send, test, type App } from './fixture';
 
 // Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
 // and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
 
-// The one switch (ESC-91): Claude Code outside Escouade and every agent of Escouade.
-const SWITCH = 'Claude et les agents peuvent piloter Escouade';
+// The one switch (ESC-91, ESC-119): every agent of Escouade, and every harness installed outside Escouade.
+const SWITCH = 'Les agents peuvent piloter Escouade';
 
 /** What the fake `claude mcp add` wrote of the server in Principal's .claude.json, if it did. */
 function declared(app: App): { url: string; token: string } | null {
@@ -31,20 +31,25 @@ async function rpc(server: { url: string; token: string }, id: number | null, me
   return { status: res.status, json: text ? JSON.parse(text) : null };
 }
 
+/** The line of a declaration under the switch: `where` is « <harness> · compte <name> ». */
+function row(dialog: import('@playwright/test').Locator, where: string) {
+  return dialog.getByRole('list', { name: 'Déclarations dans les harness' }).getByRole('listitem').filter({ hasText: where });
+}
+
 test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Harness' }).click();
-  await expect(dialog.getByRole('heading', { name: 'Escouade dans Claude' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Serveur MCP' })).toBeVisible();
   // Off to begin with: nothing declared anywhere.
   await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
   expect(declared(app)).toBeNull();
 
   // On: the server starts and is declared in Claude Code for Principal, saved at once (no « Enregistrer »).
   await dialog.getByRole('switch', { name: SWITCH }).click();
-  await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+  await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   const server = declared(app);
   expect(server).not.toBeNull();
   expect(server!.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
@@ -110,13 +115,13 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Harness' }).click();
   await dialog.getByRole('switch', { name: SWITCH }).click();
-  await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+  await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   const before = declared(app)!;
   expect((await rpc(before, 1, 'ping', {})).status).toBe(200);
 
   await dialog.getByRole('switch', { name: SWITCH }).click();
   await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
-  await expect(dialog.getByText(/Déclaré dans Claude/)).toBeHidden();
+  await expect(dialog.getByRole('list', { name: 'Déclarations dans les harness' })).toBeHidden();
   await expect.poll(() => declared(app)).toBeNull();
   const removes = app.launches().filter((l) => l.argv[0] === 'mcp' && l.argv[1] === 'remove');
   expect(removes.map((l) => l.argv.slice(1))).toEqual([['remove', 'escouade', '--scope', 'user']]);
@@ -130,7 +135,7 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
 
   // On again: declared again, with another token.
   await dialog.getByRole('switch', { name: SWITCH }).click();
-  await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+  await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   const after = declared(app)!;
   expect(after.token).not.toBe(before.token);
 });
@@ -162,7 +167,7 @@ test('the one switch reaches agents already running: their conversation says so,
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await dialog.getByRole('tab', { name: 'Harness' }).click();
   await dialog.getByRole('switch', { name: SWITCH }).click();
-  await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
+  await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   await expect(
     dialog.getByText('1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation.'),
   ).toBeVisible();
@@ -219,11 +224,16 @@ test.describe('the switch saved on, the app starting', () => {
   });
 });
 
-test.describe('« Codex peut piloter Escouade »', () => {
-  test.use({ appEnv: { ESCOUADE_CODEX: FAKE_CODEX } });
+test.describe('« Les agents peuvent piloter Escouade » in every harness installed', () => {
+  test.use({ appEnv: { ESCOUADE_CODEX: FAKE_CODEX, ESCOUADE_OPENCODE: FAKE_OPENCODE, ESCOUADE_COPILOT: FAKE_COPILOT } });
 
   /** What the user had in Principal's `config.toml` of Codex. */
   const USERS = '# mon modèle\nmodel = "gpt-5"\n\n[mcp_servers.node_repl]\ncommand = "node" # le mien\n';
+  /** What the user had in OpenCode's `opencode.json`: comments and a server of theirs. */
+  const USERS_OPENCODE =
+    '{\n  // mon modèle\n  "model": "ollama/qwen3-coder",\n  "mcp": {\n    "node": { "type": "local", "command": ["node"] }\n  }\n}\n';
+  /** Copilot's `mcp-config.json` as `copilot mcp remove` leaves it. */
+  const USERS_COPILOT = '{\n  "mcpServers": {}\n}';
 
   /** The server as Codex's `config.toml` declares it, if it does. */
   function inCodex(app: App): { url: string; token: string } | null {
@@ -233,44 +243,78 @@ test.describe('« Codex peut piloter Escouade »', () => {
     return url && token ? { url, token } : null;
   }
 
-  test('its switch declares the server in its config.toml, comments kept, and turned off changes the token and leaves the file as it was', async ({
+  /** The server as a JSON user config declares it under `servers`, if it does (comments taken out). */
+  function inJson(file: string, servers: string): { url: string; token: string; type: string } | null {
+    if (!fs.existsSync(file)) return null;
+    // Comments and trailing commas out (OpenCode and Copilot read both: Escouade writes a comma after an entry it puts
+    // in an empty object of the servers).
+    const text = fs
+      .readFileSync(file, 'utf8')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/,(\s*[}\]])/g, '$1');
+    const entry = JSON.parse(text)[servers]?.escouade;
+    if (!entry) return null;
+    return { url: entry.url, token: String(entry.headers?.Authorization ?? '').replace(/^Bearer /, ''), type: entry.type };
+  }
+
+  test('one switch declares the server in Claude Code, Codex, OpenCode and Copilot, lists each, and turned off leaves every file as it was', async ({
     app,
   }) => {
-    fs.mkdirSync(path.dirname(app.codexToml), { recursive: true });
-    fs.writeFileSync(app.codexToml, USERS);
+    for (const [file, text] of [
+      [app.codexToml, USERS],
+      [app.opencodeJson, USERS_OPENCODE],
+      [app.copilotJson, USERS_COPILOT],
+    ]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    }
     const { page } = app;
     await addProject(page, app.repo, { firstAgent: false });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await dialog.getByRole('tab', { name: 'Harness' }).click();
-    const codex = dialog.getByRole('switch', { name: 'Codex peut piloter Escouade' });
-    // The token in plain text, said beside it; nothing to do while the server is off.
-    await expect(dialog.getByText(/Le jeton y est écrit en clair\. Désactiver change le jeton/)).toBeVisible();
-    await expect(codex).toBeDisabled();
+    // One switch, no harness of its own; the token in plain text, said beside it.
+    await expect(dialog.getByRole('switch', { name: /piloter Escouade/ })).toHaveCount(1);
+    await expect(
+      dialog.getByText(/Le jeton y est écrit en clair\. Désactiver change le jeton, puis retire l’entrée partout/),
+    ).toBeVisible();
     await dialog.getByRole('switch', { name: SWITCH }).click();
-    await expect(dialog.getByText('Déclaré dans Claude · compte Principal')).toBeVisible();
-    expect(inCodex(app)).toBeNull();
 
-    await codex.click();
-    await expect(codex).toHaveAttribute('aria-checked', 'true');
-    await expect(dialog.getByText('Déclaré dans Codex · compte Principal')).toBeVisible();
-    const server = inCodex(app)!;
-    expect(server).not.toBeNull();
-    // The same token as Claude Code's, and it opens the server.
-    expect(server).toEqual(declared(app));
-    expect((await rpc(server, 1, 'ping', {})).status).toBe(200);
-    // The user's lines first, untouched.
+    // Each harness and account listed, with its file.
+    const list = dialog.getByRole('list', { name: 'Déclarations dans les harness' });
+    for (const [where, file] of [
+      ['Claude · compte Principal', app.claudeJson],
+      ['Codex · compte Principal', app.codexToml],
+      ['OpenCode · compte Principal', app.opencodeJson],
+      ['Copilot · compte Principal', app.copilotJson],
+    ]) {
+      await expect(row(dialog, where)).toContainText('Déclaré');
+      await expect(row(dialog, where).locator('.file')).toHaveText(file);
+    }
+    const claude = declared(app)!;
+    // The same token everywhere, and it opens the server.
+    expect(inCodex(app)).toEqual(claude);
+    expect(inJson(app.opencodeJson, 'mcp')).toEqual({ ...claude, type: 'remote' });
+    expect(inJson(app.copilotJson, 'mcpServers')).toEqual({ ...claude, type: 'http' });
+    expect((await rpc(claude, 1, 'ping', {})).status).toBe(200);
+    // The user's lines and comments kept.
     expect(fs.readFileSync(app.codexToml, 'utf8').startsWith(USERS)).toBe(true);
+    const oc = fs.readFileSync(app.opencodeJson, 'utf8');
+    expect(oc).toContain('// mon modèle');
+    expect(oc).toContain('"node": { "type": "local", "command": ["node"] },');
 
-    await codex.click();
-    await expect(codex).toHaveAttribute('aria-checked', 'false');
-    await expect(dialog.getByText(/Déclaré dans Codex/)).toBeHidden();
+    await dialog.getByRole('switch', { name: SWITCH }).click();
+    await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
+    await expect(list).toBeHidden();
+    // Byte for byte, every file.
     await expect.poll(() => fs.readFileSync(app.codexToml, 'utf8')).toBe(USERS);
-    // The old token opens nothing, though the server still runs for Claude Code, with a new one.
-    const old = await fetch(server.url, { method: 'POST', headers: { authorization: `Bearer ${server.token}` }, body: '{}' });
-    expect(old.status).toBe(401);
-    // (Claude Code's entry is replaced: removed, then added with the new token.)
-    await expect.poll(() => declared(app)?.token ?? server.token).not.toBe(server.token);
-    expect((await rpc(declared(app)!, 3, 'ping', {})).status).toBe(200);
+    await expect.poll(() => fs.readFileSync(app.opencodeJson, 'utf8')).toBe(USERS_OPENCODE);
+    await expect.poll(() => fs.readFileSync(app.copilotJson, 'utf8')).toBe(USERS_COPILOT);
+    await expect.poll(() => declared(app)).toBeNull();
+    // The server is off: nothing answers the old token.
+    const old = await fetch(claude.url, { method: 'POST', headers: { authorization: `Bearer ${claude.token}` }, body: '{}' }).catch(
+      () => null,
+    );
+    expect(old?.status ?? 0).not.toBe(200);
   });
 });

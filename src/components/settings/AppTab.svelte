@@ -300,7 +300,7 @@
       />
     </Row>
   </Group>
-  <!-- Beside « Claude et les agents peuvent piloter Escouade », before its activity log, which can be long. -->
+  <!-- Beside « Les agents peuvent piloter Escouade », before its activity log, which can be long. -->
   {#if anyCan('remoteControl')}
     <Group title={t('settings.claude.remoteTitle')}>
       <Row label={t('settings.claude.remoteAll')} desc={t('settings.claude.remoteAllDesc')}>

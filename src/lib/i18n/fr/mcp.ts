@@ -2,22 +2,21 @@ import type { Tree } from '../types';
 
 // The MCP server: its switch, what it was asked, and how its tools read in the conversation.
 export default {
-  // The « Claude Code » tab of the settings: the server declared in Claude Code, and what it was asked.
+  // The « Harness » tab of the settings: the server, given to the agents and declared in every harness installed, and
+  // what it was asked.
   section: {
-    title: 'Escouade dans Claude',
-    /** The one switch (ESC-91): Claude Code outside Escouade and every agent of Escouade, each with a token of its own. */
-    enable: 'Claude et les agents peuvent piloter Escouade',
+    title: 'Serveur MCP',
+    /** The one switch (ESC-91, ESC-119): the agents of Escouade, and every harness installed outside Escouade, each with a token of its own. */
+    enable: 'Les agents peuvent piloter Escouade',
     enableDesc:
-      'Claude Code hors d’Escouade (un terminal, un autre outil) et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
-    /** « <harness> peut piloter Escouade » (ESC-50): another harness outside Escouade, declared in its user config. `{file}`: the Principal's. */
-    harness: '{harness} peut piloter Escouade',
-    harnessDesc:
-      '{harness} hors d’Escouade (un terminal, son app) reçoit les mêmes outils, déclarés dans la config de chaque compte {harness} actif ({file} pour le compte Principal), le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée.',
-    harnessNeedsServer: 'Active d’abord « Claude et les agents peuvent piloter Escouade ».',
-    /** `{harness}`: Claude, Codex. `{accounts}`: the accounts it is declared in, each as « compte … » (below), joined by commas. */
-    declared: 'Déclaré dans {harness} · {accounts}',
-    account: 'compte {name}',
-    working: 'Déclaration dans {harness}…',
+      'Les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+    /** The list of the declarations, under the switch: one line per account of each harness installed. */
+    list: 'Déclarations dans les harness',
+    working: 'Déclaration dans les harness installés…',
+    /** `{harness}`: Claude, Codex, OpenCode, Copilot. `{name}`: the account. */
+    where: '{harness} · compte {name}',
+    declared: 'Déclaré',
+    failed: 'Pas déclaré',
     notDeclared: 'Pas déclaré pour le compte {name} : {error}',
     serverFailed: 'Le serveur n’a pas démarré : {error}',
     /** The agents whose process started before the switch was on (« Outils d’Escouade au prochain démarrage » on their conversation). */
@@ -34,7 +33,7 @@ export default {
     copyEntry: 'Copier l’entrée',
     copiedEntry: 'Entrée copiée',
     copyFailed: 'Copie impossible : {error}',
-    note: 'Le jeton est écrit en clair dans la config de Claude Code (~/.claude.json pour le compte Principal). Désactiver change le jeton.',
+    note: 'Escouade déclare son serveur dans la config de chaque compte actif de chaque harness installé : ~/.claude.json (Claude Code, par claude mcp add), ~/.codex/config.toml (Codex), ~/.config/opencode/opencode.json (OpenCode), ~/.copilot/mcp-config.json (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Le jeton y est écrit en clair. Désactiver change le jeton, puis retire l’entrée partout. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt.',
   },
   activity: {
     title: 'Activité MCP',

@@ -510,12 +510,23 @@ pub fn config_dir(account: &Account, settings: &Settings) -> PathBuf {
             Some(dir) => PathBuf::from(dir),
             None => match env.filter(|v| !v.is_empty()) {
                 Some(v) => PathBuf::from(v),
-                None => home.join(store.home),
+                None => xdg_config(account.engine).unwrap_or_else(|| home.join(store.home)),
             },
         };
     }
     let (env, home) = claude_home(account, settings);
     config_dir_with(account, env.as_deref(), &home)
+}
+
+/// OpenCode's folder under the app's `XDG_CONFIG_HOME` when it has one (OpenCode goes by it, under
+/// Windows too: tried on 1.19.3), in place of `~/.config`. Never in the tests.
+fn xdg_config(engine: EngineId) -> Option<PathBuf> {
+    if engine != EngineId::Opencode || cfg!(test) {
+        return None;
+    }
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(|v| PathBuf::from(v).join("opencode"))
 }
 
 /// `config_dir` with the app's `CLAUDE_CONFIG_DIR` (`env`) and home folder given.
@@ -1198,7 +1209,6 @@ impl<R: Runtime> Core<R> {
         s.accounts = self.settings.read().accounts.clone();
         s.engine_order = self.settings.read().engine_order.clone();
         s.mcp_enabled = self.settings.read().mcp_enabled;
-        s.mcp_harnesses = self.settings.read().mcp_harnesses.clone();
         self.save_settings(s)
     }
 
