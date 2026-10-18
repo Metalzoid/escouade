@@ -5,6 +5,7 @@ import { t } from './i18n';
 import { intlLocale } from './i18n/locale.svelte';
 import { api } from './ipc';
 import { app } from './state.svelte';
+import { supportsAuto, toldAuto } from './models';
 import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
 
 /** The flags of `EngineCaps` that say yes or no. */
@@ -161,9 +162,19 @@ export function effortsOf<T extends { value: string }>(who: { engine: EngineId |
 
 /**
  * Whether `model` takes an effort or the mode `auto` on the harness of `who`, as its declaration says: by its id, else by
- * the declared model its full id holds (`claude-haiku-4-5` is Haiku). A model it does not declare takes them.
+ * the declared model its full id holds (`claude-haiku-4-5` is Haiku). A model it does not declare takes them. The mode
+ * `auto` on Claude Code: as the `claude` of the account of `who` told it, else by its rule (`supportsAuto`), as the tickets
+ * and the handover have it (`Core::takes_auto`).
  */
-export function modelTakes(who: { engine: EngineId | null | undefined }, model: string, what: 'effort' | 'auto'): boolean {
+export function modelTakes(
+  who: { engine: EngineId | null | undefined; account?: string },
+  model: string,
+  what: 'effort' | 'auto',
+): boolean {
+  if (what === 'auto' && (who.engine ?? engineOf(null)?.id) === 'claude') {
+    const told = who.account ? app.accountModels[who.account]?.models : undefined;
+    return toldAuto(told ?? [], model) ?? supportsAuto(model);
+  }
   const m = model.toLowerCase();
   const told = toldOf(who).find((x) => x.id.toLowerCase() === m);
   if (told) return what === 'effort' ? told.efforts.length > 0 : true;

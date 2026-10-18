@@ -968,6 +968,7 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     *h.core.models.write() = vec![ModelInfo {
         value: "sonnet".into(),
         resolved_model: "claude-sonnet-9".into(),
+        ..Default::default()
     }];
     let count = h.core.agents.read().len();
     let v = read(
@@ -3527,6 +3528,7 @@ fn known_models(h: &Harness) {
         .map(|m| ModelInfo {
             value: m.to_string(),
             resolved_model: format!("claude-{m}-9"),
+            ..Default::default()
         })
         .collect();
 }

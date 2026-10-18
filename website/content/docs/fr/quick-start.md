@@ -62,7 +62,7 @@ Les modes de permission décident quand Claude te demande l’autorisation d’a
 
 | Mode | Ce qui se passe |
 |---|---|
-| « Auto » | Un classifieur approuve les actions sûres et demande pour le reste. Indisponible avec Haiku. |
+| « Auto » | Un classifieur approuve les actions sûres et demande pour le reste. Indisponible avec un modèle sans ce mode, comme Haiku 4.5 (Claude Code 2.1.292 et avant). |
 | « Demander » | Claude demande ton accord avant chaque action sensible. |
 | « Plan » | Claude analyse et propose un plan sans rien modifier. |
 | « Édits auto » | Les modifications de fichiers sont acceptées sans demander. |

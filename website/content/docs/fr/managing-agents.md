@@ -61,7 +61,7 @@ Le mode décide de ce que Claude fait sans te demander.
 
 | Mode | Ce qu’il fait |
 |---|---|
-| Auto | Un classifieur approuve les actions sûres et demande pour le reste. Indisponible avec Haiku. |
+| Auto | Un classifieur approuve les actions sûres et demande pour le reste. Indisponible avec un modèle que le Claude Code du compte de l’agent dit sans ce mode, comme Haiku 4.5 (Claude Code 2.1.292 et avant) ; Haiku 5.5 le prend. |
 | Demander | Claude demande ton accord avant chaque action sensible. |
 | Plan | Claude analyse et propose un plan sans rien modifier. Tu l’approuves, ou tu lui demandes de continuer à planifier (voir [les questions et autorisations](chat#questions-et-autorisations)). |
 | Édits auto | Les modifications de fichiers sont acceptées sans demander. |

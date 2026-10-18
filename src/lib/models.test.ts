@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from './state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE } from '../test/ipc';
 import { setLang } from './i18n';
-import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, modeTitle, supportsAuto, supportsEffort } from './models';
+import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, modeTitle, supportsAuto, supportsEffort, toldAuto } from './models';
 
 beforeEach(() => {
   app.engines = [CLAUDE_ENGINE];
@@ -77,11 +77,33 @@ describe('modelOptions', () => {
 });
 
 describe('capabilities', () => {
-  it('Haiku supports neither effort nor auto mode', () => {
+  it('Haiku takes no effort, and the auto mode from Haiku 5 on (its alias as from Claude Code 2.1.293)', () => {
     expect(supportsEffort('haiku')).toBe(false);
-    expect(supportsAuto('claude-haiku-4-5-20251001')).toBe(false);
     expect(supportsEffort('opus')).toBe(true);
-    expect(supportsAuto('fable')).toBe(true);
+    for (const m of ['claude-haiku-4-5-20251001', 'claude-haiku-4-5', 'claude-3-5-haiku-20241022', 'claude-3-haiku']) {
+      expect(supportsAuto(m), m).toBe(false);
+    }
+    for (const m of ['haiku', 'Haiku', 'claude-haiku-5-5', 'claude-haiku-6', 'fable', 'claude-sonnet-4-5', '']) {
+      expect(supportsAuto(m), m).toBe(true);
+    }
+  });
+
+  it('the auto mode follows what a claude told of its models, by alias or full id', () => {
+    // As Claude Code 2.1.302 answers `initialize` (ESC-121).
+    const told = [
+      { value: 'opus', resolvedModel: 'claude-opus-5-5', supportsAutoMode: true },
+      { value: 'haiku', resolvedModel: 'claude-haiku-5-5', supportsAutoMode: true },
+      { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001' },
+    ];
+    expect(toldAuto(told, 'haiku')).toBe(true);
+    expect(toldAuto(told, 'claude-haiku-5-5')).toBe(true);
+    expect(toldAuto(told, 'claude-haiku-4-5')).toBe(false);
+    expect(toldAuto(told, 'sonnet')).toBeUndefined();
+    // As 2.1.292: its alias on Haiku 4.5, without the mode.
+    expect(toldAuto([told[0], { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' }], 'haiku')).toBe(false);
+    // A version that tells it of none, or nothing told: the rule decides.
+    expect(toldAuto([{ value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' }], 'haiku')).toBeUndefined();
+    expect(toldAuto([], 'haiku')).toBeUndefined();
   });
 });
 

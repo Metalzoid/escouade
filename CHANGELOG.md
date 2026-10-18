@@ -53,6 +53,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ### Corrections
 
+- Haiku a le mode « Auto » quand le Claude Code de son compte le dit. Depuis Claude Code 2.1.293, Haiku fait tourner Haiku 5.5, qui prend ce mode, et Escouade le refusait encore : le Composer grisait « Auto » avec Haiku, un ticket sur Haiku partait en « Demander » même avec un Kanban en « Auto », et une passation vers Claude Code sur Haiku quittait « Auto ». Escouade suit maintenant ce que le Claude Code de chaque compte dit de chacun de ses modèles à chaque démarrage. Haiku 4.5, que fait tourner Claude Code 2.1.292 et avant, reste sans « Auto ».
 - Vue Claude Code, d'après un essai avec le vrai Claude Code sous Windows :
   - un message sur plusieurs lignes arrive entier. Avant, Claude Code perdait ses sauts de ligne, et un message envoyé juste après l'ouverture de l'interface pouvait partir coupé à sa première ligne ;
   - un tour annulé par Échap avant la première ligne de la réponse finit, interrompu ; l'agent restait « En cours » ;

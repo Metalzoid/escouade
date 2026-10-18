@@ -87,7 +87,7 @@ Les trois choix valent pour chaque [agent](managing-agents) créé ensuite. Dans
 Les demandes d’autorisation et leur traitement sont décrits dans [la conversation](chat), et le mode « Plan » dans [le plan](plan).
 
 > [!NOTE]
-> Avec Haiku, le choix de l’effort est grisé dans le champ de message de l’agent (« Haiku ne gère pas l’effort »), comme le mode « Auto » (« indisponible avec Haiku »).
+> Avec Haiku, le choix de l’effort est grisé dans le champ de message de l’agent (« Haiku ne gère pas l’effort »), comme le mode « Auto » (« indisponible avec ce modèle ») quand le Claude Code du compte de l’agent dit que son Haiku ne le prend pas : c’est Haiku 4.5, que Claude Code fait tourner jusqu’à la 2.1.292 ; depuis la 2.1.293, c’est Haiku 5.5, qui le prend.
 
 ## Processus
 

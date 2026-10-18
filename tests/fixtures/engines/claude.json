@@ -38,7 +38,7 @@
     { "id": "fable", "label": "Fable", "effort": true, "auto": true },
     { "id": "opus", "label": "Opus", "effort": true, "auto": true },
     { "id": "sonnet", "label": "Sonnet", "effort": true, "auto": true },
-    { "id": "haiku", "label": "Haiku", "effort": false, "auto": false }
+    { "id": "haiku", "label": "Haiku", "effort": false, "auto": true }
   ],
   "efforts": ["low", "medium", "high", "xhigh", "max"],
   "writer": "Claude Haiku",

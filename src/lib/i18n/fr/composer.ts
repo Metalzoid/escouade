@@ -17,8 +17,8 @@ export default {
     plan: { label: 'Plan', title: '{engine} analyse et propose un plan sans rien modifier' },
     acceptEdits: { label: 'Édits auto', title: 'Les modifications de fichiers sont acceptées sans demander' },
     bypassPermissions: { label: 'Bypass', title: 'Aucune demande de permission (à réserver aux environnements sûrs)' },
-    autoUnavailableDetail: 'indisponible avec Haiku',
-    autoUnavailableTitle: "Le mode Auto n'est pas disponible avec Haiku",
+    autoUnavailableDetail: 'indisponible avec ce modèle',
+    autoUnavailableTitle: "Le mode Auto n'est pas disponible avec ce modèle, d'après le Claude Code de ce compte",
     bypassToast: 'Mode Bypass : {engine} agira sans aucune demande de permission.',
   },
 

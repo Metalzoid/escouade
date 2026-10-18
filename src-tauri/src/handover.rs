@@ -52,14 +52,15 @@ pub fn closest_mode(current: &str, offered: &[&str]) -> Option<String> {
         .map(|(_, m)| m.to_string())
 }
 
-/// The modes `engine` takes with `model` (`auto` only where the model takes it).
-pub fn modes_of(engine: &dyn Engine, model: &str) -> Vec<&'static str> {
+/// The modes `engine` takes, `auto` only where its model takes it (`auto`: `Core::takes_auto`,
+/// what the `claude` of its account told).
+pub fn modes_of(engine: &dyn Engine, auto: bool) -> Vec<&'static str> {
     engine
         .caps()
         .modes
         .iter()
         .map(|m| m.id)
-        .filter(|m| *m != "auto" || engine.supports_auto(model))
+        .filter(|m| *m != "auto" || auto)
         .collect()
 }
 
@@ -669,7 +670,8 @@ impl<R: Runtime> Core<R> {
         let model = model_for(&settings, to);
         let mode = {
             let current_mode = h.lock().meta.mode.clone();
-            closest_mode(&current_mode, &modes_of(to, &model)).ok_or_else(|| {
+            let auto = self.takes_auto(target, &account, &model);
+            closest_mode(&current_mode, &modes_of(to, auto)).ok_or_else(|| {
                 anyhow!(tr_in!(
                     lang,
                     "{to_name} n’a aucun mode qui autorise aussi peu que celui de l’agent.",

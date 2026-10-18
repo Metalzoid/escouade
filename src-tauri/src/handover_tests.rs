@@ -53,6 +53,14 @@ fn the_mode_after_a_handover_is_the_same_else_the_closest_that_never_allows_more
 }
 
 #[test]
+fn the_modes_of_a_harness_hold_auto_only_where_its_model_takes_it() {
+    let claude = crate::engine::by_id(EngineId::Claude);
+    assert!(modes_of(claude, true).contains(&"auto"));
+    let without = modes_of(claude, false);
+    assert!(!without.contains(&"auto") && without.contains(&"default"));
+}
+
+#[test]
 fn the_handover_model_is_the_one_set_for_the_harness_else_its_best() {
     let claude = engine::by_id(EngineId::Claude);
     let mut s = Settings::default();
@@ -392,7 +400,25 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     assert_eq!(h.agent(&id).engine, EngineId::Bench);
 
-    // « Revenir sur Claude Code »: a handover the other way, what Minimal did in its file.
+    // « Revenir sur Claude Code »: a handover the other way, what Minimal did in its file. On haiku,
+    // which the `claude` of Pro told runs Haiku 4.5, without the mode `auto` (ESC-121): an agent
+    // in « Auto » goes in « Édits auto », the closest that allows no more.
+    h.core
+        .settings
+        .write()
+        .handover_models
+        .insert(EngineId::Claude, "haiku".into());
+    h.core.account_models.write().insert(
+        "pro".into(),
+        crate::model::AccountModels {
+            version: "2.1.292".into(),
+            models: crate::model::ModelInfo::list(&json!([
+                { "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "supportsAutoMode": true },
+                { "value": "haiku", "resolvedModel": "claude-haiku-4-5-20251001" },
+            ])),
+        },
+    );
+    h.core.agent(&id).unwrap().lock().meta.mode = "auto".into();
     h.core
         .continue_on_engine(&id, EngineId::Claude)
         .await
@@ -400,8 +426,10 @@ async fn an_agent_stopped_by_the_limit_goes_on_on_the_other_fake_harness_with_it
     let m = h.agent(&id);
     assert_eq!((m.engine, m.account.as_str()), (EngineId::Claude, "pro"));
     assert_eq!(m.handed_from, None);
-    // « Demander » stays « Demander », even where more is offered.
-    assert_eq!(m.mode, "default");
+    assert_eq!(
+        (m.model.as_str(), m.mode.as_str()),
+        ("haiku", "acceptEdits")
+    );
     h.wait("Claude's turn after the way back", |h| {
         h.turns(&id).len() == 3 && !h.agent(&id).status.is_active()
     })

@@ -61,7 +61,7 @@ The mode decides what Claude does without asking you.
 
 | Mode | What it does |
 |---|---|
-| Auto | A classifier approves safe actions and asks about the rest. Unavailable with Haiku. |
+| Auto | A classifier approves safe actions and asks about the rest. Unavailable with a model that the Claude Code of the agent’s account says lacks it, like Haiku 4.5 (Claude Code 2.1.292 and earlier); Haiku 5.5 has it. |
 | Ask | Claude asks for your approval before each sensitive action. |
 | Plan | Claude analyzes and proposes a plan without changing anything. You approve it, or tell it to keep planning (see [questions and permissions](chat#questions-and-permissions)). |
 | Accept edits | File edits are accepted without asking. |

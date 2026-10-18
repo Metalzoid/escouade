@@ -61,6 +61,15 @@ describe('AppState', () => {
     expect(app.models).toEqual([{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }]);
   });
 
+  it('knows what the claude of each account told of its models, from the start and as it tells it again', async () => {
+    const haiku45 = { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' };
+    const { emit } = await start({ accountModels: { pro: { version: '2.1.292', models: [haiku45] } } });
+    expect(app.accountModels.pro.version).toBe('2.1.292');
+    const told = { version: '2.1.302', models: [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', supportsAutoMode: true }] };
+    emit({ type: 'accountModels', account: 'principal', models: told });
+    expect(app.accountModels).toEqual({ pro: { version: '2.1.292', models: [haiku45] }, principal: told });
+  });
+
   it('writes the interface in the language the backend says, from the start and as it changes', async () => {
     const { emit } = await start({ lang: { ui: 'en', system: 'fr', claude: 'fr' } });
     expect(locale.ui).toBe('en');

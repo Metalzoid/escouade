@@ -555,13 +555,31 @@ describe('Composer', () => {
     expect(backend.called('set_agent_options').at(-1)?.args).toMatchObject({ id: a.id, mode: 'auto' });
   });
 
-  it('disables the effort and the auto mode for Haiku', async () => {
+  it('disables the effort for Haiku, and keeps the auto mode of its alias before its account’s claude told', async () => {
     setup({ model: 'haiku', mode: 'acceptEdits' });
     expect(screen.getByRole('button', { name: /^Effort/ })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
     expect(screen.getByRole('menuitemradio', { name: /Opus/ })).toBeEnabled();
+    // Nothing told yet: its alias runs Haiku 5.5, with the mode, from Claude Code 2.1.293 on.
+    await userEvent.click(screen.getByRole('button', { name: /^Mode/ }));
+    expect(screen.getByRole('menuitemradio', { name: /Auto/ })).toBeEnabled();
+  });
+
+  it('disables the auto mode where the claude of the agent’s account says its Haiku has none', async () => {
+    const { a } = setup({ model: 'haiku', mode: 'acceptEdits', account: 'principal' });
+    // Its account's claude is a 2.1.292: its haiku runs Haiku 4.5, without the mode (ESC-121).
+    app.accountModels = {
+      [a.account]: {
+        version: '2.1.292',
+        models: [
+          { value: 'opus', resolvedModel: 'claude-opus-5-5', supportsAutoMode: true },
+          { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' },
+        ],
+      },
+    };
     await userEvent.click(screen.getByRole('button', { name: /^Mode/ }));
     expect(screen.getByRole('menuitemradio', { name: /Auto/ })).toBeDisabled();
+    expect(screen.getByText('indisponible avec ce modèle')).toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toBeEnabled();
   });
 });
@@ -618,9 +636,9 @@ describe('Composer in English', () => {
     expect(screen.getByText('Claude analyzes and proposes a plan without changing anything')).toBeInTheDocument();
   });
 
-  it('says in English that Haiku has no effort or Auto mode, and what to do while Claude works', async () => {
+  it('says in English that Haiku has no effort, Haiku 4.5 no Auto mode, and what to do while Claude works', async () => {
     setLang('en');
-    setup({ model: 'haiku', status: 'running' });
+    setup({ model: 'claude-haiku-4-5', status: 'running' });
     expect(screen.getByRole('button', { name: /^Effort/ })).toHaveAttribute('data-tip', 'Haiku doesn’t support effort');
     expect(screen.getByRole('button', { name: 'Stop' })).toHaveAttribute('data-tip', 'Interrupt (Esc)');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute(
@@ -628,7 +646,7 @@ describe('Composer in English', () => {
       'Claude takes it into account at its next step · Enter to send',
     );
     await userEvent.click(screen.getByRole('button', { name: /^Mode\b/ }));
-    expect(screen.getByText('unavailable with Haiku')).toBeInTheDocument();
+    expect(screen.getByText('unavailable with this model')).toBeInTheDocument();
   });
 
   it('refuses a file over the maximum size in English, and attaches any other', async () => {

@@ -1073,6 +1073,15 @@ export interface ModelInfo {
   value: string;
   /** Full model id, e.g. "claude-sonnet-5-5". */
   resolvedModel: string;
+  /** It takes the permission mode `auto`, as Claude Code tells it (absent for a model without it, or a version that tells it of none). */
+  supportsAutoMode?: boolean;
+}
+
+/** What the `claude` of an account told of its models at its last process start: its version and its models. */
+export interface AccountModels {
+  /** "2.1.302", empty when it was not read. */
+  version: string;
+  models: ModelInfo[];
 }
 
 export interface UiState {
@@ -1508,6 +1517,7 @@ export type UiEvent =
   | { type: 'resources'; resources: Resources }
   | { type: 'models'; models: ModelInfo[] }
   | { type: 'engineModels'; engine: EngineId; models: ToldModel[] }
+  | { type: 'accountModels'; account: string; models: AccountModels }
   | { type: 'accounts'; accounts: Settings['accounts']; engineOrder: EngineId[] }
   | { type: 'quitRequested'; unsaved: number }
   /** The automatic restart for the update downloaded: when it comes, or null once called off. */
@@ -1604,6 +1614,8 @@ export interface InitialState {
   models: ModelInfo[];
   /** The models the harnesses that list them told (Codex: `model/list`), absent before 1.8. */
   engineModels?: Partial<Record<EngineId, ToldModel[]>>;
+  /** What the `claude` of each account (by its id) told of its models, absent before ESC-121. */
+  accountModels?: Record<string, AccountModels>;
   /** What each harness declares: its capabilities. */
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */

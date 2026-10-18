@@ -114,6 +114,15 @@ const sessionKept = (id) => {
 const limited = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-limit'));
 // Failing with an error of the API, for as long as the file is there.
 const failing = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-error'));
+// The alias haiku as `initialize` lists it, when <dir>/fake-haiku says which: « 5-5 » as from 2.1.293 on (Haiku 5.5, with
+// the mode auto), « 4-5 » as before (Haiku 4.5, without it); not listed otherwise.
+const haikuListed = () => {
+  const file = configDir && path.join(configDir, 'fake-haiku');
+  const which = file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim() : '';
+  if (which === '5-5') return [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', displayName: 'Haiku 5.5', supportsAutoMode: true }];
+  if (which === '4-5') return [{ value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5' }];
+  return [];
+};
 
 // `claude mcp add|remove|get|list`: the MCP servers of the user scope, which Escouade declares in each
 // Claude account (« Claude et les agents peuvent piloter Escouade »). Kept where Claude Code keeps them, in the `mcpServers`
@@ -2066,11 +2075,12 @@ function startSession() {
                 { name: 'compact', description: 'Compacte le contexte', argumentHint: '' },
                 { name: 'review', description: 'Revue de code', argumentHint: '[pr]' },
               ],
-              // As Claude Code 2.1.284 lists them (abridged): an alias and the model it runs.
+              // As Claude Code 2.1.302 lists them (abridged): an alias, the model it runs, whether it takes the mode auto.
               models: [
-                { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)' },
-                { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5' },
-                { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1' },
+                { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', supportsAutoMode: true },
+                { value: 'sonnet', resolvedModel: 'claude-sonnet-5-5', displayName: 'Sonnet 5.5', supportsAutoMode: true },
+                { value: 'claude-fable-5-1', resolvedModel: 'claude-fable-5-1', displayName: 'Fable 5.1', supportsAutoMode: true },
+                ...haikuListed(),
               ],
               account: {},
             }),

@@ -637,6 +637,8 @@ pub struct Core<R: Runtime = Wry> {
     pub models: RwLock<Vec<ModelInfo>>,
     /// The models the harnesses that list them told (`PersistedState::engine_models`).
     pub engine_models: RwLock<BTreeMap<EngineId, Vec<crate::engine::registry::ToldModel>>>,
+    /// What the `claude` of each account told of its models (`PersistedState::account_models`).
+    pub account_models: RwLock<BTreeMap<String, crate::model::AccountModels>>,
     pub git: GitService,
     pub git_cache: RwLock<HashMap<String, GitInfo>>,
     pub pty: PtyManager,
@@ -1510,6 +1512,7 @@ impl<R: Runtime> Core<R> {
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),
             engine_models: RwLock::new(state.engine_models),
+            account_models: RwLock::new(state.account_models),
             git,
             git_cache: RwLock::default(),
             pty: PtyManager::default(),
@@ -1718,6 +1721,7 @@ impl<R: Runtime> Core<R> {
         let ui = self.ui.read().clone();
         let models = self.models.read().clone();
         let engine_models = self.engine_models.read().clone();
+        let account_models = self.account_models.read().clone();
         let tickets = self.tickets.read().clone();
         let hold = self.hold.lock().clone();
         let pause = self.usage.lock().saved(hold);
@@ -1728,6 +1732,7 @@ impl<R: Runtime> Core<R> {
             ui,
             models,
             engine_models,
+            account_models,
             tickets,
             pause,
             leftover_histories,
@@ -2533,6 +2538,10 @@ impl<R: Runtime> Core<R> {
         })?;
         // A version older than the tested ones is refused, with its reason.
         engine::registry::check(harness, &program).await?;
+        // Read already by the check: kept with what its models say.
+        let version = engine::registry::version(harness, &program)
+            .await
+            .unwrap_or_default();
         // A model none of its harness's: the one its account runs by default, as its harness lists
         // them (OpenCode, whose server never starts without a model of its own).
         let env = [settings.agent_env(), accounts::launch_env(&account)].concat();
@@ -2627,6 +2636,9 @@ impl<R: Runtime> Core<R> {
                 // Claude Code tells the version each alias runs; Codex lists its account's.
                 if !ready.models.is_null() {
                     self.set_models(&ready.models);
+                    if engine.id() == EngineId::Claude {
+                        self.set_account_models(&account.id, version, &ready.models);
+                    }
                 }
                 if let Some(models) = ready.catalog {
                     self.set_engine_models(engine.id(), models);
@@ -2715,6 +2727,43 @@ impl<R: Runtime> Core<R> {
         // Under the lock: two processes starting together leave the UI with what is kept.
         self.hub.emit(UiEvent::Models { models });
         self.request_save();
+    }
+
+    /// Keeps what the `claude` of `account` (at `version`) told of its models at a process start:
+    /// which take the mode `auto` (`takes_auto`).
+    fn set_account_models(&self, account: &str, version: String, reported: &Value) {
+        let models = crate::model::AccountModels {
+            version,
+            models: ModelInfo::list(reported),
+        };
+        let mut all = self.account_models.write();
+        if all.get(account) == Some(&models) {
+            return;
+        }
+        all.insert(account.to_string(), models.clone());
+        self.hub.emit(UiEvent::AccountModels {
+            account: account.to_string(),
+            models,
+        });
+        self.request_save();
+    }
+
+    /// Whether `model` takes the mode `auto` on `engine` for an agent of `account`: as the
+    /// `claude` of the account last told it, else as its harness's rule has it
+    /// (`Engine::supports_auto`). Followed by the tickets and the handover; the Composer reads the
+    /// same (`modelTakes`).
+    pub(crate) fn takes_auto(&self, engine: EngineId, account: &str, model: &str) -> bool {
+        if engine == EngineId::Claude {
+            let told = self
+                .account_models
+                .read()
+                .get(account)
+                .and_then(|m| crate::engine::claude_told_auto(&m.models, model));
+            if let Some(told) = told {
+                return told;
+            }
+        }
+        crate::engine::by_id(engine).supports_auto(model)
     }
 
     /// A harness other than Claude Code that serves for the first time (a new agent, a ticket on

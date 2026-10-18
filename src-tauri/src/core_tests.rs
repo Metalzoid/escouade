@@ -5157,7 +5157,7 @@ async fn the_models_claude_code_runs_reach_the_ui_and_are_kept_for_the_next_laun
         .unwrap();
     assert_eq!(
         event["models"][1],
-        json!({ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5" })
+        json!({ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "supportsAutoMode": true })
     );
     h.core.save_now();
     let app = mock_app();
@@ -8843,6 +8843,43 @@ async fn turn_over(h: &Harness, id: &str, text: &str) {
     .await;
     h.wait("turn over", |h| !h.agent(id).status.is_active())
         .await;
+}
+
+#[tokio::test]
+async fn what_the_claude_of_an_account_tells_of_its_models_decides_their_mode_auto() {
+    // ESC-121, tried for real: Claude Code says by `initialize` which models take the mode `auto`
+    // (`supportsAutoMode`); its alias haiku runs Haiku 4.5 without it up to 2.1.292, Haiku 5.5
+    // with it from 2.1.293 on.
+    let h = harness("accounts-auto-told");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let haiku = Path::new(&pro.config_dir).join("fake-haiku");
+    std::fs::write(&haiku, "4-5").unwrap();
+    // Nothing told yet: the rule, where the alias takes it and Haiku 4.5 does not.
+    assert!(h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
+    assert!(!h
+        .core
+        .takes_auto(EngineId::Claude, "pro", "claude-haiku-4-5"));
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    // Kept with the version that told it, for this account alone, and saved.
+    let told = h.core.account_models.read().get("pro").cloned().unwrap();
+    assert_eq!(told.version, "2.1.301");
+    assert!(!h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
+    assert!(h.core.takes_auto(EngineId::Claude, "pro", "sonnet"));
+    assert!(h.core.takes_auto(EngineId::Claude, "principal", "haiku"));
+    // Another harness keeps its own rule, whatever a Claude account told.
+    assert!(!h.core.takes_auto(EngineId::Opencode, "pro", "sonnet"));
+    h.core.save_now();
+    let saved: Value =
+        serde_json::from_slice(&std::fs::read(h.core.data.state_file()).unwrap()).unwrap();
+    assert_eq!(saved["accountModels"]["pro"]["version"], "2.1.301");
+    // Its `claude` updated (its alias on Haiku 5.5): the next process start tells it.
+    std::fs::write(&haiku, "5-5").unwrap();
+    let again = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &again, "Encore").await;
+    assert!(h.core.takes_auto(EngineId::Claude, "pro", "haiku"));
 }
 
 #[tokio::test]

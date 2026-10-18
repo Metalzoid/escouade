@@ -698,8 +698,9 @@ pub(super) fn start_ticket<R: Runtime>(
     let started = core.ticket(&t.id).unwrap_or(t);
     let project = project_of(core, &started.project_id)?;
     let engine = started.engine.unwrap_or(project.engine());
+    // Its mode is not said: the rule of `auto` matters not here.
     let (model, effort, _) =
-        ticket_agent_options(&started, &project.board, &core.settings.read(), engine);
+        ticket_agent_options(&started, &project.board, &core.settings.read(), &|_| true);
     // The model its harness runs it on (a harness other than Claude Code: its own, by default).
     let model = core.model_for(engine, model);
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });

@@ -109,7 +109,42 @@ describe('the harnesses offered (ESC-29)', () => {
     expect(modelTakes(claude, 'haiku', 'effort')).toBe(false);
     expect(modelTakes(claude, 'claude-haiku-4-5-20251001', 'auto')).toBe(false);
     expect(modelTakes(claude, 'claude-opus-5-5', 'auto')).toBe(true);
+    // The alias haiku runs Haiku 5.5, with the mode auto, from Claude Code 2.1.293 on.
+    expect(modelTakes(claude, 'haiku', 'auto')).toBe(true);
     expect(modelTakes(bare, 'gpt-5.5', 'effort')).toBe(false);
+  });
+});
+
+describe('the mode auto as the claude of the account told it (ESC-121)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('follows what the claude of the agent’s account told, else the rule', () => {
+    const pro = { engine: 'claude' as const, account: 'pro' };
+    const principal = { engine: 'claude' as const, account: 'principal' };
+    // Nothing told: the rule, the alias as from Claude Code 2.1.293 on.
+    expect(modelTakes(pro, 'haiku', 'auto')).toBe(true);
+    // Pro's claude is a 2.1.292: its haiku runs Haiku 4.5, without the mode; Principal's a 2.1.302.
+    app.accountModels = {
+      pro: {
+        version: '2.1.292',
+        models: [
+          { value: 'opus', resolvedModel: 'claude-opus-5-5', supportsAutoMode: true },
+          { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001' },
+        ],
+      },
+      principal: { version: '2.1.302', models: [{ value: 'haiku', resolvedModel: 'claude-haiku-5-5', supportsAutoMode: true }] },
+    };
+    expect(modelTakes(pro, 'haiku', 'auto')).toBe(false);
+    expect(modelTakes(pro, 'opus', 'auto')).toBe(true);
+    expect(modelTakes(principal, 'haiku', 'auto')).toBe(true);
+    // A model its claude does not list: the rule.
+    expect(modelTakes(principal, 'claude-haiku-4-5', 'auto')).toBe(false);
+    expect(modelTakes(principal, 'sonnet', 'auto')).toBe(true);
+    // Another harness keeps its declaration.
+    expect(modelTakes({ engine: 'codex', account: 'pro' }, 'haiku', 'auto')).toBe(true);
   });
 });
 

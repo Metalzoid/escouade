@@ -27,7 +27,7 @@ pub(crate) mod minimal;
 mod userconfig_tests;
 
 pub(crate) use claude::terminal as claude_terminal;
-pub use claude::CLAUDE;
+pub use claude::{told_auto as claude_told_auto, CLAUDE};
 pub(crate) use codex::git as codex_git;
 pub use codex::CODEX;
 #[cfg(test)]

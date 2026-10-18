@@ -321,6 +321,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.claudePathFound = true;
   app.engines = [CLAUDE_ENGINE];
   app.enginesFound = ['claude'];
+  app.accountModels = {};
   app.projectPauses = {};
   app.editor = {};
   app.ui = { activeProject: projects[0]?.id ?? null, view: 'project', selectedAgent: {} };

@@ -7247,11 +7247,12 @@ async fn a_ticket_agent_on_a_model_that_has_no_auto_mode_goes_in_the_default_mod
         s.autopilot = false;
         s.mode = "auto".into();
         s.model = "sonnet".into();
-        s.max_parallel = 6;
+        s.max_parallel = 7;
     });
     let mut ids = Vec::new();
     for title in [
         "Haiku seul [ok]",
+        "Haiku 4.5 [ok]",
         "Opus [ok]",
         "Kanban [ok]",
         "Kanban haiku [ok]",
@@ -7265,7 +7266,7 @@ async fn a_ticket_agent_on_a_model_that_has_no_auto_mode_goes_in_the_default_mod
             .unwrap();
         ids.push(t.id);
     }
-    let [haiku, opus, board, board_haiku, app_haiku, plan_haiku] = &ids[..] else {
+    let [haiku, haiku_4_5, opus, board, board_haiku, app_haiku, plan_haiku] = &ids[..] else {
         panic!("{ids:?}")
     };
     // The mode its agent was made with, and launched with; its model and its effort flag as well.
@@ -7296,22 +7297,48 @@ async fn a_ticket_agent_on_a_model_that_has_no_auto_mode_goes_in_the_default_mod
         )
     };
 
-    // A Kanban in auto mode: a ticket given haiku goes in the default mode (haiku takes no auto
-    // mode, the Composer does not offer it), and no effort. Another model keeps auto.
+    // A Kanban in auto mode, before the `claude` of the account told anything of haiku: the alias
+    // keeps auto (it runs Haiku 5.5 from Claude Code 2.1.293 on), without an effort; Haiku 4.5
+    // goes in the default mode (it takes no auto mode, the Composer does not offer it). Another
+    // model keeps auto.
     h.core
         .ticket_start_with(haiku, Some("haiku".into()), None)
+        .unwrap();
+    h.core
+        .ticket_start_with(haiku_4_5, Some("claude-haiku-4-5".into()), None)
         .unwrap();
     h.core
         .ticket_start_with(opus, Some("opus".into()), None)
         .unwrap();
     h.core.ticket_start(board).unwrap();
-    for id in [haiku, opus, board] {
+    for id in [haiku, haiku_4_5, opus, board] {
         h.wait_ticket(id, "to test", |t| t.column == Column::Review)
             .await;
     }
-    assert_eq!(launched(haiku), said("haiku", "default", None));
+    assert_eq!(launched(haiku), said("haiku", "auto", None));
+    assert_eq!(
+        launched(haiku_4_5),
+        said("claude-haiku-4-5", "default", None)
+    );
     assert_eq!(launched(opus), said("opus", "auto", Some("medium")));
     assert_eq!(launched(board), said("sonnet", "auto", Some("medium")));
+
+    // The tickets go to Pro from now on, whose `claude` told at a process start that its haiku runs
+    // Haiku 4.5, without the mode (as 2.1.292 does, ESC-121): what it told is followed.
+    let pro = crate::core_tests::second_account(&h);
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    std::fs::write(Path::new(&pro.config_dir).join("fake-haiku"), "4-5").unwrap();
+    let project = Project {
+        account: "pro".into(),
+        ..h.core.project(&p.id).unwrap()
+    };
+    h.core.update_project(project.clone()).unwrap();
+    let teller = crate::core_tests::agent_on(&h, &project, "pro").await.id;
+    h.core.warm(&teller);
+    h.wait("what Pro's claude told", |h| {
+        h.core.account_models.read().contains_key("pro")
+    })
+    .await;
 
     // The agent is made with the Kanban as it is when its ticket goes: each is waited for before
     // the next change.
@@ -8475,15 +8502,20 @@ fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
             model: model.into(),
             ..Default::default()
         };
-        crate::tickets::ticket_agent_options(&t, &board, &settings, engine).2
+        crate::tickets::ticket_agent_options(&t, &board, &settings, &|m| {
+            crate::engine::by_id(engine).supports_auto(m)
+        })
+        .2
     };
     assert_eq!(settings.default_mode, "auto");
     assert_eq!(on(EngineId::Claude, "sonnet"), "auto");
-    assert_eq!(on(EngineId::Claude, "haiku"), "default");
+    assert_eq!(on(EngineId::Claude, "haiku"), "auto");
+    assert_eq!(on(EngineId::Claude, "claude-haiku-4-5"), "default");
     // OpenCode has no mode « Auto »: « Demander », the closest that allows no more.
     assert_eq!(on(EngineId::Opencode, "sonnet"), "default");
     assert_eq!(on(EngineId::Opencode, ""), "default");
     // Codex and Copilot take it, whatever model of Claude Code the Kanban names.
+    assert_eq!(on(EngineId::Codex, "claude-haiku-4-5"), "auto");
     assert_eq!(on(EngineId::Codex, "haiku"), "auto");
     assert_eq!(on(EngineId::Copilot, "haiku"), "auto");
 }

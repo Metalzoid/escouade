@@ -62,7 +62,7 @@ The permission modes decide when Claude asks you for permission to act:
 
 | Mode | What happens |
 |---|---|
-| “Auto” | A classifier approves safe actions and asks about the rest. Unavailable with Haiku. |
+| “Auto” | A classifier approves safe actions and asks about the rest. Unavailable with a model without it, like Haiku 4.5 (Claude Code 2.1.292 and earlier). |
 | “Ask” | Claude asks for your approval before each sensitive action. |
 | “Plan” | Claude analyzes and proposes a plan without changing anything. |
 | “Accept edits” | File edits are accepted without asking. |

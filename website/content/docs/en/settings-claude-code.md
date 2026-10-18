@@ -87,7 +87,7 @@ The three choices apply to every [agent](managing-agents) created afterward. In 
 Permission requests and how to answer them are described in [the conversation](chat), and “Plan” mode in [the plan](plan).
 
 > [!NOTE]
-> With Haiku, the effort choice is grayed out in the agent’s message field (“Haiku doesn’t support effort”), and so is “Auto” mode (“unavailable with Haiku”).
+> With Haiku, the effort choice is grayed out in the agent’s message field (“Haiku doesn’t support effort”), and so is “Auto” mode (“unavailable with this model”) when the Claude Code of the agent’s account says its Haiku lacks it: that’s Haiku 4.5, which Claude Code runs up to 2.1.292; from 2.1.293 on, it’s Haiku 5.5, which has it.
 
 ## Processes
 

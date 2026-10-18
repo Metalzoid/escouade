@@ -214,10 +214,47 @@ pub fn supports_effort(model: &str) -> bool {
     !model.to_lowercase().contains("haiku")
 }
 
-/// Whether a model takes the permission mode `auto`: every one but Haiku. The rule of
-/// `supportsAuto` in `src/lib/models.ts`, which keeps the Composer from offering it.
+/// Whether a model takes the permission mode `auto`, before its account's `claude` has told
+/// (`told_auto`): every one but a Haiku older than 5 (`claude-haiku-4-5`, `claude-3-5-haiku`).
+/// The alias `haiku` takes it, as from Claude Code 2.1.293 on, where it runs Haiku 5.5 (Haiku 4.5
+/// before: `claude` then runs it in `default`). The rule of `supportsAuto` in `src/lib/models.ts`.
 pub fn supports_auto(model: &str) -> bool {
-    !model.to_lowercase().contains("haiku")
+    haiku_major(model).is_none_or(|major| major >= 5)
+}
+
+/// The major version of a Haiku (`claude-haiku-4-5` → 4, `claude-3-5-haiku` → 3); 99 for the
+/// alias, which runs the latest; None for a model that is no Haiku.
+fn haiku_major(model: &str) -> Option<u32> {
+    let m = model.to_lowercase();
+    let at = m.find("haiku")?;
+    // A version has a digit or two: more is a date (`claude-3-5-haiku-20241022`).
+    let leading = |s: &str| {
+        let digits: String = s.chars().take_while(char::is_ascii_digit).collect();
+        digits.parse::<u32>().ok().filter(|_| digits.len() <= 2)
+    };
+    let after = leading(m[at + 5..].trim_start_matches(['-', '_']));
+    let before = m[..at].strip_prefix("claude-").and_then(leading);
+    Some(after.or(before).unwrap_or(99))
+}
+
+/// Whether `model` takes the mode `auto`, as a `claude` told it (`initialize`, its models'
+/// `supportsAutoMode`, ESC-121): by its alias or its full id (with or without its date). None
+/// when it tells nothing of the mode (a version that tells it of none) or does not list `model`.
+pub fn told_auto(told: &[crate::model::ModelInfo], model: &str) -> Option<bool> {
+    if told.iter().all(|m| m.supports_auto_mode.is_none()) {
+        return None;
+    }
+    let m = model.to_lowercase();
+    let dated = format!("{m}-");
+    told.iter()
+        .find(|t| t.value.to_lowercase() == m)
+        .or_else(|| {
+            told.iter().find(|t| {
+                let r = t.resolved_model.to_lowercase();
+                r == m || r.starts_with(&dated)
+            })
+        })
+        .map(|t| t.supports_auto_mode == Some(true))
 }
 
 /// The arguments of the conversation of `s`: its model, effort and mode, its added instructions,
@@ -769,23 +806,75 @@ impl EngineProcess for ClaudeProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Criterion, Ticket};
+    use crate::model::{Criterion, ModelInfo, Ticket};
 
     #[test]
-    fn auto_mode_is_taken_by_every_model_but_haiku_as_the_composer_offers_it() {
-        // The rule of `supportsAuto` (src/lib/models.ts), the effort's as well.
+    fn auto_mode_is_taken_by_every_model_but_a_haiku_older_than_5_as_the_composer_offers_it() {
+        // The rule of `supportsAuto` (src/lib/models.ts), before an account's `claude` told.
+        for model in [
+            "claude-haiku-4-5",
+            "CLAUDE-HAIKU-4-5-20251001",
+            "claude-3-5-haiku-20241022",
+            "claude-3-haiku",
+        ] {
+            assert!(!supports_auto(model), "{model}");
+        }
+        // The alias runs Haiku 5.5 from Claude Code 2.1.293 on.
         for model in [
             "haiku",
             "Haiku",
-            "claude-haiku-4-5",
-            "CLAUDE-HAIKU-4-5-20251001",
+            "claude-haiku-5-5",
+            "claude-haiku-6",
+            "sonnet",
+            "opus",
+            "claude-sonnet-4-5",
+            "claude-opus-4-1",
+            "",
         ] {
-            assert!(!supports_auto(model), "{model}");
-            assert!(!supports_effort(model), "{model}");
-        }
-        for model in ["sonnet", "opus", "claude-sonnet-4-5", "claude-opus-4-1", ""] {
             assert!(supports_auto(model), "{model}");
         }
+        // The effort keeps its rule.
+        for model in ["haiku", "claude-haiku-4-5"] {
+            assert!(!supports_effort(model), "{model}");
+        }
+    }
+
+    /// A model as `initialize` lists it.
+    fn told(value: &str, resolved: &str, auto: Option<bool>) -> ModelInfo {
+        ModelInfo {
+            value: value.into(),
+            resolved_model: resolved.into(),
+            supports_auto_mode: auto,
+        }
+    }
+
+    #[test]
+    fn the_mode_auto_follows_what_the_claude_of_the_account_told_of_its_models() {
+        // As Claude Code 2.1.302 answers `initialize` (real trial, ESC-121): Haiku 5.5 takes it,
+        // Haiku 4.5 says nothing of it.
+        let new = ModelInfo::list(&json!([
+            { "value": "opus", "resolvedModel": "claude-opus-5-5", "supportsAutoMode": true },
+            { "value": "haiku", "resolvedModel": "claude-haiku-5-5", "supportsAutoMode": true },
+            { "value": "claude-haiku-4-5-20251001", "resolvedModel": "claude-haiku-4-5-20251001" },
+        ]));
+        assert_eq!(told_auto(&new, "haiku"), Some(true));
+        assert_eq!(told_auto(&new, "HAIKU"), Some(true));
+        assert_eq!(told_auto(&new, "claude-haiku-5-5"), Some(true));
+        assert_eq!(told_auto(&new, "claude-haiku-4-5"), Some(false));
+        assert_eq!(told_auto(&new, "claude-haiku-4-5-20251001"), Some(false));
+        assert_eq!(told_auto(&new, "opus"), Some(true));
+        // Not listed: the rule decides.
+        assert_eq!(told_auto(&new, "sonnet"), None);
+        // As 2.1.292 answers it: its alias runs Haiku 4.5, without the mode.
+        let old = vec![
+            told("opus", "claude-opus-5-5", Some(true)),
+            told("haiku", "claude-haiku-4-5-20251001", None),
+        ];
+        assert_eq!(told_auto(&old, "haiku"), Some(false));
+        // A version that tells it of no model, or none told yet: the rule decides.
+        let silent = vec![told("haiku", "claude-haiku-4-5-20251001", None)];
+        assert_eq!(told_auto(&silent, "haiku"), None);
+        assert_eq!(told_auto(&[], "haiku"), None);
     }
 
     #[test]

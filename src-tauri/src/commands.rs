@@ -76,6 +76,8 @@ pub struct InitialState {
     models: Vec<ModelInfo>,
     /// The models the harnesses that list them told (Codex: `model/list`).
     engine_models: BTreeMap<crate::model::EngineId, Vec<crate::engine::registry::ToldModel>>,
+    /// What the `claude` of each account told of its models (which take the mode `auto`).
+    account_models: BTreeMap<String, crate::model::AccountModels>,
     /// What each harness declares: its capabilities, which the window reads to show a function.
     engines: Vec<crate::engine::registry::EngineDecl>,
     /// The harnesses whose program is found: the only ones the interface offers.
@@ -126,6 +128,7 @@ pub fn subscribe(
     let terminals = core.pty.list();
     let models = core.models.read().clone();
     let engine_models = core.engine_models.read().clone();
+    let account_models = core.account_models.read().clone();
     let board_issues = core.board_issues.lock().clone();
     // As it is now: the timer tells this window when it ends (and the board goes on then).
     let autopilot_pause = core.autopilot_pause();
@@ -155,6 +158,7 @@ pub fn subscribe(
         version,
         models,
         engine_models,
+        account_models,
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
         board_issues,

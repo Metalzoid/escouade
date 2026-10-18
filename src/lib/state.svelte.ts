@@ -31,6 +31,7 @@ import type {
   LangInfo,
   LaunchState,
   ModelInfo,
+  AccountModels,
   ToldModel,
   EngineDecl,
   EngineId,
@@ -255,6 +256,8 @@ class AppState {
   engines = $state.raw<EngineDecl[]>([]);
   /** The models the harnesses that list them told (Codex: `model/list`): the composer's menu of their agents. */
   engineModels = $state.raw<Partial<Record<EngineId, ToldModel[]>>>({});
+  /** What the `claude` of each account told of its models: which take the mode `auto` (`modelTakes`). */
+  accountModels = $state.raw<Record<string, AccountModels>>({});
   /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
   version = $state('');
@@ -507,6 +510,7 @@ class AppState {
     this.models = s.models;
     this.engines = s.engines ?? [];
     this.engineModels = s.engineModels ?? {};
+    this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -637,6 +641,9 @@ class AppState {
         break;
       case 'engineModels':
         this.engineModels = { ...this.engineModels, [e.engine]: e.models };
+        break;
+      case 'accountModels':
+        this.accountModels = { ...this.accountModels, [e.account]: e.models };
         break;
       case 'focus':
         this.selectProject(e.projectId);

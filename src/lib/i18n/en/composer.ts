@@ -15,8 +15,8 @@ export default defineZone('composer', {
     plan: { label: 'Plan', title: '{engine} analyzes and proposes a plan without changing anything' },
     acceptEdits: { label: 'Accept edits', title: 'File edits are accepted without asking' },
     bypassPermissions: { label: 'Bypass', title: 'No permission requests (only for safe environments)' },
-    autoUnavailableDetail: 'unavailable with Haiku',
-    autoUnavailableTitle: 'Auto mode isn’t available with Haiku',
+    autoUnavailableDetail: 'unavailable with this model',
+    autoUnavailableTitle: 'Auto mode isn’t available with this model, as this account’s Claude Code says',
     bypassToast: 'Bypass mode: {engine} will act without any permission request.',
   },
 

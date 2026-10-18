@@ -1352,6 +1352,20 @@ pub struct UiState {
 pub struct ModelInfo {
     pub value: String,
     pub resolved_model: String,
+    /// Whether it takes the permission mode `auto`, as Claude Code tells it (`supportsAutoMode`,
+    /// absent for a model without it); None when it says nothing of it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_auto_mode: Option<bool>,
+}
+
+/// What the `claude` of an account told of its models at its last process start (ESC-121): the
+/// version that told it, and its models with their mode `auto` (`engine::claude::told_auto`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AccountModels {
+    /// Its version (`2.1.302`), empty when it was not read.
+    pub version: String,
+    pub models: Vec<ModelInfo>,
 }
 
 impl ModelInfo {
@@ -1378,6 +1392,9 @@ pub struct PersistedState {
     /// The models of the harnesses that list those of their account (Codex: `model/list`), as
     /// they last listed them: the composer's menu of their agents from the start.
     pub engine_models: BTreeMap<EngineId, Vec<crate::engine::registry::ToldModel>>,
+    /// What the `claude` of each account (by its id) last told of its models: which take the mode
+    /// `auto`, from the start.
+    pub account_models: BTreeMap<String, AccountModels>,
     /// Every project's tickets.
     pub tickets: Vec<Ticket>,
     /// The autopilot's pause as the app stopped: the next start holds the tickets back the same.
@@ -1875,6 +1892,11 @@ pub enum UiEvent {
     Accounts {
         accounts: Vec<Account>,
         engine_order: Vec<EngineId>,
+    },
+    /// What the `claude` of an account told of its models (`PersistedState::account_models`).
+    AccountModels {
+        account: String,
+        models: AccountModels,
     },
     /// The models a harness listed for its account (`PersistedState::engine_models`).
     EngineModels {
