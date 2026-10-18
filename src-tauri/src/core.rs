@@ -2562,9 +2562,8 @@ impl<R: Runtime> Core<R> {
                 [settings.agent_env(), accounts::launch_env(&account)].concat(),
             );
             spawn.account = account.id.clone();
-            spawn.takes_effort =
-                Some(self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model))
-                    .filter(|_| rt.meta.engine == EngineId::Claude && !rt.meta.effort.is_empty());
+            spawn.takes_effort = (rt.meta.engine == EngineId::Claude && !rt.meta.effort.is_empty())
+                .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
         if !Path::new(&spawn.cwd).is_dir() {
