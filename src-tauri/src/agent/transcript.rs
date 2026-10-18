@@ -77,6 +77,11 @@ impl AgentRt {
             "system" => match e["subtype"].as_str().unwrap_or("") {
                 "turn_duration" => self.end_tui_turn(e["durationMs"].as_u64(), fx),
                 "compact_boundary" => self.handle_frame(e, fx),
+                // A local command's output, failed ones' (2.1.302: `/compact` that fails).
+                "local_command" => {
+                    let failed = e["commandOutcome"]["kind"] == "failed";
+                    self.on_local_command(e["content"].as_str().unwrap_or(""), failed, fx)
+                }
                 // Started with Remote Control, the interface tells the link of its session.
                 "bridge_status" => self.on_bridge_status(e, fx),
                 _ => {}
@@ -217,10 +222,9 @@ impl AgentRt {
             }
             return;
         }
-        // What a local command (`/model`, `/cost`) printed.
+        // What a local command (`/model`, `/cost`, `/compact`) printed.
         if text.contains("<local-command-stdout>") || text.contains("<local-command-stderr>") {
-            let frame = json!({ "type": "user", "message": { "content": text } });
-            return self.on_user(&frame, fx);
+            return self.on_local_command(&text, false, fx);
         }
         // A command typed in the interface: shown as typed.
         let text = match text.split_once("<command-name>") {
@@ -252,6 +256,15 @@ impl AgentRt {
         if text.trim().is_empty() && images == 0 {
             return;
         }
+        // The same prompt again: a command, as typed then as `<command-name>`.
+        let prompt_id = e["promptId"].as_str();
+        if prompt_id.is_some()
+            && prompt_id == self.tui_prompt_id.as_deref()
+            && self.tui_prompt.as_deref() == Some(text.as_str())
+        {
+            return;
+        }
+        self.tui_prompt_id = prompt_id.map(str::to_string);
         let id = e["uuid"]
             .as_str()
             .map(str::to_string)
@@ -329,6 +342,26 @@ impl AgentRt {
     /// the turn (Codex). A `Stop` takes it, for the end the core makes a moment later.
     pub(crate) fn tui_turn_mark(&self) -> (u32, Option<String>) {
         (self.meta.prompts, self.codex_turn())
+    }
+
+    /// What a local command printed (`text`, its `<local-command-stdout>` or `-stderr>`): told,
+    /// and its turn over, as an error when it failed (`failed`, or its error output). Claude Code
+    /// ends such a turn with no `turn_duration` (2.1.302, ESC-12).
+    fn on_local_command(&mut self, text: &str, failed: bool, fx: &mut Effects) {
+        let frame = json!({ "type": "user", "message": { "content": text } });
+        self.on_user(&frame, fx);
+        // Only the command's own turn: one typed while the model runs a turn leaves that turn be.
+        let commands = self
+            .tui_prompt
+            .as_deref()
+            .is_some_and(|p| p.starts_with('/'));
+        if !self.meta.status.is_active() || !commands {
+            return;
+        }
+        if failed || text.contains("<local-command-stderr>") {
+            self.tui_error = Some(strip_ansi(&strip_tags(text)).trim().to_string());
+        }
+        self.end_tui_turn(None, fx);
     }
 
     /// The end the core makes when the transcript still did not tell that of the turn a `Stop`
@@ -577,6 +610,28 @@ mod tests {
             Some("/home/u/.claude/projects/x/other.jsonl")
         );
         assert_eq!(a.meta.session_id.as_deref(), Some("other"));
+    }
+
+    #[test]
+    fn a_local_commands_output_during_a_turn_of_the_model_leaves_that_turn_running() {
+        let mut a = agent();
+        let mut fx = Effects::default();
+        let user = |text: &str| {
+            json!({ "type": "user", "uuid": new_id(), "origin": { "kind": "human" },
+                    "message": { "role": "user", "content": text } })
+        };
+        a.on_transcript(&user("Count to 200"), &mut fx);
+        a.on_transcript(
+            &user("<local-command-stdout>Total cost: $0.01</local-command-stdout>"),
+            &mut fx,
+        );
+        a.on_transcript(
+            &json!({ "type": "system", "subtype": "local_command", "commandOutcome": { "kind": "failed" },
+                     "content": "<local-command-stderr>no</local-command-stderr>" }),
+            &mut fx,
+        );
+        assert_eq!(a.meta.status, AgentStatus::Running);
+        assert_eq!(fx.turn_end, None);
     }
 
     #[test]

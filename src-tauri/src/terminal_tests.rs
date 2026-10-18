@@ -36,7 +36,12 @@ fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
 fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
     let view = engine::by_id(EngineId::Claude).terminal().unwrap();
     assert_eq!(view.shell(), "claude");
-    assert_eq!(view.paste("a\nb\x1bc"), b"\x1b[200~a\nbc\x1b[201~".to_vec());
+    // Line breaks pasted as a terminal pastes them (xterm.js too): \r. Claude Code drops a \n
+    // pasted in its interface under Windows (ESC-12, its real one).
+    assert_eq!(
+        view.paste("a\nb\r\nc\x1bd"),
+        b"\x1b[200~a\rb\rcd\x1b[201~".to_vec()
+    );
     assert_eq!(bracketed("x"), view.paste("x"));
     assert_eq!(view.submit(), b"\r");
     assert_eq!(view.interrupt_key(), b"\x1b");

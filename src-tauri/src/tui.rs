@@ -70,6 +70,11 @@ const LINK_WAIT: Duration = Duration::from_millis(1500);
 /// How long an interface a window showed, started with Remote Control, is looked for in the
 /// registry to arm that wait: past it, the registry is read no more if it never listed it.
 const REGISTRY_PATIENCE: Duration = Duration::from_secs(5 * 60);
+/// How long the registry says an interface idle, since a turn started, before that turn ends as
+/// interrupted when its transcript still did not end it (ms). Escape before the first answer:
+/// Claude Code puts the message back in its prompt, writes nothing more in its transcript and
+/// calls no hook (2.1.302, ESC-12). A turn that ends normally has its end read before.
+const IDLE_ENDS_TURN_MS: i64 = 3000;
 /// The most files of the registry looked into, and the most one of them may weigh (bytes).
 const REGISTRY_FILES: usize = 512;
 const REGISTRY_FILE_MAX: u64 = 64 << 10;
@@ -292,6 +297,11 @@ impl TuiOutput {
     /// A window has shown the terminal.
     pub(crate) fn shown(&self) -> bool {
         self.inner.lock().shown
+    }
+
+    /// The private mode `mode` as the program last set it; None: never set.
+    pub(crate) fn mode(&self, mode: u16) -> Option<bool> {
+        self.inner.lock().modes.get(&mode).copied()
     }
 
     /// The bytes kept (tests).
@@ -650,6 +660,8 @@ pub(crate) struct Registered {
     pub file: PathBuf,
     /// Its session is linked to claude.ai: the file has a `bridgeSessionId`.
     pub linked: bool,
+    /// Since when (ms) it says the interface idle (`status`, `statusUpdatedAt`), if it does.
+    pub idle_since: Option<i64>,
 }
 
 /// What `file` of the registry says, if it is a whole JSON object: one that is being written, is
@@ -681,6 +693,9 @@ pub(crate) fn find_registered(
         linked: entry["bridgeSessionId"]
             .as_str()
             .is_some_and(|id| !id.is_empty()),
+        idle_since: (entry["status"] == "idle")
+            .then(|| entry["statusUpdatedAt"].as_i64())
+            .flatten(),
     };
     if let Some(file) = known {
         let entry = read_registry_file(file)?;
@@ -731,6 +746,14 @@ pub(crate) fn no_proxy(env: &mut Vec<(String, String)>) {
 /// How long `send_to_tui` waits for a message's paste to be written to the terminal before it
 /// goes on (a program that reads nothing: the paste stays queued, and the Enter follows it).
 const PASTE_WRITTEN_WITHIN: Duration = Duration::from_secs(5);
+
+/// Bracketed paste (`CSI ? 2004 h`).
+const BRACKETED_PASTE: u16 = 2004;
+/// How long `send_to_tui` waits for an interface that turned bracketed paste off to turn it on
+/// again, before it pastes all the same. Claude Code under Windows turns it off as it starts,
+/// listed in its registry already, and on again up to eight seconds after (2.1.301, ESC-12): pasted
+/// in between, a line break would send the message's first line alone.
+const PASTE_MODE_WITHIN: Duration = Duration::from_secs(15);
 
 /// How long an image pasted in an interface is kept. Claude Code reads the file as it is pasted
 /// and keeps the image in its transcript (base64), which a resume sends again without the file
@@ -1533,7 +1556,10 @@ impl<R: Runtime> Core<R> {
             let waits_for_a_link = run.remote
                 && !run.linked
                 && (run.registered.is_some() || run.launched_at.elapsed() < REGISTRY_PATIENCE);
-            (!rt.interface_ready() || waits_for_a_link)
+            // During a turn too, for whether it says the interface idle (its file, once found, is
+            // the only one read).
+            let in_a_turn = rt.meta.status == AgentStatus::Running;
+            (!rt.interface_ready() || waits_for_a_link || in_a_turn)
                 .then(|| {
                     Some((
                         view_of(&rt.meta).ok()?.0,
@@ -1567,6 +1593,17 @@ impl<R: Runtime> Core<R> {
                 }
                 if found.linked {
                     rt.interface_linked(&mut fx);
+                }
+                // Idle for a while since the turn started, and the transcript did not end it: the
+                // interface cancelled it (`IDLE_ENDS_TURN_MS`).
+                let cancelled = found.idle_since.is_some_and(|at| {
+                    rt.meta.status == AgentStatus::Running
+                        && rt.active_since.is_some_and(|since| at > since)
+                        && now_ms() - at >= IDLE_ENDS_TURN_MS
+                });
+                if cancelled {
+                    rt.interrupted = true;
+                    rt.end_tui_turn(None, &mut fx);
                 }
             }
             // Up for `LINK_WAIT` and no sign of a link, though it was started with Remote Control
@@ -2038,7 +2075,7 @@ impl<R: Runtime> Core<R> {
             let settings = self.settings.read();
             accounts::config_dir(&accounts::get(&settings, &account), &settings)
         };
-        let (term, typing, view, harness) = {
+        let (term, typing, output, view, harness) = {
             let rt = h.lock();
             let (view, harness) = view_of(&rt.meta)?;
             if rt.tui.is_some() {
@@ -2064,6 +2101,7 @@ impl<R: Runtime> Core<R> {
             (
                 rt.tui.as_ref().map(|t| t.term_id.clone()),
                 rt.tui.as_ref().map(|t| t.typing.clone()),
+                rt.tui.as_ref().map(|t| t.output.clone()),
                 view,
                 harness,
             )
@@ -2080,6 +2118,14 @@ impl<R: Runtime> Core<R> {
         // One message at a time, paste and Enter: another one's paste between them would join the
         // two messages into one. (This runs off the runtime's threads: `Core::send`.)
         let _typing = typing.lock();
+        let start = Instant::now();
+        while output
+            .as_ref()
+            .is_some_and(|o| o.mode(BRACKETED_PASTE) == Some(false))
+            && start.elapsed() < PASTE_MODE_WITHIN
+        {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         // The pause starts once the paste is really written, not queued: under load the terminal's
         // input thread may be behind, and the queue would then join the paste and the Enter into
         // one write, which is what the pause keeps apart. An error on either write is the

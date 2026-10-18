@@ -160,9 +160,15 @@ pub trait TerminalView: Send + Sync {
     fn quit_key(&self) -> &'static [u8];
 }
 
-/// A text pasted in a terminal (bracketed paste), the sequence's own escape taken out of it.
+/// A text pasted in a terminal (bracketed paste), the sequence's own escape taken out of it, and
+/// its line breaks as a terminal pastes them (xterm.js too): `\r`. Claude Code under Windows drops
+/// a `\n` pasted (ESC-12).
 pub fn bracketed(text: &str) -> Vec<u8> {
-    format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', "")).into_bytes()
+    let text = text
+        .replace('\x1b', "")
+        .replace("\r\n", "\r")
+        .replace('\n', "\r");
+    format!("\x1b[200~{text}\x1b[201~").into_bytes()
 }
 
 /// The name of the `escouade-hook` command on this platform.

@@ -390,10 +390,23 @@ function tuiSession() {
     });
   };
   let waiting = null;
+  // What its registry file says of it (set below).
+  let status = () => {};
   let line = '';
   // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC). Pastes come bracketed
   // (ESC[200~ … ESC[201~), as Claude Code asks for them.
   process.stdout.write('\x1b[?2004hfake-claude-tui\r\n');
+  // With `tui-paste-late`, as the real one under Windows while it starts (ESC-12): it is listed in the registry, then
+  // turns bracketed paste off for a while. Without it, a paste is only keys: its line break is Enter.
+  let pasteMode = true;
+  if (fs.existsSync(side('tui-paste-late'))) {
+    pasteMode = false;
+    process.stdout.write('\x1b[?2004l');
+    setTimeout(() => {
+      pasteMode = true;
+      process.stdout.write('\x1b[?2004h');
+    }, 1500);
+  }
   // The session's file is made with its first message, not before.
   let begun = false;
   const begin = () => {
@@ -422,7 +435,60 @@ function tuiSession() {
     begin();
     // What its screen shows of the turn that starts (the terminal's output the app keeps).
     process.stdout.write(`fake-turn ${prompt}\r\n`);
+    status('busy');
     await hook('UserPromptSubmit', { prompt });
+    // "/compact" as Claude Code 2.1.302 writes it (ESC-12): the text typed, the command, then its output; no hook, no
+    // `turn_duration`. "/compact echec": its failure, as a `local_command` entry.
+    if (prompt.startsWith('/compact')) {
+      const promptId = `p-${process.pid}-${n}`;
+      const args = prompt.slice('/compact'.length).trim();
+      write({ type: 'user', uuid: `u-${process.pid}-${n++}`, promptId, message: { role: 'user', content: prompt } });
+      write({
+        type: 'user',
+        uuid: `c-${process.pid}-${n++}`,
+        promptId,
+        isMeta: true,
+        message: {
+          role: 'user',
+          content: '<local-command-caveat>The command below was run directly in Claude Code.</local-command-caveat>',
+        },
+      });
+      write({
+        type: 'user',
+        uuid: `m-${process.pid}-${n++}`,
+        promptId,
+        message: {
+          role: 'user',
+          content: `<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args>${args}</command-args>`,
+        },
+      });
+      if (args === 'echec') {
+        write({
+          type: 'system',
+          subtype: 'local_command',
+          content:
+            '<local-command-stderr>Error during compaction: API Error: Output blocked by content filtering policy</local-command-stderr>',
+          commandOutcome: { kind: 'failed' },
+        });
+      } else {
+        write({ type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted', compactMetadata: { trigger: 'manual' } });
+        write({
+          type: 'user',
+          uuid: `s-${process.pid}-${n++}`,
+          isCompactSummary: true,
+          message: { role: 'user', content: 'This session is being continued…' },
+        });
+        write({
+          type: 'user',
+          uuid: `o-${process.pid}-${n++}`,
+          message: {
+            role: 'user',
+            content: '<local-command-stdout>\x1b[2mCompacted (ctrl+o to see full summary)\x1b[22m</local-command-stdout>',
+          },
+        });
+      }
+      return status('idle');
+    }
     write({ type: 'user', uuid: `u-${process.pid}-${n++}`, origin: { kind: 'human' }, message: { role: 'user', content: prompt } });
     if (prompt.includes('permission')) {
       const input = { command: 'echo tui' };
@@ -447,12 +513,24 @@ function tuiSession() {
           uuid: `i-${process.pid}-${n++}`,
           message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] },
         });
-        return;
+        return status('idle');
       }
+    }
+    // "pense": it thinks until Escape, which cancels the turn as the real one does before its first answer (ESC-12):
+    // nothing in the transcript, no hook, its registry says idle.
+    if (prompt.includes('pense')) {
+      await new Promise((resolve) => (waiting = resolve));
+      return status('idle');
+    }
+    // "tard": its registry says it idle a second before its transcript ends the turn.
+    if (prompt.includes('tard')) {
+      status('idle');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     assistant([{ type: 'text', text: `Fini : ${prompt}` }]);
     await hook('Stop', { stop_hook_active: false });
     write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
+    status('idle');
   };
   // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r), and the prompt line drawn again at each.
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
@@ -476,6 +554,7 @@ function tuiSession() {
     }
     chunk = chunk.replaceAll('\x03', '');
     for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
+      if (!pasteMode && (part === '\x1b[200~' || part === '\x1b[201~')) continue;
       if (part === '\x1b[200~') pasteStart = line.length;
       if (part === '\x1b[201~' && pasteStart !== null && pasteStart <= line.length) {
         const file = line
@@ -496,7 +575,11 @@ function tuiSession() {
         draw();
       }
       if (part === '\x1b[200~' || part === '\x1b[201~' || part === '') continue;
-      if (part === '\x1b') {
+      if (part === '\r' && pasteStart !== null) {
+        // A line break pasted (\r, as a terminal pastes it) stays in the line; a \n pasted is dropped, as Claude Code
+        // does under Windows.
+        line += '\n';
+      } else if (part === '\x1b') {
         if (waiting) [waiting, (waiting = null)][0]('escape');
       } else if (part === '\r') {
         if (waiting) {
@@ -507,7 +590,7 @@ function tuiSession() {
           draw();
           turn(prompt);
         }
-      } else if (pasteStart !== null) line += part;
+      } else if (pasteStart !== null) line += part.replaceAll('\n', '');
       else {
         edit(part);
         draw();
@@ -527,11 +610,20 @@ function tuiSession() {
     kind: 'interactive',
     entrypoint: 'cli',
     status: 'idle',
+    statusUpdatedAt: Date.now(),
   };
+  let listed = null;
   const register = (extra = {}) => {
     if (!registry) return;
+    listed = { ...listed, ...extra };
     fs.mkdirSync(path.dirname(registry), { recursive: true });
-    fs.writeFileSync(registry, JSON.stringify({ ...registered, ...extra }));
+    fs.writeFileSync(registry, JSON.stringify({ ...registered, ...listed }));
+  };
+  // Busy during a turn, idle after, as Claude Code says in its registry file (once it is listed there).
+  status = (now) => {
+    registered.status = now;
+    registered.statusUpdatedAt = Date.now();
+    if (listed) register();
   };
   process.on('exit', () => {
     if (registry) fs.rmSync(registry, { force: true });

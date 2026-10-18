@@ -1105,6 +1105,31 @@ async fn a_message_goes_through_the_interface_and_its_turn_comes_back_from_the_t
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_message_on_several_lines_reaches_the_interface_whole_in_one_turn() {
+    let h = harness("tui-lines");
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "un\ndeux\r\ntrois").await;
+    assert_eq!(texts(&h, &id, "user"), ["un\ndeux\ntrois"]);
+    assert_eq!(texts(&h, &id, "text"), ["Fini : un\ndeux\ntrois"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_waits_for_the_interface_to_take_pastes_again_after_it_is_up() {
+    // As the real one under Windows: listed in the registry, then bracketed paste off for a while,
+    // when a line break pasted would send the message's first line alone.
+    let h = harness("tui-paste-late");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, "tui-paste-late");
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    up(&h, &id).await;
+    say_in_tui(&h, &id, "un\ndeux").await;
+    assert_eq!(texts(&h, &id, "user"), ["un\ndeux"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_permission_asked_in_the_interface_is_told_and_answered_there() {
     let h = harness("tui-permission");
     let id = agent_in_tui(&h).await;
@@ -1168,6 +1193,107 @@ async fn an_interrupt_from_the_window_is_escape_in_the_interface() {
             .any(|i| i["kind"] == "turn" && i["interrupted"] == true)
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_its_interface_cancels_before_any_answer_ends_when_its_registry_says_idle() {
+    // Escape before the first answer: Claude Code puts the message back in its prompt, writes
+    // nothing more in its transcript and calls no hook; its registry file says it idle.
+    let h = harness("tui-cancelled");
+    let id = agent_in_tui(&h).await;
+    h.core
+        .send_message(&id, "pense".into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn running", |h| {
+        h.agent(&id).status == AgentStatus::Running
+    })
+    .await;
+    h.core.interrupt(&id).await.unwrap();
+    h.wait("the turn interrupted", |h| {
+        h.items(&id)
+            .iter()
+            .any(|i| i["kind"] == "turn" && i["interrupted"] == true)
+    })
+    .await;
+    assert!(!h.agent(&id).status.is_active());
+    // The next message is a turn of its own, ended by its transcript.
+    say_in_tui(&h, &id, "bonjour").await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+    let turns: Vec<Value> = h
+        .items(&id)
+        .into_iter()
+        .filter(|i| i["kind"] == "turn")
+        .collect();
+    assert_eq!(turns.len(), 2);
+    assert_eq!(turns[1]["interrupted"], false);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_whose_registry_says_idle_before_its_transcript_ends_it_is_not_cut_short() {
+    // Idle in the registry while the turn's end is not read yet (it comes within the grace): the
+    // turn ends by its transcript, not interrupted.
+    let h = harness("tui-idle-early");
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "tard").await;
+    let turns: Vec<Value> = h
+        .items(&id)
+        .into_iter()
+        .filter(|i| i["kind"] == "turn")
+        .collect();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0]["interrupted"], false);
+    assert_eq!(texts(&h, &id, "text"), ["Fini : tard"]);
+}
+
+/// The turns of the agent's conversation.
+fn turns_of(h: &Harness, id: &str) -> Vec<Value> {
+    h.items(id)
+        .into_iter()
+        .filter(|i| i["kind"] == "turn")
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_command_is_one_message_and_its_output_ends_its_turn() {
+    // `/compact` as Claude Code 2.1.302 writes it: the text typed and the command, under one
+    // prompt, then its output, and no end of a turn.
+    let h = harness("tui-compact");
+    let id = agent_in_tui(&h).await;
+    let start = std::time::Instant::now();
+    say_in_tui(&h, &id, "/compact").await;
+    // Its output ended it, not the registry's idle (`IDLE_ENDS_TURN_MS`).
+    assert!(start.elapsed() < std::time::Duration::from_secs(2));
+    assert_eq!(texts(&h, &id, "user"), ["/compact"]);
+    let notices = texts(&h, &id, "notice");
+    assert!(
+        notices.iter().any(|n| n == "Contexte compacté"),
+        "{notices:?}"
+    );
+    let turns = turns_of(&h, &id);
+    assert_eq!(turns.len(), 1);
+    assert_eq!(
+        (&turns[0]["interrupted"], &turns[0]["isError"]),
+        (&json!(false), &json!(false))
+    );
+    assert_eq!(h.agent(&id).status, AgentStatus::Done);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_command_that_fails_ends_its_turn_with_its_error() {
+    let h = harness("tui-compact-fails");
+    let id = agent_in_tui(&h).await;
+    say_in_tui(&h, &id, "/compact echec").await;
+    assert_eq!(texts(&h, &id, "user"), ["/compact echec"]);
+    let turns = turns_of(&h, &id);
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0]["isError"], true, "{turns:?}");
+    assert!(
+        turns[0]["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("Error during compaction")),
+        "{turns:?}"
+    );
 }
 
 /// `text` typed in the interface, until its turn comes back from the transcript.
@@ -2776,4 +2902,224 @@ async fn the_end_of_a_turn_ends_the_background_subagents_the_user_stopped_in_the
     assert!(agent_events(&h, &id) > sent);
     // The paths found are kept, for the next end of a turn.
     assert!(h.core.sidechains.lock().len() >= 2);
+}
+
+/// Real run (ESC-12): « Vue Claude Code » with the real `claude` that `ESCOUADE_REAL_CLAUDE`
+/// names, on the machine's own account (Principal: no `CLAUDE_CONFIG_DIR`, the home folder
+/// `ESCOUADE_TEST_REAL_HOME` names), on Haiku: a message pasted on two lines as soon as the
+/// interface is up, `/compact`, Escape during a turn, a subagent, then `/clear`, each followed in
+/// Escouade as its interface writes it. About 0.13 $ a run. By hand only (`cargo test --lib
+/// real_claude_view -- --ignored --nocapture`, out of any Claude Code session:
+/// `env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION`), the folder of its sessions taken out of
+/// `~/.claude/projects` after (docs/TODO-1.8.md, « Vue Claude Code »).
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_claude_view() {
+    use std::time::{Duration, Instant};
+    let program = std::env::var("ESCOUADE_REAL_CLAUDE").expect("ESCOUADE_REAL_CLAUDE");
+    let home = std::env::var("ESCOUADE_TEST_REAL_HOME").expect("ESCOUADE_TEST_REAL_HOME");
+    let home = std::path::Path::new(&home).join(".claude");
+    let h = harness("tui-claude-real");
+    let (p, repo) = h.project(false).await;
+    println!("repo {}", repo.display());
+    // Principal, as the app runs it: no `CLAUDE_CONFIG_DIR`, its own Claude Code.
+    let mut s = h.core.settings.read().clone();
+    s.claude_path = program;
+    s.mcp_enabled = false;
+    h.core.save_settings(s).unwrap();
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                model: Some("haiku".into()),
+                mode: Some("default".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+    let screen = Arc::new(parking_lot::Mutex::new(String::new()));
+    let sink = screen.clone();
+    let info = h
+        .core
+        .open_agent_terminal(&id, (120, 40), false, move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
+        .await
+        .unwrap();
+    // Its first screen: the box about the folder (answered as the user would), then its prompt.
+    let start = Instant::now();
+    let (mut answered, mut trusted) = (false, false);
+    let session = h.agent(&id).session_id.unwrap();
+    let registered = || {
+        std::fs::read_dir(home.join("sessions"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|f| std::fs::read_to_string(f.path()).is_ok_and(|c| c.contains(&session)))
+    };
+    while !registered() {
+        let text = plain_text(&screen.lock());
+        if !answered && screen.lock().contains("\x1b[6n") {
+            h.core.pty.write(&info.id, b"\x1b[1;1R").unwrap();
+            answered = true;
+        }
+        // « No, exit » chosen first, then « Yes, I trust this folder » (`plain_text` drops the
+        // spaces).
+        if !trusted && text.contains("Itrustthisfolder") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            h.core.pty.write(&info.id, b"\x1b[B").unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            h.core.pty.write(&info.id, b"\r").unwrap();
+            trusted = true;
+        }
+        assert!(start.elapsed() < Duration::from_secs(60), "{text}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    println!("ready after {:?}, trusted: {trusted}", start.elapsed());
+    let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
+    let say = |text: &'static str| {
+        let (h, id, screen) = (&h, id.clone(), &screen);
+        async move {
+            let before = turns(h);
+            h.core
+                .send_message(&id, text.into(), Vec::new())
+                .await
+                .unwrap();
+            let start = Instant::now();
+            while turns(h) == before || h.agent(&id).status.is_active() {
+                assert!(
+                    start.elapsed() < Duration::from_secs(180),
+                    "no end of turn for {text:?}: {:#?}\n{}",
+                    h.items(&id),
+                    plain_text(&screen.lock())
+                );
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    };
+    let last = |kind: &str| {
+        h.items(&id)
+            .into_iter()
+            .rev()
+            .find(|i| i["kind"] == kind)
+            .unwrap_or_default()
+    };
+
+    // 1. A message on two lines, pasted: one message, its two lines, one turn.
+    say("Réponds seulement : A\nPuis rien d'autre.").await;
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+    println!("session {session}");
+    assert_eq!(
+        last("user")["text"],
+        "Réponds seulement : A\nPuis rien d'autre."
+    );
+    assert_eq!(texts(&h, &id, "user").len(), 1);
+    println!(
+        "1. answer {:?}, cost {}",
+        last("text")["text"],
+        h.agent(&id).cost
+    );
+    assert_eq!(h.agent(&id).status, AgentStatus::Done);
+
+    // 2. `/compact`: told once, its turn ended by its output, and the next message answered.
+    say("/compact").await;
+    println!(
+        "2. after /compact: {:#?}",
+        &h.items(&id)[h.items(&id).len().saturating_sub(4)..]
+    );
+    assert!(notices_of(&h, &id).iter().any(|n| n.contains("compact")));
+    assert_eq!(
+        texts(&h, &id, "user")
+            .iter()
+            .filter(|u| *u == "/compact")
+            .count(),
+        1
+    );
+    assert_eq!(last("turn")["interrupted"], false);
+    say("Réponds seulement : B").await;
+    println!("2. answer {:?}", last("text")["text"]);
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
+
+    // 3. Escape during a turn: it ends, interrupted (by the transcript, or by the registry when
+    // it was cancelled before its first answer).
+    let before = turns(&h);
+    h.core
+        .send_message(
+            &id,
+            "Écris un long poème de quarante strophes sur la mer, sans outil.".into(),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+    let start = Instant::now();
+    while h.agent(&id).status != AgentStatus::Running {
+        assert!(start.elapsed() < Duration::from_secs(60), "never running");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    h.core.interrupt(&id).await.unwrap();
+    let start = Instant::now();
+    while turns(&h) == before {
+        assert!(
+            start.elapsed() < Duration::from_secs(60),
+            "no end after Escape: {:#?}\n{}",
+            h.items(&id),
+            plain_text(&screen.lock())
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    println!("3. turn {}, status {:?}", last("turn"), h.agent(&id).status);
+    assert_eq!(last("turn")["interrupted"], true);
+    assert!(!h.agent(&id).status.is_active());
+    // Cancelled before its first answer, the message may be back in the interface's prompt (ESC-118):
+    // cleared as the user would, by one Ctrl+C.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let tail: String = plain_text(&screen.lock()).chars().rev().take(600).collect();
+    let tail: String = tail.chars().rev().collect();
+    println!("3. screen after: {tail}");
+    h.core.pty.write(&info.id, b"\x03").unwrap();
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // 4. A subagent: its row in the plan, and its thread from its own transcript.
+    say(
+        "Lance un seul sous-agent avec l'outil Agent (subagent_type general-purpose, model haiku), \
+         dont la consigne est : « Réponds seulement OK, sans aucun outil. » Puis réponds seulement : C",
+    )
+    .await;
+    let plan = h.agent(&id).plan;
+    println!("4. plan {plan:#?}");
+    let row = plan
+        .expect("a plan")
+        .agents
+        .first()
+        .cloned()
+        .expect("a row");
+    assert_eq!(row.status, crate::plan::RunStatus::Done);
+    let thread = thread(&h, &id, &row.id);
+    println!("4. thread {thread:#?}");
+    assert!(!thread.is_empty());
+
+    // 5. `/clear`: another session, followed; the next message is answered in it.
+    say("/clear").await;
+    say("Réponds seulement : D").await;
+    let cleared = h.agent(&id).session_id.clone().unwrap();
+    println!("5. session {cleared}, answer {:?}", last("text")["text"]);
+    assert_ne!(cleared, session);
+    assert!(h.agent(&id).plan.is_none_or(|p| p.agents.is_empty()));
+    println!("cost {}", h.agent(&id).cost);
+    println!("screen:\n{}", plain_text(&screen.lock()));
+}
+
+/// The notices of the agent's conversation, in lower case.
+fn notices_of(h: &Harness, id: &str) -> Vec<String> {
+    h.items(id)
+        .into_iter()
+        .filter(|i| i["kind"] == "notice")
+        .map(|i| i["text"].as_str().unwrap_or_default().to_lowercase())
+        .collect()
 }

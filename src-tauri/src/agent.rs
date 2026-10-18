@@ -218,6 +218,9 @@ pub struct AgentRt {
     tui_error: Option<String>,
     /// The running turn of its interface, from its prompt (what it was) to its end.
     pub(crate) tui_prompt: Option<String>,
+    /// The `promptId` of its transcript's entry that prompt was read from: Claude Code 2.1.302
+    /// writes a command typed twice under the same one, as typed then as `<command-name>`.
+    tui_prompt_id: Option<String>,
     /// The entries of its transcript written before then (ms) are not read: the history of a
     /// session its interface resumed or forked with no read kept, which its view already has.
     pub(crate) tui_since: Option<i64>,
@@ -486,6 +489,7 @@ impl AgentRt {
             tui_usage: HashMap::new(),
             tui_error: None,
             tui_prompt: None,
+            tui_prompt_id: None,
             tui_since: None,
             tui_exit: None,
             tui_quick_exits: 0,

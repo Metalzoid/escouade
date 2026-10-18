@@ -450,10 +450,15 @@ pub fn switch_notice(
 /// The app's `CLAUDE_CONFIG_DIR` (which Principal's processes inherit) and the home folder. In
 /// unit tests, neither the variable nor the machine user's home: a folder that does not exist, so
 /// that no test ever reads or writes the user's own Claude Code (tests may run inside a Claude
-/// Code session, with its CLAUDE_CONFIG_DIR).
+/// Code session, with its CLAUDE_CONFIG_DIR). A real run by hand (`tui_tests::real_claude_view`)
+/// gives the machine user's home in `ESCOUADE_TEST_REAL_HOME`.
 pub(crate) fn app_env() -> (Option<String>, PathBuf) {
     if cfg!(test) {
-        return (None, std::env::temp_dir().join("escouade-tests-no-home"));
+        let home = std::env::var_os("ESCOUADE_TEST_REAL_HOME").map(PathBuf::from);
+        return (
+            None,
+            home.unwrap_or_else(|| std::env::temp_dir().join("escouade-tests-no-home")),
+        );
     }
     (
         std::env::var(CONFIG_DIR_VAR).ok(),
