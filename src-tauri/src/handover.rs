@@ -622,7 +622,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.engine,
                 rt.meta.project_id.clone(),
                 rt.meta.handed_from.clone(),
-                rt.meta.terminal,
+                rt.meta.terminal || rt.meta.attached,
             )
         };
         let to = engine::by_id(target);

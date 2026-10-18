@@ -2228,3 +2228,34 @@ describe('Conversation and the subagents of its agent', () => {
     });
   });
 });
+
+describe('« Vue OpenCode » (ESC-46)', () => {
+  /** OpenCode: its interface joins the agent's process (`attached`), not in its place (`terminal`). */
+  const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, name: 'OpenCode', caps: { ...BARE_ENGINE.caps, terminalView: true } };
+
+  it('shows the interface joined to the process in place of the messages, and offers to go back', async () => {
+    setLang('fr');
+    const a = agent({ id: 'oa1', status: 'running', engine: 'opencode', attached: true });
+    resetApp({ projects: [project()], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, OPENCODE];
+    const b = fakeBackend({ get_conversation: () => [] });
+    const { container } = render(Conversation, { agent: a, project: project() });
+    expect(container.querySelector('.scroll')).toBeNull();
+    expect(container.querySelector('.tui')).not.toBeNull();
+    const back = screen.getByRole('button', { name: 'Vue Escouade' });
+    expect(back).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(back);
+    expect(b.called('set_agent_view')[0].args).toEqual({ id: 'oa1', terminal: false });
+  });
+
+  it('is offered from the conversation, during a turn too', async () => {
+    setLang('fr');
+    const a = agent({ id: 'oa2', status: 'running', engine: 'opencode' });
+    resetApp({ projects: [project()], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, OPENCODE];
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    await userEvent.click(screen.getByRole('button', { name: 'Vue OpenCode' }));
+    expect(b.called('set_agent_view')[0].args).toEqual({ id: 'oa2', terminal: true });
+  });
+});

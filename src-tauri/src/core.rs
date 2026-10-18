@@ -4556,6 +4556,9 @@ impl<R: Runtime> Core<R> {
             terminal: settings.terminal_view
                 && o.ticket_id.is_none()
                 && crate::engine::by_id(engine).terminal().is_some(),
+            attached: settings.terminal_view
+                && o.ticket_id.is_none()
+                && crate::engine::by_id(engine).attaches(),
             remote_off: o.remote_off || o.copy_of.as_ref().is_some_and(|c| c.remote_off),
             ticket_id: o.ticket_id,
             append_prompt: o.append_prompt,
@@ -5507,9 +5510,12 @@ impl<R: Runtime> Core<R> {
         let mut linked = None;
         // Its Claude Code interface, which quits as its user would once the agent is archived.
         let mut interface = None;
+        // Its interface joined to the process (OpenCode), which stops with it.
+        let mut joined = None;
         self.with_agent(id, |rt, fx| {
             rt.meta.archived = archived;
             if archived {
+                joined = rt.attach.take().map(|a| a.info.id);
                 let name = self.remote_name(&rt.meta);
                 linked = rt.end_remote().map(|link| (link, name));
                 rt.meta.resume_at = None;
@@ -5538,6 +5544,10 @@ impl<R: Runtime> Core<R> {
         }
         if let Some(p) = stopped {
             p.close_input();
+        }
+        if let Some(t) = joined {
+            let pty = self.pty.clone();
+            let _ = tokio::task::spawn_blocking(move || pty.kill(&t)).await;
         }
         // Marked as quitting under the launch lock, which is let go for the seconds it takes.
         if let Some((t, key)) = interface {

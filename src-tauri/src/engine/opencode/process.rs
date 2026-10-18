@@ -10,6 +10,7 @@
 
 use super::server::{self, Listener, Server};
 use super::{agent_of, rules, split_model, Settings};
+use crate::engine::terminal::Attach;
 use crate::engine::{
     BoxFuture, EngineProcess, Message, OnExit, OnFrame, PermissionAnswer, Ready, Remote, Start,
 };
@@ -41,6 +42,11 @@ struct State {
     variants: HashMap<String, Vec<String>>,
     /// Stopped gently while a turn ran: released once it ends.
     closing: bool,
+    /// The prompts sent whose message the session has not shown yet.
+    unseen_prompts: u32,
+    /// Whether each message of the user in the session was Escouade's (true) or typed in another
+    /// client (`opencode attach`), by its id: decided once, at its first `message.updated`.
+    by_escouade: HashMap<String, bool>,
 }
 
 pub struct OpencodeProcess {
@@ -138,7 +144,7 @@ impl Inner {
     }
 
     /// An event of its session or of a subagent's.
-    fn on_event(self: &Arc<Self>, frame: Value) {
+    fn on_event(self: &Arc<Self>, mut frame: Value) {
         let kind = frame["type"].as_str().unwrap_or_default().to_string();
         let sid = frame["properties"]["sessionID"]
             .as_str()
@@ -149,6 +155,27 @@ impl Inner {
             let mut s = self.state.lock();
             let own = sid.is_some() && sid == s.session;
             match kind.as_str() {
+                "message.updated" if own && frame["properties"]["info"]["role"] == "user" => {
+                    let id = frame["properties"]["info"]["id"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string();
+                    let State {
+                        unseen_prompts,
+                        by_escouade,
+                        ..
+                    } = &mut *s;
+                    // Escouade's while a prompt it sent is still to be seen: the server keeps the
+                    // messages of a session in the order they came.
+                    let ours = *by_escouade.entry(id).or_insert_with(|| {
+                        let ours = *unseen_prompts > 0;
+                        *unseen_prompts = unseen_prompts.saturating_sub(1);
+                        ours
+                    });
+                    if !ours {
+                        frame["properties"]["typedElsewhere"] = json!(true);
+                    }
+                }
                 "session.status" if own => {
                     if frame["properties"]["status"]["type"] == "busy" {
                         s.busy = true;
@@ -191,6 +218,7 @@ impl Inner {
             };
             s.busy = true;
             s.saw_busy = false;
+            s.unseen_prompts += 1;
             let mut body = json!({
                 "parts": parts,
                 "agent": agent_of(&s.settings.mode),
@@ -218,7 +246,11 @@ impl Inner {
                 .await
             {
                 log::warn!("opencode: {e:#}");
-                me.state.lock().busy = false;
+                {
+                    let mut s = me.state.lock();
+                    s.busy = false;
+                    s.unseen_prompts = s.unseen_prompts.saturating_sub(1);
+                }
                 (me.on_frame)(json!({
                     "type": "escouade.prompt.failed",
                     "properties": { "sessionID": session, "message": format!("{e:#}") },
@@ -450,6 +482,22 @@ impl EngineProcess for OpencodeProcess {
             }
             true
         })
+    }
+
+    /// `opencode attach` on its server, on its session, in its folder; the password in its
+    /// environment only.
+    fn attach(&self) -> Option<Attach> {
+        if !self.is_alive() {
+            return None;
+        }
+        let session = self.inner.state.lock().session.clone()?;
+        let url = self.inner.server.base().ok()?;
+        Some(attach_to(
+            &url,
+            &session,
+            &self.inner.cwd,
+            self.inner.server.password(),
+        ))
     }
 
     /// The server ready, the session opened and heard, then the models of the connected providers.
@@ -695,6 +743,17 @@ fn unsupported() -> String {
 }
 
 /// No model of a connected provider to send a message with.
+/// `opencode attach` on the server at `url` (its password `password`), on `session`, in `dir`
+/// (docs/TODO-1.8.md, point 0, « Vue terminal »).
+pub(super) fn attach_to(url: &str, session: &str, dir: &str, password: &str) -> Attach {
+    Attach {
+        args: ["attach", url, "--session", session, "--dir", dir]
+            .map(str::to_string)
+            .to_vec(),
+        env: vec![("OPENCODE_SERVER_PASSWORD".into(), password.into())],
+    }
+}
+
 pub(super) fn no_model(lang: Lang) -> String {
     tr_in!(
         lang,

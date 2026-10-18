@@ -192,6 +192,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     activity: null,
     setup: null,
     terminal: false,
+    attached: false,
     terminalId: null,
     tuiExit: null,
     isola: false,

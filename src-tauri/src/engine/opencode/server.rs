@@ -312,7 +312,13 @@ impl Server {
         }
     }
 
-    fn base(&self) -> Result<String> {
+    /// The password of its requests (`OPENCODE_SERVER_PASSWORD`).
+    pub(super) fn password(&self) -> &str {
+        &self.password
+    }
+
+    /// Its address, once it listens.
+    pub(super) fn base(&self) -> Result<String> {
         match self.base.borrow().clone() {
             Some(Ok(url)) => Ok(url),
             _ => Err(anyhow!("OpenCode is not listening")),

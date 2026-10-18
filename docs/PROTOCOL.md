@@ -561,6 +561,7 @@ Comme chez Codex, les fichiers du dossier de l'agent changent sans question en �
 | `permission.asked` | une carte : `Bash` (la commande), `Edit` (le fichier, son diff), `WebFetch` (l'adresse), `Permissions` pour un chemin hors du dossier (« Hors du dossier de l'agent : … ») ; elle dit le motif que « Toujours autoriser » retiendra quand ce n'est pas la demande elle-même. Une demande d'un sous-agent est montrée dans l'agent et dans le sous-agent |
 | `question.asked` | la carte des questions (`multiple` : plusieurs choix) |
 | `permission.replied`, `question.replied`, `question.rejected` | une carte répondue ailleurs (`opencode attach`) dit la réponse et se ferme |
+| `message.updated` (`role: user`) et sa part de texte | un message tapé ailleurs (`opencode attach`) : le message de l'utilisateur, une fois. Le process le reconnaît : un message `user` de la session qui arrive sans prompt d'Escouade en attente d'être vu est marqué `typedElsewhere` (décidé à son premier `message.updated`, par son id) ; ceux d'Escouade, déjà affichés à l'envoi, sont laissés de côté |
 | `session.status` `busy` | le tour en cours (un tour lancé ailleurs aussi) |
 | `session.error` | `MessageAbortedError` : le tour est interrompu ; une autre erreur (`UnknownError`, `ProviderAuthError`, `APIError`…) : sa première ligne, dite à la fin du tour |
 | `session.idle` | la fin du tour (voir plus haut) |
@@ -571,9 +572,13 @@ Tout le reste est ignoré sans casser le tour : `plugin.added`, `catalog.updated
 
 `real_opencode` (`src-tauri/src/opencode_tests.rs`, à la main : `ESCOUADE_REAL_OPENCODE` = l'`opencode.exe` 1.19.3, et `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME` vers un dossier dont la config déclare le fournisseur `ollama`, pour ne rien écrire dans les dossiers d'OpenCode de l'utilisateur), fait le 2026-10-18 avec `qwen3-coder:30b-32k` sur Ollama : « Réponds seulement : A » (réponse « A »), `git status --short` demandé puis autorisé (la carte dit « « Toujours autoriser » retiendra : git status * »), une question « Quelle couleur ? » répondue « bleu », deux tâches de `todowrite` faites dans le bandeau, et un sous-agent `explore` (ses deux commandes demandées sous sa `Task`, 5 outils et 25 888 tokens comptés), en 85 s. Rien n'a été écrit dans `~/.config/opencode` ni `~/.local/share/opencode`, et aucun `opencode` ne restait après l'arrêt.
 
+### Vue OpenCode (ESC-46)
+
+`opencode attach <adresse du serveur> --session <session de l'agent> --dir <son dossier>`, dans un terminal intégré, avec l'environnement du compte et `OPENCODE_SERVER_PASSWORD` (jamais dans les arguments ni dans le journal). C'est un client de plus du serveur : Escouade garde le sien (`/global/event`), et le traducteur sait déjà ce que l'interface fait (un tour commencé ailleurs, une carte répondue ailleurs, ci-dessus). Le process de l'agent est démarré d'abord s'il ne tournait pas : l'interface a besoin de sa session. Une interface est arrêtée quand son agent n'a plus de process depuis 3 s, ou quand le process est sur un autre serveur (adresse ou mot de passe changés) ; jamais le serveur avec elle. Voir docs/ENGINES.md, « La vue OpenCode ».
+
 ### Ce qui vient ensuite
 
-Le coût du jour dans la barre d'état, le garde-fou sans quota, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `opencode run` viennent avec ESC-45 ; la vue terminal d'OpenCode (`opencode attach`) plus tard. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
+Le coût du jour dans la barre d'état, le garde-fou sans quota, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `opencode run` viennent avec ESC-45. Le Principal d'OpenCode (sa config par défaut et ses fournisseurs : « Se connecter… » lance `opencode auth login`) n'est fait qu'au premier agent ou ticket OpenCode.
 
 ## Serveur MCP d'Escouade
 

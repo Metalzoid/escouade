@@ -67,6 +67,15 @@ pub struct TerminalArgs {
     pub env: Vec<(String, String)>,
 }
 
+/// How an interface joins the process of its agent (`EngineProcess::attach`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Attach {
+    pub args: Vec<String>,
+    /// The variables it gets besides its account's: what is secret (a password) goes here, never
+    /// in `args`, which the system shows to anyone who lists its processes.
+    pub env: Vec<(String, String)>,
+}
+
 /// The interface of a harness in a terminal (« Vue <harness> »).
 pub trait TerminalView: Send + Sync {
     // ----- the launch -----

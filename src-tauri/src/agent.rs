@@ -209,6 +209,8 @@ pub struct AgentRt {
     queued: u32,
     /// Claude Code's own interface running for it, in a terminal (« Vue Claude Code », `tui`).
     pub tui: Option<TuiRun>,
+    /// Its harness's interface joined to its process, in a terminal (`AgentMeta::attached`).
+    pub attach: Option<AttachRun>,
     /// The usage of each API message its interface ran, by message id with its model: what its
     /// turns are counted from, at list prices (the interface tells no cost per turn).
     tui_usage: HashMap<String, (String, Usage)>,
@@ -253,6 +255,17 @@ pub struct AgentRt {
 pub struct RemoteLink {
     pub proc: Process,
     pub bridge: Option<String>,
+}
+
+/// The interface of its harness joined to an agent's process (`attach`, `AgentMeta::attached`).
+#[derive(Debug, Clone)]
+pub struct AttachRun {
+    /// Its terminal, as the window is told of it.
+    pub info: crate::pty::TermInfo,
+    /// What the terminal printed, and the window that shows it.
+    pub output: Arc<crate::tui::TuiOutput>,
+    /// What it was started with: an interface joined to a process whose server changed is stopped.
+    pub launched: crate::engine::terminal::Attach,
 }
 
 /// Claude Code's interface running for an agent (`tui`).
@@ -469,6 +482,7 @@ impl AgentRt {
             live: HashMap::new(),
             queued: 0,
             tui: None,
+            attach: None,
             tui_usage: HashMap::new(),
             tui_error: None,
             tui_prompt: None,
@@ -530,7 +544,11 @@ impl AgentRt {
             active_since: self.active_since,
             alive: self.proc.is_some() || self.tui.is_some(),
             escouade_next: self.escouade_next && (self.proc.is_some() || self.tui.is_some()),
-            terminal_id: self.tui.as_ref().map(|t| t.term_id.clone()),
+            terminal_id: self
+                .tui
+                .as_ref()
+                .map(|t| t.term_id.clone())
+                .or_else(|| self.attach.as_ref().map(|a| a.info.id.clone())),
             interface_remote: self.tui.as_ref().map(|t| t.remote),
             tui_exit: self.tui_exit.clone(),
             pending: self.pending.iter().map(|p| p.item_id.clone()).collect(),

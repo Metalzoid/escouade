@@ -118,7 +118,7 @@ impl Hooks {
 }
 
 /// The answer to the pseudo-console's cursor position query when no window gives one.
-const CURSOR_HOME: &[u8] = b"\x1b[1;1R";
+pub(crate) const CURSOR_HOME: &[u8] = b"\x1b[1;1R";
 /// The size of the terminal of an interface started with no window.
 const BACKGROUND_SIZE: (u16, u16) = (120, 40);
 /// The most an interface's output keeps (bytes): its last screens, for a window that shows it
@@ -717,7 +717,7 @@ fn before(e: &Value, since: i64) -> bool {
 }
 
 /// `NO_PROXY` with the loopback in it: the hooks' calls never go through a proxy.
-fn no_proxy(env: &mut Vec<(String, String)>) {
+pub(crate) fn no_proxy(env: &mut Vec<(String, String)>) {
     const LOOPBACK: &str = "127.0.0.1,localhost,::1";
     for key in ["NO_PROXY", "no_proxy"] {
         match env.iter_mut().find(|(k, _)| k == key) {
@@ -796,7 +796,7 @@ pub(crate) fn quit_key(m: &AgentMeta) -> &'static [u8] {
 }
 
 /// Refused: a ticket's agent is driven by its board, over the stream.
-fn ticket_refusal() -> anyhow::Error {
+pub(crate) fn ticket_refusal() -> anyhow::Error {
     anyhow!(tr!(
         "Un agent de ticket reste dans la vue d’Escouade : son tableau le pilote.",
         "A ticket’s agent stays in Escouade’s view: its board drives it."
@@ -830,6 +830,10 @@ impl<R: Runtime> Core<R> {
     /// takes its session up again.
     pub async fn set_agent_view(self: &Arc<Self>, id: &str, terminal: bool) -> Result<()> {
         let h = self.agent(id)?;
+        // OpenCode: its interface joins the process, which goes on (`attach`).
+        if crate::engine::of(&h.lock().meta).attaches() {
+            return self.set_attached(&h, id, terminal).await;
+        }
         let lock = self.spawn_lock(id);
         let guard = lock.lock().await;
         {
@@ -941,6 +945,9 @@ impl<R: Runtime> Core<R> {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
     ) -> Result<TermInfo> {
         let h = self.agent(id)?;
+        if crate::engine::of(&h.lock().meta).attaches() {
+            return self.open_attached(&h, id, size, Box::new(on_data)).await;
+        }
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
         if self.quitting.load(std::sync::atomic::Ordering::Acquire) {

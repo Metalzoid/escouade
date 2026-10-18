@@ -3,6 +3,7 @@
 mod i18n;
 mod accounts;
 mod agent;
+mod attach;
 mod attachfiles;
 #[cfg(test)]
 mod attachfiles_tests;

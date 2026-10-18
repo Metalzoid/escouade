@@ -38,8 +38,8 @@ if (argv.includes('--version') || argv[0] === '-v') {
   process.stdout.write(`${process.env.FAKE_OPENCODE_VERSION || VERSION}\n`);
   process.exit(0);
 }
-if (argv[0] !== 'serve' && argv[0] !== 'models') {
-  process.stderr.write(`fake opencode: only serve, models and --version are played (${argv.join(' ')})\n`);
+if (!['serve', 'models', 'attach'].includes(argv[0])) {
+  process.stderr.write(`fake opencode: only serve, models, attach and --version are played (${argv.join(' ')})\n`);
   process.exit(2);
 }
 
@@ -53,6 +53,95 @@ try {
 }
 const PASSWORD = process.env.OPENCODE_SERVER_PASSWORD || '';
 if (argv[0] === 'serve') log({ launch: { argv, cwd: process.cwd(), pid: process.pid, config, password: !!PASSWORD } });
+
+// `opencode attach <url> --session <id> --dir <folder>`: a client of the server at <url> (its password in
+// OPENCODE_SERVER_PASSWORD), in a terminal: it says the session's title, then what the session does (a text, a
+// permission asked or answered, the end of a turn). Enter answers the permission waiting (« Allow once »); else what was
+// typed is sent to the session as a message. Each launch is noted in `<OPENCODE_CONFIG_DIR>/attaches.jsonl`: its
+// arguments and the password it was given, for the tests to find it never was on its command line (and in
+// FAKE_OPENCODE_LOG: {"attach": {argv, password, passwordInArgv}}, whether it had one and saw it among its arguments).
+if (argv[0] === 'attach') {
+  const url = argv[1];
+  const opt = (name) => (argv.indexOf(name) > 0 ? argv[argv.indexOf(name) + 1] : undefined);
+  const session = opt('--session');
+  const dir = opt('--dir') || process.cwd();
+  log({ attach: { argv, password: !!PASSWORD, passwordInArgv: !!PASSWORD && argv.some((a) => a.includes(PASSWORD)) } });
+  const dirOf = process.env.OPENCODE_CONFIG_DIR;
+  if (dirOf) {
+    fs.mkdirSync(dirOf, { recursive: true });
+    fs.appendFileSync(path.join(dirOf, 'attaches.jsonl'), JSON.stringify({ argv, password: PASSWORD, pid: process.pid }) + '\n');
+  }
+  const headers = { authorization: 'Basic ' + Buffer.from(`opencode:${PASSWORD}`).toString('base64'), 'content-type': 'application/json' };
+  const q = `?directory=${encodeURIComponent(dir)}`;
+  // What it shows goes to the log too ({"shown": line}): the window draws it where a test cannot read it (WebGL).
+  const say = (line) => {
+    log({ shown: line });
+    process.stdout.write(line + '\r\n');
+  };
+  const got = await fetch(`${url}/session/${session}${q}`, { headers }).catch((e) => ({ ok: false, status: String(e) }));
+  if (!got.ok) {
+    say(`fake opencode attach: refused (${got.status})`);
+    process.exit(1);
+  }
+  const info = await got.json();
+  say(`fake opencode attach: ${info.title} (${session})`);
+  let waiting = null;
+  let typed = '';
+  const events = await fetch(`${url}/global/event`, { headers });
+  (async () => {
+    const decoder = new TextDecoder();
+    let buf = '';
+    for await (const chunk of events.body) {
+      buf += decoder.decode(chunk, { stream: true });
+      let at;
+      while ((at = buf.indexOf('\n\n')) >= 0) {
+        const frame = buf.slice(0, at);
+        buf = buf.slice(at + 2);
+        if (!frame.startsWith('data: ')) continue;
+        const { type, properties: p = {} } = JSON.parse(frame.slice(6)).payload || {};
+        if (p.sessionID !== session) continue;
+        if (type === 'permission.asked') {
+          waiting = p.id;
+          say(`permission ${p.permission}: ${(p.patterns || []).join(' ')} (Enter: allow once)`);
+        } else if (type === 'permission.replied') {
+          if (waiting === p.requestID) waiting = null;
+          say(`permission answered: ${p.reply}`);
+        } else if (type === 'message.part.updated' && p.part?.type === 'text' && p.part.time?.end) {
+          say(`text: ${p.part.text}`);
+        } else if (type === 'session.idle') {
+          say('turn over');
+        }
+      }
+    }
+    say('fake opencode attach: the server is gone');
+    process.exit(1);
+  })();
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.on('data', async (d) => {
+    for (const c of d.toString('utf8')) {
+      if (c === '\x03') process.exit(0);
+      if (c !== '\r') {
+        typed += c;
+        continue;
+      }
+      if (waiting) {
+        const rid = waiting;
+        await fetch(`${url}/permission/${rid}/reply${q}`, { method: 'POST', headers, body: JSON.stringify({ reply: 'once' }) });
+      } else if (typed.trim()) {
+        // Without what the terminal answered (the cursor's position, on Windows).
+        const text = typed.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim();
+        say(`> ${text}`);
+        await fetch(`${url}/session/${session}/prompt_async${q}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ parts: [{ type: 'text', text }] }),
+        });
+      }
+      typed = '';
+    }
+  });
+  await new Promise(() => {});
+}
 
 const HOME = process.env.FAKE_OPENCODE_HOME || process.env.XDG_DATA_HOME || path.join(os.tmpdir(), 'fake-opencode');
 fs.mkdirSync(HOME, { recursive: true });

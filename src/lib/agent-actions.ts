@@ -104,8 +104,11 @@ export async function integrateBase(agent: Agent) {
  */
 export const canSwitchView = (agent: Agent) => !agent.ticketId && !agent.archived && can(agent, 'terminalView');
 
+/** In its harness's own interface, either in place of its process (Claude Code, Codex) or joined to it (OpenCode). */
+export const inHarnessView = (agent: Agent) => agent.terminal || agent.attached;
+
 /** Into the other view; the backend's refusals (a turn under way, remote control on) are told. */
-export const switchView = (agent: Agent) => app.run(api.setAgentView(agent.id, !agent.terminal));
+export const switchView = (agent: Agent) => app.run(api.setAgentView(agent.id, !inHarnessView(agent)));
 
 /**
  * Remote Control on / off by hand (off always sets the agent apart, a setting covering it or not): the agent becomes

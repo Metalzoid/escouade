@@ -1137,6 +1137,10 @@ pub struct AgentMeta {
     /// « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal (`tui`), not
     /// over the stream that Escouade's conversation view drives. Never a ticket's agent.
     pub terminal: bool,
+    /// « Vue <harness> » of a harness whose interface joins the agent's process
+    /// (`Engine::attaches`, OpenCode): the interface shows in a terminal (`AgentRt::attach`), while
+    /// the process goes on as in Escouade's view. Never with `terminal`, nor for a ticket's agent.
+    pub attached: bool,
     /// How far the transcript its interface writes was read: the file and the offset (bytes),
     /// so that what was written while the app was not reading it is read when it starts again.
     pub transcript_read: Option<(String, u64)>,

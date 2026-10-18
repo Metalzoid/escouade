@@ -315,8 +315,14 @@ pub trait Engine: Send + Sync {
     /// folder of their own given by `CLAUDE_CONFIG_DIR`.
     fn accounts(&self) -> registry::AccountStore;
 
-    /// Its own interface in a terminal (« Vue <harness> »); None when it has none
-    /// (`caps().terminal_view` says the same).
+    /// Its terminal view (« Vue <harness> ») is its interface joined to the agent's process
+    /// (`EngineProcess::attach`), which goes on: both views work at once (OpenCode). False: its
+    /// interface takes the process's place (`terminal`).
+    fn attaches(&self) -> bool {
+        false
+    }
+    /// Its own interface in a terminal (« Vue <harness> ») that takes the process's place; None
+    /// when it has none (`caps().terminal_view` says whether it has one, joined or not).
     fn terminal(&self) -> Option<&'static dyn TerminalView>;
     /// The command that installs it (« Aucun harness trouvé »).
     fn install(&self) -> registry::Install;
@@ -519,6 +525,13 @@ pub trait EngineProcess: Send + Sync {
     fn remote_control(&self, request: Remote, timeout: Duration) -> BoxFuture<'_, Result<Value>>;
 
     // ----- its own protocol -----
+
+    /// How its harness's interface joins it in a terminal (`Engine::attaches`): its arguments, and
+    /// the variables that hold what is secret (never on its command line). None when it cannot
+    /// (no session yet, or a harness whose interface takes the process's place).
+    fn attach(&self) -> Option<terminal::Attach> {
+        None
+    }
 
     /// A request in its own protocol, its answer: for the tests, and what has no method yet.
     #[cfg_attr(not(test), allow(dead_code))]

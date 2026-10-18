@@ -8,8 +8,10 @@ import {
   commitAllPrompt,
   commitViaAgent,
   copyRemoteLink,
+  inHarnessView,
   integrateBase,
   mergeAgent,
+  switchView,
   toggleRemote,
 } from './agent-actions';
 import { setLang } from './i18n';
@@ -362,5 +364,23 @@ describe('integrateBase', () => {
     fakeBackend({ integrate_base: () => ({ kind: 'conflict', files: ['a', 'b'], rebase: false }) });
     await integrateBase(app.agents.a2);
     expect(app.toasts.at(-1)?.text).toBe('main conflicts with ccm/landing in 2 files: landing has to resolve them.');
+  });
+});
+
+describe('switchView', () => {
+  it('goes back to Escouade’s view from an interface in place of the process or joined to it, and to the harness’s otherwise', async () => {
+    const cases: [Partial<Parameters<typeof agent>[0]>, boolean, boolean][] = [
+      [{}, false, true],
+      [{ terminal: true }, true, false],
+      [{ attached: true }, true, false],
+    ];
+    for (const [over, shown, asked] of cases) {
+      const a = agent({ id: 'sv', ...over });
+      resetApp({ agents: [a] });
+      const b = fakeBackend({});
+      expect(inHarnessView(a)).toBe(shown);
+      await switchView(a);
+      expect(b.called('set_agent_view')[0].args).toEqual({ id: 'sv', terminal: asked });
+    }
   });
 });

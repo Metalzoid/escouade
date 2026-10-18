@@ -423,3 +423,62 @@ fn a_path_of_windows_or_of_posix_is_absolute_on_every_system() {
     );
     assert_eq!(absolute("", cwd), "");
 }
+
+/// A message typed in `opencode attach` (the process marks it `typedElsewhere`) is the user's
+/// message in the conversation, once; Escouade's own, already shown when sent, is not shown again.
+#[test]
+fn a_message_typed_in_another_client_is_shown_once_and_escouades_own_never_twice() {
+    let mut rt = agent("C:/p");
+    start(&mut rt);
+    let user_msg = |id: &str, elsewhere: bool| {
+        let mut p = json!({ "sessionID": S, "info": { "id": id, "role": "user", "sessionID": S } });
+        if elsewhere {
+            p["typedElsewhere"] = json!(true);
+        }
+        ev("message.updated", p)
+    };
+    let text = |id: &str, msg: &str, text: &str| {
+        ev(
+            "message.part.updated",
+            json!({ "sessionID": S, "part": { "id": id, "messageID": msg, "sessionID": S, "type": "text", "text": text } }),
+        )
+    };
+    let users = |rt: &mut AgentRt| -> Vec<String> {
+        rt.conv
+            .ids_where(|v| v["kind"] == "user")
+            .into_iter()
+            .map(|id| {
+                rt.conv.get(&id).unwrap()["text"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    };
+    // Escouade's message: shown when sent, its echo from the server left out.
+    let mut fx = Effects::default();
+    rt.push_user("u1", "envoyé par Escouade", 0, &[], &mut fx);
+    feed(
+        &mut rt,
+        &[
+            user_msg("msg_1", false),
+            text("prt_1", "msg_1", "envoyé par Escouade"),
+        ],
+    );
+    assert_eq!(users(&mut rt), ["envoyé par Escouade"]);
+    // Typed in the interface: shown, once, even when its message and part come again.
+    let typed = [
+        user_msg("msg_2", true),
+        text("prt_2", "msg_2", "tapé dans l'interface"),
+        user_msg("msg_2", true),
+        text("prt_2", "msg_2", "tapé dans l'interface"),
+    ];
+    feed(&mut rt, &typed);
+    assert_eq!(
+        users(&mut rt),
+        ["envoyé par Escouade", "tapé dans l'interface"]
+    );
+    let item = rt.conv.get("prt_2").unwrap();
+    assert_eq!(item["origin"], "terminal");
+    assert_eq!(item["queued"], false);
+}

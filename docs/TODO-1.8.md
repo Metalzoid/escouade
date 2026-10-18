@@ -17,7 +17,7 @@ Tickets du Kanban d'Escouade, créés le 2026-10-14 par son serveur MCP, dans l'
 Fait pour la 1.8 :
 - [x] **Vue Claude Code** (2026-10-12) : un agent peut tourner dans l'interface de Claude Code elle-même, dans un terminal, à la place de la conversation d'Escouade (bouton de l'en-tête, réglage pour les nouveaux agents). Escouade le suit par ses hooks HTTP et son transcript. Voir `docs/PROTOCOL.md`, « Vue Claude Code ».
   - [ ] À essayer sous Windows (ConPTY, `claude.exe` natif) et macOS avec un vrai compte : collage d'un message, Échap, `/clear`, une compaction, un sous-agent.
-  - [ ] La même vue pour les autres moteurs (demandé le 2026-10-14) : voir le chapitre 1, « Vue terminal de chaque moteur ». Codex : fait (ESC-47) ; les autres harness sont reportés (décidé le 2026-10-17).
+  - [ ] La même vue pour les autres moteurs (demandé le 2026-10-14) : voir le chapitre 1, « Vue terminal de chaque moteur ». Codex : fait (ESC-47) ; OpenCode : fait (ESC-46, `opencode attach`) ; les autres harness sont reportés (décidé le 2026-10-17).
   - [x] **Changer de vue aussi au clic droit sur un agent** (demandé le 2026-10-12, fait le 2026-10-15, ESC-11) : dans le menu de sa carte de la barre latérale (`Sidebar.svelte`, à côté de « Dupliquer la conversation », « Ouvrir un terminal »…), « Vue Claude Code » ou « Vue Escouade » selon sa vue du moment. Mêmes règles que le bouton de l'en-tête (`Conversation.svelte`) : jamais pour un agent de ticket ni un agent archivé, même appel `api.setAgentView`. Textes fr et en.
     - Fait : le bouton et le menu suivent la même règle et font le même appel (`canSwitchView`, `switchView`, `src/lib/agent-actions.ts`). L'entrée suit « Ouvrir un terminal ». Tests : `Sidebar.test.ts`, « Vue Claude Code » / « Vue Escouade » (les deux vues, le refus du backend dit dans un toast, un agent de ticket et un agent archivé dans chaque vue) et le menu en anglais.
 
@@ -563,6 +563,7 @@ Essayé le 2026-10-17 (ESC-25) avec **OpenCode 1.19.3** (paquet npm `opencode-ai
   - Une permission répondue par Escouade disparaît de l'interface, qui affiche la suite du tour.
   - Un message tapé dans l'interface part sur la session : Escouade voit le message et tout le tour.
   - Deux clients à la fois marchent donc : Escouade par l'API et l'interface par `attach`.
+  - Fait dans l'app (ESC-46, 2026-10-18) : « Vue OpenCode » lance `attach` sur le serveur du compte de l'agent, sa session et son dossier, le mot de passe dans l'environnement seulement ; le process d'Escouade continue (docs/ENGINES.md, « La vue OpenCode »). Vérifié sur le faux `opencode attach` (permission répondue de chaque côté, message tapé dans l'interface, relance du serveur) ; l'essai réel avec la 1.19.3 et Ollama reste à faire à la main (le même `attach` qu'à ESC-25).
 
 ## 1. Codex, Copilot CLI, Cursor CLI et OpenCode, à côté de Claude Code
 
@@ -845,7 +846,7 @@ But : comme en vue Claude Code (`docs/PROTOCOL.md`, « Vue Claude Code »), un a
   | Cursor | `agent` | hooks du CLI partiels : seuls `beforeShellExecution` et `afterShellExecution` partent (forum de Cursor), pas de `stop` | journal non relevé ; au retour en vue Escouade, `session/load` d'ACP rejoue l'historique | `agent --resume <id>` ↔ `session/load` |
   | OpenCode | `opencode attach <adresse> --session <id>` | le flux SSE du serveur de l'agent, comme en vue Escouade | le même flux | rien à arrêter : l'interface se branche sur le serveur de l'agent, et les deux vues marchent en même temps |
 
-- [ ] **OpenCode d'abord** : c'est le plus simple, sans hook ni journal à lire. Seulement si OpenCode passe par `opencode serve` (voir « Décisions », « ACP comme voie commune »).
+- [x] **OpenCode d'abord** : c'est le plus simple, sans hook ni journal à lire. Seulement si OpenCode passe par `opencode serve` (voir « Décisions », « ACP comme voie commune »). Fait (ESC-46, 2026-10-18) : `attach.rs`, `Engine::attaches`, `EngineProcess::attach` ; docs/ENGINES.md, « La vue OpenCode ».
 - [ ] **Cursor en suivi réduit**, tant que son CLI n'envoie pas plus de hooks :
   - pas de fin de tour ni de permission en attente sur la carte, ni de notification ;
   - la vue le dit (« Suivi limité : Cursor ne prévient pas Escouade de la fin d'un tour ») ;

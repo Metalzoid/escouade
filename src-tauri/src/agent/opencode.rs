@@ -23,6 +23,9 @@ pub(crate) struct OpencodeState {
     unlinked: Vec<String>,
     /// The role of each message (`user`, `assistant`): the parts of the user's are its own words.
     roles: HashMap<String, String>,
+    /// The messages of the user typed in another client (`opencode attach`), which Escouade did not
+    /// show when it sent them: their words are shown as they come.
+    elsewhere: std::collections::HashSet<String>,
     /// The kind of each part (`text`, `reasoning`), for its deltas.
     kinds: HashMap<String, String>,
     /// The tokens and tools of each subagent, by its call.
@@ -137,6 +140,9 @@ impl AgentRt {
                 };
                 let role = info["role"].as_str().unwrap_or("assistant");
                 self.opencode.roles.insert(id.to_string(), role.to_string());
+                if own && role == "user" && p["typedElsewhere"] == true {
+                    self.opencode.elsewhere.insert(id.to_string());
+                }
                 if own && role == "assistant" {
                     self.opencode.last_message = Some(id.to_string());
                     self.opencode.plan_agent = info["agent"] == "plan" || info["mode"] == "plan";
@@ -345,6 +351,29 @@ impl AgentRt {
         }
     }
 
+    /// A text of a message typed in another client (`opencode attach`): the user's message in the
+    /// conversation, once (Escouade showed its own when it sent them).
+    fn oc_typed_elsewhere(&mut self, id: &str, part: &Value, fx: &mut Effects) {
+        let text = part["text"].as_str().unwrap_or_default();
+        if part["type"] != "text"
+            || part["synthetic"] == true
+            || text.trim().is_empty()
+            || self.conv.contains(id)
+        {
+            return;
+        }
+        let item = json!({
+            "kind": "user", "id": id, "text": text, "images": 0, "ts": now_ms(),
+            "queued": false, "origin": "terminal",
+        });
+        self.meta.resume_at = None;
+        self.append(item, fx);
+        self.meta.prompts += 1;
+        self.meta.last_activity = now_ms();
+        fx.agent_changed = true;
+        fx.save = true;
+    }
+
     /// A part of a message, as it starts, grows and ends.
     fn oc_part(&mut self, part: &Value, parent: Option<String>, fx: &mut Effects) {
         let Some(id) = part["id"].as_str() else {
@@ -352,6 +381,9 @@ impl AgentRt {
         };
         let msg = part["messageID"].as_str().unwrap_or_default();
         if self.opencode.roles.get(msg).is_some_and(|r| r == "user") {
+            if parent.is_none() && self.opencode.elsewhere.contains(msg) {
+                self.oc_typed_elsewhere(id, part, fx);
+            }
             return;
         }
         let main = parent.is_none();

@@ -343,7 +343,8 @@ pub fn caps() -> EngineCaps {
         quota_windows: Vec::new(),
         // `cost` of each step, as the provider's prices give it (0 with a local model).
         cost: CostKind::Exact,
-        terminal_view: false,
+        // `opencode attach`, beside Escouade's own client (`EngineProcess::attach`).
+        terminal_view: true,
         remote_control: false,
         background_tasks: false,
         todo_tools: false,
@@ -517,6 +518,10 @@ impl Engine for Opencode {
         }
     }
 
+    fn attaches(&self) -> bool {
+        true
+    }
+
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         None
     }
@@ -658,6 +663,27 @@ impl Engine for Opencode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opencode_attach_joins_the_session_with_its_password_in_the_environment_only() {
+        let a = process::attach_to("http://127.0.0.1:4096", "ses_1", r"C:\wt", "secret");
+        assert_eq!(
+            a.args,
+            [
+                "attach",
+                "http://127.0.0.1:4096",
+                "--session",
+                "ses_1",
+                "--dir",
+                r"C:\wt"
+            ]
+        );
+        assert!(!a.args.iter().any(|x| x.contains("secret")));
+        assert_eq!(
+            a.env,
+            [("OPENCODE_SERVER_PASSWORD".to_string(), "secret".to_string())]
+        );
+    }
 
     fn recorded(file: &str) -> Vec<Value> {
         bench::recorded(file)

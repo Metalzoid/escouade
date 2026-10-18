@@ -9,6 +9,9 @@ import { addProject, expect, FAKE_OPENCODE, send, test, type App } from './fixtu
 
 type Entry = {
   launch?: { argv: string[]; config: any; password: boolean };
+  attach?: { argv: string[]; password: boolean; passwordInArgv: boolean };
+  /** A line the fake `opencode attach` shows. */
+  shown?: string;
   req?: { method: string; path: string; directory: string | null; body: any };
 };
 
@@ -146,6 +149,59 @@ test.describe('an agent on OpenCode', () => {
     await expect(favorites.getByRole('button', { name: /Retirer des favoris : Devstral Small/ })).toBeVisible();
     await favorites.getByRole('searchbox', { name: 'Rechercher un modèle' }).fill('qwen');
     await expect(favorites.locator('li')).toHaveCount(1);
+  });
+});
+
+test.describe('« Vue OpenCode » (ESC-46)', () => {
+  test.use({ appEnv: { ESCOUADE_OPENCODE: FAKE_OPENCODE } });
+
+  /** What the fake `opencode attach` showed. */
+  const shown = (app: App) => opencodeLog(app).flatMap((e) => (e.shown ? [e.shown] : []));
+
+  test('joins the agent’s session beside Escouade: what is done in the interface, a permission answered there among it, is in the conversation', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newOpencodeAgent(page);
+    await send(page, 'bonjour OpenCode');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour OpenCode')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Vue OpenCode' }).click();
+    const view = page.locator('main .tui');
+    await expect(view.locator('.xterm')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => shown(app).some((l) => l.startsWith('fake opencode attach: ')), { timeout: 20_000 }).toBe(true);
+    // On the agent's server and session, in its folder; its password in its environment, never among its arguments.
+    const attach = opencodeLog(app).find((e) => e.attach)!.attach!;
+    expect(requests(app, 'POST', /^\/session$/)).toHaveLength(1);
+    expect(attach.argv[0]).toBe('attach');
+    expect(attach.argv[1]).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(attach.argv[2]).toBe('--session');
+    expect(attach.argv[3]).toMatch(/^ses_/);
+    expect(attach.argv[4]).toBe('--dir');
+    expect(path.resolve(attach.argv[5]).toLowerCase()).toBe(path.resolve(app.repo).toLowerCase());
+    expect(attach.password).toBe(true);
+    expect(attach.passwordInArgv).toBe(false);
+
+    // A message typed in the interface: its permission, shown there and answered there (Entrée, « Allow once »).
+    await view.locator('.xterm').click();
+    await page.keyboard.type('commande');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => shown(app), { timeout: 20_000 }).toContain('permission bash: rm -rf build (Enter: allow once)');
+    // Escouade sees it waiting on the agent’s card (« Question »: it waits for an answer).
+    await expect.poll(() => page.locator('.card').allTextContents()).toContainEqual(expect.stringMatching(/OpenCode.*Question/s));
+    await page.keyboard.press('Enter');
+    await expect.poll(() => shown(app), { timeout: 20_000 }).toContain('text: La commande est passée.');
+
+    // Back in Escouade's view: the turn is in the conversation, its permission answered; the same server went on.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByText('La commande est passée.')).toBeVisible();
+    // The message typed in the interface too, once, as the user's.
+    await expect(page.locator('main.conv .bubble', { hasText: /^\s*commande\s*$/ })).toHaveCount(1);
+    await expect(page.getByTestId('permission-pending')).toHaveCount(0);
+    await send(page, 'encore');
+    await expect(page.getByText('Bonjour, tu as dit : encore')).toBeVisible();
+    expect(opencodeLog(app).filter((e) => e.launch)).toHaveLength(1);
   });
 });
 

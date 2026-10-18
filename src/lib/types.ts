@@ -889,7 +889,12 @@ export interface Agent {
   plan?: PlanState;
   /** « Vue Claude Code »: it runs in Claude Code's own interface, in a terminal, not in Escouade's conversation view. */
   terminal: boolean;
-  /** The terminal of that interface while it runs. */
+  /**
+   * « Vue OpenCode »: its harness's interface, in a terminal, joined to the process Escouade drives, which goes on (the
+   * conversation keeps up with what is done there). Never with `terminal`.
+   */
+  attached: boolean;
+  /** The terminal of that interface (either) while it runs. */
   terminalId: string | null;
   /** How the last run of that interface ended; null until it ended (the backend puts it back to null when it starts one). */
   tuiExit: TuiExit | null;

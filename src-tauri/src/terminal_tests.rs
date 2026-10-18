@@ -19,10 +19,17 @@ fn a_harness_has_a_terminal_view_exactly_when_its_caps_say_so() {
         EngineId::Opencode,
     ] {
         let e = engine::by_id(id);
-        assert_eq!(e.terminal().is_some(), e.caps().terminal_view, "{id:?}");
+        // In the process's place, or joined to it (OpenCode), never both.
+        assert_eq!(
+            e.terminal().is_some() || e.attaches(),
+            e.caps().terminal_view,
+            "{id:?}"
+        );
+        assert!(!(e.terminal().is_some() && e.attaches()), "{id:?}");
     }
+    assert!(engine::by_id(EngineId::Opencode).attaches());
     let minimal = &crate::engine::minimal::MINIMAL;
-    assert!(minimal.terminal().is_none() && !minimal.caps().terminal_view);
+    assert!(minimal.terminal().is_none() && !minimal.attaches() && !minimal.caps().terminal_view);
 }
 
 #[test]

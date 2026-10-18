@@ -5,7 +5,7 @@
   import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
   import { withoutPassage } from '../lib/conversation';
-  import { canSwitchView, switchView } from '../lib/agent-actions';
+  import { canSwitchView, inHarnessView, switchView } from '../lib/agent-actions';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
@@ -455,6 +455,8 @@
    * waits for, or does, would be lost), as the backend refuses it: the very rows `PlanState::runs_something` counts.
    */
   const working = $derived(atWork || inBackground);
+  /** Shown in its harness's own interface, which takes its process's place or joins it (OpenCode). */
+  const harnessView = $derived(inHarnessView(agent));
   /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
   const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 
@@ -498,7 +500,7 @@
 <!-- « Outils d’Escouade au prochain démarrage »: its process started before Claude and the agents could drive Escouade. -->
 {#snippet nextStart()}
   {#if agent.escouadeNext && !agent.archived}
-    <div class="banner next" class:top={agent.terminal} role="region" aria-label={t('conv.escouadeNext.title')}>
+    <div class="banner next" class:top={harnessView} role="region" aria-label={t('conv.escouadeNext.title')}>
       <div class="what">
         <strong>{t('conv.escouadeNext.title')}</strong>
         <span>{t('conv.escouadeNext.text')}{waits ? ` ${waits}` : ''}</span>
@@ -577,14 +579,14 @@
     {#if canSwitchView(agent)}
       <button
         class="btn view"
-        class:on={agent.terminal}
-        aria-pressed={agent.terminal}
-        aria-label={agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
-        use:tip={agent.terminal ? t('conv.header.toRichHint') : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
+        class:on={harnessView}
+        aria-pressed={harnessView}
+        aria-label={harnessView ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}
+        use:tip={harnessView ? t('conv.header.toRichHint') : t('conv.header.toTerminalHint', { engine: engineName(agent.engine) })}
         onclick={() => switchView(agent)}
       >
-        <span class="mono glyph">{agent.terminal ? '◧' : '>_'}</span><span class="lbl"
-          >{agent.terminal ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}</span
+        <span class="mono glyph">{harnessView ? '◧' : '>_'}</span><span class="lbl"
+          >{harnessView ? t('conv.header.toRich') : t('conv.header.toTerminal', { engine: engineName(agent.engine) })}</span
         >
       </button>
     {/if}
@@ -656,7 +658,7 @@
   <!-- Where the agent is in its plan, when it follows one: it takes the room it needs, never the messages' last 160 px. -->
   <PlanBanner {agent} />
 
-  {#if agent.terminal && !agent.archived}
+  {#if harnessView && !agent.archived}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}

@@ -4,7 +4,7 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
-  import { canSwitchView, copyRemoteLink, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
+  import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { can, canFork, choosesEngine, engineName, engineOptions, showsCost, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { runIn } from '../lib/launch-actions';
@@ -125,7 +125,7 @@
       ...(canSwitchView(a)
         ? [
             {
-              label: t(a.terminal ? 'nav.sidebar.menu.toRich' : 'nav.sidebar.menu.toTerminal', { engine: engineName(a.engine) }),
+              label: t(inHarnessView(a) ? 'nav.sidebar.menu.toRich' : 'nav.sidebar.menu.toTerminal', { engine: engineName(a.engine) }),
               onClick: () => switchView(a),
             },
           ]
