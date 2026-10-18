@@ -8463,3 +8463,27 @@ async fn preparing_a_launch_gives_the_agent_the_projects_launch_commands() {
     })
     .await;
 }
+
+#[test]
+fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
+    // ESC-52, tried for real: a ticket on OpenCode went in « Auto », which OpenCode does not
+    // have, and one on Codex with a Kanban on haiku in « Demander »: the rule asked Claude Code.
+    let settings = Settings::default();
+    let board = BoardSettings::default();
+    let on = |engine: EngineId, model: &str| {
+        let t = Ticket {
+            model: model.into(),
+            ..Default::default()
+        };
+        crate::tickets::ticket_agent_options(&t, &board, &settings, engine).2
+    };
+    assert_eq!(settings.default_mode, "auto");
+    assert_eq!(on(EngineId::Claude, "sonnet"), "auto");
+    assert_eq!(on(EngineId::Claude, "haiku"), "default");
+    // OpenCode has no mode « Auto »: « Demander », the closest that allows no more.
+    assert_eq!(on(EngineId::Opencode, "sonnet"), "default");
+    assert_eq!(on(EngineId::Opencode, ""), "default");
+    // Codex and Copilot take it, whatever model of Claude Code the Kanban names.
+    assert_eq!(on(EngineId::Codex, "haiku"), "auto");
+    assert_eq!(on(EngineId::Copilot, "haiku"), "auto");
+}

@@ -12,7 +12,7 @@
 //! Never a token in the log: `account.getAllUsers` and `account.getCurrentAuth` give it in clear,
 //! and Escouade calls neither; what it logs of a frame is its method alone.
 
-use super::{agent_mode, catalog, permission_mode, Settings};
+use super::{agent_mode, catalog, permission_mode, takes_effort, Settings};
 use crate::engine::{
     BoxFuture, EngineProcess, Message, OnExit, OnFrame, PermissionAnswer, Program, Ready, Remote,
     Start,
@@ -603,7 +603,7 @@ impl CopilotProcess {
         if !s.settings.model.is_empty() {
             p["model"] = json!(s.settings.model);
         }
-        if !s.settings.effort.is_empty() {
+        if !s.settings.effort.is_empty() && takes_effort(&s.settings.model) {
             p["reasoningEffort"] = json!(s.settings.effort);
         }
         if let Some(i) = &self.instructions {
@@ -798,7 +798,11 @@ impl EngineProcess for CopilotProcess {
             if !signed_in(&auth, self.own_home) {
                 return Err(self.refuse(super::not_signed_in(lang)).await);
             }
-            let (session, how) = self.open().await?;
+            // None opened: the process is of no use, and its exit says why in the conversation.
+            let (session, how) = match self.open().await {
+                Ok(opened) => opened,
+                Err(e) => return Err(self.refuse(super::session_refused(lang, &e)).await),
+            };
             self.state.lock().session = Some(session.clone());
             let mode = self.state.lock().settings.mode.clone();
             if let Err(e) = self.apply_mode(&session, &mode).await {
@@ -822,7 +826,7 @@ impl EngineProcess for CopilotProcess {
             };
             if how != "new" && !model.is_empty() {
                 let mut p = json!({ "sessionId": session, "modelId": model });
-                if !effort.is_empty() {
+                if !effort.is_empty() && takes_effort(&model) {
                     p["reasoningEffort"] = json!(effort);
                 }
                 if let Err(e) = self
@@ -894,7 +898,7 @@ impl EngineProcess for CopilotProcess {
             };
             let session = self.session()?;
             let mut p = json!({ "sessionId": session, "modelId": model });
-            if !effort.is_empty() {
+            if !effort.is_empty() && takes_effort(model) {
                 p["reasoningEffort"] = json!(effort);
             }
             self.request("session.model.switchTo", p, REQUEST_LIMIT)
@@ -912,7 +916,7 @@ impl EngineProcess for CopilotProcess {
             };
             let session = self.session()?;
             let mut p = json!({ "sessionId": session, "modelId": model });
-            if !effort.is_empty() {
+            if !effort.is_empty() && takes_effort(&model) {
                 p["reasoningEffort"] = json!(effort);
             }
             self.request("session.model.switchTo", p, REQUEST_LIMIT)

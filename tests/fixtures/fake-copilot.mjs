@@ -26,7 +26,8 @@
 // message received
 // is written to $FAKE_COPILOT_LOG when set. FAKE_COPILOT_AUTH: `none` (not signed in) or `gh-cli`.
 // FAKE_COPILOT_FREE=1: no model listed (a Free account). Both may be given by $COPILOT_HOME/fake.json
-// instead ({"auth": "none", "free": true}), for one account alone.
+// instead ({"auth": "none", "free": true}), for one account alone. {"autoModel": true}: « auto » listed first, with no
+// effort, as for an account signed in by `copilot login` (seen at ESC-52).
 // `copilot login`: signs the folder in as `copilot-user` (its config.json, as Copilot keeps it).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -581,6 +582,19 @@ function main() {
     const { id, method, params = {} } = msg;
     fs.appendFileSync(path.join(home, 'calls.jsonl'), JSON.stringify({ method, params }) + '\n');
     const s = params.sessionId ? load(params.sessionId) : null;
+    // An effort with « auto », which picks the model itself, is refused, as Copilot CLI 1.0.98 does (seen at ESC-52).
+    if (['session.create', 'session.resume', 'session.model.switchTo'].includes(method) && params.reasoningEffort) {
+      const model = params.modelId || params.model || (method === 'session.create' ? 'auto' : s?.model);
+      if (model === 'auto') {
+        return write({
+          id,
+          error: {
+            code: -32603,
+            message: `Request ${method} failed with message: Reasoning effort is not supported when using the "auto" model.`,
+          },
+        });
+      }
+    }
     switch (method) {
       case 'connect':
         return result(id, { ok: true, protocolVersion: 3, version: '1.0.98' });
@@ -590,7 +604,13 @@ function main() {
         return result(id, { isAuthenticated: true, authType: how || 'user', host: 'https://github.com', login: 'user' });
       }
       case 'models.list':
-        return result(id, { models: isFree() ? [] : MODELS });
+        return result(id, {
+          models: isFree()
+            ? []
+            : fake.autoModel
+              ? [{ id: 'auto', name: 'Auto', capabilities: { supports: { vision: true } } }, ...MODELS]
+              : MODELS,
+        });
       case 'session.model.list':
         return result(id, {
           list: [],
@@ -600,6 +620,8 @@ function main() {
           ],
         });
       case 'session.create': {
+        // {"sessionError": "…"} in fake.json: every session refused with it.
+        if (fake.sessionError) return write({ id, error: { code: -32603, message: fake.sessionError } });
         reachServers().then(() => {
           const n = open(params);
           emit(n, 'session.start', { sessionId: n.id, copilotVersion: '1.0.98', context: { cwd: n.cwd } });

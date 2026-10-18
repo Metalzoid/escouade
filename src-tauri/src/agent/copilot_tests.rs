@@ -112,6 +112,8 @@ fn a_first_turn_reads_edits_and_runs_with_a_card_for_each_permission_and_its_dif
     assert!(rt.meta.touched_files.iter().any(|f| f.ends_with("calc.js")));
     let turn = items_of(&items, "turn")[0].clone();
     assert_eq!(turn["isError"], false);
+    // The time it took, from the start of its turn (Copilot tells none of its own).
+    assert!(turn["durationMs"].is_i64(), "{turn}");
     assert!(turn["tokens"].as_u64().unwrap() > 50_000);
     let cost = turn["cost"].as_f64().unwrap();
     assert!((cost - 0.002_272_275).abs() < 1e-9, "{cost}");

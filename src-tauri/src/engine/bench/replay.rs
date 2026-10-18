@@ -101,6 +101,12 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
             .unwrap_or_else(|e| panic!("line {} of the flux is no JSON: {e}", n + 1));
         engine.translate(&mut rt, &frame, &mut Effects::default());
     }
+    // A harness that tells no duration of its turns has them timed by Escouade, from the start of
+    // the turn (made up at each replay as the times are): there must be one, and it is not kept.
+    let timed = matches!(
+        engine.id(),
+        crate::model::EngineId::Copilot | crate::model::EngineId::Opencode
+    );
     let items = rt
         .conv
         .items()
@@ -108,6 +114,14 @@ pub(crate) fn replay(engine: &dyn Engine, flux: &str, agent: &Value, conv: &Path
         .map(|mut item| {
             if let Some(o) = item.as_object_mut() {
                 o.remove("id");
+                if timed && o.get("kind").and_then(Value::as_str) == Some("turn") {
+                    assert!(
+                        o.get("durationMs").is_some_and(Value::is_u64),
+                        "a turn of {} with no duration: {o:?}",
+                        engine.id().as_str()
+                    );
+                    o.insert("durationMs".into(), Value::Null);
+                }
             }
             strip_times(&mut item);
             item

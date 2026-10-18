@@ -874,8 +874,11 @@ impl AgentRt {
             fx.save = true;
             fx.agent_changed = true;
         }
+        // It tells no duration of its own: the time since the turn began (its permissions waited for
+        // included, as the agent's « Durée »).
+        let took = self.active_since.map(|since| (now_ms() - since).max(0));
         let item = json!({
-            "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null,
+            "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took,
             "cost": cost, "tokens": tokens, "isError": failed, "interrupted": interrupted,
             "error": error, "limited": limited, "engine": self.meta.engine,
         });

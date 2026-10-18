@@ -696,11 +696,15 @@ pub(super) fn start_ticket<R: Runtime>(
         .map_err(refusal)?;
     // What its agent goes with: its ticket's own, else its Kanban's, else the app's.
     let started = core.ticket(&t.id).unwrap_or(t);
-    let board = project_of(core, &started.project_id)?.board;
-    let (model, effort, _) = ticket_agent_options(&started, &board, &core.settings.read());
+    let project = project_of(core, &started.project_id)?;
+    let engine = started.engine.unwrap_or(project.engine());
+    let (model, effort, _) =
+        ticket_agent_options(&started, &project.board, &core.settings.read(), engine);
+    // The model its harness runs it on (a harness other than Claude Code: its own, by default).
+    let model = core.model_for(engine, model);
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });
     // A model that takes no effort (Haiku) goes without one: none is said.
-    if crate::engine::default().supports_effort(&model) {
+    if crate::engine::by_id(engine).supports_effort(&model) {
         answer["effort"] = json!(effort);
     }
     json(&answer)

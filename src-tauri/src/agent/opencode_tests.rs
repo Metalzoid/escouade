@@ -61,6 +61,8 @@ fn an_idle_left_from_the_turn_before_does_not_end_the_next_one() {
     );
     assert!(fxs.iter().all(|f| f.turn_end.is_none()));
     assert_eq!(rt.meta.status, AgentStatus::Running);
+    // Its turn began 3 s ago: what its card says it took (OpenCode tells no duration of its own).
+    rt.active_since = Some(now_ms() - 3_000);
     let fxs = feed(
         &mut rt,
         &[
@@ -103,6 +105,8 @@ fn an_idle_left_from_the_turn_before_does_not_end_the_next_one() {
         .unwrap();
     assert_eq!(turn["engine"], "opencode");
     assert_eq!(turn["tokens"], 115);
+    let took = turn["durationMs"].as_i64().unwrap();
+    assert!((3_000..60_000).contains(&took), "{took}");
 }
 
 #[test]

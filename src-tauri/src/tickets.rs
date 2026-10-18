@@ -180,12 +180,14 @@ fn archived_holds(lang: Lang, agent: &str, branch: &str) -> String {
 
 /// The model, the effort and the permission mode a ticket's agent goes with. The model and the
 /// effort: its ticket's own (`start_ticket` gave it one), else its board's, else the app's
-/// defaults. The mode: its board's, else the app's, but `default` instead of `auto` for a model that
-/// has no auto mode (the Composer does not offer it either): the one place that rule applies.
+/// defaults. The mode: its board's, else the app's, but `default` instead of `auto` where the
+/// ticket's harness `engine` has no auto mode for the model (the Composer does not offer it
+/// either: Claude Code's Haiku, OpenCode): the one place that rule applies.
 pub(crate) fn ticket_agent_options(
     t: &Ticket,
     board: &BoardSettings,
     settings: &Settings,
+    engine: EngineId,
 ) -> (String, String, String) {
     let first = |own: &str, board: &str, app: &str| {
         [own, board]
@@ -197,7 +199,7 @@ pub(crate) fn ticket_agent_options(
     let model = first(&t.model, &board.model, &settings.default_model);
     let effort = first(&t.effort, &board.effort, &settings.default_effort);
     let mut mode = first("", &board.mode, &settings.default_mode);
-    if mode == "auto" && !crate::engine::default().supports_auto(&model) {
+    if mode == "auto" && !crate::engine::by_id(engine).supports_auto(&model) {
         mode = "default".into();
     }
     (model, effort, mode)
@@ -1450,7 +1452,8 @@ impl<R: Runtime> Core<R> {
         // What it is told, from its protocol to its first message.
         let lang = self.lang().claude;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
-        let (model, effort, mode) = ticket_agent_options(t, s, &settings);
+        let (model, effort, mode) =
+            ticket_agent_options(t, s, &settings, t.engine.unwrap_or(project.engine()));
         // The branch it takes up may still be in the worktree of its earlier agent, archived.
         if !t.branch.is_empty() {
             self.release_archived_holder(project, t).await?;

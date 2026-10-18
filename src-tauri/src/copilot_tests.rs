@@ -626,3 +626,80 @@ async fn the_texts_written_by_copilot_go_through_copilot_p_without_tools_on_the_
     assert_eq!(answer, "Copilot (auto) a rédigé : autre chose");
     h.core.stop_for_good();
 }
+
+#[tokio::test]
+async fn an_agent_on_auto_goes_without_an_effort_which_copilot_refuses_with_it() {
+    // ESC-52, tried for real: a signed-in Principal's default model is « auto », and the ticket's
+    // agent went with the app's effort: Copilot CLI refused its session (« Reasoning effort is not
+    // supported when using the "auto" model »), and the ticket never began.
+    let h = harness("esc52-copilot-auto");
+    let (p, _) = h.project(false).await;
+    let home = copilot_accounts(&h, json!({ "autoModel": true }));
+    // A first agent: its models are known from then on, « auto » first.
+    let first = copilot_agent(&h, &p).await;
+    h.turn(&first, "bonjour").await;
+    // Then one on a model of Claude Code's (a ticket of a Kanban on Sonnet) goes on Copilot's first.
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Copilot),
+                account: Some("work".into()),
+                model: Some("sonnet".into()),
+                effort: Some("medium".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert_eq!(h.agent(&id).model, "auto");
+    h.turn(&id, "bonjour").await;
+    let calls = noted(&home, "calls.jsonl");
+    let create = calls
+        .iter()
+        .rfind(|c| c["method"] == "session.create")
+        .unwrap_or_else(|| panic!("{calls:?}"));
+    assert_eq!(create["params"]["model"], "auto", "{create}");
+    assert!(
+        create["params"].get("reasoningEffort").is_none(),
+        "{create}"
+    );
+    assert!(
+        texts(&h, &id).iter().any(|t| t.contains("a reçu")),
+        "{:?}",
+        h.items(&id)
+    );
+    // On another model, its effort goes with it again.
+    assert!(!crate::engine::by_id(EngineId::Copilot).supports_effort("auto"));
+    assert!(crate::engine::by_id(EngineId::Copilot).supports_effort("gpt-6-luna"));
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn a_session_copilot_does_not_open_says_why_in_the_conversation() {
+    // ESC-52, tried for real: `session.create` refused, the message failed with « voir le détail
+    // dans la conversation », and the conversation said nothing.
+    let h = harness("esc52-copilot-refused");
+    let (p, _) = h.project(false).await;
+    copilot_accounts(
+        &h,
+        json!({ "sessionError": "Request session.create failed with message: nope." }),
+    );
+    let id = copilot_agent(&h, &p).await;
+    assert!(h
+        .core
+        .send_message(&id, "bonjour".into(), vec![])
+        .await
+        .is_err());
+    h.wait("its reason", |h| {
+        h.items(&id).iter().any(|i| {
+            let i = i.to_string();
+            i.contains("n’a pas ouvert la session") && i.contains("nope.")
+        })
+    })
+    .await;
+    h.core.stop_for_good();
+}

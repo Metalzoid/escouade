@@ -62,6 +62,13 @@ const INSTALL: Install = Install {
 /// Never `auto`, which picks a model itself.
 const MODELS: [(&str, &str); 2] = [("gpt-6-luna", "GPT-6 Luna"), ("gpt-5-mini", "GPT-5 mini")];
 
+/// Whether `model` takes a reasoning effort: never « auto », which picks the model itself (Copilot
+/// CLI 1.0.98 refuses the session: « Reasoning effort is not supported when using the "auto" model »,
+/// seen at ESC-52 with the account of `copilot login`, which lists it first).
+pub(crate) fn takes_effort(model: &str) -> bool {
+    !model.eq_ignore_ascii_case("auto")
+}
+
 /// The efforts Escouade's menu has, in its order: a model's `supportedReasoningEfforts` among them.
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
@@ -369,6 +376,15 @@ fn not_signed_in(lang: Lang) -> String {
         lang,
         "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes (« Se connecter… », copilot login).",
         "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts (“Sign in…”, copilot login)."
+    )
+}
+
+/// No session opened for the agent (`session.create` refused): what Copilot CLI said.
+fn session_refused(lang: Lang, e: &anyhow::Error) -> String {
+    tr_in!(
+        lang,
+        "Copilot CLI n’a pas ouvert la session de l’agent : {e:#}",
+        "Copilot CLI didn’t open the agent’s session: {e:#}"
     )
 }
 
@@ -741,8 +757,8 @@ impl Engine for Copilot {
         })
     }
 
-    fn supports_effort(&self, _model: &str) -> bool {
-        true
+    fn supports_effort(&self, model: &str) -> bool {
+        takes_effort(model)
     }
 
     fn supports_auto(&self, _model: &str) -> bool {
