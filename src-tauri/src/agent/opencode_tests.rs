@@ -409,14 +409,17 @@ fn a_path_of_windows_or_of_posix_is_absolute_on_every_system() {
     for path in [
         r"C:\Users\user\wt\calc.py",
         "C:/Users/user/wt/calc.py",
-        r"\server\share\calc.py",
+        r"\\server\share\calc.py",
         "/home/user/wt/calc.py",
     ] {
         assert_eq!(absolute(path, cwd), path);
     }
+    // A relative one is joined with the separator of the folder, whatever the system.
+    assert_eq!(absolute("calc.py", cwd), "/work/wt/calc.py");
+    assert_eq!(absolute("src/app.ts", "/work/wt/"), "/work/wt/src/app.ts");
     assert_eq!(
-        absolute("calc.py", cwd),
-        std::path::Path::new(cwd).join("calc.py").to_string_lossy()
+        absolute("calc.py", r"C:\Users\user\wt"),
+        r"C:\Users\user\wt\calc.py"
     );
     assert_eq!(absolute("", cwd), "");
 }

@@ -865,23 +865,20 @@ impl AgentRt {
 }
 
 /// A path as OpenCode gave it, absolute (it may give one relative to the agent's folder). One of
-/// Windows (`C:\…`, `\\server\…`) or of a POSIX system (`/…`) is absolute on every system: an
-/// OpenCode of WSL, or a stream recorded elsewhere, reads the same.
+/// Windows (`C:\…`, `\\server\…`) or of a POSIX system (`/…`) is absolute on every system, and a
+/// relative one is joined with the separator of the agent's folder's kind: an OpenCode of WSL, or
+/// a stream recorded elsewhere, reads the same.
 fn absolute(path: &str, cwd: &str) -> String {
-    let b = path.as_bytes();
-    let drive =
-        b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
-    if path.is_empty()
-        || drive
-        || path.starts_with(['/', '\\'])
-        || std::path::Path::new(path).is_absolute()
-    {
+    let of_windows = |p: &str| {
+        let b = p.as_bytes();
+        (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/'))
+            || p.starts_with('\\')
+    };
+    if path.is_empty() || cwd.is_empty() || of_windows(path) || path.starts_with('/') {
         return path.to_string();
     }
-    std::path::Path::new(cwd)
-        .join(path)
-        .to_string_lossy()
-        .into_owned()
+    let sep = if of_windows(cwd) { '\\' } else { '/' };
+    format!("{}{sep}{path}", cwd.trim_end_matches(['/', '\\']))
 }
 
 /// The first file a patch of `patch` / `apply_patch` changes (`*** Update File: <path>`).
