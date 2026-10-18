@@ -227,7 +227,7 @@ export const en: Catalog = {
     steps: [
       {
         title: 'Install a harness',
-        text: 'Escouade’s agents run on the harness on your machine: Claude Code, and from 1.8 on Codex, OpenCode or GitHub Copilot CLI. Install it and sign in once, with your own account.',
+        text: 'Escouade’s agents run on the harness on your machine: Claude Code, Codex, OpenCode or GitHub Copilot CLI. Install it and sign in once, with your own account.',
         link: { label: 'The four harnesses', href: docPath('en', 'harness') },
       },
       {
@@ -244,20 +244,20 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'More harnesses beside Claude Code, and your code host in the loop. No date promised: the work is planned in detail on GitHub.',
+    lead: 'A redesigned app, your code host in the loop, and Cursor CLI. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
       {
-        title: 'Codex, OpenCode and Copilot CLI',
-        text: 'Each agent runs on the harness you choose, beside Claude Code: same conversation, same cards, same Kanban, same worktrees, and each one’s quota or cost in the status bar. Cursor CLI comes after.',
-      },
-      {
-        title: 'One harness per project, agent or ticket',
-        text: 'A default harness for each project, another one for an agent or a ticket, and autopilot follows, down to carrying on with another harness when a quota runs out.',
+        title: 'A redesigned app',
+        text: 'The whole interface speaks this site’s language, tinted by the active project’s color. Each card tells what its agent is doing, and a question is answered from the list, without leaving the open conversation.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket and Gitea',
         text: 'Tickets’ pull requests followed through to the merge, with their CI and their deployments, without leaving Escouade.',
+      },
+      {
+        title: 'Cursor CLI',
+        text: 'A fifth harness beside Claude Code, Codex, OpenCode and Copilot CLI: same conversation, same cards, same Kanban, same worktrees.',
       },
     ],
     plan: 'The detailed plan (in French)',
@@ -277,7 +277,7 @@ export const en: Catalog = {
       },
       {
         q: 'Which harness runs the agents?',
-        a: 'The one on your machine, with your own account: Claude Code (Claude subscription or API key), and from 1.8 on Codex (ChatGPT account), OpenCode (the provider you choose, local models included) or GitHub Copilot CLI (GitHub account with Copilot). Each agent has its own, and the documentation compares them. Cursor CLI comes later.',
+        a: 'The one on your machine, with your own account: Claude Code (Claude subscription or API key), Codex (ChatGPT account), OpenCode (the provider you choose, local models included) or GitHub Copilot CLI (GitHub account with Copilot). Each agent has its own, and the documentation compares them. Cursor CLI comes later.',
       },
       {
         q: 'Is it free?',

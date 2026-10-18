@@ -1,8 +1,14 @@
 # Escouade 2.0 — à faire
 
-Un chantier : le nouveau design de l'app, dans la langue visuelle du site.
+Le chantier principal : le nouveau design de l'app, dans la langue visuelle du site. Viennent ensuite deux chantiers reportés de la 1.8 (voir « Reportés de la 1.8 »).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 : ESC-71 à ESC-85 (les 11 lots, les deux nouveautés, la revue finale, puis la vidéo et le site). Le premier attend la fin de la 1.8, nouveau récit du site (ESC-86) compris.
+
+## Reportés de la 1.8 (2026-10-19)
+
+La 1.8.0 est sortie avec Codex, OpenCode et Copilot CLI à côté de Claude Code. Deux chantiers de son plan n'y sont pas entrés ; leur plan détaillé reste dans `docs/TODO-1.8.md` :
+- **Hébergeurs de code** (GitHub, GitLab, Bitbucket, Gitea) : les pull requests des tickets suivies jusqu'au merge, avec leur CI et leurs déploiements. Plan : `docs/TODO-1.8.md`, chapitre 2 ; tickets ESC-53 à ESC-70, après le nouveau design.
+- **Cursor CLI**, cinquième harness, par ACP : plan dans `docs/TODO-1.8.md`, chapitre 1 ; tickets ESC-24 (essais réels), ESC-42 et ESC-43 (l'adaptateur, ses comptes et son coût) et ESC-49 (sa vue terminal).
 
 ## D'où ça vient (2026-10-12)
 

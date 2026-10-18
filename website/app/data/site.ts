@@ -7,7 +7,7 @@ export const REPO = 'https://github.com/guillaume-gagnaire/escouade';
 export const DISCORD = 'https://discord.gg/m3KYtN8gxP';
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
-export const NEXT = '1.8';
+export const NEXT = '2.0';
 export const PLAN = `${REPO}/blob/main/docs/TODO-${NEXT}.md`;
 export const CHANGELOG = `${REPO}/blob/main/CHANGELOG.md`;
 /** Public address of the site, for links shared on social networks. */

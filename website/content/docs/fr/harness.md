@@ -3,7 +3,7 @@
 Un harness est le programme qui fait tourner un agent : Claude Code, Codex, OpenCode ou GitHub Copilot CLI. Cette page les compare, puis dit pour chacun comment l’installer, son compte, ses modèles, ses modes et ce qui le protège, son coût et son quota, sa vue terminal, le serveur MCP et ce qu’il ne fait pas.
 
 > [!NOTE]
-> Codex, OpenCode et Copilot CLI arrivent avec Escouade 1.8 ; Claude Code est là depuis le début. Cursor CLI viendra plus tard.
+> Codex, OpenCode et Copilot CLI sont là depuis Escouade 1.8 ; Claude Code depuis le début. Cursor CLI viendra plus tard.
 
 ## Choisir un harness
 
