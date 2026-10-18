@@ -27,7 +27,7 @@ This page covers how to use accounts; the full list of the tab’s options is in
 4. Choose what the account takes from Main, under “Share with Main” (see below).
 5. Click “Create and sign in”. The account is created, active and placed last in the list, then the window opens its sign-in.
 
-Once two harnesses are installed, the window starts with “Harness”: the account’s harness, Claude Code or Codex (see [Codex accounts](#codex-accounts)).
+Once two harnesses are installed, the window starts with “Harness”: the account’s harness, Claude Code, Codex or Copilot CLI (see [Codex accounts](#codex-accounts) and [Copilot CLI accounts](#copilot-cli-accounts)).
 
 Escouade creates a folder for the account under `~/.escouade/claude/`, named after the account. It never reuses the folder of a removed account: a new account always gets a fresh folder.
 
@@ -78,6 +78,19 @@ A Codex account is Codex started with a folder of its own (the `CODEX_HOME` vari
 - “Create and sign in” opens a terminal running `codex login` in the account’s folder: the browser opens on ChatGPT’s sign-in. As soon as `auth.json` is written, the window says “Signed in as” followed by the ChatGPT account’s address.
 
 A Codex account’s quota comes from Codex itself: from its agents while they run, else from an app-server of the account started every 5 minutes just long enough to read it, with no turn nor conversation. Its windows are labeled by their length (“5h”, “W”, or a single “30d” window on the free plan). A turn stopped by the limit waits for the reset then goes on by itself, and new Codex agents go to the next Codex account under the threshold, as with Claude Code. Resuming a Codex agent on another account isn’t offered: it waits for its reset, or goes on on another harness.
+
+## Copilot CLI accounts
+
+A Copilot CLI account is Copilot started with a folder of its own (the `COPILOT_HOME` variable): its GitHub sign-in, its sessions and its AI credits. They are managed in the “Copilot CLI accounts” group of the tab.
+
+- Its “Main” is your usual Copilot, `~/.copilot`: Escouade starts it without touching `COPILOT_HOME`.
+- “Add an account…”, harness “Copilot CLI”, makes its folder under `~/.escouade/copilot/`. It may take from Main `mcp-config.json` (your MCP servers), `copilot-instructions.md` and its `agents` and `skills` folders, linked or copied.
+- The sign-in is never copied: `config.json` (which says which GitHub user is signed in) and `settings.json` stay Main’s, and the token stays in the system keychain.
+- “Create and sign in” opens a terminal running `copilot login` in the account’s folder: it gives a code to enter on github.com/login/device. As soon as it is signed in, the window says “Signed in as” followed by `@` and your GitHub user name. Escouade neither takes nor copies any token, not even the GitHub CLI’s.
+
+Two accounts never mix. Not signed in itself, Copilot takes the GitHub CLI’s account (`gh`) on its own, and it prefers a token of the environment (`GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN`) to its sign-in: an account other than Main never gets those tokens, and on the GitHub CLI’s account it counts as not signed in (its agent doesn’t start and the conversation says to sign it in). Main may run on the GitHub CLI’s account: the conversation says so.
+
+Copilot counts in AI credits, by month: the “credits” bar says how much of them is used and when they come back (on the 1st of the month). They come from each call of its agents, else from a `copilot` of the account started at most every 5 minutes just long enough to read them, with no session nor model. Past “Pause above quota”, the autopilot pauses as for Claude Code’s windows. A turn stopped by the credits running out goes on by itself when they come back. If a session has a ceiling of credits (`--max-ai-credits`) and reaches it, a card offers to add as many credits, to lift the ceiling or to stop there.
 
 ## Manage the accounts
 

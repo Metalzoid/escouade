@@ -44,6 +44,14 @@ pub(crate) struct CopilotState {
     todo_updates: u32,
     /// The plan of the mode Plan (`exit_plan_mode.requested`), by its card.
     plans: HashMap<String, Value>,
+    /// The turn was stopped by the account's limit (`session.error` of type `quota`): when it
+    /// ends, if told (the credits given again).
+    limited: Option<Option<i64>>,
+    /// When the month's credits are given again, as the last snapshot said it.
+    credits_reset: Option<i64>,
+    /// The prices of the account's models (`billing.token_prices` of `models.list`, credits per
+    /// million tokens), for a call whose cost Copilot does not tell.
+    prices: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -100,6 +108,11 @@ impl AgentRt {
                 self.cp_turn_end(fx);
             }
             "escouade.todos" => self.cp_todos(&p["todos"], fx),
+            "escouade.prices" => {
+                if let Some(prices) = p["prices"].as_object() {
+                    self.copilot.prices = prices.clone().into_iter().collect();
+                }
+            }
             "session.event" => self.cp_event(&p["event"], fx),
             _ => {}
         }
@@ -315,18 +328,27 @@ impl AgentRt {
             "user_input.requested" => self.cp_question(d, parent, fx),
             "elicitation.requested" => self.cp_form(d, parent, fx),
             "exit_plan_mode.requested" => self.cp_plan(d, parent, fx),
+            "session_limits_exhausted.requested" => self.cp_session_limit(d, parent, fx),
             "permission.completed"
             | "user_input.completed"
             | "elicitation.completed"
-            | "exit_plan_mode.completed" => self.cp_answered_elsewhere(kind, d, fx),
+            | "exit_plan_mode.completed"
+            | "session_limits_exhausted.completed" => self.cp_answered_elsewhere(kind, d, fx),
             "assistant.usage" => {
                 let n = |k: &str| d[k].as_u64().unwrap_or(0);
                 let cache = n("cacheReadTokens") + n("cacheWriteTokens");
+                let nano = crate::engine::copilot_call_nano(d, &self.copilot.prices);
                 let u = &mut self.copilot.usage;
                 u.input += n("inputTokens").saturating_sub(cache);
                 u.cache += cache;
                 u.output += n("outputTokens");
-                u.nano += d["copilotUsage"]["totalNanoAiu"].as_u64().unwrap_or(0);
+                u.nano += nano;
+                // The month's credits, as every call tells them.
+                let snapshots = &d["quotaSnapshots"];
+                if let Some(m) = crate::engine::copilot_credits(snapshots, now_ms()) {
+                    self.copilot.credits_reset = m.resets_at;
+                    fx.rate = Some(vec![m]);
+                }
             }
             "session.usage_info" if own => {
                 if let Some(w) = d["tokenLimit"].as_u64() {
@@ -359,6 +381,17 @@ impl AgentRt {
             }
             "abort" if own => self.copilot.aborted = true,
             "session.error" if own => {
+                // The month's credits spent (`quota`), or a weekly limit: the turn waits.
+                let limit = match (d["errorType"].as_str(), d["errorCode"].as_str()) {
+                    (Some("quota"), code) if code != Some("billing_not_configured") => {
+                        Some(self.copilot.credits_reset)
+                    }
+                    (Some("rate_limit"), Some(code)) if code.contains("weekly") => Some(None),
+                    _ => None,
+                };
+                if limit.is_some() {
+                    self.copilot.limited = limit;
+                }
                 if self.copilot.error.is_none() {
                     let message = d["message"].as_str().unwrap_or_default().trim();
                     if !message.is_empty() {
@@ -674,6 +707,25 @@ impl AgentRt {
         self.cp_question_card(rid, call, vec![q], Value::Null, parent, fx);
     }
 
+    /// The session's ceiling of AI credits reached (`session_limits_exhausted.requested`, a session
+    /// given `--max-ai-credits`): a card whose choices raise it, lift it or give the call up.
+    fn cp_session_limit(&mut self, d: &Value, parent: Option<String>, fx: &mut Effects) {
+        let Some(rid) = d["requestId"].as_str().map(str::to_string) else {
+            return;
+        };
+        let lang = i18n::ui();
+        let options: Vec<Value> = crate::engine::copilot_limit_choices(lang, d)
+            .into_iter()
+            .map(|(label, _)| json!({ "label": label, "description": "" }))
+            .collect();
+        let q = json!({
+            "question": crate::engine::copilot_limit_question(lang, d),
+            "header": tr_in!(lang, "Plafond", "Ceiling"),
+            "multiSelect": false, "options": options,
+        });
+        self.cp_question_card(rid.clone(), rid, vec![q], Value::Null, parent, fx);
+    }
+
     /// A form of an MCP server (`elicitation.requested`): a card of its fields, each a question
     /// (its choices for a list or yes or no, a field to fill otherwise).
     fn cp_form(&mut self, d: &Value, parent: Option<String>, fx: &mut Effects) {
@@ -770,7 +822,9 @@ impl AgentRt {
         let st = &mut self.copilot;
         let interrupted = std::mem::take(&mut self.interrupted) || std::mem::take(&mut st.aborted);
         let error = std::mem::take(&mut st.error).filter(|_| !interrupted);
-        let failed = error.is_some();
+        let limit = std::mem::take(&mut st.limited).filter(|_| !interrupted);
+        let limited = limit.is_some();
+        let failed = error.is_some() || limited;
         if !failed {
             let last = st.last_event.clone();
             self.set_last_entry(last, fx);
@@ -795,13 +849,17 @@ impl AgentRt {
             self.meta.tokens += tokens;
             self.meta.cost += cost;
         }
-        if self.meta.resume_at.take().is_some() {
+        if let Some(resets) = limit {
+            fx.limited = Some(resets);
+        } else if self.meta.resume_at.take().is_some() {
             fx.save = true;
             fx.agent_changed = true;
         }
         let reply = std::mem::take(&mut self.final_text);
         let end = if interrupted {
             TurnEnd::Interrupted
+        } else if limited {
+            TurnEnd::Limited
         } else if let Some(reason) = error.clone() {
             TurnEnd::Error(reason)
         } else {
@@ -819,7 +877,7 @@ impl AgentRt {
         let item = json!({
             "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": null,
             "cost": cost, "tokens": tokens, "isError": failed, "interrupted": interrupted,
-            "error": error, "limited": false, "engine": self.meta.engine,
+            "error": error, "limited": limited, "engine": self.meta.engine,
         });
         self.append(item, fx);
         if !self.pending.is_empty() {
@@ -836,7 +894,7 @@ impl AgentRt {
             }
         }
         self.set_status(
-            if failed {
+            if failed && !limited {
                 AgentStatus::Error
             } else {
                 AgentStatus::Done

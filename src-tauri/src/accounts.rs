@@ -46,6 +46,13 @@ pub const SHARED_DIRS: [&str; 6] = [
 pub const CODEX_SHARED_FILES: [&str; 2] = ["config.toml", "AGENTS.md"];
 pub const CODEX_SHARED_DIRS: [&str; 3] = ["skills", "prompts", "rules"];
 
+/// What a new account of Copilot CLI may share of its Principal's folder (`~/.copilot`): its MCP
+/// servers and instructions, then its agents and skills. Never its `config.json` (its sign-in: the
+/// users signed in, a token there without a keychain), `settings.json` (its trusted folders), nor
+/// its sessions.
+pub const COPILOT_SHARED_FILES: [&str; 2] = ["mcp-config.json", "copilot-instructions.md"];
+pub const COPILOT_SHARED_DIRS: [&str; 2] = ["agents", "skills"];
+
 /// How the accounts of a harness keep their folder: where its Principal's is in the home folder,
 /// the variable that moves it, what a new account may share of it, and the arguments of its
 /// program that sign in.
@@ -68,12 +75,12 @@ pub fn store(engine: EngineId) -> Store {
             dirs: &CODEX_SHARED_DIRS,
             login: &["login"],
         },
-        // Its accounts, their sign-in and what they share come with ESC-40.
+        // Signed in by `copilot login` in the account's folder (ESC-40).
         EngineId::Copilot => Store {
             home: ".copilot",
             var: "COPILOT_HOME",
-            files: &[],
-            dirs: &[],
+            files: &COPILOT_SHARED_FILES,
+            dirs: &COPILOT_SHARED_DIRS,
             login: &["login"],
         },
         // One account in 1.8: OpenCode's own config (ESC-45), its providers connected by it.
@@ -619,6 +626,38 @@ pub fn codex_sign_in(dir: &Path) -> Option<CodexSignIn> {
         email,
         stamp: Some(hash.iter().take(8).map(|b| format!("{b:02x}")).collect()),
     })
+}
+
+/// The GitHub account a Copilot CLI folder `dir` is signed in to by `copilot login`, as its
+/// `config.json` (JSON with comments) names it: its login (the last one signed in, else the first
+/// listed), never a token; None when it names none. Its token is in the system's keychain, by user
+/// (or in that file, without a keychain): a folder signed in to another user is another account.
+pub fn copilot_sign_in(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join("config.json")).ok()?;
+    let json: String = text
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        );
+    let v: Value = serde_json::from_str(&json).ok()?;
+    let login = |u: &Value| -> Option<String> {
+        u.as_str()
+            .or_else(|| u["login"].as_str())
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+    };
+    let users = v
+        .get("loggedInUsers")
+        .or_else(|| v.get("logged_in_users"))
+        .and_then(Value::as_array);
+    let last = v
+        .get("lastLoggedInUser")
+        .or_else(|| v.get("last_logged_in_user"));
+    last.and_then(login)
+        .or_else(|| users.into_iter().flatten().find_map(login))
 }
 
 /// The items of `SHARED_FILES` and `SHARED_DIRS` that Principal's folder `dir` has, files first.
@@ -1729,9 +1768,20 @@ impl<R: Runtime> Core<R> {
                 dir: dir.to_string_lossy().into_owned(),
             });
         }
-        // OpenCode signs in to no account of its own: its providers are its config's. Copilot keeps
-        // its sign-in in the keychain: its process says when it has none (ESC-40 reads it).
-        if matches!(account.engine, EngineId::Opencode | EngineId::Copilot) {
+        // Copilot CLI: the user its folder is signed in to (`config.json`), shown `@login`; the
+        // token stays in the keychain.
+        if account.engine == EngineId::Copilot {
+            let dir = config_dir(&account, &settings);
+            let login = copilot_sign_in(&dir);
+            return Ok(AccountStatus {
+                connected: login.is_some(),
+                stamp: login.clone(),
+                email: login.map(|l| format!("@{l}")),
+                dir: dir.to_string_lossy().into_owned(),
+            });
+        }
+        // OpenCode signs in to no account of its own: its providers are its config's.
+        if account.engine == EngineId::Opencode {
             let dir = config_dir(&account, &settings);
             return Ok(AccountStatus {
                 connected: true,

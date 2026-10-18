@@ -216,12 +216,11 @@ fn no_engine_puts_the_token_on_the_command_line() {
 
 /// The engines that give their agents Escouade's server at the launch of their process: all but
 /// OpenCode, whose server is shared by the agents of an account and gives each agent's folder its
-/// entry by its API (`engine/opencode/process.rs`, `give_escouade`; tested in `opencode_tests`),
-/// and Copilot CLI, which turns it off for its sessions until ESC-40 (`engine/copilot`).
+/// entry by its API (`engine/opencode/process.rs`, `give_escouade`; tested in `opencode_tests`).
 fn gives_the_server() -> Vec<&'static dyn Engine> {
     crate::engine::registry::all()
         .into_iter()
-        .filter(|e| !matches!(e.id(), EngineId::Opencode | EngineId::Copilot))
+        .filter(|e| e.id() != EngineId::Opencode)
         .collect()
 }
 
@@ -780,5 +779,123 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
         argv.contains(&"mcp_servers.escouade.enabled=false".to_string()),
         "{argv:?}"
     );
+    h.core.stop_for_good();
+}
+
+/// The methods the last process of the fake `copilot` of the folder `dir` received (those after
+/// its `connect`), with their parameters.
+fn copilot_last_calls(dir: &Path) -> Vec<Value> {
+    let all = copilot_noted(dir, "calls.jsonl");
+    let from = all
+        .iter()
+        .rposition(|c| c["method"] == "connect")
+        .unwrap_or(0);
+    all[from..].to_vec()
+}
+
+/// What the fake `copilot` of the folder `dir` wrote in its file `name`.
+fn copilot_noted(dir: &Path, name: &str) -> Vec<Value> {
+    std::fs::read_to_string(dir.join(name))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refused_it() {
+    let h = harness("esc40-mcp-copilot");
+    let (p, _) = h.project(false).await;
+    let home = h.dir.join("copilot-work");
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "copilot-work".into(),
+            name: "Copilot".into(),
+            engine: EngineId::Copilot,
+            config_dir: home.to_string_lossy().into(),
+            claude_path: crate::engine::fake_copilot(),
+            active: true,
+            projects: Vec::new(),
+            daily_budget: None,
+        })
+    });
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            crate::core::AgentOptions {
+                engine: Some(EngineId::Copilot),
+                account: Some("copilot-work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    let argv_of = |l: &Value| -> Vec<String> {
+        l["argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a.as_str().unwrap().to_string())
+            .collect()
+    };
+    // « Claude et les agents peuvent piloter Escouade » on: its entry in a private file, which
+    // names the token; the token in its environment alone; Copilot reaches the server with it.
+    drives(&h, true);
+    settled(&h, &id).await;
+    let port = h.core.mcp.status().port;
+    h.turn(&id, "bonjour").await;
+    let launch = copilot_noted(&home, "launches.jsonl").pop().unwrap();
+    let argv = argv_of(&launch);
+    let config = h.core.data.mcp_agent_config(&id);
+    let at = argv
+        .iter()
+        .position(|a| a == "--additional-mcp-config")
+        .unwrap_or_else(|| panic!("{argv:?}"));
+    assert_eq!(argv[at + 1], format!("@{}", config.to_string_lossy()));
+    let token = launch["escouadeToken"]
+        .as_str()
+        .expect("a token")
+        .to_string();
+    assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
+    let file = std::fs::read_to_string(&config).unwrap();
+    assert!(!file.contains(&token), "{file}");
+    assert!(file.contains("Bearer ${ESCOUADE_MCP_TOKEN}"), "{file}");
+    let reached = copilot_noted(&home, "mcp.jsonl").pop().unwrap();
+    assert_eq!(
+        (reached["name"].as_str(), reached["status"].as_u64()),
+        (Some("escouade"), Some(200))
+    );
+    assert_eq!(
+        reached["url"],
+        format!("http://127.0.0.1:{port}/mcp").as_str()
+    );
+    assert!(admitted(port, &token).await);
+    // Given, the session keeps its entry on.
+    let calls = copilot_last_calls(&home);
+    assert!(!calls.iter().any(|c| c["method"] == "session.mcp.disable"));
+    // Off: no file, no token, and the server turned off by its name, for the session too (an
+    // entry `escouade` of the user's mcp-config.json is inherited otherwise).
+    drives(&h, false);
+    settled(&h, &id).await;
+    h.turn(&id, "encore").await;
+    let launch = copilot_noted(&home, "launches.jsonl").pop().unwrap();
+    assert!(launch["escouadeToken"].is_null());
+    let argv = argv_of(&launch);
+    assert!(
+        !argv.iter().any(|a| a == "--additional-mcp-config"),
+        "{argv:?}"
+    );
+    let at = argv
+        .iter()
+        .position(|a| a == "--disable-mcp-server")
+        .unwrap_or_else(|| panic!("{argv:?}"));
+    assert_eq!(argv[at + 1], "escouade");
+    let calls = copilot_last_calls(&home);
+    assert!(calls
+        .iter()
+        .any(|c| c["method"] == "session.mcp.disable" && c["params"]["serverName"] == "escouade"));
     h.core.stop_for_good();
 }

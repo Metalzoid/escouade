@@ -87,7 +87,7 @@ Pour les comptes eux-mêmes, voir [Plusieurs comptes Claude](accounts).
 
 ## Coût estimé
 
-Chaque harness dit comment il donne le coût d’un tour. Claude Code le donne exactement. Codex ne donne que ses tokens : le coût de ses tours est estimé d’après le tarif public des modèles d’OpenAI, dans la conversation (« ≈ 0,02 $ estimé ») comme dans les statistiques. Avec un abonnement ChatGPT, c’est un coût théorique, comme celui de Claude avec un abonnement Max. Un harness qui ne donne que ses tokens a un coût calculé par Escouade d’après le tarif public de ses modèles : il est marqué « ≈ » et « estimé », et une infobulle le dit. Un harness qui ne donne aucun coût a « — » à la place. Dès qu’un harness estimé compte dans ce qui est affiché, les totaux sont marqués « estimé » eux aussi.
+Chaque harness dit comment il donne le coût d’un tour. Claude Code le donne exactement, Copilot CLI aussi : ses crédits d’IA (un crédit, 0,01 $), sinon les prix par token de ses modèles. Codex ne donne que ses tokens : le coût de ses tours est estimé d’après le tarif public des modèles d’OpenAI, dans la conversation (« ≈ 0,02 $ estimé ») comme dans les statistiques. Avec un abonnement ChatGPT, c’est un coût théorique, comme celui de Claude avec un abonnement Max. Un harness qui ne donne que ses tokens a un coût calculé par Escouade d’après le tarif public de ses modèles : il est marqué « ≈ » et « estimé », et une infobulle le dit. Un harness qui ne donne aucun coût a « — » à la place. Dès qu’un harness estimé compte dans ce qui est affiché, les totaux sont marqués « estimé » eux aussi.
 
 ## D’où viennent les chiffres
 

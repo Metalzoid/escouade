@@ -1341,6 +1341,8 @@ impl<R: Runtime> Core<R> {
         env.push((TOKEN_VAR.into(), token));
         env.extend(started_from.env);
         env.extend(launch.env);
+        let masked = view.masked_env(&env);
+        env.extend(masked);
         no_proxy(&mut env);
         // What its harness has to be asked before it starts (Codex: the trust of its hooks).
         match view.prepare(&program, &cwd, &args, &env).await {
@@ -2072,6 +2074,8 @@ impl<R: Runtime> Core<R> {
             }
         };
         let mut env = [settings.agent_env(), accounts::launch_env(account)].concat();
+        let masked = view.masked_env(&env);
+        env.extend(masked);
         no_proxy(&mut env);
         let Some(copy) = view.copy_first(program, &cwd, &env, &of, at.as_deref()) else {
             return;

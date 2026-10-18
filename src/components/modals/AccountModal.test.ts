@@ -136,6 +136,37 @@ describe('AccountModal', () => {
     expect(screen.getByRole('status')).toHaveTextContent('codex login ouvre ton navigateur');
   });
 
+  it('adds an account of Copilot CLI, sharing its MCP servers, instructions, agents and skills, signed in by copilot login', async () => {
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'copilot', name: 'Copilot CLI' }];
+    app.enginesFound = ['claude', 'copilot'];
+    const WORK: Account = {
+      ...PRO,
+      id: 'travail',
+      name: 'Travail',
+      engine: 'copilot',
+      configDir: 'C:\Users\ada\.escouade\copilot\travail',
+    };
+    const SHARED = ['mcp-config.json', 'copilot-instructions.md', 'agents', 'skills'];
+    const b = backend([OUT], {
+      account_shareable: (a) => (a.engine === 'copilot' ? SHARED : SHAREABLE),
+      account_create: () => WORK,
+    });
+    render(AccountModal, { engine: 'copilot' });
+    expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Copilot CLI' })).toBeInTheDocument();
+    await waitFor(() => expect(b.called('account_shareable').at(-1)?.args).toEqual({ engine: 'copilot' }));
+    const group = await screen.findByRole('group', { name: 'Partager avec Principal' });
+    for (const name of SHARED) expect(within(group).getByRole('checkbox', { name })).toBeChecked();
+    expect(screen.getByText(/La connexion n’est jamais copiée : chaque compte se connecte par copilot login/)).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Travail');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
+    await waitFor(() => expect(b.called('account_create')).toHaveLength(1));
+    expect(b.called('account_create')[0].args).toEqual({ name: 'Travail', share: SHARED, mode: 'link', engine: 'copilot' });
+    // Its `copilot login` in a terminal of its folder, said so.
+    await screen.findByRole('dialog', { name: 'Se connecter au compte « Travail »' });
+    expect(term.opened).toEqual(['travail']);
+    expect(screen.getByRole('status')).toHaveTextContent('copilot login donne un code');
+  });
+
   it('offers no harness to pick while only one is found', async () => {
     backend();
     render(AccountModal, {});

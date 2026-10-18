@@ -13,7 +13,7 @@
 
   // « Ajouter un compte… »: a new account of a harness (`engine`, else the one picked here), made with what it shares of
   // the folder of that harness's Principal, then signed in. « Se connecter… » (`accountId`): straight to the sign-in.
-  // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`); Escouade looks for it
+  // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
   let { accountId, back, engine: asked }: { accountId?: string; back?: SettingsTab; engine?: EngineId } = $props();
 
@@ -23,6 +23,11 @@
       nothing: 'accounts.modal.codex.nothingToShare',
       never: 'accounts.modal.codex.neverShared',
       hint: 'accounts.modal.codex.signInHint',
+    },
+    copilot: {
+      nothing: 'accounts.modal.copilot.nothingToShare',
+      never: 'accounts.modal.copilot.neverShared',
+      hint: 'accounts.modal.copilot.signInHint',
     },
   };
   const CLAUDE_SAYS = {

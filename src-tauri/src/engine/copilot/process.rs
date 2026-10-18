@@ -42,7 +42,7 @@ pub(super) const PROTOCOL: u64 = 3;
 /// A request of the session waiting for its answer (its event, by its `requestId`).
 #[derive(Debug, Clone)]
 pub(super) struct Asked {
-    /// `permission`, `user_input`, `elicitation` or `exit_plan_mode`.
+    /// `permission`, `user_input`, `elicitation`, `exit_plan_mode` or `session_limits_exhausted`.
     pub kind: String,
     pub data: Value,
 }
@@ -77,6 +77,11 @@ pub struct CopilotProcess {
     start: Start,
     cwd: String,
     instructions: Option<String>,
+    escouade: bool,
+    /// Its account has a folder of its own (`COPILOT_HOME`): not its Principal.
+    own_home: bool,
+    /// The last lines of its standard error: what its exit tells in the conversation.
+    tail: Arc<Mutex<VecDeque<String>>>,
     on_frame: Arc<OnFrame>,
 }
 
@@ -91,6 +96,69 @@ pub(super) struct Opts {
     /// The instructions added to its session (`systemMessage`, given again at each resume: Copilot
     /// forgets them otherwise, tried).
     pub instructions: Option<String>,
+    /// Escouade's server is given to it (`--additional-mcp-config`): its entry stays on.
+    pub escouade: bool,
+}
+
+/// The variables a token of GitHub reaches Copilot in, taken before its own sign-in.
+pub(super) const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
+
+/// Whether the variables of a process give it a folder of its own (an account other than its
+/// Principal).
+pub(super) fn own_home(env: &[(String, String)]) -> bool {
+    env.iter()
+        .any(|(k, v)| k == "COPILOT_HOME" && !v.is_empty())
+}
+
+/// Whether `auth.getStatus` says Copilot is signed in as the account: an account of its own
+/// never on the GitHub CLI's (`gh-cli`), which Copilot takes by itself without a sign-in of its
+/// own and is the same for every account.
+pub(super) fn signed_in(auth: &Value, own_home: bool) -> bool {
+    auth["isAuthenticated"] == true && !(own_home && auth["authType"] == "gh-cli")
+}
+
+/// The quota of an account none of whose agents runs, by a server of its own started then stopped
+/// (`program` with `args` and `env`): `account.getQuota`'s snapshots, None when the account is not
+/// signed in. No session is opened, no model asked.
+pub(super) async fn read_quota(
+    program: Program,
+    args: Vec<String>,
+    env: Vec<(String, String)>,
+    cwd: String,
+) -> Result<Option<Value>> {
+    let opts = Opts {
+        program,
+        cwd,
+        args,
+        env,
+        start: Start::New,
+        settings: Settings::default(),
+        instructions: None,
+        escouade: false,
+    };
+    let p = CopilotProcess::spawn(opts, Box::new(|_| {}), Box::new(|_, _| {}))?;
+    let read = async {
+        p.request(
+            "connect",
+            json!({ "supportedTaskKinds": ["agent", "client", "shell"] }),
+            REQUEST_LIMIT,
+        )
+        .await?;
+        let auth = p
+            .request("auth.getStatus", json!({}), REQUEST_LIMIT)
+            .await?;
+        if !signed_in(&auth, p.own_home) {
+            return Ok(None);
+        }
+        let quota = p
+            .request("account.getQuota", json!({}), REQUEST_LIMIT)
+            .await?;
+        Ok(Some(quota["quotaSnapshots"].clone()))
+    };
+    let read = read.await;
+    p.kill();
+    p.wait_gone(Duration::from_secs(5)).await;
+    read
 }
 
 /// One message of a stream framed by `Content-Length` headers, read from `r`: None once it ends.
@@ -138,7 +206,9 @@ impl CopilotProcess {
             start,
             settings,
             instructions,
+            escouade,
         } = opts;
+        let own_home = own_home(&env);
         let launch = program.launch(&cwd, &args, &env)?;
         let mut cmd = Command::new(&launch.program);
         cmd.args(&launch.args)
@@ -147,6 +217,13 @@ impl CopilotProcess {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        // An account of its own signs in by itself (`copilot login`): a token of the app's
+        // environment would make it another one, the same for every account.
+        if own_home {
+            for var in INHERITED_TOKENS {
+                cmd.env_remove(var);
+            }
+        }
         for (k, v) in &launch.env {
             cmd.env(k, v);
         }
@@ -211,6 +288,9 @@ impl CopilotProcess {
             start,
             cwd,
             instructions,
+            escouade,
+            own_home,
+            tail: tail.clone(),
             on_frame: on_frame.clone(),
         });
         let weak = Arc::downgrade(&proc);
@@ -263,6 +343,15 @@ impl CopilotProcess {
 
     fn id(&self) -> u64 {
         self.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Refused to start for `reason`: the process stops, its exit telling `reason` in the
+    /// conversation (as its standard error's last line).
+    async fn refuse(&self, reason: String) -> anyhow::Error {
+        note(&self.tail, reason.clone());
+        self.kill();
+        self.wait_exit(Duration::from_secs(5)).await;
+        anyhow!(reason)
     }
 
     /// A request to Copilot, its result.
@@ -380,7 +469,8 @@ impl CopilotProcess {
             kind @ ("permission.requested"
             | "user_input.requested"
             | "elicitation.requested"
-            | "exit_plan_mode.requested") => {
+            | "exit_plan_mode.requested"
+            | "session_limits_exhausted.requested") => {
                 if let Some(rid) = data["requestId"].as_str() {
                     let kind = kind.trim_end_matches(".requested").to_string();
                     self.state.lock().asked.insert(
@@ -395,7 +485,8 @@ impl CopilotProcess {
             "permission.completed"
             | "user_input.completed"
             | "elicitation.completed"
-            | "exit_plan_mode.completed" => {
+            | "exit_plan_mode.completed"
+            | "session_limits_exhausted.completed" => {
                 if let Some(rid) = data["requestId"].as_str() {
                     self.state.lock().asked.remove(rid);
                 }
@@ -597,6 +688,11 @@ impl CopilotProcess {
             .request("models.list", json!({}), REQUEST_LIMIT)
             .await
             .ok();
+        if let Some(prices) = listed.as_ref().map(super::prices).filter(|p| !p.is_empty()) {
+            (self.on_frame)(json!({ "method": "escouade.prices", "params": {
+                "sessionId": session, "prices": prices,
+            } }));
+        }
         let of_session = self
             .request(
                 "session.model.list",
@@ -691,14 +787,16 @@ impl EngineProcess for CopilotProcess {
                 )
                 .await?;
             if hello["protocolVersion"].as_u64() != Some(PROTOCOL) {
-                bail!(super::protocol_refused(lang, &hello["protocolVersion"]));
+                return Err(self
+                    .refuse(super::protocol_refused(lang, &hello["protocolVersion"]))
+                    .await);
             }
             // Never a token: `auth.getStatus` tells how it is signed in, no more.
             let auth = self
                 .request("auth.getStatus", json!({}), REQUEST_LIMIT)
                 .await?;
-            if auth["isAuthenticated"] != true {
-                bail!(super::not_signed_in(lang));
+            if !signed_in(&auth, self.own_home) {
+                return Err(self.refuse(super::not_signed_in(lang)).await);
             }
             let (session, how) = self.open().await?;
             self.state.lock().session = Some(session.clone());
@@ -706,14 +804,16 @@ impl EngineProcess for CopilotProcess {
             if let Err(e) = self.apply_mode(&session, &mode).await {
                 log::warn!("copilot: mode {mode} not applied: {e:#}");
             }
-            // Escouade's server comes with ESC-40: an entry of the user's of its name is off for the
-            // session (`--disable-mcp-server` does nothing in the server mode, tried).
-            let off = json!({ "sessionId": session, "serverName": crate::engine::mcp::SERVER });
-            if let Err(e) = self
-                .request("session.mcp.disable", off, REQUEST_LIMIT)
-                .await
-            {
-                log::debug!("copilot: session.mcp.disable: {e:#}");
+            // Escouade's server refused: an entry of the user's of its name is off for the session
+            // (`--disable-mcp-server` does nothing in the server mode, tried).
+            if !self.escouade {
+                let off = json!({ "sessionId": session, "serverName": crate::engine::mcp::SERVER });
+                if let Err(e) = self
+                    .request("session.mcp.disable", off, REQUEST_LIMIT)
+                    .await
+                {
+                    log::debug!("copilot: session.mcp.disable: {e:#}");
+                }
             }
             // A resumed session keeps its model; the agent's is the one it runs on.
             let (model, effort) = {
@@ -902,6 +1002,16 @@ impl EngineProcess for CopilotProcess {
         let Some(asked) = self.state.lock().asked.get(request_id).cloned() else {
             bail!("Copilot no longer waits for this answer");
         };
+        if asked.kind == "session_limits_exhausted" {
+            let text = super::limit_question(i18n::ui(), &asked.data);
+            let answer = input["answers"][text.as_str()].as_str().unwrap_or_default();
+            return self.answer_pending(
+                "session.ui.handlePendingSessionLimitsExhausted",
+                request_id,
+                "response",
+                super::limit_answer(&asked.data, answer),
+            );
+        }
         if asked.kind == "elicitation" {
             let content = super::form_content(&asked.data["requestedSchema"], &input);
             return self.answer_pending(
@@ -931,9 +1041,20 @@ impl EngineProcess for CopilotProcess {
         Ok(())
     }
 
-    /// The credits of the month come with ESC-40.
+    /// The credits of the month (`session.quota.get`), as meters.
     fn read_usage(&self) -> BoxFuture<'_, Result<Option<Value>>> {
-        Box::pin(async { Ok(None) })
+        Box::pin(async move {
+            let session = self.session()?;
+            let read = self
+                .request(
+                    "session.quota.get",
+                    json!({ "sessionId": session }),
+                    REQUEST_LIMIT,
+                )
+                .await?;
+            let now = chrono::Utc::now().timestamp_millis();
+            Ok(super::credits(&read["snapshots"], now).map(|m| json!({ "meters": [m] })))
+        })
     }
 
     fn rename<'a>(&'a self, title: &'a str) -> BoxFuture<'a, Result<()>> {

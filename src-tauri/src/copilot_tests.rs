@@ -187,3 +187,442 @@ async fn real_copilot() {
     assert!(a.tokens > 0 && a.cost > 0.0);
     h.core.archive_agent(&id, true).await.ok();
 }
+
+// ----- ESC-40: its accounts, their credits, the texts it writes -----
+
+use std::path::PathBuf;
+use std::time::Duration;
+
+/// Copilot's Principal (inactive: never started here) and an account « Work » of its own folder
+/// (`<test dir>/work`), both on the fake `copilot`; `fake` is what the fake reads of « Work »
+/// (`fake.json`: `auth`, `free`, `credits`).
+fn copilot_accounts(h: &Harness, fake: Value) -> PathBuf {
+    let work = h.dir.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::write(work.join("fake.json"), fake.to_string()).unwrap();
+    h.set_settings(|s| {
+        for (id, dir, active) in [
+            ("principal-copilot", String::new(), false),
+            ("work", work.to_string_lossy().into_owned(), true),
+        ] {
+            s.accounts.push(Account {
+                id: id.into(),
+                name: id.into(),
+                engine: EngineId::Copilot,
+                config_dir: dir,
+                claude_path: crate::engine::fake_copilot(),
+                active,
+                projects: Vec::new(),
+                daily_budget: None,
+            });
+        }
+    });
+    work
+}
+
+/// The lines of the file `name` the fake wrote in the folder `dir`.
+fn noted(dir: &std::path::Path, name: &str) -> Vec<Value> {
+    std::fs::read_to_string(dir.join(name))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+fn argv(launch: &Value) -> Vec<String> {
+    launch["argv"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap().to_string())
+        .collect()
+}
+
+/// The first of the month after now, at midnight UTC, in epoch ms.
+fn next_month() -> i64 {
+    use chrono::{Datelike, TimeZone};
+    let now = chrono::Utc::now();
+    let (y, m) = if now.month() == 12 {
+        (now.year() + 1, 1)
+    } else {
+        (now.year(), now.month() + 1)
+    };
+    chrono::Utc
+        .with_ymd_and_hms(y, m, 1, 0, 0, 0)
+        .unwrap()
+        .timestamp_millis()
+}
+
+async fn copilot_agent(h: &Harness, p: &Project) -> String {
+    h.core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Copilot),
+                account: Some("work".into()),
+                model: Some("gpt-6-luna".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id
+}
+
+#[test]
+fn a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_and_never_its_sign_in(
+) {
+    use crate::accounts::{create_of, launch_env, principal_of, shareable_of, ShareMode};
+    let dir = crate::paths::test_dir("esc40-copilot-share");
+    let principal = dir.join(".copilot");
+    std::fs::create_dir_all(principal.join("skills").join("revue")).unwrap();
+    std::fs::write(
+        principal.join("skills").join("revue").join("SKILL.md"),
+        "# Revue",
+    )
+    .unwrap();
+    std::fs::create_dir_all(principal.join("agents")).unwrap();
+    std::fs::write(principal.join("agents").join("relu.agent.md"), "# Relu").unwrap();
+    std::fs::write(principal.join("mcp-config.json"), r#"{"mcpServers":{}}"#).unwrap();
+    std::fs::write(principal.join("copilot-instructions.md"), "Sois bref.").unwrap();
+    // Its sign-in, its trusted folders and its sessions.
+    std::fs::write(
+        principal.join("config.json"),
+        r#"{"loggedInUsers":[{"host":"https://github.com","login":"moi"}]}"#,
+    )
+    .unwrap();
+    std::fs::write(principal.join("settings.json"), "{}").unwrap();
+    std::fs::create_dir_all(principal.join("session-state")).unwrap();
+    assert_eq!(
+        shareable_of(EngineId::Copilot, &principal),
+        [
+            "mcp-config.json",
+            "copilot-instructions.md",
+            "agents",
+            "skills"
+        ]
+    );
+    let mut s = Settings::default();
+    s.accounts.push(principal_of(EngineId::Copilot));
+    let root = dir.join("data").join("copilot");
+    for refused in ["config.json", "settings.json", "session-state"] {
+        let e = create_of(
+            EngineId::Copilot,
+            &s,
+            &root,
+            &principal,
+            "Refusé",
+            &[refused.to_string()],
+            ShareMode::Copy,
+        )
+        .unwrap_err();
+        assert!(
+            e.to_string().contains("ne se partage pas"),
+            "{refused}: {e}"
+        );
+    }
+    let share = shareable_of(EngineId::Copilot, &principal);
+    let made = create_of(
+        EngineId::Copilot,
+        &s,
+        &root,
+        &principal,
+        "Travail",
+        &share,
+        ShareMode::Copy,
+    )
+    .unwrap();
+    let own = PathBuf::from(&made.config_dir);
+    assert_eq!(own, std::path::absolute(root.join("travail")).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(own.join("copilot-instructions.md")).unwrap(),
+        "Sois bref."
+    );
+    assert!(own.join("mcp-config.json").is_file());
+    assert!(own.join("agents").join("relu.agent.md").is_file());
+    assert!(own.join("skills").join("revue").join("SKILL.md").is_file());
+    // Not signed in as Principal's user: a folder of its own, without its config.json.
+    assert!(!own.join("config.json").exists());
+    assert_eq!(crate::accounts::copilot_sign_in(&own), None);
+    assert_eq!(
+        launch_env(&made),
+        [("COPILOT_HOME".to_string(), made.config_dir.clone())]
+    );
+    assert!(launch_env(&principal_of(EngineId::Copilot)).is_empty());
+}
+
+#[test]
+fn a_copilot_sign_in_is_the_user_its_config_json_names_never_a_token() {
+    use crate::accounts::copilot_sign_in;
+    let dir = crate::paths::test_dir("esc40-copilot-auth");
+    assert_eq!(copilot_sign_in(&dir), None);
+    let write = |text: &str| std::fs::write(dir.join("config.json"), text).unwrap();
+    // As Copilot CLI writes it: comments first; never signed in.
+    write("// User settings belong in settings.json.\n// This file is managed automatically.\n{\n  \"firstLaunchAt\": \"2026-10-17T18:49:58.805Z\"\n}\n");
+    assert_eq!(copilot_sign_in(&dir), None);
+    // Signed in: its last user, else the first of its list.
+    write("// managed\n{\"loggedInUsers\":[{\"host\":\"https://github.com\",\"login\":\"un\"},{\"host\":\"https://github.com\",\"login\":\"deux\"}],\"lastLoggedInUser\":{\"host\":\"https://github.com\",\"login\":\"deux\"}}");
+    assert_eq!(copilot_sign_in(&dir).as_deref(), Some("deux"));
+    write(r#"{"loggedInUsers":[{"host":"https://github.com","login":"un"}]}"#);
+    assert_eq!(copilot_sign_in(&dir).as_deref(), Some("un"));
+    // Without a keychain, its token is in the file too: never read as the user.
+    write(
+        r#"{"logged_in_users":["trois"],"copilot_tokens":{"https://github.com:trois":"gho_secret"}}"#,
+    );
+    assert_eq!(copilot_sign_in(&dir).as_deref(), Some("trois"));
+    write(r#"{"loggedInUsers":[]}"#);
+    assert_eq!(copilot_sign_in(&dir), None);
+}
+
+#[tokio::test]
+async fn a_copilot_account_is_added_then_signed_in_by_copilot_login_in_a_terminal_of_its_folder() {
+    use crate::accounts::ShareMode;
+    let h = harness("esc40-copilot-login");
+    let work = h
+        .core
+        .create_account(EngineId::Copilot, "Travail", &[], ShareMode::Link)
+        .unwrap();
+    let dir = PathBuf::from(&work.config_dir);
+    assert_eq!(
+        dir,
+        std::path::absolute(h.core.data.accounts_of(EngineId::Copilot).join("travail")).unwrap()
+    );
+    let ids: Vec<String> = h
+        .core
+        .settings
+        .read()
+        .accounts
+        .iter()
+        .map(|a| a.id.clone())
+        .collect();
+    assert_eq!(ids, ["principal", "principal-copilot", "travail"]);
+    h.core
+        .update_claude_account(Account {
+            claude_path: crate::engine::fake_copilot(),
+            ..work
+        })
+        .unwrap();
+    let status = h.core.claude_account_status("travail").await.unwrap();
+    assert!(!status.connected);
+    let out = std::sync::Arc::new(parking_lot::Mutex::new(String::new()));
+    let sink = out.clone();
+    let info = h
+        .core
+        .claude_login("travail", (200, 30), move |b| {
+            sink.lock().push_str(&String::from_utf8_lossy(&b))
+        })
+        .unwrap();
+    assert_eq!(
+        (info.name.as_str(), info.shell.as_str()),
+        ("Travail", "copilot cli")
+    );
+    let start = std::time::Instant::now();
+    let mut answered = false;
+    while !dir.join("config.json").is_file() {
+        // The console asks where its cursor is (ConPTY) before it shows anything.
+        if !answered && out.lock().contains("[6n") {
+            h.core.pty.write(&info.id, b"[1;1R").unwrap();
+            answered = true;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "no sign-in: {:?}",
+            out.lock()
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // `copilot login`, in the account's folder: its user, never a token.
+    let launch = noted(&dir, "launches.jsonl").pop().unwrap();
+    assert_eq!(argv(&launch), ["login"]);
+    let status = h.core.claude_account_status("travail").await.unwrap();
+    assert!(status.connected);
+    assert_eq!(status.email.as_deref(), Some("@copilot-user"));
+    assert_eq!(status.stamp.as_deref(), Some("copilot-user"));
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn the_credits_of_a_copilot_account_without_an_agent_are_read_by_a_server_of_its_own() {
+    let h = harness("esc40-quota-apart");
+    let work = copilot_accounts(&h, json!({ "credits": 25 }));
+    h.core.refresh_usage().await;
+    let usage = h.core.usage.lock().clone();
+    let read = usage.account("work").unwrap();
+    assert_eq!(read.meters.len(), 1, "{:?}", read.meters);
+    // The month's credits, 75 % used; `account.getQuota` tells the time of its reading as their
+    // end: the first of next month instead.
+    assert_eq!((read.meters[0].minutes, read.meters[0].pct), (None, 75.0));
+    assert_eq!(read.meters[0].resets_at, Some(next_month()));
+    assert!(read.connected);
+    // A server started for that and stopped: no session, Escouade's server kept out.
+    let started = noted(&work, "launches.jsonl");
+    assert_eq!(started.len(), 1);
+    let a = argv(&started[0]);
+    assert!(a.contains(&"--server".to_string()), "{a:?}");
+    assert!(a.contains(&"--disable-mcp-server".to_string()), "{a:?}");
+    let calls: Vec<String> = noted(&work, "calls.jsonl")
+        .iter()
+        .map(|c| c["method"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(calls, ["connect", "auth.getStatus", "account.getQuota"]);
+    // Read again within five minutes: not asked again.
+    h.core.refresh_usage().await;
+    assert_eq!(noted(&work, "launches.jsonl").len(), 1);
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn an_account_of_its_own_on_the_github_clis_sign_in_is_not_signed_in() {
+    let h = harness("esc40-gh-cli");
+    let (p, _) = h.project(false).await;
+    // Copilot took the GitHub CLI's account by itself: the same for every account.
+    copilot_accounts(&h, json!({ "auth": "gh-cli" }));
+    h.core.refresh_usage().await;
+    assert!(!h.core.usage.lock().account("work").unwrap().connected);
+    let id = copilot_agent(&h, &p).await;
+    let e = h
+        .core
+        .send_message(&id, "bonjour".into(), vec![])
+        .await
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("n'a pas pu démarrer"), "{e:#}");
+    // Why, in its conversation: its process stopped on it.
+    h.wait("its reason", |h| {
+        h.items(&id).iter().any(|i| {
+            i.to_string().contains("copilot login") && i.to_string().contains("Réglages › Comptes")
+        })
+    })
+    .await;
+    // Nothing was said on that sign-in.
+    assert!(!h
+        .items(&id)
+        .iter()
+        .any(|i| i["kind"] == "text" && i["text"].as_str().unwrap_or("").contains("a reçu")));
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn a_copilot_turn_tells_its_accounts_credits_and_their_end_stops_it_until_they_come_back() {
+    let h = harness("esc40-credits");
+    let (p, _) = h.project(false).await;
+    copilot_accounts(&h, json!({ "credits": 3 }));
+    let id = copilot_agent(&h, &p).await;
+    h.turn(&id, "bonjour").await;
+    // Each call says the month's credits: 97 % used, over « Pause au-delà du quota » (95 %).
+    let usage = h.core.usage.lock().clone();
+    let read = usage.account("work").unwrap();
+    assert_eq!((read.meters[0].minutes, read.meters[0].pct), (None, 97.0));
+    assert!(crate::accounts::over_threshold(
+        &usage.accounts,
+        "work",
+        95,
+        now_ms()
+    ));
+    let pause =
+        crate::board::account_pause(&usage.accounts, "work", 95, &Default::default(), now_ms())
+            .expect("the autopilot paused");
+    assert_eq!(pause.reason, PauseReason::Credits);
+    // A turn stopped by its credits spent: limited, its resume planned when they are given again.
+    h.turn(&id, "limite").await;
+    let turn = h
+        .items(&id)
+        .into_iter()
+        .rfind(|i| i["kind"] == "turn")
+        .unwrap();
+    assert_eq!(turn["limited"], true);
+    let at = h.agent(&id).resume_at.expect("its resume planned");
+    assert!(at >= next_month(), "after the reset: {at}");
+    // Its cost: the nano-AIU of its calls (0.227 credit, $0.00227 a turn).
+    let cost = h.agent(&id).cost;
+    assert!((cost - 2.0 * 227_227_500.0 / 1e11).abs() < 1e-9, "{cost}");
+    // The statistics keep them as Copilot's, and narrow to it.
+    let all = h.core.stats_view_by("day", None, None);
+    assert!(
+        all.engines.contains(&"copilot".to_string()),
+        "{:?}",
+        all.engines
+    );
+    let copilot = h.core.stats_view_by("day", None, Some("copilot"));
+    assert!((copilot.cost - cost).abs() < 1e-9, "{}", copilot.cost);
+    assert_eq!(copilot.tokens, 2 * (200 + 1000 + 40));
+    let claude = h.core.stats_view_by("day", None, Some("claude"));
+    assert_eq!(claude.tokens, 0);
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn the_sessions_ceiling_of_credits_is_answered_from_its_card() {
+    let h = harness("esc40-ceiling");
+    let (p, _) = h.project(false).await;
+    copilot_accounts(&h, json!({}));
+    let id = copilot_agent(&h, &p).await;
+    h.core
+        .send_message(&id, "plafond".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("the card", |h| waiting(h, &id, "question").is_some())
+        .await;
+    let card = waiting(&h, &id, "question").unwrap();
+    let q = &card["questions"][0];
+    let text = q["question"].as_str().unwrap().to_string();
+    let lift = q["options"][1]["label"].as_str().unwrap().to_string();
+    h.core
+        .answer_question(&id, card["id"].as_str().unwrap(), json!({ text: lift }))
+        .unwrap();
+    h.wait("the turn's end", |h| {
+        texts(h, &id).iter().any(|t| t == "Plafond : unset.")
+    })
+    .await;
+    h.core.stop_for_good();
+}
+
+#[tokio::test]
+async fn the_texts_written_by_copilot_go_through_copilot_p_without_tools_on_the_account_of_the_agent(
+) {
+    let h = harness("esc40-writer");
+    let (p, _) = h.project(false).await;
+    let work = copilot_accounts(&h, json!({}));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::Copilot));
+    let id = copilot_agent(&h, &p).await;
+    let answer = h
+        .core
+        .one_shot("Nomme la tâche.", "ajouter un bouton", Some(&id), None)
+        .await
+        .unwrap();
+    assert_eq!(answer, "Copilot (gpt-5-mini) a rédigé : ajouter un bouton");
+    let asked = noted(&work, "prompts.jsonl");
+    assert_eq!(asked.len(), 1);
+    let a = argv(&asked[0]);
+    for x in [
+        "--output-format",
+        "json",
+        "--disable-builtin-mcps",
+        "--no-custom-instructions",
+        "--available-tools=escouade-aucun-outil",
+    ] {
+        assert!(a.iter().any(|y| y == x), "{x}: {a:?}");
+    }
+    // The question never on the command line: from the input, its instructions first.
+    assert!(!a.iter().any(|y| y.contains("ajouter un bouton")), "{a:?}");
+    let question = asked[0]["question"].as_str().unwrap();
+    assert!(
+        question.starts_with("<instructions>\nNomme la tâche."),
+        "{question}"
+    );
+    // Its session is gone from the account's folder.
+    let session = a
+        .iter()
+        .find_map(|y| y.strip_prefix("--session-id="))
+        .unwrap();
+    assert!(!work.join("session-state").join(session).exists());
+    // A Free account takes no model but `auto`: asked again on it.
+    std::fs::write(work.join("fake.json"), r#"{"free":true}"#).unwrap();
+    let answer = h
+        .core
+        .one_shot("Nomme.", "autre chose", Some(&id), None)
+        .await
+        .unwrap();
+    assert_eq!(answer, "Copilot (auto) a rédigé : autre chose");
+    h.core.stop_for_good();
+}

@@ -77,6 +77,13 @@ export default defineZone('accounts', {
       neverShared: 'The sign-in (auth.json) is never copied: each account has its own (its token changes each time it is renewed).',
       signInHint: 'Sign in in the terminal below: codex login opens your browser on ChatGPT’s sign-in.',
     },
+    // What a Copilot CLI account keeps apart (its folder is a COPILOT_HOME).
+    copilot: {
+      nothingToShare: '{name} has no mcp-config.json, copilot-instructions.md, agents or skills to share.',
+      neverShared:
+        'The sign-in is never copied: each account signs in with copilot login (its config.json and the system keychain), without the GitHub CLI’s token.',
+      signInHint: 'Sign in in the terminal below: copilot login gives a code to enter on github.com/login/device.',
+    },
     restart: 'Restart',
     done: 'Done',
   },

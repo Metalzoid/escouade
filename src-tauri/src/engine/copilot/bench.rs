@@ -80,7 +80,7 @@ impl Target for OnBench {
                 Scenario::Interrupt => "lent",
                 Scenario::PlanMode => "propose un plan",
                 Scenario::Subagents => "sous-agent",
-                Scenario::Limit => return None,
+                Scenario::Limit => "limite",
             }
             .to_string(),
         )
@@ -95,12 +95,8 @@ impl Target for OnBench {
 async fn the_fake_copilot_passes_the_bench() {
     let dir = bench_dir("esc39-bench-copilot");
     let played = run(&OnBench, &dir).await;
-    // No quota yet (ESC-40): neither the limit nor the quota.
-    let expected: Vec<Scenario> = Scenario::ALL
-        .into_iter()
-        .filter(|s| !matches!(s, Scenario::Limit | Scenario::Quota))
-        .collect();
-    assert_eq!(played, expected);
+    // The month's credits (ESC-40): the limit and the quota too.
+    assert_eq!(played, Scenario::ALL.to_vec());
 }
 
 #[test]

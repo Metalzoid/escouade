@@ -85,6 +85,13 @@ export default {
       neverShared: 'La connexion (auth.json) n’est jamais copiée : chaque compte a la sienne (son jeton change à chaque renouvellement).',
       signInHint: 'Connecte-toi dans le terminal ci-dessous : codex login ouvre ton navigateur sur la connexion de ChatGPT.',
     },
+    // What a Copilot CLI account keeps apart (its folder is a COPILOT_HOME).
+    copilot: {
+      nothingToShare: '{name} n’a ni mcp-config.json, ni copilot-instructions.md, ni agents ou skills à partager.',
+      neverShared:
+        'La connexion n’est jamais copiée : chaque compte se connecte par copilot login (son config.json et le trousseau du système), sans le jeton du GitHub CLI.',
+      signInHint: 'Connecte-toi dans le terminal ci-dessous : copilot login donne un code à saisir sur github.com/login/device.',
+    },
     restart: 'Relancer',
     done: 'Terminé',
   },

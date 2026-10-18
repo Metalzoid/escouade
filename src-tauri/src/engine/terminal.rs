@@ -94,6 +94,12 @@ pub trait TerminalView: Send + Sync {
     fn escouade(&self, harness: &dyn Engine, access: &Escouade, _config_dir: &Path) -> mcp::Launch {
         harness.escouade_launch(access)
     }
+    /// The variables set over those of its environment `env` (its account's folder among them),
+    /// to keep from it what the app's own environment would give it: nothing, unless its harness
+    /// would take another account from it (Copilot CLI: a GitHub token, for an account of its own).
+    fn masked_env(&self, _env: &[(String, String)]) -> Vec<(String, String)> {
+        Vec::new()
+    }
     /// What is added to its arguments once they are known (`args`, with its environment `env`),
     /// just before it starts: nothing, unless its harness has to be asked first.
     fn prepare<'a>(

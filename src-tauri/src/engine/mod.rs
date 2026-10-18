@@ -36,8 +36,14 @@ pub(crate) use codex::{
 };
 #[cfg(test)]
 pub(crate) use copilot::fake_copilot;
+#[cfg(test)]
+pub(crate) use copilot::limit_answer as copilot_limit_answer;
 pub use copilot::COPILOT;
-pub(crate) use copilot::{no as copilot_no, yes as copilot_yes};
+pub(crate) use copilot::{
+    call_nano as copilot_call_nano, credits as copilot_credits,
+    limit_choices as copilot_limit_choices, limit_question as copilot_limit_question,
+    no as copilot_no, yes as copilot_yes,
+};
 pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;

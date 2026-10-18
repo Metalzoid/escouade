@@ -12,6 +12,7 @@
 pub(crate) mod bench;
 mod locate;
 mod process;
+mod prompt;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
@@ -32,8 +33,10 @@ use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
+use crate::model::QuotaMeter;
 use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 
 /// GitHub Copilot CLI.
 pub struct Copilot;
@@ -63,7 +66,10 @@ const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
 /// The variables whose values Copilot strips from its commands and MCP servers (`--secret-env-vars`):
 /// the tokens it may be given.
-const SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN";
+/// Not `ESCOUADE_MCP_TOKEN`: listed, Copilot no longer puts it in the header of Escouade's entry
+/// (`${ESCOUADE_MCP_TOKEN}`, which then reaches the server without it: tried on 1.0.98). It is the
+/// agent's own token, for the server it is given, valid while its process lives.
+const SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN";
 
 /// The model, effort and mode in force (Copilot takes them at once, `session.model.switchTo` and
 /// `session.mode.set`).
@@ -157,8 +163,8 @@ pub fn caps() -> EngineCaps {
         // `immediate`: the running turn takes it at once.
         mid_turn: MidTurn::Immediate,
         slash_commands: false,
-        // The credits of the month come with ESC-40.
-        quota: QuotaKind::None,
+        // The credits of the month (`quotaSnapshots`).
+        quota: QuotaKind::Credits,
         quota_windows: Vec::new(),
         // Its nano-AIU at the end of each turn (`session.usage_checkpoint`).
         cost: CostKind::Exact,
@@ -356,12 +362,12 @@ fn protocol_refused(lang: Lang, version: &Value) -> String {
     )
 }
 
-/// Refused: no account is signed in to Copilot.
+/// Refused: no account is signed in to Copilot (an account of its own on the GitHub CLI's is not).
 fn not_signed_in(lang: Lang) -> String {
     tr_in!(
         lang,
-        "Copilot CLI n’est connecté à aucun compte GitHub : connecte-toi avec copilot login.",
-        "Copilot CLI isn’t signed in to any GitHub account: sign in with copilot login."
+        "Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes (« Se connecter… », copilot login).",
+        "Copilot CLI isn’t signed in to any GitHub account on this account: sign it in in Settings › Accounts (“Sign in…”, copilot login)."
     )
 }
 
@@ -419,11 +425,205 @@ fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
     Ok(m)
 }
 
-fn not_yet() -> String {
-    tr!(
-        "Copilot ne le fait pas encore dans Escouade",
-        "Copilot doesn’t do it in Escouade yet"
+/// The month's credits as Copilot's quota says them (`quotaSnapshots` of each `assistant.usage` and
+/// of `account.getQuota`, `snapshots` of `session.quota.get`), read at `now` (epoch ms): those of
+/// `chat` (the AI credits, with a billing by tokens), else of `premium_interactions`; none when
+/// the plan has no limit or none is told.
+pub(crate) fn credits(snapshots: &Value, now: i64) -> Option<QuotaMeter> {
+    let told = |k: &str| {
+        let s = snapshots.get(k).filter(|s| s.is_object())?;
+        (s["remainingPercentage"].is_number() && s["entitlementRequests"].as_f64() != Some(0.0))
+            .then_some(s)
+    };
+    let s = told("chat").or_else(|| told("premium_interactions"))?;
+    if s["isUnlimitedEntitlement"] == true {
+        return None;
+    }
+    let remaining = s["remainingPercentage"].as_f64()?.clamp(0.0, 100.0);
+    let told_reset = s["resetDateEpochMs"].as_i64().or_else(|| {
+        s["resetDate"]
+            .as_str()
+            .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+            .map(|d| d.timestamp_millis())
+    });
+    // `account.getQuota` says the time of its reading (tried): the credits are given again on the
+    // first of the month (UTC), as the turns' snapshots say.
+    let resets_at = told_reset
+        .filter(|&t| t > now + 60_000)
+        .unwrap_or_else(|| next_month(now));
+    Some(QuotaMeter::credits(crate::model::RateWindow {
+        pct: ((100.0 - remaining) * 10.0).round() / 10.0,
+        resets_at: Some(resets_at),
+    }))
+}
+
+/// The question of the card of a session's ceiling of credits reached
+/// (`session_limits_exhausted.requested`: `usedAiCredits` of `maxAiCredits`).
+pub(crate) fn limit_question(lang: Lang, data: &Value) -> String {
+    let n = |k: &str| {
+        let v = data[k].as_f64().unwrap_or(0.0);
+        let s = format!("{:.2}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    };
+    tr_in!(
+        lang,
+        "Le plafond de crédits d’IA de la session est atteint ({used} sur {max}). Que faire de l’appel en attente ?",
+        "The session’s ceiling of AI credits is reached ({used} of {max}). What about the call waiting?",
+        used = n("usedAiCredits"),
+        max = n("maxAiCredits")
     )
+}
+
+/// The choices of that card, each with the answer it gives Copilot
+/// (`session.ui.handlePendingSessionLimitsExhausted`): the ceiling raised by as much again, lifted,
+/// or the call given up.
+pub(crate) fn limit_choices(lang: Lang, data: &Value) -> Vec<(String, Value)> {
+    let max = data["maxAiCredits"].as_f64().unwrap_or(0.0);
+    let mut out = Vec::new();
+    if max > 0.0 {
+        let more = format!("{max}");
+        out.push((
+            tr_in!(
+                lang,
+                "Ajouter {more} crédits",
+                "Add {more} credits",
+                more = more
+            ),
+            json!({ "action": "add", "additionalAiCredits": max }),
+        ));
+    }
+    out.push((
+        tr_in!(lang, "Lever le plafond", "Lift the ceiling"),
+        json!({ "action": "unset" }),
+    ));
+    out.push((
+        tr_in!(lang, "Arrêter là", "Stop here"),
+        json!({ "action": "cancel" }),
+    ));
+    out
+}
+
+/// The answer to that card: the choice `answer` names, in either language; none known, the call is
+/// given up.
+pub(crate) fn limit_answer(data: &Value, answer: &str) -> Value {
+    [Lang::Fr, Lang::En]
+        .iter()
+        .flat_map(|l| limit_choices(*l, data))
+        .find(|(label, _)| label == answer)
+        .map_or_else(|| json!({ "action": "cancel" }), |(_, r)| r)
+}
+
+/// The prices of the account's models, by their id (`billing.tokenPrices` of `models.list`: AI
+/// credits per batch of tokens), for the calls whose cost Copilot does not tell.
+pub(crate) fn prices(listed: &Value) -> HashMap<String, Value> {
+    listed["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| {
+            let p = m["billing"]["tokenPrices"].clone();
+            p.is_object()
+                .then(|| Some((m["id"].as_str()?.to_string(), p)))
+                .flatten()
+        })
+        .collect()
+}
+
+/// What one call of the model cost, in nano-AIU (`assistant.usage`): Copilot's
+/// (`copilotUsage.totalNanoAiu`), else the sum of its details (`tokenDetails`: tokens by batch),
+/// else its tokens at its model's prices (`prices`). A credit is 10⁹ nano-AIU, checked at point 0.
+pub(crate) fn call_nano(usage: &Value, prices: &HashMap<String, Value>) -> u64 {
+    let told = &usage["copilotUsage"];
+    if let Some(n) = told["totalNanoAiu"].as_u64() {
+        return n;
+    }
+    let by_batch = |count: f64, size: f64, per_batch: f64| {
+        if size > 0.0 {
+            count / size * per_batch
+        } else {
+            0.0
+        }
+    };
+    if let Some(details) = told["tokenDetails"].as_array().filter(|d| !d.is_empty()) {
+        let f = |d: &Value, k: &str| d[k].as_f64().unwrap_or(0.0);
+        return details
+            .iter()
+            .map(|d| by_batch(f(d, "tokenCount"), f(d, "batchSize"), f(d, "costPerBatch")))
+            .sum::<f64>()
+            .round() as u64;
+    }
+    let Some(p) = usage["model"].as_str().and_then(|m| prices.get(m)) else {
+        return 0;
+    };
+    let n = |k: &str| usage[k].as_f64().unwrap_or(0.0);
+    let price = |k: &str| p[k].as_f64().unwrap_or(0.0);
+    let size = p["batchSize"].as_f64().unwrap_or(1_000_000.0);
+    let (read, write) = (n("cacheReadTokens"), n("cacheWriteTokens"));
+    let fresh = (n("inputTokens") - read - write).max(0.0);
+    let credits = by_batch(fresh, size, price("inputPrice"))
+        + by_batch(read, size, price("cacheReadPrice"))
+        + by_batch(write, size, price("cacheWritePrice"))
+        + by_batch(n("outputTokens"), size, price("outputPrice"));
+    (credits * 1e9).round() as u64
+}
+
+/// The first of the month after `now` (epoch ms), at midnight UTC.
+fn next_month(now: i64) -> i64 {
+    use chrono::{Datelike, TimeZone};
+    let d = chrono::Utc
+        .timestamp_millis_opt(now)
+        .single()
+        .unwrap_or_else(chrono::Utc::now);
+    let (y, m) = if d.month() == 12 {
+        (d.year() + 1, 1)
+    } else {
+        (d.year(), d.month() + 1)
+    };
+    chrono::Utc
+        .with_ymd_and_hms(y, m, 1, 0, 0, 0)
+        .single()
+        .map_or(now, |t| t.timestamp_millis())
+}
+
+/// The variable the token of Escouade's server reaches Copilot in: its entry's header names it
+/// (`${ESCOUADE_MCP_TOKEN}`, taken from the environment, tried on 1.0.98), so that neither its file
+/// nor its command line holds the token.
+pub(crate) const TOKEN_VAR: &str = "ESCOUADE_MCP_TOKEN";
+
+/// The private file of a process given Escouade's server: its entry, read by
+/// `--additional-mcp-config @<file>`, the token named and not written.
+fn grant_file(url: &str) -> Vec<u8> {
+    let entry = json!({ "mcpServers": { mcp::SERVER: {
+        "type": "http",
+        "url": url,
+        "headers": { "Authorization": format!("Bearer ${{{TOKEN_VAR}}}") },
+        "tools": ["*"],
+    } } });
+    serde_json::to_vec_pretty(&entry).unwrap_or_default()
+}
+
+/// What a process is started with of Escouade's server: given, its entry's file and the token in
+/// the environment; refused, `--disable-mcp-server escouade`, which does nothing in the server mode
+/// (tried): the process also turns an entry of the user's off for its session
+/// (`session.mcp.disable`).
+fn escouade_launch(escouade: &Escouade) -> mcp::Launch {
+    match escouade {
+        Escouade::Granted {
+            token,
+            file: Some(file),
+            ..
+        } => mcp::Launch {
+            args: vec![
+                "--additional-mcp-config".into(),
+                format!("@{}", file.to_string_lossy()),
+            ],
+            env: vec![(TOKEN_VAR.into(), token.clone())],
+        },
+        _ => mcp::Launch {
+            args: vec!["--disable-mcp-server".into(), mcp::SERVER.into()],
+            env: Vec::new(),
+        },
+    }
 }
 
 impl Engine for Copilot {
@@ -507,6 +707,26 @@ impl Engine for Copilot {
         &EFFORTS
     }
 
+    /// `account.getQuota` of a server of the account's own, started then stopped (no session, no
+    /// model asked): not signed in as the account, said so.
+    fn read_quota<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        _dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
+        Box::pin(async move {
+            let cwd = std::env::temp_dir().to_string_lossy().into_owned();
+            let mut args = args();
+            args.extend(escouade_launch(&Escouade::Denied { file: None }).args);
+            let Some(snapshots) = process::read_quota(program, args, env, cwd).await? else {
+                return Ok(Some(crate::usage::Reading::NotSignedIn));
+            };
+            let now = chrono::Utc::now().timestamp_millis();
+            Ok(credits(&snapshots, now).map(|m| crate::usage::Reading::Windows(vec![m])))
+        })
+    }
+
     fn supports_effort(&self, _model: &str) -> bool {
         true
     }
@@ -526,7 +746,11 @@ impl Engine for Copilot {
         on_frame: super::OnFrame,
         on_exit: super::OnExit,
     ) -> Result<Process> {
-        let args = args();
+        let launch = escouade_launch(&spawn.escouade);
+        let mut args = args();
+        args.extend(launch.args);
+        let mut env = spawn.env.clone();
+        env.extend(launch.env);
         log::info!(
             "{}: starting {} {} in {} (account {})",
             spawn.label,
@@ -545,8 +769,9 @@ impl Engine for Copilot {
             program: spawn.program,
             cwd: spawn.cwd,
             args,
-            env: spawn.env,
+            env,
             start: spawn.start,
+            escouade: matches!(spawn.escouade, Escouade::Granted { file: Some(_), .. }),
             settings,
             instructions,
         };
@@ -567,27 +792,26 @@ impl Engine for Copilot {
         None
     }
 
-    /// The texts written by a model come with ESC-40 (`copilot -p`).
-    fn one_shot<'a>(&'a self, _ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
-        Box::pin(async move { bail!(not_yet()) })
+    /// `copilot -p`, the question read from its input, without tools for a short text (`prompt`).
+    fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
+        Box::pin(prompt::one_shot(ask))
     }
 
     fn writer(&self, _weight: Weight) -> &'static str {
-        "Copilot"
+        prompt::WRITER
     }
 
-    fn grant_file(&self, _url: &str, _token: &str) -> Option<Vec<u8>> {
-        None
+    /// Its entry, the token named (`${ESCOUADE_MCP_TOKEN}`), never written.
+    fn grant_file(&self, url: &str, _token: &str) -> Option<Vec<u8>> {
+        Some(grant_file(url))
     }
 
     fn refusal(&self) -> Option<Value> {
         None
     }
 
-    /// Kept out for now: an entry of the user's is turned off for the session (`process`); ESC-40
-    /// gives it.
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch::default()
+    fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch {
+        escouade_launch(escouade)
     }
 }
 
@@ -742,5 +966,134 @@ mod tests {
             message("bonjour", &[]).unwrap(),
             json!({ "prompt": "bonjour" })
         );
+    }
+
+    #[test]
+    fn the_months_credits_come_from_chat_and_a_reading_without_its_end_ends_next_month() {
+        let at = |d: &str| {
+            chrono::DateTime::parse_from_rfc3339(d)
+                .unwrap()
+                .timestamp_millis()
+        };
+        let now = at("2026-10-18T10:00:00Z");
+        // A call's snapshot (`assistant.usage`): its own end.
+        let call = json!({ "chat": { "entitlementRequests": 200, "usedRequests": 1,
+            "remainingPercentage": 99.3, "resetDate": "2026-11-01T00:00:00Z" } });
+        let m = credits(&call, now).unwrap();
+        assert_eq!((m.minutes, m.pct), (None, 0.7));
+        assert_eq!(m.resets_at, Some(at("2026-11-01T00:00:00Z")));
+        // `account.getQuota` says the time of its reading: the first of next month instead.
+        let read = json!({ "chat": { "entitlementRequests": 200, "remainingPercentage": 80,
+            "resetDate": "2026-10-18T09:59:59Z" } });
+        let m = credits(&read, now).unwrap();
+        assert_eq!(m.pct, 20.0);
+        assert_eq!(m.resets_at, Some(at("2026-11-01T00:00:00Z")));
+        // `session.quota.get`: in epoch ms; December goes to January.
+        let dec = at("2026-12-30T10:00:00Z");
+        let m = credits(
+            &json!({ "chat": { "entitlementRequests": 200, "remainingPercentage": 0 } }),
+            dec,
+        )
+        .unwrap();
+        assert_eq!(m.pct, 100.0);
+        assert_eq!(m.resets_at, Some(at("2027-01-01T00:00:00Z")));
+        // A plan without a limit, or nothing told: no meter. Premium requests when chat has none.
+        let unlimited = json!({ "chat": { "isUnlimitedEntitlement": true,
+            "entitlementRequests": -1, "remainingPercentage": 100 } });
+        assert_eq!(credits(&unlimited, now), None);
+        assert_eq!(credits(&json!({}), now), None);
+        let premium = json!({
+            "chat": { "entitlementRequests": 0, "remainingPercentage": 0 },
+            "premium_interactions": { "entitlementRequests": 300, "remainingPercentage": 75 },
+        });
+        assert_eq!(credits(&premium, now).unwrap().pct, 25.0);
+        // As the real run read them out of a session (ESC-23).
+        let got = recorded("first-turn.jsonl")
+            .into_iter()
+            .filter_map(|m| m["result"]["snapshots"]["chat"]["resetDateEpochMs"].as_i64())
+            .next()
+            .unwrap();
+        assert_eq!(got, at("2026-11-01T00:00:00Z"));
+    }
+
+    #[test]
+    fn a_calls_cost_is_its_nano_aiu_else_its_details_else_its_models_prices() {
+        // Every call of the real runs: their details make their total, to the nano-AIU.
+        let mut checked = 0;
+        for file in [
+            "first-turn.jsonl",
+            "assisted-autopilot.jsonl",
+            "full-turn.jsonl",
+        ] {
+            for m in recorded(file) {
+                let d = &m["params"]["event"]["data"];
+                if m["params"]["event"]["type"] != "assistant.usage" {
+                    continue;
+                }
+                let Some(total) = d["copilotUsage"]["totalNanoAiu"].as_u64() else {
+                    continue;
+                };
+                assert_eq!(call_nano(d, &HashMap::new()), total);
+                let mut untold = d.clone();
+                untold["copilotUsage"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("totalNanoAiu");
+                let by_details = call_nano(&untold, &HashMap::new()) as i64;
+                assert!((by_details - total as i64).abs() <= 1, "{file}");
+                checked += 1;
+            }
+        }
+        assert!(checked >= 3, "{checked}");
+        // Neither: the prices of its model, from `models.list`.
+        let listed = json!({ "models": [
+            { "id": "gpt-6-luna", "billing": { "multiplier": 1, "tokenPrices": {
+                "inputPrice": 10, "cacheReadPrice": 1, "cacheWritePrice": 12.5,
+                "outputPrice": 50, "batchSize": 1_000_000 } } },
+            { "id": "gpt-5-mini", "billing": { "multiplier": 0.33 } },
+        ] });
+        let prices = prices(&listed);
+        assert_eq!(prices.len(), 1);
+        let usage = json!({ "model": "gpt-6-luna", "inputTokens": 12 + 40_145 + 13_657,
+            "cacheReadTokens": 40_145, "cacheWriteTokens": 13_657, "outputTokens": 325 });
+        assert_eq!(call_nano(&usage, &prices), 227_227_500);
+        // An unknown model: nothing to count.
+        assert_eq!(
+            call_nano(&json!({ "model": "x", "inputTokens": 5 }), &prices),
+            0
+        );
+    }
+
+    #[test]
+    fn escouades_server_is_given_by_a_file_that_names_the_token_and_refused_by_its_name() {
+        let url = "http://127.0.0.1:4321/mcp";
+        let file: Value =
+            serde_json::from_slice(&COPILOT.grant_file(url, "s3cr3t").unwrap()).unwrap();
+        assert_eq!(
+            file,
+            json!({ "mcpServers": { "escouade": {
+                "type": "http", "url": url,
+                "headers": { "Authorization": "Bearer ${ESCOUADE_MCP_TOKEN}" },
+                "tools": ["*"],
+            } } })
+        );
+        let granted = COPILOT.escouade_launch(&Escouade::Granted {
+            url: url.into(),
+            token: "s3cr3t".into(),
+            file: Some("C:/data/mcp/a1.json".into()),
+        });
+        assert_eq!(
+            granted.args,
+            ["--additional-mcp-config", "@C:/data/mcp/a1.json"]
+        );
+        assert_eq!(
+            granted.env,
+            [("ESCOUADE_MCP_TOKEN".to_string(), "s3cr3t".to_string())]
+        );
+        // Never among the variables kept from its commands: Copilot would not put it in the header.
+        assert!(!args().iter().any(|a| a.contains("ESCOUADE_MCP_TOKEN")));
+        let refused = COPILOT.escouade_launch(&Escouade::Denied { file: None });
+        assert_eq!(refused.args, ["--disable-mcp-server", "escouade"]);
+        assert!(refused.env.is_empty());
     }
 }

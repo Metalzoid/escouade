@@ -181,6 +181,29 @@ test.describe('an agent on Copilot CLI', () => {
   });
 });
 
+test.describe('the credits of a Copilot CLI account', () => {
+  test.use({ appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT } });
+
+  test('show in the status bar as each call tells them, and a turn stopped by their end resumes when they come back', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await newCopilotAgent(page);
+    await send(page, 'bonjour');
+    await expect(page.getByText('Copilot a reçu : bonjour')).toBeVisible();
+    // The fake's calls say 90 % of the month's credits left: a bar « crédits », 10 % used.
+    const credits = page.locator('footer').getByRole('meter', { name: 'Crédits du mois' });
+    await expect(credits).toHaveAttribute('aria-valuenow', '10');
+    await expect(page.locator('footer').getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveCount(0);
+    // Their end stops the turn, which resumes by itself once they are given again: the first of next month.
+    await send(page, 'limite');
+    await expect(credits).toHaveAttribute('aria-valuenow', '100');
+    const resume = page.getByText(/^Reprise automatique (le .+ )?à \d\d:\d\d$/);
+    await expect(resume).toBeVisible();
+    await page.getByRole('button', { name: 'Annuler la reprise' }).click();
+    await expect(resume).toBeHidden();
+  });
+});
+
 test.describe('« Vue Copilot CLI » (ESC-48)', () => {
   test.use({ appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT } });
 

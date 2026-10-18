@@ -668,6 +668,37 @@ describe('Stats by harness (ESC-30)', () => {
     expect(kpis.queryByText('estimé')).not.toBeInTheDocument();
   });
 
+  it('filters Copilot CLI, whose cost comes from its nano-AIU and is exact (ESC-40)', async () => {
+    const COPILOT: EngineDecl = { ...BARE_ENGINE, id: 'copilot', name: 'Copilot CLI', caps: { ...BARE_ENGINE.caps, cost: 'exact' } };
+    app.engines = [CLAUDE_ENGINE, COPILOT];
+    app.settings.accounts = [PRINCIPAL, { ...WORK, id: 'principal-copilot', name: 'Principal', engine: 'copilot' }];
+    const backend = fakeBackend({
+      stats: (a: { range: string; engine: string | null }): StatsView => ({
+        ...view(a.range),
+        ...(a.engine === 'copilot' ? { tokens: 2_480, cost: 0.0045, costAll: 0.0045 } : {}),
+        byEngine: [
+          { engine: 'claude', tokens: 54_500, cost: 1.6, turns: 3, agents: 2 },
+          { engine: 'copilot', tokens: 2_480, cost: 0.0045, turns: 2, agents: 1 },
+        ],
+        engines: ['claude', 'copilot'],
+        accounts: ['principal', 'principal-copilot'],
+      }),
+    });
+    render(Stats);
+    const engine = await screen.findByRole('combobox', { name: 'Harness' });
+    expect(
+      within(engine)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Tous les harness', 'Claude Code', 'Copilot CLI']);
+    await screen.findByRole('table', { name: 'Par harness' });
+    expect(lines('Par harness')[1]).toEqual(['Copilot CLI', '2,5 k', '0,005 $', '2', '1']);
+    await userEvent.selectOptions(engine, 'Copilot CLI');
+    await waitFor(() => expect(backend.called('stats').at(-1)?.args).toEqual({ range: 'day', account: null, engine: 'copilot' }));
+    const kpis = within(document.querySelector<HTMLElement>('.kpis')!);
+    expect(kpis.queryByText('estimé')).not.toBeInTheDocument();
+  });
+
   it('puts the harnesses side by side, the cost of one that only estimates it marked so', async () => {
     fakeBackend({ stats: both });
     render(Stats);

@@ -62,8 +62,11 @@ export function statusEngine(): EngineId {
   return app.agent?.engine ?? app.project?.engine ?? defaultEngine();
 }
 
-/** The files a new account may share of its Principal's folder, Claude Code's then Codex's (`accounts::SHARED_FILES`, `CODEX_SHARED_FILES`): the other items are folders. */
-export const SHARED_FILES = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md'];
+/**
+ * The files a new account may share of its Principal's folder, Claude Code's, Codex's then Copilot CLI's (`accounts::SHARED_FILES`,
+ * `CODEX_SHARED_FILES`, `COPILOT_SHARED_FILES`): the other items are folders.
+ */
+export const SHARED_FILES = ['settings.json', 'CLAUDE.md', 'config.toml', 'AGENTS.md', 'mcp-config.json', 'copilot-instructions.md'];
 
 /**
  * The account's name as shown. Principal is named in the language of its first save: while the user has not renamed it,

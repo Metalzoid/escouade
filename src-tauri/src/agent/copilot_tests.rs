@@ -15,7 +15,8 @@ fn agent(cwd: &str, mode: &str) -> AgentRt {
     };
     AgentRt::new(
         meta,
-        &crate::paths::test_dir("esc39-cp-conv").join(new_id()),
+        // A folder of its own: the tests run at once, and `test_dir` empties the one it names.
+        &crate::paths::test_dir(&format!("esc39-cp-conv-{}", new_id())),
     )
 }
 
@@ -431,4 +432,167 @@ fn a_message_refused_ends_its_turn_in_error() {
     );
     assert!(matches!(fxs[0].turn_end, Some(TurnEnd::Error(ref m)) if m == "quota"));
     assert_eq!(rt.meta.status, AgentStatus::Error);
+}
+
+#[test]
+fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
+    let (rt, fxs) = replay("first-turn.jsonl", "default");
+    // Every `assistant.usage` of the real run says the credits of the month, given again on the
+    // first of November.
+    let meters: Vec<_> = fxs.iter().filter_map(|f| f.rate.clone()).collect();
+    assert!(!meters.is_empty());
+    let last = meters.last().unwrap();
+    assert_eq!(last.len(), 1);
+    assert_eq!(last[0].minutes, None, "the month's credits");
+    assert!(last[0].pct > 0.0 && last[0].pct < 5.0, "{:?}", last[0]);
+    assert_eq!(
+        last[0].resets_at,
+        Some(
+            chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
+                .unwrap()
+                .timestamp_millis()
+        )
+    );
+    // The cost of its turns: its nano-AIU, a credit (10⁹) for a cent.
+    let rows: Vec<_> = fxs.iter().flat_map(|f| f.turns.clone()).collect();
+    assert!(!rows.is_empty());
+    let nano: u64 = recorded("first-turn.jsonl")
+        .iter()
+        .filter(|l| l["dir"] == "s2c" && l["msg"]["params"]["event"]["type"] == "assistant.usage")
+        .filter_map(|l| {
+            l["msg"]["params"]["event"]["data"]["copilotUsage"]["totalNanoAiu"].as_u64()
+        })
+        .sum();
+    let cost: f64 = rows.iter().map(|r| r.cost).sum();
+    assert!((cost - nano as f64 / 1e11).abs() < 1e-9, "{cost} {nano}");
+    assert!(rows.iter().all(|r| r.engine == EngineId::Copilot));
+    assert!((rt.meta.cost - cost).abs() < 1e-9);
+}
+
+#[test]
+fn a_call_without_its_cost_is_priced_from_its_details_or_its_models_prices() {
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "x", 0, &[], &mut fx);
+    let prices = json!({ "gpt-6-luna": {
+        "inputPrice": 10, "cacheReadPrice": 1, "cacheWritePrice": 12.5, "outputPrice": 50,
+        "batchSize": 1_000_000,
+    } });
+    let fxs = feed(
+        &mut rt,
+        &[
+            json!({ "method": "escouade.prices", "params": { "sessionId": S, "prices": prices } }),
+            // The tokens of point 0's first turn, its cost untold: 227 227.5 credits per million.
+            ev(
+                "assistant.usage",
+                json!({ "model": "gpt-6-luna", "inputTokens": 40_145 + 13_657 + 12,
+                    "cacheReadTokens": 40_145, "cacheWriteTokens": 13_657, "outputTokens": 325 }),
+            ),
+            ev("session.idle", json!({})),
+        ],
+    );
+    let row = fxs.iter().flat_map(|f| f.turns.clone()).next().unwrap();
+    assert!(
+        (row.cost - 227_227_500.0 / 1e11).abs() < 1e-9,
+        "{}",
+        row.cost
+    );
+}
+
+#[test]
+fn credits_spent_stop_the_turn_until_they_are_given_again() {
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "x", 0, &[], &mut fx);
+    let reset = "2026-11-01T00:00:00Z";
+    let fxs = feed(
+        &mut rt,
+        &[
+            ev(
+                "assistant.usage",
+                json!({ "model": "gpt-6-luna", "inputTokens": 10, "outputTokens": 1,
+                    "copilotUsage": { "totalNanoAiu": 1000 },
+                    "quotaSnapshots": { "chat": { "entitlementRequests": 200, "usedRequests": 200,
+                        "remainingPercentage": 0, "resetDate": reset } } }),
+            ),
+            ev(
+                "session.error",
+                json!({ "errorType": "quota", "errorCode": "quota_exceeded",
+                    "message": "You have exceeded your monthly quota." }),
+            ),
+            ev("session.idle", json!({})),
+        ],
+    );
+    let at = chrono::DateTime::parse_from_rfc3339(reset)
+        .unwrap()
+        .timestamp_millis();
+    assert_eq!(fxs[0].rate.as_ref().unwrap()[0].pct, 100.0);
+    let end = fxs.last().unwrap();
+    assert_eq!(end.turn_end, Some(TurnEnd::Limited));
+    assert_eq!(end.limited, Some(Some(at)));
+    assert_ne!(rt.meta.status, AgentStatus::Error);
+    let items = rt.conv.items();
+    assert_eq!(items_of(&items, "turn").last().unwrap()["limited"], true);
+    // Another error is no limit.
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    rt.push_user("u1", "x", 0, &[], &mut fx);
+    let fxs = feed(
+        &mut rt,
+        &[
+            ev(
+                "session.error",
+                json!({ "errorType": "query", "message": "bad" }),
+            ),
+            ev("session.idle", json!({})),
+        ],
+    );
+    assert!(matches!(
+        fxs.last().unwrap().turn_end,
+        Some(TurnEnd::Error(_))
+    ));
+}
+
+#[test]
+fn the_sessions_ceiling_of_credits_is_a_card_whose_choices_answer_copilot() {
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    let mut fx = Effects::default();
+    rt.push_user("u1", "x", 0, &[], &mut fx);
+    let data = json!({ "requestId": "lim1", "usedAiCredits": 5.2, "maxAiCredits": 5 });
+    feed(
+        &mut rt,
+        &[ev("session_limits_exhausted.requested", data.clone())],
+    );
+    let items = rt.conv.items();
+    let card = items_of(&items, "question")[0];
+    assert_eq!(card["id"], "lim1");
+    let q = &card["questions"][0];
+    let text = q["question"].as_str().unwrap();
+    assert!(text.contains("5.2") && text.contains('5'), "{text}");
+    let labels: Vec<&str> = q["options"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels.len(), 3);
+    assert_eq!(rt.meta.status, AgentStatus::Waiting);
+    // Each choice gives Copilot its action, in either language.
+    for (label, action) in labels.iter().zip(["add", "unset", "cancel"]) {
+        assert_eq!(
+            crate::engine::copilot_limit_answer(&data, label)["action"],
+            action
+        );
+    }
+    assert_eq!(
+        crate::engine::copilot_limit_answer(&data, labels[0])["additionalAiCredits"],
+        5.0
+    );
+    assert_eq!(
+        crate::engine::copilot_limit_answer(&data, "autre chose")["action"],
+        "cancel"
+    );
 }

@@ -646,13 +646,15 @@ GitHub Copilot CLI est le quatrième harness (docs/ENGINES.md), piloté par un *
 ### Lancement : un process par agent
 
 ```
-copilot --server --stdio --no-auto-update --disable-builtin-mcps --disallow-temp-dir --secret-env-vars=GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN
+copilot --server --stdio --no-auto-update --disable-builtin-mcps --disallow-temp-dir --secret-env-vars=GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN
+  [--additional-mcp-config @<fichier privé> | --disable-mcp-server escouade]
 ```
 
 - Le programme est le binaire natif : sous Windows, le `copilot.exe` du paquet de la plateforme (`node_modules/@github/copilot/node_modules/@github/copilot-win32-x64/copilot.exe`, à côté du lanceur `copilot.cmd` ou `copilot.ps1`), sinon le `copilot` du PATH. Il est dans le Job de l'agent. Dans une build de debug, `ESCOUADE_COPILOT` (les e2e) donne le programme quand aucun chemin n'est réglé, ou `none` pour aucun.
-- `--disable-builtin-mcps` : sans lui, Copilot branche son serveur MCP GitHub avec le compte. `--disallow-temp-dir` : sans lui, le dossier temporaire du système est ouvert sans demande. `--secret-env-vars` : ces variables sont retirées des commandes et des serveurs MCP de l'agent.
+- `--disable-builtin-mcps` : sans lui, Copilot branche son serveur MCP GitHub avec le compte. `--disallow-temp-dir` : sans lui, le dossier temporaire du système est ouvert sans demande. `--secret-env-vars` : ces variables sont retirées des commandes et des serveurs MCP de l'agent ; pas `ESCOUADE_MCP_TOKEN`, que Copilot ne mettrait plus dans l'en-tête de l'entrée d'Escouade (essayé, ESC-40 : voir « Le serveur MCP d'Escouade » plus bas).
+- Pour un compte autre que Principal (une `COPILOT_HOME` à lui), les jetons de GitHub de l'environnement d'Escouade (`COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`) ne sont pas transmis : Copilot les préfère à sa connexion, et tous les comptes seraient alors le même.
 - **Pas de bac à sable en mode serveur** dans la 1.0.98 (essayé : `sandboxApplied: false` à chaque commande, `--sandbox` et `settings.json` ou pas) : seules les règles d'Escouade protègent, et le menu des modes le dit.
-- Le message est encadré par des en-têtes `Content-Length` (JSON-RPC 2.0). `connect` (`protocolVersion: 3`, sinon refusé avec la commande de mise à jour), puis `auth.getStatus` : **jamais un jeton dans un journal** (`account.getAllUsers` et `account.getCurrentAuth` le rendent en clair : Escouade n'appelle ni l'un ni l'autre, et ne journalise que la méthode d'un message). Non connecté, l'agent ne démarre pas (« connecte-toi avec copilot login ») ; connecté par le compte du GitHub CLI (`authType: gh-cli`, ce que Copilot fait seul faute de connexion à lui), la conversation le dit.
+- Le message est encadré par des en-têtes `Content-Length` (JSON-RPC 2.0). `connect` (`protocolVersion: 3`, sinon refusé avec la commande de mise à jour), puis `auth.getStatus` : **jamais un jeton dans un journal** (`account.getAllUsers` et `account.getCurrentAuth` le rendent en clair : Escouade n'appelle ni l'un ni l'autre, et ne journalise que la méthode d'un message). Non connecté, l'agent ne démarre pas : le process s'arrête et sa raison est dans la conversation (« connecte-le dans Réglages › Comptes », ESC-40). Connecté par le compte du GitHub CLI (`authType: gh-cli`, ce que Copilot fait seul faute de connexion à lui) : Principal démarre et la conversation le dit ; un autre compte est tenu pour non connecté (ce compte serait le même pour tous).
 - L'arrêt doux envoie `runtime.shutdown`, puis ferme l'entrée.
 
 ### Les sessions
@@ -708,11 +710,12 @@ En `manual`, Copilot demande tout, lectures comprises : les règles d'Escouade (
 | `exit_plan_mode.requested` | la carte « Plan à approuver » (`ExitPlanMode`, son `planContent`, sinon son résumé) ; le tour l'attend |
 | `*.completed` | une carte répondue autrement (par la requête au client, ou close par Copilot) dit la réponse et se ferme |
 | `session.todos_changed` | les tâches lues (`escouade.todos`) dans le bandeau « Plan » (`pending`, `in_progress`, `done`) |
-| `assistant.usage` | les tokens de chaque appel (sous-agents compris), additionnés par tour, et son coût (`copilotUsage.totalNanoAiu` : crédits = nano-AIU / 10⁹, dollars = crédits × 0,01 ; leur somme est le `session.usage_checkpoint`) |
+| `assistant.usage` | les tokens de chaque appel (sous-agents compris), additionnés par tour, et son coût (`copilotUsage.totalNanoAiu` : crédits = nano-AIU / 10⁹, dollars = crédits × 0,01 ; leur somme est le `session.usage_checkpoint` ; sans lui, la somme de ses `tokenDetails`, sinon ses tokens aux prix de son modèle, `billing.tokenPrices` de `models.list`, passés par `escouade.prices`) ; les crédits du mois de ses `quotaSnapshots` (ESC-40) |
 | `session.usage_info` | la fenêtre de contexte (`tokenLimit`, `currentTokens`) |
 | `session.model_change` | le modèle de l'agent (jamais `auto`) |
 | `session.compaction_complete` | « Contexte compacté » |
-| `abort`, `session.error` | un tour interrompu ; une erreur, dite à la fin du tour |
+| `abort`, `session.error` | un tour interrompu ; une erreur, dite à la fin du tour ; `errorType: quota` (crédits épuisés, sauf `billing_not_configured`) ou une limite hebdomadaire (`rate_limit`, `user_weekly_rate_limited`) : le tour finit « limité », et reprend seul à la remise à zéro des crédits (ESC-40) |
+| `session_limits_exhausted.requested` | le plafond de crédits de la session atteint (`usedAiCredits`, `maxAiCredits`) : une carte de question, « Ajouter N crédits » (`add`), « Lever le plafond » (`unset`), « Arrêter là » (`cancel`), répondue par `session.ui.handlePendingSessionLimitsExhausted` (ESC-40) |
 | `session.idle` (sans `agentId`) | la fin du tour ; son dernier événement gardé (non `ephemeral`) est le point de copie |
 
 Tout le reste est ignoré sans casser le tour (`model.*`, `session.lifecycle`, `host.event`, `sandbox.decision`, `hook.*`, `pending_messages.modified`, `session.background_tasks_changed`, et tout type ou champ inconnu). Un flux enregistré (`{"dir", "msg"}` par ligne) se rejoue tel quel : les événements, la session qu'a ouverte la réponse à `session.create` ou `session.resume`, et les tâches lues.
@@ -721,9 +724,49 @@ Tout le reste est ignoré sans casser le tour (`model.*`, `session.lifecycle`, `
 
 `real_copilot` (`src-tauri/src/copilot_tests.rs`, à la main : `ESCOUADE_REAL_COPILOT` = le `copilot.exe` 1.0.98, une `COPILOT_HOME` jetable et le jeton du GitHub CLI dans l'environnement du seul process d'essai, `GH_TOKEN`), fait le 2026-10-18 sur un compte Free avec `gpt-6-luna` : « Réponds seulement : A » (réponse « A ») ; `git status --short` demandé par une carte `Bash` puis autorisé ; une question `ask_user` « Quelle couleur ? » répondue « bleu » (l'événement et la requête au client : une seule carte) ; en mode Plan, une lecture du dossier passée sans carte, le `plan.md` de la session écrit sans demande, deux tâches par `sql`, puis la carte « Plan à approuver », refusée : Copilot a revu son plan et l'a redemandé (le test refuse désormais chaque plan jusqu'à la fin du tour). Les trois premiers tours ont compté 66 141 tokens. Aucun jeton dans le journal de l'essai ; ce que Copilot a ajouté à `%LOCALAPPDATA%copilot` (son cache commun au poste, six fichiers) a été retiré, et aucun `copilot` ne restait.
 
-### Ce qui vient ensuite
+### Les comptes (ESC-40)
 
-Les comptes (`COPILOT_HOME`, `copilot login` dans un terminal intégré), la barre des crédits du mois et le pilote auto qui en tient compte, le serveur MCP d'Escouade donné aux agents et les textes rédigés par `copilot -p` viennent avec ESC-40 ; la vue terminal de Copilot plus tard. Le Principal de Copilot est `~/.copilot`, lancé sans la variable.
+Un compte est une `COPILOT_HOME` : Principal est `~/.copilot`, lancé sans la variable ; les autres sont sous `<données>/copilot/<nom>`. Un nouveau compte peut reprendre de Principal `mcp-config.json`, `copilot-instructions.md`, `agents` et `skills` (liés ou copiés), jamais `config.json` (les utilisateurs connectés, et le jeton lui-même sans trousseau), `settings.json` (ses dossiers de confiance) ni ses sessions. Il se connecte par `copilot login` (dans le dossier du compte, depuis un terminal intégré, comme un compte Claude Code) : Escouade ne prend ni ne recopie aucun jeton.
+
+- **Qui est connecté** : `config.json` de la `COPILOT_HOME` (du JSON précédé de commentaires `//`) nomme les utilisateurs connectés (`loggedInUsers`, d'après la doc du dossier de config de Copilot CLI ; `lastLoggedInUser`, et les formes `logged_in_users` / `last_logged_in_user`, lus aussi) : leur `login` est ce que montre le panneau des comptes (`@login`) et l'empreinte de la connexion, jamais un jeton. Le jeton est dans le trousseau du système (sinon dans ce fichier) : un dossier connecté à un autre utilisateur GitHub est un autre compte.
+- **Deux comptes ne se mélangent pas** : un compte à lui ne reçoit pas les jetons de l'environnement d'Escouade (voir « Lancement »), et un `gh-cli` y vaut « non connecté » (`process::signed_in`), au démarrage d'un agent comme à la lecture de ses crédits.
+- **Pas essayé avec un vrai second compte GitHub** (il n'y en a pas ici) : la forme exacte de `loggedInUsers` après un vrai `copilot login` reste à voir (l'ajout s'essaie jusqu'à l'écran de connexion, qui donne un code à saisir sur github.com/login/device).
+
+### Les crédits du mois (ESC-40)
+
+`caps.quota` vaut `credits` : une barre « crédits » (`QuotaMeter` sans durée), ce qui est utilisé (`100 − remainingPercentage`) jusqu'à la remise à zéro.
+
+| Source | Quand | Ce qu'Escouade en lit |
+|---|---|---|
+| `assistant.usage.quotaSnapshots` | à chaque appel au modèle | `chat` (les crédits d'IA, facturés par token), sinon `premium_interactions` ; `resetDate` (le 1ᵉʳ du mois suivant, 00:00 UTC) ; rien pour un plan sans limite (`isUnlimitedEntitlement`) |
+| `session.quota.get` | `read_usage` d'un agent vivant | `snapshots`, avec `resetDateEpochMs` |
+| `account.getQuota` | un compte sans agent, au plus toutes les 5 min, par un `copilot --server --stdio` du compte lancé puis arrêté (`connect`, `auth.getStatus`, `account.getQuota` : aucune session, aucun modèle) | `quotaSnapshots` ; son `resetDate` est l'heure du relevé (essayé) : le 1ᵉʳ du mois suivant à la place |
+
+Au-delà de « Pause au-delà du quota », le pilote auto se met en pause (`PauseReason::Credits`) jusqu'à la remise à zéro. Les limites par session et par semaine des offres Pro et Pro+ n'ont pas de source lisible (le compte Free n'en a pas) : une limite hebdomadaire qui arrête un tour le finit « limité », sans heure de reprise connue.
+
+### Le serveur MCP d'Escouade (ESC-40)
+
+- **Donné** : `--additional-mcp-config @<données>/mcp/<agent>.json` (le fichier privé de `grant_file`, oublié à l'arrêt du process), dont l'entrée `escouade` (`type: http`, l'URL du serveur, `tools: ["*"]`) a l'en-tête `Authorization: Bearer ${ESCOUADE_MCP_TOKEN}` : le jeton n'est ni dans le fichier ni sur la ligne de commande, seulement dans l'environnement du process (`ESCOUADE_MCP_TOKEN`).
+- Essayé sur la 1.0.98 sans dépenser de crédit (la connexion se fait à `session.create`) : le serveur reçoit le bon jeton à chaque requête (`server/discover`, `initialize`…) ; **avec `ESCOUADE_MCP_TOKEN` dans `--secret-env-vars`, l'en-tête arrive sans lui** (d'où sa sortie de la liste) ; une entrée `escouade` du `mcp-config.json` de l'utilisateur ne l'emporte pas sur celle d'`--additional-mcp-config` (« augments config from ~/.copilot/mcp-config.json »).
+- **Refusé** : `--disable-mcp-server escouade`, sans effet en mode serveur (essayé, ESC-23), puis `session.mcp.disable` sur la session, qui coupe une entrée `escouade` de l'utilisateur. Donné, la session ne coupe rien.
+- L'interrupteur « Copilot peut piloter Escouade » (son `mcp-config.json`) est ESC-119.
+
+### Les textes rédigés (ESC-40)
+
+`copilot -p`, essayé le 2026-10-18 sur la 1.0.98 (compte Free) :
+
+```
+copilot --output-format json --stream off --no-auto-update --disable-builtin-mcps --no-custom-instructions --disallow-temp-dir
+  --model gpt-5-mini --reasoning-effort low --available-tools=escouade-aucun-outil
+  --session-id=<uuid> --log-dir <dossier temporaire>          (la question par l'entrée)
+```
+
+- **La question par l'entrée** (« piped stdin »), jamais sur la ligne de commande ; `-p` n'a pas de prompt système : les consignes la précèdent entre `<instructions>`. La réponse est le dernier `assistant.message` (sans `agentId`) du flux JSON (une ligne par événement, puis `result`) ; un `session.error` sans réponse refuse avec son message.
+- **Sans outil** : `--available-tools=` (vide) les laisse tous (essayé : `powershell`, `view`, `edit`, `task`… au prompt) ; une liste qui ne nomme aucun outil de Copilot n'en laisse aucun, et un texte court coûte six fois moins (0,04 crédit au lieu de 0,23). Un texte qui lit son dossier a `view`, `glob` et `grep`, permis sans question (`--allow-tool`).
+- **Le modèle est toujours donné** (`gpt-5-mini`, « Copilot (GPT-5 mini) ») : sans lui, `auto` choisit seul. Mais un compte Free n'accepte aucun `--model` nommé (« Model "…" from --model flag is not available », rien sur la sortie) : la question est alors reposée sur `auto` (qui y a choisi `mai-code-1.1-flash`).
+- Chaque question est une session du compte : nommée (`--session-id`), elle est retirée de `session-state/` une fois répondue, et son journal (`--log-dir`) est gardé à part puis retiré. Sur le compte de l'agent ou du projet, comme Codex ; pour un compte à lui, les jetons de l'environnement ne sont pas transmis (vides).
+
+La vue Copilot (ESC-48, docs/ENGINES.md, « La vue Copilot ») reçoit le même serveur MCP et les mêmes garde-fous des comptes que le serveur.
 
 ## Serveur MCP d'Escouade
 

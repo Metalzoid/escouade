@@ -27,7 +27,7 @@ Cette page explique l’usage ; la liste des options de l’onglet est dans [les
 4. Choisis ce que le compte reprend de Principal, sous « Partager avec Principal » (voir ci-dessous).
 5. Clique sur « Créer et se connecter ». Le compte est créé, actif et placé en dernier dans la liste, puis la fenêtre ouvre sa connexion.
 
-Dès que deux harness sont installés, la fenêtre commence par « Harness » : le harness du compte, Claude Code ou Codex (voir [les comptes Codex](#comptes-codex)).
+Dès que deux harness sont installés, la fenêtre commence par « Harness » : le harness du compte, Claude Code, Codex ou Copilot CLI (voir [les comptes Codex](#comptes-codex) et [les comptes Copilot CLI](#comptes-copilot-cli)).
 
 Escouade crée pour le compte un dossier sous `~/.escouade/claude/`, nommé d’après le compte. Elle ne reprend jamais le dossier d’un compte supprimé : un nouveau compte a toujours un dossier neuf.
 
@@ -78,6 +78,19 @@ Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODE
 - « Créer et se connecter » ouvre un terminal où tourne `codex login` dans le dossier du compte : le navigateur s’ouvre sur la connexion de ChatGPT. Dès qu’`auth.json` est écrit, la fenêtre écrit « Connecté au compte » suivi de l’adresse du compte ChatGPT.
 
 Le quota d’un compte Codex vient de Codex lui-même : de ses agents pendant qu’ils tournent, sinon d’un app-server du compte lancé toutes les 5 minutes le temps de le lire, sans tour ni conversation. Ses fenêtres prennent un libellé selon leur durée (« 5h », « 7j », ou une seule fenêtre « 30j » avec l’offre gratuite). Un tour arrêté par la limite attend la remise à zéro puis reprend seul, et les nouveaux agents Codex partent sur le compte Codex suivant sous le seuil, comme chez Claude Code. Reprendre un agent Codex sur un autre compte n’est pas proposé : il attend sa remise à zéro, ou continue sur un autre harness.
+
+## Comptes Copilot CLI
+
+Un compte Copilot CLI, c’est Copilot lancé avec son propre dossier (la variable `COPILOT_HOME`) : sa connexion à GitHub, ses sessions et ses crédits d’IA. Ils se gèrent dans le groupe « Comptes Copilot CLI » de l’onglet.
+
+- Son « Principal » est ton Copilot habituel, `~/.copilot` : Escouade le lance sans toucher à `COPILOT_HOME`.
+- « Ajouter un compte… », harness « Copilot CLI », crée son dossier sous `~/.escouade/copilot/`. Il peut reprendre de Principal `mcp-config.json` (tes serveurs MCP), `copilot-instructions.md` et ses dossiers `agents` et `skills`, par lien ou par copie.
+- La connexion n’est jamais copiée : `config.json` (qui dit quel utilisateur GitHub est connecté) et `settings.json` restent à Principal, et le jeton reste dans le trousseau du système.
+- « Créer et se connecter » ouvre un terminal où tourne `copilot login` dans le dossier du compte : il donne un code à saisir sur github.com/login/device. Dès que la connexion est faite, la fenêtre écrit « Connecté au compte » suivi de `@` et de ton nom d’utilisateur GitHub. Escouade ne prend ni ne recopie aucun jeton, pas même celui du GitHub CLI.
+
+Deux comptes ne se mélangent pas. Faute de connexion à lui, Copilot prend de lui-même le compte du GitHub CLI (`gh`), et il préfère un jeton de l’environnement (`GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN`) à sa connexion : un compte autre que Principal ne reçoit jamais ces jetons, et sur le compte du GitHub CLI il est tenu pour non connecté (son agent ne démarre pas et la conversation dit de le connecter). Principal, lui, peut tourner sur le compte du GitHub CLI : la conversation le dit.
+
+Copilot compte en crédits d’IA, par mois : la barre « crédits » dit ce qui en est utilisé et quand ils reviennent (le 1ᵉʳ du mois). Ils viennent de chaque appel de ses agents, sinon d’un `copilot` du compte lancé au plus toutes les 5 minutes le temps de les lire, sans session ni modèle. Au-delà de « Pause au-delà du quota », le pilote auto se met en pause comme pour les fenêtres de Claude Code. Un tour arrêté par les crédits épuisés reprend seul à leur retour. Si une session a un plafond de crédits (`--max-ai-credits`) et l’atteint, une carte propose d’ajouter autant de crédits, de lever le plafond ou d’arrêter là.
 
 ## Gérer les comptes
 

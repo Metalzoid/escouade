@@ -368,6 +368,18 @@ impl TerminalView for CopilotTerminal {
         })
     }
 
+    /// An account of its own (a `COPILOT_HOME` of its own) on its own sign-in, as its server: the
+    /// GitHub tokens of the app's environment are emptied, Copilot preferring them to it.
+    fn masked_env(&self, env: &[(String, String)]) -> Vec<(String, String)> {
+        if !super::process::own_home(env) {
+            return Vec::new();
+        }
+        super::process::INHERITED_TOKENS
+            .iter()
+            .map(|v| (v.to_string(), String::new()))
+            .collect()
+    }
+
     fn read_dir_args(&self, dir: &Path) -> Vec<String> {
         vec![format!("--add-dir={}", dir.display())]
     }
@@ -619,5 +631,42 @@ mod tests {
         assert!(COPILOT_TERMINAL.says_session_lost(
             b"Error: No session, task, or name matched 's9'.\r\nTo resume by session or task ID:"
         ));
+    }
+
+    #[test]
+    fn its_view_is_given_escouades_server_as_its_server_and_an_account_of_its_own_no_inherited_token(
+    ) {
+        use crate::engine::COPILOT;
+        let dir = Path::new("C:/copilot");
+        // Given: the entry's private file, the token in the environment alone (ESC-40).
+        let granted = COPILOT_TERMINAL.escouade(
+            &COPILOT,
+            &Escouade::Granted {
+                url: "http://127.0.0.1:4321/mcp".into(),
+                token: "s3cr3t".into(),
+                file: Some(PathBuf::from("C:/data/mcp/a1.json")),
+            },
+            dir,
+        );
+        assert_eq!(
+            granted.args,
+            ["--additional-mcp-config", "@C:/data/mcp/a1.json"]
+        );
+        assert!(!granted.args.iter().any(|a| a.contains("s3cr3t")));
+        assert_eq!(granted.env[0].0, "ESCOUADE_MCP_TOKEN");
+        // Refused: by its name (the interface has no session to turn it off in).
+        let refused = COPILOT_TERMINAL.escouade(&COPILOT, &Escouade::Denied { file: None }, dir);
+        assert_eq!(refused.args, ["--disable-mcp-server", "escouade"]);
+        // An account of its own: the GitHub tokens of the app's environment emptied; Principal keeps them.
+        let own = vec![(
+            "COPILOT_HOME".to_string(),
+            "C:/data/copilot/work".to_string(),
+        )];
+        let masked = COPILOT_TERMINAL.masked_env(&own);
+        assert_eq!(masked.len(), 3);
+        assert!(masked
+            .iter()
+            .all(|(k, v)| k.contains("TOKEN") && v.is_empty()));
+        assert!(COPILOT_TERMINAL.masked_env(&[]).is_empty());
     }
 }

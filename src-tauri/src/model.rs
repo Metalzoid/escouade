@@ -1498,9 +1498,7 @@ impl QuotaMeter {
         }
     }
 
-    /// The month's credits as `w` reads them.
-    // Read by the first harness with credits (Copilot CLI).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// The month's credits as `w` reads them (Copilot CLI).
     pub fn credits(w: RateWindow) -> Self {
         Self {
             minutes: None,

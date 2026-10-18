@@ -87,7 +87,7 @@ For the accounts themselves, see [Several Claude accounts](accounts).
 
 ## Estimated cost
 
-Each harness says how it gives the cost of a turn. Claude Code gives it exactly. Codex only gives its tokens: the cost of its turns is estimated from the public price of OpenAI’s models, in the conversation (“≈ $0.02 estimated”) as in the statistics. With a ChatGPT subscription, it’s a theoretical cost, like Claude’s with a Max subscription. A harness that only gives its tokens has a cost Escouade works out from the public price of its models: it is marked “≈” and “estimated”, and a tooltip says so. A harness that gives no cost has “—” instead. As soon as an estimated harness counts in what is shown, the totals are marked “estimated” too.
+Each harness says how it gives the cost of a turn. Claude Code gives it exactly, and so does Copilot CLI: its AI credits (a credit, $0.01), else the per-token prices of its models. Codex only gives its tokens: the cost of its turns is estimated from the public price of OpenAI’s models, in the conversation (“≈ $0.02 estimated”) as in the statistics. With a ChatGPT subscription, it’s a theoretical cost, like Claude’s with a Max subscription. A harness that only gives its tokens has a cost Escouade works out from the public price of its models: it is marked “≈” and “estimated”, and a tooltip says so. A harness that gives no cost has “—” instead. As soon as an estimated harness counts in what is shown, the totals are marked “estimated” too.
 
 ## Where the figures come from
 
