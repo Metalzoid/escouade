@@ -324,6 +324,25 @@ impl AgentRt {
         fx.agent_changed = true;
     }
 
+    /// Which turn of its interface runs: the messages typed so far, and the id its harness gave
+    /// the turn (Codex). A `Stop` takes it, for the end the core makes a moment later.
+    pub(crate) fn tui_turn_mark(&self) -> (u32, Option<String>) {
+        (self.meta.prompts, self.codex_turn())
+    }
+
+    /// The end the core makes when the transcript still did not tell that of the turn a `Stop`
+    /// was for (`stopped`, its `tui_turn_mark`): only that turn's. Under load, the transcript
+    /// tells its end late, and the next message's turn may have started by then.
+    pub(crate) fn end_stopped_tui_turn(
+        &mut self,
+        stopped: &(u32, Option<String>),
+        fx: &mut Effects,
+    ) {
+        if self.tui_turn_mark() == *stopped {
+            self.end_tui_turn(None, fx);
+        }
+    }
+
     /// The running turn of its interface is over: told as the stream's result tells it, with the
     /// usage of the process so far (cumulative, as the stream's figures are).
     pub fn end_tui_turn(&mut self, duration_ms: Option<u64>, fx: &mut Effects) {

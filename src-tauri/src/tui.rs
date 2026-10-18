@@ -1692,7 +1692,7 @@ impl<R: Runtime> Core<R> {
             accounts::program(&account, &settings).and_then(|p| p.wsl().cloned())
         };
         let mut fx = Effects::default();
-        let (out, pid, name, view, gen) = {
+        let (out, pid, name, view, gen, turn) = {
             let mut rt = h.lock();
             let Some(gen) = rt.tui.as_ref().map(|t| t.gen) else {
                 return;
@@ -1719,6 +1719,7 @@ impl<R: Runtime> Core<R> {
                 rt.meta.name.clone(),
                 view,
                 gen,
+                rt.tui_turn_mark(),
             )
         };
         self.apply(id, &pid, &name, fx, view);
@@ -1726,7 +1727,8 @@ impl<R: Runtime> Core<R> {
             // A background subagent the user stopped in the interface says so only in its files.
             self.end_stopped_subagents(id);
             // The transcript tells the end of the turn right after the hook; if it still did not
-            // after a moment (a version that does not write it), the turn ends here.
+            // after a moment (a version that does not write it), the turn ends here: that turn, not
+            // the next message's, which may have started meanwhile.
             let (c, id) = (self.clone(), id.to_string());
             tauri::async_runtime::spawn(async move {
                 for wait in [300, 1500] {
@@ -1735,7 +1737,7 @@ impl<R: Runtime> Core<R> {
                 }
                 let _ = c.with_agent(&id, |rt, fx| {
                     if rt.tui.as_ref().is_some_and(|t| t.gen == gen) {
-                        rt.end_tui_turn(None, fx);
+                        rt.end_stopped_tui_turn(&turn, fx);
                     }
                     Ok(())
                 });

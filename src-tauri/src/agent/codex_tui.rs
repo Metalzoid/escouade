@@ -155,6 +155,12 @@ impl AgentRt {
                 if !self.meta.status.is_active() {
                     return;
                 }
+                // That of an earlier turn, the core ended, read once the next one started.
+                if let (Some(running), Some(ended)) = (self.codex_turn(), p["turn_id"].as_str()) {
+                    if running != ended {
+                        return;
+                    }
+                }
                 let status = if p["type"] == "turn_aborted" {
                     "interrupted"
                 } else {
@@ -542,6 +548,77 @@ mod tests {
             .filter(|i| i["kind"] == "turn")
             .count();
         assert_eq!(turns, 1);
+    }
+
+    #[test]
+    fn the_end_of_an_earlier_turn_read_late_does_not_end_the_one_that_runs() {
+        let mut a = agent(Some("s1"));
+        let mut fx = Effects::default();
+        let ev = |payload: Value| json!({ "type": "event_msg", "payload": payload });
+        a.codex_rollout(
+            &ev(json!({ "type": "task_started", "turn_id": "t1" })),
+            &mut fx,
+        );
+        a.codex_hook(
+            &json!({ "hook_event_name": "Stop", "session_id": "s1" }),
+            &mut fx,
+        );
+        // Its end not written yet (its Stop hook slow to quit, under load): ended by the core.
+        a.end_tui_turn(None, &mut fx);
+        fx.turn_end.take();
+        // The next message's turn starts, then the first one's end is read.
+        a.codex_rollout(
+            &ev(json!({ "type": "task_started", "turn_id": "t2" })),
+            &mut fx,
+        );
+        a.codex_rollout(
+            &ev(json!({ "type": "task_complete", "turn_id": "t1", "duration_ms": 5 })),
+            &mut fx,
+        );
+        assert_eq!(fx.turn_end, None);
+        assert_eq!(a.meta.status, AgentStatus::Running);
+        a.codex_rollout(
+            &ev(json!({ "type": "turn_aborted", "turn_id": "t2", "reason": "interrupted" })),
+            &mut fx,
+        );
+        assert_eq!(fx.turn_end, Some(TurnEnd::Interrupted));
+    }
+
+    #[test]
+    fn the_end_the_core_makes_after_a_stop_is_that_of_its_turn_alone() {
+        let mut a = agent(Some("s1"));
+        let mut fx = Effects::default();
+        let ev = |payload: Value| json!({ "type": "event_msg", "payload": payload });
+        a.codex_rollout(
+            &ev(json!({ "type": "task_started", "turn_id": "t1" })),
+            &mut fx,
+        );
+        a.codex_hook(
+            &json!({ "hook_event_name": "Stop", "session_id": "s1" }),
+            &mut fx,
+        );
+        let stopped = a.tui_turn_mark();
+        // Its end read, then the next message's turn started, before the core's moment is up.
+        a.codex_rollout(
+            &ev(json!({ "type": "task_complete", "turn_id": "t1", "duration_ms": 5 })),
+            &mut fx,
+        );
+        fx.turn_end.take();
+        a.codex_rollout(
+            &ev(json!({ "type": "task_started", "turn_id": "t2" })),
+            &mut fx,
+        );
+        a.end_stopped_tui_turn(&stopped, &mut fx);
+        assert_eq!(fx.turn_end, None);
+        assert_eq!(a.meta.status, AgentStatus::Running);
+        // That of its own turn, whose end never came: made.
+        a.codex_hook(
+            &json!({ "hook_event_name": "Stop", "session_id": "s1" }),
+            &mut fx,
+        );
+        let stopped = a.tui_turn_mark();
+        a.end_stopped_tui_turn(&stopped, &mut fx);
+        assert!(matches!(fx.turn_end, Some(TurnEnd::Finished(_))));
     }
 
     #[test]

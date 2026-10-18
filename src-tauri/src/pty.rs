@@ -1096,6 +1096,15 @@ impl PtyManager {
             .map_err(|e| anyhow!("{e}"))?;
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        // Under Windows, the terminal's environment takes the account's variables from the
+        // registry (portable-pty), its temporary folder too: in a test, it keeps the test's
+        // (`test_tmp`), where the fake CLIs it starts keep their logs.
+        #[cfg(test)]
+        for k in ["TMP", "TEMP", "TMPDIR"] {
+            if let Some(v) = std::env::var_os(k) {
+                cmd.env(k, v);
+            }
+        }
         for (k, v) in env {
             cmd.env(k, v);
         }

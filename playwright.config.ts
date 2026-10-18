@@ -6,6 +6,8 @@ export default defineConfig({
   testDir: 'tests/e2e',
   // Only the tests: tests/e2e also holds the unit tests of the fixture's helpers (`*.test.ts`, Vitest's).
   testMatch: '**/*.spec.ts',
+  // A temporary folder of its own, the app's too, removed at the end (scripts/test-tmp.ts).
+  globalSetup: './tests/e2e/global-tmp.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   workers: 1,

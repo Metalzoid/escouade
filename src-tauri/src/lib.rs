@@ -64,6 +64,8 @@ mod taskout;
 mod telemetry;
 #[cfg(test)]
 mod terminal_tests;
+#[cfg(test)]
+mod test_tmp;
 mod testlaunch;
 mod text;
 mod ticketfiles;

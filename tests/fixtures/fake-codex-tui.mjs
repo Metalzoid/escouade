@@ -183,7 +183,6 @@ export function tui(argv, log) {
 
   let n = 0;
   let waiting = null;
-  let turnId = null;
   const turn = async (prompt) => {
     if (prompt === '/quit' || prompt === '/exit') process.exit(0);
     let first = false;
@@ -192,7 +191,8 @@ export function tui(argv, log) {
       file = newRollout(home, session, cwd, sub === 'fork' ? { forked_from_id: of } : {});
       first = true;
     }
-    turnId = `turn-tui-${process.pid}-${++n}`;
+    // Its own id: the end of a turn that is slow to end (its Stop hook) is never written with the next one's.
+    const turnId = `turn-tui-${process.pid}-${++n}`;
     process.stdout.write(`fake-turn ${prompt}\r\n`);
     event({ type: 'task_started', turn_id: turnId, model_context_window: 258400 });
     if (first) await hook('SessionStart', { source: sub === 'resume' ? 'resume' : 'startup' });
@@ -232,7 +232,6 @@ export function tui(argv, log) {
       if (stopped === 'escape') {
         await hook('Interrupt', { turn_id: turnId });
         event({ type: 'turn_aborted', turn_id: turnId, reason: 'interrupted', duration_ms: 50 });
-        turnId = null;
         return;
       }
     }
@@ -247,7 +246,6 @@ export function tui(argv, log) {
     event({ type: 'token_count', info: { total_token_usage: usage, last_token_usage: usage, model_context_window: 258400 } });
     await hook('Stop', { turn_id: turnId, stop_hook_active: false, last_assistant_message: reply });
     event({ type: 'task_complete', turn_id: turnId, last_agent_message: reply, duration_ms: 12 });
-    turnId = null;
   };
 
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
@@ -256,7 +254,24 @@ export function tui(argv, log) {
   let pasting = false;
   let ctrlC = 0;
   const draw = () => process.stdout.write(`\r\x1b[2K› ${line}`);
-  process.stdin.on('data', (chunk) => {
+  // A key sequence the terminal gave in two reads (under load) is read whole: its start waits a moment for the
+  // rest, then is read as it is (Escape alone).
+  let held = '';
+  let flush = null;
+  process.stdin.on('data', (data) => {
+    clearTimeout(flush);
+    const whole = held + data;
+    const cut = whole.match(/\x1b(\[(2(0[01]?)?)?)?$/);
+    held = cut ? cut[0] : '';
+    if (held)
+      flush = setTimeout(() => {
+        const rest = held;
+        held = '';
+        read(rest);
+      }, 50);
+    read(cut ? whole.slice(0, cut.index) : whole);
+  });
+  const read = (chunk) => {
     for (const _ of chunk.matchAll(/\x03/g)) {
       log?.({ ctrlC: Date.now() });
       if (trusting || ++ctrlC >= 2) process.exit(0);
@@ -293,5 +308,5 @@ export function tui(argv, log) {
         if (!pasting) draw();
       }
     }
-  });
+  };
 }

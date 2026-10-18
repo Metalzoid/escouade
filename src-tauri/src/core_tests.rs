@@ -3917,6 +3917,25 @@ async fn the_running_claude_processes_are_counted_with_their_memory() {
     assert_eq!(h.core.sample_resources().instances, 0);
 }
 
+/// Removes the worktree of an agent whose process was just killed, once that process let go of
+/// it: under Windows a folder a process still has open (its current folder) cannot go, and a
+/// process killed under load is gone some time later.
+async fn remove_once_let_go(dir: impl AsRef<Path>) {
+    let dir = dir.as_ref();
+    let start = std::time::Instant::now();
+    loop {
+        match std::fs::remove_dir_all(dir) {
+            Ok(()) => return,
+            Err(e) => assert!(
+                start.elapsed() < Duration::from_secs(30),
+                "{} not removed: {e}",
+                dir.display()
+            ),
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 #[tokio::test]
 async fn deleting_an_agent_whose_worktree_vanished_still_removes_it() {
     let h = harness("delete-gone");
@@ -3927,8 +3946,7 @@ async fn deleting_an_agent_whose_worktree_vanished_still_removes_it() {
     if let Some(proc) = h.core.agent(&a.meta.id).unwrap().lock().detach() {
         proc.kill();
     }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    std::fs::remove_dir_all(&wt.path).unwrap();
+    remove_once_let_go(&wt.path).await;
     h.core.delete_agent(&a.meta.id, true).await.unwrap();
     assert!(h.core.agent(&a.meta.id).is_err());
     assert_eq!(h.removed_events(&a.meta.id), 1);
@@ -4418,8 +4436,7 @@ async fn the_project_diff_says_why_an_agents_worktree_could_not_be_read() {
     if let Some(proc) = h.core.agent(&id).unwrap().lock().detach() {
         proc.kill();
     }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    std::fs::remove_dir_all(&wt).unwrap();
+    remove_once_let_go(&wt).await;
     assert_eq!(h.core.worktree_diff(Some(&id)).await.unwrap(), None);
 }
 
@@ -6496,8 +6513,7 @@ async fn a_terminal_is_refused_for_an_agent_whose_worktree_vanished() {
     if let Some(proc) = h.core.agent(&a.meta.id).unwrap().lock().detach() {
         proc.kill();
     }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    std::fs::remove_dir_all(&wt.path).unwrap();
+    remove_once_let_go(&wt.path).await;
 
     // Not a shell opened elsewhere, in the app's own folder, as if it were the worktree.
     for sub in [None, Some("src")] {
@@ -6623,8 +6639,7 @@ async fn the_editor_says_so_when_the_worktree_of_its_agent_vanished() {
     if let Some(proc) = h.core.agent(&a.meta.id).unwrap().lock().detach() {
         proc.kill();
     }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    std::fs::remove_dir_all(&wt.path).unwrap();
+    remove_once_let_go(&wt.path).await;
 
     // The tree, the search, a file read or written, a rename: the same words, not the system's.
     let id = Some(a.meta.id.clone());

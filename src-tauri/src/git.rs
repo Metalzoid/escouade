@@ -3462,6 +3462,16 @@ mod repo_tests {
         assert!(d.contains("+++ b/résumé.md"), "{d}");
     }
 
+    /// The subject of the last commit of `r`, read with no limit: the reads' one a test made short
+    /// would cut it under load.
+    fn last_subject(r: &str) -> String {
+        let out = Command::new("git")
+            .args(["-C", r, "log", "-1", "--format=%s"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
     fn git(r: &str, args: &[&str]) {
         assert!(Command::new("git")
             .arg("-C")
@@ -4098,27 +4108,18 @@ sleep {seconds}
         // The hook outlasts the reads' limit: every path that runs hooks waits for it.
         let r = repo_with_a_slow_hook("git-limit-hooks-run");
         run_hooks(&r, &["commit", "-qm", "slow"]).await.unwrap();
-        assert_eq!(
-            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
-            "slow"
-        );
+        assert_eq!(last_subject(&r), "slow");
 
         let r = repo_with_a_slow_hook("git-limit-hooks-commit");
         commit_staged(&r, "slow").await.unwrap();
-        assert_eq!(
-            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
-            "slow"
-        );
+        assert_eq!(last_subject(&r), "slow");
 
         // `commit_paths` gives the paths on the input of the command.
         let r = repo_with_a_slow_hook("git-limit-hooks-paths");
         commit_paths(&r, &["a.txt".to_string()], "slow")
             .await
             .unwrap();
-        assert_eq!(
-            text(&r, &["log", "-1", "--format=%s"]).await.unwrap(),
-            "slow"
-        );
+        assert_eq!(last_subject(&r), "slow");
     }
 
     #[tokio::test]

@@ -116,6 +116,8 @@ opt-level = 3
 strip = true
 
 [dev-dependencies]
+# Each test process's temporary folder of its own, given before `main` (`src/test_tmp.rs`).
+ctor = "1"
 tauri = { version = "2", features = ["test", "tray-icon", "image-png"] }
 # An https server with a self-signed certificate (a corporate proxy's), for the TLS settings.
 rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
