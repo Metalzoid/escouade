@@ -57,6 +57,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 - Vue Claude Code, d'après un essai avec le vrai Claude Code sous Windows :
   - un message sur plusieurs lignes arrive entier. Avant, Claude Code perdait ses sauts de ligne, et un message envoyé juste après l'ouverture de l'interface pouvait partir coupé à sa première ligne ;
   - un tour annulé par Échap avant la première ligne de la réponse finit, interrompu ; l'agent restait « En cours » ;
+  - le message suivant envoyé par Escouade après cette annulation arrive seul. Claude Code remet le message annulé dans sa zone de saisie, et le suivant s'y ajoutait : les deux partaient ensemble. Escouade vide maintenant la saisie par un seul Ctrl+C avant de coller, quand elle ne contient que le message qu'elle avait collé. Si quelque chose a été tapé dans le terminal (un brouillon), rien n'est vidé : la conversation dit que le message s'ajoute à ce que contient la saisie ;
   - une commande locale de Claude Code, comme `/compact`, finit son tour quand elle a répondu, en erreur si elle a échoué, et n'apparaît plus deux fois dans la conversation ; l'agent restait « En cours » après elle.
 - D'après l'essai de chaque harness avec un vrai ticket :
   - l'agent d'un ticket sur OpenCode part en « Demander » quand le Kanban dit « Auto », qu'OpenCode n'a pas ; il affichait « Auto » et demandait tout de même. La règle vient maintenant du harness du ticket : un ticket sur Codex ou Copilot CLI garde « Auto » même si le modèle du Kanban est Haiku ;

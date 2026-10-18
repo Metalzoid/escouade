@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
@@ -63,6 +63,9 @@ struct Term {
     writes: Arc<WriteLog>,
     /// When the log last got a slow echo of the window (ms), `i64::MIN` for never.
     slow_echo_at: AtomicI64,
+    /// How many of the window's writes were typed by its user (`typing`), not answers of the
+    /// terminal.
+    typed: Arc<AtomicU64>,
 }
 
 /// A write waiting for the input thread.
@@ -87,6 +90,48 @@ fn tracing() -> bool {
 
 fn now_us() -> i64 {
     chrono::Utc::now().timestamp_micros()
+}
+
+/// Whether what the window sends to a terminal was typed by its user, and may change what the
+/// program holds as its input: not what the terminal sends on its own (its answers to the
+/// program's queries, the focus that comes and goes, the mouse), nor Escape alone. A key that
+/// moves or recalls (an arrow, Alt+a letter) is typing.
+pub(crate) fn typing(data: &[u8]) -> bool {
+    let mut s = data;
+    while !s.is_empty() {
+        let len = match s {
+            // A mouse report of the old kind: three bytes follow, whatever they are.
+            [0x1b, b'[', b'M', _, _, _, ..] => 6,
+            [0x1b, b'[', rest @ ..] => {
+                let Some(end) = rest.iter().position(|b| (0x40..=0x7e).contains(b)) else {
+                    return true;
+                };
+                let (body, last) = (&rest[..end], rest[end]);
+                let focus = body.is_empty() && matches!(last, b'I' | b'O');
+                let mouse = body.first() == Some(&b'<') && matches!(last, b'M' | b'm');
+                // A cursor position, the attributes, a status, the window, a mode.
+                let answer = matches!(last, b'R' | b'c' | b'n' | b't' | b'y');
+                if !(focus || mouse || answer) {
+                    return true;
+                }
+                end + 3
+            }
+            // A string (a colour, a setting asked for), up to BEL or ESC \.
+            [0x1b, b']' | b'P' | b'_' | b'^', rest @ ..] => {
+                let Some(end) = rest.iter().enumerate().position(|(i, b)| {
+                    *b == 0x07 || (*b == 0x1b && rest.get(i + 1) == Some(&b'\\'))
+                }) else {
+                    return true;
+                };
+                end + 2 + if rest[end] == 0x07 { 1 } else { 2 }
+            }
+            // Escape alone (or before another sequence).
+            [0x1b] | [0x1b, 0x1b, ..] => 1,
+            _ => return true,
+        };
+        s = &s[len.min(s.len())..];
+    }
+    false
 }
 
 /// How many writes a terminal remembers (`WriteLog`).
@@ -1150,6 +1195,7 @@ impl PtyManager {
                 io_at: io_at.clone(),
                 writes: writes.clone(),
                 slow_echo_at: AtomicI64::new(i64::MIN),
+                typed: Arc::default(),
             }),
         );
 
@@ -1206,6 +1252,20 @@ impl PtyManager {
     /// slow echo (`TermReport::SlowEcho`).
     pub fn write(&self, id: &str, data: &[u8]) -> Result<u64> {
         self.queue(id, data, None)
+    }
+
+    /// Queues what the window sends (`write`), counting what its user typed (`typing`).
+    pub fn write_from_window(&self, id: &str, data: &[u8]) -> Result<u64> {
+        if typing(data) {
+            self.term(id)?.typed.fetch_add(1, Ordering::AcqRel);
+        }
+        self.write(id, data)
+    }
+
+    /// How many writes of the window to terminal `id` its user typed (`write_from_window`), as
+    /// they come; None for a terminal that is gone.
+    pub fn typed(&self, id: &str) -> Option<Arc<AtomicU64>> {
+        self.term(id).ok().map(|t| t.typed.clone())
     }
 
     /// Queues `data` like `write`, then waits until the input thread has written it, for at most
@@ -3580,6 +3640,7 @@ impl PtyManager {
                 io_at: Arc::new(AtomicI64::new(now_ms())),
                 writes,
                 slow_echo_at: AtomicI64::new(i64::MIN),
+                typed: Arc::default(),
             }),
         );
     }
@@ -4317,5 +4378,56 @@ mod input_tests {
         assert_eq!(err.to_string(), closed(i18n::ui()).to_string());
         // Closing again is harmless.
         term.close_console();
+    }
+}
+
+#[cfg(test)]
+mod typing_tests {
+    use super::typing;
+
+    #[test]
+    fn what_the_terminal_sends_on_its_own_and_escape_alone_are_not_typing() {
+        for data in [
+            &b"\x1b"[..],
+            b"\x1b\x1b",
+            b"\x1b[I",
+            b"\x1b[O",
+            b"\x1b[12;40R",
+            b"\x1b[?1;2c",
+            b"\x1b[>0;276;0c",
+            b"\x1b[0n",
+            b"\x1b[?2004;1$y",
+            b"\x1b[<0;10;5M\x1b[<0;10;5m",
+            b"\x1b[M #!",
+            b"\x1b]11;rgb:0000/0000/0000\x07",
+            b"\x1b]10;rgb:ffff/ffff/ffff\x1b\\",
+            b"\x1bP1$r0m\x1b\\",
+            b"\x1b[I\x1b[12;1R\x1b",
+            b"",
+        ] {
+            assert!(!typing(data), "{data:?}");
+        }
+    }
+
+    #[test]
+    fn text_keys_and_sequences_cut_short_are_typing() {
+        for data in [
+            &b"a"[..],
+            b"\r",
+            b"\x03",
+            b"\x7f",
+            b"\x15",
+            b"\x1b[A",
+            b"\x1b[3~",
+            b"\x1bOP",
+            b"\x1bb",
+            b"\x1b\x7f",
+            b"\x1b[200~texte\x1b[201~",
+            b"\x1b[I a",
+            b"\x1b[12;4",
+            b"\x1b]11;rgb",
+        ] {
+            assert!(typing(data), "{data:?}");
+        }
     }
 }

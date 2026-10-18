@@ -312,6 +312,16 @@ pub struct TuiRun {
     pub linked: bool,
     /// Held while a message is typed in it, paste then Enter: two messages never mix.
     pub typing: Arc<parking_lot::Mutex<()>>,
+    /// How many keys its window typed (`PtyManager::typed`), as they come.
+    pub typed: Arc<std::sync::atomic::AtomicU64>,
+    /// How many it had typed when its prompt was last known empty: as it started, as a turn
+    /// started (its prompt sent), once Escouade emptied it.
+    pub empty_at: Option<u64>,
+    /// How many it had typed when Escouade last pasted a message in it, its prompt empty.
+    pub pasted: Option<u64>,
+    /// A turn of it was cancelled before its answer, and Claude Code put its message back in its
+    /// prompt (`tui::IDLE_ENDS_TURN_MS`); until the next turn starts.
+    pub cancelled: Option<crate::tui::Cancelled>,
     /// The user closed its terminal (`Core::kill_terminal`): its end is no failure to start.
     pub killed: bool,
     /// Remote Control ended while it ran a turn, and no window had shown it: it stops once the
@@ -351,6 +361,10 @@ impl TuiRun {
             sessions: None,
             linked: false,
             typing: Arc::default(),
+            typed: Arc::default(),
+            empty_at: Some(0),
+            pasted: None,
+            cancelled: None,
             killed: false,
             stop_when_idle: false,
             gen: 1,
@@ -908,6 +922,11 @@ impl AgentRt {
             }
         } else if !was && is {
             self.active_since = Some(now);
+            // A prompt was sent: the one a cancelled turn put back is no longer there.
+            if let Some(t) = self.tui.as_mut() {
+                t.cancelled = None;
+                t.empty_at = Some(t.typed.load(std::sync::atomic::Ordering::Acquire));
+            }
         }
         self.meta.status = status;
         self.meta.last_activity = now;

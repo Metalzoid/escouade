@@ -328,9 +328,9 @@ if (argv[0] === 'mcp') {
 // <log>.tui-rc-inactive is there the `bridge_status` it writes has no link ("/remote-control is not active")
 // and the registry has no `bridgeSessionId`; while <log>.tui-rc-registry-only is there the link is told in the
 // registry alone; while <log>.tui-rc-exit is there
-// it closes 200 ms after it started (code 1). Each Ctrl+C (\x03) it reads is added, with its time (ms),
-// to <log>.quit.jsonl; the second one ends it (code 0), as Claude Code quits on two, unless
-// <log>.tui-ignore-quit is there: then it goes on.
+// it closes 200 ms after it started (code 1). Each Ctrl+C (\x03) it reads is added, with its time (ms) and the
+// prompt line it found, to <log>.quit.jsonl; on a line that holds something it empties it, and the second one on an
+// empty line ends it (code 0), as Claude Code quits on two, unless <log>.tui-ignore-quit is there: then it goes on.
 // As Claude Code does, it writes no transcript before its first message (a session that never got one cannot be resumed), and
 // a `--resume=<id>` of a session absent from every <dir>/projects/* folder (or named `missing…`) fails as an unknown one does:
 // "No conversation found with session ID: <id>" on stderr, exit code 1, a moment after (the pseudo-console flushes its
@@ -525,10 +525,13 @@ function tuiSession() {
         return status('idle');
       }
     }
-    // "pense": it thinks until Escape, which cancels the turn as the real one does before its first answer (ESC-12):
-    // nothing in the transcript, no hook, its registry says idle.
-    if (prompt.includes('pense')) {
+    // Ending with "pense": it thinks until Escape, which cancels the turn as the real one does before its first answer (ESC-12):
+    // nothing in the transcript, no hook, its registry says idle, and the prompt back in its line (before what was typed
+    // meanwhile).
+    if (prompt.endsWith('pense')) {
       await new Promise((resolve) => (waiting = resolve));
+      line = prompt + line;
+      draw();
       return status('idle');
     }
     // "tard": its registry says it idle a second before its transcript ends the turn.
@@ -557,12 +560,16 @@ function tuiSession() {
     }
   };
   process.stdin.on('data', (chunk) => {
-    for (const _ of chunk.matchAll(/\x03/g)) {
-      fs.appendFileSync(side('quit.jsonl'), JSON.stringify({ at: Date.now() }) + '\n');
-      if (++ctrlC >= 2 && !fs.existsSync(side('tui-ignore-quit'))) process.exit(0);
-    }
-    chunk = chunk.replaceAll('\x03', '');
-    for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b)/)) {
+    for (const part of chunk.split(/(\x1b\[20[01]~|\r|\x1b|\x03)/)) {
+      // Ctrl+C empties a line that holds something, as Claude Code does; on an empty one, the second quits.
+      if (part === '\x03') {
+        fs.appendFileSync(side('quit.jsonl'), JSON.stringify({ at: Date.now(), line }) + '\n');
+        if (line) {
+          line = '';
+          draw();
+        } else if (++ctrlC >= 2 && !fs.existsSync(side('tui-ignore-quit'))) process.exit(0);
+        continue;
+      }
       if (!pasteMode && (part === '\x1b[200~' || part === '\x1b[201~')) continue;
       if (part === '\x1b[200~') pasteStart = line.length;
       if (part === '\x1b[201~' && pasteStart !== null && pasteStart <= line.length) {

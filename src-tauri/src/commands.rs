@@ -1503,7 +1503,9 @@ fn spawn_launch(
 /// a slow echo (`term_report`).
 #[tauri::command]
 pub fn term_write(core: CoreState, id: String, data: String) -> Res<u64> {
-    core.pty.write(&id, data.as_bytes()).map_err(err)
+    core.pty
+        .write_from_window(&id, data.as_bytes())
+        .map_err(err)
 }
 
 /// Synchronous, so that resizes keep their order among themselves (the last one wins); it waits

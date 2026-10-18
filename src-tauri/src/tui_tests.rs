@@ -1195,31 +1195,65 @@ async fn an_interrupt_from_the_window_is_escape_in_the_interface() {
     .await;
 }
 
+/// `text` sent to the agent's interface, then cancelled before its answer by Escape (Escouade's
+/// button, or the key typed in its terminal), until its turn ends as interrupted.
+async fn cancel_in_tui(h: &Harness, id: &str, text: &str, from_terminal: bool) {
+    h.core
+        .send_message(id, text.into(), Vec::new())
+        .await
+        .unwrap();
+    h.wait("the turn running", |h| {
+        h.agent(id).status == AgentStatus::Running
+    })
+    .await;
+    if from_terminal {
+        h.core
+            .pty
+            .write_from_window(&terminal_of(h, id), b"\x1b")
+            .unwrap();
+    } else {
+        h.core.interrupt(id).await.unwrap();
+    }
+    h.wait("the turn interrupted", |h| {
+        h.items(id)
+            .iter()
+            .any(|i| i["kind"] == "turn" && i["interrupted"] == true)
+    })
+    .await;
+    assert!(!h.agent(id).status.is_active());
+}
+
+/// What the fake interface found in its prompt line at each Ctrl+C it read.
+fn ctrl_c_lines(h: &Harness, id: &str) -> Vec<Value> {
+    let cwd = std::path::PathBuf::from(h.agent(id).cwd);
+    h.fake_log(&cwd, "quit")
+        .into_iter()
+        .map(|q| q["line"].clone())
+        .collect()
+}
+
+/// What the conversation says of a cancelled message left in the interface's prompt.
+fn left_in_prompt(h: &Harness, id: &str) -> Vec<String> {
+    texts(h, id, "notice")
+        .into_iter()
+        .filter(|n| n.contains("remis dans sa saisie"))
+        .collect()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_turn_its_interface_cancels_before_any_answer_ends_when_its_registry_says_idle() {
     // Escape before the first answer: Claude Code puts the message back in its prompt, writes
     // nothing more in its transcript and calls no hook; its registry file says it idle.
     let h = harness("tui-cancelled");
     let id = agent_in_tui(&h).await;
-    h.core
-        .send_message(&id, "pense".into(), Vec::new())
-        .await
-        .unwrap();
-    h.wait("the turn running", |h| {
-        h.agent(&id).status == AgentStatus::Running
-    })
-    .await;
-    h.core.interrupt(&id).await.unwrap();
-    h.wait("the turn interrupted", |h| {
-        h.items(&id)
-            .iter()
-            .any(|i| i["kind"] == "turn" && i["interrupted"] == true)
-    })
-    .await;
-    assert!(!h.agent(&id).status.is_active());
-    // The next message is a turn of its own, ended by its transcript.
+    cancel_in_tui(&h, &id, "pense", false).await;
+    // The next message is a turn of its own, ended by its transcript: the prompt, which held
+    // Escouade's cancelled message alone, was emptied first by a single Ctrl+C (ESC-118).
     say_in_tui(&h, &id, "bonjour").await;
     assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+    assert_eq!(texts(&h, &id, "user"), ["pense", "bonjour"]);
+    assert_eq!(ctrl_c_lines(&h, &id), [json!("pense")]);
+    assert!(left_in_prompt(&h, &id).is_empty());
     let turns: Vec<Value> = h
         .items(&id)
         .into_iter()
@@ -1227,6 +1261,63 @@ async fn a_turn_its_interface_cancels_before_any_answer_ends_when_its_registry_s
         .collect();
     assert_eq!(turns.len(), 2);
     assert_eq!(turns[1]["interrupted"], false);
+    // Once only: the message after is pasted as it is.
+    say_in_tui(&h, &id, "merci").await;
+    assert_eq!(ctrl_c_lines(&h, &id).len(), 1);
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour", "Fini : merci"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_cancelled_by_escape_typed_in_the_terminal_is_emptied_all_the_same() {
+    // Escape types no text: the prompt holds Escouade's message alone still.
+    let h = harness("tui-cancelled-key");
+    let id = agent_in_tui(&h).await;
+    cancel_in_tui(&h, &id, "pense", true).await;
+    say_in_tui(&h, &id, "bonjour").await;
+    assert_eq!(texts(&h, &id, "text"), ["Fini : bonjour"]);
+    assert_eq!(ctrl_c_lines(&h, &id), [json!("pense")]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_draft_typed_in_the_terminal_after_a_cancelled_message_is_kept_and_said() {
+    // The user typed after the cancelled message Claude Code put back: nothing is emptied, the
+    // next message is added to the prompt, and the conversation says it.
+    let h = harness("tui-cancelled-draft");
+    let id = agent_in_tui(&h).await;
+    cancel_in_tui(&h, &id, "pense", false).await;
+    h.core
+        .pty
+        .write_from_window(&terminal_of(&h, &id), b" et ceci")
+        .unwrap();
+    say_in_tui(&h, &id, "bonjour").await;
+    assert!(ctrl_c_lines(&h, &id).is_empty());
+    assert_eq!(texts(&h, &id, "text"), ["Fini : pense et cecibonjour"]);
+    assert_eq!(
+        left_in_prompt(&h, &id).len(),
+        1,
+        "{:?}",
+        texts(&h, &id, "notice")
+    );
+    // Said once: the prompt was sent with it.
+    say_in_tui(&h, &id, "merci").await;
+    assert_eq!(left_in_prompt(&h, &id).len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_draft_typed_before_escouades_message_is_kept_when_that_message_is_cancelled() {
+    // The prompt held the user's draft when Escouade pasted its message: the cancelled message
+    // Claude Code puts back holds the draft too, which is not emptied.
+    let h = harness("tui-cancelled-before");
+    let id = agent_in_tui(&h).await;
+    h.core
+        .pty
+        .write_from_window(&terminal_of(&h, &id), b"brouillon ")
+        .unwrap();
+    cancel_in_tui(&h, &id, "pense", false).await;
+    say_in_tui(&h, &id, "bonjour").await;
+    assert!(ctrl_c_lines(&h, &id).is_empty());
+    assert_eq!(texts(&h, &id, "text"), ["Fini : brouillon pensebonjour"]);
+    assert_eq!(left_in_prompt(&h, &id).len(), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -2904,22 +2995,17 @@ async fn the_end_of_a_turn_ends_the_background_subagents_the_user_stopped_in_the
     assert!(h.core.sidechains.lock().len() >= 2);
 }
 
-/// Real run (ESC-12): « Vue Claude Code » with the real `claude` that `ESCOUADE_REAL_CLAUDE`
-/// names, on the machine's own account (Principal: no `CLAUDE_CONFIG_DIR`, the home folder
-/// `ESCOUADE_TEST_REAL_HOME` names), on Haiku: a message pasted on two lines as soon as the
-/// interface is up, `/compact`, Escape during a turn, a subagent, then `/clear`, each followed in
-/// Escouade as its interface writes it. About 0.13 $ a run. By hand only (`cargo test --lib
-/// real_claude_view -- --ignored --nocapture`, out of any Claude Code session:
-/// `env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION`), the folder of its sessions taken out of
-/// `~/.claude/projects` after (docs/TODO-1.8.md, « Vue Claude Code »).
-#[tokio::test(flavor = "multi_thread")]
-#[ignore]
-async fn real_claude_view() {
+/// The real `claude` of `ESCOUADE_REAL_CLAUDE` in « Vue Claude Code », on the machine's own
+/// account (Principal: no `CLAUDE_CONFIG_DIR`, the home folder `ESCOUADE_TEST_REAL_HOME` names),
+/// on Haiku, up and its prompt ready: the agent, its terminal and what that showed.
+async fn real_interface(
+    name: &str,
+) -> (Harness, String, TermInfo, Arc<parking_lot::Mutex<String>>) {
     use std::time::{Duration, Instant};
     let program = std::env::var("ESCOUADE_REAL_CLAUDE").expect("ESCOUADE_REAL_CLAUDE");
     let home = std::env::var("ESCOUADE_TEST_REAL_HOME").expect("ESCOUADE_TEST_REAL_HOME");
     let home = std::path::Path::new(&home).join(".claude");
-    let h = harness("tui-claude-real");
+    let h = harness(name);
     let (p, repo) = h.project(false).await;
     println!("repo {}", repo.display());
     // Principal, as the app runs it: no `CLAUDE_CONFIG_DIR`, its own Claude Code.
@@ -2981,6 +3067,23 @@ async fn real_claude_view() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     println!("ready after {:?}, trusted: {trusted}", start.elapsed());
+    (h, id, info, screen)
+}
+
+/// Real run (ESC-12): « Vue Claude Code » with the real `claude` that `ESCOUADE_REAL_CLAUDE`
+/// names, on the machine's own account (Principal: no `CLAUDE_CONFIG_DIR`, the home folder
+/// `ESCOUADE_TEST_REAL_HOME` names), on Haiku: a message pasted on two lines as soon as the
+/// interface is up, `/compact`, Escape during a turn, a subagent, then `/clear`, each followed in
+/// Escouade as its interface writes it. About 0.13 $ a run. By hand only (`cargo test --lib
+/// real_claude_view -- --ignored --nocapture`, out of any Claude Code session:
+/// `env -u CLAUDECODE -u CLAUDE_CODE_CHILD_SESSION`), the folder of its sessions taken out of
+/// `~/.claude/projects` after (docs/TODO-1.8.md, « Vue Claude Code »).
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_claude_view() {
+    use std::time::{Duration, Instant};
+    let (h, id, _, screen) = real_interface("tui-claude-real").await;
+    let session = h.agent(&id).session_id.unwrap();
     let turns = |h: &Harness| h.items(&id).iter().filter(|i| i["kind"] == "turn").count();
     let say = |text: &'static str| {
         let (h, id, screen) = (&h, id.clone(), &screen);
@@ -3076,14 +3179,12 @@ async fn real_claude_view() {
     println!("3. turn {}, status {:?}", last("turn"), h.agent(&id).status);
     assert_eq!(last("turn")["interrupted"], true);
     assert!(!h.agent(&id).status.is_active());
-    // Cancelled before its first answer, the message may be back in the interface's prompt (ESC-118):
-    // cleared as the user would, by one Ctrl+C.
+    // Cancelled before its first answer, the message may be back in the interface's prompt:
+    // Escouade empties it before the next one (ESC-118, `real_claude_view_cancelled`).
     tokio::time::sleep(Duration::from_secs(1)).await;
     let tail: String = plain_text(&screen.lock()).chars().rev().take(600).collect();
     let tail: String = tail.chars().rev().collect();
     println!("3. screen after: {tail}");
-    h.core.pty.write(&info.id, b"\x03").unwrap();
-    tokio::time::sleep(Duration::from_secs(2)).await;
 
     // 4. A subagent: its row in the plan, and its thread from its own transcript.
     say(
@@ -3091,6 +3192,9 @@ async fn real_claude_view() {
          dont la consigne est : « Réponds seulement OK, sans aucun outil. » Puis réponds seulement : C",
     )
     .await;
+    assert!(last("user")["text"]
+        .as_str()
+        .is_some_and(|u| u.starts_with("Lance un seul sous-agent")));
     let plan = h.agent(&id).plan;
     println!("4. plan {plan:#?}");
     let row = plan
@@ -3113,6 +3217,140 @@ async fn real_claude_view() {
     assert!(h.agent(&id).plan.is_none_or(|p| p.agents.is_empty()));
     println!("cost {}", h.agent(&id).cost);
     println!("screen:\n{}", plain_text(&screen.lock()));
+}
+
+/// Real run (ESC-118): a message cancelled by Escape before its answer, which Claude Code puts
+/// back in its prompt; the next one Escouade sends arrives alone (the prompt emptied by one
+/// Ctrl+C, the interface still up). Then a draft typed in the terminal after another cancelled
+/// message: kept, the next message added to it, and the conversation says so. On Haiku, a few
+/// cents. By hand only, as `real_claude_view`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn real_claude_view_cancelled() {
+    let (h, id, info, screen) = real_interface("tui-claude-real-cancel").await;
+    let tail = || {
+        let all = plain_text(&screen.lock());
+        let tail: String = all.chars().rev().take(400).collect();
+        tail.chars().rev().collect::<String>()
+    };
+    let last = |kind: &str| last_item(&h, &id, kind);
+    let pause = || tokio::time::sleep(std::time::Duration::from_millis(500));
+
+    // 1. Escouade's message alone in the prompt: emptied, the next one arrives alone.
+    real_cancel(
+        &h,
+        &id,
+        "Écris les nombres de un à deux cents en toutes lettres, sans outil.",
+    )
+    .await;
+    pause().await;
+    println!("1. screen after the cancel: {}", tail());
+    real_say(&h, &id, "Réponds seulement : A").await;
+    println!(
+        "1. user {:?}, answer {:?}",
+        last("user")["text"],
+        last("text")["text"]
+    );
+    assert_eq!(last("user")["text"], "Réponds seulement : A");
+    assert!(h.core.pty.exists(&info.id), "the interface quit");
+    assert!(notices_of(&h, &id).iter().all(|n| !n.contains("remis")));
+
+    // 2. A draft typed after the cancel: kept, the next message added to it, and said.
+    real_cancel(
+        &h,
+        &id,
+        "Écris les nombres de un à deux cents en toutes lettres, sans outil.",
+    )
+    .await;
+    pause().await;
+    h.core
+        .pty
+        .write_from_window(&info.id, " Puis réponds seulement : B".as_bytes())
+        .unwrap();
+    pause().await;
+    println!("2. screen with the draft: {}", tail());
+    real_say(&h, &id, " Non, réponds seulement : C").await;
+    println!(
+        "2. user {:?}, answer {:?}",
+        last("user")["text"],
+        last("text")["text"]
+    );
+    assert!(notices_of(&h, &id).iter().any(|n| n.contains("remis")));
+    let user = last("user")["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        user.contains(" B") && user.ends_with("Non, réponds seulement : C"),
+        "{user}"
+    );
+    println!("cost {}", h.agent(&id).cost);
+}
+
+/// The last item of the agent's conversation of that kind (null for none).
+fn last_item(h: &Harness, id: &str, kind: &str) -> Value {
+    h.items(id)
+        .into_iter()
+        .rev()
+        .find(|i| i["kind"] == kind)
+        .unwrap_or_default()
+}
+
+/// Waits for the end of a turn of the real interface, after `before` turns.
+async fn real_turn_after(h: &Harness, id: &str, before: usize) {
+    let turns = |h: &Harness| h.items(id).iter().filter(|i| i["kind"] == "turn").count();
+    let start = std::time::Instant::now();
+    while turns(h) == before || h.agent(id).status.is_active() {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(120),
+            "no end of turn: {:#?}",
+            h.items(id)
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+}
+
+/// `text` sent to the real interface, until its turn ends.
+async fn real_say(h: &Harness, id: &str, text: &str) {
+    let before = h.items(id).iter().filter(|i| i["kind"] == "turn").count();
+    h.core
+        .send_message(id, text.into(), Vec::new())
+        .await
+        .unwrap();
+    real_turn_after(h, id, before).await;
+}
+
+/// `text` sent to the real interface, then Escape as soon as its turn runs: before its first
+/// answer, so the registry ends it (`IDLE_ENDS_TURN_MS`).
+async fn real_cancel(h: &Harness, id: &str, text: &str) {
+    use std::time::{Duration, Instant};
+    let before = h.items(id).iter().filter(|i| i["kind"] == "turn").count();
+    h.core
+        .send_message(id, text.into(), Vec::new())
+        .await
+        .unwrap();
+    let start = Instant::now();
+    while h.agent(id).status != AgentStatus::Running {
+        assert!(start.elapsed() < Duration::from_secs(60), "never running");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    h.core.interrupt(id).await.unwrap();
+    real_turn_after(h, id, before).await;
+    let cancelled = h
+        .core
+        .agent(id)
+        .unwrap()
+        .lock()
+        .tui
+        .as_ref()
+        .and_then(|t| t.cancelled);
+    println!("cancelled {cancelled:?}, turn {}", last_item(h, id, "turn"));
+    assert_eq!(last_item(h, id, "turn")["interrupted"], true);
+    assert!(
+        cancelled.is_some(),
+        "ended by its transcript, not cancelled before its answer"
+    );
 }
 
 /// The notices of the agent's conversation, in lower case.

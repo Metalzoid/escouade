@@ -42,6 +42,7 @@ use std::convert::Infallible;
 use std::io::{Read, Seek, SeekFrom};
 use std::net::{Ipv4Addr, TcpListener};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use tauri::Runtime;
@@ -75,6 +76,23 @@ const REGISTRY_PATIENCE: Duration = Duration::from_secs(5 * 60);
 /// Claude Code puts the message back in its prompt, writes nothing more in its transcript and
 /// calls no hook (2.1.302, ESC-12). A turn that ends normally has its end read before.
 const IDLE_ENDS_TURN_MS: i64 = 3000;
+
+/// A turn cancelled before its answer, whose message Claude Code put back in its prompt
+/// (`IDLE_ENDS_TURN_MS`): the next message pasted would be added to it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cancelled {
+    /// Its message is the one Escouade pasted, and nothing was typed in the terminal since: the
+    /// prompt holds it alone.
+    pub(crate) pasted: bool,
+    /// How many keys the window had typed then (`PtyManager::typed`).
+    pub(crate) typed: u64,
+}
+
+/// How long the Ctrl+C that empties the prompt of a cancelled message is given to be written,
+/// and the pause after it, before the next message is pasted.
+const EMPTIED_WITHIN: Duration = Duration::from_secs(2);
+const AFTER_EMPTYING: Duration = Duration::from_millis(300);
+
 /// The most files of the registry looked into, and the most one of them may weigh (bytes).
 const REGISTRY_FILES: usize = 512;
 const REGISTRY_FILE_MAX: u64 = 64 << 10;
@@ -1455,6 +1473,11 @@ impl<R: Runtime> Core<R> {
                 sessions: view.running_dir(&config_dir),
                 linked: false,
                 typing: Default::default(),
+                // Gone already (it exited at once): its exit follows.
+                typed: self.pty.typed(&info.id).unwrap_or_default(),
+                empty_at: Some(0),
+                pasted: None,
+                cancelled: None,
                 killed: false,
                 stop_when_idle: false,
             });
@@ -1640,6 +1663,13 @@ impl<R: Runtime> Core<R> {
                         && now_ms() - at >= IDLE_ENDS_TURN_MS
                 });
                 if cancelled {
+                    if let Some(run) = rt.tui.as_mut() {
+                        let typed = run.typed.load(Ordering::Acquire);
+                        run.cancelled = Some(Cancelled {
+                            pasted: run.pasted == Some(typed),
+                            typed,
+                        });
+                    }
                     rt.interrupted = true;
                     rt.end_tui_turn(None, &mut fx);
                 }
@@ -2155,7 +2185,7 @@ impl<R: Runtime> Core<R> {
 
     /// A message for an agent in the Claude Code view: typed in its interface, as pasted text
     /// then Enter. Refused while it waits for an answer there (the text would go to its dialog).
-    pub(crate) fn send_to_tui(&self, id: &str, text: &str) -> Result<()> {
+    pub(crate) fn send_to_tui(self: &Arc<Self>, id: &str, text: &str) -> Result<()> {
         let h = self.agent(id)?;
         let (account, cwd) = {
             let rt = h.lock();
@@ -2216,6 +2246,49 @@ impl<R: Runtime> Core<R> {
             && start.elapsed() < PASTE_MODE_WITHIN
         {
             std::thread::sleep(Duration::from_millis(50));
+        }
+        // A message cancelled before its answer, that Claude Code put back in its prompt
+        // (`Cancelled`): the one Escouade pasted alone, it is emptied first by a single Ctrl+C
+        // (two within a second quit the interface); anything else is left there, and said.
+        let (cancelled, typed) = {
+            let mut rt = h.lock();
+            match rt.tui.as_mut().filter(|t| t.term_id == term) {
+                Some(t) => (t.cancelled.take(), t.typed.clone()),
+                None => (None, Arc::default()),
+            }
+        };
+        match cancelled {
+            Some(c) if c.pasted && typed.load(Ordering::Acquire) == c.typed => {
+                self.pty.write_and_wait(&term, b"\x03", EMPTIED_WITHIN)?;
+                std::thread::sleep(AFTER_EMPTYING);
+                log::info!("agent {id}: the prompt of the cancelled message emptied");
+            }
+            Some(_) => {
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.notice(
+                        "warn",
+                        tr!(
+                            "{harness} a remis dans sa saisie le message annulé avant sa réponse, et du texte a été tapé dans son terminal : Escouade ne l’a pas vidée, ce message s’ajoute à ce qu’elle contient.",
+                            "{harness} put the message cancelled before its answer back in its prompt, and text was typed in its terminal: Escouade did not empty it, this message is added to what it holds.",
+                            harness = harness
+                        ),
+                        fx,
+                    );
+                    Ok(())
+                });
+            }
+            None => {}
+        }
+        {
+            // Its prompt empty as it is pasted: a cancellation of it leaves this message alone there.
+            let now = typed.load(Ordering::Acquire);
+            let mut rt = h.lock();
+            if let Some(t) = rt.tui.as_mut().filter(|t| t.term_id == term) {
+                if cancelled.is_some_and(|c| c.pasted && c.typed == now) {
+                    t.empty_at = Some(now);
+                }
+                t.pasted = (t.empty_at == Some(now)).then_some(now);
+            }
         }
         // The pause starts once the paste is really written, not queued: under load the terminal's
         // input thread may be behind, and the queue would then join the paste and the Enter into
