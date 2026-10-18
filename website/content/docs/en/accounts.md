@@ -230,6 +230,8 @@ The conversation marks it: “Continued on Codex · Claude Code quota spent unti
 
 The agent’s menu also offers “Continue on another harness…” at any time, outside a running turn.
 
+An agent in a terminal view (Claude Code view, Codex view…) switches too: the handover file goes through Escouade’s view, then, once its turn is over, the agent moves to the target harness’s terminal view, on its new session. A harness with no terminal view leaves it in Escouade’s view, like an agent that was already there.
+
 The harness left is set aside until its reset. After that, the card and the menu offer “Go back to Claude Code”: a handover the other way. The agent never goes back by itself.
 
 The setting “Continue on the next harness when every account of a harness is spent” (Settings › Harness, “Processes” group, shown with two harnesses) does it without you. It is off by default. When on, the agent stopped by the limit moves by itself to the first fallback harness with an account to take it, never to the one it left; the autopilot follows its ticket on the new harness.

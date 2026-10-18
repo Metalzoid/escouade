@@ -1575,9 +1575,11 @@ impl<R: Runtime> Core<R> {
         let limited = end == TurnEnd::Limited;
         let Some(ticket_id) = ticket_id else {
             // Its harness spent, an agent goes on on another one, with the option (ESC-88).
-            if limited {
-                self.handover_on_limit(agent_id).await;
+            if limited && self.handover_on_limit(agent_id).await {
+                return;
             }
+            // The turn of a handover file from a terminal view: in the new harness's (ESC-120).
+            self.view_after_handover(agent_id, &end).await;
             return;
         };
         // Stopped by the usage limit with another account to go on on: it does, rather than wait

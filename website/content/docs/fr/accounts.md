@@ -230,6 +230,8 @@ La conversation le marque : « Suite sur Codex · quota Claude Code épuisé ju
 
 Le menu de l’agent propose aussi « Continuer sur un autre harness… » à tout moment, hors d’un tour en cours.
 
+Un agent en vue terminal (Vue Claude Code, Vue Codex…) en change aussi : le dossier de passation part dans la vue Escouade, puis, son tour fini, l’agent passe dans la vue terminal du harness cible, sur sa nouvelle session. Un harness sans vue terminal le laisse en vue Escouade, comme un agent qui y était déjà.
+
 Le harness quitté est mis de côté jusqu’à sa remise à zéro. Ensuite, la carte et le menu proposent « Revenir sur Claude Code » : une passation dans l’autre sens. L’agent n’y revient jamais seul.
 
 Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Harness, groupe « Processus », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.

@@ -276,3 +276,79 @@ test.describe('« Vue Copilot CLI » (ESC-48)', () => {
     expect(sent(app, 'session.resume').at(-1).sessionId).toBe(launch.argv[1]);
   });
 });
+
+test.describe('« Continuer sur Copilot CLI » from a terminal view (ESC-120)', () => {
+  test.use({
+    appEnv: { ESCOUADE_COPILOT: FAKE_COPILOT },
+    preStart: { run: () => ({ handoverModels: { copilot: 'gpt-6-luna' } }) },
+  });
+
+  /** The launches of the fake interface, in its COPILOT_HOME. */
+  const tuiLaunches = (app: App): any[] => {
+    const file = path.join(app.root, 'copilot', 'fake-tui-launches.jsonl');
+    return fs.existsSync(file)
+      ? fs
+          .readFileSync(file, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+      : [];
+  };
+
+  /** A new agent on Claude Code, from the menu beside « Nouvel agent ». */
+  async function newClaudeAgent(page: Page) {
+    await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+    await page.getByRole('menuitem', { name: 'Nouvel agent sur Claude Code' }).click();
+    await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Claude…' })).toBeVisible();
+  }
+
+  /** « Continuer sur <harness> » from the menu of the card shown. */
+  async function continueOn(page: Page, harness: string) {
+    await page.locator('.card.sel').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Continuer sur un autre harness…' }).click();
+    await page.getByRole('menuitem', { name: `Continuer sur ${harness}` }).click();
+  }
+
+  test('an agent in the Claude Code view goes on in the Copilot view on its new session, one in Escouade’s view stays there', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { firstAgent: false });
+    // Copilot used once in the project: its Principal serves it then.
+    await newCopilotAgent(page);
+    await send(page, 'bonjour Copilot');
+    await expect(page.getByText('Copilot a reçu : bonjour Copilot')).toBeVisible();
+
+    // A Claude Code agent in Escouade's view: on Copilot, in Escouade's view still once the turn of its handover file is over.
+    await newClaudeAgent(page);
+    await send(page, 'bonjour Claude');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Claude')).toBeVisible();
+    await continueOn(page, 'Copilot CLI');
+    await expect(page.getByTestId('handover')).toContainText('Suite sur Copilot CLI');
+    await expect(page.getByTestId('turn-done').filter({ hasText: 'sur Copilot CLI' })).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(1_500);
+    await expect(page.locator('main .xterm')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Vue Copilot CLI' })).toBeVisible();
+
+    // Another in the Claude Code view: on Copilot, the file goes over the stream, then its interface on its new session.
+    await newClaudeAgent(page);
+    await send(page, 'bonjour Claude');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Claude')).toBeVisible();
+    await expect(page.locator('.card.sel')).toContainText('Terminé');
+    await page.getByRole('button', { name: 'Vue Claude Code' }).click();
+    await expect(page.locator('main [data-pastes="images"] .xterm textarea')).toBeAttached({ timeout: 20_000 });
+    const created = sent(app, 'session.create').length;
+    await continueOn(page, 'Copilot CLI');
+    await expect.poll(() => sent(app, 'session.create').length, { timeout: 20_000 }).toBe(created + 1);
+    await expect(page.locator('main .tui .xterm')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Vue Escouade' })).toBeVisible();
+    await expect.poll(() => tuiLaunches(app).length, { timeout: 20_000 }).toBe(1);
+    const argv: string[] = tuiLaunches(app)[0].argv;
+    expect(argv[0]).toBe('--resume');
+    expect(fs.existsSync(path.join(app.root, 'copilot', 'session-state', `${argv[1]}.json`))).toBe(true);
+    // The turn of its handover file, in the conversation back in Escouade's view.
+    await page.getByRole('button', { name: 'Vue Escouade' }).click();
+    await expect(page.getByTestId('handover')).toContainText('Suite sur Copilot CLI');
+    await expect(page.getByTestId('turn-done').filter({ hasText: 'sur Copilot CLI' })).toBeVisible();
+  });
+});

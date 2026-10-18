@@ -953,3 +953,40 @@ async fn real_copilot_view_on_a_free_account() {
         std::fs::read_dir(&direct).map(|d| d.count())
     );
 }
+
+/// An agent in the Claude Code view handed over to Copilot (« Continuer sur Copilot CLI »,
+/// ESC-120): its turn of the handover file ended, it is in the Copilot view on its new session.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_copilot_view() {
+    let h = harness("tui-copilot-handover");
+    let (p, repo) = h.project(false).await;
+    crate::core_tests::second_account(&h);
+    let home = copilot_account(&h, &repo, true);
+    let mut s = h.core.settings.read().clone();
+    s.engine_order = vec![EngineId::Copilot];
+    s.handover_models
+        .insert(EngineId::Copilot, "gpt-6-luna".into());
+    h.core.save_settings(s).unwrap();
+    let id = crate::core_tests::agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&id, true).await.unwrap();
+
+    h.core
+        .continue_on_engine(&id, EngineId::Copilot)
+        .await
+        .unwrap();
+    assert!(!h.agent(&id).terminal);
+    h.wait("the turn of the handover file", |h| {
+        items_of(h, &id, "turn")
+            .last()
+            .is_some_and(|t| t["engine"] == "copilot")
+            && !h.agent(&id).status.is_active()
+    })
+    .await;
+    h.wait("the Copilot view", |h| h.agent(&id).terminal).await;
+    let m = h.agent(&id);
+    assert_eq!(m.engine, EngineId::Copilot);
+    let session = m.session_id.expect("its new session");
+    open_copilot(&h, &id, "fake-copilot-tui").await;
+    let argv = argv_of(&last_launch(&home));
+    assert_eq!(argv[..2], ["--resume", session.as_str()], "{argv:?}");
+}

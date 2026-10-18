@@ -12,7 +12,7 @@
 
 use crate::accounts;
 use crate::agent::Effects;
-use crate::board;
+use crate::board::{self, TurnEnd};
 use crate::core::Core;
 use crate::engine::{self, Engine};
 use crate::i18n::Lang;
@@ -613,7 +613,9 @@ impl<R: Runtime> Core<R> {
     /// (one of `handover_targets`, or the one it left, once its quota reset). Its process stops
     /// and is gone; it takes an account of `target` serving its project, a mode that never allows
     /// more than its own, the handover model of `target`, a new session; the conversation shows
-    /// the change; then the handover file is its first message there.
+    /// the change; then the handover file is its first message there. In a terminal view before
+    /// (« Vue <harness> »), it goes in the view of `target` once the turn of that file ended, if
+    /// `target` has one (`view_after_handover`): else it stays in Escouade's.
     pub async fn continue_on_engine(self: &Arc<Self>, id: &str, target: EngineId) -> Result<()> {
         let lang = crate::i18n::ui();
         let h = self.agent(id)?;
@@ -623,7 +625,8 @@ impl<R: Runtime> Core<R> {
                 rt.meta.engine,
                 rt.meta.project_id.clone(),
                 rt.meta.handed_from.clone(),
-                rt.meta.terminal || rt.meta.attached,
+                // A handover file of a terminal view, its turn not ended yet: the view still holds.
+                rt.meta.terminal || rt.meta.attached || rt.view_after_handover,
             )
         };
         let to = engine::by_id(target);
@@ -763,6 +766,9 @@ impl<R: Runtime> Core<R> {
                 account: from_account.clone(),
                 until,
             });
+            rt.view_after_handover = terminal
+                && rt.meta.ticket_id.is_none()
+                && (to.terminal().is_some() || to.attaches());
             rt.append(separator(current, target, limited, until), &mut fx);
             fx.save = true;
             (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
@@ -777,7 +783,25 @@ impl<R: Runtime> Core<R> {
         self.apply(id, &pid, &name, fx, Some(view));
         self.request_save();
         self.schedule();
-        self.send_handover(id, text).await
+        let sent = self.send_handover(id, text).await;
+        if sent.is_err() {
+            // No turn to wait for: it stays in Escouade's view.
+            h.lock().view_after_handover = false;
+        }
+        sent
+    }
+
+    /// The turn of its handover file ended (`turn_ended`): an agent handed over from a terminal
+    /// view goes in the view of its new harness, on its new session (ESC-120). Stopped by the
+    /// usage limit, it stays in Escouade's view, where « Continuer sur … » is offered.
+    pub(crate) async fn view_after_handover(self: &Arc<Self>, id: &str, end: &TurnEnd) {
+        let Ok(h) = self.agent(id) else { return };
+        if !std::mem::take(&mut h.lock().view_after_handover) || *end == TurnEnd::Limited {
+            return;
+        }
+        if let Err(e) = self.set_agent_view(id, true).await {
+            log::warn!("agent {id}: not in its harness's view after its handover: {e:#}");
+        }
     }
 
     /// « Continuer sur le harness suivant… »: the agent stopped by the usage limit, whose harness

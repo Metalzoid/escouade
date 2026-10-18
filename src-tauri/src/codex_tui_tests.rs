@@ -525,3 +525,59 @@ async fn real_codex_view() {
     assert_eq!(items_of(&h, &id, "user").len(), 2);
     assert_eq!(json!(texts.last()), json!("B"));
 }
+
+/// An agent in the Claude Code view handed over to Codex (« Continuer sur Codex », ESC-120): the
+/// handover file goes over the stream, then, its turn ended, the agent is in the Codex view on its
+/// new session. One in Escouade's view stays there.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_handed_over_from_the_claude_code_view_goes_on_in_the_codex_view() {
+    let h = harness("tui-codex-handover");
+    let (p, repo) = h.project(false).await;
+    crate::core_tests::second_account(&h);
+    let home = codex_account(&h, &repo, true);
+    let mut s = h.core.settings.read().clone();
+    s.engine_order = vec![EngineId::Codex];
+    h.core.save_settings(s).unwrap();
+    let in_view = crate::core_tests::agent_on(&h, &p, "pro").await.id;
+    let in_escouade = crate::core_tests::agent_on(&h, &p, "pro").await.id;
+    h.core.set_agent_view(&in_view, true).await.unwrap();
+    assert_eq!(
+        h.core.handover_targets(&in_view).unwrap(),
+        [EngineId::Codex]
+    );
+    let handed = |h: &Harness, id: &str| {
+        let turns = items_of(h, id, "turn");
+        turns.last().is_some_and(|t| t["engine"] == "codex") && !h.agent(id).status.is_active()
+    };
+
+    h.core
+        .continue_on_engine(&in_view, EngineId::Codex)
+        .await
+        .unwrap();
+    // The file goes over the stream: Escouade's view meanwhile.
+    let m = h.agent(&in_view);
+    assert_eq!((m.engine, m.account.as_str()), (EngineId::Codex, "cx"));
+    assert!(!m.terminal);
+    h.wait("the turn of the handover file", |h| handed(h, &in_view))
+        .await;
+    h.wait("the Codex view", |h| h.agent(&in_view).terminal)
+        .await;
+    let session = h.agent(&in_view).session_id.expect("its new session");
+    // Its interface resumes the session the handover file started.
+    open_codex(&h, &in_view, "fake-codex-tui").await;
+    let launch = last_launch(&home);
+    assert_eq!(launch["argv"][0], "resume");
+    assert_eq!(launch["argv"][1], session.as_str());
+    assert_eq!(items_of(&h, &in_view, "turn").len(), 1);
+
+    // In Escouade's view before: it stays there.
+    h.core
+        .continue_on_engine(&in_escouade, EngineId::Codex)
+        .await
+        .unwrap();
+    h.wait("the other's handover turn", |h| handed(h, &in_escouade))
+        .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let o = h.agent(&in_escouade);
+    assert_eq!((o.engine, o.terminal), (EngineId::Codex, false));
+}

@@ -239,6 +239,10 @@ pub struct AgentRt {
     /// Haiku was asked to name it since the app started (not saved): asked once, at the first
     /// message that gives a text to name it from (`naming_text`).
     pub(crate) naming_asked: bool,
+    /// Handed over from a terminal view (« Vue <harness> ») to a harness that has one (ESC-120):
+    /// the turn of its handover file ended, it goes in that harness's view, on its new session
+    /// (not saved).
+    pub(crate) view_after_handover: bool,
     /// The text of a message the app typed into its interface by itself (the automatic resume:
     /// « continue »), until its entry is read from the transcript: no task of the user's, it
     /// never names the agent (not saved).
@@ -499,6 +503,7 @@ impl AgentRt {
             tui_quick_exits: 0,
             unwritten_session: None,
             naming_asked: false,
+            view_after_handover: false,
             unprompted: None,
             without_escouade: false,
             escouade_next: false,
