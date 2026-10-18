@@ -102,6 +102,25 @@ describe('MicButton in the composer', () => {
     await waitFor(() => expect(panel()).toBeNull());
   });
 
+  it('on line, says which service transcribes', async () => {
+    let give!: (t: string) => void;
+    const a = agent({ id: `m${Math.random()}` });
+    resetApp({ agents: [a] });
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'elevenlabs' };
+    fakeBackend({
+      get_conversation: () => [],
+      voice_start: () => ({ kind: 'listening', session: 1 }),
+      voice_stop: () => new Promise((r) => (give = r)),
+    });
+    render(Composer, { agent: app.agents[a.id] });
+    await click(mic());
+    await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
+    await click(mic());
+    await waitFor(() => expect(panel()).toHaveTextContent('Transcription par ElevenLabs…'));
+    give('fin');
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
   it('the first time, offers the model with its size, and shows its download', async () => {
     const a = agent({ id: `m${Math.random()}` });
     resetApp({ agents: [a] });

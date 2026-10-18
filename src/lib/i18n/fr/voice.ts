@@ -16,6 +16,7 @@ export default {
     holdHint: 'Relâche pour finir · Échap pour annuler',
     level: 'Niveau du micro',
     transcribing: 'Transcription sur ta machine…',
+    transcribingOnline: 'Transcription par {service}…',
     offerTitle: 'Télécharger le modèle de transcription ?',
     offerBody:
       'La dictée se fait sur ta machine avec Whisper, modèle « {model} » ({size}). Il est téléchargé une seule fois, puis rien de ce que tu dis ne quitte ta machine.',
@@ -37,6 +38,25 @@ export default {
     transcription: 'Transcription',
     transcriptionNote:
       'Whisper transcrit sur ta machine : rien de ce que tu dis n’est envoyé. Seul le modèle est téléchargé, par le proxy des réglages réseau, et sa somme de contrôle vérifiée.',
+    engine: 'Transcrite par',
+    engineDesc:
+      'Éteint par défaut, « En ligne » envoie le son de chaque dictée au service choisi, avec ta clé : pour une machine trop lente pour Whisper, ou une meilleure qualité.',
+    local: 'Local (Whisper)',
+    online: 'En ligne',
+    onlineNote:
+      'Ce qui part, et où : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté, et {service} le traite selon ses propres conditions. La conversation vocale, elle, reste transcrite sur ta machine.',
+    service: 'Service',
+    serviceDesc: 'Modèle « {model} », payé à l’usage sur ton compte {service}.',
+    key: 'Clé de {service}',
+    keyDesc: 'Gardée dans le trousseau du système, jamais dans les fichiers d’Escouade ni dans son journal.',
+    keyPlaceholder: 'Colle ta clé d’API',
+    keySave: 'Enregistrer la clé',
+    keySaved: 'Enregistrée dans le trousseau',
+    keyMissing: 'Aucune clé enregistrée : la dictée en ligne en a besoin.',
+    keyReplace: 'Remplacer',
+    keyDelete: 'Effacer la clé',
+    keySavedToast: 'Clé de {service} enregistrée dans le trousseau.',
+    keyFailed: 'La clé n’a pas été enregistrée : {error}',
     model: 'Modèle',
     modelDesc: 'Plus gros, il comprend mieux et transcrit plus lentement. Celui choisi se télécharge à la première dictée.',
     modelSpeed: 'Vitesse {speed}/5 · qualité {quality}/5',

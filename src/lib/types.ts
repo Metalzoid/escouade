@@ -98,6 +98,10 @@ export interface VoiceSettings {
   shortcut: string;
   /** The conversation's voice (ESC-97). */
   speech: SpeechSettings;
+  /** Who transcribes a dictation: Whisper on the machine (the default), or the service `onlineService` with the user's key (ESC-110). */
+  transcription: 'local' | 'online';
+  /** The service of « En ligne »: `openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`. */
+  onlineService: string;
 }
 
 /** How the agent's passages are read aloud in a conversation. */

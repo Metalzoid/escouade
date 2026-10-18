@@ -2005,13 +2005,19 @@ pub fn voice_info(voice: VoiceState) -> VoiceInfo {
     }
 }
 
-/// The settings' choice for a dictation: microphone, model, and the language Whisper is told.
-fn voice_choice(settings: &Settings) -> crate::voice::Choice {
-    crate::voice::Choice {
+/// The settings' choice for a dictation: microphone, model, and the language Whisper is told;
+/// on line, the service and its key, from the keychain, and the client of the proxy of the settings.
+fn voice_choice(
+    settings: &Settings,
+    secrets: &dyn crate::integrations::secrets::SecretStore,
+) -> Result<crate::voice::Choice, crate::voice::VoiceError> {
+    let online = crate::voice::online::spec_of(settings, secrets)?;
+    Ok(crate::voice::Choice {
         device: settings.voice.device.clone(),
         model: settings.voice.model.clone(),
         language: crate::voice::whisper_language(&settings.voice.language, i18n::ui()),
-    }
+        online,
+    })
 }
 
 fn voice_err(e: crate::voice::VoiceError) -> String {
@@ -2023,7 +2029,7 @@ fn voice_err(e: crate::voice::VoiceError) -> String {
 /// time, and the answer waits for them.
 #[tauri::command(async)]
 pub fn voice_start(core: CoreState, voice: VoiceState) -> Res<crate::voice::Started> {
-    let choice = voice_choice(&core.settings.read());
+    let choice = voice_choice(&core.settings.read(), &*core.secrets).map_err(voice_err)?;
     voice.start(&choice).map_err(voice_err)
 }
 
@@ -2048,13 +2054,36 @@ pub async fn voice_stop(
             "ticket" => "ticket",
             _ => "composer",
         };
-        let model = core.settings.read().voice.model.clone();
-        let model = crate::voice::models::find(&model)
-            .map(|m| m.id)
-            .unwrap_or(crate::voice::models::DEFAULT_MODEL);
+        let settings = core.settings.read().voice.clone();
+        // On line, the service stands for the model: never the key nor the text.
+        let model = match crate::voice::online_provider(&settings) {
+            Some(p) => p.id(),
+            None => crate::voice::models::find(&settings.model)
+                .map(|m| m.id)
+                .unwrap_or(crate::voice::models::DEFAULT_MODEL),
+        };
         core.telemetry.track(Event::DictationUsed { target, model });
     }
     Ok(text)
+}
+
+/// Réglages › Voix: the services of « En ligne » whose key is in the keychain (never the keys).
+#[tauri::command(async)]
+pub fn voice_online_keys(core: CoreState) -> Vec<String> {
+    crate::voice::online::keys(&*core.secrets)
+}
+
+/// Keeps the key of `service` in the system's keychain, read back to check; never in a file: a
+/// keychain that refuses it (or none, on Linux) leaves it unsaved, and says so.
+#[tauri::command(async)]
+pub fn voice_online_key_set(core: CoreState, service: String, key: String) -> Res<()> {
+    crate::voice::online::save_key(&*core.secrets, &service, &key)
+}
+
+/// Forgets the key of `service`.
+#[tauri::command(async)]
+pub fn voice_online_key_delete(core: CoreState, service: String) -> Res<()> {
+    crate::voice::online::delete_key(&*core.secrets, &service)
 }
 
 /// Escape, or the field dictated into gone: the listening and the transcription stop, nothing

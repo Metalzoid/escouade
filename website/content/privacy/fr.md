@@ -40,7 +40,7 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `tickets_imported` | Des tickets sont importés | `service` : `jira`, `trello`, `github` ou `linear` |
 | `account_created` | Un compte Claude est ajouté | — |
 | `remote_control_enabled` | Le remote control est activé, à la main ou par un réglage | `from` : `agent` (clic droit sur un agent), `project` (réglage d’un projet) ou `global` (réglage de tous les agents) |
-| `dictation_used` | Une dictée a donné du texte | `target` : `composer` (le champ de message), `terminal` (la vue Claude Code) ou `ticket` (la description d’un ticket) ; `model` : le modèle Whisper (`tiny`, `base`, `small`…) |
+| `dictation_used` | Une dictée a donné du texte | `target` : `composer` (le champ de message), `terminal` (la vue Claude Code) ou `ticket` (la description d’un ticket) ; `model` : le modèle Whisper (`tiny`, `base`, `small`…), ou le service de la dictée en ligne (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`) |
 | `voice_conversation` | Une conversation vocale commence | `lang` : la langue de la conversation (`fr`, `en`) ; `voice` : la voix Piper qui lit (`fr_FR-siwis-medium`…) ; jamais ce qui est dit ni lu |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent ou de la branche, ni ce qui a été écrit.
@@ -70,7 +70,7 @@ Tous les événements portent aussi :
 - Les données Git : commits, remotes.
 - Les jetons et les secrets.
 - Tout ce que tu tapes.
-- Ce que tu dictes : le son du micro et le texte qu’en tire Whisper restent sur ta machine. La transcription s’y fait ; seul le modèle est téléchargé, une fois, depuis Hugging Face (`huggingface.co`), par le proxy des réglages.
+- Ce que tu dictes : le son du micro et le texte qu’en tire Whisper restent sur ta machine. La transcription s’y fait ; seul le modèle est téléchargé, une fois, depuis Hugging Face (`huggingface.co`), par le proxy des réglages. La dictée en ligne, éteinte par défaut, est à part : voir « La dictée en ligne, si tu l’allumes », plus bas.
 
 ## L’outil et l’endroit où vivent les données
 
@@ -145,6 +145,25 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 - **Claude Code**, qu’elle lance sur ta machine, envoie ses requêtes à Anthropic comme il le ferait dans un terminal. Escouade interroge aussi le service d’usage d’Anthropic pour afficher tes quotas ([les quotas](usage)).
 - **Les mises à jour** : Escouade lit le fichier `latest.json` de la dernière release sur GitHub, puis télécharge la nouvelle version ([les mises à jour](updates)).
 - **Les intégrations** que tu connectes (Jira, Trello, GitHub, Linear) : Escouade s’adresse à ces services avec ton jeton ([les intégrations](integrations)).
+- **La dictée en ligne**, si tu l’allumes : voir juste en dessous.
+
+## La dictée en ligne, si tu l’allumes
+
+Par défaut, la dictée se fait sur ta machine et rien de ce que tu dis n’en sort. Dans Réglages › Voix › « Transcrite par », tu peux choisir « En ligne » et un service, avec **ta propre clé** d’API : c’est éteint tant que tu ne le choisis pas.
+
+- **Ce qui part** : le son de chaque dictée (un fichier WAV, mono, 16 kHz), une fois que tu la finis, avec la langue parlée des réglages et ta clé. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent, ni le texte des tickets. La conversation vocale, elle, reste transcrite sur ta machine.
+- **Où** : au seul service choisi, par le proxy des réglages réseau :
+
+| Service | Adresse | Modèle |
+| --- | --- | --- |
+| OpenAI | `api.openai.com` | `gpt-4o-mini-transcribe` |
+| Groq | `api.groq.com` | `whisper-large-v3-turbo` |
+| Mistral | `api.mistral.ai` | `voxtral-mini-latest` |
+| ElevenLabs | `api.elevenlabs.io` | `scribe_v2` |
+| Deepgram | `api.deepgram.com` | `nova-3` |
+
+- **Ce qu’il en fait** : le service te renvoie le texte, qu’Escouade met dans le champ dicté. Il traite le son selon ses propres conditions, celles de ton compte chez lui : c’est entre lui et toi, Escouade n’en reçoit rien.
+- **Ta clé** : gardée dans le trousseau du système (le Gestionnaire d’identification de Windows, le Trousseau de macOS), jamais dans les fichiers d’Escouade ni dans son journal. Sous Linux, où Escouade n’a pas de trousseau, elle n’est pas enregistrée.
 
 ## Ce site
 

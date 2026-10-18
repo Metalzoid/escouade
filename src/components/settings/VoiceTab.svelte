@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DEFAULT_SHORTCUT, shortcutLabel, shortcutOf } from '../../lib/dictation';
+  import { DEFAULT_SHORTCUT, ONLINE_SERVICES, onlineService, shortcutLabel, shortcutOf } from '../../lib/dictation';
   import { dictation } from '../../lib/dictation.svelte';
   import { fBytes } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -13,8 +13,8 @@
   import SpeechSettings from './SpeechSettings.svelte';
   import { tip } from '../../lib/tip';
 
-  // « Voix »: the microphone, the Whisper model (downloaded or deleted at once, chosen with the draft), the language
-  // spoken and the shortcut, saved with the other settings.
+  // « Voix »: the microphone, who transcribes (Whisper and its model, downloaded or deleted at once; or a service on
+  // line, its key kept in the keychain at once), the language spoken and the shortcut, saved with the other settings.
   const v = $derived(settingsForm.settings.voice);
   let info = $state<VoiceInfo | null>(null);
   let recording = $state(false);
@@ -53,6 +53,49 @@
       app.toast(t('voice.deleteFailed', { error: String(e) }), 'error');
     }
     await load();
+  }
+
+  // « En ligne » (ESC-110): the service chosen with the draft, its key kept in the keychain at once (never shown back).
+  const online = $derived(v.transcription === 'online');
+  const service = $derived(onlineService(v.onlineService));
+  let keys = $state<string[]>([]);
+  let keyDraft = $state('');
+  let replacing = $state(false);
+  const hasKey = $derived(keys.includes(service.id));
+
+  async function loadKeys() {
+    keys = await api.voiceOnlineKeys().catch(() => []);
+  }
+  $effect(() => {
+    void loadKeys();
+  });
+  // Another service: its own key.
+  $effect(() => {
+    void service.id;
+    keyDraft = '';
+    replacing = false;
+  });
+
+  async function saveKey() {
+    const label = service.label;
+    try {
+      await api.voiceOnlineKeySet(service.id, keyDraft);
+      keyDraft = '';
+      replacing = false;
+      app.toast(t('voice.settings.keySavedToast', { service: label }));
+    } catch (e) {
+      app.toast(t('voice.settings.keyFailed', { error: String(e) }), 'error');
+    }
+    await loadKeys();
+  }
+
+  async function deleteKey() {
+    try {
+      await api.voiceOnlineKeyDelete(service.id);
+    } catch (e) {
+      app.toast(String(e), 'error');
+    }
+    await loadKeys();
   }
 
   function record(e: KeyboardEvent) {
@@ -95,36 +138,83 @@
   </Row>
 </Group>
 
-<Group title={t('voice.settings.transcription')} note={t('voice.settings.transcriptionNote')}>
-  <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')}>
-    <div class="models" role="radiogroup" aria-label={t('voice.settings.model')}>
-      {#each info?.models ?? [] as m (m.id)}
-        {@const on = v.model === m.id}
-        <div class="model" class:on>
-          <label class="pick">
-            <input type="radio" name="voice-model" value={m.id} checked={on} onchange={() => (v.model = m.id)} />
-            <span class="name mono">{m.id}</span>
-            <span class="meta">{fBytes(m.size)} · {t('voice.settings.modelSpeed', { speed: m.speed, quality: m.quality })}</span>
-          </label>
-          {#if progress && progress.model === m.id}
-            <span class="meta mono">{Math.round((progress.done / Math.max(1, progress.total)) * 100)} %</span>
-            <button class="btn ghost small" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
-          {:else if m.downloaded}
-            <span class="ok">{t('voice.settings.downloaded')}</span>
-            <button
-              class="btn ghost small"
-              use:tip={t('voice.settings.deleteTitle', { model: m.id, size: fBytes(m.size) })}
-              onclick={() => remove(m.id)}>{t('voice.settings.delete')}</button
-            >
-          {:else}
-            <button class="btn small" disabled={!!busy || dictation.phase !== 'idle'} onclick={() => download(m.id)}
-              >{t('voice.settings.download')}</button
-            >
-          {/if}
-        </div>
-      {/each}
-    </div>
+<Group
+  title={t('voice.settings.transcription')}
+  note={online ? t('voice.settings.onlineNote', { service: service.label, host: service.host }) : t('voice.settings.transcriptionNote')}
+>
+  <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')}>
+    <Chips
+      label={t('voice.settings.engine')}
+      options={[
+        { value: 'local', label: t('voice.settings.local') },
+        { value: 'online', label: t('voice.settings.online') },
+      ]}
+      bind:value={v.transcription}
+    />
   </Row>
+  {#if online}
+    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { model: service.model, service: service.label })}>
+      <select class="field input" aria-label={t('voice.settings.service')} bind:value={v.onlineService}>
+        {#each ONLINE_SERVICES as s (s.id)}
+          <option value={s.id}>{s.label}</option>
+        {/each}
+      </select>
+    </Row>
+    <Row
+      label={t('voice.settings.key', { service: service.label })}
+      desc={hasKey ? t('voice.settings.keyDesc') : `${t('voice.settings.keyMissing')} ${t('voice.settings.keyDesc')}`}
+    >
+      <div class="keys">
+        {#if hasKey && !replacing}
+          <span class="ok">{t('voice.settings.keySaved')}</span>
+          <button class="btn ghost" onclick={() => (replacing = true)}>{t('voice.settings.keyReplace')}</button>
+          <button class="btn ghost" onclick={deleteKey}>{t('voice.settings.keyDelete')}</button>
+        {:else}
+          <input
+            class="field input mono"
+            type="password"
+            aria-label={t('voice.settings.key', { service: service.label })}
+            placeholder={t('voice.settings.keyPlaceholder')}
+            autocomplete="off"
+            spellcheck="false"
+            bind:value={keyDraft}
+            onkeydown={(e) => e.key === 'Enter' && keyDraft.trim() && (e.preventDefault(), void saveKey())}
+          />
+          <button class="btn" disabled={!keyDraft.trim()} onclick={saveKey}>{t('voice.settings.keySave')}</button>
+        {/if}
+      </div>
+    </Row>
+  {:else}
+    <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')}>
+      <div class="models" role="radiogroup" aria-label={t('voice.settings.model')}>
+        {#each info?.models ?? [] as m (m.id)}
+          {@const on = v.model === m.id}
+          <div class="model" class:on>
+            <label class="pick">
+              <input type="radio" name="voice-model" value={m.id} checked={on} onchange={() => (v.model = m.id)} />
+              <span class="name mono">{m.id}</span>
+              <span class="meta">{fBytes(m.size)} · {t('voice.settings.modelSpeed', { speed: m.speed, quality: m.quality })}</span>
+            </label>
+            {#if progress && progress.model === m.id}
+              <span class="meta mono">{Math.round((progress.done / Math.max(1, progress.total)) * 100)} %</span>
+              <button class="btn ghost small" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
+            {:else if m.downloaded}
+              <span class="ok">{t('voice.settings.downloaded')}</span>
+              <button
+                class="btn ghost small"
+                use:tip={t('voice.settings.deleteTitle', { model: m.id, size: fBytes(m.size) })}
+                onclick={() => remove(m.id)}>{t('voice.settings.delete')}</button
+              >
+            {:else}
+              <button class="btn small" disabled={!!busy || dictation.phase !== 'idle'} onclick={() => download(m.id)}
+                >{t('voice.settings.download')}</button
+              >
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </Row>
+  {/if}
   <Row label={t('voice.settings.language')} desc={t('voice.settings.languageDesc')}>
     <Chips label={t('voice.settings.language')} options={languageOptions} bind:value={v.language} />
   </Row>

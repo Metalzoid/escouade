@@ -1,6 +1,6 @@
 # Réglages : Réseau
 
-L’onglet « Réseau » des réglages configure le proxy HTTP(S) et la vérification des certificats TLS pour Claude Code, les quotas, les intégrations et les mises à jour.
+L’onglet « Réseau » des réglages configure le proxy HTTP(S) et la vérification des certificats TLS pour Claude Code, les quotas, les intégrations, les mises à jour et la dictée (le téléchargement de ses modèles et, en ligne, son service).
 
 ## Ouvrir l’onglet
 

@@ -15,6 +15,7 @@ export default defineZone('voice', {
     holdHint: 'Let go to end · Esc to cancel',
     level: 'Microphone level',
     transcribing: 'Transcribing on your machine…',
+    transcribingOnline: 'Transcribing with {service}…',
     offerTitle: 'Download the transcription model?',
     offerBody:
       'Dictation runs on your machine with Whisper, model “{model}” ({size}). It is downloaded once, then nothing you say leaves your machine.',
@@ -35,6 +36,25 @@ export default defineZone('voice', {
     transcription: 'Transcription',
     transcriptionNote:
       'Whisper transcribes on your machine: nothing you say is sent. Only the model is downloaded, through the proxy of the network settings, and its checksum checked.',
+    engine: 'Transcribed by',
+    engineDesc:
+      'Off by default, “Online” sends the sound of each dictation to the service chosen, with your key: for a machine too slow for Whisper, or a better quality.',
+    local: 'Local (Whisper)',
+    online: 'Online',
+    onlineNote:
+      'What leaves, and where: the sound of each dictation (a WAV file), once you end it, to {service} ({host}), with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into, and {service} handles it under its own terms. The voice conversation is still transcribed on your machine.',
+    service: 'Service',
+    serviceDesc: 'Model “{model}”, paid per use on your {service} account.',
+    key: '{service} key',
+    keyDesc: 'Kept in the system keychain, never in Escouade’s files nor in its log.',
+    keyPlaceholder: 'Paste your API key',
+    keySave: 'Save the key',
+    keySaved: 'Saved in the keychain',
+    keyMissing: 'No key saved: online dictation needs one.',
+    keyReplace: 'Replace',
+    keyDelete: 'Delete the key',
+    keySavedToast: '{service} key saved in the keychain.',
+    keyFailed: 'The key was not saved: {error}',
     model: 'Model',
     modelDesc: 'A bigger one understands better and transcribes more slowly. The one chosen downloads at the first dictation.',
     modelSpeed: 'Speed {speed}/5 · quality {quality}/5',

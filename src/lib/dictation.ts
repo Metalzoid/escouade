@@ -121,3 +121,19 @@ export function duration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** The services of « En ligne » (ESC-110): where the sound of a dictation goes, and the model it is given to. */
+export const ONLINE_SERVICES = [
+  { id: 'openai', label: 'OpenAI', host: 'api.openai.com', model: 'gpt-4o-mini-transcribe' },
+  { id: 'groq', label: 'Groq', host: 'api.groq.com', model: 'whisper-large-v3-turbo' },
+  { id: 'mistral', label: 'Mistral', host: 'api.mistral.ai', model: 'voxtral-mini-latest' },
+  { id: 'elevenlabs', label: 'ElevenLabs', host: 'api.elevenlabs.io', model: 'scribe_v2' },
+  { id: 'deepgram', label: 'Deepgram', host: 'api.deepgram.com', model: 'nova-3' },
+] as const;
+
+export type OnlineService = (typeof ONLINE_SERVICES)[number];
+
+/** The service of « En ligne » the settings name; OpenAI for one it does not know. */
+export function onlineService(id: string | undefined): OnlineService {
+  return ONLINE_SERVICES.find((s) => s.id === id) ?? ONLINE_SERVICES[0];
+}

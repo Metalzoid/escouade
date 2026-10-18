@@ -40,7 +40,7 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github` or `linear` |
 | `account_created` | A Claude account is added | — |
 | `remote_control_enabled` | Remote control is turned on, by hand or by a setting | `from`: `agent` (right-click on an agent), `project` (a project’s setting) or `global` (the setting for all agents) |
-| `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…) |
+| `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…), or the service of online dictation (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`) |
 | `voice_conversation` | A voice conversation starts | `lang`: the conversation’s language (`fr`, `en`); `voice`: the Piper voice that reads (`fr_FR-siwis-medium`…); never what is said or read |
 
 An event says that a feature was used, not on what: never the name of the project, the agent or the branch, nor anything that was written.
@@ -70,7 +70,7 @@ Every event also carries:
 - Git data: commits, remotes.
 - Tokens and secrets.
 - Anything you type.
-- What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings.
+- What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings. Online dictation, off by default, is apart: see “Online dictation, if you turn it on”, below.
 
 ## The tool and where the data lives
 
@@ -145,6 +145,25 @@ Escouade has no account or server of its own for your projects, conversations or
 - **Claude Code**, which it runs on your machine, sends its requests to Anthropic as it would in a terminal. Escouade also queries Anthropic’s usage service to show your quotas ([quotas](usage)).
 - **Updates**: Escouade reads the `latest.json` file of the latest release on GitHub, then downloads the new version ([updates](updates)).
 - **The integrations** you connect (Jira, Trello, GitHub, Linear): Escouade talks to those services with your token ([integrations](integrations)).
+- **Online dictation**, if you turn it on: see just below.
+
+## Online dictation, if you turn it on
+
+By default, dictation happens on your machine and nothing you say leaves it. In Settings › Voice › “Transcribed by”, you may choose “Online” and a service, with **your own** API key: it is off until you choose it.
+
+- **What leaves**: the sound of each dictation (a WAV file, mono, 16 kHz), once you end it, with the spoken language of the settings and your key. Nothing else: neither the project, nor the code, nor the conversation with the agent, nor the text of tickets. The voice conversation is still transcribed on your machine.
+- **Where**: to the one service chosen, through the proxy of the network settings:
+
+| Service | Address | Model |
+| --- | --- | --- |
+| OpenAI | `api.openai.com` | `gpt-4o-mini-transcribe` |
+| Groq | `api.groq.com` | `whisper-large-v3-turbo` |
+| Mistral | `api.mistral.ai` | `voxtral-mini-latest` |
+| ElevenLabs | `api.elevenlabs.io` | `scribe_v2` |
+| Deepgram | `api.deepgram.com` | `nova-3` |
+
+- **What it does with it**: the service sends the text back, which Escouade puts in the field dictated into. It handles the sound under its own terms, those of your account with it: that is between it and you, Escouade receives none of it.
+- **Your key**: kept in the system keychain (Windows’ Credential Manager, macOS’ Keychain), never in Escouade’s files nor in its log. On Linux, where Escouade has no keychain, it is not saved.
 
 ## This site
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DEFAULT_SHORTCUT, duration, shortcutLabel } from '../lib/dictation';
+  import { DEFAULT_SHORTCUT, duration, onlineService, shortcutLabel } from '../lib/dictation';
   import { dictation, type DictationTarget } from '../lib/dictation.svelte';
   import { fBytes } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -59,7 +59,11 @@
         </div>
         <span class="muted small">{t('voice.panel.hint', { key })}</span>
       {:else if phase === 'transcribing'}
-        <span class="muted">{t('voice.panel.transcribing')}</span>
+        <span class="muted"
+          >{app.settings.voice?.transcription === 'online'
+            ? t('voice.panel.transcribingOnline', { service: onlineService(app.settings.voice.onlineService).label })
+            : t('voice.panel.transcribing')}</span
+        >
       {:else if phase === 'offer' && dictation.offer}
         <span class="strong">{t('voice.panel.offerTitle')}</span>
         <span class="muted small">{t('voice.panel.offerBody', { model: dictation.offer.model, size: fBytes(dictation.offer.size) })}</span>

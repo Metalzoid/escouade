@@ -1,7 +1,8 @@
 //! Dictation: the microphone listened to on the backend's side (cpal), the sound brought to what
 //! Whisper takes (mono, 16 kHz), its level told to the window while it listens, then transcribed
 //! on the machine (whisper.cpp, on a thread of its own) once the user stops. Nothing leaves the
-//! machine but the download of a model, through the proxy of the settings.
+//! machine but the download of a model, through the proxy of the settings; or, « En ligne » in the
+//! settings (off by default, `online`), the sound of the dictation to the service the user chose.
 //!
 //! One listening at a time, for the whole app: it stops when the user says so, when the window is
 //! closed or reloaded, when the app quits, and after `MAX_LISTEN`. The text goes back to the window,
@@ -11,6 +12,7 @@
 pub mod audio;
 pub mod conversation;
 pub mod models;
+pub mod online;
 pub mod source;
 pub mod speech;
 pub mod spoken;
@@ -53,6 +55,8 @@ pub enum VoiceError {
     Silent,
     /// Already listening.
     AlreadyListening,
+    /// The service on line did not transcribe it (ESC-110).
+    Online(online::OnlineError),
     Other(String),
 }
 
@@ -91,6 +95,7 @@ impl VoiceError {
                 "No sound system answers. Start PulseAudio or PipeWire (or check ALSA), then try again."
             ),
             VoiceError::AlreadyListening => tr_in!(lang, "Une dictée est déjà en cours.", "A dictation is already under way."),
+            VoiceError::Online(e) => e.message(lang),
             VoiceError::Other(e) => tr_in!(lang, "La dictée a échoué : {e}", "Dictation failed: {e}"),
         }
     }
@@ -187,6 +192,15 @@ pub struct Choice {
     pub model: String,
     /// Whisper's code, or "auto".
     pub language: String,
+    /// « En ligne »: the service the sound goes to, with its key (ESC-110); none: Whisper, on the machine.
+    pub online: Option<online::Spec>,
+}
+
+/// The service of « En ligne », when the settings choose it (ESC-110); none: Whisper, on the machine.
+pub fn online_provider(settings: &crate::model::VoiceSettings) -> Option<online::Provider> {
+    (settings.transcription == "online")
+        .then(|| online::Provider::find(&settings.online_service))
+        .flatten()
 }
 
 /// The language Whisper is told: the setting's ("ui": the interface's, "auto": found by Whisper).
@@ -208,8 +222,10 @@ struct Session {
     rate: u32,
     /// Set, the ticker stops.
     done: Arc<AtomicBool>,
+    /// Whisper's model; empty on line.
     model: PathBuf,
     language: String,
+    transcriber: Arc<dyn Transcriber>,
 }
 
 /// How the window is told, and in what language.
@@ -241,6 +257,8 @@ pub struct Voice {
     /// Called off while the microphone opened: it is let go as soon as it is open.
     called_off: AtomicBool,
     max_listen: Duration,
+    /// The fake transcriber stands for the service on line too (`ESCOUADE_VOICE_TRANSCRIPT`, tests).
+    pub fake_online: bool,
 }
 
 impl Voice {
@@ -277,6 +295,7 @@ impl Voice {
             max_listen: MAX_LISTEN,
             opening: AtomicBool::new(false),
             called_off: AtomicBool::new(false),
+            fake_online: false,
         }
     }
 
@@ -313,7 +332,9 @@ impl Voice {
             Some(wav) => Box::new(source::WavFile(wav.into())),
             None => Box::new(source::Microphone),
         };
-        let transcriber: Arc<dyn Transcriber> = match var("ESCOUADE_VOICE_TRANSCRIPT") {
+        let fake = var("ESCOUADE_VOICE_TRANSCRIPT");
+        let fake_online = fake.is_some();
+        let transcriber: Arc<dyn Transcriber> = match fake {
             Some(text) => Arc::new(transcribe::Fake::new(&text)),
             None => Arc::new(transcribe::Whisper::default()),
         };
@@ -350,6 +371,7 @@ impl Voice {
         )
         .with_speech(engine, output);
         voice.voices_url = voices_url;
+        voice.fake_online = fake_online;
         voice
     }
 
@@ -372,7 +394,8 @@ impl Voice {
         let model = models::find(&choice.model)
             .or_else(|| models::find(models::DEFAULT_MODEL))
             .expect("the default model is in the catalog");
-        if !self.store.has(model) {
+        // On line, no model is needed.
+        if choice.online.is_none() && !self.store.has(model) {
             return Ok(Started::NeedsModel {
                 model: model.id.into(),
                 size: model.size,
@@ -417,7 +440,14 @@ impl Voice {
         log::info!("voice: listening at {rate} Hz");
         let done = Arc::new(AtomicBool::new(false));
         let capture = Arc::new(Mutex::new(Some(capture)));
-        let model_path = self.store.path(model.id);
+        // On line: the service's (the fake transcriber of the tests stands for it too).
+        let (transcriber, model_path): (Arc<dyn Transcriber>, PathBuf) = match &choice.online {
+            Some(spec) if !self.fake_online => {
+                (Arc::new(online::Online(spec.clone())), PathBuf::new())
+            }
+            Some(_) => (self.transcriber.clone(), PathBuf::new()),
+            None => (self.transcriber.clone(), self.store.path(model.id)),
+        };
         let mut slot = self.session.lock();
         if slot.is_some() {
             return Err(VoiceError::AlreadyListening);
@@ -427,8 +457,8 @@ impl Voice {
             return Err(VoiceError::Other("called off".into()));
         }
         // Loaded while the user speaks: the text comes sooner once they stop.
-        {
-            let t = self.transcriber.clone();
+        if choice.online.is_none() {
+            let t = transcriber.clone();
             let p = model_path.clone();
             std::thread::spawn(move || t.preload(&p));
         }
@@ -440,6 +470,7 @@ impl Voice {
             done: done.clone(),
             model: model_path,
             language: choice.language.clone(),
+            transcriber,
         });
         drop(slot);
         let emit = self.emit.clone();
@@ -510,14 +541,18 @@ impl Voice {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         *self.transcribing.lock() = Some(cancel.clone());
-        let result = self
-            .transcriber
-            .transcribe(&session.model, &pcm, &session.language, &cancel);
+        let result =
+            session
+                .transcriber
+                .transcribe(&session.model, &pcm, &session.language, &cancel);
         self.transcribing.lock().take();
         if cancel.load(Ordering::Acquire) {
             return Ok(String::new());
         }
-        result.map_err(|e| VoiceError::Other(format!("{e:#}")))
+        result.map_err(|e| match e.downcast::<online::OnlineError>() {
+            Ok(e) => VoiceError::Online(e),
+            Err(e) => VoiceError::Other(format!("{e:#}")),
+        })
     }
 
     /// Stops everything: the listening (its sound dropped) and the transcription under way. The

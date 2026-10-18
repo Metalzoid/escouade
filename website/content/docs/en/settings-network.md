@@ -1,6 +1,6 @@
 # Settings: Network
 
-The “Network” tab of the settings configures the HTTP(S) proxy and TLS certificate checking for Claude Code, quotas, integrations, and updates.
+The “Network” tab of the settings configures the HTTP(S) proxy and TLS certificate checking for Claude Code, quotas, integrations, updates, and dictation (the download of its models and, online, its service).
 
 ## Open the tab
 

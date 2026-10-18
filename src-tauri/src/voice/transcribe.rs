@@ -206,7 +206,8 @@ impl Transcriber for Fake {
         language: &str,
         cancel: &Arc<AtomicBool>,
     ) -> Result<String> {
-        if !model.exists() {
+        // No model on line (ESC-110).
+        if !model.as_os_str().is_empty() && !model.exists() {
             return Err(anyhow!("no model at {}", model.display()));
         }
         self.calls

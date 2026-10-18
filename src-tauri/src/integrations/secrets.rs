@@ -448,7 +448,7 @@ struct TokenFile {
 }
 
 /// Puts `secret` under `name`, then reads it back: Ok once the store gives it as it was given.
-fn keep_secret(store: &dyn SecretStore, name: &str, secret: &str) -> Result<()> {
+pub(crate) fn keep_secret(store: &dyn SecretStore, name: &str, secret: &str) -> Result<()> {
     store.set(name, secret)?;
     if store.get(name)?.as_deref() != Some(secret) {
         bail!("it does not give it back as it was given");

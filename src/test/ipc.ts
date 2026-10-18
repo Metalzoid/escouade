@@ -109,6 +109,8 @@ export const SETTINGS: Settings = {
     language: 'ui',
     shortcut: 'Mod+Shift+Space',
     speech: { voices: {}, speakers: {}, rate: 1, volume: 1, silenceMs: 1200 },
+    transcription: 'local',
+    onlineService: 'openai',
   },
 };
 

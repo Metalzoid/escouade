@@ -51,7 +51,82 @@ describe('Réglages › Voix', () => {
       language: 'ui',
       shortcut: 'Mod+Shift+Space',
       speech: { voices: {}, speakers: {}, rate: 1, volume: 1, silenceMs: 1200 },
+      transcription: 'local',
+      onlineService: 'openai',
     });
+  });
+
+  it('transcribes locally by default, and says nothing leaves the machine', async () => {
+    const backend = open();
+    const group = await screen.findByRole('group', { name: 'Transcrite par' });
+    expect(within(group).getByRole('button', { name: 'Local (Whisper)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/rien de ce que tu dis n’est envoyé/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
+    expect(await screen.findByRole('radio', { name: /^base/ })).toBeInTheDocument();
+    await waitFor(() => expect(backend.called('voice_online_keys')).toHaveLength(1));
+  });
+
+  it('online: names the service, says what leaves and where, and saves the choice', async () => {
+    const backend = open({ voice_online_keys: () => [] });
+    const group = await screen.findByRole('group', { name: 'Transcrite par' });
+    await userEvent.click(within(group).getByRole('button', { name: 'En ligne' }));
+    // The models of Whisper are not what transcribes any more.
+    expect(screen.queryByRole('radio', { name: /^base/ })).toBeNull();
+    const select = screen.getByRole('combobox', { name: 'Service' }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual(['OpenAI', 'Groq', 'Mistral', 'ElevenLabs', 'Deepgram']);
+    expect(
+      screen.getByText(/le son de chaque dictée \(un fichier WAV\), une fois que tu la finis, vers OpenAI \(api\.openai\.com\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Aucune clé enregistrée/)).toBeInTheDocument();
+    await userEvent.selectOptions(select, 'deepgram');
+    expect(screen.getByText(/vers Deepgram \(api\.deepgram\.com\)/)).toBeInTheDocument();
+    expect(screen.getByText('Modèle « nova-3 », payé à l’usage sur ton compte Deepgram.')).toBeInTheDocument();
+    await save();
+    const voice = backend.called('save_settings')[0].args.settings.voice;
+    expect(voice.transcription).toBe('online');
+    expect(voice.onlineService).toBe('deepgram');
+    // The settings never hold a key.
+    expect(JSON.stringify(voice)).not.toMatch(/key/i);
+  });
+
+  it('keeps the key in the keychain at once, never in the settings, and shows it saved, not the key', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'groq' };
+    let keys: string[] = [];
+    const backend = open({
+      voice_online_keys: () => keys,
+      voice_online_key_set: ({ service }) => {
+        keys = [service];
+      },
+      voice_online_key_delete: () => {
+        keys = [];
+      },
+    });
+    const field = await screen.findByLabelText('Clé de Groq');
+    expect(field).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('button', { name: 'Enregistrer la clé' })).toBeDisabled();
+    await userEvent.type(field, 'gsk_secret');
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer la clé' }));
+    expect(backend.called('voice_online_key_set')[0].args).toEqual({ service: 'groq', key: 'gsk_secret' });
+    expect(await screen.findByText('Enregistrée dans le trousseau')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Clé de Groq')).toBeNull();
+    expect(document.body.innerHTML).not.toContain('gsk_secret');
+    expect(backend.called('save_settings')).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Effacer la clé' }));
+    expect(backend.called('voice_online_key_delete')[0].args).toEqual({ service: 'groq' });
+    expect(await screen.findByLabelText('Clé de Groq')).toBeInTheDocument();
+  });
+
+  it('says when the keychain refuses the key', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'mistral' };
+    const toast = vi.spyOn(app, 'toast');
+    open({
+      voice_online_keys: () => [],
+      voice_online_key_set: () => {
+        throw 'no system keychain here';
+      },
+    });
+    await userEvent.type(await screen.findByLabelText('Clé de Mistral'), 'k-123{Enter}');
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('La clé n’a pas été enregistrée : no system keychain here', 'error'));
   });
 
   it('shows each model with its size, speed and quality: base by default, downloaded; another chosen is saved', async () => {
@@ -125,6 +200,7 @@ describe('Réglages › Voix', () => {
     setLang('en');
     expect(await screen.findByRole('combobox', { name: 'Microphone used' })).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Shift+Space')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Transcribed by' })).getByRole('button', { name: 'Online' })).toBeInTheDocument();
     setLang('fr');
   });
 });

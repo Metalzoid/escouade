@@ -121,6 +121,7 @@ fn choice(model: &str, language: &str) -> Choice {
         device: String::new(),
         model: model.into(),
         language: language.into(),
+        online: None,
     }
 }
 
@@ -698,3 +699,77 @@ fn called_off_while_the_microphone_opens_it_never_listens() {
 }
 
 include!("conv_tests.rs");
+
+fn online_choice(base: &str) -> Choice {
+    let mut spec = online::Spec::new(
+        online::Provider::Groq,
+        "gsk-test-key".into(),
+        reqwest::Client::new(),
+    );
+    spec.base = base.into();
+    Choice {
+        online: Some(spec),
+        ..choice("base", "fr")
+    }
+}
+
+#[test]
+fn on_line_no_model_is_needed_and_the_fake_transcriber_stands_for_the_service() {
+    let mut h = harness("online-fake", "Bonjour en ligne", 16_000);
+    h.voice.fake_online = true;
+    // No model on the disk: it listens all the same.
+    let id = session(h.voice.start(&online_choice("http://127.0.0.1:9")).unwrap());
+    h.script.push(&voice_tone(16_000, 1.0));
+    assert_eq!(h.voice.stop(id).unwrap(), "Bonjour en ligne");
+    assert_eq!(*h.fake.calls.lock(), vec![(16_000, "fr".to_string())]);
+    assert!(!h.voice.store.dir.exists());
+}
+
+#[tokio::test]
+async fn on_line_the_text_comes_from_the_service_and_its_failure_is_told_as_such() {
+    let (url, asked) = online::tests::serve(200, r#"{"text":"Depuis le service"}"#).await;
+    let h = harness("online-real", "never this", 16_000);
+    let id = session(h.voice.start(&online_choice(&url)).unwrap());
+    h.script.push(&voice_tone(16_000, 1.0));
+    let v = Arc::new(h.voice);
+    let v2 = v.clone();
+    let text = tokio::task::spawn_blocking(move || v2.stop(id))
+        .await
+        .unwrap();
+    assert_eq!(text.unwrap(), "Depuis le service");
+    assert_eq!(
+        asked.lock()[0].line,
+        "POST /v1/audio/transcriptions HTTP/1.1"
+    );
+    assert!(h.fake.calls.lock().is_empty());
+    // A key refused: the window says so, as the service's.
+    let (url, _) = online::tests::serve(401, r#"{"error":{"message":"Invalid API Key"}}"#).await;
+    let id = session(v.start(&online_choice(&url)).unwrap());
+    h.script.push(&voice_tone(16_000, 1.0));
+    let v2 = v.clone();
+    let e = tokio::task::spawn_blocking(move || v2.stop(id))
+        .await
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(
+        e,
+        VoiceError::Online(online::OnlineError::KeyRefused(online::Provider::Groq))
+    );
+    assert_eq!(
+        e.message(crate::i18n::Lang::Fr, "windows"),
+        "Groq refuse la clé. Vérifie-la dans Réglages › Voix."
+    );
+}
+
+#[test]
+fn the_settings_choose_the_service_only_when_on_line_is_on() {
+    let mut s = crate::model::VoiceSettings::default();
+    assert_eq!(s.transcription, "local");
+    assert_eq!(online_provider(&s), None);
+    s.online_service = "deepgram".into();
+    assert_eq!(online_provider(&s), None);
+    s.transcription = "online".into();
+    assert_eq!(online_provider(&s), Some(online::Provider::Deepgram));
+    s.online_service = "nope".into();
+    assert_eq!(online_provider(&s), None);
+}

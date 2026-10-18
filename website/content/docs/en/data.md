@@ -54,6 +54,7 @@ Tokens aren’t in the settings:
 - **Jira, Trello, GitHub, Linear.** Each service’s token is in the system keychain: Windows Credential Manager, macOS Keychain Access. There is one entry per service (`jira`, `trello`, `github`, `linear`) under the `dev.gagnaire.escouade` service. `integrations.json` keeps the rest of the account. When the keychain refuses the entry, Settings › Integrations says so (“System keychain unavailable: the token stays in ~/.escouade/integrations.json.”) and the token stays in that file, readable only by you on macOS and Linux.
 - **Linux.** There is no supported keychain: the integration tokens stay in `integrations.json`.
 - **MCP server.** The token for Claude outside Escouade is in the keychain (an `mcp` entry), otherwise in `mcp-token.json`. Each agent’s is in its `mcp/<agent>.json`, which goes away with its process.
+- **Online dictation.** Each service’s key is in the keychain, one entry per service (`dictation-openai`, `dictation-groq`, `dictation-mistral`, `dictation-elevenlabs`, `dictation-deepgram`), never in a file: on Linux, it cannot be saved. “Delete the key”, in Settings › Voice, removes its entry. See [dictation](chat).
 - **Claude Code’s sign-in.** It isn’t Escouade’s: Claude Code keeps it in each account’s folder (the `.credentials.json` file), and on macOS in the keychain. See [Claude accounts](accounts).
 
 To remove a token, disconnect the service in Settings › Integrations: its entry leaves the keychain. See [integrations](integrations).

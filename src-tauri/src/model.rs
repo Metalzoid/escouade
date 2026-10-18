@@ -191,6 +191,11 @@ pub struct VoiceSettings {
     pub shortcut: String,
     /// The conversation's voice (ESC-97).
     pub speech: SpeechSettings,
+    /// Who transcribes a dictation: "local" (Whisper, on the machine) or "online" (the service
+    /// `online_service`, with the user's key kept in the keychain, ESC-110). Off by default.
+    pub transcription: String,
+    /// The service of « En ligne » (`voice::online::Provider::id`).
+    pub online_service: String,
 }
 
 impl Default for VoiceSettings {
@@ -201,6 +206,8 @@ impl Default for VoiceSettings {
             language: "ui".into(),
             shortcut: "Mod+Shift+Space".into(),
             speech: SpeechSettings::default(),
+            transcription: "local".into(),
+            online_service: "openai".into(),
         }
     }
 }

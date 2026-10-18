@@ -100,9 +100,12 @@ The dictated text is **inserted at the cursor** (it replaces the selection, if a
 
 The transcription happens **on your machine**, by Whisper (whisper.cpp), on a thread of its own: nothing you say leaves your machine. At the first dictation, Escouade offers to download the “base” model (148 MB), once, from Hugging Face, through the proxy of the [network settings](settings-network); its checksum is checked before it is kept, in `~/.escouade/voice/models`. After that, a sentence is transcribed in one or two seconds.
 
+**Online, if you choose it.** For a machine too slow for Whisper, or a better quality, Settings › Voice › “Transcribed by” › “Online” sends the sound of each dictation, once you end it, to the service chosen: OpenAI, Groq, Mistral (Voxtral), ElevenLabs (Scribe) or Deepgram, with **your own** API key, paid per use on your account with it. It is off by default. Only the sound of the dictation leaves, through the proxy of the [network settings](settings-network); no model is to be downloaded. The key is kept in the system keychain (not on Linux, where it cannot be saved), never in Escouade’s files nor in its log. When the key is refused or the service cannot be reached, the dictation says so, and nothing is written. The voice conversation is still transcribed on your machine. The details are on the [Privacy](/en/privacy/) page.
+
 In **Settings › Voice**:
 
 - “Microphone used”: the system’s by default, or another one;
+- “Transcribed by”: “Local (Whisper)”, the default, or “Online”, with the service and its key (“Save the key”, then “Replace” or “Delete the key”);
 - “Model”: tiny (78 MB, the fastest), base (148 MB, the default), small (488 MB), large-v3-turbo-q5_0 (574 MB), medium (1.5 GB) or large-v3-turbo (1.6 GB, the most accurate). Each one downloads or is deleted from its row; the one chosen downloads at the first dictation;
 - “Spoken language”: the interface’s by default, automatic detection, or a given language;
 - “Shortcut”: “Change”, then press the shortcut you want (with `Ctrl`, `Alt` or `Cmd`, or a key `F1` to `F24`).

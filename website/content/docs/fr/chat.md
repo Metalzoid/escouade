@@ -100,9 +100,12 @@ Le texte dicté est **inséré à l’endroit du curseur** (il remplace la séle
 
 La transcription se fait **sur ta machine**, par Whisper (whisper.cpp), dans un fil à part : rien de ce que tu dis ne quitte ta machine. À la première dictée, Escouade propose de télécharger le modèle « base » (148 Mo), une seule fois, depuis Hugging Face, par le proxy des [réglages réseau](settings-network) ; sa somme de contrôle est vérifiée avant qu’il soit gardé, dans `~/.escouade/voice/models`. Ensuite, une phrase se transcrit en une à deux secondes.
 
+**En ligne, si tu le choisis.** Pour une machine trop lente pour Whisper, ou une meilleure qualité, Réglages › Voix › « Transcrite par » › « En ligne » envoie le son de chaque dictée, une fois que tu la finis, au service choisi : OpenAI, Groq, Mistral (Voxtral), ElevenLabs (Scribe) ou Deepgram, avec **ta propre clé** d’API, payée à l’usage sur ton compte chez lui. C’est éteint par défaut. Seul le son de la dictée part, par le proxy des [réglages réseau](settings-network) ; aucun modèle n’est à télécharger. La clé est gardée dans le trousseau du système (pas sous Linux, où elle ne peut pas être enregistrée), jamais dans les fichiers d’Escouade ni dans son journal. Si la clé est refusée ou le service injoignable, la dictée le dit, et rien n’est écrit. La conversation vocale reste transcrite sur ta machine. Le détail est sur la page [Confidentialité](/privacy/).
+
 Dans **Réglages › Voix** :
 
 - « Micro utilisé » : celui du système par défaut, ou un autre ;
+- « Transcrite par » : « Local (Whisper) », par défaut, ou « En ligne », avec le service et sa clé (« Enregistrer la clé », puis « Remplacer » ou « Effacer la clé ») ;
 - « Modèle » : tiny (78 Mo, le plus rapide), base (148 Mo, par défaut), small (488 Mo), large-v3-turbo-q5_0 (574 Mo), medium (1,5 Go) ou large-v3-turbo (1,6 Go, le plus juste). Chacun se télécharge ou s’efface depuis sa ligne ; celui choisi se télécharge à la première dictée ;
 - « Langue parlée » : celle de l’interface par défaut, la détection automatique, ou une langue précise ;
 - « Raccourci » : « Changer », puis appuie sur le raccourci voulu (avec `Ctrl`, `Alt` ou `Cmd`, ou une touche `F1` à `F24`).
