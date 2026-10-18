@@ -2772,8 +2772,32 @@ impl<R: Runtime> Core<R> {
 
     /// Keeps the models a harness listed for its account at a process start (Codex: `model/list`):
     /// the composer's menu of its agents.
-    fn set_engine_models(&self, engine: EngineId, models: Vec<crate::engine::registry::ToldModel>) {
+    fn set_engine_models(
+        &self,
+        engine: EngineId,
+        mut models: Vec<crate::engine::registry::ToldModel>,
+    ) {
         let mut all = self.engine_models.write();
+        // A list that knows a provider by its id alone (OpenCode's `opencode models`, without its
+        // server) keeps the name its server gave it before (`Ollama (local)`, not `ollama`).
+        if let Some(known) = all.get(&engine) {
+            for m in &mut models {
+                let Some((prefix, _)) = m.id.split_once('/') else {
+                    continue;
+                };
+                if m.provider.as_deref().is_some_and(|p| p != prefix) {
+                    continue;
+                }
+                let named = known.iter().find_map(|k| {
+                    let p = k.provider.as_deref()?;
+                    (k.id.split_once('/').map(|(kp, _)| kp) == Some(prefix) && p != prefix)
+                        .then(|| p.to_string())
+                });
+                if let Some(name) = named {
+                    m.provider = Some(name);
+                }
+            }
+        }
         if all.get(&engine) == Some(&models) {
             return;
         }

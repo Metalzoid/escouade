@@ -213,6 +213,14 @@ async fn the_models_of_the_connected_providers_come_with_their_variants_and_favo
     let (p, _) = h.project(false).await;
     opencode_account(&h);
     let id = new_agent(&h, &p.id).await;
+    // Listed first by `opencode models` (the providers by their ids), then by its server (their
+    // names), which may come after the agent is there.
+    h.wait("the models of its server", |h| {
+        h.core.engine_models.read()[&EngineId::Opencode]
+            .first()
+            .is_some_and(|m| m.provider.as_deref() == Some("Ollama (local)"))
+    })
+    .await;
     let models = h.core.engine_models.read()[&EngineId::Opencode].clone();
     let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(
