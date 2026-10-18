@@ -165,6 +165,10 @@ export function tui(argv, { free = false } = {}) {
   const trusted = () => (readJsonc(config).trustedFolders || []).map(norm).some((k) => norm(cwd) === k || norm(cwd).startsWith(k + '/'));
   let trusting = !trusted();
   let remember = false;
+  // Raw before its first screen (ESC-125): a key typed as soon as that shows would else reach a terminal still cooked, which
+  // turns Enter into \n.
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.setEncoding('utf8');
   process.stdout.write(trusting ? '\x1b[?2004hfake-copilot-trust\r\n' : '\x1b[?2004hfake-copilot-tui\r\n');
   if (refused) process.stdout.write(`✗ Model "${refused}" from --model flag is not available. Using "auto" instead.\r\n`);
 
@@ -245,8 +249,6 @@ export function tui(argv, { free = false } = {}) {
     await hook('agentStop', { transcriptPath: logOf(id), stopReason: 'end_turn', stop_hook_active: false });
   };
 
-  if (process.stdin.isTTY) process.stdin.setRawMode(true);
-  process.stdin.setEncoding('utf8');
   let line = '';
   let pasting = false;
   let ctrlC = 0;

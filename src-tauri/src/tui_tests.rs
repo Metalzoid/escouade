@@ -709,6 +709,82 @@ async fn an_interface_a_window_showed_that_its_user_exits_soon_after_starting_is
     a_shown_interface_ends_soon_after_it_started("tui-rc-shown-exit", true).await;
 }
 
+/// A wait of a view's test that times out tells what to read the failure by (ESC-125): the screen
+/// of the agent's interface, whether its process runs, and the end of the fake's logs.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wait_that_times_out_tells_the_screen_the_interfaces_state_and_the_fakes_logs() {
+    let h = harness("tui-wait-report");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    let (info, _) = open_interface(&h, &id).await;
+    h.core.pty.write(&info.id, b"bonjour").unwrap();
+    h.wait("the line typed", |h| h.views_report().contains("> bonjour"))
+        .await;
+    let said = h.timed_out("nothing");
+    assert!(
+        said.starts_with("timed out waiting for nothing\n"),
+        "{said}"
+    );
+    assert!(said.contains(&format!("--- agent {id} (")), "{said}");
+    assert!(
+        said.contains(&format!("interface {} (running, started ", info.id)),
+        "{said}"
+    );
+    let screen = &said[said.find("screen (").unwrap()..];
+    assert!(screen.contains("  | fake-claude-tui"), "{said}");
+    assert!(screen.contains("> bonjour\n"), "{said}");
+    // The fake's launch log, named after the repository it ran in.
+    let key: String = r
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    assert!(
+        said.contains(&format!("fake-claude-{key}.jsonl (")),
+        "{said}"
+    );
+    assert!(said.contains("\"argv\""), "{said}");
+
+    // Its process gone: said so, and how it ended.
+    h.core.pty.write(&info.id, b"\x15/exit\r").unwrap();
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    let said = h.views_report();
+    assert!(
+        said.contains("no interface running, last exit Some("),
+        "{said}"
+    );
+}
+
+/// A key typed as soon as the interface shows its first screen is read as typed, however long the
+/// rest of its start takes (ESC-125: on a loaded runner, `/exit` reached the fake interface while
+/// its terminal was still cooked, which turned its Enter into a line feed: it never ended).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_key_typed_as_soon_as_the_first_screen_shows_is_read_as_typed() {
+    let h = harness("tui-typed-at-once");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.fake_flag(&r, "tui-slow-start");
+    let (info, _) = open_interface(&h, &id).await;
+    h.core.pty.write(&info.id, b"/exit\r").unwrap();
+    h.wait("the interface over", |h| !interface_runs(h, &id))
+        .await;
+    assert_eq!(
+        h.core
+            .agent(&id)
+            .unwrap()
+            .lock()
+            .tui_exit
+            .as_ref()
+            .and_then(|e| e.code),
+        Some(0)
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn an_interface_shown_after_it_started_in_the_background_is_no_failure_when_it_closes() {
     let h = harness("tui-rc-shown-late");
@@ -741,8 +817,10 @@ async fn the_link_of_an_interface_started_with_remote_control_is_read_from_its_t
     let state = |h: &Harness| h.core.agent(&id).unwrap().lock().view().remote_state;
     assert_eq!(state(&h), None);
     h.core.set_remote_control(&id, true).await.unwrap();
-    h.wait("the interface linked", |h| {
-        state(h).as_deref() == Some("connected")
+    // Linked by its registry or its `bridge-session` entry; its link comes with the
+    // `bridge_status` entry it writes next, read a moment later under load.
+    h.wait("the interface linked, with its link", |h| {
+        state(h).as_deref() == Some("connected") && h.agent(&id).remote_url.is_some()
     })
     .await;
     // The link it wrote: the interface's own, not the stream's session.

@@ -65,9 +65,14 @@ async fn new_copilot_agent(h: &Harness, trusted: bool) -> (String, PathBuf) {
 }
 
 /// An agent on Copilot, in the Copilot view.
+/// Created in it, as with the setting « Vue terminal » on (ESC-125): created in Escouade's view,
+/// its server starts at once and opens a session, which its interface would resume, or not,
+/// whether its switch came first (`a_new_agent_whose_server_opened_its_session_resumes_it_in_copilots_view`).
 async fn copilot_agent(h: &Harness, trusted: bool) -> (String, PathBuf) {
+    h.core.settings.write().terminal_view = true;
     let (id, home) = new_copilot_agent(h, trusted).await;
-    h.core.set_agent_view(&id, true).await.unwrap();
+    assert!(h.agent(&id).terminal);
+    assert!(!h.alive(&id), "no server for an agent born in the view");
     (id, home)
 }
 
@@ -396,6 +401,25 @@ async fn a_new_agent_in_copilots_view_names_its_session_and_a_question_waits() {
     .await;
     assert_eq!(users(&h, &id), ["Une question ?"]);
     assert_eq!(h.agent(&id).session_id.as_deref(), Some(argv[1].as_str()));
+}
+
+/// What the CI met (ESC-125): a new agent created in Escouade's view has its server started at
+/// once, which opens a session; switched to Copilot's view after that, its interface resumes that
+/// session instead of naming one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_new_agent_whose_server_opened_its_session_resumes_it_in_copilots_view() {
+    let h = harness("tui-copilot-server-first");
+    let (id, home) = new_copilot_agent(&h, true).await;
+    h.wait("its server's session", |h| {
+        h.agent(&id).session_id.is_some()
+    })
+    .await;
+    let session = h.agent(&id).session_id.unwrap();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_copilot(&h, &id, "fake-copilot-tui").await;
+    let argv = argv_of(&last_launch(&home));
+    assert_eq!(argv[..2], ["--resume", session.as_str()], "{argv:?}");
+    assert_eq!(h.agent(&id).session_id.as_deref(), Some(session.as_str()));
 }
 
 #[tokio::test(flavor = "multi_thread")]

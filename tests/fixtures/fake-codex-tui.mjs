@@ -179,6 +179,10 @@ export function tui(argv, log) {
     return [...text.matchAll(/^\[projects\.['"](.*)['"]\]\s*$/gm)].map((m) => norm(m[1].replaceAll('\\\\', '\\')));
   };
   let trusting = !known().some((k) => norm(root) === k || norm(cwd) === k || norm(cwd).startsWith(k + '/'));
+  // Raw before its first screen (ESC-125): a key typed as soon as that shows would else reach a terminal still cooked, which
+  // turns Enter into \n.
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.setEncoding('utf8');
   process.stdout.write(trusting ? '\x1b[?2004hfake-codex-trust\r\n' : '\x1b[?2004hfake-codex-tui\r\n');
 
   let n = 0;
@@ -248,8 +252,6 @@ export function tui(argv, log) {
     event({ type: 'task_complete', turn_id: turnId, last_agent_message: reply, duration_ms: 12 });
   };
 
-  if (process.stdin.isTTY) process.stdin.setRawMode(true);
-  process.stdin.setEncoding('utf8');
   let line = '';
   let pasting = false;
   let ctrlC = 0;

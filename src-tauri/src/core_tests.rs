@@ -2,7 +2,7 @@
 //! (tests/fixtures/fake-claude.cmd, or the `fake-claude` shell script outside Windows) and Tauri's
 //! mock runtime.
 
-use crate::agent::NotifyKind;
+use crate::agent::{AgentHandle, NotifyKind};
 use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
 use crate::model::*;
 use crate::paths::{test_dir, DataDir};
@@ -201,7 +201,106 @@ impl Harness {
         if pred(self) {
             return;
         }
-        panic!("timed out waiting for {what}");
+        panic!("{}", self.timed_out(what));
+    }
+
+    /// What a wait for `what` that timed out says.
+    pub(crate) fn timed_out(&self, what: &str) -> String {
+        format!("timed out waiting for {what}{}", self.views_report())
+    }
+
+    /// What a wait that timed out tells of the agents' interfaces (the views' tests), so that a
+    /// failure of the CI reads without reproducing it: for each agent with one, whether it runs
+    /// (its terminal open, since when), how the last one ended, the end of its screen; then the end
+    /// of the fake interfaces' logs (their launches, their hooks).
+    pub(crate) fn views_report(&self) -> String {
+        let mut out = String::new();
+        let mut agents: Vec<AgentHandle> = self.core.agents.read().values().cloned().collect();
+        agents.sort_by_key(|a| a.lock().meta.id.clone());
+        for a in agents {
+            let rt = a.lock();
+            if !rt.meta.terminal && rt.tui.is_none() && rt.tui_exit.is_none() {
+                continue;
+            }
+            out.push_str(&format!(
+                "\n--- agent {} ({:?}, session {:?}): ",
+                rt.meta.id, rt.meta.status, rt.meta.session_id
+            ));
+            match &rt.tui {
+                Some(run) => {
+                    let open = self.core.pty.exists(&run.term_id);
+                    let registered = match run.registered {
+                        Some(r) => format!("registered {} ms ago", r.elapsed().as_millis()),
+                        None => "not registered".into(),
+                    };
+                    out.push_str(&format!(
+                        "interface {} ({}, started {} ms ago, {registered}, ready {}), last exit {:?}, {} quick exits\n",
+                        run.term_id,
+                        if open { "running" } else { "its terminal ended" },
+                        run.launched_at.elapsed().as_millis(),
+                        rt.interface_ready(),
+                        rt.tui_exit,
+                        rt.tui_quick_exits
+                    ));
+                    out.push_str(&screen_end(&run.output.kept()));
+                }
+                None => out.push_str(&format!(
+                    "no interface running, last exit {:?}, {} quick exits\n",
+                    rt.tui_exit, rt.tui_quick_exits
+                )),
+            }
+        }
+        for file in self.fake_logs() {
+            let text = std::fs::read_to_string(&file).unwrap_or_default();
+            let lines: Vec<&str> = text.lines().collect();
+            out.push_str(&format!(
+                "\n--- {} ({} lines), its end:\n",
+                file.display(),
+                lines.len()
+            ));
+            for l in &lines[lines.len().saturating_sub(FAKE_LOG_LINES)..] {
+                out.push_str(&clip(l, 600));
+                out.push('\n');
+            }
+        }
+        out
+    }
+
+    /// The logs of the fake interfaces of this test: the fake `claude`'s in the temporary folder
+    /// (named after the folder it ran in, under the test's), the other fakes' (`fake-tui-*.jsonl`)
+    /// in the test's folder.
+    fn fake_logs(&self) -> Vec<PathBuf> {
+        let key: String = self
+            .dir
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        let prefix = format!("fake-claude-{key}");
+        let mut files: Vec<PathBuf> = std::fs::read_dir(std::env::temp_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|f| f.file_name().to_string_lossy().starts_with(&prefix))
+            .map(|f| f.path())
+            .filter(|p| p.extension().is_some_and(|e| e == "jsonl"))
+            .collect();
+        let mut dirs = vec![self.dir.clone()];
+        while let Some(d) = dirs.pop() {
+            for f in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                let (path, name) = (f.path(), f.file_name().to_string_lossy().into_owned());
+                if f.file_type().is_ok_and(|t| t.is_dir()) {
+                    // Not into the repositories' own files.
+                    if name != ".git" {
+                        dirs.push(path);
+                    }
+                } else if name.starts_with("fake-tui-") && name.ends_with(".jsonl") {
+                    files.push(path);
+                }
+            }
+        }
+        files.sort();
+        files
     }
 
     pub(crate) async fn turn(&self, id: &str, text: &str) {
@@ -9528,6 +9627,41 @@ async fn an_accounts_status_tells_whether_it_is_signed_in_and_with_which_email()
     );
     let e = status(&h, "parti").await.unwrap_err();
     assert_eq!(e.to_string(), "compte « parti » introuvable");
+}
+
+/// How many lines of a fake interface's log, and of an interface's screen, `views_report` tells.
+const FAKE_LOG_LINES: usize = 12;
+const SCREEN_LINES: usize = 25;
+
+/// The last lines of what a terminal printed, as `plain_text` reads them, the empty ones left out.
+fn screen_end(kept: &[u8]) -> String {
+    let text = String::from_utf8_lossy(kept);
+    let lines: Vec<String> = text
+        .split('\n')
+        // What a carriage return wrote over is gone from the screen.
+        .map(|l| {
+            l.rsplit('\r')
+                .map(plain_text)
+                .find(|p| !p.trim().is_empty())
+                .unwrap_or_default()
+        })
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    let mut out = format!("screen ({} bytes), its end:\n", kept.len());
+    for l in &lines[lines.len().saturating_sub(SCREEN_LINES)..] {
+        out.push_str("  | ");
+        out.push_str(&clip(l, 300));
+        out.push('\n');
+    }
+    out
+}
+
+/// `s` cut to `max` characters at most.
+fn clip(s: &str, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        Some((at, _)) => format!("{}…", &s[..at]),
+        None => s.to_string(),
+    }
 }
 
 /// What a terminal printed, without its escape sequences nor its line ends (a pseudo-console

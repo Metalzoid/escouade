@@ -352,6 +352,8 @@ if (argv[0] === 'mcp') {
 // it closes 200 ms after it started (code 1). Each Ctrl+C (\x03) it reads is added, with its time (ms) and the
 // prompt line it found, to <log>.quit.jsonl; on a line that holds something it empties it, and the second one on an
 // empty line ends it (code 0), as Claude Code quits on two, unless <log>.tui-ignore-quit is there: then it goes on.
+// Its terminal is raw before its first screen; while <log>.tui-slow-start is there, the rest of its start waits half a
+// second after that screen.
 // As Claude Code does, it writes no transcript before its first message (a session that never got one cannot be resumed), and
 // a `--resume=<id>` of a session absent from every <dir>/projects/* folder (or named `missing…`) fails as an unknown one does:
 // "No conversation found with session ID: <id>" on stderr, exit code 1, a moment after (the pseudo-console flushes its
@@ -423,9 +425,16 @@ function tuiSession() {
   // What its registry file says of it (set below).
   let status = () => {};
   let line = '';
+  // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r), and the prompt line drawn again at each.
+  // Raw before its first screen (ESC-125): a key typed as soon as that shows would else reach a terminal still cooked, which
+  // turns Enter into \n (no prompt submitted), however long the rest of its start takes.
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.setEncoding('utf8');
   // No space: ConPTY draws a run of spaces as a cursor move (ESC[nC). Pastes come bracketed
   // (ESC[200~ … ESC[201~), as Claude Code asks for them.
   process.stdout.write('\x1b[?2004hfake-claude-tui\r\n');
+  // With `tui-slow-start`, the rest of its start waits half a second, as on a loaded runner (ESC-125).
+  if (fs.existsSync(side('tui-slow-start'))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
   // With `tui-paste-late`, as the real one under Windows while it starts (ESC-12): it is listed in the registry, then
   // turns bracketed paste off for a while. Without it, a paste is only keys: its line break is Enter.
   let pasteMode = true;
@@ -565,9 +574,6 @@ function tuiSession() {
     write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
     status('idle');
   };
-  // As Claude Code's interface: every key as it comes (Escape alone, Enter as \r), and the prompt line drawn again at each.
-  if (process.stdin.isTTY) process.stdin.setRawMode(true);
-  process.stdin.setEncoding('utf8');
   let pasteStart = null;
   let images = 0;
   let ctrlC = 0;
