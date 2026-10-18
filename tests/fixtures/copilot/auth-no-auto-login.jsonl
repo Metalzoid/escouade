@@ -1,0 +1,10 @@
+{"dir":"note","t":13,"msg":{"spawn":"copilot.exe","args":["--server","--stdio","--no-auto-update","--no-auto-login"],"home":"<COPILOT_HOME>"}}
+{"dir":"c2s","t":13,"msg":{"jsonrpc":"2.0","id":1,"method":"connect","params":{"supportedTaskKinds":["agent","client","shell"]}}}
+{"dir":"s2c","t":418,"msg":{"jsonrpc":"2.0","id":1,"result":{"ok":true,"protocolVersion":3,"version":"1.0.98","taskKinds":["agent","shell","client"]}}}
+{"dir":"c2s","t":419,"msg":{"jsonrpc":"2.0","id":2,"method":"auth.getStatus","params":{}}}
+{"dir":"s2c","t":420,"msg":{"jsonrpc":"2.0","id":2,"result":{"isAuthenticated":false,"statusMessage":"Not authenticated"}}}
+{"dir":"c2s","t":420,"msg":{"jsonrpc":"2.0","id":3,"method":"account.getAllUsers","params":{}}}
+{"dir":"s2c","t":421,"msg":{"jsonrpc":"2.0","id":3,"result":[]}}
+{"dir":"c2s","t":421,"msg":{"jsonrpc":"2.0","id":4,"method":"runtime.shutdown","params":{}}}
+{"dir":"s2c","t":457,"msg":{"jsonrpc":"2.0","id":4,"result":null}}
+{"dir":"note","t":506,"msg":{"exit":0,"signal":null}}

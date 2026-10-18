@@ -1,0 +1,13 @@
+{"in":{"jsonrpc":"2.0","id":0,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"copilot-cli","version":"1.0.98"},"io.modelcontextprotocol/clientCapabilities":{"sampling":{},"elicitation":{"form":{},"url":{}}}}}}}
+{"out":{"jsonrpc":"2.0","id":0,"result":{}}}
+{"in":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"sampling":{},"elicitation":{"form":{},"url":{}}},"clientInfo":{"name":"copilot-cli","version":"1.0.98"}}}}
+{"out":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"essai","version":"1.0.0"},"instructions":"Serveur d'essai d'Escouade."}}}
+{"in":{"jsonrpc":"2.0","method":"notifications/initialized"}}
+{"in":{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"progressToken":0}}}}
+{"out":{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"ping","description":"Répond pong avec le texte donné.","inputSchema":{"type":"object","properties":{"texte":{"type":"string"}},"required":["texte"]}},{"name":"formulaire","description":"Demande à l'utilisateur son prénom et son âge par un formulaire, et rend ses réponses.","inputSchema":{"type":"object","properties":{}}}]}}}
+{"in":{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"arguments":{"texte":"bonjour"},"name":"ping"}}}
+{"out":{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"pong bonjour"}]}}}
+{"in":{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"_meta":{"progressToken":2},"arguments":{},"name":"formulaire"}}}
+{"out":{"jsonrpc":"2.0","id":1000,"method":"elicitation/create","params":{"message":"Qui es-tu ?","requestedSchema":{"type":"object","properties":{"prenom":{"type":"string","title":"Prénom"},"age":{"type":"number","title":"Âge"}},"required":["prenom"]}}}}
+{"in":{"jsonrpc":"2.0","id":1000,"result":{"action":"accept","content":{"prenom":"Camille","age":30}}}}
+{"out":{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"formulaire : {\"action\":\"accept\",\"content\":{\"prenom\":\"Camille\",\"age\":30}}"}]}}}

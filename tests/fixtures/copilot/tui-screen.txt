@@ -1,0 +1,30 @@
+L Interactive · Manual Approval · @ files · # issuesance exactement `Start-Sleep -Seconds 60; echo fini` avec powershell.❯ ● Working esc edit prompt❯ Lance exactement `Start-Sleep -Seconds 60; echo fini` avec powershell.06:05 ◉ Work ◎ Working ○ Working ◎ WorkingAuto → gpt-6-luna ◉ng ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working ◉ng ◎  ○  ◎ Wo ◉ Work ● Working ◉ Working ◎ Working ○ng ◎  ◉  ● Wo ◉ Work ◎ Working ○ Working ◉ Work ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working· 12 B esc interrupt ◉ng · 43103 B esc interrupt ◎2 ○ 24  ◎ Wo$ Shell Wait 60 seconds and print fini
+   Start-Sleep -Seconds 60; echo fini ◉ Work ● Working ◉ Working ◎ Working ○ng ◎  ◉  ● Wo ◉ Work ◎ Working ○ Working╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Wait 60 seconds and print fini│
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Start-Sleep -Seconds 60; echo fini│ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+││
+│ Do you want to run this command?│
+││
+│ ❯ 1. Yes │
+│   2. Yes, and don't ask again for `Start-Sleep` in this repo (~\AppData\Local\Temp\esc23\repo)│
+│   3. No, and tell Copilot what to do differently (Esc to stop)│
+││
+│ ↑/↓ to navigate · enter to select · esc to cancel│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+ ~\AppData\Local\Temp\esc23\wt-agent1 [⎇ agent1*%]                                               Session: 0.24 AIC used 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ● Working · 123 B esc interrupt                                                                      Auto → gpt-6-luna  ◉ Work ◎ Working ○ Working ◎ Working ◉ng ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working ◉ng ◎  ○  ◎ Wo ◉ Work ● Working ◉ Working ◎ Working ○ng ◎  ◉  ● Wo ◉ Work ◎ Working ○ Working ◎ Working ●ng ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working ◉ng ◎  ○  ◎ Wo ◉ Work5s ● Working ◉ Working ◎ Working ○ng ◎  ◉  ● Wo ◉ Work ◎ Working ○ Working ◎ Working6s ◉ng ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working ◉ng ◎  Wo7s ◉ Work ● Working ◉ Workingagain to interrupt ◎ Working ○ng ◎  ◉  ● Wo ◉ Workinterrupt ◎ Working ○ Working8s ◎ Working ◉ng ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working ◉ng9s◎  ○  ◎ Wo ◉ Work ● Working ◉ Working ◎ Working ○ng ◎  ◉  ● Wo10s ◉ Work ◎ Working ◎ Wo ◉ng ●  ◉  ◎ Wo ○ Work ◎ Working ◉ Working ● Working1s ◉ng ◎  ○ 
