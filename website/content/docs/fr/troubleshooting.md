@@ -201,6 +201,23 @@ Voir les [notifications](notifications).
 
 **Solution.** Ouvre le journal de l’app (voir « Où est le journal de l’app », plus bas) : chaque écho qui a mis plus de 300 ms à s’afficher y est noté (au plus une fois toutes les 10 secondes par terminal), avec le temps de chaque étape, par exemple « echo of a 1-byte write shown after 837 ms: written 0 ms after the backend got it, first output 835 ms after, the echo 835 ms after, to and from the window 1 ms (answer to the write 2 ms), painted 1 ms later ». Ici, presque tout est avant « the echo » : c’est le programme qui a tardé. Un long « to and from the window » vient de la fenêtre, un long « painted » de son affichage. Le journal dit aussi, à l’ouverture de chaque terminal, son moteur de rendu : « renderer webgl » suivi du nom de la carte graphique (un nom comme SwiftShader veut dire un rendu sans carte graphique, plus lent), ou « renderer dom ». Signale-le avec ces lignes (voir « Signaler un bug »).
 
+**Lire la ligne.** Une seule étape porte presque tout le temps :
+
+- **« first output » et « the echo » longs** : le programme du terminal a tardé à répondre. Ouvre le même shell hors d’Escouade (dans Windows Terminal, par exemple) : s’il est lent aussi, la cause est le shell ou le poste, pas Escouade. Dans PowerShell, essaie `pwsh -NoProfile` (un module du profil peut travailler à chaque touche) et `Set-PSReadLineOption -PredictionSource None` (une prédiction fournie par un module, comme `Az.Tools.Predictor`, est calculée à chaque touche).
+- **« written … after the backend got it » long** : le programme ne lisait plus ce qu’on lui tapait, occupé ailleurs.
+- **« to and from the window » long** : le temps s’est perdu entre la fenêtre et le backend. Signale-le.
+- **« painted » long** : l’affichage. Regarde la ligne « renderer » du même terminal.
+
+Sur ce chemin, une frappe prend d’ordinaire 10 à 40 ms, et rarement plus de 150 ms, même avec des agents au travail, une suite de tests et un modèle local qui occupent le processeur.
+
+**Sur un poste d’entreprise.** Ce qu’ajoute un poste géré peut ralentir chaque frappe sans charger le processeur :
+
+- **Un EDR ou un antivirus** (Microsoft Defender for Endpoint, CrowdStrike, SentinelOne…) inspecte les processus que lance le terminal et ce qu’ils échangent avec la pseudo-console de Windows. Le temps apparaît alors dans « first output » et « the echo ». Si le même shell est lent hors d’Escouade aussi, demande au service informatique de regarder ce que l’outil fait sur `escouade.exe`, `conhost.exe` et le shell (`pwsh.exe`, `bash.exe`), ou de les exclure de l’inspection en temps réel.
+- **Un bureau à distance** (RDP, Citrix, un poste virtuel) transmet l’image par le réseau : l’écho est affiché à temps dans Escouade, mais arrive tard sur ton écran. Le journal ne note alors rien, puisque rien n’a tardé dans l’app, et un terminal hors d’Escouade, dans la même session, est aussi lent. Sans carte graphique, la ligne « renderer » nomme SwiftShader ou dit « renderer dom » : l’affichage est fait par le processeur.
+- **Le profil du shell** fourni par l’entreprise (modules chargés, invite qui interroge le réseau ou git) : `pwsh -NoProfile` le montre tout de suite.
+
+Si tu vois le retard et que le journal ne note rien, le temps n’est pas passé dans Escouade : il est dans l’affichage du poste (un bureau à distance), ou l’écho a mis plus de 10 secondes (une frappe restée sans réponse est alors oubliée). Seule une fenêtre visible mesure ses frappes.
+
 ## Journal et signalement
 
 ### Où est le journal de l’app

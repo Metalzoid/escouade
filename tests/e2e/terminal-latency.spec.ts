@@ -578,8 +578,14 @@ function link(writes: Write[], bench: Bench, rust: { writes: RustWrite[]; reads:
       next = first + 1;
       l.first = out[first];
       // A letter shows in the first output that has it once the escape sequences are gone (the line is drawn again whole
-      // at each key, so the letters of the keys before it are there too: a group's letters are all different).
-      l.chunk = /^[a-z]$/i.test(js.data) ? out.slice(first).find((c) => visible(c.text).includes(js.data)) : l.first;
+      // at each key, so the letters of the keys before it are there too: a group's letters are all different). Looked for
+      // until the next group is typed only: a program that read the letter and the line's clearing at once (busy meanwhile)
+      // draws the cleared line, never the letter, and the same letter of a later group is no echo of this one.
+      const letter = /^[a-z]$/i.test(js.data);
+      const clearedAt = mine.find((w) => w.called > js.called && !/^[a-z]$/i.test(w.data))?.called;
+      const until =
+        clearedAt === undefined ? Infinity : (mine.find((w) => w.called > clearedAt && /^[a-z]$/i.test(w.data))?.called ?? Infinity);
+      l.chunk = letter ? out.slice(first).find((c) => c.t < until && visible(c.text).includes(js.data)) : l.first;
     }
     return l;
   });

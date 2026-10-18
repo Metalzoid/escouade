@@ -201,6 +201,23 @@ See [notifications](notifications).
 
 **Fix.** Open the app’s log (see “Where the app’s log is”, below): every echo that took more than 300 ms to show is noted there (at most once every 10 seconds per terminal), with the time of each step, for example “echo of a 1-byte write shown after 837 ms: written 0 ms after the backend got it, first output 835 ms after, the echo 835 ms after, to and from the window 1 ms (answer to the write 2 ms), painted 1 ms later”. Here nearly everything comes before “the echo”: the program was slow. A long “to and from the window” comes from the window, a long “painted” from its drawing. When each terminal opens, the log also says what draws it: “renderer webgl” followed by the graphics card’s name (a name like SwiftShader means drawing without a graphics card, which is slower), or “renderer dom”. Report it with these lines (see “Reporting a bug”).
 
+**Reading the line.** One step carries nearly all the time:
+
+- **Long “first output” and “the echo”**: the terminal’s program was slow to answer. Open the same shell outside Escouade (in Windows Terminal, for example): if it is slow there too, the cause is the shell or the machine, not Escouade. In PowerShell, try `pwsh -NoProfile` (a module of the profile can do work at every key) and `Set-PSReadLineOption -PredictionSource None` (a prediction from a module, such as `Az.Tools.Predictor`, is computed at every key).
+- **Long “written … after the backend got it”**: the program had stopped reading what was typed, busy elsewhere.
+- **Long “to and from the window”**: the time was lost between the window and the backend. Report it.
+- **Long “painted”**: the drawing. Look at the “renderer” line of the same terminal.
+
+On this path a keystroke usually takes 10 to 40 ms, and seldom more than 150 ms, even with agents at work, a test suite and a local model keeping the processor busy.
+
+**On a work machine.** What a managed machine adds can slow every keystroke down without loading the processor:
+
+- **An EDR or an antivirus** (Microsoft Defender for Endpoint, CrowdStrike, SentinelOne…) inspects the processes the terminal starts and what they exchange with Windows’ pseudo-console. The time then shows in “first output” and “the echo”. If the same shell is slow outside Escouade too, ask your IT department to look at what the tool does to `escouade.exe`, `conhost.exe` and the shell (`pwsh.exe`, `bash.exe`), or to leave them out of real-time inspection.
+- **A remote desktop** (RDP, Citrix, a virtual desktop) sends the picture over the network: the echo is drawn on time in Escouade but reaches your screen late. The log then notes nothing, since nothing was late in the app, and a terminal outside Escouade, in the same session, is just as slow. Without a graphics card, the “renderer” line names SwiftShader or says “renderer dom”: the processor does the drawing.
+- **The shell’s profile** your company provides (modules loaded, a prompt that asks the network or git): `pwsh -NoProfile` shows it at once.
+
+If you see the delay and the log notes nothing, the time was not spent in Escouade: it is in the machine’s display (a remote desktop), or the echo took more than 10 seconds (a keystroke left unanswered is then forgotten). Only a visible window measures its keystrokes.
+
 ## Log and reports
 
 ### Where the app’s log is
