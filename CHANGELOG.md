@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
-## [Non publié]
+## [1.8.4] — 2026-10-19
 
 ### Corrections
 
