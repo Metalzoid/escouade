@@ -193,7 +193,8 @@ mod tests {
         // The link under its temporary name, as on the client's Mac (/opt/homebrew/bin).
         std::fs::remove_file(bin.join("claude")).unwrap();
         std::fs::write(bin.join(".claude-Xa3k9"), "").unwrap();
-        let other = root.join("other");
+        // A folder of programs looked at first, apart: on Unix, its packages are in its own ../lib.
+        let other = root.join("other").join("bin");
         std::fs::create_dir_all(&other).unwrap();
         assert_eq!(
             leftover_in(&[other, bin.clone()]),
