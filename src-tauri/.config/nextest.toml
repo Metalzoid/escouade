@@ -24,6 +24,11 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 # The failures' output is also repeated at the end of the log, where the annotation reads it
 # (scripts/nextest-annotations.mjs).
 failure-output = "immediate-final"
+# The archive the Windows CI builds once and runs on two runners (ci.yml) carries the fake `codex`
+# of the Codex view's tests too (examples/fake_codex.rs), which they start from beside them.
+archive.include = [
+  { path = "debug/examples", relative-to = "target", depth = 1, on-missing = "warn" },
+]
 
 [profile.ci.junit]
 path = "junit.xml"

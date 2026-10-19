@@ -12,12 +12,67 @@ concurrency:
   group: ci-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: true
 
+# The jobs run side by side (the run took 42 min one after the other, at 1.8.4): the frontend's checks once, on Linux;
+# Windows builds its Rust tests (a nextest archive) and the app once, then runs the tests in 2 parts and the end-to-end
+# tests in 3, each part on a runner of its own; macOS tests and builds its bundle side by side; Linux tests and builds
+# its packages. A public repository's runners cost nothing.
 jobs:
-  test:
-    name: Lint, tests and end-to-end
+  front:
+    name: Frontend (format, types, Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format (Prettier)
+        run: npm run format:check
+
+      - name: Typecheck (svelte-check)
+        run: npm run check
+
+      - name: Frontend tests (Vitest)
+        run: npm test
+
+  windows-lint:
+    name: Windows (Rust format and Clippy)
     runs-on: windows-latest
-    # Its steps took 40 min at 1.8.3 (Rust tests ~14, end-to-end ~18): 45 left no room for a slow runner.
-    timeout-minutes: 60
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      # whisper-rs generates its bindings with libclang: the runner's LLVM (cmake is there too).
+      - name: libclang for whisper.cpp
+        shell: bash
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Rust format
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+  windows-build:
+    name: Windows (build)
+    runs-on: windows-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
@@ -35,33 +90,75 @@ jobs:
         shell: bash
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
 
+      # The cache of the one Windows job there was (named `test`): its dependencies are those of these builds.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: test
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Format (Prettier)
-        run: npm run format:check
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
 
-      - name: Typecheck (svelte-check)
-        run: npm run check
-
-      - name: Frontend tests (Vitest)
-        run: npm test
-
-      - name: Rust format
+      # The test binaries, with what they run beside them (escouade-hook, examples/fake_codex): built once, run by
+      # the two windows-rust runners.
+      - name: Rust tests, built once (nextest archive)
         working-directory: src-tauri
-        run: cargo fmt --check
+        run: cargo nextest archive --profile ci --archive-file ../nextest-windows.tar.zst
 
-      - name: Clippy
+      - name: Build the app for end-to-end tests
+        run: npx tauri build --debug --no-bundle
+
+      - name: Upload the Rust tests
+        uses: actions/upload-artifact@v7
+        with:
+          name: nextest-windows
+          path: nextest-windows.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+      # The app and its hook (looked for beside it): what the end-to-end tests drive.
+      - name: Upload the app
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-windows
+          path: |
+            src-tauri/target/debug/escouade.exe
+            src-tauri/target/debug/escouade-hook.exe
+          retention-days: 1
+
+  windows-rust:
+    name: Windows (Rust tests ${{ matrix.part }}/2)
+    needs: windows-build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The fake harnesses of the tests (tests/fixtures) are Node scripts, with Node's own modules only.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: rustup toolchain install
 
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - name: Download the Rust tests
+        uses: actions/download-artifact@v7
+        with:
+          name: nextest-windows
 
       # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
       # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
@@ -72,22 +169,44 @@ jobs:
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+        # Extracted where the build put it (src-tauri/target, the same path on every Windows runner): the paths cargo
+        # wrote into the tests (`CARGO_BIN_EXE_escouade-hook`, the fake codex beside them) are right as they are.
         run: |
           set +e
-          cargo nextest run --profile ci 2>&1 | tee nextest.log
+          cargo nextest run --archive-file ../nextest-windows.tar.zst --workspace-remap . --extract-to . --extract-overwrite \
+            --profile ci --partition count:${{ matrix.part }}/2 2>&1 | tee nextest.log
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
-      # From here on, whatever the Rust tests did (the job fails all the same): a failure there
-      # must not hide what the end-to-end tests say, and the other way round.
-      - name: Build the app for end-to-end tests
-        if: ${{ !cancelled() }}
-        run: npx tauri build --debug --no-bundle
+  windows-e2e:
+    name: Windows (end-to-end ${{ matrix.shard }}/3)
+    needs: windows-build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the app
+        uses: actions/download-artifact@v7
+        with:
+          name: app-windows
+          path: src-tauri/target/debug
 
       # Surfaced as an annotation: the end-to-end tests need the Evergreen WebView2 runtime.
       - name: WebView2 runtime
-        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $id = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
@@ -99,7 +218,6 @@ jobs:
       # and CI runners are elevated: open the app's DevTools port through the machine policy instead,
       # with the options that keep its window drawing out of sight (RENDER_UNSEEN in tests/e2e/fixture.ts).
       - name: Open the app's WebView2 DevTools port
-        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
@@ -107,21 +225,20 @@ jobs:
           New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling' -PropertyType String -Force | Out-Null
 
       # A test that fails runs again twice (playwright.config.ts): the one that passes then is reported
-      # as flaky, and its trace is kept.
+      # as flaky, and its trace is kept. Each runner takes a third of the tests (Playwright's shards).
       - name: End-to-end tests (Playwright over WebView2)
-        if: ${{ !cancelled() }}
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
           # As in the environment of an agent of Escouade: the tests must not depend on it.
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/3
 
       # The traces of the tests that failed, or that ran again (there is none when all passed first time).
       - name: Upload Playwright traces
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
@@ -154,12 +271,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Typecheck (svelte-check)
-        run: npm run check
-
-      - name: Frontend tests (Vitest)
-        run: npm test
 
       - name: Clippy
         working-directory: src-tauri
@@ -219,7 +330,7 @@ jobs:
           retention-days: 7
 
   macos:
-    name: macOS (lint, tests and app bundle)
+    name: macOS (lint and tests)
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -240,12 +351,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Typecheck (svelte-check)
-        run: npm run check
-
-      - name: Frontend tests (Vitest)
-        run: npm test
 
       - name: Clippy
         working-directory: src-tauri
@@ -271,6 +376,31 @@ jobs:
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
+
+  macos-bundle:
+    name: macOS (app bundle)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      # The cache of the macOS job: the dependencies built there serve the bundle too.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: macos
+
+      - name: Install dependencies
+        run: npm ci
 
       # The Release builds one app for Apple Silicon and Intel Macs: whisper.cpp (dictation) is built for Intel
       # here too, as it is there (a check builds what build scripts build, cmake's whisper.cpp among them).
