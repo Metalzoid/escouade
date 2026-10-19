@@ -2,13 +2,17 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
+
 ## [1.8.2] — 2026-10-19
+
+### Ajouts
+
+- En conversation vocale, l'agent pose ses questions à la voix, une par une, même quand il en a plusieurs. Les choix s'affichent à l'écran : tu réponds en disant le choix, son numéro ou ta propre réponse.
 
 ### Modifications
 
-- En conversation vocale, les questions de l’agent sont posées à la voix **une à une** : une demande de plusieurs questions (Claude Code en pose jusqu’à quatre d’un coup) ou à choix multiples ne met plus la conversation en pause. La voix dit la question (« Question 2 sur 3. ») sans lire ses choix, qui s’affichent sous l’orbe, numérotés ; ta réponse dite y répond (une option par son nom ou son rang, plusieurs pour un choix multiple, sinon ta réponse libre), se voit cochée dans la carte, puis vient la suivante, et toutes les réponses partent ensemble après la dernière. Un clic ou le numéro d’un choix répond aussi. Une réponse pas comprise est reposée deux fois au plus avant la pause ; « répète » et « annule » marchent. Une question posée sans choix (Copilot CLI), ou par un agent de ticket pendant que la conversation écoute, est maintenant posée à la voix elle aussi.
-
-- Réglages › Harness n’a plus la ligne « État » ni son bouton « Se connecter… », un reste d’avant les comptes ajoutés : les comptes de chaque harness se connectent dans Réglages › Comptes, où chacun a son état. Sous la version d’un harness dont aucun compte n’est connecté, une phrase renvoie à l’onglet Comptes.
+- Réglages › Harness n'a plus de bouton « Se connecter… » : chaque compte se connecte depuis Réglages › Comptes.
 
 ## [1.8.1] — 2026-10-19
 
