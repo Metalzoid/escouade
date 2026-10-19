@@ -1834,8 +1834,13 @@ impl<R: Runtime> Core<R> {
         let (mcp_enabled, before) = (s.mcp_enabled, self.lang());
         let telemetry = s.telemetry;
         let remote_all = s.remote_control_all;
+        let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
         let mcp_was_enabled = before_settings.mcp_enabled;
+        if self_update && !before_settings.claude_self_update {
+            // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
+            crate::selfupdate::poke();
+        }
         if before_settings.remote_control_all != remote_all {
             // Every agent gets Remote Control or loses it, on tasks of their own: the save does
             // not wait for the processes it starts.
@@ -2537,13 +2542,8 @@ impl<R: Runtime> Core<R> {
         let harness = engine::of(&h.lock().meta);
         // An account removed meanwhile: another of its harness, else refused (ESC-128).
         let account = self.agent_account(h)?;
-        let program = accounts::program(&account, &settings).ok_or_else(|| {
-            let name = harness.name();
-            anyhow!(tr!(
-                "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "{name} not found. Install it or give its path in the settings."
-            ))
-        })?;
+        let program = accounts::program(&account, &settings)
+            .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
         // A version older than the tested ones is refused, with its reason.
         engine::registry::check(harness, &program).await?;
         // Read already by the check: kept with what its models say.

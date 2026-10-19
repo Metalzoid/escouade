@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
+## [Non publié]
+
+### Corrections
+
+- Arrêter un agent ne peut plus couper une mise à jour de Claude Code à mi-chemin, ce qui pouvait faire disparaître la commande `claude` : Escouade le met à jour lui-même, chaque jour (interrupteur dans Réglages › Harness). Un Claude Code introuvable est dit avec la commande qui le réinstalle.
+
 ## [1.8.4] — 2026-10-19
 
 ### Corrections

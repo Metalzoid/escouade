@@ -145,6 +145,20 @@ export default {
       'Escouade : la conversation d’Escouade. Terminal du harness : l’interface du harness elle-même (celle de Claude Code…), dans un terminal. Chaque agent change de vue depuis son en-tête ; les agents de ticket, et ceux d’un harness sans vue terminal, restent dans la vue d’Escouade.',
     terminalViewEscouade: 'Escouade',
     terminalViewHarness: 'Terminal du harness',
+    /** Escouade's update of Claude Code (ESC-133). */
+    selfUpdate: 'Mettre à jour Claude Code automatiquement',
+    selfUpdateDesc:
+      'Escouade lance claude update à son démarrage puis chaque jour, à part de ses agents. Les process de Claude Code qu’il lance ne se mettent plus à jour seuls : leur arrêt pouvait couper une installation à mi-chemin.',
+    selfUpdateStates: {
+      waiting: 'Pas encore lancée depuis le démarrage d’Escouade.',
+      running: 'Mise à jour en cours…',
+      upToDate: 'À jour ({version}).',
+      upToDateNoVersion: 'À jour.',
+      updated: 'Mis à jour en {version} (depuis la {from}).',
+      failed: 'Échec de la mise à jour : {line}',
+      off: 'Coupée : Claude Code n’est plus mis à jour, ni par Escouade ni par lui-même. Lance claude update de temps en temps.',
+      userOff: 'Coupée dans Claude Code lui-même ({line}) : Escouade ne le met pas à jour non plus.',
+    },
     todoTools: 'Les agents tiennent une liste de tâches',
     todoToolsDesc:
       'Donne aux agents l’outil de liste de tâches de Claude Code : s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan » (le modèle n’est pas obligé de s’en servir). S’applique aux agents lancés ensuite.',

@@ -14,9 +14,25 @@ Les problèmes que rencontre le plus souvent Escouade, chacun avec son symptôme
 2. Sinon, le `PATH`, puis les emplacements habituels des installeurs. Sous Windows : `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe` et `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. Sous macOS et Linux : `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude` et `/usr/local/bin/claude`.
 3. Sous Windows, à défaut, un Claude Code installé dans WSL (voir plus bas).
 
+Le message le dit avec la commande qui le réinstalle : « Claude Code est introuvable : réinstalle-le (…), ou indique son chemin dans Réglages › Harness. », à la connexion d’un compte, au lancement d’un agent et dans Réglages › Harness.
+
 **Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Harness (voir les [réglages des harness](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
 
 Un compte Claude peut avoir son propre exécutable (Réglages › Comptes, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
+
+### Claude Code a disparu après une mise à jour interrompue
+
+**Symptôme.** La connexion de chaque compte s’arrête aussitôt, ou Escouade dit « L’installation de Claude Code a été interrompue (il en reste …) ». Dans un terminal, la commande `claude` n’existe plus.
+
+**Cause.** Une mise à jour de Claude Code installé par npm (`npm install -g`) a été coupée à mi-chemin : npm avait retiré l’ancien `claude` et n’a pas posé le nouveau. Il en reste un lien temporaire `.claude-XXXX` à côté de l’ancien (dans `/opt/homebrew/bin` par exemple), ou l’ancien paquet mis de côté (`@anthropic-ai/.claude-code-XXXX`). Jusqu’à la 1.8.4, un `claude` lancé par Escouade pouvait commencer cette mise à jour, et Escouade la couper en l’arrêtant ; depuis, ses `claude` ne se mettent plus à jour eux-mêmes et Escouade lance `claude update` à part (voir les [réglages des harness](settings-claude-code)).
+
+**Solution.** Dans un terminal, relance l’installation :
+
+```sh
+npm install -g @anthropic-ai/claude-code
+```
+
+Si npm refuse (`ENOTEMPTY`), supprime d’abord ce qui reste (le chemin que donne le message), puis relance. Escouade retrouve Claude Code tout seul.
 
 ### Claude Code est introuvable quand l’app démarre depuis le Finder (macOS)
 

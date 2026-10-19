@@ -31,6 +31,9 @@ pub use claude::{
     catalog as claude_catalog, read_models as claude_read_models, told_auto as claude_told_auto,
     told_effort as claude_told_effort, told_model as claude_told_model, CLAUDE,
 };
+pub use claude::{
+    interrupted_line as claude_interrupted_line, missing_line as claude_missing_line,
+};
 pub(crate) use codex::git as codex_git;
 pub use codex::CODEX;
 #[cfg(test)]
@@ -52,7 +55,7 @@ pub use mcp::Escouade;
 #[cfg(test)]
 pub(crate) use opencode::fake_opencode;
 pub use opencode::OPENCODE;
-pub use program::{Located, Program};
+pub use program::{Launch, Located, Program};
 pub use terminal::TerminalView;
 
 #[cfg(test)]
@@ -288,6 +291,28 @@ pub enum StartLost {
     ForkPoint,
 }
 
+/// Why a harness cannot be started, its program not found, in `lang`: for Claude Code, its
+/// installation cut half-way or not found, with the command that puts it back (ESC-133).
+pub fn missing_line(id: crate::model::EngineId, lang: crate::i18n::Lang) -> String {
+    if id == crate::model::EngineId::Claude {
+        return claude::missing_line(lang);
+    }
+    let name = by_id(id).name();
+    tr_in!(
+        lang,
+        "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
+        "{name} not found. Install it or give its path in the settings."
+    )
+}
+
+/// `Engine::no_self_update` as variables to give a process.
+pub fn no_self_update_env(engine: &dyn Engine) -> impl Iterator<Item = (String, String)> {
+    engine
+        .no_self_update()
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+}
+
 /// A harness: Claude Code, then Codex, Copilot CLI, Cursor CLI, OpenCode.
 pub trait Engine: Send + Sync {
     /// Its id, as the data keeps it (`claude`).
@@ -337,6 +362,13 @@ pub trait Engine: Send + Sync {
     /// What tells its accounts apart (`registry::AccountStore`): for Claude Code, a configuration
     /// folder of their own given by `CLAUDE_CONFIG_DIR`.
     fn accounts(&self) -> registry::AccountStore;
+    /// The variables every process of it is given so that it never updates itself (ESC-133):
+    /// Escouade stops its processes with their whole tree, so an update it started (`npm install
+    /// -g` under Claude Code) would be cut half-way, the program gone. Escouade updates it itself
+    /// (`selfupdate`).
+    fn no_self_update(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
 
     /// Its terminal view (« Vue <harness> ») is its interface joined to the agent's process
     /// (`EngineProcess::attach`), which goes on: both views work at once (OpenCode). False: its

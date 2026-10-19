@@ -51,6 +51,51 @@ const INSTALL: Install = Install {
     unix: "curl -fsSL https://claude.ai/install.sh | bash",
 };
 
+/// What turns off Claude Code's own update (docs: « Disable auto-updates »): only its check in the
+/// background, `claude update` still works. Claude Code also leaves its plugins as they are then
+/// (`FORCE_AUTOUPDATE_PLUGINS` would bring their update back), nothing else.
+pub const NO_AUTOUPDATER: (&str, &str) = ("DISABLE_AUTOUPDATER", "1");
+
+/// The command that puts back an installation of Claude Code by npm.
+pub const NPM_INSTALL: &str = "npm install -g @anthropic-ai/claude-code";
+
+/// What is said when no `claude` is found (ESC-133), in `lang`: its installation by npm cut
+/// half-way, what it left and the command that puts it back (`locate::interrupted_install`), else
+/// not found, with its installer.
+pub fn missing_line(lang: Lang) -> String {
+    missing_line_with(lang, locate::interrupted_install().as_deref())
+}
+
+/// What is said of a `claude` that stopped before it did anything, when an installation of it by
+/// npm was cut half-way (ESC-133): what it left, and the command that puts it back.
+pub fn interrupted_line(lang: Lang) -> Option<String> {
+    let left = locate::interrupted_install()?;
+    Some(missing_line_with(lang, Some(&left)))
+}
+
+/// `missing_line`, `leftover` what an installation cut half-way left.
+pub fn missing_line_with(lang: Lang, leftover: Option<&std::path::Path>) -> String {
+    let npm = NPM_INSTALL;
+    if let Some(left) = leftover {
+        let left = left.display();
+        return tr_in!(
+            lang,
+            "L’installation de Claude Code a été interrompue (il en reste {left}) : relance `{npm}` dans un terminal.",
+            "Claude Code’s installation was interrupted ({left} is left over): run `{npm}` again in a terminal."
+        );
+    }
+    let install = if cfg!(windows) {
+        INSTALL.windows
+    } else {
+        INSTALL.unix
+    };
+    tr_in!(
+        lang,
+        "Claude Code est introuvable : réinstalle-le (`{install}`, ou `{npm}`), ou indique son chemin dans Réglages › Harness.",
+        "Claude Code can’t be found: install it again (`{install}`, or `{npm}`), or set its path in Settings › Harness."
+    )
+}
+
 /// The aliases the composer offers: Claude Code runs the latest model of the family it knows
 /// (`MODELS` of `src/lib/models.ts`, which names them once it has told which version).
 const MODELS: [(&str, &str); 4] = [
@@ -514,6 +559,10 @@ impl Engine for Claude {
         }
     }
 
+    fn no_self_update(&self) -> &'static [(&'static str, &'static str)] {
+        &[NO_AUTOUPDATER]
+    }
+
     fn caps(&self) -> EngineCaps {
         caps()
     }
@@ -909,6 +958,34 @@ impl EngineProcess for ClaudeProcess {
 mod tests {
     use super::*;
     use crate::model::{Criterion, ModelInfo, Ticket};
+
+    #[test]
+    fn a_claude_not_found_is_said_with_what_puts_it_back() {
+        use crate::i18n::Lang::{En, Fr};
+        let install = if cfg!(windows) {
+            "irm https://claude.ai/install.ps1 | iex"
+        } else {
+            "curl -fsSL https://claude.ai/install.sh | bash"
+        };
+        assert_eq!(
+            missing_line_with(Fr, None),
+            format!("Claude Code est introuvable : réinstalle-le (`{install}`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.")
+        );
+        assert_eq!(
+            missing_line_with(En, None),
+            format!("Claude Code can’t be found: install it again (`{install}`, or `npm install -g @anthropic-ai/claude-code`), or set its path in Settings › Harness.")
+        );
+        // Its installation by npm cut half-way, as on the client's Mac.
+        let left = std::path::Path::new("/opt/homebrew/bin/.claude-Xa3k9");
+        assert_eq!(
+            missing_line_with(Fr, Some(left)),
+            "L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal."
+        );
+        assert_eq!(
+            missing_line_with(En, Some(left)),
+            "Claude Code’s installation was interrupted (/opt/homebrew/bin/.claude-Xa3k9 is left over): run `npm install -g @anthropic-ai/claude-code` again in a terminal."
+        );
+    }
 
     #[test]
     fn auto_mode_is_taken_by_every_model_but_a_haiku_older_than_5_as_the_composer_offers_it() {

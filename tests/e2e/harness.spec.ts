@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { addProject, expect, FAKE, send, test } from './fixture';
 
@@ -24,6 +25,62 @@ test('Réglages › Harness shows Claude Code’s executable and version, and se
   // Its × (Escape may go to the sign-in's terminal once it has the focus).
   await signIn.getByRole('button', { name: 'Fermer' }).click();
   await expect(signIn).toHaveCount(0);
+});
+
+test('Escouade runs claude update at its start, apart from its agents, whose own update is off; Réglages › Harness says what it said (ESC-133)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  await send(page, 'Bonjour');
+  await expect(page.locator('.card .name').first()).toHaveText('bonjour-fake');
+  // Every claude launched for it (the agent, the naming of the agent, the reading of the models): its own update off.
+  expect(app.launches().length).toBeGreaterThan(0);
+  expect(app.launches().map((l) => l.autoUpdater)).toEqual(app.launches().map(() => '1'));
+  // `claude update`, a few seconds after the start, with nothing that turns it off.
+  const updates = path.join(app.root, 'fake-claude.jsonl.update.jsonl');
+  const said = () =>
+    fs.existsSync(updates)
+      ? fs
+          .readFileSync(updates, 'utf8')
+          .trim()
+          .split('\n')
+          .map((l) => JSON.parse(l))
+      : [];
+  await expect.poll(said, { timeout: 30_000 }).toContainEqual({ done: true });
+  expect(said()[0]).toMatchObject({ started: true, autoUpdater: null });
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Harness' }).click();
+  const claude = settings.getByRole('region', { name: 'Claude Code' });
+  await expect(claude.getByRole('switch', { name: 'Mettre à jour Claude Code automatiquement' })).toHaveAttribute('aria-checked', 'true');
+  await expect(claude.getByRole('status')).toHaveText('À jour (2.1.301).');
+});
+
+test.describe('with Claude Code’s own update turned off by the user', () => {
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        // As Claude Code's own migration writes it, in Principal's settings.json.
+        fs.mkdirSync(path.join(root, 'claude'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'claude', 'settings.json'), JSON.stringify({ env: { DISABLE_AUTOUPDATER: '1' } }));
+      },
+    },
+  });
+
+  test('Escouade does not update it either, and says so (ESC-133)', async ({ app }) => {
+    const { page } = app;
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Harness' }).click();
+    const claude = settings.getByRole('region', { name: 'Claude Code' });
+    await expect(claude.getByRole('status')).toHaveText(
+      'Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.',
+    );
+    // Past the start's few seconds: never run.
+    await page.waitForTimeout(8000);
+    expect(fs.existsSync(path.join(app.root, 'fake-claude.jsonl.update.jsonl'))).toBe(false);
+  });
 });
 
 test('« Modèle des textes rédigés » offers Claude Haiku alone with Claude Code alone, and Haiku names a new agent', async ({ app }) => {
@@ -56,7 +113,11 @@ test.describe('with no harness found', () => {
     await settings.getByRole('tab', { name: 'Harness' }).click();
     const claude = settings.getByRole('region', { name: 'Claude Code' });
     await expect(claude.locator('[data-engine-state="absent"]')).toHaveText('Introuvable');
-    await expect(claude.getByText('irm https://claude.ai/install.ps1 | iex')).toBeVisible();
+    await expect(claude.getByText('irm https://claude.ai/install.ps1 | iex', { exact: true })).toBeVisible();
+    // Said with what puts it back (ESC-133), by the installation's row and by its update's.
+    const gone =
+      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
+    await expect(claude.getByText(gone, { exact: true })).toHaveCount(2);
     // No harness to write the texts: « Modèle des textes rédigés » is not offered.
     await settings.getByRole('tab', { name: 'Application' }).click();
     await expect(settings.getByRole('heading', { name: 'Langue' })).toBeVisible();

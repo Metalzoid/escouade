@@ -379,9 +379,13 @@ fn fail_checkouts(repo: &Path) {
     }
 }
 
-/// What the app answers when Claude Code cannot be found.
-const NO_CLAUDE: &str =
-    "Erreur : Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.";
+/// What the app answers when Claude Code cannot be found (with its repair, ESC-133).
+fn no_claude() -> String {
+    format!(
+        "Erreur : {}",
+        crate::engine::missing_line(EngineId::Claude, crate::i18n::Lang::Fr)
+    )
+}
 
 #[tokio::test]
 async fn tickets_get_keys_from_the_project_that_are_never_reused() {
@@ -1967,16 +1971,22 @@ async fn a_turn_stopped_by_the_usage_limit_leaves_a_blocked_ticket_as_it_is() {
             t.column = Column::Doing;
             t.iteration = 1;
             t.agent_id = Some(a.clone());
-            t.blocked = Some(NO_CLAUDE.into());
+            t.blocked = Some(no_claude());
             Ok(())
         })
         .unwrap();
     h.core.agent(&a).unwrap().lock().meta.resume_at = Some(now_ms() + 3_600_000);
     h.core.turn_ended(&a, TurnEnd::Limited).await;
-    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some(NO_CLAUDE));
+    assert_eq!(
+        h.ticket(&t.id).blocked.as_deref(),
+        Some(no_claude().as_str())
+    );
     h.core.agent(&a).unwrap().lock().meta.resume_at = None;
     h.core.turn_ended(&a, TurnEnd::Limited).await;
-    assert_eq!(h.ticket(&t.id).blocked.as_deref(), Some(NO_CLAUDE));
+    assert_eq!(
+        h.ticket(&t.id).blocked.as_deref(),
+        Some(no_claude().as_str())
+    );
     assert!(h.alerts().is_empty(), "{:?}", h.alerts());
     // Not blocked, with no resume to wait for, it is.
     h.core
@@ -2399,11 +2409,14 @@ async fn a_ticket_whose_automatic_resume_cannot_be_sent_is_blocked() {
     h.lose_claude();
     h.core.agent(&id).unwrap().lock().meta.resume_at = Some(now_ms() - 1_000);
     h.core.resume_due().await;
-    assert_eq!(h.ticket(&a.id).blocked.as_deref(), Some(NO_CLAUDE));
+    assert_eq!(
+        h.ticket(&a.id).blocked.as_deref(),
+        Some(no_claude().as_str())
+    );
     assert!(h
         .alerts()
         .iter()
-        .any(|x| x.ends_with(&format!("DEM-1 bloqué : {NO_CLAUDE}"))));
+        .any(|x| x.ends_with(&format!("DEM-1 bloqué : {}", no_claude()))));
 }
 
 #[tokio::test]
@@ -2688,7 +2701,7 @@ async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_it() {
             t.column = Column::Doing;
             t.iteration = 1;
             t.agent_id = Some(a.clone());
-            t.blocked = Some(NO_CLAUDE.into());
+            t.blocked = Some(no_claude());
             Ok(())
         })
         .unwrap();
@@ -2928,7 +2941,7 @@ async fn a_ticket_stopped_mid_start_goes_back_to_do_at_the_next_start() {
     // A blocked one shows why, and waits for "Reprendre".
     h.core
         .edit_ticket(&ids[3], |t| {
-            t.blocked = Some(NO_CLAUDE.into());
+            t.blocked = Some(no_claude());
             Ok(())
         })
         .unwrap();
@@ -2955,7 +2968,7 @@ async fn a_ticket_stopped_mid_start_goes_back_to_do_at_the_next_start() {
         let blocked = h.ticket(&ids[3]);
         assert_eq!(
             (blocked.column, blocked.blocked.as_deref()),
-            (Column::Doing, Some(NO_CLAUDE))
+            (Column::Doing, Some(no_claude().as_str()))
         );
     }
     h.wait("the agents made for them archived", |h| {
@@ -8160,7 +8173,7 @@ async fn resuming_a_ticket_whose_agent_never_got_its_first_message_sends_its_fil
             t.column = Column::Doing;
             t.iteration = 1;
             t.agent_id = Some(a.clone());
-            t.blocked = Some(NO_CLAUDE.into());
+            t.blocked = Some(no_claude());
             Ok(())
         })
         .unwrap();

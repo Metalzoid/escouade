@@ -348,9 +348,9 @@ impl<R: Runtime> Core<R> {
             });
         }
         let program = accounts::program(account, settings).ok_or_else(|| {
-            anyhow!(tr!(
-                "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "Claude Code not found. Install it or give its path in the settings."
+            anyhow!(crate::engine::missing_line(
+                crate::model::EngineId::Claude,
+                crate::i18n::ui()
             ))
         })?;
         let (env, home) = self.claude_app_env(account, settings);

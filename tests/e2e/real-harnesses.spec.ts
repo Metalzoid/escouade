@@ -83,8 +83,11 @@ function realEnv(h: Harness | 'handover'): Record<string, string> {
 }
 
 function realSettings(h: Harness | 'handover', root: string): Record<string, unknown> {
-  // Claude Code on Haiku; the others on their default model.
-  const s: Record<string, unknown> = h === 'claude' || h === 'handover' ? { defaultModel: 'haiku' } : {};
+  // Claude Code on Haiku; the others on their default model. Never `claude update` of the machine's Claude Code (ESC-133).
+  const s: Record<string, unknown> = {
+    claudeSelfUpdate: false,
+    ...(h === 'claude' || h === 'handover' ? { defaultModel: 'haiku' } : {}),
+  };
   if (h === 'claude') s.claudePath = process.env.ESCOUADE_REAL_CLAUDE;
   if (h === 'handover') s.claudePath = QUOTA;
   // The texts (commit messages…) written by the harness tried, Claude Code apart (Haiku).

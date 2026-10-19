@@ -90,6 +90,10 @@ pub struct Settings {
     /// for the agents that start (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, see `Settings::agent_env`), so
     /// that their progress can be shown (`plan`).
     pub todo_tools: bool,
+    /// « Mettre à jour Claude Code automatiquement » (ESC-133): Escouade runs `claude update` at its
+    /// start, then once a day, in a process of its own (`selfupdate`), every `claude` it launches
+    /// having its own update turned off. Unless the user turned it off in Claude Code itself.
+    pub claude_self_update: bool,
     /// « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent
     /// goes on by itself on the account `accounts::pick` gives, when another is usable, rather than
     /// wait for its own to reset. Off unless the user switches it on (not verified with a second
@@ -494,6 +498,7 @@ impl Default for Settings {
             accounts: Vec::new(),
             engine_order: Vec::new(),
             todo_tools: true,
+            claude_self_update: true,
             switch_on_limit: false,
             handover_on_limit: false,
             handover_models: Default::default(),

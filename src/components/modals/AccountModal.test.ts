@@ -445,6 +445,29 @@ describe('AccountModal', () => {
     await waitFor(() => expect(screen.queryByText('Claude Code s’est arrêté avant la connexion.')).not.toBeInTheDocument());
   });
 
+  it('says that Claude Code is gone, or that its installation was cut, rather than that it stopped (ESC-133)', async () => {
+    const gone =
+      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
+    const cut =
+      'L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal.';
+    let why: string | null = gone;
+    const b = backend([OUT], { account_sign_in_ended: () => why });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    render(AccountModal, { accountId: 'pro' });
+    await waitFor(() => expect(term.opened).toEqual(['pro']));
+    app.exitedTerms['term-1'] = 1;
+    expect(await screen.findByText(gone)).toBeInTheDocument();
+    expect(screen.queryByText('Claude Code s’est arrêté avant la connexion.')).not.toBeInTheDocument();
+    expect(b.called('account_sign_in_ended').at(-1)!.args).toEqual({ id: 'pro' });
+    // Started again, it stops again: asked again.
+    why = cut;
+    await userEvent.click(screen.getByRole('button', { name: 'Relancer' }));
+    await waitFor(() => expect(term.opened).toEqual(['pro', 'pro']));
+    await waitFor(() => expect(screen.queryByText(gone)).not.toBeInTheDocument());
+    app.exitedTerms['term-2'] = 1;
+    expect(await screen.findByText(cut)).toBeInTheDocument();
+  });
+
   it('says why the account was not made, and stays on the form', async () => {
     backend([OUT], { account_create: () => Promise.reject('Un compte s’appelle déjà « Pro ».') });
     render(AccountModal, {});

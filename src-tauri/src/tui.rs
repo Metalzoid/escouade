@@ -1234,10 +1234,9 @@ impl<R: Runtime> Core<R> {
         let harness = crate::engine::of(&h.lock().meta);
         let (view, harness_name) = view_of(&h.lock().meta)?;
         let program = accounts::program(&account, &settings).ok_or_else(|| {
-            anyhow!(tr!(
-                "{harness} introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "{harness} not found. Install it or give its path in the settings.",
-                harness = harness_name
+            anyhow!(crate::engine::missing_line(
+                account.engine,
+                crate::i18n::ui()
             ))
         })?;
         // A version older than the tested ones is refused, with its reason.

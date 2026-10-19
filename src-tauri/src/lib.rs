@@ -64,6 +64,7 @@ mod process_tests;
 mod pty;
 mod resources;
 mod search;
+mod selfupdate;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
@@ -310,6 +311,8 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(move || warm.warm_claude());
             // What the `claude` of each account tells of its models, without a turn (ESC-124).
             core.read_all_claude_models();
+            // Claude Code updated by Escouade, apart from its agents (ESC-133).
+            selfupdate::watch(core.clone());
             updates::watch(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 // « Zoom de l’interface », before the window shows: never drawn at 100 % first, nor
@@ -372,6 +375,8 @@ pub fn run() {
             commands::set_ui,
             commands::save_settings,
             commands::claude_locate,
+            commands::claude_update_status,
+            commands::account_sign_in_ended,
             commands::claude_found,
             commands::engines,
             commands::account_shareable,

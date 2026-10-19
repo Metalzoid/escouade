@@ -11,7 +11,7 @@ Un groupe par harness, sous son nom :
 | « Chemin de l’exécutable » | Le programme du harness (voir ci-dessous pour Claude Code). |
 | « Version » | La version trouvée, et si Escouade a été testé avec elle : une version plus ancienne est refusée, avec sa raison et la commande qui la met à jour ; une plus récente est utilisée, avec un avertissement. Quand aucun compte de ce harness n’est connecté, la ligne ajoute « Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes. » |
 | « Modèles » (OpenCode) | Les modèles des fournisseurs connectés à OpenCode, avec une recherche : les favoris d’abord, puis un groupe par fournisseur. L’étoile d’un modèle en fait un favori, qui vient en premier dans le menu des modèles de ses agents. |
-| « Installation » | Pour un harness introuvable : la commande qui l’installe (Claude Code : `irm https://claude.ai/install.ps1 \| iex` sous Windows, `curl -fsSL https://claude.ai/install.sh \| bash` sous macOS et Linux). |
+| « Installation » | Pour un harness introuvable : la commande qui l’installe (Claude Code : `irm https://claude.ai/install.ps1 \| iex` sous Windows, `curl -fsSL https://claude.ai/install.sh \| bash` sous macOS et Linux). Pour Claude Code, la ligne dit aussi si une installation par npm a été interrompue, avec la commande qui la répare (voir le [dépannage](troubleshooting)). |
 
 Les comptes d’un harness ne se connectent pas ici mais dans l’onglet [« Comptes »](settings-accounts) : chacun y a son état et son bouton « Se connecter… ». Un harness introuvable n’apparaît que dans cet onglet. Au premier lancement, si aucun n’est trouvé, l’écran d’accueil dit « Aucun harness trouvé » et donne la commande d’installation de chacun ; Escouade marche dès qu’un harness est trouvé.
 
@@ -53,6 +53,18 @@ Champ vide, le texte grisé dit déjà si `claude` est trouvé : « claude (tro
 
 > [!WARNING]
 > Si le `claude` trouvé est dans WSL et que le réseau de WSL est en NAT, un avertissement s’ajoute : le serveur MCP d’Escouade et le suivi de la [vue Claude Code](claude-code-view) n’atteignent pas l’app. Passe WSL en mode miroir (`networkingMode=mirrored` sous `[wsl2]` dans `%UserProfile%\.wslconfig`), puis lance `wsl --shutdown`.
+
+## Mise à jour de Claude Code
+
+Les `claude` qu’Escouade lance ne se mettent pas à jour eux-mêmes : Escouade arrête ses processus avec tout ce qu’ils ont lancé, et un arrêt pouvait couper une mise à jour de Claude Code en cours, au point de faire disparaître la commande `claude` (voir le [dépannage](troubleshooting)). C’est Escouade qui le met à jour.
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Mettre à jour Claude Code automatiquement » | Escouade lance `claude update` quelques secondes après son démarrage, puis une fois par jour tant qu’il est ouvert, à part de ses agents : ni l’arrêt d’un agent ni la fermeture d’Escouade ne l’interrompent. | Activé |
+
+La ligne sous l’interrupteur dit où en est la dernière mise à jour : « À jour (2.1.302). », « Mis à jour en 2.1.302 (depuis la 2.1.301). », « Mise à jour en cours… » ou « Échec de la mise à jour : » suivi de l’erreur. Le [journal de l’app](troubleshooting) le note aussi.
+
+Désactivé, plus rien ne met Claude Code à jour : lance `claude update` toi-même de temps en temps. Si tu as coupé la mise à jour dans Claude Code lui-même (`DISABLE_AUTOUPDATER` ou `DISABLE_UPDATES` dans ton environnement ou dans le `env` de son `settings.json`, ou `autoUpdates: false`), Escouade la laisse coupée, et la ligne le dit : « Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus. »
 
 ## Nouveaux agents
 

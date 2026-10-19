@@ -9,7 +9,7 @@
   import { privacyUrl } from '../../lib/telemetry';
   import { CREDITS_URL } from '../../lib/conversation';
   import { DISCORD_URL, siteUrl } from '../../lib/links';
-  import type { ClaudeLocated, EngineDecl, EngineInfo } from '../../lib/types';
+  import type { ClaudeLocated, ClaudeUpdateStatus, EngineDecl, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -66,6 +66,50 @@
       stale = true;
     };
   });
+  // Where Escouade's update of Claude Code stands (ESC-133): read with the tab, again once the switch is saved, and
+  // every 2 s until its first run ends.
+  let selfUpdate = $state<ClaudeUpdateStatus | null>(null);
+  $effect(() => {
+    if (tab !== 'claude') return;
+    void app.settings.claudeSelfUpdate;
+    let stale = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = async () => {
+      const st = await api.claudeUpdateStatus().catch(() => null);
+      if (stale) return;
+      selfUpdate = st;
+      if (st?.state === 'running' || st?.state === 'waiting') timer = setTimeout(read, 2000);
+    };
+    void read();
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  });
+
+  /** What the last update of Claude Code by Escouade did, or why it is not run; empty when there is nothing to say. */
+  function selfUpdateText(st: ClaudeUpdateStatus | null): string {
+    if (!s.claudeSelfUpdate) return t('settings.claude.selfUpdateStates.off');
+    // Turned on, not saved yet: said once saved.
+    if (!st || st.state === 'off') return '';
+    switch (st.state) {
+      case 'upToDate':
+        return st.version
+          ? t('settings.claude.selfUpdateStates.upToDate', { version: st.version })
+          : t('settings.claude.selfUpdateStates.upToDateNoVersion');
+      case 'updated':
+        return t('settings.claude.selfUpdateStates.updated', { version: st.version ?? '?', from: st.from ?? '?' });
+      case 'failed':
+        return t('settings.claude.selfUpdateStates.failed', { line: st.line ?? '' });
+      case 'userOff':
+        return t('settings.claude.selfUpdateStates.userOff', { line: st.line ?? '' });
+      case 'missing':
+        return st.line ?? '';
+      default:
+        return t(`settings.claude.selfUpdateStates.${st.state}`);
+    }
+  }
+
   /** Each harness: its declaration, and what is found of it once read. */
   const harnesses = $derived(app.engines.map((d) => ({ decl: d, info: infos?.find((i) => i.id === d.id) ?? null })));
   /** The one the path of the settings is for: the default harness, until each has its own. */
@@ -146,10 +190,27 @@
             </Row>
           {/if}
         {:else if own ? located && !located.path : info?.state === 'absent'}
-          <Row label={t('settings.claude.install')} desc={t('settings.claude.installDesc')}>
+          <!-- Claude Code's says whether its installation was cut half-way, with its repair (ESC-133). -->
+          <Row label={t('settings.claude.install')} desc={(info?.state === 'absent' && info.note) || t('settings.claude.installDesc')}>
             <span class="state bad" data-engine-state="absent">{t('settings.claude.states.absent')}</span>
             <code class="mono cmd">{installOf(decl)}</code>
           </Row>
+        {/if}
+        {#if decl.id === 'claude'}
+          {@const said = selfUpdateText(selfUpdate)}
+          <Row label={t('settings.claude.selfUpdate')} desc={t('settings.claude.selfUpdateDesc')}>
+            <Switch label={t('settings.claude.selfUpdate')} bind:on={s.claudeSelfUpdate} />
+          </Row>
+          {#if said}
+            <p
+              class="self-update"
+              class:bad={s.claudeSelfUpdate && (selfUpdate?.state === 'failed' || selfUpdate?.state === 'missing')}
+              data-update-state={s.claudeSelfUpdate ? selfUpdate?.state : 'off'}
+              role="status"
+            >
+              {said}
+            </p>
+          {/if}
         {/if}
       </Group>
     </section>
@@ -406,6 +467,15 @@
     color: var(--wait);
   }
   .state.bad {
+    color: var(--del);
+  }
+  .self-update {
+    margin: 0;
+    padding: 0 16px 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .self-update.bad {
     color: var(--del);
   }
   .cmd {

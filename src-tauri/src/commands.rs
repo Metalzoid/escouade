@@ -211,6 +211,18 @@ pub async fn engines(core: CoreState<'_>) -> Res<Vec<crate::engine::registry::En
     Ok(engines)
 }
 
+/// What stopped the sign-in of an account before it was signed in, when it is known (ESC-133).
+#[tauri::command(async)]
+pub fn account_sign_in_ended(core: CoreState, id: String) -> Option<String> {
+    core.sign_in_ended(&id)
+}
+
+/// Where Escouade's update of Claude Code stands (ESC-133), for « Réglages › Harness ».
+#[tauri::command(async)]
+pub fn claude_update_status(core: CoreState) -> crate::selfupdate::Status {
+    crate::selfupdate::status(&core.settings.read())
+}
+
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
 /// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
 #[tauri::command(async)]

@@ -110,11 +110,11 @@ fn start_reaper(root: &Path) {
 
 /// The handles this process may hand down that it keeps to itself for a while, until dropped.
 #[cfg(windows)]
-struct KeptHere(Vec<windows_sys::Win32::Foundation::HANDLE>);
+pub(crate) struct KeptHere(Vec<windows_sys::Win32::Foundation::HANDLE>);
 
 #[cfg(windows)]
 impl KeptHere {
-    fn std_handles() -> Self {
+    pub(crate) fn std_handles() -> Self {
         use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::Foundation::{
             GetHandleInformation, SetHandleInformation, HANDLE_FLAG_INHERIT,

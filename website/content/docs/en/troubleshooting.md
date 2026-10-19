@@ -14,9 +14,25 @@ The problems Escouade runs into most often, each with its symptom, its cause, an
 2. Otherwise, the `PATH`, then the usual installer locations. On Windows: `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe`, and `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. On macOS and Linux: `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`.
 3. On Windows, failing that, a Claude Code installed in WSL (see below).
 
+The message says so with the command that installs it again: “Claude Code can’t be found: install it again (…), or set its path in Settings › Harness.”, when signing in an account, when starting an agent and in Settings › Harness.
+
 **Fix.** Install Claude Code and sign in, or give its path in Settings › Harness (see the [Harness settings](settings-claude-code)). The field accepts `~` for your home folder, and on Windows you can leave out `.exe` or `.cmd`. The line under the field answers right away: “Found: …” with the path it picked, or “Not found. Give the path to claude.exe, …”. Clear the field to go back to automatic detection (“blank = detect automatically”).
 
 A Claude account can have its own executable (Settings › Accounts, “Executable” field, “The one in the settings” by default). A path that exists but won’t run gives “can’t start” followed by that path.
+
+### Claude Code disappeared after an interrupted update
+
+**Symptom.** Signing in any account stops right away, or Escouade says “Claude Code’s installation was interrupted (… is left over)”. In a terminal, the `claude` command no longer exists.
+
+**Cause.** An update of Claude Code installed with npm (`npm install -g`) was cut halfway: npm had removed the old `claude` and never put the new one in place. A temporary link `.claude-XXXX` is left next to the old one (in `/opt/homebrew/bin` for example), or the old package moved aside (`@anthropic-ai/.claude-code-XXXX`). Up to 1.8.4, a `claude` launched by Escouade could start this update, and Escouade cut it by stopping that process; since then, its `claude` processes no longer update themselves and Escouade runs `claude update` apart (see the [Harness settings](settings-claude-code)).
+
+**Fix.** In a terminal, run the installation again:
+
+```sh
+npm install -g @anthropic-ai/claude-code
+```
+
+If npm refuses (`ENOTEMPTY`), first delete what’s left (the path the message gives), then run it again. Escouade finds Claude Code again by itself.
 
 ### Claude Code is not found when the app starts from the Finder (macOS)
 

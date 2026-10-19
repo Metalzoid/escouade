@@ -12,6 +12,7 @@ import type {
   BranchInfo,
   CheckedUpdate,
   ClaudeLocated,
+  ClaudeUpdateStatus,
   EngineId,
   EngineInfo,
   ClosedProject,
@@ -150,6 +151,8 @@ export const api = {
   locateClaude: (path: string, wslDistro: string) => invoke<ClaudeLocated>('claude_locate', { path, wslDistro }),
   /** Whether Claude Code is found for the account new agents go to, and by the settings' own path (as at the start). */
   claudeFound: () => invoke<{ claudeFound: boolean; claudePathFound: boolean; enginesFound?: EngineId[] }>('claude_found'),
+  /** Where Escouade's update of Claude Code stands (ESC-133). */
+  claudeUpdateStatus: () => invoke<ClaudeUpdateStatus>('claude_update_status'),
   /** Every harness with what is found of it here: its program, version and state (versions read again). */
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
@@ -172,6 +175,8 @@ export const api = {
   /** The account removed, its folder left on the disk; refused while an agent not archived runs on it. */
   accountRemove: (id: string) => invoke<Account[]>('account_remove', { id }),
   accountStatus: (id: string) => invoke<AccountStatus>('account_status', { id }),
+  /** What stopped the account's sign-in before it was signed in, when it is known (its program not found, an installation cut half-way); null otherwise. */
+  accountSignInEnded: (id: string) => invoke<string | null>('account_sign_in_ended', { id }),
   /** The account's `claude` in an interactive terminal, to sign in with (written to and killed as a terminal). */
   accountLogin: (id: string, cols: number, rows: number, onData: (d: ArrayBuffer) => void) => {
     const output = new Channel<ArrayBuffer>();

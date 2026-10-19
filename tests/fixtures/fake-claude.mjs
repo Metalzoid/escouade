@@ -11,9 +11,9 @@
 // "flood 90s" (60 s by default) keeps it busy for that long, as an agent hard at work: a text streamed in small deltas (one
 // every 15 ms) and a tool call with ~1.5 KB of output every ~170 ms, then the turn ends; an interrupt stops it.
 // "flood-real 90s" (60 s by default) plays a busy superpowers agent for that long, timers pacing it: a 40-task plan, then subagents, tool results of 2-30 KB.
-// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools} (its process id, which names a
+// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools, autoUpdater} (its process id, which names a
 // new session of it `sess-<pid>`, its HTTPS_PROXY,
-// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR and CLAUDE_CODE_ENABLE_TODO_TOOLS, null when unset) to $FAKE_CLAUDE_LOG, by
+// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR, CLAUDE_CODE_ENABLE_TODO_TOOLS and DISABLE_AUTOUPDATER, null when unset) to $FAKE_CLAUDE_LOG, by
 // default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
 // With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
@@ -86,6 +86,22 @@ if (argv[0] === '--version') {
   process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION || '2.1.301'} (Claude Code)\n`);
   process.exit(0);
 }
+// `update`, as Escouade runs it apart from its agents (ESC-133), not logged with the launches: FAKE_CLAUDE_UPDATE_LOG
+// (by default <log>.update.jsonl) gets {started, pid, autoUpdater} at once, then {done} once FAKE_CLAUDE_UPDATE_MS (0
+// by default) went by; it then prints FAKE_CLAUDE_UPDATE_SAYS (« Claude Code is up to date (2.1.301) » by default)
+// and ends with FAKE_CLAUDE_UPDATE_EXIT (0 by default).
+if (argv[0] === 'update') {
+  const defaultLog =
+    process.env.FAKE_CLAUDE_LOG || path.join(os.tmpdir(), `fake-claude-${process.cwd().replace(/[^a-zA-Z0-9]/g, '_')}.jsonl`);
+  const log = process.env.FAKE_CLAUDE_UPDATE_LOG || `${defaultLog}.update.jsonl`;
+  const write = (line) => fs.appendFileSync(log, JSON.stringify(line) + '\n');
+  write({ started: true, pid: process.pid, autoUpdater: process.env.DISABLE_AUTOUPDATER ?? null });
+  // Waited for here, nothing below run: the rest of this file is the other commands.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.FAKE_CLAUDE_UPDATE_MS || 0));
+  write({ done: true });
+  fs.writeSync(1, `${process.env.FAKE_CLAUDE_UPDATE_SAYS || 'Claude Code is up to date (2.1.301)'}\n`);
+  process.exit(Number(process.env.FAKE_CLAUDE_UPDATE_EXIT || 0));
+}
 const logFile = process.env.FAKE_CLAUDE_LOG || path.join(os.tmpdir(), `fake-claude-${process.cwd().replace(/[^a-zA-Z0-9]/g, '_')}.jsonl`);
 fs.appendFileSync(
   logFile,
@@ -97,6 +113,7 @@ fs.appendFileSync(
     tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
     configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
     todoTools: process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS ?? null,
+    autoUpdater: process.env.DISABLE_AUTOUPDATER ?? null,
   }) + '\n',
 );
 

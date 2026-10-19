@@ -69,6 +69,7 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'handoverOnLimit',
     'handoverModels',
     'todoTools',
+    'claudeSelfUpdate',
     'idleStopMinutes',
     'attachMaxMb',
     'attachWarnMb',

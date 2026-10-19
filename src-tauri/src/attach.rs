@@ -153,10 +153,9 @@ impl<R: Runtime> Core<R> {
             )
         };
         let program = accounts::program(&account, &settings).ok_or_else(|| {
-            anyhow!(tr!(
-                "{harness} introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "{harness} not found. Install it or give its path in the settings.",
-                harness = harness
+            anyhow!(crate::engine::missing_line(
+                account.engine,
+                crate::i18n::ui()
             ))
         })?;
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();

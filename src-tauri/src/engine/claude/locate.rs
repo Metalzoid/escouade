@@ -119,9 +119,87 @@ fn detect_native() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// What an installation of Claude Code by npm cut half-way left (ESC-133): npm takes the old
+/// `claude` away, then puts the new one by a link written under a temporary name (`.claude-XXXX`
+/// beside it); the old package is moved aside (`@anthropic-ai/.claude-code-XXXX`). Looked for in the
+/// folders of the PATH and where npm puts its programs (Homebrew's, `/usr/local`, Windows'
+/// `%APPDATA%\npm`). None when nothing is left.
+pub fn interrupted_install() -> Option<PathBuf> {
+    let mut bins: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    if cfg!(windows) {
+        bins.extend(dirs::data_dir().map(|d| d.join("npm")));
+    } else {
+        bins.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
+    }
+    leftover_in(&bins)
+}
+
+/// `interrupted_install` in the folders of programs `bins`.
+pub(super) fn leftover_in(bins: &[PathBuf]) -> Option<PathBuf> {
+    let starting = |dir: &Path, prefix: &str| -> Option<PathBuf> {
+        std::fs::read_dir(dir)
+            .ok()?
+            .flatten()
+            .find(|e| e.file_name().to_string_lossy().starts_with(prefix))
+            .map(|e| e.path())
+    };
+    bins.iter().find_map(|bin| {
+        starting(bin, ".claude-").or_else(|| {
+            // npm's packages: beside its programs under Windows, in ../lib on Unix.
+            let modules = if cfg!(windows) {
+                bin.join("node_modules")
+            } else {
+                bin.parent()?.join("lib").join("node_modules")
+            };
+            starting(&modules.join("@anthropic-ai"), ".claude-code-")
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_an_npm_installation_cut_half_way_left_is_found() {
+        let root = crate::paths::test_dir("claude-leftover");
+        let bin = if cfg!(windows) {
+            root.join("npm")
+        } else {
+            root.join("bin")
+        };
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join("node"), "").unwrap();
+        // A folder of programs with nothing of Claude Code's, or a whole one: nothing left.
+        assert_eq!(leftover_in(std::slice::from_ref(&bin)), None);
+        std::fs::write(bin.join("claude"), "").unwrap();
+        assert_eq!(leftover_in(std::slice::from_ref(&bin)), None);
+        // The old package moved aside, never put back.
+        let scope = if cfg!(windows) {
+            bin.join("node_modules")
+        } else {
+            root.join("lib").join("node_modules")
+        }
+        .join("@anthropic-ai");
+        std::fs::create_dir_all(scope.join("claude-code")).unwrap();
+        assert_eq!(leftover_in(std::slice::from_ref(&bin)), None);
+        std::fs::create_dir_all(scope.join(".claude-code-2DTsDk1V")).unwrap();
+        assert_eq!(
+            leftover_in(std::slice::from_ref(&bin)),
+            Some(scope.join(".claude-code-2DTsDk1V"))
+        );
+        // The link under its temporary name, as on the client's Mac (/opt/homebrew/bin).
+        std::fs::remove_file(bin.join("claude")).unwrap();
+        std::fs::write(bin.join(".claude-Xa3k9"), "").unwrap();
+        let other = root.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        assert_eq!(
+            leftover_in(&[other, bin.clone()]),
+            Some(bin.join(".claude-Xa3k9"))
+        );
+    }
 
     fn ubuntu_claude() -> wsl::Program {
         wsl::Program {

@@ -98,6 +98,26 @@
   const files = $derived((shareable ?? []).filter((n) => SHARED_FILES.includes(n)));
   const folders = $derived((shareable ?? []).filter((n) => !SHARED_FILES.includes(n)));
   const exited = $derived(termId !== null && app.exitedTerms[termId] !== undefined);
+  /**
+   * Why its program stopped before the sign-in, when the backend knows it (ESC-133): not found, or for Claude Code its
+   * installation cut half-way, each with what to do. Null: only that it stopped is said.
+   */
+  let endedWhy = $state<string | null>(null);
+  $effect(() => {
+    if (!exited || signedIn || !account) return;
+    const id = account.id;
+    let stale = false;
+    api
+      .accountSignInEnded(id)
+      .then((why) => {
+        if (!stale) endedWhy = why ?? null;
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+      endedWhy = null;
+    };
+  });
   /** What is said of the machine's account: signed in (as whom), added already, or not signed in there. */
   function machineSays(m: MachineAccount | null): string {
     const harness = engineName(engine);
@@ -387,7 +407,7 @@
     {#if termId}<div class="term" bind:this={box}></div>{/if}
     {#if exited && !signedIn}
       <div class="ended">
-        <span>{t('accounts.modal.ended', { harness: engineName(engine) })}</span>
+        <span class:bad={!!endedWhy}>{endedWhy ?? t('accounts.modal.ended', { harness: engineName(engine) })}</span>
         <button class="btn" onclick={restart}>{t('accounts.modal.restart')}</button>
       </div>
     {/if}
@@ -510,6 +530,10 @@
     align-items: center;
     gap: 10px;
     font-size: 12.5px;
+  }
+  .ended .bad {
+    color: var(--del);
+    user-select: text;
   }
   .error {
     margin: 0;

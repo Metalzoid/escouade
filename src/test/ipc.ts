@@ -96,6 +96,7 @@ export const SETTINGS: Settings = {
   mcpEnabled: false,
   mcpPort: 0,
   todoTools: true,
+  claudeSelfUpdate: true,
   terminalView: false,
   remoteControlAll: false,
   uiZoom: 100,

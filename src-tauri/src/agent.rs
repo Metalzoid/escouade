@@ -1296,7 +1296,14 @@ impl AgentRt {
                 format!("\n\n{}", truncate(stderr.trim(), 2000))
             };
             let code = code.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
-            let reason = stopped(i18n::ui(), harness.name(), &code);
+            let mut reason = stopped(i18n::ui(), harness.name(), &code);
+            // A `claude` that stopped before it started: its installation may have been cut
+            // half-way (ESC-133), which is said with its repair.
+            if !self.saw_init && harness.id() == EngineId::Claude {
+                if let Some(line) = crate::engine::claude_interrupted_line(i18n::ui()) {
+                    reason = format!("{reason}. {line}");
+                }
+            }
             if resume_failed {
                 // What the process said, else that it stopped: the card says it as the error.
                 let said = if stderr.trim().is_empty() {

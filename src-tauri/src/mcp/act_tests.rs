@@ -2834,13 +2834,19 @@ async fn a_ticket_is_not_sent_back_while_its_agents_account_is_held_back_and_onl
     h.core.mcp.stop();
 }
 
+/// Claude Code nowhere to be found, as the app says it (with its repair, ESC-133).
+fn no_claude() -> String {
+    crate::engine::missing_line(crate::model::EngineId::Claude, crate::i18n::Lang::Fr)
+}
+
 /// The block of a ticket whose agent got no message: Claude Code is nowhere to be found.
-const NO_CLAUDE_BLOCK: &str =
-    "Erreur : Claude Code introuvable. Installe-le ou indique son chemin dans les réglages.";
+fn no_claude_block() -> String {
+    format!("Erreur : {}", no_claude())
+}
 
 /// What a tool says when its message failed after the ticket moved.
 fn unsent(key: &str) -> String {
-    format!("{key} a été pris en compte, mais son agent n’a pas reçu le message : Claude Code introuvable. Installe-le ou indique son chemin dans les réglages. Le ticket est bloqué avec cette raison.")
+    format!("{key} a été pris en compte, mais son agent n’a pas reçu le message : {} Le ticket est bloqué avec cette raison.", no_claude())
 }
 
 #[tokio::test]
@@ -2871,7 +2877,7 @@ async fn a_message_that_fails_after_the_ticket_moved_says_so_and_the_ticket_is_b
     let moved = stored(&h, &review.id);
     assert_eq!(
         (moved.column, moved.blocked.as_deref()),
-        (Column::Doing, Some(NO_CLAUDE_BLOCK))
+        (Column::Doing, Some(no_claude_block().as_str()))
     );
     // Resumed: no longer blocked for what it was, blocked for this.
     let (blocked, _) = staffed(&h, &p, "DEM-2", Column::Doing, 2);
@@ -2886,13 +2892,13 @@ async fn a_message_that_fails_after_the_ticket_moved_says_so_and_the_ticket_is_b
     assert_eq!(entry(&h).outcome, "error");
     assert_eq!(
         stored(&h, &blocked.id).blocked.as_deref(),
-        Some(NO_CLAUDE_BLOCK)
+        Some(no_claude_block().as_str())
     );
     // Blocked for the very same reason as before: nothing moved, the failure is a refusal.
     let (same, _) = staffed(&h, &p, "DEM-3", Column::Doing, 3);
     h.core
         .edit_ticket(&same.id, |x| {
-            x.blocked = Some(NO_CLAUDE_BLOCK.into());
+            x.blocked = Some(no_claude_block());
             Ok(())
         })
         .unwrap();
@@ -2906,10 +2912,7 @@ async fn a_message_that_fails_after_the_ticket_moved_says_so_and_the_ticket_is_b
         &same,
     )
     .await;
-    assert_eq!(
-        why,
-        "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages."
-    );
+    assert_eq!(why, no_claude());
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -2933,7 +2936,7 @@ async fn a_conflict_handed_over_whose_message_fails_says_so_and_the_ticket_is_bl
     let moved = stored(&h, &t.id);
     assert_eq!(
         (moved.column, moved.conflict, moved.blocked.as_deref()),
-        (Column::Doing, false, Some(NO_CLAUDE_BLOCK))
+        (Column::Doing, false, Some(no_claude_block().as_str()))
     );
     c.cancel().await.unwrap();
     h.core.mcp.stop();

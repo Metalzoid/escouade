@@ -69,6 +69,8 @@ export interface Settings {
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
   todoTools: boolean;
+  /** « Mettre à jour Claude Code automatiquement »: Escouade runs `claude update` at its start then once a day, apart from its agents, each `claude` it launches having its own update off (ESC-133). */
+  claudeSelfUpdate: boolean;
   /** « Ouvrir les nouveaux agents dans l'interface de Claude Code »: a new agent (not a ticket's) starts in the Claude Code view. */
   terminalView: boolean;
   /** « Remote control pour tous les agents »: every agent of every project is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
@@ -309,6 +311,20 @@ export interface ClaudeLocated {
   nat: boolean;
   /** A `claude` of WSL may be named (under Windows). */
   canWsl: boolean;
+}
+
+/** Where Escouade's update of Claude Code stands (`claude_update_status`, ESC-133). */
+export interface ClaudeUpdateStatus {
+  /** Not run yet, under way, up to date, updated, failed; off by the setting, off by the user in Claude Code itself (`line` says how), or no `claude` found (`line` says what to do). */
+  state: 'waiting' | 'running' | 'upToDate' | 'updated' | 'failed' | 'off' | 'userOff' | 'missing';
+  /** The version it runs (the new one once updated). */
+  version: string | null;
+  /** The version it was updated from. */
+  from: string | null;
+  /** The error in a line, or why it is not run. */
+  line: string | null;
+  /** When it ended, in milliseconds since the epoch. */
+  at: number | null;
 }
 
 /** How a new account shares Principal's items: linked (one change for both accounts) or copied. */

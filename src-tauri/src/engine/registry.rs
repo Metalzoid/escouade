@@ -450,7 +450,8 @@ async fn ask_version(engine: &dyn Engine, program: &Program) -> Option<String> {
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let launch = program.launch(&cwd.to_string_lossy(), &args, &[]).ok()?;
+    let env: Vec<_> = super::no_self_update_env(engine).collect();
+    let launch = program.launch(&cwd.to_string_lossy(), &args, &env).ok()?;
     let mut cmd = tokio::process::Command::new(&launch.program);
     cmd.args(&launch.args).envs(launch.env).current_dir(&cwd);
     #[cfg(windows)]

@@ -125,6 +125,20 @@ export default defineZone('settings', {
       'Escouade: Escouade’s conversation. Harness terminal: the harness’s own interface (Claude Code’s…), in a terminal. Each agent switches views from its header; ticket agents, and those of a harness with no terminal view, stay in Escouade’s view.',
     terminalViewEscouade: 'Escouade',
     terminalViewHarness: 'Harness terminal',
+    /** Escouade's update of Claude Code (ESC-133). */
+    selfUpdate: 'Update Claude Code automatically',
+    selfUpdateDesc:
+      'Escouade runs claude update when it starts, then every day, apart from its agents. The Claude Code processes it launches no longer update themselves: stopping them could cut an installation halfway.',
+    selfUpdateStates: {
+      waiting: 'Not run yet since Escouade started.',
+      running: 'Updating…',
+      upToDate: 'Up to date ({version}).',
+      upToDateNoVersion: 'Up to date.',
+      updated: 'Updated to {version} (from {from}).',
+      failed: 'The update failed: {line}',
+      off: 'Off: Claude Code is no longer updated, neither by Escouade nor by itself. Run claude update from time to time.',
+      userOff: 'Turned off in Claude Code itself ({line}): Escouade doesn’t update it either.',
+    },
     todoTools: 'Agents keep a task list',
     todoToolsDesc:
       'Gives agents Claude Code’s task list tool: if they keep a list, Escouade shows their progress in the “Plan” banner (the model does not have to use it). Applies to agents started afterwards.',

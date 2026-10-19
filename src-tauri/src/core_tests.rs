@@ -9022,6 +9022,42 @@ async fn an_agent_on_a_second_account_goes_through_the_proxy_with_its_folder() {
     );
 }
 
+#[tokio::test]
+async fn every_claude_escouade_launches_has_its_own_update_turned_off() {
+    let h = harness("no-autoupdater");
+    let (p, r) = h.project(false).await;
+    let pro = second_account(&h);
+    // An agent of Principal and one of another account, a one-shot question in the project.
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.turn(&a, "Bonjour").await;
+    let b = agent_on(&h, &p, "pro").await.id;
+    h.turn(&b, "Bonjour").await;
+    h.core.suggest_worktree_steps(&p.id).await.unwrap();
+    let log = h.launch_log(&r);
+    assert!(log.len() >= 3, "{log:?}");
+    assert!(log.iter().any(|l| l["argv"].to_string().contains("\"-p\"")));
+    for launch in &log {
+        assert_eq!(launch["autoUpdater"], json!("1"), "{launch}");
+    }
+    // The reading of an account's models (in the temporary folder, shared with other tests: its
+    // own launches are those with its folder).
+    h.core.read_claude_models("pro").await;
+    let tmp = std::env::temp_dir();
+    let tmp = if cfg!(windows) {
+        tmp
+    } else {
+        tmp.canonicalize().unwrap()
+    };
+    let tmp = PathBuf::from(tmp.to_string_lossy().trim_end_matches(['\\', '/']));
+    let read: Vec<Value> = h
+        .launch_log(&tmp)
+        .into_iter()
+        .filter(|l| l["configDir"] == json!(pro.config_dir))
+        .collect();
+    assert!(!read.is_empty());
+    assert!(read.iter().all(|l| l["autoUpdater"] == json!("1")));
+}
+
 /// The turns of each account over the day, `(account, turns)`, by account.
 fn turns_by_account(h: &Harness, account: Option<&str>) -> Vec<(String, u64)> {
     let mut turns: Vec<_> = h
@@ -9912,16 +9948,21 @@ async fn an_accounts_sign_in_runs_its_claude_with_its_folder_in_a_terminal() {
         .core
         .create_claude_account("Pro", &[], ShareMode::Copy)
         .unwrap();
-    // A `claude` that tells the folder it was given (and on Unix what opens its browser).
+    // A `claude` that tells the folder it was given, its own update turned off (ESC-133), and on
+    // Unix what opens its browser.
     let script = if cfg!(windows) {
         let s = h.dir.join("claude-login.cmd");
-        std::fs::write(&s, "@echo off\r\necho config=[%CLAUDE_CONFIG_DIR%]\r\n").unwrap();
+        std::fs::write(
+            &s,
+            "@echo off\r\necho config=[%CLAUDE_CONFIG_DIR%] update=[%DISABLE_AUTOUPDATER%]\r\n",
+        )
+        .unwrap();
         s
     } else {
         let s = h.dir.join("claude-login");
         std::fs::write(
             &s,
-            "#!/bin/sh\necho \"config=[$CLAUDE_CONFIG_DIR] browser=[$BROWSER]\"\n",
+            "#!/bin/sh\necho \"config=[$CLAUDE_CONFIG_DIR] update=[$DISABLE_AUTOUPDATER] browser=[$BROWSER]\"\n",
         )
         .unwrap();
         #[cfg(unix)]
@@ -9954,11 +9995,11 @@ async fn an_accounts_sign_in_runs_its_claude_with_its_folder_in_a_terminal() {
         ("Pro", "claude", "")
     );
     let expected = if cfg!(windows) {
-        format!("config=[{}]", pro.config_dir)
+        format!("config=[{}] update=[1]", pro.config_dir)
     } else {
         // Escouade's opener, which starts the browser out of the terminal of the sign-in.
         format!(
-            "config=[{}] browser=[{}]",
+            "config=[{}] update=[1] browser=[{}]",
             pro.config_dir,
             h.core.data.browser_opener().display()
         )
@@ -10000,11 +10041,19 @@ async fn an_accounts_sign_in_runs_its_claude_with_its_folder_in_a_terminal() {
             ..pro.clone()
         })
         .unwrap();
+    // With the command that puts it back (ESC-133); the sign-in that ended says the same.
     let e = h.core.claude_login("pro", (80, 24), |_| {}).unwrap_err();
-    assert_eq!(
-        e.to_string(),
-        "Claude Code introuvable. Installe-le ou indique son chemin dans les réglages."
+    let said = e.to_string();
+    assert!(
+        said.starts_with("Claude Code est introuvable : réinstalle-le (")
+            || said.starts_with("L’installation de Claude Code a été interrompue"),
+        "{said}"
     );
+    assert!(
+        said.contains("`npm install -g @anthropic-ai/claude-code`"),
+        "{said}"
+    );
+    assert_eq!(h.core.sign_in_ended("pro"), Some(said));
     let e = h.core.claude_login("parti", (80, 24), |_| {}).unwrap_err();
     assert_eq!(e.to_string(), "compte « parti » introuvable");
 }

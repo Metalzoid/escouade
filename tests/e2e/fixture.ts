@@ -48,6 +48,8 @@ export interface App {
     proxy: string | null;
     configDir: string | null;
     todoTools: string | null;
+    /** `DISABLE_AUTOUPDATER`: its own update off (ESC-133). */
+    autoUpdater: string | null;
   }[];
 }
 

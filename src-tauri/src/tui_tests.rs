@@ -1531,6 +1531,20 @@ async fn in_the_claude_code_view_a_skill_with_arguments_names_the_agent_from_the
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_claude_code_view_starts_without_its_own_update() {
+    // Stopped with its tree when the view closes: an update it started would be cut (ESC-133).
+    let h = harness("tui-no-autoupdater");
+    let id = agent_in_tui(&h).await;
+    let cwd = std::path::PathBuf::from(h.agent(&id).cwd);
+    let launch = h
+        .launch_log(&cwd)
+        .into_iter()
+        .rfind(|l| !l["argv"].to_string().contains("stream-json"))
+        .expect("the interface's launch");
+    assert_eq!(launch["autoUpdater"], serde_json::json!("1"), "{launch}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_interface_refused_escouades_tools_is_started_without_its_server() {
     // « Claude et les agents peuvent piloter Escouade » off: the interface's tools of Escouade are
     // refused, and the server itself denied in the one settings file it is given (its hooks'),

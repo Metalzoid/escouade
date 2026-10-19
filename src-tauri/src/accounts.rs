@@ -605,14 +605,18 @@ pub(crate) fn own_dir(account: &Account) -> Option<&str> {
 /// What the account's harness is launched with besides the network settings
 /// (`Settings::claude_env`): the variable of its configuration folder its harness declares
 /// (`Engine::accounts`: `CLAUDE_CONFIG_DIR`, `CODEX_HOME`), exactly the folder saved, when it
-/// has one. Never for a Principal.
+/// has one (never for a Principal), and, for every account, those that keep it from updating
+/// itself (`Engine::no_self_update`, ESC-133).
 pub fn launch_env(account: &Account) -> Vec<(String, String)> {
-    match engine::by_id(account.engine).accounts() {
-        engine::registry::AccountStore::ConfigDir { var } => own_dir(account)
-            .map(|dir| (var.to_string(), dir.to_string()))
-            .into_iter()
-            .collect(),
-    }
+    let engine = engine::by_id(account.engine);
+    let own = match engine.accounts() {
+        engine::registry::AccountStore::ConfigDir { var } => {
+            own_dir(account).map(|dir| (var.to_string(), dir.to_string()))
+        }
+    };
+    own.into_iter()
+        .chain(engine::no_self_update_env(engine))
+        .collect()
 }
 
 /// The program the account runs: its own when it names one, else the settings' path for Claude
@@ -1893,13 +1897,20 @@ impl<R: Runtime> Core<R> {
                     .claude_account_status(&account.id)
                     .await
                     .is_ok_and(|s| s.connected);
-            let (state, note) = registry::state_of(
+            let (state, mut note) = registry::state_of(
                 crate::i18n::ui(),
                 harness,
                 found.is_some(),
                 version.as_deref(),
                 connected,
             );
+            // Claude Code not found: its installation cut half-way, or what installs it (ESC-133).
+            if found.is_none() && harness.id() == EngineId::Claude {
+                note =
+                    tokio::task::spawn_blocking(|| engine::claude_missing_line(crate::i18n::ui()))
+                        .await
+                        .ok();
+            }
             out.push(registry::EngineInfo {
                 id: harness.id(),
                 name: harness.name(),
@@ -1912,6 +1923,22 @@ impl<R: Runtime> Core<R> {
             });
         }
         out
+    }
+
+    /// What stopped the sign-in of account `id` before it was signed in, when it is known
+    /// (ESC-133): its `claude` not found, or for Claude Code an installation of it cut half-way,
+    /// each with what to do. None: nothing more to say than that it stopped.
+    pub fn sign_in_ended(&self, id: &str) -> Option<String> {
+        let settings = self.settings.read().clone();
+        let account = settings.accounts.iter().find(|a| a.id == id)?.clone();
+        let lang = crate::i18n::ui();
+        if program(&account, &settings).is_none() {
+            return Some(engine::missing_line(account.engine, lang));
+        }
+        if account.engine == EngineId::Claude {
+            return engine::claude_interrupted_line(lang);
+        }
+        None
     }
 
     /// Whether Claude Code is found for the account new agents would go to (the current one): its
@@ -2015,10 +2042,7 @@ impl<R: Runtime> Core<R> {
         let settings = self.settings.read().clone();
         let name = engine::by_name(account.engine);
         let program = program(&account, &settings).ok_or_else(|| {
-            anyhow::anyhow!(tr!(
-                "{name} introuvable. Installe-le ou indique son chemin dans les réglages.",
-                "{name} not found. Install it or give its path in the settings."
-            ))
+            anyhow::anyhow!(engine::missing_line(account.engine, crate::i18n::ui()))
         })?;
         // Its own command of sign-in (`codex login`), else the program itself (Claude Code asks).
         let args: Vec<String> = store(account.engine)
@@ -2249,17 +2273,25 @@ mod tests {
 
     #[test]
     fn principal_is_launched_without_claude_config_dir_another_account_with_its_folder() {
-        assert!(launch_env(&principal()).is_empty());
+        // Every claude, whatever its account, without its own update (ESC-133).
+        let no_update = ("DISABLE_AUTOUPDATER".to_string(), "1".to_string());
+        assert_eq!(launch_env(&principal()), vec![no_update.clone()]);
         // Even with a folder written by hand in its settings.
-        assert!(launch_env(&account("principal", "/Users/x/.claude")).is_empty());
+        assert_eq!(
+            launch_env(&account("principal", "/Users/x/.claude")),
+            vec![no_update.clone()]
+        );
         let dir = r"C:\Users\x\.escouade\claude\pro";
         assert_eq!(
             launch_env(&account("pro", dir)),
-            vec![("CLAUDE_CONFIG_DIR".to_string(), dir.to_string())]
+            vec![
+                ("CLAUDE_CONFIG_DIR".to_string(), dir.to_string()),
+                no_update.clone()
+            ]
         );
         // Another account with no folder runs as Principal does.
-        assert!(launch_env(&account("pro", "")).is_empty());
-        assert!(launch_env(&account("pro", "  ")).is_empty());
+        assert_eq!(launch_env(&account("pro", "")), vec![no_update.clone()]);
+        assert_eq!(launch_env(&account("pro", "  ")), vec![no_update]);
     }
 
     #[test]

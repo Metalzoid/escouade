@@ -6,7 +6,7 @@ import { setLang } from '../../lib/i18n';
 import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { PROJECT_COLORS } from '../../lib/theme';
-import type { EngineInfo, RunCommand } from '../../lib/types';
+import type { ClaudeUpdateStatus, EngineInfo, RunCommand } from '../../lib/types';
 import { BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
 
@@ -387,7 +387,9 @@ describe('SettingsModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     expect(app.modal).toBeNull();
     // Nothing saved; the « Harness » tab it opened on only read the harnesses and what the MCP server is doing.
-    expect(backend.calls.filter((c) => !['engines', 'mcp_status', 'mcp_declare_status', 'mcp_activity'].includes(c.cmd))).toEqual([]);
+    expect(
+      backend.calls.filter((c) => !['engines', 'mcp_status', 'mcp_declare_status', 'mcp_activity', 'claude_update_status'].includes(c.cmd)),
+    ).toEqual([]);
     expect(app.settings.bashPath).toBe('');
   });
 
@@ -1502,6 +1504,84 @@ describe('SettingsModal, the version of Claude Code', () => {
     render(SettingsModal, { tab: 'claude' });
     for (const name of labels) expect(screen.queryByRole('switch', { name })).toBeNull();
     expect(screen.queryByRole('group', { name: view })).toBeNull();
+  });
+});
+
+describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
+  beforeEach(() => resetApp());
+  const located = { path: 'C:\\Users\\me\\.local\\bin\\claude.exe', wsl: null, nat: false, canWsl: true };
+  const info = (over: Partial<EngineInfo> = {}): EngineInfo => ({
+    ...CLAUDE_ENGINE,
+    located,
+    version: '2.1.302',
+    state: 'ready',
+    note: null,
+    ...over,
+  });
+  const status = (over: Partial<ClaudeUpdateStatus>): ClaudeUpdateStatus => ({
+    state: 'waiting',
+    version: null,
+    from: null,
+    line: null,
+    at: null,
+    ...over,
+  });
+  const SWITCH = 'Mettre à jour Claude Code automatiquement';
+
+  it('says what the last update did, its error in a line, or that the user turned it off in Claude Code', async () => {
+    let answer = status({ state: 'updated', version: '2.1.302', from: '2.1.301', at: 1 });
+    fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
+    render(SettingsModal, { tab: 'claude' });
+    expect(screen.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'true');
+    expect(await screen.findByText('Mis à jour en 2.1.302 (depuis la 2.1.301).')).toBeInTheDocument();
+    cleanup();
+    answer = status({ state: 'upToDate', version: '2.1.302', at: 1 });
+    fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
+    cleanup();
+    answer = status({ state: 'failed', line: 'Error: EACCES: permission denied', at: 1 });
+    fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('Échec de la mise à jour : Error: EACCES: permission denied')).toHaveClass('bad');
+    cleanup();
+    answer = status({ state: 'userOff', line: 'DISABLE_AUTOUPDATER' });
+    fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
+    render(SettingsModal, { tab: 'claude' });
+    expect(
+      await screen.findByText('Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.'),
+    ).toBeInTheDocument();
+  });
+
+  it('is turned off by its switch, saved with the settings, and says that nothing updates Claude Code then', async () => {
+    const backend = fakeBackend({
+      claude_locate: () => located,
+      engines: () => [info()],
+      claude_update_status: () => status({ state: 'upToDate', version: '2.1.302' }),
+      save_settings: () => [],
+    });
+    render(SettingsModal, { tab: 'claude' });
+    expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('switch', { name: SWITCH }));
+    expect(
+      screen.getByText(
+        'Coupée : Claude Code n’est plus mis à jour, ni par Escouade ni par lui-même. Lance claude update de temps en temps.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(backend.called('save_settings').at(-1)!.args.settings.claudeSelfUpdate).toBe(false);
+  });
+
+  it('says that Claude Code is gone, or its installation cut, with the repair', async () => {
+    const cut =
+      'L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal.';
+    fakeBackend({
+      claude_locate: () => ({ path: null, wsl: null, nat: false, canWsl: true }),
+      engines: () => [info({ located: { ...located, path: null }, version: null, state: 'absent', note: cut })],
+      claude_update_status: () => status({ state: 'missing', line: cut }),
+    });
+    render(SettingsModal, { tab: 'claude' });
+    await waitFor(() => expect(screen.getAllByText(cut).length).toBe(2));
   });
 });
 
