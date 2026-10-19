@@ -5,6 +5,8 @@
   import { keyLabel } from '../../lib/platform';
   import { answersHere, ariaEnter, enterAnswer, optionAnswer } from '../../lib/shortcuts';
   import { speakerOf } from '../../lib/engines';
+  import { conversation } from '../../lib/conversation.svelte';
+  import { answerOf, draftIfAny, draftOf } from '../../lib/question-answers.svelte';
   import { app } from '../../lib/state.svelte';
   import type { Question, QuestionItem } from '../../lib/types';
   import { tip } from '../../lib/tip';
@@ -12,9 +14,11 @@
   // `current`: several requests can wait at once, and the keyboard answers the first (as the message field does).
   let { item, agentId, pending, current = true }: { item: QuestionItem; agentId: string; pending: boolean; current?: boolean } = $props();
 
-  let picks = $state<Record<string, string[]>>({});
-  /** What is written in the fields of a form (a question with `field`), by question. */
-  let texts = $state<Record<string, string>>({});
+  // The options ticked and what is written in the fields of a form (a question with `field`), by question: kept apart
+  // from the card, where the voice conversation ticks them as they are said (ESC-131).
+  const draft = $derived(draftIfAny(item.id));
+  const picks = $derived(draft?.picks ?? {});
+  const texts = $derived(draft?.texts ?? {});
   let busy = $state(false);
   let card = $state<HTMLElement>();
   /** The question the Alt+digit keys are for: the one being answered. */
@@ -30,20 +34,24 @@
   const needsConfirm = $derived(item.questions.length > 1 || item.questions.some((q) => q.multiSelect || q.field));
   // A field a form leaves optional (`required: false`) is answered empty too.
   const answered = (q: Question) =>
-    q.required === false || (q.field ? (texts[q.question] ?? '').trim() !== '' : (picks[q.question] ?? []).length > 0);
+    q.required === false || (q.field ? (texts[q.question] ?? '').trim() !== '' : answerOf(draft, q.question) !== '');
   const complete = $derived(item.questions.every(answered));
   const firstUnanswered = () => item.questions.findIndex((q) => !answered(q));
 
   function choose(qi: number, label: string) {
     const q = item.questions[qi];
-    const cur = picks[q.question] ?? [];
+    const mine = draftOf(item.id);
+    const cur = mine.picks[q.question] ?? [];
     if (q.multiSelect) {
-      picks[q.question] = cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label];
+      mine.picks[q.question] = cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label];
       // Several options can be ticked: the keys stay here until Ctrl+Enter moves on.
       cursor = qi;
       return;
     }
-    picks[q.question] = [label];
+    mine.picks[q.question] = [label];
+    delete mine.texts[q.question];
+    // Ticked by hand while the voice asks it: the voice takes it and goes on.
+    conversation.answeredInWindow(item.id);
     if (!needsConfirm) {
       submit();
       return;
@@ -59,7 +67,7 @@
     // The card is about to go: the focus it holds would be lost with it.
     const held = !!card?.contains(document.activeElement);
     const answers = Object.fromEntries(
-      item.questions.map((q) => [q.question, q.field ? (texts[q.question] ?? '').trim() : (picks[q.question] ?? []).join(', ')]),
+      item.questions.map((q) => [q.question, q.field ? (texts[q.question] ?? '').trim() : answerOf(draft, q.question)]),
     );
     await app.run(api.answerQuestion(agentId, item.id, answers));
     busy = false;
@@ -117,7 +125,7 @@
             placeholder={q.field === 'number' ? t('composer.question.numberPlaceholder') : t('composer.question.fieldPlaceholder')}
             aria-label={q.question}
             disabled={busy}
-            bind:value={texts[q.question]}
+            bind:value={() => texts[q.question] ?? '', (v) => (draftOf(item.id).texts[q.question] = v)}
             onkeydown={(e) => {
               if (e.key === 'Enter' && complete) {
                 e.preventDefault();
@@ -144,6 +152,10 @@
             </button>
           {/each}
         </div>
+        <!-- A free answer said in the voice conversation: what was heard, to be seen. -->
+        {#if !q.field && !(picks[q.question] ?? []).length && texts[q.question]}
+          <div class="said" data-free-answer>{t('composer.question.saidAnswer', { text: texts[q.question] })}</div>
+        {/if}
         {#if q.options.some((o) => o.description)}
           <div class="descs">
             {#each q.options as o, j (j)}
@@ -286,6 +298,10 @@
   .field:focus {
     outline: none;
     border-color: var(--wait);
+  }
+  .said {
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .descs {
     display: flex;

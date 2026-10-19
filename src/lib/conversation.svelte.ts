@@ -1,31 +1,71 @@
 // The voice conversation (ESC-97), for the whole window: one at a time, with the agent of the composer it was started
 // from. The backend keeps the microphone open, finds the end of a sentence by its silence, transcribes it, reads aloud
 // and hears a barge-in (`voice::conversation`); this leads it: what is heard goes to the agent, the passage the agent
-// wrote to be read is read once its turn is over, then it listens again. A question or a permission of the agent is
-// read, and a spoken answer answers it; one it cannot take puts the conversation on pause, and says so.
+// wrote to be read is read once its turn is over, then it listens again. A permission of the agent is read, and a
+// spoken answer answers it. A request of questions is asked one question at a time (ESC-131): the voice says the
+// question, its choices show in the overlay, the answer said (or chosen there) answers it and is ticked in the card,
+// then the next is asked; the request goes once the last has its answer. An answer not understood has its question
+// asked again, twice at most, then the conversation is on pause, and says so.
 
 import {
-  answerableByVoice,
-  listed,
-  optionAnswer,
   permissionAnswer,
   permissionWhat,
+  questionAnswer,
+  spokenQuestion,
   turnOver,
   turnsIn,
   type AnswerWords,
+  type SpokenAnswer,
 } from './conversation';
 import { conversationOf } from './conversations.svelte';
 import { dictation } from './dictation.svelte';
 import { t } from './i18n';
 import { api } from './ipc';
+import { answerOf, draftIfAny, draftOf } from './question-answers.svelte';
 import { app } from './state.svelte';
-import type { Agent, ConvItem, PermissionItem, QuestionItem, VoiceEvent } from './types';
+import type { Agent, ConvItem, PermissionItem, QuestionItem, QuestionOption, VoiceEvent } from './types';
 
 export type ConvPhase =
   'idle' | 'starting' | 'offer' | 'downloading' | 'listening' | 'hearing' | 'transcribing' | 'working' | 'speaking' | 'question' | 'paused';
 
 /** What it does once a reading is over. */
 type After = 'listen' | 'pause' | 'answer';
+
+/** The question asked aloud, one of a request of one or several: the overlay shows it with its choices. */
+export interface ConvAsk {
+  itemId: string;
+  /** Its rank in the request (from 0), and how many questions the request has. */
+  index: number;
+  total: number;
+  question: string;
+  options: QuestionOption[];
+  multi: boolean;
+  /** A free answer is taken (« Autre »). */
+  free: boolean;
+  /** Answers not understood so far: it is asked again twice at most, then the conversation is on pause. */
+  misses: number;
+}
+
+/** How long what was understood is lit before the next question. */
+const FLASH_MS = 700;
+
+/** The words of spoken answers, in the language of what the conversation says (`t`). */
+export function spokenWords(): AnswerWords {
+  return {
+    yes: t('voice.conversation.words.yes'),
+    no: t('voice.conversation.words.no'),
+    always: t('voice.conversation.words.always'),
+    ordinals: t('voice.conversation.words.ordinals').split(';'),
+    numbers: t('voice.conversation.words.numbers').split(';'),
+    last: t('voice.conversation.words.last'),
+    all: t('voice.conversation.words.all'),
+    both: t('voice.conversation.words.both'),
+    none: t('voice.conversation.words.none'),
+    fillers: t('voice.conversation.words.fillers'),
+    repeat: t('voice.conversation.words.repeat'),
+    cancel: t('voice.conversation.words.cancel'),
+  };
+}
 
 class VoiceConversation {
   phase = $state<ConvPhase>('idle');
@@ -44,17 +84,27 @@ class VoiceConversation {
   progress = $state<{ id: string; done: number; total: number } | null>(null);
   /** Every voice being downloaded, how far: Réglages › Voix shows them. */
   voiceDownloads = $state<Record<string, { done: number; total: number }>>({});
+  /** The question being asked aloud, with its choices. */
+  ask = $state<ConvAsk | null>(null);
+  /** What was understood of the last answer, lit a moment before the next question: options, or a free answer. */
+  understood = $state<{ picks: string[]; text: string | null } | null>(null);
+  /** The last answer was not understood: the overlay says so too. */
+  missed = $state(false);
+  /** How long an answer understood is shown before the next question (the tests: 0). */
+  flashMs = FLASH_MS;
   private session: number | null = null;
   private reading: number | null = null;
   private after: After = 'listen';
   /** The turns of the agent's conversation when the last sentence was sent: one more is its answer. */
   private turns: number | null = null;
-  /** The question or permission read aloud, waiting for a spoken answer. */
+  /** The permission read aloud, or the request whose questions are asked, waiting for a spoken answer. */
   private asking: QuestionItem | PermissionItem | null = null;
   /** The ones already read: each is read once. */
   private asked = new Set<string>();
   /** Readings asked so far: the number of an older one, answered late, is not taken for the last one's. */
   private says = 0;
+  /** The next question, on its way once what was understood has been seen. */
+  private flash: ReturnType<typeof setTimeout> | null = null;
 
   get active() {
     return this.phase !== 'idle';
@@ -90,6 +140,8 @@ class VoiceConversation {
       } else {
         this.session = r.session;
         this.phase = 'listening';
+        // A question already waiting (the agent of a ticket asks without being spoken to): asked at once.
+        this.recheck();
       }
     } catch (e) {
       this.reset();
@@ -130,12 +182,23 @@ class VoiceConversation {
     this.reset();
   }
 
-  /** « Reprendre » after a pause: it listens again (the agent's question, if still open, is answered in the window). */
+  /**
+   * « Reprendre » after a pause: the question it paused on is asked again, if it still waits; else it listens again
+   * (a request given up by « annule », or a permission, is answered in the window).
+   */
   resume() {
     if (this.phase !== 'paused' || this.session === null) return;
+    const item = this.asking;
+    if (item?.kind === 'question' && this.ask && this.stillAsked(item)) {
+      this.ask.misses = 0;
+      this.missed = false;
+      return this.say(this.questionText(), 'answer');
+    }
     this.asking = null;
+    this.ask = null;
     this.phase = 'listening';
     void api.conversationListen(this.session);
+    this.recheck();
   }
 
   /** What the backend says. */
@@ -182,6 +245,7 @@ class VoiceConversation {
         } else {
           // The backend listens again by itself.
           this.phase = this.after === 'answer' ? 'question' : 'listening';
+          if (this.phase === 'listening') this.recheck();
         }
         break;
       case 'convEnded':
@@ -204,6 +268,7 @@ class VoiceConversation {
       // Nothing understood: it listens again, waiting for the answer still if one was asked.
       this.phase = this.asking ? 'question' : 'listening';
       void api.conversationListen(session);
+      if (!this.asking) this.recheck();
       return;
     }
     this.heard = text;
@@ -223,48 +288,193 @@ class VoiceConversation {
     }
   }
 
-  private words(): AnswerWords {
-    return {
-      yes: t('voice.conversation.words.yes'),
-      no: t('voice.conversation.words.no'),
-      always: t('voice.conversation.words.always'),
-      ordinals: [1, 2, 3, 4].map((n) => t(`voice.conversation.words.ordinals.o${n}` as 'voice.conversation.words.ordinals.o1')),
-    };
-  }
-
-  /** A spoken answer to the question or the permission read: given, or the conversation paused. */
+  /** A spoken answer to the permission read, or to the question asked. */
   private async answer(text: string, session: number) {
     const item = this.asking!;
+    if (item.kind === 'question') return this.answerQuestion(item, text, session);
     const agentId = this.agentId!;
     this.asking = null;
     // Held before the answer goes: the agent may answer back at once, and its passage be read before a hold sent after.
     void api.conversationHold(session);
     try {
-      if (item.kind === 'permission') {
-        const r = permissionAnswer(text, this.words(), item.canAlways);
-        if (!r) return this.pause('pausedQuestion');
-        this.phase = 'working';
-        await api.answerPermission(agentId, item.id, r, r === 'deny' ? text : undefined);
-      } else {
-        const q = item.questions[0];
-        const label = optionAnswer(
-          text,
-          q.options.map((o) => o.label),
-          this.words(),
-        );
-        if (!label) return this.pause('pausedQuestion');
-        this.phase = 'working';
-        await api.answerQuestion(agentId, item.id, { [q.question]: label });
-      }
+      const r = permissionAnswer(text, spokenWords(), item.canAlways);
+      if (!r) return this.pause();
+      this.phase = 'working';
+      await api.answerPermission(agentId, item.id, r, r === 'deny' ? text : undefined);
     } catch (e) {
       app.toast(String(e), 'error');
-      this.pause('pausedQuestion');
+      this.pause();
     }
   }
 
-  /** Says why, then holds until « Reprendre ». */
-  private pause(why: 'pausedQuestion' | 'pausedMulti') {
-    this.say(t(`voice.conversation.say.${why}`), 'pause');
+  /** Whether the request `item` still waits for its answers (not answered in the window, nor elsewhere). */
+  private stillAsked(item: QuestionItem) {
+    const agent = this.agentId ? app.agents[this.agentId] : undefined;
+    return !agent || agent.pending.includes(item.id);
+  }
+
+  /** The answer said to the question asked: taken, the question asked again, or the questions given up. */
+  private answerQuestion(item: QuestionItem, text: string, session: number) {
+    const ask = this.ask;
+    if (!ask || ask.itemId !== item.id) return;
+    if (!this.stillAsked(item)) return this.backToWork(session);
+    const r = questionAnswer(text, spokenQuestion(item, ask.index), spokenWords());
+    if (r?.kind === 'answer') return this.takeAnswer(item, ask.index, r);
+    if (r?.kind === 'repeat') {
+      this.missed = false;
+      return this.say(this.questionText(), 'answer');
+    }
+    if (r?.kind === 'cancel') {
+      // The card waits in the window, with the answers already given; « Reprendre » listens again.
+      this.ask = null;
+      this.understood = null;
+      this.missed = false;
+      return this.say(t('voice.conversation.say.cancelled'), 'pause');
+    }
+    ask.misses++;
+    this.missed = true;
+    if (ask.misses > 2) return this.pause();
+    this.say(this.questionText(true), 'answer');
+  }
+
+  /** The question asked, as said: where it is among the request's, and whether it takes several answers. */
+  private questionText(missed = false) {
+    const ask = this.ask!;
+    return [
+      missed ? t('voice.conversation.say.missed') : '',
+      ask.total > 1 ? t('voice.conversation.say.step', { n: ask.index + 1, total: ask.total }) : '',
+      ask.question,
+      ask.multi ? t('voice.conversation.say.several') : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  /** The first question of `item` that has no answer yet, asked aloud; the request sent once all have one. */
+  private askNext(item: QuestionItem) {
+    const draft = draftIfAny(item.id);
+    const index = item.questions.findIndex((q) => !answerOf(draft, q.question));
+    if (index < 0) return this.send(item);
+    const q = item.questions[index];
+    const spoken = spokenQuestion(item, index);
+    this.asking = item;
+    this.ask = {
+      itemId: item.id,
+      index,
+      total: item.questions.length,
+      question: q.question,
+      options: q.options,
+      multi: spoken.multi,
+      free: spoken.free,
+      misses: 0,
+    };
+    this.understood = null;
+    this.missed = false;
+    this.say(this.questionText(), 'answer');
+  }
+
+  /** An answer to the question `index` of `item`: ticked in its card, lit a moment, then the next question. */
+  private takeAnswer(item: QuestionItem, index: number, r: Extract<SpokenAnswer, { kind: 'answer' }>) {
+    const q = item.questions[index].question;
+    const draft = draftOf(item.id);
+    if (r.picks.length) {
+      draft.picks[q] = r.picks;
+      delete draft.texts[q];
+    } else {
+      draft.picks[q] = [];
+      draft.texts[q] = r.none ? t('voice.conversation.overlay.none') : (r.text ?? '');
+    }
+    this.understood = { picks: r.picks, text: r.picks.length ? null : draft.texts[q] };
+    this.next(item);
+  }
+
+  /** What was understood is seen a moment, then the next question is asked (or the request sent). */
+  private next(item: QuestionItem) {
+    const session = this.session;
+    if (session === null) return;
+    this.missed = false;
+    // Nothing is heard meanwhile; the question still being read (chosen in the overlay meanwhile) stops.
+    const reading = this.reading !== null;
+    this.reading = null;
+    this.phase = 'question';
+    if (reading) void api.conversationListen(session).then(() => api.conversationHold(session));
+    else void api.conversationHold(session);
+    if (this.flash) clearTimeout(this.flash);
+    this.flash = setTimeout(() => {
+      this.flash = null;
+      if (this.session === session && this.asking === item) this.askNext(item);
+    }, this.flashMs);
+  }
+
+  /** Every question answered: the request goes, all its answers together, as the card's button sends them. */
+  private async send(item: QuestionItem) {
+    const agentId = this.agentId!;
+    const session = this.session!;
+    const draft = draftIfAny(item.id);
+    const answers = Object.fromEntries(item.questions.map((q) => [q.question, answerOf(draft, q.question)]));
+    this.ask = null;
+    this.understood = null;
+    this.asking = null;
+    this.phase = 'working';
+    void api.conversationHold(session);
+    try {
+      await api.answerQuestion(agentId, item.id, answers);
+    } catch (e) {
+      app.toast(String(e), 'error');
+      if (this.session === session) this.pause();
+    }
+  }
+
+  /** The request answered in the window meanwhile: back to waiting for the agent. */
+  private backToWork(session: number) {
+    this.asking = null;
+    this.ask = null;
+    this.understood = null;
+    this.missed = false;
+    this.phase = 'working';
+    void api.conversationHold(session);
+  }
+
+  /** An option of the question asked, clicked in the overlay or chosen by its key: ticked (several choices), or taken. */
+  choose(index: number) {
+    const item = this.asking;
+    const ask = this.ask;
+    if (item?.kind !== 'question' || !ask || this.flash) return;
+    const label = ask.options[index]?.label;
+    if (label === undefined) return;
+    if (ask.multi) {
+      const draft = draftOf(item.id);
+      const cur = draft.picks[ask.question] ?? [];
+      draft.picks[ask.question] = cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label];
+      return;
+    }
+    this.takeAnswer(item, ask.index, { kind: 'answer', picks: [label], text: null });
+  }
+
+  /** « Valider » of a question of several choices: the options ticked are its answer (none ticked: « Aucune »). */
+  validate() {
+    const item = this.asking;
+    const ask = this.ask;
+    if (item?.kind !== 'question' || !ask?.multi || this.flash) return;
+    const ticked = draftIfAny(item.id)?.picks[ask.question] ?? [];
+    const picks = ask.options.map((o) => o.label).filter((l) => ticked.includes(l));
+    this.takeAnswer(item, ask.index, { kind: 'answer', picks, text: null, none: !picks.length });
+  }
+
+  /** An option ticked by hand in the card of `itemId`: the question asked, answered so, is taken and the next asked. */
+  answeredInWindow(itemId: string) {
+    const item = this.asking;
+    const ask = this.ask;
+    if (item?.kind !== 'question' || !ask || item.id !== itemId || this.flash) return;
+    const draft = draftIfAny(item.id);
+    if (!answerOf(draft, ask.question)) return;
+    this.understood = { picks: draft?.picks[ask.question] ?? [], text: null };
+    this.next(item);
+  }
+
+  /** Says it did not understand, then holds until « Reprendre » (the answers already given stay ticked). */
+  private pause() {
+    this.say(t('voice.conversation.say.pausedQuestion'), 'pause');
   }
 
   private say(text: string, after: After) {
@@ -291,44 +501,33 @@ class VoiceConversation {
   }
 
   /**
-   * The agent and its conversation as they change (the composer's effect): its question or permission is read, the
-   * end of its turn has its passage read.
+   * The agent and its conversation as they change (the composer's effect): its permission is read, its questions
+   * asked, the end of its turn has its passage read.
    */
   observe(agent: Agent, items: ConvItem[]) {
     if (agent.id !== this.agentId || this.session === null) return;
-    if (this.phase !== 'working' && this.phase !== 'question' && this.phase !== 'paused') return;
+    const phase = this.phase;
+    if (phase !== 'working' && phase !== 'listening' && phase !== 'question' && phase !== 'paused') return;
     const pending = agent.pending.length ? items.find((i) => i.id === agent.pending[0]) : undefined;
-    if (this.phase === 'working' && pending && (pending.kind === 'question' || pending.kind === 'permission')) {
-      if (this.asked.has(pending.id)) return;
+    // Asked while it works for what was said, or while it listens (an agent that asks by itself).
+    const asks = pending && (pending.kind === 'question' || pending.kind === 'permission');
+    if ((phase === 'working' || phase === 'listening') && asks && !this.asked.has(pending.id)) {
       this.asked.add(pending.id);
-      if (pending.kind === 'permission') {
-        this.asking = pending;
-        return this.say(t('voice.conversation.say.permission', { name: agent.name, what: permissionWhat(pending) }), 'answer');
-      }
-      if (!answerableByVoice(pending)) return this.pause('pausedMulti');
-      const q = pending.questions[0];
+      if (pending.kind === 'question') return this.askNext(pending);
       this.asking = pending;
-      return this.say(
-        t('voice.conversation.say.question', {
-          question: q.question,
-          options: listed(
-            q.options.map((o) => o.label),
-            t('voice.conversation.say.or'),
-          ),
-        }),
-        'answer',
-      );
+      return this.say(t('voice.conversation.say.permission', { name: agent.name, what: permissionWhat(pending) }), 'answer');
     }
     // Answered in the window meanwhile: back to waiting for the agent.
-    if ((this.phase === 'question' || this.phase === 'paused') && this.asking && !agent.pending.includes(this.asking.id)) {
+    if ((phase === 'question' || phase === 'paused') && this.asking && !agent.pending.includes(this.asking.id)) {
+      if (this.flash) clearTimeout(this.flash);
+      this.flash = null;
+      if (this.reading === null) return this.backToWork(this.session);
       this.asking = null;
-      if (this.reading === null) {
-        this.phase = 'working';
-        void api.conversationHold(this.session);
-      }
+      this.ask = null;
+      this.understood = null;
       return;
     }
-    if (this.phase !== 'working' || this.turns === null) return;
+    if (phase !== 'working' || this.turns === null) return;
     const over = turnOver(items, this.turns);
     if (!over) return;
     this.turns = null;
@@ -336,6 +535,12 @@ class VoiceConversation {
       over.spoken ??
       (over.turn.isError && !over.turn.interrupted ? t('voice.conversation.say.error') : t('voice.conversation.say.noPassage'));
     this.say(text, 'listen');
+  }
+
+  /** The agent as it is now: its question asked if one waits (at the start, after a reading, after a pause). */
+  private recheck() {
+    const agent = this.agentId ? app.agents[this.agentId] : undefined;
+    if (agent) this.observe(agent, conversationOf(agent.id).items);
   }
 
   private reset() {
@@ -346,6 +551,11 @@ class VoiceConversation {
     this.after = 'listen';
     this.turns = null;
     this.asking = null;
+    this.ask = null;
+    this.understood = null;
+    this.missed = false;
+    if (this.flash) clearTimeout(this.flash);
+    this.flash = null;
     this.offer = null;
     this.progress = null;
     this.level = 0;
@@ -359,6 +569,7 @@ class VoiceConversation {
   clear() {
     this.reset();
     this.asked.clear();
+    this.flashMs = FLASH_MS;
   }
 }
 

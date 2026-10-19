@@ -150,12 +150,11 @@ test.describe('a question of the agent answered aloud', () => {
     },
   });
 
-  test('the question is read with its choices, the option said answers it, and the answer is read', async ({ app }) => {
+  test('the question is read without its choices, the option said answers it, and the answer is read', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
     await button(page).click();
     await expect.poll(() => said(SPOKEN_LOG)[0] ?? '', { timeout: 25_000 }).toBe('Quelle base de données?');
-    await expect.poll(() => said(SPOKEN_LOG).slice(1, 2), { timeout: 5_000 }).toEqual(['Les choix sont: PostgreSQL ou SQLite.']);
     // « La deuxième »: SQLite, answered for the user.
     await expect.poll(() => said(SPOKEN_LOG).at(-1), { timeout: 30_000 }).toBe('Tu as choisi SQLite.');
     await expect(page.getByText('Tu as choisi SQLite.').first()).toBeVisible();
@@ -165,6 +164,91 @@ test.describe('a question of the agent answered aloud', () => {
       .getByRole('dialog')
       .getByRole('button', { name: /Arrêter/ })
       .click();
+    await expect(panel(page)).toHaveCount(0);
+  });
+});
+
+/** The WAV of the question said once, then again after each silence of `gaps` (seconds): a sentence, then answers. */
+function repeated(file: string, gaps: number[]) {
+  const wav = fs.readFileSync(QUESTION);
+  const data = wav.indexOf(Buffer.from('data')) + 8;
+  const rate = wav.readUInt32LE(24);
+  const speech = wav.subarray(data);
+  const body = Buffer.concat([speech, ...gaps.flatMap((gap) => [Buffer.alloc(Math.round(rate * gap) * 2), speech])]);
+  const head = Buffer.from(wav.subarray(0, 44));
+  head.writeUInt32LE(36 + body.length, 4);
+  head.writeUInt32LE(body.length, 40);
+  fs.writeFileSync(file, Buffer.concat([head, body]));
+}
+
+const FIVE = path.join(os.tmpdir(), `escouade-e2e-five-${process.pid}.wav`);
+repeated(FIVE, [12, 7, 7, 7]);
+
+test.describe('a request of three questions asked aloud one at a time (ESC-131)', () => {
+  test.use({
+    appEnv: {
+      ESCOUADE_VOICE_WAV: FIVE,
+      // The sentence, then an answer not understood (a rank beyond the list), then the three answers.
+      ESCOUADE_VOICE_TRANSCRIPT: 'Configure le projet|La cinquième.|SQLite.|La première et la troisième.|Escouade-front',
+      ESCOUADE_SPEECH_FAKE: SPOKEN_LOG,
+    },
+    preStart: {
+      run: (root: string) => {
+        placeModels(root);
+        fs.rmSync(SPOKEN_LOG, { force: true });
+      },
+    },
+  });
+
+  test('each question is said without its choices, shown with them, answered by what is said, ticked in the card; the three answers go together', async ({
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    const { page } = app;
+    await addProject(page, app.repo);
+    await button(page).click();
+    const ask = page.locator('[data-conversation-ask]');
+    // The first question: said, its choices shown under the orb with their ranks.
+    await expect.poll(() => said(SPOKEN_LOG), { timeout: 30_000 }).toContain('Question 1 sur 3.');
+    await expect(ask).toHaveAttribute('data-conversation-ask', '0');
+    await expect(ask.getByRole('button', { name: /PostgreSQL/ })).toBeVisible();
+    await expect(ask.getByRole('button', { name: /SQLite/ })).toBeVisible();
+    await expect(ask).toContainText('Autre : dis ta réponse');
+    // « La cinquième »: not understood, asked again.
+    await expect.poll(() => said(SPOKEN_LOG).some((s) => /pas compris/.test(s)), { timeout: 30_000 }).toBe(true);
+    // « SQLite »: ticked in the card, then the second question.
+    await expect(ask).toHaveAttribute('data-conversation-ask', '1', { timeout: 30_000 });
+    const ticked = page.locator('[data-testid="question-pending"] .opt.on');
+    await expect(ticked).toHaveCount(1);
+    await expect(ticked.first()).toContainText('SQLite');
+    await expect(ask).toContainText('Plusieurs réponses possibles');
+    // A capture of the overlay asking (`ESCOUADE_E2E_SHOT`: where to write it).
+    if (process.env.ESCOUADE_E2E_SHOT) await page.screenshot({ path: process.env.ESCOUADE_E2E_SHOT });
+    // « La première et la troisième », then the third, answered freely.
+    await expect(ask).toHaveAttribute('data-conversation-ask', '2', { timeout: 30_000 });
+    await expect(ticked).toHaveCount(3);
+    await expect(ticked.nth(1)).toContainText('Unitaires');
+    await expect(ticked.nth(2)).toContainText('Lint');
+    // The three answers together, as the card's button sends them: the agent says them back.
+    // (In the order of the backend's map, by question.)
+    await expect.poll(() => said(SPOKEN_LOG).at(-1), { timeout: 40_000 }).toMatch(/^Tu as choisi /);
+    const passage = said(SPOKEN_LOG).at(-1)!;
+    expect(
+      passage
+        .split(/ *; */)
+        .map((s) => s.replace(/^Tu as choisi |\.$/g, ''))
+        .sort(),
+    ).toEqual(['Escouade-front', 'SQLite', 'Unitaires, Lint']);
+    const spoken = said(SPOKEN_LOG);
+    expect(spoken.filter((s) => s === 'Question 1 sur 3.')).toHaveLength(2);
+    expect(spoken).toContain('Question 2 sur 3.');
+    expect(spoken).toContain('Question 3 sur 3.');
+    expect(spoken).toContain('Plusieurs réponses possibles.');
+    // The voice never read the choices.
+    expect(spoken.join('\n')).not.toMatch(/PostgreSQL|Unitaires, E2E|web-shop|Les choix sont/);
+    await expect(panel(page)).toHaveAttribute('data-conversation-phase', 'listening', { timeout: 15_000 });
+    await expect(ask).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await expect(panel(page)).toHaveCount(0);
   });
 });

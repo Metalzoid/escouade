@@ -9,6 +9,7 @@ import { gitSync } from '../lib/git-sync.svelte';
 import { mcp } from '../lib/mcp.svelte';
 import { dictation } from '../lib/dictation.svelte';
 import { conversation } from '../lib/conversation.svelte';
+import { clearDrafts } from '../lib/question-answers.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
 import type {
@@ -358,6 +359,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   mcp.reset();
   dictation.clear();
   conversation.clear();
+  clearDrafts();
   trees.reset();
   navHistory.reset();
   recentFiles.reset();

@@ -85,6 +85,7 @@ export default defineZone('composer', {
   question: {
     waiting: '{engine} is waiting for your answer',
     orWrite: 'or answer freely in the field below',
+    saidAnswer: 'Answer said: “{text}”',
     submit: 'Submit',
     unanswered: 'Question left unanswered',
     answeredBy: 'Answered by {author} through Escouade',

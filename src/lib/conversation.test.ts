@@ -1,27 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
 import {
-  listed,
   normalize,
-  optionAnswer,
   permissionAnswer,
+  questionAnswer,
   turnOver,
   withoutInstruction,
   withoutPassage,
   type AnswerWords,
+  type SpokenQuestion,
 } from './conversation';
-import { conversation } from './conversation.svelte';
+import { conversation, spokenWords } from './conversation.svelte';
 import { conversationOf } from './conversations.svelte';
 import { dictation } from './dictation.svelte';
 import { setLang } from './i18n';
+import { clearDrafts, draftIfAny, draftOf } from './question-answers.svelte';
+import { app } from './state.svelte';
 import type { Agent, ConvItem, PermissionItem, QuestionItem, VoiceEvent } from './types';
 
-const FR: AnswerWords = {
+const FR = {
   yes: 'oui|ouais|ok|d’accord|vas-y|bien sûr',
   no: 'non|refuse|pas question',
   always: 'toujours',
-  ordinals: ['premier|première|un|1', 'deuxième|second|deux|2', 'troisième|trois|3'],
-};
+} as AnswerWords;
 
 describe('spoken answers', () => {
   it('reads words without case, accents nor punctuation', () => {
@@ -42,20 +43,100 @@ describe('spoken answers', () => {
     expect(permissionAnswer('nonobstant', FR, true)).toBeNull();
   });
 
-  it('finds the option named, or by its rank', () => {
-    const options = ['SQLite', 'Postgres', 'Postgres avec Docker'];
-    expect(optionAnswer('SQLite, s’il te plaît.', options, FR)).toBe('SQLite');
-    expect(optionAnswer('Postgres avec Docker', options, FR)).toBe('Postgres avec Docker');
-    expect(optionAnswer('Plutôt Postgres.', options, FR)).toBe('Postgres');
-    expect(optionAnswer('La deuxième.', options, FR)).toBe('Postgres');
-    expect(optionAnswer('La troisième', options, FR)).toBe('Postgres avec Docker');
-    expect(optionAnswer('Aucune idée', options, FR)).toBeNull();
-    expect(optionAnswer('', options, FR)).toBeNull();
-  });
+  describe('an answer said to a question (ESC-131)', () => {
+    const one = (options: string[], free = false): SpokenQuestion => ({ options, multi: false, free });
+    const several = (options: string[], free = false): SpokenQuestion => ({ options, multi: true, free });
+    const picks = (heard: string, q: SpokenQuestion) => {
+      const r = questionAnswer(heard, q, spokenWords());
+      return r?.kind === 'answer' ? (r.picks.length ? r.picks : r.none ? 'none' : { text: r.text }) : r === null ? null : r.kind;
+    };
 
-  it('lists options as they are said', () => {
-    expect(listed(['A', 'B', 'C'], 'ou')).toBe('A, B ou C');
-    expect(listed(['A'], 'ou')).toBe('A');
+    describe('in French', () => {
+      beforeEach(() => setLang('fr'));
+
+      it('finds the option by its name, near enough: no case nor accents, a word of it no other has', () => {
+        const q = one(['SQLite', 'Postgres', 'Postgres avec Docker']);
+        expect(picks('SQLite, s’il te plaît.', q)).toEqual(['SQLite']);
+        expect(picks('Postgres avec Docker', q)).toEqual(['Postgres avec Docker']);
+        expect(picks('Plutôt Postgres.', q)).toEqual(['Postgres']);
+        expect(picks('sqlite', q)).toEqual(['SQLite']);
+        expect(picks('Avec docker.', q)).toEqual(['Postgres avec Docker']);
+        expect(picks('Une base éphémère', one(['Base persistante', 'Base éphémère']))).toEqual(['Base éphémère']);
+        expect(picks('Je veux la version locale', one(['Version locale', 'Version distante']))).toEqual(['Version locale']);
+        // The beginning of a word stands for it: « Postgres » for « PostgreSQL ».
+        expect(picks('Postgres', one(['PostgreSQL', 'SQLite']))).toEqual(['PostgreSQL']);
+      });
+
+      it('finds it by its rank, the last one too, and a number said alone', () => {
+        const q = one(['A', 'B', 'C']);
+        expect(picks('La deuxième.', q)).toEqual(['B']);
+        expect(picks('La troisième', q)).toEqual(['C']);
+        expect(picks('Le premier', q)).toEqual(['A']);
+        expect(picks('La dernière.', q)).toEqual(['C']);
+        expect(picks('2', q)).toEqual(['B']);
+        expect(picks('Option trois.', q)).toEqual(['C']);
+        expect(picks('La une', q)).toEqual(['A']);
+      });
+
+      it('takes several for a question of several choices', () => {
+        const q = several(['Tests unitaires', 'Tests e2e', 'Lint']);
+        expect(picks('La première et la troisième.', q)).toEqual(['Tests unitaires', 'Lint']);
+        expect(picks('Unitaires et lint', q)).toEqual(['Tests unitaires', 'Lint']);
+        expect(picks('1 et 2', q)).toEqual(['Tests unitaires', 'Tests e2e']);
+        expect(picks('Toutes.', q)).toEqual(['Tests unitaires', 'Tests e2e', 'Lint']);
+        expect(picks('Aucune.', q)).toBe('none');
+        expect(picks('Les deux', several(['Windows', 'macOS']))).toEqual(['Windows', 'macOS']);
+      });
+
+      it('takes what was said as the free answer when no option is named and the question takes one', () => {
+        expect(picks('Escouade-front', one(['web-shop', 'admin'], true))).toEqual({ text: 'Escouade-front' });
+        // The « un » of a sentence is no rank.
+        expect(picks('Un thème sombre', one(['Clair', 'Système'], true))).toEqual({ text: 'Un thème sombre' });
+        expect(picks('Mon appli', { options: [], multi: false, free: true })).toEqual({ text: 'Mon appli' });
+        // An option named still wins.
+        expect(picks('Admin', one(['web-shop', 'admin'], true))).toEqual(['admin']);
+      });
+
+      it('does not understand nothing, two options for one choice, a rank beyond the list, nor no option without a free answer', () => {
+        const q = one(['SQLite', 'Postgres'], true);
+        expect(picks('', q)).toBeNull();
+        expect(picks('…', q)).toBeNull();
+        expect(picks('SQLite ou Postgres', q)).toBeNull();
+        expect(picks('La première et la deuxième', q)).toBeNull();
+        expect(picks('La cinquième', q)).toBeNull();
+        expect(picks('Aucune idée', one(['SQLite', 'Postgres']))).toBeNull();
+      });
+
+      it('hears « répète » and « annule » as commands, never as answers', () => {
+        const q = one(['SQLite', 'Postgres'], true);
+        expect(picks('Répète.', q)).toBe('repeat');
+        expect(picks('Tu peux répéter ?', q)).toBe('repeat');
+        expect(picks('Annule.', q)).toBe('cancel');
+        expect(picks('Laisse tomber', q)).toBe('cancel');
+      });
+    });
+
+    describe('in English', () => {
+      beforeEach(() => setLang('en'));
+      afterEach(() => setLang('fr'));
+
+      it('finds options by name and rank, several, a free answer, and the commands', () => {
+        const q = one(['SQLite', 'Postgres', 'Postgres with Docker'], true);
+        expect(picks('Postgres with Docker, please.', q)).toEqual(['Postgres with Docker']);
+        expect(picks('The second one.', q)).toEqual(['Postgres']);
+        expect(picks('The last one', q)).toEqual(['Postgres with Docker']);
+        expect(picks('Number one', q)).toEqual(['SQLite']);
+        expect(picks('A dark theme', one(['Light', 'System'], true))).toEqual({ text: 'A dark theme' });
+        expect(picks('The fifth', q)).toBeNull();
+        const m = several(['Unit tests', 'E2E tests', 'Lint']);
+        expect(picks('The first and the third', m)).toEqual(['Unit tests', 'Lint']);
+        expect(picks('All of them', m)).toEqual(['Unit tests', 'E2E tests', 'Lint']);
+        expect(picks('None', m)).toBe('none');
+        expect(picks('Both', several(['Windows', 'macOS']))).toEqual(['Windows', 'macOS']);
+        expect(picks('Say that again?', q)).toBe('repeat');
+        expect(picks('Never mind.', q)).toBe('cancel');
+      });
+    });
   });
 
   it('shows a message and an answer without what the conversation added to them', () => {
@@ -130,7 +211,10 @@ describe('the conversation', () => {
     resetApp({ agents: [a] });
   });
 
-  afterEach(() => conversation.clear());
+  afterEach(() => {
+    conversation.clear();
+    clearDrafts();
+  });
 
   const ev = (e: Record<string, unknown>) => conversation.take({ session: SESSION, ...e } as VoiceEvent);
   const said = () => backend.called('conversation_say').map((c) => c.args.text);
@@ -237,66 +321,302 @@ describe('the conversation', () => {
     expect(conversation.phase).toBe('working');
   });
 
-  it('reads a question and the option said answers it', async () => {
+  /** A request of the agent: its questions, as its harness gives them. */
+  const request = (id: string, questions: QuestionItem['questions'], extra: Partial<QuestionItem> = {}): QuestionItem => ({
+    kind: 'question',
+    id,
+    toolUseId: 'tu',
+    questions,
+    answers: null,
+    ts: 3,
+    ...extra,
+  });
+  const later = () => new Promise((r) => setTimeout(r, 5));
+
+  /** It speaks to the agent, which asks `q`. */
+  async function asked(q: QuestionItem) {
     await startTalking();
-    ev({ kind: 'convHeard', text: 'Crée la base', error: null });
+    ev({ kind: 'convHeard', text: 'Configure le projet', error: null });
     await tick();
-    const q: QuestionItem = {
-      kind: 'question',
-      id: 'q1',
-      toolUseId: 'tu',
-      questions: [{ question: 'Quelle base de données ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }],
-      answers: null,
-      ts: 3,
-    } as QuestionItem;
-    conversation.observe({ ...a, pending: ['q1'] }, [q]);
-    expect(said()[0]).toBe('Quelle base de données ? Les choix sont : SQLite ou Postgres.');
-    ev({ kind: 'convSpoken', reading: 1, error: null });
-    ev({ kind: 'convHeard', text: 'La deuxième.', error: null });
+    a = { ...a, pending: [q.id] };
+    app.agents[a.id] = a;
+    conversation.observe(a, [q]);
+  }
+
+  /** The reading under way ends, then `text` is heard. */
+  async function answers(text: string) {
+    ev({ kind: 'convSpoken', reading, error: null });
+    ev({ kind: 'convHeard', text, error: null });
     await tick();
+  }
+
+  it('asks a single question aloud, without its choices, and the option said answers it', async () => {
+    conversation.flashMs = 0;
+    await asked(request('q1', [{ question: 'Quelle base de données ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }]));
+    expect(said()[0]).toBe('Quelle base de données ?');
+    expect(conversation.ask).toMatchObject({ index: 0, total: 1, multi: false, free: true });
+    await answers('La deuxième.');
+    expect(draftIfAny('q1')?.picks['Quelle base de données ?']).toEqual(['Postgres']);
+    await later();
     expect(backend.called('answer_question')[0].args).toMatchObject({ answers: { 'Quelle base de données ?': 'Postgres' } });
+    expect(conversation.phase).toBe('working');
+    expect(conversation.ask).toBeNull();
   });
 
-  it('an answer it does not understand puts the conversation on pause, and says so', async () => {
-    await startTalking();
-    ev({ kind: 'convHeard', text: 'Crée la base', error: null });
-    await tick();
-    const q = {
-      kind: 'question',
-      id: 'q2',
-      toolUseId: 'tu',
-      questions: [{ question: 'Quelle base ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }],
-      answers: null,
-      ts: 3,
-    } as QuestionItem;
-    conversation.observe({ ...a, pending: ['q2'] }, [q]);
-    ev({ kind: 'convSpoken', reading: 1, error: null });
-    ev({ kind: 'convHeard', text: 'Je réfléchis encore', error: null });
-    await tick();
-    expect(said()[1]).toBe('Je n’ai pas compris ta réponse. La conversation est en pause : réponds dans la fenêtre.');
-    ev({ kind: 'convSpoken', reading: 2, error: null });
+  it('asks a request of three questions one at a time, and sends the three answers together after the last', async () => {
+    conversation.flashMs = 0;
+    const q = request('q3', [
+      { question: 'Quelle base ?', header: 'Base', options: [{ label: 'PostgreSQL' }, { label: 'SQLite' }] },
+      {
+        question: 'Quels tests ?',
+        header: 'Tests',
+        multiSelect: true,
+        options: [{ label: 'Unitaires' }, { label: 'E2E' }, { label: 'Lint' }],
+      },
+      { question: 'Quel nom ?', header: 'Nom', options: [{ label: 'web-shop' }, { label: 'admin' }] },
+    ]);
+    await asked(q);
+    expect(said().at(-1)).toBe('Question 1 sur 3. Quelle base ?');
+    // A rank beyond the list: not understood, asked again.
+    await answers('La cinquième.');
+    expect(said().at(-1)).toBe('Je n’ai pas compris. Question 1 sur 3. Quelle base ?');
+    expect(conversation.missed).toBe(true);
+    await answers('SQLite');
+    expect(draftIfAny('q3')?.picks['Quelle base ?']).toEqual(['SQLite']);
+    await later();
+    expect(said().at(-1)).toBe('Question 2 sur 3. Quels tests ? Plusieurs réponses possibles.');
+    expect(conversation.ask).toMatchObject({ index: 1, multi: true });
+    expect(conversation.missed).toBe(false);
+    await answers('La première et la troisième.');
+    expect(draftIfAny('q3')?.picks['Quels tests ?']).toEqual(['Unitaires', 'Lint']);
+    await later();
+    expect(said().at(-1)).toBe('Question 3 sur 3. Quel nom ?');
+    await answers('Escouade-front');
+    expect(draftIfAny('q3')?.texts['Quel nom ?']).toBe('Escouade-front');
+    await later();
+    expect(backend.called('answer_question')).toHaveLength(1);
+    expect(backend.called('answer_question')[0].args).toMatchObject({
+      requestId: 'q3',
+      answers: { 'Quelle base ?': 'SQLite', 'Quels tests ?': 'Unitaires, Lint', 'Quel nom ?': 'Escouade-front' },
+    });
+    // What was read never listed the choices.
+    for (const s of said()) expect(s).not.toMatch(/PostgreSQL|Unitaires|web-shop|choix sont/);
+  });
+
+  it('lights what was understood a moment before the next question', async () => {
+    await asked(
+      request('q4', [
+        { question: 'A ?', options: [{ label: 'Oui' }, { label: 'Non' }] },
+        { question: 'B ?', options: [{ label: 'Un' }, { label: 'Deux' }] },
+      ]),
+    );
+    expect(conversation.flashMs).toBe(700);
+    conversation.flashMs = 60;
+    await answers('Non');
+    expect(conversation.understood).toEqual({ picks: ['Non'], text: null });
+    expect(conversation.ask?.index).toBe(0);
+    const before = said().length;
+    await later();
+    expect(said()).toHaveLength(before);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(said().at(-1)).toBe('Question 2 sur 2. B ?');
+    expect(conversation.understood).toBeNull();
+  });
+
+  it('asks again an answer not understood, twice at most, then pauses on the question, the answers given kept', async () => {
+    conversation.flashMs = 0;
+    await asked(
+      request('q5', [
+        { question: 'Quelle base ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] },
+        { question: 'Quel port ?', options: [{ label: '5432' }, { label: '5433' }] },
+      ]),
+    );
+    await answers('SQLite');
+    await later();
+    await answers('Le premier ou le deuxième ?');
+    expect(said().at(-1)).toBe('Je n’ai pas compris. Question 2 sur 2. Quel port ?');
+    await answers('La septième');
+    expect(said().at(-1)).toBe('Je n’ai pas compris. Question 2 sur 2. Quel port ?');
+    await answers('La neuvième');
+    expect(said().at(-1)).toBe('Je n’ai pas compris ta réponse. La conversation est en pause : réponds dans la fenêtre.');
+    ev({ kind: 'convSpoken', reading, error: null });
     expect(conversation.phase).toBe('paused');
-    expect(backend.called('conversation_hold').length).toBeGreaterThan(0);
     expect(backend.called('answer_question')).toHaveLength(0);
-    // « Reprendre »: it listens again.
+    expect(draftIfAny('q5')?.picks['Quelle base ?']).toEqual(['SQLite']);
+    // « Reprendre »: the question it paused on, asked again.
     conversation.resume();
-    expect(conversation.phase).toBe('listening');
+    expect(said().at(-1)).toBe('Question 2 sur 2. Quel port ?');
+    expect(conversation.phase).toBe('question');
   });
 
-  it('a question of several choices at once is not answered aloud: on pause at once', async () => {
+  it('« répète » asks the question again; « annule » leaves the card to be answered in the window', async () => {
+    await asked(request('q6', [{ question: 'Quelle base ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] }]));
+    await answers('Répète, s’il te plaît.');
+    expect(said()).toEqual(['Quelle base ?', 'Quelle base ?']);
+    expect(conversation.ask?.misses).toBe(0);
+    await answers('Laisse tomber.');
+    expect(said().at(-1)).toBe('D’accord : la question attend ta réponse dans la fenêtre.');
+    expect(conversation.ask).toBeNull();
+    ev({ kind: 'convSpoken', reading, error: null });
+    expect(conversation.phase).toBe('paused');
+    expect(backend.called('answer_question')).toHaveLength(0);
+    // Answered in the window: back to waiting for the agent.
+    a = { ...a, pending: [] };
+    app.agents[a.id] = a;
+    conversation.observe(a, []);
+    expect(conversation.phase).toBe('working');
+  });
+
+  it('takes an option chosen in the window (the overlay, its key, the card) and goes on to the next question', async () => {
+    conversation.flashMs = 0;
+    await asked(
+      request('q7', [
+        { question: 'Quelle base ?', options: [{ label: 'SQLite' }, { label: 'Postgres' }] },
+        { question: 'Quels tests ?', multiSelect: true, options: [{ label: 'Unitaires' }, { label: 'E2E' }] },
+        { question: 'Quel port ?', options: [{ label: '5432' }, { label: '5433' }] },
+      ]),
+    );
+    conversation.choose(1);
+    expect(draftIfAny('q7')?.picks['Quelle base ?']).toEqual(['Postgres']);
+    await later();
+    expect(said().at(-1)).toBe('Question 2 sur 3. Quels tests ? Plusieurs réponses possibles.');
+    // Several choices: each click ticks, « Valider » takes them.
+    conversation.choose(0);
+    conversation.choose(1);
+    conversation.choose(0);
+    expect(draftIfAny('q7')?.picks['Quels tests ?']).toEqual(['E2E']);
+    expect(conversation.ask?.index).toBe(1);
+    conversation.validate();
+    await later();
+    expect(said().at(-1)).toBe('Question 3 sur 3. Quel port ?');
+    // Ticked by hand in the card.
+    draftOf('q7').picks['Quel port ?'] = ['5433'];
+    conversation.answeredInWindow('q7');
+    await later();
+    expect(backend.called('answer_question')[0].args).toMatchObject({
+      answers: { 'Quelle base ?': 'Postgres', 'Quels tests ?': 'E2E', 'Quel port ?': '5433' },
+    });
+  });
+
+  it('the request answered entirely in the window meanwhile: back to waiting for the agent', async () => {
+    await asked(
+      request('q8', [
+        { question: 'A ?', options: [{ label: 'X' }] },
+        { question: 'B ?', options: [{ label: 'Y' }] },
+      ]),
+    );
+    ev({ kind: 'convSpoken', reading, error: null });
+    a = { ...a, pending: [] };
+    app.agents[a.id] = a;
+    conversation.observe(a, []);
+    expect(conversation.phase).toBe('working');
+    expect(conversation.ask).toBeNull();
+  });
+
+  it('asks aloud the single question of every harness: Claude Code, Codex, Copilot CLI (with no choices too), OpenCode', async () => {
+    const cases: [string, QuestionItem, string, Record<string, string>][] = [
+      [
+        'Claude Code (AskUserQuestion)',
+        request('c1', [
+          {
+            question: 'Quelle base ?',
+            header: 'Base',
+            multiSelect: false,
+            options: [
+              { label: 'PostgreSQL', description: 'Relationnelle' },
+              { label: 'SQLite', description: 'Embarquée' },
+            ],
+          },
+        ]),
+        'SQLite',
+        { 'Quelle base ?': 'SQLite' },
+      ],
+      [
+        'Codex (requestUserInput), its question with its id',
+        request('c2', [
+          {
+            id: 'lang',
+            question: 'Quel langage ?',
+            header: 'Langage',
+            multiSelect: false,
+            options: [
+              { label: 'Rust', description: '' },
+              { label: 'Go', description: '' },
+            ],
+          },
+        ]),
+        'Le premier',
+        { 'Quel langage ?': 'Rust' },
+      ],
+      [
+        'Copilot CLI (ask_user), a question asked in text, without choices',
+        request('c3', [{ question: 'Quel nom pour la branche ?', header: '', multiSelect: false, options: [] }]),
+        'fix-login',
+        { 'Quel nom pour la branche ?': 'fix-login' },
+      ],
+      [
+        'OpenCode, several choices',
+        request('c4', [
+          {
+            question: 'Quels systèmes ?',
+            header: '',
+            multiSelect: true,
+            options: [
+              { label: 'Windows', description: '' },
+              { label: 'Linux', description: '' },
+            ],
+          },
+        ]),
+        'Les deux',
+        { 'Quels systèmes ?': 'Windows, Linux' },
+      ],
+      [
+        'a form of an MCP server (Copilot: elicitation), a field to fill',
+        request('c5', [{ id: 'port', question: 'Port', multiSelect: false, options: [], field: 'number', required: true }], {
+          form: { message: 'Configuration', source: 'db' },
+        }),
+        '5432',
+        { Port: '5432' },
+      ],
+    ];
+    for (const [harness, q, heard, sent] of cases) {
+      a = agent({ id: 'a1', name: 'Alice' });
+      resetApp({ agents: [a] });
+      conversation.clear();
+      conversation.flashMs = 0;
+      reading = 0;
+      backend = fakeBackend({
+        conversation_start: () => ({ kind: 'listening', session: SESSION }),
+        conversation_say: () => ++reading,
+        get_conversation: () => [],
+      });
+      await asked(q);
+      expect(said()[0], harness).toBe(q.questions[0].question + (q.questions[0].multiSelect ? ' Plusieurs réponses possibles.' : ''));
+      await answers(heard);
+      await later();
+      expect(backend.called('answer_question')[0]?.args, harness).toMatchObject({ requestId: q.id, answers: sent });
+    }
+  });
+
+  it('asks the question of an agent that asks while it listens (the agent of a ticket), and one waiting at the start', async () => {
     await startTalking();
-    ev({ kind: 'convHeard', text: 'Configure', error: null });
-    await tick();
-    const q = {
-      kind: 'question',
-      id: 'q3',
-      toolUseId: 'tu',
-      questions: [{ question: 'Lesquels ?', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] }],
-      answers: null,
-      ts: 3,
-    } as QuestionItem;
-    conversation.observe({ ...a, pending: ['q3'] }, [q]);
-    expect(said()[0]).toBe('Cette question attend une réponse dans la fenêtre. La conversation est en pause.');
+    const q = request('t1', [{ question: 'On continue ?', options: [{ label: 'Oui' }, { label: 'Non' }] }]);
+    a = { ...a, pending: ['t1'] };
+    app.agents[a.id] = a;
+    conversation.observe(a, [q]);
+    expect(said()[0]).toBe('On continue ?');
+    expect(conversation.phase).toBe('question');
+    // Already waiting when the conversation starts.
+    conversation.clear();
+    reading = 0;
+    backend = fakeBackend({
+      conversation_start: () => ({ kind: 'listening', session: SESSION }),
+      conversation_say: () => ++reading,
+      get_conversation: () => [q],
+    });
+    conversationOf('a1').items = [q];
+    await conversation.start('a1');
+    expect(said()[0]).toBe('On continue ?');
   });
 
   it('asks for the model, then for the voice, before it listens; « Arrêter » closes the microphone', async () => {

@@ -99,6 +99,7 @@ export default {
   question: {
     waiting: '{engine} attend ta réponse',
     orWrite: 'ou réponds librement dans le champ ci-dessous',
+    saidAnswer: 'Réponse dite : « {text} »',
     submit: 'Valider',
     unanswered: 'Question restée sans réponse',
     /** Answered through the MCP server, not by the user in the window (see `permission.allowedBy`). */

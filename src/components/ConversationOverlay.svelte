@@ -3,6 +3,7 @@
   import { conversation, type ConvPhase } from '../lib/conversation.svelte';
   import { t } from '../lib/i18n';
   import { keyLabel } from '../lib/platform';
+  import { draftIfAny } from '../lib/question-answers.svelte';
   import { app } from '../lib/state.svelte';
 
   // The voice conversation over the whole window (ESC-97, « A · Orbe » chosen on preview, design/voice-conversation):
@@ -15,6 +16,11 @@
   const phase = $derived(conversation.phase);
   const name = $derived(agent?.name ?? '');
   const subtitle = $derived(conversation.subtitle);
+  // The question asked aloud (ESC-131): its choices show under the orb, the voice does not read them; what was
+  // understood is lit a moment before the next question.
+  const ask = $derived(conversation.ask);
+  const understood = $derived(conversation.understood);
+  const ticked = $derived(ask ? (draftIfAny(ask.itemId)?.picks[ask.question] ?? []) : []);
 
   let canvas = $state<HTMLCanvasElement>();
 
@@ -47,6 +53,7 @@
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     let frame = 0;
     let level = 0;
+    let lift = conversation.ask ? 1 : 0;
     let tint = tintOf(conversation.phase);
     const rgba = (c: number[], a: number) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 
@@ -71,9 +78,11 @@
       const w = canvas!.clientWidth;
       const h = canvas!.clientHeight;
       ctx!.clearRect(0, 0, w, h);
+      // A question asked: the orb goes up, smaller, its choices under it.
+      lift += ((conversation.ask ? 1 : 0) - lift) * (still ? 1 : 0.12);
       const cx = w / 2;
-      const cy = h / 2 - 40;
-      const base = Math.min(92, Math.max(56, Math.min(w, h) * 0.11));
+      const cy = (h / 2 - 40) * (1 - lift) + h * 0.22 * lift;
+      const base = Math.min(92, Math.max(56, Math.min(w, h) * 0.11)) * (1 - 0.3 * lift);
       const r0 = base + level * base * 0.3 + (thinking(p) && !still ? 3 * Math.sin(t * 1.6) : 0);
       // The halo, wider with the sound.
       const halo = ctx!.createRadialGradient(cx, cy, r0 * 0.2, cx, cy, r0 * 2.6);
@@ -124,12 +133,26 @@
     };
   });
 
-  // Escape ends it, before anything else of the window takes the key.
+  // Escape ends it, before anything else of the window takes the key; while a question is asked, the key of a
+  // choice's rank chooses it, Enter confirms the choices ticked of a question of several.
   function onKey(e: KeyboardEvent) {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    e.stopPropagation();
-    conversation.stop();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      conversation.stop();
+      return;
+    }
+    if (!ask || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    const n = /^[1-9]$/.test(e.key) ? Number(e.key) : 0;
+    if (n && n <= ask.options.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      conversation.choose(n - 1);
+    } else if (e.key === 'Enter' && ask.multi) {
+      e.preventDefault();
+      e.stopPropagation();
+      conversation.validate();
+    }
   }
 </script>
 
@@ -137,6 +160,7 @@
 
 <div
   class="overlay"
+  class:asking={!!ask}
   role="dialog"
   aria-modal="true"
   aria-label={t('voice.conversation.overlay.label', { name })}
@@ -154,6 +178,50 @@
   <div class="state" role="status" aria-live="polite">
     {t(`voice.conversation.phase.${phase}` as 'voice.conversation.phase.working', { name })}
   </div>
+  {#if ask}
+    <section class="ask" aria-label={t('voice.conversation.overlay.choices')} data-conversation-ask={ask.index}>
+      <div class="meta">
+        {#if ask.total > 1}<span data-step>{t('voice.conversation.overlay.step', { n: ask.index + 1, total: ask.total })}</span>{/if}
+        {#if ask.multi}<span>{t('voice.conversation.overlay.several')}</span>{/if}
+      </div>
+      <p class="question">{ask.question}</p>
+      {#if ask.options.length}
+        <ol class="choices" class:two={ask.options.length > 3}>
+          {#each ask.options as o, i (i)}
+            {@const on = ticked.includes(o.label)}
+            <li>
+              <button
+                class="choice"
+                class:on
+                class:lit={!!understood?.picks.includes(o.label)}
+                aria-pressed={ask.multi ? on : undefined}
+                aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
+                onclick={() => conversation.choose(i)}
+              >
+                <span class="rank" aria-hidden="true">{i + 1}</span>
+                <span class="body">
+                  <span class="label">{o.label}</span>
+                  {#if o.description}<span class="desc">{o.description}</span>{/if}
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ol>
+      {/if}
+      {#if understood?.text}
+        <p class="yours" data-understood>{t('voice.conversation.overlay.yourAnswer', { text: understood.text })}</p>
+      {:else if conversation.missed}
+        <p class="missed" role="alert">{t('voice.conversation.overlay.missed')}</p>
+      {:else if ask.free}
+        <p class="other">{t('voice.conversation.overlay.other')}</p>
+      {/if}
+      {#if ask.multi}
+        <button class="pill validate" onclick={() => conversation.validate()}>
+          {t('voice.conversation.overlay.validate')} <kbd>{keyLabel('Enter')}</kbd>
+        </button>
+      {/if}
+    </section>
+  {/if}
   <div class="subs" aria-live="polite">
     {#if subtitle}
       {#key subtitle}
@@ -309,10 +377,150 @@
     border-radius: 2px;
     background: currentColor;
   }
+  /* A question asked: the orb up, the state under it, then the question and its choices. */
+  .asking .state {
+    top: calc(22% + 78px);
+  }
+  .ask {
+    position: absolute;
+    left: 50%;
+    top: calc(22% + 112px);
+    bottom: 196px;
+    transform: translateX(-50%);
+    width: min(680px, 86%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    overflow-y: auto;
+    animation: in 0.2s ease-out;
+  }
+  .meta {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .meta span + span::before {
+    content: '·';
+    margin-right: 10px;
+  }
+  .question {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.4;
+    text-align: center;
+    text-wrap: balance;
+  }
+  .choices {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    width: 100%;
+    display: grid;
+    gap: 8px;
+  }
+  .choices.two {
+    grid-template-columns: 1fr 1fr;
+  }
+  .choice {
+    width: 100%;
+    min-height: 46px;
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    border-radius: 12px;
+    border: 1px solid var(--line2);
+    background: rgba(42, 39, 36, 0.62);
+    color: var(--text);
+    font: 13.5px var(--ui);
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s,
+      box-shadow 0.2s;
+  }
+  .choice:hover {
+    border-color: rgba(232, 148, 92, 0.6);
+  }
+  .choice:focus-visible {
+    outline: 2px solid rgba(232, 148, 92, 0.8);
+    outline-offset: 2px;
+  }
+  .rank {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font: 600 12px var(--mono);
+    color: var(--muted);
+    border: 1px solid var(--line2);
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .label {
+    font-weight: 600;
+  }
+  .desc {
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .choice.on {
+    border-color: rgb(232, 148, 92);
+    background: rgba(232, 148, 92, 0.14);
+  }
+  .choice.on .rank,
+  .choice.lit .rank {
+    background: rgb(232, 148, 92);
+    border-color: transparent;
+    color: #1b1512;
+  }
+  /* What was understood: lit a moment before the next question. */
+  .choice.lit {
+    border-color: rgb(232, 148, 92);
+    background: rgba(232, 148, 92, 0.24);
+    box-shadow: 0 0 0 4px rgba(232, 148, 92, 0.16);
+  }
+  .other,
+  .yours,
+  .missed {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .yours {
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 12px;
+    background: rgba(232, 148, 92, 0.18);
+    border: 1px solid rgb(232, 148, 92);
+  }
+  .missed {
+    color: rgb(228, 112, 98);
+  }
   @media (prefers-reduced-motion: reduce) {
     .overlay,
-    .sub {
+    .sub,
+    .ask {
       animation: none;
+    }
+    .choice {
+      transition: none;
     }
   }
 </style>

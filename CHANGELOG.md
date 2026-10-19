@@ -6,6 +6,8 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 ### Modifications
 
+- En conversation vocale, les questions de l’agent sont posées à la voix **une à une** : une demande de plusieurs questions (Claude Code en pose jusqu’à quatre d’un coup) ou à choix multiples ne met plus la conversation en pause. La voix dit la question (« Question 2 sur 3. ») sans lire ses choix, qui s’affichent sous l’orbe, numérotés ; ta réponse dite y répond (une option par son nom ou son rang, plusieurs pour un choix multiple, sinon ta réponse libre), se voit cochée dans la carte, puis vient la suivante, et toutes les réponses partent ensemble après la dernière. Un clic ou le numéro d’un choix répond aussi. Une réponse pas comprise est reposée deux fois au plus avant la pause ; « répète » et « annule » marchent. Une question posée sans choix (Copilot CLI), ou par un agent de ticket pendant que la conversation écoute, est maintenant posée à la voix elle aussi.
+
 - Réglages › Harness n’a plus la ligne « État » ni son bouton « Se connecter… », un reste d’avant les comptes ajoutés : les comptes de chaque harness se connectent dans Réglages › Comptes, où chacun a son état. Sous la version d’un harness dont aucun compte n’est connecté, une phrase renvoie à l’onglet Comptes.
 
 ## [1.8.1] — 2026-10-19

@@ -797,23 +797,26 @@ function startSession() {
     out({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: windows() } });
   }
 
-  // AskUserQuestion; once answered, `then` goes on with the turn (else a plain reply ends it).
-  function askQuestion(then = null) {
+  // AskUserQuestion; once answered, `then` goes on with the turn (else a plain reply ends it). `questions`: its own
+  // (else one question of two choices).
+  function askQuestion(then = null, questions = null) {
     const tuid = `toolu_q${msg}`;
     assistant({ type: 'tool_use', id: tuid, name: 'AskUserQuestion', input: {} });
-    const input = {
-      questions: [
-        {
-          question: 'Quelle base de données ?',
-          header: 'Base',
-          multiSelect: false,
-          options: [
-            { label: 'PostgreSQL', description: 'Relationnelle' },
-            { label: 'SQLite', description: 'Embarquée' },
+    const input = questions
+      ? { questions }
+      : {
+          questions: [
+            {
+              question: 'Quelle base de données ?',
+              header: 'Base',
+              multiSelect: false,
+              options: [
+                { label: 'PostgreSQL', description: 'Relationnelle' },
+                { label: 'SQLite', description: 'Embarquée' },
+              ],
+            },
           ],
-        },
-      ],
-    };
+        };
     pendingAnswer = { id: 'req_question', tuid, kind: 'question', then };
     out({
       type: 'control_request',
@@ -1771,6 +1774,37 @@ function startSession() {
   // A sentence said in a voice conversation (ESC-97): the answer ends with its passage to be read aloud, between
   // <spoken> and </spoken>, as the instruction at the end of the message asks; « base » asks a question first, and
   // the passage says the option chosen.
+  const PROJECT_QUESTIONS = [
+    {
+      question: 'Quelle base de données ?',
+      header: 'Base',
+      multiSelect: false,
+      options: [
+        { label: 'PostgreSQL', description: 'Relationnelle' },
+        { label: 'SQLite', description: 'Embarquée' },
+      ],
+    },
+    {
+      question: 'Quels tests ?',
+      header: 'Tests',
+      multiSelect: true,
+      options: [
+        { label: 'Unitaires', description: '' },
+        { label: 'E2E', description: '' },
+        { label: 'Lint', description: '' },
+      ],
+    },
+    {
+      question: 'Quel nom pour le projet ?',
+      header: 'Nom',
+      multiSelect: false,
+      options: [
+        { label: 'web-shop', description: '' },
+        { label: 'admin', description: '' },
+      ],
+    },
+  ];
+
   function voiceTurn(text) {
     const said = text.slice(0, text.indexOf('<escouade-voice>')).trim();
     const answer = (choice = '') => {
@@ -1780,6 +1814,9 @@ function startSession() {
       );
       result();
     };
+    // « projet » (ESC-131): a request of three questions, a simple one, one of several choices, one answered freely.
+    if (said.toLowerCase().includes('projet'))
+      return askQuestion((answers) => answer(Object.values(answers ?? {}).join(' ; ')), PROJECT_QUESTIONS);
     if (said.toLowerCase().includes('base')) return askQuestion((answers) => answer(Object.values(answers ?? {}).join(', ')));
     answer();
   }

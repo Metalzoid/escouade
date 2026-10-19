@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { conversation } from '../lib/conversation.svelte';
 import { setLang } from '../lib/i18n';
-import type { VoiceEvent } from '../lib/types';
+import { draftIfAny } from '../lib/question-answers.svelte';
+import { app } from '../lib/state.svelte';
+import type { QuestionItem, VoiceEvent } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import ConversationOverlay from './ConversationOverlay.svelte';
 
@@ -109,5 +111,134 @@ describe('the voice conversation over the whole window', () => {
     getContext.mockRestore();
     raf.mockRestore();
     caf.mockRestore();
+  });
+
+  describe('a request of questions asked aloud (ESC-131)', () => {
+    const request: QuestionItem = {
+      kind: 'question',
+      id: 'rq',
+      toolUseId: 'tu',
+      ts: 3,
+      answers: null,
+      questions: [
+        {
+          question: 'Quelle base ?',
+          header: 'Base',
+          options: [
+            { label: 'PostgreSQL', description: 'Relationnelle' },
+            { label: 'SQLite', description: 'Embarquée' },
+          ],
+        },
+        {
+          question: 'Quels tests ?',
+          header: 'Tests',
+          multiSelect: true,
+          options: [{ label: 'Unitaires' }, { label: 'E2E' }, { label: 'Lint' }],
+        },
+        { question: 'Quel nom ?', header: 'Nom', options: [{ label: 'web-shop' }, { label: 'admin' }] },
+      ],
+    };
+    const later = (ms = 5) => new Promise((r) => setTimeout(r, ms));
+    const choice = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
+    const asking = () => document.querySelector('[data-conversation-ask]') as HTMLElement | null;
+
+    async function ask() {
+      app.agents.a1 = { ...app.agents.a1, pending: ['rq'] };
+      ev({ kind: 'convHeard', text: 'Configure le projet', error: null });
+      await tick();
+      conversation.observe(app.agents.a1, [request]);
+      await tick();
+    }
+
+    async function heard(text: string) {
+      ev({ kind: 'convSpoken', reading, error: null });
+      ev({ kind: 'convHeard', text, error: null });
+      await tick();
+    }
+
+    it('shows the question under the orb with its choices, their ranks and descriptions, where it is, and « Autre »', async () => {
+      render(ConversationOverlay);
+      await ask();
+      expect(overlay().classList.contains('asking')).toBe(true);
+      const section = screen.getByRole('region', { name: 'Choix de la question' });
+      expect(section.querySelector('[data-step]')?.textContent).toBe('Question 1 sur 3');
+      expect(section.textContent).toContain('Quelle base ?');
+      const items = [...section.querySelectorAll('li')].map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
+      expect(items).toEqual(['1 PostgreSQL Relationnelle', '2 SQLite Embarquée']);
+      expect(choice('PostgreSQL').getAttribute('aria-keyshortcuts')).toBe('1');
+      expect(section.textContent).toContain('Autre : dis ta réponse');
+      // The voice says the question, not its choices.
+      expect(backend.called('conversation_say').at(-1)?.args.text).toBe('Question 1 sur 3. Quelle base ?');
+    });
+
+    it('lights the choice understood a moment, then shows the next question', async () => {
+      conversation.flashMs = 40;
+      render(ConversationOverlay);
+      await ask();
+      await heard('La deuxième');
+      await tick();
+      expect(choice('SQLite').classList.contains('lit')).toBe(true);
+      expect(choice('PostgreSQL').classList.contains('lit')).toBe(false);
+      await later(60);
+      expect(asking()?.dataset.conversationAsk).toBe('1');
+      expect(screen.getByRole('region').textContent).toContain('Plusieurs réponses possibles');
+    });
+
+    it('says on screen too an answer not understood, and shows a free answer understood', async () => {
+      conversation.flashMs = 40;
+      render(ConversationOverlay);
+      await ask();
+      await heard('SQLite ou PostgreSQL');
+      await tick();
+      expect(screen.getByRole('alert').textContent).toBe('Je n’ai pas compris : redis ta réponse, ou choisis ci-dessous.');
+      await heard('SQLite');
+      await later(60);
+      await heard('Toutes');
+      await later(60);
+      await heard('Escouade-front');
+      await tick();
+      expect(document.querySelector('[data-understood]')?.textContent).toBe('Ta réponse : Escouade-front');
+    });
+
+    it('a click or the key of its rank chooses; several choices are ticked, then « Valider » or Enter sends them', async () => {
+      conversation.flashMs = 0;
+      render(ConversationOverlay);
+      await ask();
+      await userEvent.click(choice('SQLite'));
+      await later();
+      expect(draftIfAny('rq')?.picks['Quelle base ?']).toEqual(['SQLite']);
+      expect(asking()?.dataset.conversationAsk).toBe('1');
+      await userEvent.click(choice('Unitaires'));
+      await fireEvent.keyDown(window, { key: '3' });
+      await tick();
+      expect(choice('Unitaires').getAttribute('aria-pressed')).toBe('true');
+      expect(choice('Lint').getAttribute('aria-pressed')).toBe('true');
+      expect(choice('E2E').getAttribute('aria-pressed')).toBe('false');
+      expect(asking()?.dataset.conversationAsk).toBe('1');
+      await userEvent.click(screen.getByRole('button', { name: /Valider/ }));
+      await later();
+      expect(asking()?.dataset.conversationAsk).toBe('2');
+      await fireEvent.keyDown(window, { key: '2' });
+      await later();
+      expect(backend.called('answer_question')[0].args.answers).toEqual({
+        'Quelle base ?': 'SQLite',
+        'Quels tests ?': 'Unitaires, Lint',
+        'Quel nom ?': 'admin',
+      });
+      expect(asking()).toBeNull();
+    });
+
+    it('Enter confirms the choices ticked of a question of several', async () => {
+      conversation.flashMs = 0;
+      render(ConversationOverlay);
+      await ask();
+      await fireEvent.keyDown(window, { key: '1' });
+      await later();
+      await fireEvent.keyDown(window, { key: '2' });
+      await fireEvent.keyDown(window, { key: 'Enter' });
+      await later();
+      expect(draftIfAny('rq')?.picks['Quels tests ?']).toEqual(['E2E']);
+      expect(asking()?.dataset.conversationAsk).toBe('2');
+    });
   });
 });
