@@ -233,7 +233,8 @@ test.describe('OpenCode 2', () => {
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await dialog.getByRole('tab', { name: 'Harness' }).click();
     const group = dialog.locator('section[data-engine="opencode"]');
-    await expect(group.locator('[data-engine-state]')).toHaveText('Non pris en charge');
+    // Its version line says it, refused (1.8.2: no state line any more).
+    await expect(group.locator('[data-state]')).toHaveAttribute('data-state', 'unsupported');
     await expect(group.getByText(refusal)).toBeVisible();
   });
 });
