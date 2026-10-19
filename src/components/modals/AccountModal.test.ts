@@ -116,7 +116,7 @@ describe('AccountModal', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Harness' }), 'codex');
     expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Codex' })).toBeInTheDocument();
     await waitFor(() => expect(b.called('account_shareable').at(-1)?.args).toEqual({ engine: 'codex' }));
-    const group = await screen.findByRole('group', { name: 'Partager avec Principal' });
+    const group = await screen.findByRole('group', { name: 'Partager avec le compte de la machine' });
     // config.toml and AGENTS.md are files, skills a folder.
     expect(within(group).getByRole('checkbox', { name: 'config.toml' })).toBeChecked();
     expect(within(group).getByRole('checkbox', { name: 'skills' })).toBeChecked();
@@ -154,7 +154,7 @@ describe('AccountModal', () => {
     render(AccountModal, { engine: 'copilot' });
     expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Copilot CLI' })).toBeInTheDocument();
     await waitFor(() => expect(b.called('account_shareable').at(-1)?.args).toEqual({ engine: 'copilot' }));
-    const group = await screen.findByRole('group', { name: 'Partager avec Principal' });
+    const group = await screen.findByRole('group', { name: 'Partager avec le compte de la machine' });
     for (const name of SHARED) expect(within(group).getByRole('checkbox', { name })).toBeChecked();
     expect(screen.getByText(/La connexion n’est jamais copiée : chaque compte se connecte par copilot login/)).toBeInTheDocument();
     await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Travail');
@@ -165,6 +165,77 @@ describe('AccountModal', () => {
     await screen.findByRole('dialog', { name: 'Se connecter au compte « Travail »' });
     expect(term.opened).toEqual(['travail']);
     expect(screen.getByRole('status')).toHaveTextContent('copilot login donne un code');
+  });
+
+  describe('the machine’s account or a new one (ESC-128)', () => {
+    const machine = (over: Record<string, unknown> = {}) => ({
+      found: true,
+      added: false,
+      connected: true,
+      signsIn: true,
+      email: 'ada@atlas.dev',
+      dir: 'C:\\Users\\ada\\.codex',
+      ...over,
+    });
+    const CODEX_MAIN: Account = { id: 'principal-codex', name: 'Principal', engine: 'codex', configDir: '', claudePath: '', active: true };
+
+    beforeEach(() => {
+      app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, name: 'Codex' }];
+      app.enginesFound = ['claude', 'codex'];
+      app.settings.accounts = [];
+      app.modal = { kind: 'account', engine: 'codex' };
+    });
+
+    it('offers the account signed in on the machine first, and adds it as it is', async () => {
+      const b = backend([OUT], { account_machine: () => machine(), account_add_machine: () => CODEX_MAIN });
+      render(AccountModal, { engine: 'codex' });
+      const offered = await screen.findByRole('radio', { name: /Le compte de la machine/ });
+      await waitFor(() => expect(offered).toBeChecked());
+      expect(b.called('account_machine')[0].args).toEqual({ engine: 'codex' });
+      expect(screen.getByText('Codex est connecté sur cette machine · ada@atlas.dev')).toBeInTheDocument();
+      expect(screen.getByText(/Son dossier habituel, tel quel/)).toHaveTextContent('(~/.codex)');
+      // Nothing to name nor share: it is the machine's own.
+      expect(screen.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter ce compte' }));
+      await waitFor(() => expect(b.called('account_add_machine')).toHaveLength(1));
+      expect(b.called('account_add_machine')[0].args).toEqual({ engine: 'codex' });
+      expect(app.settings.accounts).toEqual([CODEX_MAIN]);
+      // No sign-in to make: back to the accounts.
+      expect(term.opened).toEqual([]);
+      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    });
+
+    it('offers a new account instead while the harness is not signed in on the machine, or its account is added already', async () => {
+      backend([OUT], { account_machine: () => machine({ connected: false, email: null }) });
+      const { unmount } = render(AccountModal, { engine: 'codex' });
+      expect(await screen.findByText('Codex n’est pas connecté sur cette machine')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Le compte de la machine/ })).toBeDisabled();
+      expect(screen.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
+      expect(screen.getByRole('textbox', { name: 'Nom' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Créer et se connecter' })).toBeInTheDocument();
+      unmount();
+      backend([OUT], { account_machine: () => machine({ added: true }) });
+      render(AccountModal, { engine: 'codex' });
+      expect(await screen.findByText('Déjà ajouté')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /Le compte de la machine/ })).toBeDisabled();
+    });
+
+    it('says OpenCode is installed, which signs in to no account', async () => {
+      backend([OUT], { account_machine: () => machine({ signsIn: false, email: null }) });
+      render(AccountModal, { engine: 'codex' });
+      expect(await screen.findByText('Codex est installé sur cette machine')).toBeInTheDocument();
+    });
+
+    it('opened over another window, goes back to it when it closes', async () => {
+      backend([OUT], { account_machine: () => machine() });
+      const onclose = vi.fn();
+      app.modal = { kind: 'newProject' };
+      render(AccountModal, { engine: 'codex', onclose });
+      await screen.findByRole('button', { name: 'Ajouter ce compte' });
+      await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      expect(onclose).toHaveBeenCalledOnce();
+      expect(app.modal).toEqual({ kind: 'newProject' });
+    });
   });
 
   it('offers no harness to pick while only one is found', async () => {

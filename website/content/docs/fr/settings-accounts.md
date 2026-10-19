@@ -4,7 +4,7 @@ L’onglet « Comptes » liste les comptes sur lesquels partent les agents, un
 
 ## Comment Escouade choisit un compte
 
-Un compte est un harness lancé avec son propre dossier de configuration (pour Claude Code, son `CLAUDE_CONFIG_DIR`), donc avec sa connexion, ses sessions et son quota. Chaque compte appartient à un seul harness, et l’onglet les groupe par harness : « Comptes Claude Code », puis ceux des autres harness quand ils en ont. Chaque harness a son « Principal », ton installation habituelle : il est lancé comme toujours, sans dossier à part, et il ne se supprime pas. Le fonctionnement des comptes et de leurs quotas est expliqué dans [les comptes](accounts) et dans [l’usage](usage).
+Un compte est un harness lancé avec son propre dossier de configuration (pour Claude Code, son `CLAUDE_CONFIG_DIR`), donc avec sa connexion, ses sessions et son quota. Chaque compte appartient à un seul harness, et l’onglet les groupe par harness : « Comptes Claude Code », puis ceux des autres harness quand ils en ont. Aucun compte n’existe au départ : seuls ceux que tu ajoutes comptent. Un harness installé sans compte a son groupe, avec « Aucun compte » et « Ajouter un compte Codex… ». Le compte de la machine d’un harness, son « Principal », est ton installation habituelle : une fois ajouté, il est lancé comme toujours, sans dossier à part, et il se retire comme les autres, sans déconnecter la machine. Le fonctionnement des comptes et de leurs quotas est expliqué dans [les comptes](accounts) et dans [l’usage](usage).
 
 La note sous le titre du premier groupe le résume : « Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre. » En détail :
 
@@ -25,7 +25,8 @@ Chaque compte a son bloc dans le groupe de son harness.
 | « Dossier » | Le dossier de configuration du compte, affiché sans pouvoir être modifié. | — |
 | « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de l’onglet « Harness » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
 | « Se connecter… » ou « Se reconnecter… » | Ouvre la connexion du compte. | — |
-| « Supprimer » | Retire le compte de la liste (absent pour le Principal de chaque harness). | — |
+| « Nouveaux agents » | « Modèle », « Effort » et « Mode » des nouveaux agents de ce compte, parmi ceux de son harness : les modèles que son harness liste pour lui, les efforts de son modèle (absent pour un harness sans effort), les modes de son harness. « Celui du harness » prend le défaut de son harness. Un nouvel agent les prend, sauf choix dans son champ de message ; un ticket, après ceux du ticket et du Kanban. Enregistré tout de suite. | « Celui du harness » (à la mise à jour, un compte Claude Code gardé prend les anciens réglages « Nouveaux agents » de l’onglet « Harness ») |
+| « Supprimer » | Retire le compte de la liste, le compte de la machine compris (la confirmation dit qu’il reste connecté sur la machine). | — |
 | « Réservé aux projets » | Une case par projet ouvert, plus une case cochée, marquée « (fermé) », pour chaque projet fermé auquel le compte reste réservé : le compte ne sert que les projets cochés. | Aucune case cochée : « Tous les projets » |
 
 ### Nom et état
@@ -66,10 +67,13 @@ Dès que deux harness ont des comptes, la liste « Ordre des harness » appara
 
 ## Ajouter un compte
 
-« Ajouter un compte… », sous les groupes, ouvre la fenêtre « Ajouter un compte Claude » : le compte ajouté est un compte de Claude Code.
+« Ajouter un compte… », sous les groupes (ou « Ajouter un compte Codex… » dans le groupe d’un harness sans compte), ouvre la fenêtre « Ajouter un compte Claude Code », avec « Harness » dès que deux harness sont installés. Elle propose d’abord :
+
+- « Le compte de la machine » : le compte du dossier habituel du harness, quand le harness y est connecté (« Claude Code est connecté sur cette machine · ada@exemple.dev ») et qu’il n’est pas déjà ajouté (« Déjà ajouté ») ; sinon grisé. « Ajouter ce compte » l’ajoute tel quel.
+- « Un nouveau compte » : un dossier à lui sous `~/.escouade`, et sa propre connexion, réglé ainsi :
 
 1. « Nom » : le nom du nouveau compte (« Pro, Équipe… » en exemple). Deux comptes ne peuvent pas porter le même nom.
-2. « Partager avec Principal » : des cases, toutes cochées au départ, pour les éléments du dossier de Principal que le compte reprend. Les fichiers sont `settings.json` et `CLAUDE.md`, les dossiers `skills`, `agents`, `commands`, `plugins`, `hooks` et `output-styles` ; seuls ceux que Principal possède sont proposés.
+2. « Partager avec… » : des cases, toutes cochées au départ, pour les éléments du dossier du compte de la machine que le compte reprend. Les fichiers sont `settings.json` et `CLAUDE.md`, les dossiers `skills`, `agents`, `commands`, `plugins`, `hooks` et `output-styles` ; seuls ceux que ce dossier possède sont proposés.
 3. « Partage » : « Lier (un changement vaut pour les deux comptes) », par défaut, ou « Copier ». Sous Windows, les dossiers sont liés par une jonction, qui ne demande pas de droits d’administrateur, et les fichiers sont copiés, un lien de fichier en demandant. Sous macOS et Linux, dossiers et fichiers sont liés par des liens symboliques ; la mention « copiés (un lien de fichier demande des droits d’administrateur) » que la fenêtre affiche à côté des fichiers ne vaut que pour Windows, même si elle apparaît aussi sous Linux.
 4. « Créer et se connecter » crée le compte, actif et en dernier dans la liste, avec son dossier dans `~/.escouade/claude/`, puis ouvre sa connexion.
 
@@ -81,7 +85,7 @@ Le seuil se règle dans l’onglet [« Kanban »](settings-board), pas ici, ma
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Pause au-delà du quota » (pour tous les projets) | Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire atteint ou dépasse ce seuil. Choix : 80 %, 90 %, 95 % ou 100 %. | 100 % |
+| « Pause au-delà du quota » (pour tous les projets) | Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire atteint ou dépasse ce seuil. Choix : 80 %, 90 %, 95 % ou 100 %. | 100 % |
 
 Un compte dont une fenêtre a passé le seuil est écarté au profit du suivant de son harness, et le panneau des quotas le marque « au-delà du seuil de pause ». Le pilote auto se met en pause harness par harness : un ticket attend que l’un des comptes de son harness repasse sous le seuil, pendant que ceux d’un autre harness démarrent. Un harness sans quota ne le met jamais en pause.
 

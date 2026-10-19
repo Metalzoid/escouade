@@ -101,6 +101,7 @@ export default defineZone('wizard', {
   },
   account: {
     remoteAll: 'Already on for all agents (Settings › Harness).',
+    noAccount: 'No {harness} account: this project’s agents and tickets won’t start until one is added.',
   },
   integrations: {
     none: 'No Jira, Trello, GitHub or Linear account is connected: connect one in Settings › Integrations, after creating the project.',

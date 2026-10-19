@@ -1,7 +1,11 @@
-//! The Claude accounts: each one is Claude Code run with a configuration folder of its own
-//! (`CLAUDE_CONFIG_DIR`), so with its own sign-in, sessions and quota. Principal is the user's own
-//! Claude Code, launched as it always was: never given a `CLAUDE_CONFIG_DIR`, since setting one,
-//! even to `~/.claude`, changes the name of its macOS keychain entry and signs the user out.
+//! The accounts of the harnesses: each one is its harness run with a configuration folder of its
+//! own (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`…), so with its own sign-in, sessions and quota. The
+//! machine's account of a harness (its Principal) is the user's own installation, launched as it
+//! always was: never given a `CLAUDE_CONFIG_DIR`, since setting one, even to `~/.claude`, changes
+//! the name of its macOS keychain entry and signs the user out.
+//!
+//! Only the accounts the user added exist (ESC-128): a first installation has none, for any
+//! harness, and « Ajouter un compte… » adds the machine's (`principal_of`) or a new one.
 //!
 //! The order of `Settings::accounts` is their priority: new agents go to the first one usable.
 
@@ -22,6 +26,10 @@ use tauri::Runtime;
 
 /// The id of the user's own account.
 pub const PRINCIPAL: &str = "principal";
+
+/// How far the accounts are brought (`Settings::accounts_version`): 1 since only the accounts
+/// added exist (ESC-128, `migrate`).
+pub const ACCOUNTS_VERSION: u32 = 1;
 
 /// The variable that gives Claude Code its configuration folder.
 pub(crate) const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
@@ -113,7 +121,7 @@ pub enum ShareMode {
     Copy,
 }
 
-/// Principal as it is made the first time: the user's own Claude Code, active.
+/// Claude Code's Principal as it is added: the user's own Claude Code, active.
 pub fn principal() -> Account {
     principal_of(EngineId::Claude)
 }
@@ -133,24 +141,21 @@ pub fn is_principal(account: &Account) -> bool {
     account.id == principal_id(account.engine)
 }
 
-/// The Principal of `engine` as it is made the first time: the user's own, active.
+/// The machine's account of `engine` (its Principal) as « Ajouter un compte… » adds it: the user's
+/// own installation, active.
 pub fn principal_of(engine: EngineId) -> Account {
     Account {
         id: principal_id(engine),
         name: tr!("Principal", "Main"),
         engine,
-        config_dir: String::new(),
-        claude_path: String::new(),
-        active: true,
-        projects: Vec::new(),
-        daily_budget: None,
+        ..Default::default()
     }
 }
 
-/// Puts the accounts right: Claude Code's Principal (first when it was missing, as on the first
-/// load), and that of every other harness written that has accounts, with no folder of its own;
-/// every id unique; at least one account of each harness active; every harness with accounts once
-/// in « Ordre des harness ».
+/// Puts the accounts right: every id unique; a Principal without a folder of its own, of the
+/// harness its id says; at least one account of each harness that has some active; every harness
+/// with accounts once in « Ordre des harness ». It adds none: only the accounts the user added
+/// exist (ESC-128).
 pub fn normalize(settings: &mut Settings) {
     let accounts = &mut settings.accounts;
     for a in accounts.iter_mut() {
@@ -175,8 +180,8 @@ pub fn normalize(settings: &mut Settings) {
         }
     }
     // None (written by hand): one after its name, never a Principal's.
-    let engines: Vec<EngineId> = engine::registry::all().iter().map(|e| e.id()).collect();
-    taken.extend(engines.iter().map(|e| principal_id(*e)));
+    let written: Vec<EngineId> = engine::registry::all().iter().map(|e| e.id()).collect();
+    taken.extend(written.iter().map(|e| principal_id(*e)));
     for a in accounts.iter_mut().filter(|a| a.id.is_empty()) {
         let base = match crate::core::slugify(&a.name) {
             s if s.is_empty() => "account".to_string(),
@@ -185,47 +190,26 @@ pub fn normalize(settings: &mut Settings) {
         a.id = unique(&base, &taken);
         taken.insert(a.id.clone());
     }
-    // A harness other than Claude Code has its Principal once it serves (`Core::accounts_of`): one
-    // that never ran shows nowhere, nor is it a harness to go on on (`fallback_engines`).
-    let engines: Vec<EngineId> = engines
-        .into_iter()
-        .filter(|e| *e == EngineId::Claude || accounts.iter().any(|a| a.engine == *e))
-        .collect();
-    for engine in &engines {
-        let id = principal_id(*engine);
-        let at = match accounts.iter().position(|a| a.id == id) {
-            Some(at) => at,
-            // Claude Code's first, as before 1.8; another's after the accounts there are.
-            None if *engine == EngineId::Claude => {
-                accounts.insert(0, principal_of(*engine));
-                0
+    for a in accounts.iter_mut() {
+        // A Principal, whatever a hand-edited file says: a folder would sign the user out of it,
+        // and its id says its harness.
+        if let Some(e) = written.iter().find(|e| principal_id(**e) == a.id) {
+            a.engine = *e;
+            a.config_dir.clear();
+            if a.name.trim().is_empty() {
+                a.name = principal().name;
             }
-            None => {
-                accounts.push(principal_of(*engine));
-                accounts.len() - 1
-            }
-        };
-        let main = &mut accounts[at];
-        // Whatever a hand-edited file says: a folder would sign the user out of it, and its id
-        // says its harness.
-        main.config_dir.clear();
-        main.engine = *engine;
-        if main.name.trim().is_empty() {
-            main.name = principal().name;
-        }
-        if !accounts.iter().any(|a| a.active && a.engine == *engine) {
-            accounts[at].active = true;
         }
     }
-    // A harness this version does not write (accounts saved by a later one) keeps one active
-    // too, its first, and its place in the order.
-    let mut others: Vec<EngineId> = Vec::new();
+    // Each harness with accounts keeps one active, its first (one this version does not write,
+    // saved by a later one, too), and its place in the order.
+    let mut engines: Vec<EngineId> = Vec::new();
     for a in accounts.iter() {
-        if !engines.contains(&a.engine) && !others.contains(&a.engine) {
-            others.push(a.engine);
+        if !engines.contains(&a.engine) {
+            engines.push(a.engine);
         }
     }
-    for engine in &others {
+    for engine in &engines {
         if !accounts.iter().any(|a| a.active && a.engine == *engine) {
             if let Some(first) = accounts.iter_mut().find(|a| a.engine == *engine) {
                 first.active = true;
@@ -233,12 +217,85 @@ pub fn normalize(settings: &mut Settings) {
         }
     }
     let mut order = Vec::new();
-    for e in settings.engine_order.iter().chain(&engines).chain(&others) {
+    for e in settings.engine_order.iter().chain(&engines) {
         if !order.contains(e) {
             order.push(*e);
         }
     }
     settings.engine_order = order;
+}
+
+/// The settings saved before 1.8.1 (`accounts_version` 0) brought to the accounts added alone
+/// (ESC-128), once: a Principal stays, as an account added (same id, same name, same settings: its
+/// agents, tickets and statistics do not move), when `keep` says it is signed in or served; else it
+/// goes. Claude Code's was there even when the settings did not list it (saved before the
+/// accounts, `normalize` put it back at every load): it is looked at too. Each Claude Code account
+/// kept takes the model, effort and mode new agents had (`Settings::default_model`…); another
+/// harness's keeps its harness's defaults. Whether anything was done.
+pub fn migrate(settings: &mut Settings, keep: impl Fn(&Account) -> bool) -> bool {
+    if settings.accounts_version >= ACCOUNTS_VERSION {
+        return false;
+    }
+    if !settings.accounts.iter().any(|a| a.id == PRINCIPAL) {
+        settings.accounts.insert(0, principal());
+    }
+    settings.accounts.retain(|a| !is_principal(a) || keep(a));
+    let (model, effort, mode) = (
+        settings.default_model.trim().to_string(),
+        settings.default_effort.trim().to_string(),
+        settings.default_mode.trim().to_string(),
+    );
+    for a in settings
+        .accounts
+        .iter_mut()
+        .filter(|a| a.engine == EngineId::Claude)
+    {
+        if a.default_model.is_empty() {
+            a.default_model = model.clone();
+        }
+        if a.default_effort.is_empty() {
+            a.default_effort = effort.clone();
+        }
+        if a.default_mode.is_empty() {
+            a.default_mode = mode.clone();
+        }
+    }
+    settings.accounts_version = ACCOUNTS_VERSION;
+    normalize(settings);
+    true
+}
+
+/// What a new agent goes with unless it says its own: its account's model, effort and permission
+/// mode (`Account::default_model`…), else its harness's defaults (`defaults`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Defaults {
+    pub model: String,
+    pub effort: String,
+    pub mode: String,
+}
+
+/// Claude Code's model of new agents, until an account says another.
+pub const CLAUDE_DEFAULT_MODEL: &str = "sonnet";
+
+/// The `Defaults` of `account`, else of its harness `engine` (none: no account yet): Claude
+/// Code's Sonnet, every harness's effort `medium` and mode `auto`; no model for another harness,
+/// whose own default it then runs (`Core::model_for`).
+pub fn defaults(account: Option<&Account>, engine: EngineId) -> Defaults {
+    let engine = account.map_or(engine, |a| a.engine);
+    let own = |f: fn(&Account) -> &String| {
+        account
+            .map(|a| f(a).trim().to_string())
+            .filter(|v| !v.is_empty())
+    };
+    let model = own(|a| &a.default_model).unwrap_or_else(|| match engine {
+        EngineId::Claude => CLAUDE_DEFAULT_MODEL.to_string(),
+        _ => String::new(),
+    });
+    Defaults {
+        model,
+        effort: own(|a| &a.default_effort).unwrap_or_else(|| "medium".into()),
+        mode: own(|a| &a.default_mode).unwrap_or_else(|| "auto".into()),
+    }
 }
 
 /// `base`, else `base-2`, `base-3`… the first that is not `taken`.
@@ -252,35 +309,33 @@ fn unique(base: &str, taken: &HashSet<String>) -> String {
     id
 }
 
-/// The account `id` names, else Principal (an id unknown to the settings: an account removed, a
-/// state saved by a later version), with a line in the log. None only when the settings have no
-/// Principal, which `normalize` prevents.
+/// The account `id` names, if the settings have it: an id they do not know (an account removed,
+/// a state saved by a later version) is none, never another account (ESC-128).
 pub fn find<'a>(settings: &'a Settings, id: &str) -> Option<&'a Account> {
-    if let Some(a) = settings.accounts.iter().find(|a| a.id == id) {
-        return Some(a);
-    }
-    // Empty: an agent made by code that names none.
-    if !id.is_empty() && id != PRINCIPAL {
-        log::warn!("account {id:?} unknown: Principal instead");
-    }
-    settings.accounts.iter().find(|a| a.id == PRINCIPAL)
+    settings.accounts.iter().find(|a| a.id == id)
 }
 
-/// `find`, as a copy that is always there: settings never normalized (written whole by a test)
-/// give Principal as it is made.
+/// `find`, as a copy that is always there, for what names or reads an account (its name, its
+/// folder): one the settings do not know is the machine's of its harness for a Principal's id,
+/// else an account named by its id, switched off, with no folder. Never what an agent is started
+/// on: that is `Core::agent_account`, which refuses an account gone.
 pub fn get(settings: &Settings, id: &str) -> Account {
-    // The Principal of another harness, missing from settings saved without it: that harness's own,
-    // never Claude Code's (an agent of Codex would start `claude`).
-    if !settings.accounts.iter().any(|a| a.id == id) {
-        if let Some(e) = engine::registry::all()
-            .iter()
-            .map(|e| e.id())
-            .find(|e| *e != EngineId::Claude && principal_id(*e) == id)
-        {
-            return principal_of(e);
-        }
+    if let Some(a) = find(settings, id) {
+        return a.clone();
     }
-    find(settings, id).cloned().unwrap_or_else(principal)
+    if let Some(e) = engine::registry::all()
+        .iter()
+        .map(|e| e.id())
+        .find(|e| principal_id(*e) == id)
+    {
+        return principal_of(e);
+    }
+    Account {
+        id: id.to_string(),
+        name: id.to_string(),
+        active: false,
+        ..Default::default()
+    }
 }
 
 /// The meters of the account's quota (`usage`) used `threshold` percent or more at `now`, until an
@@ -309,16 +364,16 @@ pub fn over_threshold(usage: &[AccountUsage], id: &str, threshold: u32, now: i64
 /// The account a new agent goes to. The one `preferred` names (a project's, or the one asked for)
 /// when it is active; else the first active one, in the settings' order, none of whose quota
 /// meters (`usage`) is used `threshold` percent or more at `now`; when every active account is,
-/// the first active one (the autopilot then pauses). Principal when none is active, which
-/// `normalize` prevents. Given the settings of one harness (`for_project`), it stays among its
-/// accounts: going on another harness is a handover (ESC-88).
+/// the first active one (the autopilot then pauses). None when none is active (no account added,
+/// ESC-128). Given the settings of one harness (`for_project`), it stays among its accounts: going
+/// on another harness is a handover (ESC-88).
 pub fn pick(
     settings: &Settings,
     usage: &[AccountUsage],
     threshold: u32,
     preferred: Option<&str>,
     now: i64,
-) -> String {
+) -> Option<String> {
     pick_where(settings, preferred, |id| {
         !over_threshold(usage, id, threshold, now)
     })
@@ -330,16 +385,16 @@ pub fn pick_where(
     settings: &Settings,
     preferred: Option<&str>,
     usable: impl Fn(&str) -> bool,
-) -> String {
+) -> Option<String> {
     let mut active = settings.accounts.iter().filter(|a| a.active);
     if let Some(a) = preferred.and_then(|id| active.clone().find(|a| a.id == id)) {
-        return a.id.clone();
+        return Some(a.id.clone());
     }
     let first = active.clone().next();
     active
         .find(|a| usable(&a.id))
         .or(first)
-        .map_or_else(|| PRINCIPAL.to_string(), |a| a.id.clone())
+        .map(|a| a.id.clone())
 }
 
 /// The settings as an agent of `engine` sees them: the accounts of the other harnesses taken as
@@ -365,7 +420,7 @@ pub fn for_project(settings: &Settings, engine: EngineId, project: Option<&str>)
 }
 
 /// Whether an active account of `engine` serves new agents of `project` (none: of no project).
-/// Principal may be reserved like any account: a project then may have none on that harness, and
+/// None does while the harness has no account (ESC-128), or each is reserved to other projects:
 /// nothing starts for it there.
 pub fn serves_any(settings: &Settings, engine: EngineId, project: Option<&str>) -> bool {
     settings
@@ -812,8 +867,7 @@ pub fn create_of(
         config_dir: dir.to_string_lossy().into_owned(),
         claude_path: String::new(),
         active: true,
-        projects: Vec::new(),
-        daily_budget: None,
+        ..Default::default()
     })
 }
 
@@ -1081,6 +1135,25 @@ pub struct AccountStatus {
     pub stamp: Option<String>,
 }
 
+/// What « Ajouter un compte… » says of the machine's account of a harness (`Core::machine_account`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineAccount {
+    /// Its harness's program is found.
+    pub found: bool,
+    /// It is among the accounts already.
+    pub added: bool,
+    /// Its harness is signed in there (OpenCode, which signs in to none: found).
+    pub connected: bool,
+    /// Its harness signs in to an account of its own (not OpenCode, whose providers are its
+    /// config's).
+    pub signs_in: bool,
+    /// Who it is signed in as, when the harness says: an email, a GitHub `@login`.
+    pub email: Option<String>,
+    /// Its folder (`~/.claude`, the app's `CLAUDE_CONFIG_DIR`, `~/.codex`…).
+    pub dir: String,
+}
+
 /// Refused: no account has the id the window gave (removed meanwhile).
 fn unknown(id: &str) -> anyhow::Error {
     anyhow::anyhow!(tr!(
@@ -1105,8 +1178,51 @@ fn reserved(account: &Account) -> anyhow::Error {
     ))
 }
 
+/// Refused: the harness `engine` has no account (ESC-128): nothing starts on it before one is
+/// added. The window offers « Ajouter un compte… » on that harness with it (`commands::err`).
+#[derive(Debug)]
+pub struct NoAccount {
+    pub engine: EngineId,
+    text: String,
+}
+
+impl std::fmt::Display for NoAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text)
+    }
+}
+
+impl std::error::Error for NoAccount {}
+
+/// What the window is told of the refusal `e` (said as `text`): one for want of an account comes
+/// as `no-account:<harness>|<text>`, which the window shows with « Ajouter un compte… » on that
+/// harness (`refusal.ts`).
+pub fn marked(e: &anyhow::Error, text: String) -> String {
+    match e.downcast_ref::<NoAccount>() {
+        Some(no) => format!("no-account:{}|{text}", no.engine),
+        None => text,
+    }
+}
+
+/// `NoAccount` for `engine`, said in the interface's language.
+pub(crate) fn no_account_of(engine: EngineId) -> anyhow::Error {
+    let harness = engine::by_name(engine);
+    anyhow::Error::new(NoAccount {
+        engine,
+        text: tr!(
+            "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes.",
+            "No {harness} account: add one in Settings › Accounts."
+        ),
+    })
+}
+
+/// Whether the settings have an account of `engine`, active or not.
+pub fn has_any(settings: &Settings, engine: EngineId) -> bool {
+    settings.accounts.iter().any(|a| a.engine == engine)
+}
+
 /// Refused: no active account of `engine` serves the project `name` (all are reserved to others,
-/// or off): nothing starts for it on that harness.
+/// or off; none at all: `no_account_of`): nothing starts for it on that harness.
 pub(crate) fn no_account(name: &str, engine: EngineId) -> anyhow::Error {
     let harness = engine::by_name(engine);
     anyhow::anyhow!(tr!(
@@ -1208,12 +1324,13 @@ impl<R: Runtime> Core<R> {
         let _one = self.claude_accounts_lock.lock();
         s.accounts = self.settings.read().accounts.clone();
         s.engine_order = self.settings.read().engine_order.clone();
+        s.accounts_version = self.settings.read().accounts_version;
         s.mcp_enabled = self.settings.read().mcp_enabled;
         self.save_settings(s)
     }
 
     /// The settings changed by `change` and saved, with the accounts as they then are.
-    fn change_claude_accounts<T>(
+    pub(crate) fn change_claude_accounts<T>(
         self: &Arc<Self>,
         change: impl FnOnce(&mut Settings) -> Result<T>,
     ) -> Result<(T, Vec<Account>)> {
@@ -1282,9 +1399,9 @@ impl<R: Runtime> Core<R> {
         self.create_account(EngineId::Claude, name, share, mode)
     }
 
-    /// « Créer et se connecter » for an account of `engine` (`create_of`), its folder in the data
-    /// folder's of its harness (`claude`, `codex`), last in the order and active. The first of a
-    /// harness that never served brings its Principal with it (`normalize`).
+    /// « Nouveau compte » of « Ajouter un compte… » for `engine` (`create_of`): its folder in the
+    /// data folder's of its harness (`claude`, `codex`), last in the order and active. Alone: its
+    /// harness's Principal is added only when the user asks (`add_machine_account`, ESC-128).
     pub fn create_account(
         self: &Arc<Self>,
         engine: EngineId,
@@ -1296,14 +1413,36 @@ impl<R: Runtime> Core<R> {
         let (made, _) = self.change_claude_accounts(|s| {
             let from = config_dir(&get(s, &principal_id(engine)), s);
             let made = create_of(engine, s, &root, &from, name, share, mode)?;
-            // Its harness's Principal first, as `normalize` would add it after.
-            if !s.accounts.iter().any(|a| a.engine == engine) {
-                s.accounts.push(principal_of(engine));
-            }
             s.accounts.push(made.clone());
             Ok(made)
         })?;
-        // The window learns them all: the first account of a harness brings its Principal.
+        self.account_added(&made);
+        Ok(made)
+    }
+
+    /// « Le compte de la machine » of « Ajouter un compte… »: the user's own installation of
+    /// `engine` (its Principal: its usual folder, `~/.claude`, `~/.codex`…), added last in the
+    /// order and active, as it is. Refused when it is there already.
+    pub fn add_machine_account(self: &Arc<Self>, engine: EngineId) -> Result<Account> {
+        let (made, _) = self.change_claude_accounts(|s| {
+            let id = principal_id(engine);
+            if s.accounts.iter().any(|a| a.id == id) {
+                bail!(tr!(
+                    "Le compte de la machine est déjà ajouté.",
+                    "The machine’s account is added already."
+                ));
+            }
+            let made = principal_of(engine);
+            s.accounts.push(made.clone());
+            Ok(made)
+        })?;
+        self.account_added(&made);
+        Ok(made)
+    }
+
+    /// An account added: the window told the accounts (and « Ordre des harness », which gains its
+    /// harness), the models of a Claude Code one read (ESC-124).
+    fn account_added(self: &Arc<Self>, made: &Account) {
         let (accounts, engine_order) = {
             let s = self.settings.read();
             (s.accounts.clone(), s.engine_order.clone())
@@ -1312,15 +1451,44 @@ impl<R: Runtime> Core<R> {
             accounts,
             engine_order,
         });
-        if engine == EngineId::Claude {
+        if made.engine == EngineId::Claude {
             let (c, id) = (self.clone(), made.id.clone());
             tauri::async_runtime::spawn(async move { c.read_claude_models(&id).await });
         }
-        Ok(made)
     }
 
-    /// The account's name, `claude` and whether new agents may go to it, as the tab gives them
-    /// (its folder stays its own); the accounts as they then are.
+    /// What « Ajouter un compte… » says of the machine's account of `engine`: whether its harness
+    /// is signed in there (with its identity when the harness gives it), its folder, and whether it
+    /// is added already.
+    pub async fn machine_account(&self, engine: EngineId) -> MachineAccount {
+        let id = principal_id(engine);
+        let settings = self.settings.read().clone();
+        let account = get(&settings, &id);
+        let added = find(&settings, &id).is_some();
+        let found = {
+            let (account, settings) = (account.clone(), settings.clone());
+            tokio::task::spawn_blocking(move || program(&account, &settings).is_some())
+                .await
+                .unwrap_or(false)
+        };
+        let status = self.status_of(&account).await;
+        MachineAccount {
+            found,
+            added,
+            // OpenCode signs in to no account: its own installation, once found.
+            connected: if engine == EngineId::Opencode {
+                found
+            } else {
+                status.connected
+            },
+            signs_in: engine != EngineId::Opencode,
+            email: status.email,
+            dir: status.dir,
+        }
+    }
+
+    /// The account's name, `claude`, whether new agents may go to it and what they go with, as the
+    /// tab gives them (its folder stays its own); the accounts as they then are.
     pub fn update_claude_account(self: &Arc<Self>, account: Account) -> Result<Vec<Account>> {
         let (_, accounts) = self.change_claude_accounts(|s| {
             if !s.accounts.iter().any(|a| a.id == account.id) {
@@ -1364,6 +1532,10 @@ impl<R: Runtime> Core<R> {
             a.name = name.to_string();
             a.claude_path = account.claude_path.trim().to_string();
             a.active = account.active;
+            // What its new agents go with (ESC-128); empty: its harness's default.
+            a.default_model = account.default_model.trim().to_string();
+            a.default_effort = account.default_effort.trim().to_string();
+            a.default_mode = account.default_mode.trim().to_string();
             a.daily_budget = match account.daily_budget {
                 Some(b) if !b.is_finite() || b < 0.0 => bail!(tr!(
                     "Le budget par jour est un montant en dollars, positif.",
@@ -1421,21 +1593,17 @@ impl<R: Runtime> Core<R> {
 
     /// The account removed from the settings, its folder left on the disk (its sign-in and its
     /// sessions with it), but for the MCP server's entry in its `.claude.json` (`withdraw_removed`).
-    /// Never Principal, nor an account an agent not archived still runs on.
+    /// The machine's too (ESC-128): its harness stays signed in there. Never an account an agent
+    /// not archived still runs on.
     pub fn remove_claude_account(self: &Arc<Self>, id: &str) -> Result<Vec<Account>> {
-        if id == PRINCIPAL {
-            bail!(tr!(
-                "Le compte Principal ne se supprime pas.",
-                "The Main account can’t be removed."
-            ));
-        }
         let (gone, accounts) = self.change_claude_accounts(|s| {
             let at = s
                 .accounts
                 .iter()
                 .position(|a| a.id == id)
                 .ok_or_else(|| unknown(id))?;
-            // An archived agent restored later runs on Principal (`find`).
+            // An archived agent restored later goes to another account of its harness
+            // (`Core::agent_account`).
             let n = self
                 .agents
                 .read()
@@ -1771,40 +1939,46 @@ impl<R: Runtime> Core<R> {
     /// Whether the account is signed in, and with which email.
     pub async fn claude_account_status(&self, id: &str) -> Result<AccountStatus> {
         let account = self.claude_account(id)?;
+        Ok(self.status_of(&account).await)
+    }
+
+    /// Whether `account` (one of the settings, or the machine's not added yet) is signed in.
+    pub(crate) async fn status_of(&self, account: &Account) -> AccountStatus {
+        let id = &account.id;
         let settings = self.settings.read().clone();
         if account.engine == EngineId::Codex {
-            let dir = config_dir(&account, &settings);
+            let dir = config_dir(account, &settings);
             let signed = codex_sign_in(&dir);
-            return Ok(AccountStatus {
+            return AccountStatus {
                 connected: signed.is_some(),
                 stamp: signed.as_ref().and_then(|s| s.stamp.clone()),
                 email: signed.and_then(|s| s.email),
                 dir: dir.to_string_lossy().into_owned(),
-            });
+            };
         }
         // Copilot CLI: the user its folder is signed in to (`config.json`), shown `@login`; the
         // token stays in the keychain.
         if account.engine == EngineId::Copilot {
-            let dir = config_dir(&account, &settings);
+            let dir = config_dir(account, &settings);
             let login = copilot_sign_in(&dir);
-            return Ok(AccountStatus {
+            return AccountStatus {
                 connected: login.is_some(),
                 stamp: login.clone(),
                 email: login.map(|l| format!("@{l}")),
                 dir: dir.to_string_lossy().into_owned(),
-            });
+            };
         }
         // OpenCode signs in to no account of its own: its providers are its config's.
         if account.engine == EngineId::Opencode {
-            let dir = config_dir(&account, &settings);
-            return Ok(AccountStatus {
+            let dir = config_dir(account, &settings);
+            return AccountStatus {
                 connected: true,
                 stamp: None,
                 email: None,
                 dir: dir.to_string_lossy().into_owned(),
-            });
+            };
         }
-        let sign_in = crate::usage::sign_in(&account, &settings);
+        let sign_in = crate::usage::sign_in(account, &settings);
         let stored = match crate::usage::read_stored(&sign_in.dir, &sign_in.service).await {
             Ok(stored) => Some(stored),
             // A file being written, the keychain refused: not signed in as far as can be told.
@@ -1816,16 +1990,16 @@ impl<R: Runtime> Core<R> {
         let connected = stored
             .as_ref()
             .is_some_and(|s| s.credentials != crate::usage::Credentials::Missing);
-        Ok(AccountStatus {
+        AccountStatus {
             connected,
             stamp: stored.and_then(|s| s.stamp),
             email: connected
-                .then(|| email_in(&claude_json(&account, &settings)))
+                .then(|| email_in(&claude_json(account, &settings)))
                 .flatten(),
-            dir: config_dir(&account, &settings)
+            dir: config_dir(account, &settings)
                 .to_string_lossy()
                 .into_owned(),
-        })
+        }
     }
 
     /// « Se connecter… »: the account's `claude`, in an interactive terminal of `size`, with its
@@ -1914,6 +2088,7 @@ mod tests {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         }
     }
 
@@ -1922,39 +2097,36 @@ mod tests {
     }
 
     #[test]
-    fn settings_without_accounts_get_principal_active_with_no_folder() {
+    fn a_first_installation_has_no_account_for_any_harness() {
+        // ESC-128: no Principal made, for Claude Code either; the settings start brought up to date.
         let mut s = Settings::default();
+        assert_eq!(s.accounts_version, ACCOUNTS_VERSION);
         normalize(&mut s);
-        assert_eq!(
-            s.accounts,
-            vec![Account {
-                engine: EngineId::Claude,
-                id: "principal".into(),
-                name: "Principal".into(),
-                config_dir: String::new(),
-                claude_path: String::new(),
-                active: true,
-                projects: Vec::new(),
-                daily_budget: None,
-            }]
-        );
-        assert_eq!(principal(), s.accounts[0]);
-        // Normalized again, nothing changes.
-        let before = s.accounts.clone();
-        normalize(&mut s);
-        assert_eq!(s.accounts, before);
+        assert!(s.accounts.is_empty());
+        assert!(s.engine_order.is_empty());
+        for e in engine::registry::all() {
+            assert!(!has_any(&s, e.id()), "{}", e.id());
+            assert!(!serves_any(&s, e.id(), None), "{}", e.id());
+        }
+        assert_eq!(pick(&s, &[], 95, None, NOW), None);
+        // Read from a file that says nothing of them: the same, but to be brought up to date.
+        let mut read: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(read.accounts_version, 0);
+        normalize(&mut read);
+        assert!(read.accounts.is_empty());
     }
 
     #[test]
-    fn a_list_without_principal_gets_it_first_and_keeps_the_others_as_they_are() {
+    fn a_list_without_principal_stays_as_it_is() {
         let pro = account("pro", r"C:\Users\x\.escouade\claude\pro");
         let mut s = Settings {
             accounts: vec![pro.clone()],
             ..Default::default()
         };
         normalize(&mut s);
-        assert_eq!(ids(&s), ["principal", "pro"]);
-        assert_eq!(s.accounts[1], pro);
+        assert_eq!(ids(&s), ["pro"]);
+        assert_eq!(s.accounts[0], pro);
+        assert_eq!(s.engine_order, [EngineId::Claude]);
     }
 
     #[test]
@@ -2025,13 +2197,13 @@ mod tests {
             ..Default::default()
         };
         normalize(&mut s);
-        assert_eq!(ids(&s), ["principal", "x", "x-3", "x-2"]);
+        assert_eq!(ids(&s), ["x", "x-3", "x-2"]);
         let dirs: Vec<&str> = s.accounts.iter().map(|a| a.config_dir.as_str()).collect();
-        assert_eq!(dirs, ["", "/a", "/b", "/c"]);
+        assert_eq!(dirs, ["/a", "/b", "/c"]);
     }
 
     #[test]
-    fn principal_is_made_active_when_no_account_is() {
+    fn the_first_account_of_a_harness_is_made_active_when_none_is() {
         let mut s = Settings {
             accounts: vec![
                 Account {
@@ -2047,7 +2219,7 @@ mod tests {
         };
         normalize(&mut s);
         let active: Vec<bool> = s.accounts.iter().map(|a| a.active).collect();
-        assert_eq!(active, [false, true]);
+        assert_eq!(active, [true, false]);
         // Another account active: Principal may rest.
         s.accounts[0].active = true;
         s.accounts[1].active = false;
@@ -2331,6 +2503,7 @@ mod tests {
                 active: true,
                 projects: Vec::new(),
                 daily_budget: None,
+                ..Default::default()
             }
         );
         assert!(Path::new(&made.config_dir).is_absolute());
@@ -2366,10 +2539,13 @@ mod tests {
         let root = dir.join("claude");
         let p = principal_folder(&dir);
         let mut s = Settings {
-            accounts: vec![Account {
-                name: "Pro".into(),
-                ..account("pro", "/a")
-            }],
+            accounts: vec![
+                principal(),
+                Account {
+                    name: "Pro".into(),
+                    ..account("pro", "/a")
+                },
+            ],
             ..Default::default()
         };
         normalize(&mut s);
@@ -2608,9 +2784,10 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_account_is_principal() {
+    fn an_unknown_account_is_none_never_principal() {
+        // ESC-128: an id the settings do not know falls back on no other account.
         let mut s = Settings {
-            accounts: vec![account("pro", "/a")],
+            accounts: vec![principal(), account("pro", "/a")],
             ..Default::default()
         };
         normalize(&mut s);
@@ -2619,14 +2796,17 @@ mod tests {
             find(&s, "principal").map(|a| a.id.as_str()),
             Some("principal")
         );
-        assert_eq!(find(&s, "parti").map(|a| a.id.as_str()), Some("principal"));
-        assert_eq!(find(&s, "").map(|a| a.id.as_str()), Some("principal"));
-        // Settings never normalized have none.
-        assert_eq!(find(&Settings::default(), "pro"), None);
-        // A copy, always there.
+        assert_eq!(find(&s, "parti"), None);
+        assert_eq!(find(&s, ""), None);
+        assert_eq!(find(&Settings::default(), "principal"), None);
+        // A copy, always there, to name it: never another account in its place.
         assert_eq!(get(&s, "pro"), s.accounts[1]);
-        assert_eq!(get(&s, "parti"), s.accounts[0]);
-        assert_eq!(get(&Settings::default(), "pro"), principal());
+        let gone = get(&s, "parti");
+        assert_eq!((gone.id.as_str(), gone.name.as_str()), ("parti", "parti"));
+        assert!(!gone.active);
+        assert!(own_dir(&gone).is_none());
+        // A Principal not added: the machine's account of its harness, as it would be added.
+        assert_eq!(get(&Settings::default(), "principal"), principal());
     }
 
     const NOW: i64 = 1_790_000_000_000;
@@ -2649,7 +2829,11 @@ mod tests {
     /// Principal, Pro and Team, in that order, all active.
     fn three() -> Settings {
         let mut s = Settings {
-            accounts: vec![account("pro", "/pro"), account("team", "/team")],
+            accounts: vec![
+                principal(),
+                account("pro", "/pro"),
+                account("team", "/team"),
+            ],
             ..Default::default()
         };
         normalize(&mut s);
@@ -2668,13 +2852,16 @@ mod tests {
         let mut s = three();
         let pick_at = |s: &Settings, usage: &[AccountUsage]| pick(s, usage, 95, None, NOW);
         // Nothing read yet: the first.
-        assert_eq!(pick_at(&s, &[]), "principal");
+        assert_eq!(pick_at(&s, &[]).as_deref(), Some("principal"));
         let end = NOW + 60_000;
         // Under the threshold, whatever its use.
-        assert_eq!(pick_at(&s, &[used("principal", 94.0, end)]), "principal");
+        assert_eq!(
+            pick_at(&s, &[used("principal", 94.0, end)]).as_deref(),
+            Some("principal")
+        );
         // At it (as the autopilot counts it): the next one.
         let first_over = [used("principal", 95.0, end)];
-        assert_eq!(pick_at(&s, &first_over), "pro");
+        assert_eq!(pick_at(&s, &first_over).as_deref(), Some("pro"));
         // Its week counts as well as its 5 hours.
         let week = AccountUsage {
             id: "principal".into(),
@@ -2687,20 +2874,23 @@ mod tests {
             ),
             ..Default::default()
         };
-        assert_eq!(pick_at(&s, &[week]), "pro");
+        assert_eq!(pick_at(&s, &[week]).as_deref(), Some("pro"));
         // The next one over as well: the one after.
         let two_over = [used("principal", 100.0, end), used("pro", 96.0, end)];
-        assert_eq!(pick_at(&s, &two_over), "team");
+        assert_eq!(pick_at(&s, &two_over).as_deref(), Some("team"));
         // The order is the settings', not the order of the readings.
         let reversed = [used("pro", 96.0, end), used("principal", 100.0, end)];
-        assert_eq!(pick_at(&s, &reversed), "team");
+        assert_eq!(pick_at(&s, &reversed).as_deref(), Some("team"));
         // A window already over (and the margin after it) holds nothing back.
         let ended = [used("principal", 100.0, NOW - 31_000)];
-        assert_eq!(pick_at(&s, &ended), "principal");
+        assert_eq!(pick_at(&s, &ended).as_deref(), Some("principal"));
         // An account switched off is skipped, over or not.
         deactivate(&mut s, "principal");
-        assert_eq!(pick_at(&s, &[]), "pro");
-        assert_eq!(pick_at(&s, &[used("pro", 100.0, end)]), "team");
+        assert_eq!(pick_at(&s, &[]).as_deref(), Some("pro"));
+        assert_eq!(
+            pick_at(&s, &[used("pro", 100.0, end)]).as_deref(),
+            Some("team")
+        );
     }
 
     #[test]
@@ -2712,12 +2902,15 @@ mod tests {
             used("pro", 100.0, end),
             used("team", 100.0, end),
         ];
-        assert_eq!(pick(&s, &all, 95, None, NOW), "principal");
+        assert_eq!(pick(&s, &all, 95, None, NOW).as_deref(), Some("principal"));
         deactivate(&mut s, "principal");
-        assert_eq!(pick(&s, &all, 95, None, NOW), "pro");
+        assert_eq!(pick(&s, &all, 95, None, NOW).as_deref(), Some("pro"));
         // The threshold is the user's: at 100 % nothing at 99 % is past it.
         let under = [used("principal", 99.0, end), used("pro", 99.0, end)];
-        assert_eq!(pick(&three(), &under, 100, None, NOW), "principal");
+        assert_eq!(
+            pick(&three(), &under, 100, None, NOW).as_deref(),
+            Some("principal")
+        );
     }
 
     #[test]
@@ -2725,16 +2918,29 @@ mod tests {
         let mut s = three();
         let end = NOW + 60_000;
         let over = [used("pro", 100.0, end)];
-        assert_eq!(pick(&s, &over, 95, Some("pro"), NOW), "pro");
-        assert_eq!(pick(&s, &[], 95, Some("team"), NOW), "team");
+        assert_eq!(
+            pick(&s, &over, 95, Some("pro"), NOW).as_deref(),
+            Some("pro")
+        );
+        assert_eq!(
+            pick(&s, &[], 95, Some("team"), NOW).as_deref(),
+            Some("team")
+        );
         // Not one to ask for: the automatic choice (the first usable account).
         let first_over = [used("principal", 100.0, end)];
         for asked in [Some(""), Some("parti"), None] {
-            assert_eq!(pick(&s, &first_over, 95, asked, NOW), "pro", "{asked:?}");
+            assert_eq!(
+                pick(&s, &first_over, 95, asked, NOW).as_deref(),
+                Some("pro"),
+                "{asked:?}"
+            );
         }
         // An account switched off cannot be asked for either.
         deactivate(&mut s, "pro");
-        assert_eq!(pick(&s, &first_over, 95, Some("pro"), NOW), "team");
+        assert_eq!(
+            pick(&s, &first_over, 95, Some("pro"), NOW).as_deref(),
+            Some("team")
+        );
     }
 
     #[test]
@@ -2754,8 +2960,8 @@ mod tests {
         // Principal over the threshold: the other project goes to Team, never to Pro.
         let end = NOW + 60_000;
         let over = [used("principal", 100.0, end)];
-        assert_eq!(pick(&other, &over, 95, None, NOW), "team");
-        assert_eq!(pick(&client, &over, 95, None, NOW), "pro");
+        assert_eq!(pick(&other, &over, 95, None, NOW).as_deref(), Some("team"));
+        assert_eq!(pick(&client, &over, 95, None, NOW).as_deref(), Some("pro"));
     }
 
     #[test]
@@ -2824,13 +3030,22 @@ mod tests {
             used("team", 100.0, end),
         ];
         let claude = for_project(&s, EngineId::Claude, None);
-        assert_eq!(pick(&claude, &over, 95, None, NOW), "principal");
+        assert_eq!(
+            pick(&claude, &over, 95, None, NOW).as_deref(),
+            Some("principal")
+        );
         // On Codex, its first free one, whatever the Claude accounts read.
         let codex = for_project(&s, EngineId::Codex, None);
         let codex_over = [used("principal-codex", 100.0, end)];
-        assert_eq!(pick(&codex, &codex_over, 95, None, NOW), "work");
+        assert_eq!(
+            pick(&codex, &codex_over, 95, None, NOW).as_deref(),
+            Some("work")
+        );
         // Asked for by id, an account of another harness is not taken.
-        assert_eq!(pick(&codex, &[], 95, Some("pro"), NOW), "principal-codex");
+        assert_eq!(
+            pick(&codex, &[], 95, Some("pro"), NOW).as_deref(),
+            Some("principal-codex")
+        );
     }
 
     #[test]
@@ -2891,18 +3106,141 @@ mod tests {
         );
     }
 
+    /// Settings as 1.8.0 saved them: Claude Code's Principal (renamed, reserved to a project), Pro,
+    /// the Principal of Codex and one of its accounts, the defaults of new agents of the time.
+    fn saved_by_1_8_0() -> Settings {
+        Settings {
+            accounts_version: 0,
+            accounts: vec![
+                Account {
+                    name: "Perso".into(),
+                    projects: vec!["p1".into()],
+                    ..principal()
+                },
+                account("pro", "/pro"),
+                principal_of(EngineId::Codex),
+                Account {
+                    engine: EngineId::Codex,
+                    ..account("work", "/work")
+                },
+            ],
+            default_model: "opus".into(),
+            default_effort: "high".into(),
+            default_mode: "default".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_update_keeps_a_principal_signed_in_or_that_served_as_an_account_added() {
+        // ESC-128, case by case. Kept: as it was, same id, same name, same settings.
+        let mut s = saved_by_1_8_0();
+        let before = s.accounts[0].clone();
+        assert!(migrate(&mut s, |_| true));
+        assert_eq!(ids(&s), ["principal", "pro", "principal-codex", "work"]);
+        assert_eq!(s.accounts[0].name, "Perso");
+        assert_eq!(s.accounts[0].projects, before.projects);
+        assert_eq!(s.accounts_version, ACCOUNTS_VERSION);
+        // Brought once: never again, whatever `keep` would say.
+        assert!(!migrate(&mut s, |_| panic!("asked again")));
+        assert_eq!(ids(&s), ["principal", "pro", "principal-codex", "work"]);
+    }
+
+    #[test]
+    fn the_update_drops_a_principal_never_signed_in_nor_used() {
+        // Claude Code's kept, Codex's dropped: Codex keeps the account the user made.
+        let mut s = saved_by_1_8_0();
+        migrate(&mut s, |a| a.engine == EngineId::Claude);
+        assert_eq!(ids(&s), ["principal", "pro", "work"]);
+        // Both dropped: the accounts made stay, in their order.
+        let mut s = saved_by_1_8_0();
+        migrate(&mut s, |_| false);
+        assert_eq!(ids(&s), ["pro", "work"]);
+        // Its harness keeps an active account: the first left, when none of them was.
+        let mut s = saved_by_1_8_0();
+        s.accounts[1].active = false;
+        migrate(&mut s, |_| false);
+        assert!(s.accounts[0].active);
+        // Who had only Claude Code's Principal, never signed in nor used: no account left.
+        let mut s = Settings {
+            accounts_version: 0,
+            accounts: vec![principal()],
+            ..Default::default()
+        };
+        migrate(&mut s, |_| false);
+        assert!(s.accounts.is_empty());
+        // Signed in: nothing else changes for them.
+        let mut s = Settings {
+            accounts_version: 0,
+            accounts: vec![principal()],
+            ..Default::default()
+        };
+        migrate(&mut s, |_| true);
+        assert_eq!(ids(&s), ["principal"]);
+        assert_eq!(s.accounts[0].name, "Principal");
+    }
+
+    #[test]
+    fn the_update_gives_the_defaults_of_new_agents_to_each_claude_code_account_kept() {
+        let mut s = saved_by_1_8_0();
+        s.accounts[1].default_model = "haiku".into();
+        migrate(&mut s, |_| true);
+        let of = |id: &str| {
+            let d = defaults(find(&s, id), EngineId::Claude);
+            (d.model, d.effort, d.mode)
+        };
+        let said = |m: &str, e: &str, o: &str| (m.to_string(), e.to_string(), o.to_string());
+        assert_eq!(of("principal"), said("opus", "high", "default"));
+        // Its own model stays; what it did not say comes from the settings.
+        assert_eq!(of("pro"), said("haiku", "high", "default"));
+        // Another harness's: its harness's own defaults (no model: the one Codex runs).
+        assert_eq!(of("work"), said("", "medium", "auto"));
+        assert_eq!(s.accounts[3].default_model, "");
+        // Never written back to the settings.
+        let v = serde_json::to_value(&s).unwrap();
+        assert!(v.get("defaultModel").is_none());
+        assert_eq!(v["accountsVersion"], 1);
+    }
+
+    #[test]
+    fn a_new_agent_goes_with_its_accounts_defaults_else_its_harnesss() {
+        let said = |d: Defaults| (d.model, d.effort, d.mode);
+        let s = |m: &str, e: &str, o: &str| (m.to_string(), e.to_string(), o.to_string());
+        assert_eq!(
+            said(defaults(None, EngineId::Claude)),
+            s("sonnet", "medium", "auto")
+        );
+        assert_eq!(
+            said(defaults(None, EngineId::Codex)),
+            s("", "medium", "auto")
+        );
+        let codex = Account {
+            engine: EngineId::Codex,
+            default_model: " gpt-6-luna ".into(),
+            default_mode: "default".into(),
+            ..account("work", "/w")
+        };
+        // The account's harness, whatever harness is said.
+        assert_eq!(
+            said(defaults(Some(&codex), EngineId::Claude)),
+            s("gpt-6-luna", "medium", "default")
+        );
+    }
+
     #[test]
     fn the_order_of_the_harnesses_lists_each_one_once() {
         let mut s = Settings {
+            accounts: vec![principal()],
             engine_order: vec![EngineId::Codex, EngineId::Codex],
             ..Default::default()
         };
         normalize(&mut s);
-        // The one known kept, every harness written added after it.
+        // The one known kept, every harness with accounts added after it.
         assert_eq!(s.engine_order, [EngineId::Codex, EngineId::Claude]);
+        // No account: no harness in the order yet (ESC-128).
         let mut fresh = Settings::default();
         normalize(&mut fresh);
-        assert_eq!(fresh.engine_order, [EngineId::Claude]);
+        assert!(fresh.engine_order.is_empty());
     }
 
     #[test]
@@ -2917,14 +3255,17 @@ mod tests {
     }
 
     #[test]
-    fn a_harness_other_than_claude_code_has_no_principal_until_it_serves() {
-        // Codex is written (ESC-37), and never ran here: nothing of it in the accounts, nor in the
-        // order of the harnesses (it is no harness to go on on).
-        let mut s = Settings::default();
+    fn no_harness_has_a_principal_until_it_is_added() {
+        // ESC-128: no harness has a Principal until the user adds it: nothing of Codex in the
+        // accounts, nor in the order of the harnesses (it is no harness to go on on).
+        let mut s = Settings {
+            accounts: vec![principal()],
+            ..Default::default()
+        };
         normalize(&mut s);
         assert!(s.accounts.iter().all(|a| a.engine == EngineId::Claude));
         assert_eq!(s.engine_order, [EngineId::Claude]);
-        // Once it served (`Core::accounts_of`), its Principal stays.
+        // Added (`Core::add_machine_account`), it stays.
         s.accounts.push(principal_of(EngineId::Codex));
         normalize(&mut s);
         normalize(&mut s);
@@ -3062,11 +3403,20 @@ mod tests {
     fn a_choice_is_made_among_the_accounts_that_are_usable_else_the_first_active_one() {
         let s = three();
         let only = |ok: &'static str| move |id: &str| id == ok;
-        assert_eq!(pick_where(&s, None, only("team")), "team");
-        assert_eq!(pick_where(&s, None, only("principal")), "principal");
-        assert_eq!(pick_where(&s, None, |_| false), "principal");
+        assert_eq!(pick_where(&s, None, only("team")).as_deref(), Some("team"));
+        assert_eq!(
+            pick_where(&s, None, only("principal")).as_deref(),
+            Some("principal")
+        );
+        assert_eq!(
+            pick_where(&s, None, |_| false).as_deref(),
+            Some("principal")
+        );
         // Asked for, it is taken even if it is not usable.
-        assert_eq!(pick_where(&s, Some("pro"), only("team")), "pro");
+        assert_eq!(
+            pick_where(&s, Some("pro"), only("team")).as_deref(),
+            Some("pro")
+        );
     }
 
     /// A session as Claude Code files it in an account's folder: its transcript in the project's

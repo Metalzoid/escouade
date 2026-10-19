@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    accountEngines,
+    accountDefaults,
     accountName,
+    accountsTabEngines,
+    addAccount,
     agentsOn,
     backToAccounts,
     engineOfAccount,
@@ -11,7 +13,8 @@
     PRINCIPAL,
     projectsWithoutAccount,
   } from '../../lib/accounts';
-  import { capsOf, engineName } from '../../lib/engines';
+  import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf } from '../../lib/engines';
+  import { EFFORTS, MODES } from '../../lib/models';
   import { fList, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -25,7 +28,8 @@
   // « Annuler » could not take back.
 
   const accounts = $derived(app.settings.accounts ?? []);
-  const groups = $derived(accountEngines().map((engine) => ({ engine, list: accounts.filter((a) => engineOfAccount(a) === engine) })));
+  /** Every harness installed, an empty one with « Aucun compte » (ESC-128), and those with accounts. */
+  const groups = $derived(accountsTabEngines().map((engine) => ({ engine, list: accounts.filter((a) => engineOfAccount(a) === engine) })));
   /** How many accounts of each harness are active: its last one stays on. */
   const activeOf = (engine: EngineId) => accounts.filter((a) => a.active && engineOfAccount(a) === engine).length;
   /** « Ordre des harness », once there are two harnesses to put in order. */
@@ -125,7 +129,7 @@
     if (list) app.settings.accounts = list;
   }
 
-  /** Asks before removing it, unless agents still run on it; back to this tab either way. */
+  /** Asks before removing it, unless agents still run on it; back to this tab either way. The machine's stays signed in. */
   function remove(a: Account) {
     const n = agentsOn(a.id);
     if (n) {
@@ -133,12 +137,15 @@
       return;
     }
     delete refused[a.id];
-    const { id, configDir } = a;
+    const { id } = a;
+    const path = tildify(a.configDir || statuses[a.id]?.dir || '');
+    const machine = isPrincipal(a);
+    const says = machine ? 'removeMachineConfirm' : 'removeConfirm';
     app.modal = {
       kind: 'confirm',
-      title: t('accounts.tab.removeConfirm.title', { name: accountName(a) }),
-      body: t('accounts.tab.removeConfirm.body', { path: tildify(configDir) }),
-      confirm: t('accounts.tab.removeConfirm.confirm'),
+      title: t(`accounts.tab.${says}.title`, { name: accountName(a) }),
+      body: t(`accounts.tab.${says}.body`, { path, harness: engineName(engineOfAccount(a)) }),
+      confirm: t(`accounts.tab.${says}.confirm`),
       danger: true,
       onConfirm: async () => {
         const list = await app.run(api.accountRemove(id));
@@ -170,6 +177,30 @@
     if (!(await save({ ...plain(a), dailyBudget: budget || null }))) input.value = shown;
   }
 
+  /** What its new agents go with, as its harness has it (ESC-128): its models, the efforts of its model, its modes. */
+  function defaultsOf(a: Account) {
+    const engine = engineOfAccount(a);
+    const who = { engine, account: a.id };
+    const d = accountDefaults(a);
+    const models = modelsOf(who);
+    // Claude Code's Sonnet; another harness's own default, as it lists it for the account.
+    const harnessModel = accountDefaults(undefined, engine).model || defaultModelOf(who);
+    const named = models.find((m) => m.id === harnessModel)?.label ?? harnessModel;
+    return {
+      models,
+      // A model it saved that its harness does not list (any more): kept in the menu, as it is.
+      kept: a.defaultModel && !models.some((m) => m.id === a.defaultModel) ? a.defaultModel : '',
+      harnessLabel: named ? t('accounts.tab.harnessDefaultNamed', { name: named }) : t('accounts.tab.harnessDefault'),
+      efforts: effortsOf({ ...who, model: d.model }, EFFORTS),
+      modes: modesOf(who, MODES),
+    };
+  }
+
+  /** One of the defaults of its new agents chosen; empty: its harness's. */
+  function setDefault(a: Account, field: 'defaultModel' | 'defaultEffort' | 'defaultMode', value: string) {
+    void save({ ...plain(a), [field]: value });
+  }
+
   const blurOnEnter = (e: KeyboardEvent) => {
     if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
   };
@@ -179,118 +210,164 @@
   {@const harness = engineName(g.engine)}
   {@const list = g.list}
   <Group title={t('accounts.tab.group', { harness })} note={gi === 0 ? t('accounts.tab.order') : undefined} plain>
-    <ul class="list" aria-label={t('accounts.tab.group', { harness })}>
-      {#each list as a, i (a.id)}
-        {@const name = accountName(a)}
-        {@const status = statuses[a.id]}
-        {@const late = expired(a.id)}
-        {@const last = a.active && activeOf(g.engine) === 1}
-        {@const reserved = a.projects ?? []}
-        {@const closedOnes = closedReserved(a)}
-        <li class="acct" aria-label={name}>
-          <div class="line">
-            <input
-              class="field name"
-              aria-label={t('accounts.tab.name')}
-              spellcheck="false"
-              value={name}
-              onkeydown={blurOnEnter}
-              onblur={(e) => commit(a, e.currentTarget, 'name')}
-            />
-            <span class="state" class:on={a.active && status?.connected} class:off={!a.active}>
-              <span class="dot" aria-hidden="true"></span>{stateOf(a, status)}
-            </span>
-            <div style="flex:1"></div>
-            <span class="k" aria-hidden="true">{t('accounts.tab.active')}</span>
-            <button
-              class="switch"
-              class:on={a.active}
-              role="switch"
-              aria-checked={a.active}
-              aria-label={t('accounts.tab.active')}
-              aria-describedby={last ? 'accounts-last-active' : undefined}
-              use:tip={last ? t('accounts.tab.lastActive') : undefined}
-              disabled={last}
-              onclick={() => save({ ...plain(a), active: !a.active })}
-            ></button>
-            <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(a, list[i - 1])}
-              >↑</button
-            >
-            <button
-              class="icon-btn"
-              aria-label={t('accounts.tab.down', { name })}
-              disabled={i === list.length - 1}
-              onclick={() => move(a, list[i + 1])}>↓</button
-            >
-          </div>
-          <div class="line">
-            <span class="k">{t('accounts.tab.folder')}</span>
-            <span class="dir mono">{tildify(a.configDir || status?.dir || '')}</span>
-          </div>
-          <div class="line">
-            <label class="k" for="account-exe-{a.id}">{t('accounts.tab.executable')}</label>
-            <input
-              id="account-exe-{a.id}"
-              class="field mono exe"
-              spellcheck="false"
-              placeholder={t('accounts.tab.executableDefault')}
-              value={a.claudePath}
-              onkeydown={blurOnEnter}
-              onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
-            />
-            <div style="flex:1"></div>
-            {#if status}
-              <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
-              <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
-                {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
-              </button>
-            {/if}
-            {#if !isPrincipal(a)}
-              <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
-            {/if}
-          </div>
-          {#if noQuota(g.engine)}
+    {#if !list.length}
+      <!-- A harness installed without an account (ESC-128): nothing starts on it until one is added. -->
+      <div class="list empty" role="group" aria-label={t('accounts.tab.group', { harness })}>
+        <div class="line">
+          <span class="none">{t('accounts.tab.none')}</span>
+          <div style="flex:1"></div>
+          <button class="btn" onclick={() => addAccount(g.engine)}>{t('accounts.tab.addTo', { harness })}</button>
+        </div>
+        <p class="k hint">{t('accounts.tab.noneHint', { harness })}</p>
+      </div>
+    {:else}
+      <ul class="list" aria-label={t('accounts.tab.group', { harness })}>
+        {#each list as a, i (a.id)}
+          {@const name = accountName(a)}
+          {@const status = statuses[a.id]}
+          {@const late = expired(a.id)}
+          {@const last = a.active && activeOf(g.engine) === 1}
+          {@const reserved = a.projects ?? []}
+          {@const closedOnes = closedReserved(a)}
+          {@const defaults = defaultsOf(a)}
+          <li class="acct" aria-label={name}>
             <div class="line">
-              <label class="k" for="account-budget-{a.id}">{t('accounts.tab.budget')}</label>
               <input
-                id="account-budget-{a.id}"
-                class="field mono budget"
-                type="text"
-                inputmode="decimal"
+                class="field name"
+                aria-label={t('accounts.tab.name')}
                 spellcheck="false"
-                placeholder={t('accounts.tab.budgetNone')}
-                aria-describedby="account-budget-hint-{a.id}"
-                value={a.dailyBudget ? String(a.dailyBudget) : ''}
+                value={name}
                 onkeydown={blurOnEnter}
-                onblur={(e) => commitBudget(a, e.currentTarget)}
+                onblur={(e) => commit(a, e.currentTarget, 'name')}
               />
-              <span class="k hint" id="account-budget-hint-{a.id}">{t('accounts.tab.budgetHint')}</span>
+              {#if isPrincipal(a)}<span class="machine">{t('accounts.tab.machine')}</span>{/if}
+              <span class="state" class:on={a.active && status?.connected} class:off={!a.active}>
+                <span class="dot" aria-hidden="true"></span>{stateOf(a, status)}
+              </span>
+              <div style="flex:1"></div>
+              <span class="k" aria-hidden="true">{t('accounts.tab.active')}</span>
+              <button
+                class="switch"
+                class:on={a.active}
+                role="switch"
+                aria-checked={a.active}
+                aria-label={t('accounts.tab.active')}
+                aria-describedby={last ? 'accounts-last-active' : undefined}
+                use:tip={last ? t('accounts.tab.lastActive') : undefined}
+                disabled={last}
+                onclick={() => save({ ...plain(a), active: !a.active })}
+              ></button>
+              <button class="icon-btn" aria-label={t('accounts.tab.up', { name })} disabled={i === 0} onclick={() => move(a, list[i - 1])}
+                >↑</button
+              >
+              <button
+                class="icon-btn"
+                aria-label={t('accounts.tab.down', { name })}
+                disabled={i === list.length - 1}
+                onclick={() => move(a, list[i + 1])}>↓</button
+              >
             </div>
-          {/if}
-          {#if app.projects.length || closedOnes.length}
-            <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
-              <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
-              {#each app.projects as p (p.id)}
-                <label class="chip">
-                  <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
-                  {p.name}
-                </label>
-              {/each}
-              <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
-              {#each closedOnes as c (c.id)}
-                <label class="chip">
-                  <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
-                  {t('accounts.tab.closedProject', { name: c.name })}
-                </label>
-              {/each}
-              {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+            <div class="line">
+              <span class="k">{t('accounts.tab.folder')}</span>
+              <span class="dir mono">{tildify(a.configDir || status?.dir || '')}</span>
             </div>
-          {/if}
-          {#if late}<p class="late">{late}</p>{/if}
-          {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
-        </li>
-      {/each}
-    </ul>
+            <div class="line">
+              <label class="k" for="account-exe-{a.id}">{t('accounts.tab.executable')}</label>
+              <input
+                id="account-exe-{a.id}"
+                class="field mono exe"
+                spellcheck="false"
+                placeholder={t('accounts.tab.executableDefault')}
+                value={a.claudePath}
+                onkeydown={blurOnEnter}
+                onblur={(e) => commit(a, e.currentTarget, 'claudePath')}
+              />
+              <div style="flex:1"></div>
+              {#if status}
+                <!-- Not signed in, or out of date: to sign in. Signed in: to sign in again (another claude.ai account, say). -->
+                <button class="btn" onclick={() => (app.modal = { kind: 'account', accountId: a.id })}>
+                  {status.connected && !late ? t('accounts.tab.signInAgain') : t('accounts.tab.signIn')}
+                </button>
+              {/if}
+              <button class="btn ghost danger" onclick={() => remove(a)}>{t('accounts.tab.remove')}</button>
+            </div>
+            <!-- What its new agents go with, as its harness has it (ESC-128). -->
+            <div class="line wrap" role="group" aria-label={t('accounts.tab.defaults')}>
+              <span class="k">{t('accounts.tab.defaults')}</span>
+              <label class="pick">
+                <span class="k">{t('accounts.tab.defaultModel')}</span>
+                <select class="field" value={a.defaultModel ?? ''} onchange={(e) => setDefault(a, 'defaultModel', e.currentTarget.value)}>
+                  <option value="">{defaults.harnessLabel}</option>
+                  {#each defaults.models as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+                  {#if defaults.kept}<option value={defaults.kept}>{defaults.kept}</option>{/if}
+                </select>
+              </label>
+              {#if defaults.efforts.length}
+                <label class="pick">
+                  <span class="k">{t('accounts.tab.defaultEffort')}</span>
+                  <select
+                    class="field"
+                    value={a.defaultEffort ?? ''}
+                    onchange={(e) => setDefault(a, 'defaultEffort', e.currentTarget.value)}
+                  >
+                    <option value="">{t('accounts.tab.harnessDefault')}</option>
+                    {#each defaults.efforts as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+                  </select>
+                </label>
+              {/if}
+              {#if defaults.modes.length}
+                <label class="pick">
+                  <span class="k">{t('accounts.tab.defaultMode')}</span>
+                  <select class="field" value={a.defaultMode ?? ''} onchange={(e) => setDefault(a, 'defaultMode', e.currentTarget.value)}>
+                    <option value="">{t('accounts.tab.harnessDefault')}</option>
+                    {#each defaults.modes as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+                  </select>
+                </label>
+              {/if}
+            </div>
+            {#if noQuota(g.engine)}
+              <div class="line">
+                <label class="k" for="account-budget-{a.id}">{t('accounts.tab.budget')}</label>
+                <input
+                  id="account-budget-{a.id}"
+                  class="field mono budget"
+                  type="text"
+                  inputmode="decimal"
+                  spellcheck="false"
+                  placeholder={t('accounts.tab.budgetNone')}
+                  aria-describedby="account-budget-hint-{a.id}"
+                  value={a.dailyBudget ? String(a.dailyBudget) : ''}
+                  onkeydown={blurOnEnter}
+                  onblur={(e) => commitBudget(a, e.currentTarget)}
+                />
+                <span class="k hint" id="account-budget-hint-{a.id}">{t('accounts.tab.budgetHint')}</span>
+              </div>
+            {/if}
+            {#if app.projects.length || closedOnes.length}
+              <div class="line wrap" role="group" aria-label={t('accounts.tab.reserved')}>
+                <span class="k" use:tip={t('accounts.tab.reservedHint')}>{t('accounts.tab.reserved')}</span>
+                {#each app.projects as p (p.id)}
+                  <label class="chip">
+                    <input type="checkbox" checked={reserved.includes(p.id)} onchange={(e) => reserve(a, p.id, e.currentTarget.checked)} />
+                    {p.name}
+                  </label>
+                {/each}
+                <!-- Closed, but their history is kept and so is the reservation: it goes only when they are unticked or erased. -->
+                {#each closedOnes as c (c.id)}
+                  <label class="chip">
+                    <input type="checkbox" checked={reserved.includes(c.id)} onchange={(e) => reserve(a, c.id, e.currentTarget.checked)} />
+                    {t('accounts.tab.closedProject', { name: c.name })}
+                  </label>
+                {/each}
+                {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
+              </div>
+            {/if}
+            {#if late}<p class="late">{late}</p>{/if}
+            {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </Group>
 {/each}
 <!-- Always there, empty while every project has an account: a screen reader hears it fill. -->
@@ -410,6 +487,34 @@
     padding: 0 10px;
     background: var(--panel);
     font-size: 12px;
+  }
+  .empty {
+    padding: 12px 16px;
+    gap: 6px;
+  }
+  .none {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .machine {
+    flex: none;
+    font-size: 11px;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pick select {
+    height: 28px;
+    padding: 0 8px;
+    background: var(--panel);
+    font-size: 12px;
+    max-width: 220px;
   }
   .budget {
     width: 90px;

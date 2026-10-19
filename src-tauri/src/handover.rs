@@ -553,11 +553,9 @@ impl<R: Runtime> Core<R> {
             .project(project)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        Some(accounts::pick_where(
-            &settings,
-            preferred.as_deref(),
-            |id| self.account_usable(id),
-        ))
+        accounts::pick_where(&settings, preferred.as_deref(), |id| {
+            self.account_usable(id)
+        })
     }
 
     /// When the quota the agent's account of its harness has spent resets: the resume it waits

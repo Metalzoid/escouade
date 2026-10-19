@@ -64,9 +64,6 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
   app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel'],
   claude: [
     'claudePath',
-    'defaultModel',
-    'defaultEffort',
-    'defaultMode',
     'autoResume',
     'switchOnLimit',
     'handoverOnLimit',

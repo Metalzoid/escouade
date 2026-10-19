@@ -56,8 +56,10 @@ describe('AccountsTab', () => {
     expect(within(row('Principal')).queryByRole('button', { name: 'Se connecter…' })).not.toBeInTheDocument();
     expect(within(row('Principal')).getByRole('button', { name: 'Se reconnecter…' })).toBeInTheDocument();
     expect(within(row('Pro')).queryByRole('button', { name: 'Se reconnecter…' })).not.toBeInTheDocument();
-    // Principal never goes.
-    expect(within(row('Principal')).queryByRole('button', { name: 'Supprimer' })).not.toBeInTheDocument();
+    // The machine's account is told, and goes like any other (ESC-128).
+    expect(within(row('Principal')).getByText('Compte de la machine')).toBeInTheDocument();
+    expect(within(row('Pro')).queryByText('Compte de la machine')).not.toBeInTheDocument();
+    expect(within(row('Principal')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(
       screen.getByText('Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre.'),
@@ -242,6 +244,23 @@ describe('AccountsTab', () => {
     expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
   });
 
+  it('removes the machine’s account once confirmed, saying the machine stays signed in (ESC-128)', async () => {
+    const b = backend({ account_remove: () => [PRO] });
+    render(SettingsModal, { tab: 'accounts' });
+    await within(row('Principal')).findByText('Connecté · ada@atlas.dev');
+    await userEvent.click(within(row('Principal')).getByRole('button', { name: 'Supprimer' }));
+    const modal = app.modal;
+    if (modal?.kind !== 'confirm') throw new Error(`${modal?.kind}`);
+    expect(modal.title).toBe('Retirer le compte de la machine « Principal » ?');
+    expect(modal.body).toBe(
+      'Les nouveaux agents ne partiront plus dessus. Claude Code reste connecté sur cette machine : le retirer ne déconnecte rien (~/.claude).',
+    );
+    expect(modal.confirm).toBe('Retirer');
+    await modal.onConfirm(false);
+    expect(b.called('account_remove')[0].args.id).toBe('principal');
+    expect(app.settings.accounts).toEqual([PRO]);
+  });
+
   it('opens the window that adds an account, or signs one in', async () => {
     backend();
     render(SettingsModal, { tab: 'accounts' });
@@ -368,6 +387,16 @@ describe('AccountsTab', () => {
     expect(
       screen.getByText('New agents start on the first active account of their harness under the pause threshold, in this order.'),
     ).toBeInTheDocument();
+    expect(within(row('Main')).getByText('This machine’s account')).toBeInTheDocument();
+    // What its new agents go with: the choices are read at each render, in the language of the interface.
+    const defaults = within(within(row('Pro')).getByRole('group', { name: 'New agents' }));
+    const options = (name: string) =>
+      within(defaults.getByRole('combobox', { name }))
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+    expect(options('Effort')).toEqual(['The harness’s', 'Low', 'Medium', 'High', 'Very high', 'Max']);
+    expect(options('Mode')).toEqual(['The harness’s', 'Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
+    expect(options('Model')[0]).toBe('The harness’s (Sonnet)');
     app.settings.accounts = [{ ...PRINCIPAL, name: 'Perso' }, PRO];
     await waitFor(() => expect(names()).toEqual(['Perso', 'Pro']));
   });
@@ -400,17 +429,83 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     render(SettingsModal, { tab: 'accounts' });
     expect(items('Comptes Claude Code')).toEqual(['Principal', 'Pro']);
     expect(items('Comptes Harness nu')).toEqual(['Principal', 'Travail']);
-    // A Principal of each harness, which never goes.
+    // The machine's account of each harness goes like the others (ESC-128).
     const codex = list('Comptes Harness nu');
     expect(
-      within(within(codex).getByRole('listitem', { name: 'Principal' })).queryByRole('button', { name: 'Supprimer' }),
-    ).not.toBeInTheDocument();
+      within(within(codex).getByRole('listitem', { name: 'Principal' })).getByRole('button', { name: 'Supprimer' }),
+    ).toBeInTheDocument();
     expect(within(within(codex).getByRole('listitem', { name: 'Travail' })).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     // An account goes up among its harness's: never past another harness's.
     expect(within(codex).getByRole('button', { name: 'Monter Principal' })).toBeDisabled();
     await userEvent.click(within(codex).getByRole('button', { name: 'Monter Travail' }));
     await waitFor(() => expect(b.called('account_reorder')).toHaveLength(1));
     expect(b.called('account_reorder')[0].args.ids).toEqual(['principal', 'pro', 'work', 'principal-codex']);
+  });
+
+  it('shows each harness installed, one without an account with « Aucun compte » and an add button on it (ESC-128)', async () => {
+    app.enginesFound = ['claude', 'codex'];
+    app.settings.accounts = [PRO];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(items('Comptes Claude Code')).toEqual(['Pro']);
+    const empty = screen.getByRole('group', { name: 'Comptes Harness nu' });
+    expect(within(empty).getByText('Aucun compte')).toBeInTheDocument();
+    expect(within(empty).getByText('Aucun agent ni ticket ne démarre sur Harness nu avant qu’un compte soit ajouté.')).toBeInTheDocument();
+    await userEvent.click(within(empty).getByRole('button', { name: 'Ajouter un compte Harness nu…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+  });
+
+  it('shows « Aucun compte » for every harness installed on a first installation, and nothing of one not installed', () => {
+    app.enginesFound = ['claude'];
+    app.settings.accounts = [];
+    app.settings.engineOrder = [];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { tab: 'accounts' });
+    expect(within(screen.getByRole('group', { name: 'Comptes Claude Code' })).getByText('Aucun compte')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Comptes Harness nu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Comptes Claude Code' })).not.toBeInTheDocument();
+  });
+
+  it('sets what the new agents of an account go with, among what its own harness has (ESC-128)', async () => {
+    const b = fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      account_update: (a: { account: Account }) => app.settings.accounts.map((x) => (x.id === a.account.id ? a.account : x)),
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const work = within(list('Comptes Harness nu')).getByRole('listitem', { name: 'Travail' });
+    const defaults = within(within(work).getByRole('group', { name: 'Nouveaux agents' }));
+    // The models of its harness, nothing of Claude Code's; its modes; no effort, which it takes none of.
+    const model = defaults.getByRole('combobox', { name: 'Modèle' });
+    expect(
+      within(model)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([
+      // No model of its own by default: the one its harness runs, the first it declares here.
+      'Celui du harness (GPT-5.5)',
+      'GPT-5.5',
+      'GPT-5.5 mini',
+    ]);
+    expect(defaults.queryByRole('combobox', { name: 'Effort' })).not.toBeInTheDocument();
+    const mode = defaults.getByRole('combobox', { name: 'Mode' });
+    expect(
+      within(mode)
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value),
+    ).toEqual(['', 'default', 'plan']);
+    await userEvent.selectOptions(model, 'gpt-5.5-mini');
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(1));
+    expect(b.called('account_update')[0].args.account).toMatchObject({ id: 'work', defaultModel: 'gpt-5.5-mini' });
+    await userEvent.selectOptions(mode, 'plan');
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(2));
+    expect(b.called('account_update')[1].args.account).toMatchObject({ id: 'work', defaultModel: 'gpt-5.5-mini', defaultMode: 'plan' });
+    // Claude Code's account: Claude Code's models, efforts and modes.
+    const pro = within(list('Comptes Claude Code')).getByRole('listitem', { name: 'Pro' });
+    const claude = within(within(pro).getByRole('group', { name: 'Nouveaux agents' }));
+    expect(within(claude.getByRole('combobox', { name: 'Modèle' })).getByRole('option', { name: 'Sonnet' })).toBeInTheDocument();
+    expect(claude.getByRole('combobox', { name: 'Effort' })).toBeInTheDocument();
+    expect(within(claude.getByRole('combobox', { name: 'Mode' })).getByRole('option', { name: 'Auto' })).toBeInTheDocument();
   });
 
   it('keeps one account of each harness active, whatever the other harness has', () => {

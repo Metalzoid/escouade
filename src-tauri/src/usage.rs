@@ -495,7 +495,7 @@ impl UsageSnapshot {
             settings.accounts.iter().map(|a| a.engine).collect();
         self.current = engines
             .into_iter()
-            .map(|engine| {
+            .filter_map(|engine| {
                 // The accounts reserved to some projects are not where any new agent goes; when
                 // each one of the harness is (Principal too), the first usable active one all the
                 // same.
@@ -505,8 +505,8 @@ impl UsageSnapshot {
                 } else {
                     accounts::of_engine(settings, engine)
                 };
-                let id = accounts::pick(&settings, &self.accounts, threshold, None, now);
-                (engine, id)
+                let id = accounts::pick(&settings, &self.accounts, threshold, None, now)?;
+                Some((engine, id))
             })
             .collect();
     }
@@ -967,7 +967,7 @@ mod tests {
 
     fn two_accounts() -> Settings {
         let mut s = Settings {
-            accounts: vec![pro()],
+            accounts: vec![accounts::principal(), pro()],
             ..Default::default()
         };
         accounts::normalize(&mut s);

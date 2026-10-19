@@ -15,12 +15,21 @@
   // Only a click on the overlay closes it: not the end of a selection dragged out of a field (what was typed there
   // would be lost).
   let downOnOverlay = false;
+  let overlay = $state<HTMLDivElement>();
+  /** Échap closes the modal on top alone: one opened over another (« Ajouter un compte… » from the assistant) first. */
+  function onkeydown(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    const all = document.querySelectorAll('.overlay');
+    if (all.length > 1 && all[all.length - 1] !== overlay) return;
+    onclose();
+  }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
+<svelte:window {onkeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div
+  bind:this={overlay}
   class="overlay"
   onmousedown={(e) => (downOnOverlay = e.target === e.currentTarget)}
   onclick={(e) => downOnOverlay && e.target === e.currentTarget && onclose()}

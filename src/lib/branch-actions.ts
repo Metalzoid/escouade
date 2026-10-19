@@ -3,6 +3,7 @@
 // `core::BranchRefusal`) become a question or a toast in the user's own words.
 
 import { t } from './i18n';
+import { missingAccountOf } from './refusal';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { BranchInfo } from './types';
@@ -47,6 +48,8 @@ export function refusalText(error: unknown, branch: string): string {
 
 /** Tells in a toast why the backend refused an operation on `branch`. */
 export function tellRefusal(error: unknown, branch: string) {
+  // For want of an account (ESC-128): with « Ajouter un compte… ».
+  if (missingAccountOf(error)) return app.refused(error);
   app.toast(refusalText(error, branch), 'error');
 }
 

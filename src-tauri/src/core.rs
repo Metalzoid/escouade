@@ -2535,7 +2535,8 @@ impl<R: Runtime> Core<R> {
         let settings = self.settings.read().clone();
         // Its account's harness, where its session is kept.
         let harness = engine::of(&h.lock().meta);
-        let account = accounts::get(&settings, &h.lock().meta.account);
+        // An account removed meanwhile: another of its harness, else refused (ESC-128).
+        let account = self.agent_account(h)?;
         let program = accounts::program(&account, &settings).ok_or_else(|| {
             let name = harness.name();
             anyhow!(tr!(
@@ -2811,7 +2812,7 @@ impl<R: Runtime> Core<R> {
         if told.catalog.is_empty() || listed(&model) {
             return;
         }
-        let wanted = self.settings.read().default_model.clone();
+        let wanted = accounts::defaults(Some(&account), EngineId::Claude).model;
         let Some(pick) = told
             .catalog
             .iter()
@@ -2913,46 +2914,126 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// A harness other than Claude Code that serves for the first time (a new agent, a ticket on
-    /// it) gets its Principal, its usual installation (`accounts::normalize` makes none for a
-    /// harness that never served): saved, and the window told.
-    pub(crate) fn accounts_of(&self, engine: EngineId) {
-        // Looked at under the read lock: it is asked often (every text written by a model), and a
-        // writer waiting on the settings holds back every new reader, a thread that reads them
-        // again within a read of its own included.
-        if self
-            .settings
-            .read()
-            .accounts
-            .iter()
-            .any(|a| a.engine == engine)
-        {
-            return;
-        }
-        let accounts = {
-            let mut s = self.settings.write();
-            if s.accounts.iter().any(|a| a.engine == engine) {
+    /// The settings saved before 1.8.1 brought to the accounts added alone (ESC-128,
+    /// `accounts::migrate`), once, at the start: a Principal signed in, or that served (an agent,
+    /// a project that prefers it, a line of the statistics), stays; another goes, its MCP entry
+    /// taken out of its config. Nothing for settings brought already, a new installation's too.
+    pub async fn migrate_accounts(self: &Arc<Self>) {
+        let principals: Vec<Account> = {
+            let s = self.settings.read();
+            if s.accounts_version >= accounts::ACCOUNTS_VERSION {
                 return;
             }
-            s.accounts.push(accounts::principal_of(engine));
-            accounts::normalize(&mut s);
-            match serde_json::to_vec_pretty(&*s) {
-                Ok(bytes) => {
-                    if let Err(e) = paths::write_atomic(&self.data.settings_file(), &bytes) {
-                        log::warn!("settings not saved with the Principal of {engine}: {e:#}");
-                    }
-                }
-                Err(e) => log::warn!("settings not serialized: {e:#}"),
+            // Claude Code's too when the settings do not list it (`accounts::migrate`).
+            let missing =
+                (!s.accounts.iter().any(|a| a.id == accounts::PRINCIPAL)).then(accounts::principal);
+            s.accounts
+                .iter()
+                .filter(|a| accounts::is_principal(a))
+                .cloned()
+                .chain(missing)
+                .collect()
+        };
+        let mut keep = HashSet::new();
+        for a in &principals {
+            if self.account_served(&a.id) || self.signed_in(a).await {
+                keep.insert(a.id.clone());
             }
+        }
+        let dropped: Vec<Account> = principals
+            .into_iter()
+            .filter(|a| !keep.contains(&a.id))
+            .collect();
+        let migrated = self.change_claude_accounts(|s| {
+            accounts::migrate(s, |a| keep.contains(&a.id));
+            Ok(())
+        });
+        if let Err(e) = migrated {
+            log::warn!("accounts not brought to 1.8.1: {e:#}");
+            return;
+        }
+        log::info!(
+            "accounts brought to 1.8.1: Principals kept {keep:?}, dropped {:?}",
+            dropped.iter().map(|a| &a.id).collect::<Vec<_>>()
+        );
+        // The MCP server is declared in the accounts added alone (ESC-119): out of the
+        // Principals dropped, and of the machine's config of a harness without an account, where
+        // it was declared until now.
+        let left: Vec<Account> = {
+            let s = self.settings.read();
+            engine::registry::all()
+                .iter()
+                .map(|e| e.id())
+                .filter(|e| *e != EngineId::Claude && !accounts::has_any(&s, *e))
+                .filter(|e| !dropped.iter().any(|a| a.engine == *e))
+                .map(accounts::principal_of)
+                .collect()
+        };
+        for gone in dropped.into_iter().chain(left) {
+            self.withdraw_removed(gone);
+        }
+        let (accounts, engine_order) = {
+            let s = self.settings.read();
             (s.accounts.clone(), s.engine_order.clone())
         };
-        log::info!("the Principal of {engine} serves from now on");
         self.hub.emit(UiEvent::Accounts {
-            accounts: accounts.0,
-            engine_order: accounts.1,
+            accounts,
+            engine_order,
         });
-        // Its usage too: the status bar shows its account (its cost of the day, ESC-45).
         self.settle_usage();
+    }
+
+    /// Whether the account `id` served: an agent on it (archived ones too), a project that prefers
+    /// it, a turn or a message of the statistics written on it.
+    fn account_served(&self, id: &str) -> bool {
+        self.agents
+            .read()
+            .values()
+            .any(|h| h.lock().meta.account == id)
+            || self.projects.read().iter().any(|p| p.account == id)
+            || self.stats.used_by(id)
+    }
+
+    /// Whether the harness of `account` is signed in there (OpenCode, which signs in to none, is
+    /// told by what it served alone). Claude Code's too when its `.claude.json` names the
+    /// claude.ai account it signed in with: a keychain that does not answer drops nobody.
+    async fn signed_in(&self, account: &Account) -> bool {
+        if account.engine == EngineId::Opencode {
+            return false;
+        }
+        if account.engine == EngineId::Claude {
+            let settings = self.settings.read().clone();
+            if accounts::email_in(&accounts::claude_json(account, &settings)).is_some() {
+                return true;
+            }
+        }
+        self.status_of(account).await.connected
+    }
+
+    /// The account agent `h` is started on: its own, when the settings have it for its harness;
+    /// else (removed, ESC-128: never another one in its place silently) the one a new agent of its
+    /// project on its harness goes to, its own from then on. Refused when no account of its
+    /// harness serves its project (`account_for_new`).
+    pub(crate) fn agent_account(&self, h: &AgentHandle) -> Result<Account> {
+        let (id, own, project, engine) = {
+            let rt = h.lock();
+            let m = &rt.meta;
+            (
+                m.id.clone(),
+                m.account.clone(),
+                m.project_id.clone(),
+                m.engine,
+            )
+        };
+        let settings = self.settings.read().clone();
+        if let Some(a) = accounts::find(&settings, &own).filter(|a| a.engine == engine) {
+            return Ok(a.clone());
+        }
+        let next = self.account_for_new(&project, engine)?;
+        log::warn!("agent {id}: account {own:?} unknown, {next:?} instead");
+        h.lock().meta.account = next.clone();
+        self.request_save();
+        Ok(accounts::get(&settings, &next))
     }
 
     /// Keeps the models a harness listed for its account at a process start (Codex: `model/list`):
@@ -4773,9 +4854,8 @@ impl<R: Runtime> Core<R> {
                 .as_ref()
                 .filter(|c| c.session_id.is_some())
                 .and_then(|c| c.entry.clone()),
-            model: self.model_for(engine, o.model.unwrap_or(settings.default_model.clone())),
-            effort: o.effort.unwrap_or(settings.default_effort.clone()),
-            mode: o.mode.unwrap_or(settings.default_mode.clone()),
+            // Set below, once its account is known: unless they say theirs, its account's.
+            model: String::new(),
             cwd: project.path.clone(),
             created_at: now_ms(),
             last_activity: now_ms(),
@@ -4793,10 +4873,19 @@ impl<R: Runtime> Core<R> {
         };
         // The one asked for if the settings know it as an account of the agent's harness
         // (Principal otherwise), else the project's, else the first usable one of the harness.
-        meta.account = match o.account.as_deref().map(|id| accounts::get(&settings, id)) {
-            Some(a) if a.engine == meta.engine => a.id,
+        meta.account = match o
+            .account
+            .as_deref()
+            .and_then(|id| accounts::find(&settings, id))
+        {
+            Some(a) if a.engine == meta.engine => a.id.clone(),
             _ => self.account_for_new(project_id, meta.engine)?,
         };
+        // Its model, effort and mode: those asked for, else its account's (ESC-128).
+        let defaults = accounts::defaults(accounts::find(&settings, &meta.account), engine);
+        meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
+        meta.effort = o.effort.unwrap_or(defaults.effort);
+        meta.mode = o.mode.unwrap_or(defaults.mode);
         let conversations = self.data.conversations();
         // A copy's conversation is written first: when it cannot be, nothing was made for it.
         if let Some(c) = &o.copy_of {
@@ -5514,8 +5603,7 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
-    /// The id of the account agent `id` runs on: Principal for an agent gone, or on an account
-    /// the settings no longer know.
+    /// The id of the account agent `id` runs on: empty for an agent gone.
     pub(crate) fn account_of(&self, id: &str) -> String {
         let account = self
             .agent(id)
@@ -5533,12 +5621,11 @@ impl<R: Runtime> Core<R> {
         agent: Option<&str>,
         project: Option<&str>,
     ) -> Result<Account> {
-        // A harness that never served has its Principal from now on (`Core::accounts_of`); Claude
-        // Code always has one.
-        if engine != EngineId::Claude {
-            self.accounts_of(engine);
-        }
         let settings = self.settings.read().clone();
+        // No account of the harness (ESC-128): one is to be added first.
+        if !accounts::has_any(&settings, engine) {
+            return Err(accounts::no_account_of(engine));
+        }
         let of_agent = agent
             .and_then(|id| self.agent(id).ok())
             .map(|h| h.lock().meta.account.clone())
@@ -5549,9 +5636,9 @@ impl<R: Runtime> Core<R> {
             (None, None) if !accounts::serves_any(&settings, engine, None) => {
                 return Err(accounts::no_account_outside_projects(engine))
             }
-            (None, None) => {
-                self.pick_account(&accounts::for_project(&settings, engine, None), None)
-            }
+            (None, None) => self
+                .pick_account(&accounts::for_project(&settings, engine, None), None)
+                .ok_or_else(|| accounts::no_account_of(engine))?,
         };
         Ok(accounts::get(&settings, &id))
     }
@@ -6342,8 +6429,9 @@ impl<R: Runtime> Core<R> {
         if let Some(model) = first_agent {
             if let Err(e) = self.create_agent(&project.id, Some(model)).await {
                 log::warn!("first agent of {}: {e:#}", project.name);
+                // For want of an account: with « Ajouter un compte… » (ESC-128).
                 self.hub.emit(UiEvent::Toast {
-                    text: e.to_string(),
+                    text: accounts::marked(&e, e.to_string()),
                 });
             }
         }

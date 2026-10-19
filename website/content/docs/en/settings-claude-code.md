@@ -56,13 +56,7 @@ With the field blank, the placeholder already says whether `claude` is found: �
 
 ## New agents
 
-The three choices apply to every [agent](managing-agents) created afterward. In an agent’s message field you can change them for that agent alone. Kanban tickets take them too when the project’s [“Kanban”](settings-board) tab doesn’t pick its own.
-
-| Setting | Effect | Default |
-|---|---|---|
-| “Default model” | One of Claude Code’s aliases: “Fable”, “Opus”, “Sonnet”, or “Haiku”. Once Claude Code has said which version it runs for an alias, the chip shows it (“Sonnet 5.5”, for example). | “Sonnet” |
-| “Default effort” | How much the model thinks before answering. | “Medium” |
-| “Default permission mode” | What Claude may do without asking you. | “Auto” |
+The model, effort and mode new [agents](managing-agents) start with are set account by account, on its card in [Settings › Accounts](settings-accounts), among its harness’s: there is no setting shared here any more. In an agent’s message field you can change them for that agent alone. Kanban tickets take the ticket’s, else the project’s [“Kanban”](settings-board) tab’s, else those of the account that takes them.
 
 ### Effort levels
 
@@ -155,7 +149,7 @@ This group lets Escouade’s agents, and every harness installed started outside
 
 ### Agents can drive Escouade
 
-The switch is off by default; it is the only one, for every harness. It gives the server to each Escouade agent, in every project, with a token of its own: there is nothing to allow in a project’s settings. It also declares it in the config of each active account of each harness installed: `~/.claude.json` (Claude Code, through `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) for the Main account, the rest of the file and its comments kept. A harness installed or an account added later is declared at once. It saves right away, without “Save”: turning it on writes into these files, which “Cancel” could not undo. Turning it off changes the token, takes the entry out everywhere (each file back to what it was, byte for byte) and keeps the server away from the agents: those already running lose the tools at once.
+The switch is off by default; it is the only one, for every harness. It gives the server to each Escouade agent, in every project, with a token of its own: there is nothing to allow in a project’s settings. It also declares it in the config of each active account added of each harness installed (a harness without one has it declared nowhere): `~/.claude.json` (Claude Code, through `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) for the Main account, the rest of the file and its comments kept. A harness installed or an account added later is declared at once. It saves right away, without “Save”: turning it on writes into these files, which “Cancel” could not undo. Turning it off changes the token, takes the entry out everywhere (each file back to what it was, byte for byte) and keeps the server away from the agents: those already running lose the tools at once.
 
 An agent already running gets the tools the next time its process starts: its conversation then shows “Escouade’s tools at the next start” with “Restart”, which resumes its session in a new process, and a line under the switch says how many agents are in that case (“1 agent already running gets the tools the next time its process starts: “Restart” on its conversation.”). See [Escouade’s agents and the server](mcp#escouade-s-agents-and-the-server).
 

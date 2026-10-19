@@ -19,7 +19,7 @@ One switch gives the server to Escouade’s agents in every project, and declare
 1. Open Settings › Harness. The “MCP server” group has the “Agents can drive Escouade” switch.
 2. Turn it on. It saves right away, without “Save”: the declaration writes into the config of each account of each harness, which “Cancel” could not undo.
 
-Escouade then starts the server and declares it in each active account of each harness installed:
+Escouade then starts the server and declares it in each active account of each harness installed, only the accounts added (a harness without one has it declared nowhere):
 
 | Harness | File (Main account) | How |
 | --- | --- | --- |

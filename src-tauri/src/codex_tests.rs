@@ -26,6 +26,7 @@ fn codex_accounts(h: &Harness) {
                 active: true,
                 projects: Vec::new(),
                 daily_budget: None,
+                ..Default::default()
             });
         }
     });
@@ -224,7 +225,7 @@ fn a_codex_sign_in_is_read_from_its_auth_json_its_email_from_its_id_token() {
 async fn a_codex_account_is_added_then_signed_in_by_codex_login_in_a_terminal_of_its_folder() {
     use crate::accounts::ShareMode;
     let h = harness("esc38-codex-login");
-    // The first account of Codex brings its Principal.
+    // A new account alone: the first of Codex brings no Principal (ESC-128).
     let work = h
         .core
         .create_account(EngineId::Codex, "Travail", &[], ShareMode::Link)
@@ -242,7 +243,7 @@ async fn a_codex_account_is_added_then_signed_in_by_codex_login_in_a_terminal_of
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert_eq!(ids, ["principal", "principal-codex", "travail"]);
+    assert_eq!(ids, ["principal", "travail"]);
     let work = h
         .core
         .update_claude_account(Account {

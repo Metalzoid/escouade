@@ -1,6 +1,6 @@
 //! Tauri commands invoked by the frontend.
 
-use crate::accounts::{AccountStatus, ShareMode};
+use crate::accounts::{AccountStatus, MachineAccount, ShareMode};
 use crate::attachfiles::AttachedFile;
 use crate::closed::ClosedProjectInfo;
 use crate::core::{AgentOptions, Attachment, Core, NotOnBase, SyncOp};
@@ -43,8 +43,12 @@ fn project_added<R: tauri::Runtime>(core: &Core<R>, r: Res<(Project, bool)>) -> 
 }
 type CoreState<'a> = State<'a, Arc<Core>>;
 
+/// What the window is told of a refusal. One for want of an account of a harness (ESC-128) comes
+/// as `no-account:<harness>|<text>`: the window shows the text with « Ajouter un compte… » on
+/// that harness (`errorText`).
 fn err(e: anyhow::Error) -> String {
-    format!("{e:#}")
+    let text = format!("{e:#}");
+    crate::accounts::marked(&e, text)
 }
 
 /// Refused: the shell `id` asked for is not one this system has.
@@ -265,6 +269,19 @@ pub fn account_create(
         .create_account(engine, &name, &share, mode)
         .map_err(err);
     counted(&core, Event::AccountCreated, r)
+}
+
+/// « Le compte de la machine » of `engine` added (its Principal, ESC-128).
+#[tauri::command(async)]
+pub fn account_add_machine(core: CoreState, engine: EngineId) -> Res<ClaudeAccount> {
+    let r = core.add_machine_account(engine).map_err(err);
+    counted(&core, Event::AccountCreated, r)
+}
+
+/// What « Ajouter un compte… » says of the machine's account of `engine`.
+#[tauri::command]
+pub async fn account_machine(core: CoreState<'_>, engine: EngineId) -> Res<MachineAccount> {
+    Ok(core.machine_account(engine).await)
 }
 
 /// The account's name, `claude` and « Actif »; the accounts as they then are.

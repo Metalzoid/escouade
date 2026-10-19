@@ -1694,7 +1694,8 @@ async fn a_wait_asked_for_nothing_too_much_an_unknown_ticket_or_a_since_that_is_
 }
 
 #[tokio::test]
-async fn a_boards_settings_are_read_whole_with_the_apps_defaults_and_the_branch_it_merges_into() {
+async fn a_boards_settings_are_read_whole_with_its_accounts_defaults_and_the_branch_it_merges_into()
+{
     let h = harness("mcp-get-board");
     let (p, r) = h.project(false).await;
     let p = still(&h, &p);
@@ -1737,12 +1738,14 @@ async fn a_boards_settings_are_read_whole_with_the_apps_defaults_and_the_branch_
         )
     );
 
-    // Every setting as the Kanban has it, the defaults as the app has them.
+    // Every setting as the Kanban has it, the defaults as the account of its new agents has them
+    // (ESC-128).
     {
         let mut s = h.core.settings.write();
-        s.default_model = "opus".into();
-        s.default_effort = "high".into();
-        s.default_mode = "plan".into();
+        let a = &mut s.accounts[0];
+        a.default_model = "opus".into();
+        a.default_effort = "high".into();
+        a.default_mode = "plan".into();
     }
     h.core
         .board_set(

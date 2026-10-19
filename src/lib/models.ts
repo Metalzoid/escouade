@@ -118,7 +118,8 @@ export function modelOptions(catalog: ModelInfo[], models?: { id: string; label:
   const list = models || told.length ? told : MODELS.map((m) => ({ id: m.value, label: m.label }));
   return list.map((m) => {
     const id = resolveAlias(m.id.toLowerCase(), catalog);
-    return { value: m.id, label: id ? displayModel(id) : m.label };
+    // A model of no family Escouade names (Mythos: `claude-mythos-1`) keeps the name its harness gave it.
+    return { value: m.id, label: id && parseModel(id) ? displayModel(id) : m.label };
   });
 }
 

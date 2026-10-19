@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { addAccount, defaultEngine } from '../lib/accounts';
   import { t } from '../lib/i18n';
   import { OS } from '../lib/platform';
   import { app } from '../lib/state.svelte';
@@ -6,6 +7,8 @@
   // The first start: Escouade works as soon as one harness is found. With none, each one Escouade knows, with the command
   // that installs it.
   const none = $derived(app.enginesFound.length === 0);
+  /** A harness found, no account added (ESC-128): the first thing to do. */
+  const noAccount = $derived(!none && !(app.settings.accounts ?? []).length);
 </script>
 
 <div class="welcome">
@@ -22,6 +25,15 @@
             <li><span class="name">{e.name}</span><code class="mono">{OS === 'windows' ? e.install.windows : e.install.unix}</code></li>
           {/each}
         </ul>
+      </section>
+    {/if}
+    {#if noAccount}
+      <section class="none" aria-labelledby="no-account">
+        <h2 id="no-account" class="warn">{t('shell.welcome.noAccount')}</h2>
+        <p>{t('shell.welcome.noAccountDesc')}</p>
+        <button class="btn" onclick={() => addAccount(app.enginesFound.includes(defaultEngine()) ? defaultEngine() : app.enginesFound[0])}
+          >{t('accounts.tab.add')}</button
+        >
       </section>
     {/if}
     <button

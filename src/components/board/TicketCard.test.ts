@@ -870,8 +870,8 @@ describe('TicketCard with a model or an effort of its own', () => {
     expect(screen.queryByLabelText(/de ce ticket/)).not.toBeInTheDocument();
   });
 
-  it('shows nothing for an effort alone when the Kanban follows an app on Haiku', () => {
-    app.settings.defaultModel = 'haiku';
+  it('shows nothing for an effort alone when the Kanban follows an account on Haiku', () => {
+    app.settings.accounts = app.settings.accounts.map((a) => ({ ...a, defaultModel: 'haiku' }));
     fakeBackend();
     const { container } = show(ticket({ effort: 'max' }));
     expect(own(container)).toBeNull();

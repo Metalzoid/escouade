@@ -1,6 +1,7 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
   Account,
+  MachineAccount,
   AccountForm,
   AccountStatus,
   AccountView,
@@ -150,7 +151,11 @@ export const api = {
   /** A new account of `engine` (Claude Code's by default), its folder made with the items `share` of its Principal's linked or copied, saved last. */
   accountCreate: (name: string, share: string[], mode: ShareMode, engine?: EngineId) =>
     invoke<Account>('account_create', engine ? { name, share, mode, engine } : { name, share, mode }),
-  /** The account's name, `claude` and « Actif » (its folder stays its own); the accounts as they then are. */
+  /** « Le compte de la machine » of `engine` added (its Principal: its usual folder, as it is). */
+  accountAddMachine: (engine: EngineId) => invoke<Account>('account_add_machine', { engine }),
+  /** Whether the machine's account of `engine` is signed in, with whom, and whether it is added already. */
+  accountMachine: (engine: EngineId) => invoke<MachineAccount>('account_machine', { engine }),
+  /** The account's name, `claude`, « Actif » and the defaults of its new agents (its folder stays its own); the accounts as they then are. */
   accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
   /** The accounts in the order of `ids`, as they then are. */
   accountReorder: (ids: string[]) => invoke<Account[]>('account_reorder', { ids }),

@@ -21,6 +21,7 @@ fn opencode_account(h: &Harness) {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
 }
@@ -361,6 +362,7 @@ async fn real_opencode() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
     let id = h
@@ -511,6 +513,7 @@ async fn no_server_starts_without_a_model_of_its_providers_and_a_server_always_h
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
     // A model of another harness (a handover, a setting of Claude Code's).
@@ -635,6 +638,7 @@ async fn the_opencode_view_joins_the_agents_session_beside_escouade() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
     let id = h
@@ -877,6 +881,7 @@ async fn real_opencode_view() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
     let id = h
@@ -1031,6 +1036,7 @@ fn account_with(
             active: true,
             projects: Vec::new(),
             daily_budget: budget,
+            ..Default::default()
         });
     });
     dir
@@ -1180,6 +1186,7 @@ async fn a_local_model_costs_nothing_and_never_reaches_the_budget() {
             active: true,
             projects: Vec::new(),
             daily_budget: Some(0.01),
+            ..Default::default()
         });
     });
     let id = agent_on(&h, &p.id, "oc-local").await;
@@ -1423,6 +1430,7 @@ async fn real_opencode_writes_and_drives_escouade() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
         s.writer_engine = Some(EngineId::Opencode);
         s.writer_model = "ollama/qwen3-coder:30b-32k".into();

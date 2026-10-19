@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { accountName, backToAccounts, engineOfAccount, principalId, SHARED_FILES } from '../../lib/accounts';
+  import { tildify } from '../../lib/format';
   import { engineName, offered } from '../../lib/engines';
   import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -8,14 +9,22 @@
   import { app } from '../../lib/state.svelte';
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
   import type { SettingsTab } from '../../lib/settings.svelte';
-  import type { Account, EngineId, ShareMode } from '../../lib/types';
+  import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
   import Modal from './Modal.svelte';
 
-  // « Ajouter un compte… »: a new account of a harness (`engine`, else the one picked here), made with what it shares of
-  // the folder of that harness's Principal, then signed in. « Se connecter… » (`accountId`): straight to the sign-in.
+  // « Ajouter un compte… » (ESC-128): for a harness (`engine`, else the one picked here), the machine's account (its
+  // Principal: its usual folder, as it is), offered when its harness is signed in there and it is not added yet; or a new
+  // account, made with what it shares of the machine's folder, then signed in. « Se connecter… » (`accountId`): straight
+  // to the sign-in.
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
-  let { accountId, back, engine: asked }: { accountId?: string; back?: SettingsTab; engine?: EngineId } = $props();
+  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  let {
+    accountId,
+    back,
+    engine: asked,
+    onclose,
+  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; onclose?: () => void } = $props();
 
   /** What the modal says of the folders of a harness's accounts: Claude Code's unless the harness has its own. */
   const SAYS: Partial<Record<EngineId, { nothing: Key; never: Key; hint: Key }>> = {
@@ -51,6 +60,12 @@
   const engines = $derived(offered());
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   let name = $state('');
+  /** The machine's account of the harness picked; null until read. */
+  let machine = $state<MachineAccount | null>(null);
+  /** What is added: the machine's account (when it is offered) or a new one. */
+  let kind = $state<'machine' | 'new'>('new');
+  /** The machine's account may be added: signed in there, not added yet. */
+  const offersMachine = $derived(!!machine && machine.connected && !machine.added);
   /** What Principal has to share; null until known. */
   let shareable = $state<string[] | null>(null);
   let checked = $state<Record<string, boolean>>({});
@@ -76,12 +91,23 @@
   /** A look at the sign-in is under way: the next tick waits for it. */
   let looking = false;
 
-  const principal = $derived(
-    accountName(app.settings.accounts.find((a) => a.id === principalId(engine)) ?? { id: principalId(engine), name: '', engine }),
-  );
+  /** The machine's account of the harness, once added: what a new account shares is said by its name, else as « le compte de la machine ». */
+  const machineAdded = $derived(app.settings.accounts.find((a) => a.id === principalId(engine)));
+  const principal = $derived(machineAdded ? accountName(machineAdded) : t('accounts.modal.machineName'));
+  const shareLegend = $derived(machineAdded ? t('accounts.modal.share', { name: principal }) : t('accounts.modal.shareMachine'));
   const files = $derived((shareable ?? []).filter((n) => SHARED_FILES.includes(n)));
   const folders = $derived((shareable ?? []).filter((n) => !SHARED_FILES.includes(n)));
   const exited = $derived(termId !== null && app.exitedTerms[termId] !== undefined);
+  /** What is said of the machine's account: signed in (as whom), added already, or not signed in there. */
+  function machineSays(m: MachineAccount | null): string {
+    const harness = engineName(engine);
+    if (!m) return t('accounts.modal.machineChecking');
+    if (m.added) return t('accounts.modal.machineAdded');
+    if (!m.connected) return t('accounts.modal.machineNotConnected', { harness });
+    if (m.email) return t('accounts.modal.machineConnected', { harness, email: m.email });
+    return t(m.signsIn ? 'accounts.modal.machineConnectedNoEmail' : 'accounts.modal.machineFound', { harness });
+  }
+
   const title = $derived(
     account
       ? t('accounts.modal.signInTitle', { name: accountName(account) })
@@ -91,7 +117,46 @@
   untrack(() => {
     if (account) return void start();
     loadShareable();
+    loadMachine();
   });
+
+  /** What the machine's account of the harness picked is: offered first when it may be added. */
+  function loadMachine() {
+    const of = engine;
+    machine = null;
+    kind = 'new';
+    api
+      .accountMachine(of)
+      .then((m) => {
+        if (of !== engine) return;
+        machine = m;
+        kind = m.connected && !m.added ? 'machine' : 'new';
+      })
+      .catch(() => (machine = null));
+  }
+
+  /** The harness picked changed: what it has to share, and its machine's account. */
+  function pickEngine() {
+    loadShareable();
+    loadMachine();
+  }
+
+  /** « Ajouter ce compte »: the machine's account added as it is, signed in already: back to the accounts. */
+  async function addMachine() {
+    if (busy) return;
+    busy = true;
+    error = null;
+    try {
+      const made = await api.accountAddMachine(engine);
+      if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
+      void app.run(api.refreshUsage());
+      close();
+    } catch (e) {
+      error = String(e);
+    } finally {
+      busy = false;
+    }
+  }
 
   /** What the Principal of the harness picked has to share, all ticked. */
   function loadShareable() {
@@ -123,7 +188,7 @@
     try {
       const share = (shareable ?? []).filter((n) => checked[n]);
       const made = await api.accountCreate(name.trim(), share, mode, engine);
-      // The backend tells them all (`accounts`, with the Principal a first account of a harness brings): this one at once.
+      // The backend tells them all (`accounts`): this one at once.
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
       account = made;
       await start();
@@ -219,7 +284,8 @@
 
   function close() {
     stop();
-    backToAccounts(back);
+    if (onclose) onclose();
+    else backToAccounts(back);
   }
 
   onDestroy(stop);
@@ -230,7 +296,10 @@
 {/snippet}
 
 {#snippet actions()}
-  {#if !account}
+  {#if !account && kind === 'machine'}
+    <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+    <button class="btn primary" disabled={busy || !offersMachine} onclick={addMachine}>{t('accounts.modal.addMachine')}</button>
+  {:else if !account}
     <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={busy || !name.trim()} onclick={create}>{t('accounts.modal.create')}</button>
   {:else}
@@ -244,49 +313,69 @@
     {#if engines.length > 1}
       <div class="field-row">
         <label class="k" for="account-harness">{t('accounts.modal.harness')}</label>
-        <select id="account-harness" class="field name" bind:value={engine} onchange={loadShareable}>
+        <select id="account-harness" class="field name" bind:value={engine} onchange={pickEngine}>
           {#each engines as e (e.id)}<option value={e.id}>{e.name}</option>{/each}
         </select>
       </div>
     {/if}
-    <div class="field-row">
-      <label class="k" for="account-name">{t('accounts.modal.name')}</label>
-      <!-- svelte-ignore a11y_autofocus -->
-      <input
-        id="account-name"
-        class="field name"
-        spellcheck="false"
-        autofocus
-        placeholder={t('accounts.modal.namePlaceholder')}
-        bind:value={name}
-        onkeydown={(e) => e.key === 'Enter' && create()}
-      />
+    <!-- The machine's account or a new one (ESC-128). -->
+    <div class="kinds" role="radiogroup" aria-label={t('accounts.modal.kind')}>
+      <label class="kind" class:off={!offersMachine}>
+        <input type="radio" name="account-kind" value="machine" bind:group={kind} disabled={!offersMachine} />
+        <span class="what">
+          <span class="title">{t('accounts.modal.machine')}</span>
+          <span class="hint">{machineSays(machine)}</span>
+          {#if machine?.dir}<span class="hint">{t('accounts.modal.machineHint', { path: tildify(machine.dir) })}</span>{/if}
+        </span>
+      </label>
+      <label class="kind">
+        <input type="radio" name="account-kind" value="new" bind:group={kind} />
+        <span class="what">
+          <span class="title">{t('accounts.modal.newAccount')}</span>
+          <span class="hint">{t('accounts.modal.newHint')}</span>
+        </span>
+      </label>
     </div>
-    {#if shareable?.length}
-      <fieldset class="share">
-        <legend>{t('accounts.modal.share', { name: principal })}</legend>
-        {#if files.length}
-          <div class="line">
-            <span class="k">{t('accounts.modal.files')}</span>
-            {#each files as n (n)}{@render item(n)}{/each}
-            {#if !IS_MAC && mode === 'link'}<span class="hint">{t('accounts.modal.filesCopied')}</span>{/if}
+    {#if kind === 'new'}
+      <div class="field-row">
+        <label class="k" for="account-name">{t('accounts.modal.name')}</label>
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          id="account-name"
+          class="field name"
+          spellcheck="false"
+          autofocus
+          placeholder={t('accounts.modal.namePlaceholder')}
+          bind:value={name}
+          onkeydown={(e) => e.key === 'Enter' && create()}
+        />
+      </div>
+      {#if shareable?.length}
+        <fieldset class="share">
+          <legend>{shareLegend}</legend>
+          {#if files.length}
+            <div class="line">
+              <span class="k">{t('accounts.modal.files')}</span>
+              {#each files as n (n)}{@render item(n)}{/each}
+              {#if !IS_MAC && mode === 'link'}<span class="hint">{t('accounts.modal.filesCopied')}</span>{/if}
+            </div>
+          {/if}
+          {#if folders.length}
+            <div class="line">
+              <span class="k">{t('accounts.modal.folders')}</span>
+              {#each folders as n (n)}{@render item(n)}{/each}
+            </div>
+          {/if}
+          <div class="line modes" role="radiogroup" aria-label={t('accounts.modal.mode')}>
+            <label class="item"><input type="radio" name="share-mode" value="link" bind:group={mode} />{t('accounts.modal.link')}</label>
+            <label class="item"><input type="radio" name="share-mode" value="copy" bind:group={mode} />{t('accounts.modal.copy')}</label>
           </div>
-        {/if}
-        {#if folders.length}
-          <div class="line">
-            <span class="k">{t('accounts.modal.folders')}</span>
-            {#each folders as n (n)}{@render item(n)}{/each}
-          </div>
-        {/if}
-        <div class="line modes" role="radiogroup" aria-label={t('accounts.modal.mode')}>
-          <label class="item"><input type="radio" name="share-mode" value="link" bind:group={mode} />{t('accounts.modal.link')}</label>
-          <label class="item"><input type="radio" name="share-mode" value="copy" bind:group={mode} />{t('accounts.modal.copy')}</label>
-        </div>
-      </fieldset>
-    {:else if shareable}
-      <p class="note">{t(says.nothing, { name: principal })}</p>
+        </fieldset>
+      {:else if shareable}
+        <p class="note">{t(says.nothing, { name: principal })}</p>
+      {/if}
+      <p class="note">{t(says.never)}</p>
     {/if}
-    <p class="note">{t(says.never)}</p>
   {:else}
     <p class="said" class:ok={signedIn} role="status">
       {#if signedIn}
@@ -307,6 +396,34 @@
 </Modal>
 
 <style>
+  .kinds {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kind {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    cursor: pointer;
+  }
+  .kind.off {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .what {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .title {
+    font-size: 13px;
+    font-weight: 600;
+  }
   .field-row {
     display: flex;
     align-items: center;

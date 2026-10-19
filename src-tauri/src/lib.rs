@@ -301,6 +301,9 @@ pub fn run() {
                 log::error!("app menu not set: {e}");
             }
             core.start(git_rx);
+            // The Principals of settings saved before 1.8.1 kept or dropped, once (ESC-128).
+            let migrating = core.clone();
+            tauri::async_runtime::spawn(async move { migrating.migrate_accounts().await });
             // Finding a `claude` of WSL may start its distribution: done now and off the main
             // thread, which neither the window nor the board then waits for (`wsl::find` keeps it).
             let warm = core.clone();
@@ -373,6 +376,8 @@ pub fn run() {
             commands::engines,
             commands::account_shareable,
             commands::account_create,
+            commands::account_add_machine,
+            commands::account_machine,
             commands::account_update,
             commands::account_reorder,
             commands::engine_order_set,

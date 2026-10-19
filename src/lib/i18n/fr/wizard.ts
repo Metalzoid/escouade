@@ -106,6 +106,8 @@ export default {
   },
   account: {
     remoteAll: 'Déjà allumé pour tous les agents (Réglages › Harness).',
+    /** ESC-128: its harness has no account yet. */
+    noAccount: 'Aucun compte {harness} : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
   },
   integrations: {
     none: 'Aucun compte Jira, Trello, GitHub ou Linear n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',

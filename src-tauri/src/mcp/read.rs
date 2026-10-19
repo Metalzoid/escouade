@@ -570,7 +570,8 @@ pub(crate) struct BoardView {
     prefix: String,
 }
 
-/// What the tickets' agents go with when the Kanban sets nothing: the app's defaults.
+/// What the tickets' agents go with when the Kanban sets nothing: those of the account a new agent
+/// of the project goes to (ESC-128), else its harness's.
 #[derive(Serialize)]
 struct BoardDefaults {
     model: String,
@@ -587,7 +588,6 @@ pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) ->
     } else {
         b.target.clone()
     };
-    let settings = core.settings.read();
     BoardView {
         project: project.name.clone(),
         project_id: project.id.clone(),
@@ -603,10 +603,13 @@ pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) ->
         model: b.model.clone(),
         effort: b.effort.clone(),
         mode: b.mode.clone(),
-        defaults: BoardDefaults {
-            model: settings.default_model.clone(),
-            effort: settings.default_effort.clone(),
-            mode: settings.default_mode.clone(),
+        defaults: {
+            let d = core.new_agent_defaults(&project.id, project.engine());
+            BoardDefaults {
+                model: d.model,
+                effort: d.effort,
+                mode: d.mode,
+            }
         },
         tests_first: b.tests_first_on(),
         test_command: b.test_command.clone(),
@@ -678,10 +681,7 @@ struct Pause {
 
 /// `get_usage`: each account's quota, of every harness, and the autopilot's pause.
 pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
-    let mut list = core.settings.read().accounts.clone();
-    if list.is_empty() {
-        list.push(accounts::principal());
-    }
+    let list = core.settings.read().accounts.clone();
     // Each account's windows as last read, and the account new agents go to as the status bar
     // and the autopilot have it (`UsageSnapshot::settle`: the first active one under the
     // threshold, else the first active one).

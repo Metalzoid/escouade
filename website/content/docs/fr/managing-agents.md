@@ -35,7 +35,7 @@ Un nouvel agent s’appelle `agent-1`, `agent-2`… Dès que tu lui envoies son 
 
 ## Modèle, effort et mode de permission
 
-Sous le champ de saisie, une barre de menus règle l’agent : « Modèle », « Effort » et « Mode » (plus « Compte » quand tu as plusieurs comptes). Les valeurs des nouveaux agents sont dans Réglages › Harness, groupe « Nouveaux agents » : « Modèle par défaut » (Sonnet), « Effort par défaut » (Moyen) et « Mode de permission par défaut » (Auto). Voir [les réglages des harness](settings-claude-code).
+Sous le champ de saisie, une barre de menus règle l’agent : « Modèle », « Effort » et « Mode » (plus « Compte » quand tu as plusieurs comptes). Les valeurs des nouveaux agents sont celles de leur compte, dans sa fiche de Réglages › Comptes, « Nouveaux agents » : « Modèle », « Effort » et « Mode », parmi ceux de son harness (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir [les réglages des comptes](settings-accounts).
 
 ### Modèle
 

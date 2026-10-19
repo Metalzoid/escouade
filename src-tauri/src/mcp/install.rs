@@ -263,22 +263,16 @@ pub struct Declaration {
     pub paste: bool,
 }
 
-/// The accounts of `engine` the server is declared in: its active ones; a harness that has none
-/// in the settings yet (its Principal is made at its first agent, `Core::accounts_of`), its
-/// Principal all the same, which is the user's own config. `all`: the inactive ones too (to take
+/// The accounts of `engine` the server is declared in: its active ones, those the user added alone
+/// (ESC-128: a harness without one has it declared nowhere). `all`: the inactive ones too (to take
 /// the entry out of).
 fn accounts_in(settings: &Settings, engine: EngineId, all: bool) -> Vec<Account> {
-    let of: Vec<Account> = settings
+    settings
         .accounts
         .iter()
         .filter(|a| a.engine == engine && (all || a.active))
         .cloned()
-        .collect();
-    let none = !settings.accounts.iter().any(|a| a.engine == engine);
-    if none && engine != EngineId::Claude {
-        return vec![accounts::principal_of(engine)];
-    }
-    of
+        .collect()
 }
 
 /// The harnesses that can be declared in: Claude Code, and those with a user config of theirs.

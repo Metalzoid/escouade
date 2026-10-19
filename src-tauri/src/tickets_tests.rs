@@ -7151,7 +7151,7 @@ async fn a_ticket_started_with_a_model_and_an_effort_keeps_them_until_it_is_star
 }
 
 #[tokio::test]
-async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_ticket_else_of_the_board_else_of_the_app(
+async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_ticket_else_of_the_board_else_of_its_account(
 ) {
     let h = harness("tk-agent-model");
     let (p, _) = h.project(false).await;
@@ -7223,15 +7223,16 @@ async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_ticket_else_of
     assert_eq!(h.ticket(board).model, "");
     assert_eq!(h.ticket(only_model).effort, "");
 
-    // A Kanban that has none: the app's.
+    // A Kanban that has none: those of the account that takes it (ESC-128).
     h.set_board(&p.id, |s| {
         s.model.clear();
         s.effort.clear();
     });
     {
         let mut s = h.core.settings.write();
-        s.default_model = "opus".into();
-        s.default_effort = "high".into();
+        let a = &mut s.accounts[0];
+        a.default_model = "opus".into();
+        a.default_effort = "high".into();
     }
     h.core.ticket_start(app).unwrap();
     h.wait_ticket(app, "to test", |t| t.column == Column::Review)
@@ -8495,19 +8496,22 @@ async fn preparing_a_launch_gives_the_agent_the_projects_launch_commands() {
 fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
     // ESC-52, tried for real: a ticket on OpenCode went in « Auto », which OpenCode does not
     // have, and one on Codex with a Kanban on haiku in « Demander »: the rule asked Claude Code.
-    let settings = Settings::default();
     let board = BoardSettings::default();
     let on = |engine: EngineId, model: &str| {
+        let defaults = crate::accounts::defaults(None, engine);
         let t = Ticket {
             model: model.into(),
             ..Default::default()
         };
-        crate::tickets::ticket_agent_options(&t, &board, &settings, &|m| {
+        crate::tickets::ticket_agent_options(&t, &board, &defaults, &|m| {
             crate::engine::by_id(engine).supports_auto(m)
         })
         .2
     };
-    assert_eq!(settings.default_mode, "auto");
+    assert_eq!(
+        crate::accounts::defaults(None, EngineId::Claude).mode,
+        "auto"
+    );
     assert_eq!(on(EngineId::Claude, "sonnet"), "auto");
     assert_eq!(on(EngineId::Claude, "haiku"), "auto");
     assert_eq!(on(EngineId::Claude, "claude-haiku-4-5"), "default");

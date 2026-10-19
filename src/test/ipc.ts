@@ -57,9 +57,6 @@ export function fakeBackend(handlers: Record<string, (args: any) => unknown> = {
 
 export const SETTINGS: Settings = {
   claudePath: '',
-  defaultModel: 'sonnet',
-  defaultEffort: 'medium',
-  defaultMode: 'auto',
   sound: true,
   osNotifications: true,
   notifyFor: { questions: true, done: true, errors: true, tickets: true },

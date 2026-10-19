@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { accountName, accountsOf, serves } from '../../lib/accounts';
+  import { accountName, accountsOf, defaultEngine, hasAccount, serves } from '../../lib/accounts';
+  import { engineName } from '../../lib/engines';
   import { t } from '../../lib/i18n';
+  import AccountModal from '../modals/AccountModal.svelte';
   import { app } from '../../lib/state.svelte';
   import type { CommitMode } from '../../lib/types';
   import type { WizardForm } from '../../lib/wizard-form.svelte';
@@ -22,9 +24,20 @@
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
   );
   const all = $derived(!!app.settings.remoteControlAll);
+  /** The project's harness, and whether it has an account (ESC-128): without one, « Ajouter un compte… » over the assistant. */
+  const engine = $derived(form.config.engine ?? defaultEngine());
+  const missing = $derived(!hasAccount(engine));
+  let adding = $state(false);
 </script>
 
 <Checks {form} step="account" />
+{#if missing}
+  <div class="missing" role="status">
+    <span>{t('wizard.account.noAccount', { harness: engineName(engine) })}</span>
+    <button class="btn" onclick={() => (adding = true)}>{t('accounts.tab.add')}</button>
+  </div>
+{/if}
+{#if adding}<AccountModal {engine} onclose={() => (adding = false)} />{/if}
 <div class="box">
   <Row label={t('accounts.project.label')} desc={t('accounts.project.desc')}>
     <Chips label={t('accounts.project.label')} options={ACCOUNTS} bind:value={form.config.account} />
@@ -42,6 +55,15 @@
 </div>
 
 <style>
+  .missing {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--wait);
+  }
   .box {
     border: 1px solid var(--line);
     border-radius: var(--r);

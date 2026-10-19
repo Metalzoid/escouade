@@ -35,7 +35,7 @@ A new agent is called `agent-1`, `agent-2`… As soon as you send it its first m
 
 ## Model, effort, and permission mode
 
-Under the message field, a bar of menus adjusts the agent: “Model”, “Effort”, and “Mode” (plus “Account” when you have several accounts). The values for new agents are in Settings › Harness, group “New agents”: “Default model” (Sonnet), “Default effort” (Medium), and “Default permission mode” (Auto). See [the harness settings](settings-claude-code).
+Under the message field, a bar of menus adjusts the agent: “Model”, “Effort”, and “Mode” (plus “Account” when you have several accounts). The values for new agents are those of their account, on its card in Settings › Accounts, “New agents”: “Model”, “Effort”, and “Mode”, among its harness’s (by default the harness’s: Sonnet, Medium, and Auto for Claude Code). See [the account settings](settings-accounts).
 
 ### Model
 

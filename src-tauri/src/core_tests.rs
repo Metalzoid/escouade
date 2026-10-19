@@ -104,11 +104,14 @@ pub(crate) fn harness(name: &str) -> Harness {
     let dir = test_dir(name);
     let data = DataDir::new(dir.join("data"));
     data.ensure().unwrap();
+    // The account each test runs its agents on: Claude Code's Principal, added as the user would
+    // (a first installation has none, ESC-128).
     let settings = Settings {
         claude_path: fake_cli(),
         sound: false,
         os_notifications: false,
         idle_stop_minutes: 1,
+        accounts: vec![crate::accounts::principal()],
         ..Default::default()
     };
     std::fs::write(data.settings_file(), serde_json::to_vec(&settings).unwrap()).unwrap();
@@ -8722,53 +8725,243 @@ async fn settings_saved_before_the_languages_stay_in_french_and_a_new_install_fo
     );
 }
 
-#[tokio::test]
-async fn settings_and_agents_saved_before_the_accounts_load_on_principal() {
-    let dir = test_dir("accounts-old-files");
+/// A core on settings saved by 1.8.0 (`accounts_version` 0) and the state `state`, in the
+/// folder `dir` (`test_dir`), whose `DIR` they may name.
+fn core_saved_by_1_8_0(
+    name: &str,
+    settings: Value,
+    state: Value,
+) -> (Arc<Core<MockRuntime>>, PathBuf) {
+    let dir = test_dir(name);
+    let shown = serde_json::to_string(&dir.to_string_lossy()).unwrap();
+    let shown = &shown[1..shown.len() - 1];
+    let settings: Value =
+        serde_json::from_str(&settings.to_string().replace("DIR", shown)).unwrap();
+    let state: Value = serde_json::from_str(&state.to_string().replace("DIR", shown)).unwrap();
     let data = DataDir::new(dir.join("data"));
     data.ensure().unwrap();
-    std::fs::write(data.settings_file(), r#"{"claudePath":"","sound":false}"#).unwrap();
-    let agent = json!({ "id": "a1", "projectId": "p1", "name": "ancien", "model": "sonnet",
-                        "effort": "medium", "mode": "auto", "cwd": dir.to_string_lossy(),
-                        "sessionId": "s1" });
-    std::fs::write(
-        data.state_file(),
-        json!({ "projects": [], "agents": [agent] }).to_string(),
-    )
-    .unwrap();
+    std::fs::write(data.settings_file(), settings.to_string()).unwrap();
+    std::fs::write(data.state_file(), state.to_string()).unwrap();
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data);
-    assert_eq!(
-        core.settings.read().accounts,
-        vec![Account {
-            engine: EngineId::Claude,
-            id: "principal".into(),
-            name: "Principal".into(),
-            config_dir: String::new(),
-            claude_path: String::new(),
-            active: true,
-            projects: Vec::new(),
-            daily_budget: None,
-        }]
+    // The app is not needed past the load: the core keeps its handle.
+    std::mem::forget(app);
+    (core, dir)
+}
+
+fn core_account_ids(core: &Core<MockRuntime>) -> Vec<String> {
+    core.settings
+        .read()
+        .accounts
+        .iter()
+        .map(|a| a.id.clone())
+        .collect()
+}
+
+#[tokio::test]
+async fn settings_and_agents_saved_before_the_accounts_keep_principal_through_the_update() {
+    // ESC-128: settings of before the accounts (none listed) and an agent of then (on Principal).
+    let agent = json!({ "id": "a1", "projectId": "p1", "name": "ancien", "model": "sonnet",
+                        "effort": "medium", "mode": "auto", "cwd": "/x", "sessionId": "s1" });
+    let (core, _dir) = core_saved_by_1_8_0(
+        "esc128-old-files",
+        json!({ "claudePath": "", "sound": false, "defaultModel": "opus" }),
+        json!({ "projects": [], "agents": [agent] }),
     );
+    // Loaded as they are: no Principal made up.
+    assert!(core.settings.read().accounts.is_empty());
     assert_eq!(core.agent("a1").unwrap().lock().meta.account, "principal");
-    // Saved without Principal (a window that lost it): it is put back, first, in the file too.
-    let pro = Account {
-        id: "pro".into(),
-        name: "Pro".into(),
-        config_dir: dir.join("pro").to_string_lossy().into(),
-        ..Default::default()
-    };
-    let s = Settings {
-        accounts: vec![pro],
-        ..core.settings.read().clone()
-    };
-    core.save_settings(s).unwrap();
-    let ids = |accounts: &[Account]| accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ids(&core.settings.read().accounts), ["principal", "pro"]);
-    let saved: Settings =
+    // The update: Principal served (an agent runs on it), it stays, with the defaults of then.
+    core.migrate_accounts().await;
+    assert_eq!(core_account_ids(&core), ["principal"]);
+    let s = core.settings.read().clone();
+    assert_eq!(s.accounts_version, crate::accounts::ACCOUNTS_VERSION);
+    assert_eq!(s.accounts[0].name, "Principal");
+    assert_eq!(s.accounts[0].default_model, "opus");
+    assert_eq!(core.agent("a1").unwrap().lock().meta.account, "principal");
+    // In the file too, without the settings of then.
+    let saved: Value =
         serde_json::from_slice(&std::fs::read(core.data.settings_file()).unwrap()).unwrap();
-    assert_eq!(ids(&saved.accounts), ["principal", "pro"]);
+    assert_eq!(saved["accountsVersion"], 1);
+    assert_eq!(saved["accounts"][0]["id"], "principal");
+    assert!(saved.get("defaultModel").is_none());
+}
+
+#[tokio::test]
+async fn the_update_drops_a_principal_never_signed_in_nor_used_and_keeps_the_others() {
+    let (core, dir) = core_saved_by_1_8_0(
+        "esc128-dropped",
+        json!({ "accounts": [
+            { "id": "principal", "name": "Principal" },
+            { "id": "pro", "name": "Pro", "configDir": "DIR/pro" },
+            { "id": "principal-codex", "name": "Principal", "engine": "codex" },
+        ] }),
+        json!({ "projects": [], "agents": [] }),
+    );
+    let _ = dir;
+    core.migrate_accounts().await;
+    assert_eq!(core_account_ids(&core), ["pro"]);
+    // Brought once: a Principal added later stays, whatever it served.
+    core.add_machine_account(EngineId::Codex).unwrap();
+    core.migrate_accounts().await;
+    assert_eq!(core_account_ids(&core), ["pro", "principal-codex"]);
+}
+
+#[tokio::test]
+async fn the_update_keeps_a_principal_that_served_in_the_statistics_or_a_project() {
+    let (core, _dir) = core_saved_by_1_8_0(
+        "esc128-served",
+        json!({ "accounts": [
+            { "id": "principal", "name": "Principal" },
+            { "id": "principal-codex", "name": "Principal", "engine": "codex" },
+            { "id": "principal-copilot", "name": "Principal", "engine": "copilot" },
+        ] }),
+        json!({ "projects": [{ "id": "p1", "name": "demo", "path": "DIR", "color": "#888",
+                          "account": "principal-copilot" }],
+                "agents": [] }),
+    );
+    // A message written on Codex's, long ago (its agent deleted since).
+    core.stats
+        .record_prompt("principal-codex", "codex", "gone", "p0");
+    core.migrate_accounts().await;
+    assert_eq!(
+        core_account_ids(&core),
+        ["principal-codex", "principal-copilot"]
+    );
+}
+
+#[tokio::test]
+async fn the_update_keeps_a_principal_signed_in_on_the_machine() {
+    // The machine's home of this test: Codex signed in there (an API key), Copilot CLI not.
+    let dir = test_dir("esc128-signed-in-home");
+    std::fs::create_dir_all(dir.join(".codex")).unwrap();
+    std::fs::write(
+        dir.join(".codex").join("auth.json"),
+        r#"{"OPENAI_API_KEY":"sk-test"}"#,
+    )
+    .unwrap();
+    // nextest runs each test in a process of its own.
+    std::env::set_var("ESCOUADE_TEST_REAL_HOME", &dir);
+    let (core, _dir) = core_saved_by_1_8_0(
+        "esc128-signed-in",
+        json!({ "accounts": [
+            { "id": "principal-codex", "name": "Principal", "engine": "codex" },
+            { "id": "principal-copilot", "name": "Principal", "engine": "copilot" },
+        ] }),
+        json!({ "projects": [], "agents": [] }),
+    );
+    core.migrate_accounts().await;
+    std::env::remove_var("ESCOUADE_TEST_REAL_HOME");
+    assert_eq!(core_account_ids(&core), ["principal-codex"]);
+}
+
+#[tokio::test]
+async fn the_machines_account_or_a_new_one_is_added_and_the_machines_once() {
+    // ESC-128: « Ajouter un compte… » on a first installation, where no harness has an account.
+    let dir = test_dir("esc128-add-home");
+    std::fs::create_dir_all(dir.join(".codex")).unwrap();
+    std::fs::write(
+        dir.join(".codex").join("auth.json"),
+        r#"{"OPENAI_API_KEY":"sk-test"}"#,
+    )
+    .unwrap();
+    std::env::set_var("ESCOUADE_TEST_REAL_HOME", &dir);
+    let h = harness("esc128-add");
+    h.core.remove_claude_account("principal").unwrap();
+    assert!(h.core.settings.read().accounts.is_empty());
+    let machine = h.core.machine_account(EngineId::Codex).await;
+    assert!(machine.connected && !machine.added && machine.signs_in);
+    assert_eq!(PathBuf::from(&machine.dir), dir.join(".codex"));
+    let added = h.core.add_machine_account(EngineId::Codex).unwrap();
+    assert_eq!(
+        (added.id.as_str(), added.engine, added.config_dir.as_str()),
+        ("principal-codex", EngineId::Codex, "")
+    );
+    assert!(h.core.machine_account(EngineId::Codex).await.added);
+    assert!(h
+        .core
+        .add_machine_account(EngineId::Codex)
+        .unwrap_err()
+        .to_string()
+        .contains("déjà ajouté"));
+    // Copilot CLI not signed in here: not offered (the window says so), a new account is.
+    assert!(!h.core.machine_account(EngineId::Copilot).await.connected);
+    let made = h
+        .core
+        .create_account(
+            EngineId::Copilot,
+            "Travail",
+            &[],
+            crate::accounts::ShareMode::Copy,
+        )
+        .unwrap();
+    std::env::remove_var("ESCOUADE_TEST_REAL_HOME");
+    assert!(!made.config_dir.is_empty());
+    assert_eq!(core_account_ids(&h.core), ["principal-codex", "travail"]);
+    // The window was told each one.
+    assert!(h.events.lock().iter().any(|e| e["type"] == "accounts"));
+}
+
+#[tokio::test]
+async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told_why() {
+    let h = harness("esc128-no-account");
+    let (p, _) = h.project(false).await;
+    h.core.remove_claude_account("principal").unwrap();
+    let refused = h.core.create_agent(&p.id, None).await.unwrap_err();
+    let no = refused
+        .downcast_ref::<crate::accounts::NoAccount>()
+        .expect("for want of an account");
+    assert_eq!(no.engine, EngineId::Claude);
+    assert_eq!(
+        refused.to_string(),
+        "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes."
+    );
+    // Nor on another harness, never on Claude Code's in its place.
+    let codex = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Codex),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        codex
+            .downcast_ref::<crate::accounts::NoAccount>()
+            .map(|n| n.engine),
+        Some(EngineId::Codex)
+    );
+}
+
+#[tokio::test]
+async fn an_agent_whose_account_is_gone_takes_another_of_its_harness_never_principal() {
+    let h = harness("esc128-gone");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    let a = agent_on(&h, &p, "pro").await;
+    // Its account gone (a state saved with an account removed since): the one a new agent of its
+    // project goes to, Principal here, the only one left, as it serves the project.
+    h.core.agent(&a.id).unwrap().lock().meta.account = "parti".into();
+    h.turn(&a.id, "Bonjour").await;
+    assert_eq!(h.agent(&a.id).account, "principal");
+    // No account of its harness left: refused, with nothing started.
+    let b = agent_on(&h, &p, "pro").await;
+    let _ = pro;
+    let mut s = h.core.settings.read().clone();
+    s.accounts.retain(|a| a.id == "pro");
+    s.accounts[0].engine = EngineId::Codex;
+    h.core.save_settings(s).unwrap();
+    h.core.agent(&b.id).unwrap().lock().meta.account = "parti".into();
+    let handle = h.core.agent(&b.id).unwrap();
+    let refused = h.core.agent_account(&handle).unwrap_err();
+    assert!(refused
+        .downcast_ref::<crate::accounts::NoAccount>()
+        .is_some());
+    // It keeps its account until one is there: nothing was started for it.
+    assert_eq!(h.agent(&b.id).account, "parti");
 }
 
 #[tokio::test]
@@ -9242,7 +9435,7 @@ async fn quota_windows_saved_before_the_accounts_are_principals_and_each_account
     };
     let settings = Settings {
         sound: false,
-        accounts: vec![pro],
+        accounts: vec![crate::accounts::principal(), pro],
         ..Default::default()
     };
     std::fs::write(data.settings_file(), serde_json::to_vec(&settings).unwrap()).unwrap();
@@ -9356,6 +9549,7 @@ async fn an_account_made_in_its_tab_gets_a_folder_of_its_own_and_comes_last() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         }
     );
     assert!(dir.is_dir());
@@ -9416,9 +9610,22 @@ async fn an_account_an_agent_still_runs_on_is_not_removed() {
     h.core.archive_agent(&two, true).await.unwrap();
     let left = h.core.remove_claude_account(&pro.id).unwrap();
     assert_eq!(account_ids(&left), ["principal"]);
-    // Principal never goes; an account gone meanwhile is said so.
-    let e = h.core.remove_claude_account("principal").unwrap_err();
-    assert_eq!(e.to_string(), "Le compte Principal ne se supprime pas.");
+    // The machine's goes like any other (ESC-128): its agents first; an account gone meanwhile is
+    // said so.
+    let three = agent_on(&h, &p, "principal").await.id;
+    assert_eq!(
+        h.core
+            .remove_claude_account("principal")
+            .unwrap_err()
+            .to_string(),
+        "Le compte sert encore à 1 agent."
+    );
+    h.core.archive_agent(&three, true).await.unwrap();
+    assert!(h
+        .core
+        .remove_claude_account("principal")
+        .unwrap()
+        .is_empty());
     let e = h.core.remove_claude_account("parti").unwrap_err();
     assert_eq!(e.to_string(), "compte « parti » introuvable");
 }

@@ -33,6 +33,26 @@ describe('Welcome', () => {
     expect(within(items[0]).getByText(/claude\.ai\/install/)).toHaveClass('mono');
   });
 
+  it('leads a first installation, a harness found and no account, to « Ajouter un compte… » (ESC-128)', async () => {
+    fakeBackend();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['codex'];
+    app.settings.accounts = [];
+    render(Welcome);
+    const none = screen.getByRole('region', { name: 'Aucun compte' });
+    expect(none).toHaveTextContent('Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau.');
+    // On the harness found: Claude Code is not.
+    await userEvent.click(within(none).getByRole('button', { name: 'Ajouter un compte…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+  });
+
+  it('says nothing of the accounts once one is added', () => {
+    fakeBackend();
+    app.enginesFound = ['claude'];
+    render(Welcome);
+    expect(screen.queryByRole('region', { name: 'Aucun compte' })).not.toBeInTheDocument();
+  });
+
   it('says nothing about it once one is found', () => {
     fakeBackend();
     app.enginesFound = ['claude'];

@@ -12,8 +12,14 @@ use std::collections::{BTreeMap, HashMap};
 pub struct Settings {
     /// Empty = auto-detect `claude` on PATH.
     pub claude_path: String,
+    /// The model, effort and mode of new agents before they were each account's (ESC-128): read
+    /// once, to give them to the Claude Code accounts kept by the update (`accounts::migrate`),
+    /// never written again.
+    #[serde(skip_serializing)]
     pub default_model: String,
+    #[serde(skip_serializing)]
     pub default_effort: String,
+    #[serde(skip_serializing)]
     pub default_mode: String,
     pub sound: bool,
     pub os_notifications: bool,
@@ -68,9 +74,14 @@ pub struct Settings {
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
     pub mcp_port: u16,
-    /// The Claude accounts, in the order new agents try them; Principal always among them
-    /// (`accounts::normalize`, at every load and save).
+    /// The accounts of every harness, in the order new agents try them: only those the user added
+    /// (ESC-128), none on a first installation.
     pub accounts: Vec<Account>,
+    /// How far the accounts were brought by the updates (`accounts::ACCOUNTS_VERSION`): 0 for
+    /// settings saved before 1.8.1, whose Principals `accounts::migrate` keeps or drops once.
+    /// A new installation starts at the current one.
+    #[serde(default)]
+    pub accounts_version: u32,
     /// « Ordre des harness »: the harnesses one after the other, every one Escouade knows listed
     /// once (`accounts::normalize`). It gives a project its fallback harnesses after its default
     /// one (`accounts::fallback_engines`, ESC-88) and the order of the groups of « Comptes ».
@@ -180,6 +191,14 @@ pub struct Account {
     /// (`board::account_pause`). None (or 0): no budget.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daily_budget: Option<f64>,
+    /// The model, the effort and the permission mode of its new agents unless they say theirs
+    /// (ESC-128); empty: its harness's default (`accounts::defaults`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub default_model: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub default_effort: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub default_mode: String,
 }
 
 /// The dictation's settings.
@@ -276,6 +295,9 @@ impl Default for Account {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            default_model: String::new(),
+            default_effort: String::new(),
+            default_mode: String::new(),
         }
     }
 }
@@ -430,6 +452,7 @@ impl Default for Settings {
             default_model: "sonnet".into(),
             default_effort: "medium".into(),
             default_mode: "auto".into(),
+            accounts_version: crate::accounts::ACCOUNTS_VERSION,
             sound: true,
             os_notifications: true,
             notify_for: NotifyFor::default(),

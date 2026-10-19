@@ -13,6 +13,9 @@ export default {
     intro: 'Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux.',
     /** No harness found: the first start lists each one with the command that installs it. */
     noEngine: 'Aucun harness trouvé',
+    /** ESC-128: harnesses found, no account added yet. */
+    noAccount: 'Aucun compte',
+    noAccountDesc: 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.',
     noEngineDesc: 'Installe l’un d’eux, puis indique son chemin dans Réglages › Harness s’il n’est pas dans le PATH :',
     addProject: 'Ajouter un projet',
   },

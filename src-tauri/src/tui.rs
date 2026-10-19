@@ -1229,7 +1229,8 @@ impl<R: Runtime> Core<R> {
         }
         self.hooks.revoke(id);
         let settings = self.settings.read().clone();
-        let account = accounts::get(&settings, &h.lock().meta.account);
+        // An account removed meanwhile: another of its harness, else refused (ESC-128).
+        let account = self.agent_account(h)?;
         let harness = crate::engine::of(&h.lock().meta);
         let (view, harness_name) = view_of(&h.lock().meta)?;
         let program = accounts::program(&account, &settings).ok_or_else(|| {

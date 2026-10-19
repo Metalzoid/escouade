@@ -56,13 +56,7 @@ Champ vide, le texte grisé dit déjà si `claude` est trouvé : « claude (tro
 
 ## Nouveaux agents
 
-Les trois choix valent pour chaque [agent](managing-agents) créé ensuite. Dans le champ de message d’un agent, tu peux les changer pour cet agent seul. Les tickets du Kanban les reprennent quand l’onglet [« Kanban »](settings-board) du projet ne choisit pas les siens.
-
-| Réglage | Effet | Par défaut |
-|---|---|---|
-| « Modèle par défaut » | Un des alias de Claude Code : « Fable », « Opus », « Sonnet » ou « Haiku ». Une fois que Claude Code a dit quelle version il fait tourner pour un alias, la puce l’affiche (« Sonnet 5.5 », par exemple). | « Sonnet » |
-| « Effort par défaut » | Combien le modèle réfléchit avant de répondre. | « Moyen » |
-| « Mode de permission par défaut » | Ce que Claude peut faire sans te demander. | « Auto » |
+Le modèle, l’effort et le mode avec lesquels partent les nouveaux [agents](managing-agents) se règlent compte par compte, dans sa fiche de [Réglages › Comptes](settings-accounts), parmi ceux de son harness : il n’y a plus de réglage commun ici. Dans le champ de message d’un agent, tu peux les changer pour cet agent seul. Les tickets du Kanban prennent ceux du ticket, sinon de l’onglet [« Kanban »](settings-board) du projet, sinon du compte qui les prend.
 
 ### Les niveaux d’effort
 
@@ -87,7 +81,7 @@ Les trois choix valent pour chaque [agent](managing-agents) créé ensuite. Dans
 Les demandes d’autorisation et leur traitement sont décrits dans [la conversation](chat), et le mode « Plan » dans [le plan](plan).
 
 > [!NOTE]
-> Avec Haiku, le choix de l’effort est grisé dans le champ de message de l’agent (« Haiku ne gère pas l’effort »), comme le mode « Auto » (« indisponible avec ce modèle ») quand le Claude Code du compte de l’agent dit que son Haiku ne le prend pas : c’est Haiku 4.5, que Claude Code fait tourner jusqu’à la 2.1.292 ; depuis la 2.1.293, c’est Haiku 5.5, qui le prend.
+> Avec Haiku, le choix de l’effort est grisé dans le champ de message de l’agent (« Haiku ne gère pas l’effort »), comme le mode « Auto » (« indisponible avec ce modèle ») quand le Claude Code du compte de l’agent dit que son Haiku ne le prend pas : c’est Haiku 4.5, que Claude Code fait tourner jusqu’à la 2.1.292 ; depuis la 2.1.293, c’est Haiku 5.5, qui le prend.
 
 ## Processus
 
@@ -97,7 +91,7 @@ Les demandes d’autorisation et leur traitement sont décrits dans [la conversa
 | « Reprendre sur un autre compte un agent de ticket arrêté par la limite » | Sinon il attend la remise à zéro de son compte. Absent tant qu’il n’y a qu’un compte. | Désactivé |
 | « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » | L’agent passe seul sur le harness de secours suivant de son projet, et le pilote auto le suit pour les tickets ; sinon il attend la remise à zéro. Le harness quitté n’est pas repris avant sa remise à zéro, et l’agent n’y revient jamais seul. Absent tant qu’un seul harness est trouvé. | Désactivé |
 | « Modèle de passation · <harness> » | Le modèle d’un agent qui passe sur ce harness. Un par harness, affiché avec le réglage précédent. | Le meilleur |
-| « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
+| « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
 | « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |
 
@@ -155,7 +149,7 @@ Ce groupe laisse les agents d’Escouade, et chaque harness installé lancé hor
 
 ### Les agents peuvent piloter Escouade
 
-L’interrupteur est désactivé par défaut ; c’est le seul, il vaut pour tous les harness. Il donne le serveur à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il le déclare aussi dans la config de chaque compte actif de chaque harness installé : `~/.claude.json` (Claude Code, par `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer écrit dans ces fichiers, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire l’entrée partout (chaque fichier redevient celui d’avant, à l’octet près) et écarte le serveur des agents : ceux déjà lancés perdent les outils tout de suite.
+L’interrupteur est désactivé par défaut ; c’est le seul, il vaut pour tous les harness. Il donne le serveur à chaque agent d’Escouade, de tous les projets, avec un jeton à lui : il n’y a rien à permettre dans les réglages d’un projet. Il le déclare aussi dans la config de chaque compte actif ajouté de chaque harness installé (un harness sans compte n’a la déclaration nulle part) : `~/.claude.json` (Claude Code, par `claude mcp add`), `~/.codex/config.toml` (Codex), `~/.config/opencode/opencode.json` (OpenCode), `~/.copilot/mcp-config.json` (Copilot CLI) pour le compte Principal, le reste du fichier et ses commentaires gardés. Un harness installé ou un compte ajouté plus tard est déclaré aussitôt. Il s’enregistre tout de suite, sans passer par « Enregistrer » : l’activer écrit dans ces fichiers, ce qu’un « Annuler » ne pourrait pas défaire. Le désactiver change le jeton, retire l’entrée partout (chaque fichier redevient celui d’avant, à l’octet près) et écarte le serveur des agents : ceux déjà lancés perdent les outils tout de suite.
 
 Un agent déjà lancé reçoit les outils au prochain démarrage de son processus : sa conversation affiche alors « Outils d’Escouade au prochain démarrage » avec « Relancer », qui reprend sa session dans un nouveau processus, et une ligne sous l’interrupteur dit combien d’agents sont dans ce cas (« 1 agent déjà lancé aura les outils au prochain démarrage de son process : « Relancer » sur sa conversation. »). Voir [Les agents d’Escouade et le serveur](mcp#les-agents-d-escouade-et-le-serveur).
 

@@ -3,7 +3,6 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { anyCan, offered } from '../../lib/engines';
-  import { EFFORTS, MODES, modelOptions } from '../../lib/models';
   import { IS_MAC, OS } from '../../lib/platform';
   import { accountName, engineOfAccount } from '../../lib/accounts';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -80,7 +79,8 @@
   /** « Se connecter… »: the sign-in of the account new agents of `engine` go to, in a built-in terminal, back to this tab once done. */
   function signIn(engine: EngineId) {
     const account = signInAccount(engine);
-    if (account) app.modal = { kind: 'account', accountId: account.id, back: 'claude' };
+    // No account of it yet (ESC-128): « Ajouter un compte… » on it.
+    app.modal = account ? { kind: 'account', accountId: account.id, back: 'claude' } : { kind: 'account', engine, back: 'claude' };
   }
 
   /** The command that installs a harness on this system. */
@@ -191,17 +191,6 @@
       />
     </Row>
   {/snippet}
-  <Group title={t('settings.claude.newAgents')}>
-    <Row label={t('settings.claude.defaultModel')}>
-      <Chips label={t('settings.claude.defaultModel')} options={modelOptions(app.models)} bind:value={s.defaultModel} />
-    </Row>
-    <Row label={t('settings.claude.defaultEffort')}>
-      <Chips label={t('settings.claude.defaultEffort')} options={EFFORTS} bind:value={s.defaultEffort} />
-    </Row>
-    <Row label={t('settings.claude.defaultMode')}>
-      <Chips label={t('settings.claude.defaultMode')} options={MODES} bind:value={s.defaultMode} />
-    </Row>
-  </Group>
   <Group title={t('settings.claude.processes')}>
     <Row label={t('settings.claude.autoResume')} desc={t('settings.claude.autoResumeDesc')}>
       <Switch label={t('settings.claude.autoResume')} bind:on={s.autoResume} />

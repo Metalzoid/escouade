@@ -179,15 +179,15 @@ fn archived_holds(lang: Lang, agent: &str, branch: &str) -> String {
 }
 
 /// The model, the effort and the permission mode a ticket's agent goes with. The model and the
-/// effort: its ticket's own (`start_ticket` gave it one), else its board's, else the app's
-/// defaults. The mode: its board's, else the app's, but `default` instead of `auto` where the
+/// effort: its ticket's own (`start_ticket` gave it one), else its board's, else those of the
+/// account that takes it (`defaults`, ESC-128). The mode: its board's, else the account's, but `default` instead of `auto` where the
 /// model has no auto mode on the ticket's harness, as `takes_auto` says (`Core::takes_auto`: what
 /// the `claude` of its account told, else the harness's rule; the Composer does not offer it
 /// either: Claude Code's Haiku 4.5, OpenCode): the one place that rule applies.
 pub(crate) fn ticket_agent_options(
     t: &Ticket,
     board: &BoardSettings,
-    settings: &Settings,
+    defaults: &accounts::Defaults,
     takes_auto: &dyn Fn(&str) -> bool,
 ) -> (String, String, String) {
     let first = |own: &str, board: &str, app: &str| {
@@ -197,9 +197,9 @@ pub(crate) fn ticket_agent_options(
             .unwrap_or(app)
             .to_string()
     };
-    let model = first(&t.model, &board.model, &settings.default_model);
-    let effort = first(&t.effort, &board.effort, &settings.default_effort);
-    let mut mode = first("", &board.mode, &settings.default_mode);
+    let model = first(&t.model, &board.model, &defaults.model);
+    let effort = first(&t.effort, &board.effort, &defaults.effort);
+    let mut mode = first("", &board.mode, &defaults.mode);
     if mode == "auto" && !takes_auto(&model) {
         mode = "default".into();
     }
@@ -820,6 +820,10 @@ impl<R: Runtime> Core<R> {
         let ticket = self.ticket(id)?;
         let project = ticket.project_id.clone();
         let engine = self.ticket_engine(&ticket);
+        // No account of its harness at all (ESC-128): one is to be added first.
+        if !accounts::has_any(&self.settings.read(), engine) {
+            return Err(accounts::no_account_of(engine));
+        }
         if !accounts::serves_any(&self.settings.read(), engine, Some(&project)) {
             let name = self.project(&project).map_or(project, |p| p.name);
             return Err(accounts::no_account(&name, engine));
@@ -1069,9 +1073,12 @@ impl<R: Runtime> Core<R> {
     /// it, in the order of the accounts: never one of another harness. Refused when no active
     /// account of the harness serves the project (all reserved to others, Principal too).
     pub(crate) fn account_for_new(&self, project_id: &str, engine: EngineId) -> Result<String> {
-        self.accounts_of(engine);
         let all = self.settings.read().clone();
         let project = self.project(project_id).ok();
+        // No account of the harness at all (ESC-128): one is to be added first.
+        if !accounts::has_any(&all, engine) {
+            return Err(accounts::no_account_of(engine));
+        }
         if !accounts::serves_any(&all, engine, Some(project_id)) {
             let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
             return Err(accounts::no_account(&name, engine));
@@ -1079,14 +1086,33 @@ impl<R: Runtime> Core<R> {
         let settings = accounts::for_project(&all, engine, Some(project_id));
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        Ok(self.pick_account(&settings, preferred.as_deref()))
+        self.pick_account(&settings, preferred.as_deref())
+            .ok_or_else(|| accounts::no_account_of(engine))
+    }
+
+    /// What a new agent of the project on `engine` goes with unless it says its own: the defaults
+    /// of the account it would go to (`account_for_new`), else of its harness (no account yet).
+    pub(crate) fn new_agent_defaults(
+        &self,
+        project_id: &str,
+        engine: EngineId,
+    ) -> accounts::Defaults {
+        let account = self
+            .account_for_new(project_id, engine)
+            .ok()
+            .map(|id| accounts::get(&self.settings.read(), &id));
+        accounts::defaults(account.as_ref(), engine)
     }
 
     /// `accounts::pick` as the board has it: a usable account is under the threshold, holds
     /// nothing back (a pause after a usage limit) and has no agent waiting for its quota. When
     /// none is, one that holds nothing back although over the threshold ("Reprendre
-    /// maintenant"), else the first active one.
-    pub(crate) fn pick_account(&self, settings: &Settings, preferred: Option<&str>) -> String {
+    /// maintenant"), else the first active one. None without an active account.
+    pub(crate) fn pick_account(
+        &self,
+        settings: &Settings,
+        preferred: Option<&str>,
+    ) -> Option<String> {
         let threshold = board::quota_threshold(settings.quota_pause);
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
@@ -1097,14 +1123,14 @@ impl<R: Runtime> Core<R> {
                 || board::account_pause(&usage, id, threshold, &hold, now).is_some()
         };
         let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, threshold, now);
-        let id = accounts::pick_where(settings, preferred, usable);
+        let id = accounts::pick_where(settings, preferred, usable)?;
         if !held(&id) {
-            return id;
+            return Some(id);
         }
         accounts::candidates(settings, preferred)
             .into_iter()
             .find(|a| !held(a))
-            .unwrap_or(id)
+            .or(Some(id))
     }
 
     /// No ticket of the project on `engine` may start now: every account of that harness it may go
@@ -1456,8 +1482,9 @@ impl<R: Runtime> Core<R> {
         let engine = t.engine.unwrap_or(project.engine());
         let account = self.account_for_new(&project.id, engine)?;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
+        let defaults = accounts::defaults(accounts::find(&settings, &account), engine);
         let (model, effort, mode) =
-            ticket_agent_options(t, s, &settings, &|m| self.takes_auto(engine, &account, m));
+            ticket_agent_options(t, s, &defaults, &|m| self.takes_auto(engine, &account, m));
         // The branch it takes up may still be in the worktree of its earlier agent, archived.
         if !t.branch.is_empty() {
             self.release_archived_holder(project, t).await?;
@@ -1726,7 +1753,7 @@ impl<R: Runtime> Core<R> {
                 && board::account_pause(&usage, id, threshold, &hold, now).is_none()
                 && !accounts::over_threshold(&usage, id, threshold, now)
         };
-        let target = accounts::pick_where(&settings, preferred.as_deref(), usable);
+        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)?;
         usable(&target).then_some(target)
     }
 

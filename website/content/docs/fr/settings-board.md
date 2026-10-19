@@ -78,7 +78,7 @@ Voir [le pilote auto](autopilot).
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Attribuer les tickets automatiquement » | Un agent libre prend le prochain ticket « À faire ». C’est le même interrupteur que « Pilote auto » dans l’en-tête du Kanban, qui s’y enregistre aussitôt. Désactivé, un ticket ne part que si tu cliques sur « Lancer ». | Activé |
-| « Pause au-delà du quota » | Choix de 80 %, 90 %, 95 % ou 100 %. Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire a atteint ce seuil. Commun à tous les projets (« pour tous les projets »). | 100 % |
+| « Pause au-delà du quota » | Choix de 80 %, 90 %, 95 % ou 100 %. Aucun ticket ne démarre tant que la fenêtre de 5 h ou la fenêtre hebdomadaire a atteint ce seuil. Commun à tous les projets (« pour tous les projets »). | 100 % |
 
 Quand la pause joue, une bande sous l’en-tête du Kanban dit pourquoi rien ne démarre et propose « Reprendre maintenant », qui lève la pause jusqu’à la fin de la fenêtre concernée.
 
@@ -98,7 +98,7 @@ Les agents qui prennent les tickets de ce projet. Voir [le Kanban](board).
 | « Effort » | « Par défaut », ou Bas, Moyen, Élevé, Très élevé, Max. | « Par défaut » |
 | « Mode » | « Par défaut », ou le mode de permission : Auto, Demander, Plan, Édits auto, Bypass. | « Par défaut » |
 
-« Par défaut » veut dire le choix correspondant de l’onglet [« Harness »](settings-claude-code) : « Modèle par défaut », « Effort par défaut » et « Mode de permission par défaut ». Tant que tu n’y touches pas, ce sont Sonnet, Moyen et Auto.
+« Par défaut » veut dire le choix correspondant du compte qui prend le ticket, dans sa fiche de [Réglages › Comptes](settings-accounts) (« Nouveaux agents ») : le menu le nomme d’après le compte où partirait un nouvel agent du projet. Tant que tu n’y touches pas, ce sont ceux de son harness : Sonnet, Moyen et Auto pour Claude Code.
 
 Les modes de permission sont expliqués dans [les agents](managing-agents). En bref :
 

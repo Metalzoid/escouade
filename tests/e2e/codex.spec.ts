@@ -39,6 +39,58 @@ async function newCodexAgent(page: Page) {
 test.describe('an agent on Codex', () => {
   test.use({ appEnv: { ESCOUADE_CODEX: FAKE_CODEX } });
 
+  test('goes with the model, the effort and the mode its account sets, among those of Codex (ESC-128)', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    // A first agent: Codex lists its models for its account (model/list).
+    await newCodexAgent(page);
+    await send(page, 'bonjour Codex');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
+    // Réglages › Comptes: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    // No group « Nouveaux agents » for every harness any more.
+    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await expect(dialog.getByRole('group', { name: 'Modèle par défaut' })).toHaveCount(0);
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
+    const defaults = codex.getByRole('group', { name: 'Nouveaux agents' });
+    const model = defaults.getByRole('combobox', { name: 'Modèle' });
+    await expect(model.getByRole('option')).toHaveText(['Celui du harness (GPT-6-Luna)', 'GPT-6-Luna', 'GPT-5.6-Terra']);
+    const mode = defaults.getByRole('combobox', { name: 'Mode' });
+    await expect(mode.getByRole('option', { name: 'Plan' })).toHaveCount(1);
+    await model.selectOption('gpt-5.6-terra');
+    await defaults.getByRole('combobox', { name: 'Effort' }).selectOption('high');
+    await mode.selectOption('plan');
+    const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
+    await expect
+      .poll(() => {
+        const a = settings().accounts.find((x: { id: string }) => x.id === 'principal-codex');
+        return [a?.defaultModel, a?.defaultEffort, a?.defaultMode];
+      })
+      .toEqual(['gpt-5.6-terra', 'high', 'plan']);
+    // Claude Code's account keeps Claude Code's.
+    const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' }).getByRole('listitem', { name: 'Principal' });
+    await expect(
+      claude
+        .getByRole('combobox', { name: 'Modèle' })
+        .getByRole('option', { name: /Sonnet/ })
+        .first(),
+    ).toBeAttached();
+    await page.keyboard.press('Escape');
+    // A new agent on Codex goes with them.
+    const before = requests(app, 'turn/start').length;
+    await newCodexAgent(page);
+    await send(page, 'bonjour encore');
+    // In the mode Plan, it asks first: its turn started is what tells.
+    await expect.poll(() => requests(app, 'turn/start').length).toBeGreaterThan(before);
+    const start = requests(app, 'turn/start')[before]!.params;
+    expect(start.model).toBe('gpt-5.6-terra');
+    expect(start.effort).toBe('high');
+    expect(start.collaborationMode.mode).toBe('plan');
+  });
+
   test('answers live, runs a command once allowed, changes a file with its diff, plans, steers, resumes and is copied', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);

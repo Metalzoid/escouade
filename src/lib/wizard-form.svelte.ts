@@ -1,7 +1,7 @@
 // The state of the new project's assistant: where it starts from, the step on screen, the settings as they are set
 // so far, what the folder was found to hold, and what « Créer » (or « Enregistrer », for an existing project) does.
 
-import { accountName } from './accounts';
+import { accountName, CLAUDE_DEFAULT_MODEL, newAgentDefaults } from './accounts';
 import { t } from './i18n';
 import { api } from './ipc';
 import { app } from './state.svelte';
@@ -52,7 +52,7 @@ export class WizardForm {
 
   /** `project`: an existing project set up anew (Réglages › Projets), else a new one. */
   constructor(readonly project: Project | null = null) {
-    this.model = app.settings.defaultModel || 'sonnet';
+    this.model = newAgentDefaults(undefined).model || CLAUDE_DEFAULT_MODEL;
     if (project) {
       this.path = project.path;
       this.start = 'current';

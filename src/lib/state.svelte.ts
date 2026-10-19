@@ -16,6 +16,7 @@ import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
+import { errorText, missingAccountOf } from './refusal';
 import { testCommand, worktreeCommand } from './recipe';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
@@ -595,7 +596,9 @@ class AppState {
         this.openBoard(e.projectId);
         break;
       case 'toast':
-        this.toast(e.text, 'info');
+        // For want of an account (ESC-128): with « Ajouter un compte… ».
+        if (missingAccountOf(e.text)) this.refused(e.text);
+        else this.toast(e.text, 'info');
         break;
       case 'language':
         this.takeLang(e.lang);
@@ -1175,7 +1178,7 @@ class AppState {
       this.closeEditor(projectId);
       this.selectAgent(a.id);
     } catch (e) {
-      this.toast(String(e), 'error');
+      this.refused(e);
     }
   }
 
@@ -1188,7 +1191,7 @@ class AppState {
       this.closeEditor(a.projectId);
       this.selectAgent(a.id);
     } catch (e) {
-      this.toast(String(e), 'error');
+      this.refused(e);
     }
   }
 
@@ -1222,9 +1225,16 @@ class AppState {
     try {
       return await p;
     } catch (e) {
-      this.toast(String(e), 'error');
+      this.refused(e);
       return undefined;
     }
+  }
+
+  /** A refusal told by a toast; one for want of an account of a harness (ESC-128) with « Ajouter un compte… » on it. */
+  refused(e: unknown) {
+    const engine = missingAccountOf(e);
+    if (!engine) return this.toast(errorText(e), 'error');
+    this.toast(errorText(e), 'error', { label: t('accounts.tab.add'), onClick: () => (this.modal = { kind: 'account', engine }) });
   }
 }
 

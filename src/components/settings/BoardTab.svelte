@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { newAgentDefaults } from '../../lib/accounts';
   import { commitPreview } from '../../lib/board';
   import { fPct } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -137,7 +138,7 @@
   </Row>
   <Row label={t('common.model')}>
     <select class="field select" aria-label={t('common.model')} bind:value={b.model}>
-      <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(settingsForm.settings.defaultModel, app.models) })}</option>
+      <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(newAgentDefaults(project).model, app.models) })}</option>
       {#each modelOptions(app.models) as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>

@@ -107,9 +107,9 @@ test.describe('two accounts, a conversation stopped by the usage limit', () => {
   });
 });
 
-// The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings, which brings Codex's
-// Principal with it (ESC-37: a harness other than Claude Code has its Principal once it has accounts). No agent runs on
-// Codex here: its accounts are only listed, reserved and put in order.
+// The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings, alone (ESC-128: no
+// harness has a Principal the user did not add). No agent runs on Codex here: its accounts are only listed, reserved and
+// put in order.
 test.describe('the accounts of two harnesses', () => {
   test.use({
     preStart: {
@@ -145,11 +145,10 @@ test.describe('the accounts of two harnesses', () => {
     const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' });
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' });
     await expect(claude.getByRole('listitem')).toHaveCount(2);
-    await expect(codex.getByRole('listitem')).toHaveCount(2);
-    // Its Principal comes after the accounts already there.
-    await expect(codex.getByRole('listitem').last()).toHaveAccessibleName(/Principal/);
-    // Two active accounts of Codex: either may be turned off, whatever Claude Code has.
-    await expect(codex.getByRole('listitem', { name: 'Travail' }).getByRole('switch', { name: 'Actif' })).toBeEnabled();
+    // The account added alone: no Principal of Codex came with it (ESC-128).
+    await expect(codex.getByRole('listitem')).toHaveCount(1);
+    // Its only account stays on, whatever Claude Code has.
+    await expect(codex.getByRole('listitem', { name: 'Travail' }).getByRole('switch', { name: 'Actif' })).toBeDisabled();
     await expect(claude.getByRole('listitem', { name: 'Pro' }).getByRole('switch', { name: 'Actif' })).toBeEnabled();
 
     // Reserved to the project, as a Claude account is.
@@ -186,14 +185,74 @@ test.describe('the accounts of two harnesses', () => {
     // Codex alone: nothing it ran, nor any prompt of it.
     await harness.selectOption({ label: 'Codex' });
     await expect(prompts.locator('.kv')).toHaveText('0');
-    // Its accounts alone to choose from: « Travail » and its Principal.
-    await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText([
-      'Tous les comptes',
-      'Travail',
-      'Principal',
-    ]);
+    // Its accounts alone: « Travail », the only one added (ESC-128), nothing to choose from.
+    await expect(page.getByRole('combobox', { name: 'Compte' })).toHaveCount(0);
     await harness.selectOption({ label: 'Claude Code' });
     await expect(page.getByRole('combobox', { name: 'Compte' }).getByRole('option')).toHaveText(['Tous les comptes', 'Principal', 'Pro']);
+  });
+});
+
+// ESC-128: a first installation has no account, for any harness. « Ajouter un compte… » offers the account signed in on
+// the machine (the app's CLAUDE_CONFIG_DIR, the test's, signed in here) or a new one; without one, nothing starts.
+test.describe('a first installation, without an account', () => {
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        fs.mkdirSync(principalDir(root), { recursive: true });
+        fs.writeFileSync(path.join(principalDir(root), '.credentials.json'), SIGNED_IN);
+        fs.writeFileSync(
+          path.join(principalDir(root), '.claude.json'),
+          JSON.stringify({ oauthAccount: { emailAddress: 'ada@atlas.dev' } }),
+        );
+        return { noAccounts: true };
+      },
+    },
+  });
+
+  test('refuses an agent with « Ajouter un compte… », which adds the machine’s account, then the agent starts on it', async ({ app }) => {
+    const { page } = app;
+    // The first screen leads to it.
+    const welcome = page.getByRole('region', { name: 'Aucun compte' });
+    await expect(welcome).toContainText('Seuls les comptes ajoutés lancent des agents.');
+    await addProject(page, app.repo);
+    // Its first agent was not made: none starts on an account it does not have; the window says why.
+    await expect(page.locator('.toast').filter({ hasText: 'Aucun compte Claude Code' }).first()).toBeVisible();
+    expect(app.launches().filter(isAgent)).toEqual([]);
+    // Réglages › Comptes: Claude Code installed, « Aucun compte ».
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    const empty = dialog.getByRole('group', { name: 'Comptes Claude Code' });
+    await expect(empty).toContainText('Aucun compte');
+    await page.keyboard.press('Escape');
+    // A new agent is refused, with the button that adds one on its harness.
+    await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+    const toast = page.locator('.toast').filter({ hasText: 'Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes.' }).last();
+    await expect(toast).toBeVisible();
+    await expect(toast).not.toContainText('no-account');
+    await toast.getByRole('button', { name: 'Ajouter un compte…' }).click();
+    // The machine's account, signed in here: offered first, with who it is.
+    const modal = page.getByRole('dialog', { name: 'Ajouter un compte Claude Code' });
+    await expect(modal.getByText('Claude Code est connecté sur cette machine · ada@atlas.dev')).toBeVisible();
+    await expect(modal.getByRole('radio', { name: /Le compte de la machine/ })).toBeChecked();
+    // Or a new one, with its own folder and sign-in.
+    await modal.getByRole('radio', { name: /Un nouveau compte/ }).check();
+    await expect(modal.getByRole('textbox', { name: 'Nom' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Créer et se connecter' })).toBeVisible();
+    await modal.getByRole('radio', { name: /Le compte de la machine/ }).check();
+    await modal.getByRole('button', { name: 'Ajouter ce compte' }).click();
+    // Back to the accounts: it is there, and in the settings, launched without a folder of Escouade's.
+    const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' });
+    await expect(claude.getByRole('listitem')).toHaveCount(1);
+    await expect(claude.getByRole('listitem', { name: 'Principal' })).toContainText('Compte de la machine');
+    const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
+    await expect.poll(() => settings().accounts.map((a: { id: string }) => a.id)).toEqual(['principal']);
+    await page.keyboard.press('Escape');
+    // Now an agent starts on it.
+    await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+    await send(page, 'Bonjour');
+    await expect(page.getByText('Tâche terminée')).toBeVisible();
+    expect(processes(app.launches())).toEqual([principalDir(app.root)]);
   });
 });
 

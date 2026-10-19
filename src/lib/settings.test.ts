@@ -377,7 +377,7 @@ describe('settingsForm', () => {
   it('marks the tabs whose settings changed', () => {
     settingsForm.open();
     expect(settingsForm.changed('claude')).toBe(false);
-    settingsForm.settings.defaultModel = 'opus';
+    settingsForm.settings.idleStopMinutes = 5;
     settingsForm.settings.proxyTerminals = true;
     settingsForm.projects.p2.board.maxParallel = 5;
     expect(settingsForm.changed('claude')).toBe(true);

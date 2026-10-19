@@ -68,6 +68,16 @@ describe('Board', () => {
     return expect.poll(() => screen.queryByText('1 place libre')).toBeInTheDocument();
   });
 
+  it('offers « Ajouter un compte… » beside why nothing starts while its harness has no account (ESC-128)', async () => {
+    fakeBackend();
+    app.settings.accounts = [];
+    app.boardIssues = { p1: 'Aucun compte Claude Code pour ce projet — aucun ticket ne démarre' };
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Aucun compte Claude Code pour ce projet — aucun ticket ne démarre')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'claude' });
+  });
+
   it('says why the autopilot is paused, and resumes it at once on demand', async () => {
     const backend = fakeBackend();
     const at = new Date();

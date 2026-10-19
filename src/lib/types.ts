@@ -6,9 +6,6 @@ export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
 export interface Settings {
   claudePath: string;
-  defaultModel: string;
-  defaultEffort: string;
-  defaultMode: string;
   sound: boolean;
   osNotifications: boolean;
   /** « Me prévenir pour »: what the chime and the system notifications are for. */
@@ -212,6 +209,26 @@ export interface Account {
    * autopilot pauses until midnight. None: no budget.
    */
   dailyBudget?: number | null;
+  /** The model, effort and permission mode of its new agents unless they say theirs (ESC-128); empty: its harness's default. */
+  defaultModel?: string;
+  defaultEffort?: string;
+  defaultMode?: string;
+}
+
+/** What « Ajouter un compte… » says of the machine's account of a harness (its Principal, `accounts::MachineAccount`). */
+export interface MachineAccount {
+  /** Its harness's program is found. */
+  found: boolean;
+  /** It is among the accounts already. */
+  added: boolean;
+  /** Its harness is signed in there (OpenCode, which signs in to none: found). */
+  connected: boolean;
+  /** Its harness signs in to an account of its own (not OpenCode, whose providers are its config's). */
+  signsIn: boolean;
+  /** Who it is signed in as, when the harness says: an email, a GitHub `@login`. */
+  email: string | null;
+  /** Its folder. */
+  dir: string;
 }
 
 /** Whether a Claude account is signed in to claude.ai, as its tab shows it. */

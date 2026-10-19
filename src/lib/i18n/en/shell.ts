@@ -13,6 +13,8 @@ export default defineZone('shell', {
     intro: 'Add a project to run agents, follow their questions, and open terminals.',
     /** `{command}`: the command that installs it, in code style. */
     noEngine: 'No harness found',
+    noAccount: 'No account',
+    noAccountDesc: 'Add an account: the one already signed in on this machine, or a new one. Only the accounts added start agents.',
     noEngineDesc: 'Install one of them, then set its path in Settings › Harness if it isn’t on the PATH:',
     addProject: 'Add a project',
   },

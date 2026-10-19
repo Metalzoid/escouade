@@ -167,29 +167,20 @@ describe('SettingsModal', () => {
     expect(app.settings.notifyFor.done).toBe(false);
   });
 
-  it('sets the defaults of new agents, named with the version Claude Code runs', async () => {
+  it('has no defaults of new agents for every harness any more: each account has its own (ESC-128)', async () => {
     const backend = backendSaving();
-    app.models = [{ value: 'sonnet', resolvedModel: 'claude-sonnet-5-5' }];
     render(SettingsModal);
-    const model = screen.getByRole('group', { name: 'Modèle par défaut' });
-    expect(within(model).getByRole('button', { name: 'Sonnet 5.5' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(within(model).getByRole('button', { name: /Opus/ }));
-    await userEvent.click(within(screen.getByRole('group', { name: 'Effort par défaut' })).getByRole('button', { name: 'Max' }));
-    await userEvent.click(
-      within(screen.getByRole('group', { name: 'Mode de permission par défaut' })).getByRole('button', { name: 'Plan' }),
-    );
+    expect(screen.queryByRole('group', { name: 'Modèle par défaut' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Effort par défaut' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Mode de permission par défaut' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nouveaux agents' })).not.toBeInTheDocument();
     const resume = screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
     expect(resume).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(resume);
     await userEvent.clear(screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ }));
     await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({
-      defaultModel: 'opus',
-      defaultEffort: 'max',
-      defaultMode: 'plan',
-      autoResume: false,
-      idleStopMinutes: 0,
-    });
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ autoResume: false, idleStopMinutes: 0 });
+    expect(backend.called('save_settings')[0].args.settings).not.toHaveProperty('defaultModel');
   });
 
   it('opens new agents in Escouade or in their harness’s terminal (ESC-34)', async () => {
@@ -1159,10 +1150,10 @@ describe('SettingsModal', () => {
     expect(app.modal).toBeNull();
   });
 
-  it('names the Kanban agents’ default after the default model chosen, saved or not', async () => {
+  it('names the Kanban agents’ default after the model of the account its new agents go to (ESC-128)', async () => {
     fakeBackend({ git_branches: () => ['main'] });
+    app.settings.accounts = app.settings.accounts.map((a) => ({ ...a, defaultModel: 'opus' }));
     render(SettingsModal);
-    await userEvent.click(within(screen.getByRole('group', { name: 'Modèle par défaut' })).getByRole('button', { name: /Opus/ }));
     await userEvent.click(tab('Kanban'));
     expect(within(screen.getByRole('combobox', { name: 'Modèle' })).getByRole('option', { name: 'Par défaut (Opus)' })).toBeInTheDocument();
   });
@@ -1215,15 +1206,6 @@ describe('SettingsModal in English', () => {
     expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
-    // The choices of a setting are read at each render: their words follow too.
-    const effort = within(screen.getByRole('group', { name: 'Default effort' }));
-    expect(effort.getAllByRole('button').map((b) => b.textContent)).toEqual(['Low', 'Medium', 'High', 'Very high', 'Max']);
-    expect(effort.getByRole('button', { name: 'Low' })).toHaveAttribute('data-tip', 'Quick answers, little thinking');
-    expect(
-      within(screen.getByRole('group', { name: 'Default permission mode' }))
-        .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual(['Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
     app.claudePathFound = false;

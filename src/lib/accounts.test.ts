@@ -94,11 +94,12 @@ describe('the accounts of a project', () => {
     give(waits('a1', 'principal', 9_000));
     expect(quotaOf(project({ account: 'principal' }))).toBe(9_000);
     expect(quotaOf(project({ account: 'pro' }))).toBeNull();
-    // An agent archived, or on an account the window does not know (Principal's), is counted as the backend does.
+    // An agent archived, or on an account the window does not know any more, is counted as the backend does: the latter
+    // for no account, never for Principal's (ESC-128: it gets another at its next start).
     give(waits('a1', 'principal', 9_000, { archived: true }), waits('a2', 'pro', 7_000));
     expect(quotaOf(any)).toBeNull();
     give(waits('a1', 'parti', 9_000), waits('a2', 'pro', 7_000));
-    expect(quotaOf(any)).toBe(7_000);
+    expect(quotaOf(any)).toBeNull();
   });
 
   it('is unchanged with a single account', () => {
@@ -202,14 +203,15 @@ describe('the quota of each account', () => {
     app.agents = {
       a1: agent({ id: 'a1', account: 'pro', liveCost: 0.3 }),
       a2: agent({ id: 'a2', account: 'principal' }),
-      // On an account the settings no longer list: the backend takes it for Principal's.
-      a3: agent({ id: 'a3', account: 'parti', liveCost: 0.1 }),
+      // On an account the settings no longer list: no account's, never Principal's (ESC-128); it runs no turn before it
+      // gets another.
+      a3: agent({ id: 'a3', account: 'parti' }),
       // Archived: its turn is still running, as the status bar counts it.
       a4: agent({ id: 'a4', account: 'pro', liveCost: 0.2, archived: true }),
     };
     const today = Object.fromEntries(quotaRows(NOW).map((r) => [r.account.id, r.today]));
-    expect(today.principal.cost).toBeCloseTo(1.3);
-    expect(today.principal.estimated).toBe(true);
+    expect(today.principal.cost).toBeCloseTo(1.2);
+    expect(today.principal.estimated).toBe(false);
     expect(today.pro.cost).toBeCloseTo(1.0);
     expect(today.pro.estimated).toBe(true);
     // Not read yet, nothing running: nothing spent, nothing estimated.

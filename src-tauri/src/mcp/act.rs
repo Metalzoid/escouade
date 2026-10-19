@@ -694,13 +694,13 @@ pub(super) fn start_ticket<R: Runtime>(
     }
     core.ticket_start_with(&t.id, model, effort)
         .map_err(refusal)?;
-    // What its agent goes with: its ticket's own, else its Kanban's, else the app's.
+    // What its agent goes with: its ticket's own, else its Kanban's, else its account's.
     let started = core.ticket(&t.id).unwrap_or(t);
     let project = project_of(core, &started.project_id)?;
     let engine = started.engine.unwrap_or(project.engine());
     // Its mode is not said: the rule of `auto` matters not here.
-    let (model, effort, _) =
-        ticket_agent_options(&started, &project.board, &core.settings.read(), &|_| true);
+    let defaults = core.new_agent_defaults(&project.id, engine);
+    let (model, effort, _) = ticket_agent_options(&started, &project.board, &defaults, &|_| true);
     // The model its harness runs it on (a harness other than Claude Code: its own, by default).
     let model = core.model_for(engine, model);
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });

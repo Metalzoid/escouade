@@ -51,10 +51,59 @@ export function engineOrder(): EngineId[] {
   return out;
 }
 
-/** The harnesses that have accounts, in their order: one group each in « Comptes » and in the panel of the quotas. */
+/** The harnesses that have accounts, in their order: one group each in the panel of the quotas. */
 export function accountEngines(): EngineId[] {
   const have = new Set((app.settings.accounts ?? []).map(engineOfAccount));
   return engineOrder().filter((e) => have.has(e));
+}
+
+/**
+ * The groups of « Comptes »: every harness installed (its program found), with « Aucun compte » while it has none, and
+ * those with accounts, in their order (ESC-128).
+ */
+export function accountsTabEngines(): EngineId[] {
+  const have = new Set((app.settings.accounts ?? []).map(engineOfAccount));
+  return engineOrder().filter((e) => have.has(e) || app.enginesFound.includes(e));
+}
+
+/** Whether the harness has an account at all: without one, nothing starts on it (ESC-128). */
+export function hasAccount(engine: EngineId): boolean {
+  return (app.settings.accounts ?? []).some((a) => engineOfAccount(a) === engine);
+}
+
+/** Claude Code's model of new agents, until an account says another (`accounts::CLAUDE_DEFAULT_MODEL`). */
+export const CLAUDE_DEFAULT_MODEL = 'sonnet';
+
+/** What a new agent goes with unless it says its own (`accounts::defaults`). */
+export interface AgentDefaults {
+  model: string;
+  effort: string;
+  mode: string;
+}
+
+/**
+ * The account's model, effort and permission mode for its new agents, else its harness's (`engine`, without an account):
+ * Claude Code's Sonnet, effort `medium` and mode `auto`; no model for another harness, which runs its own default.
+ */
+export function accountDefaults(a: Account | undefined, engine: EngineId = a ? engineOfAccount(a) : defaultEngine()): AgentDefaults {
+  const own = (v: string | undefined) => v?.trim() || undefined;
+  const of = a ? engineOfAccount(a) : engine;
+  return {
+    model: own(a?.defaultModel) ?? (of === 'claude' ? CLAUDE_DEFAULT_MODEL : ''),
+    effort: own(a?.defaultEffort) ?? 'medium',
+    mode: own(a?.defaultMode) ?? 'auto',
+  };
+}
+
+/** The defaults of the account a new agent of the project on `engine` would go to (`newAgentAccount`), else of its harness. */
+export function newAgentDefaults(project: ProjectLike | undefined, engine?: EngineId): AgentDefaults {
+  const e = engine ?? engineOfProject(project);
+  return accountDefaults(newAgentAccount(project, e), e);
+}
+
+/** « Ajouter un compte… » on `engine` (Réglages › Comptes, back there when it closes). */
+export function addAccount(engine: EngineId) {
+  app.modal = { kind: 'account', engine };
 }
 
 /** The harness whose accounts the status bar shows: the one of the agent shown, else the project's default one. */
@@ -148,9 +197,9 @@ export function pauseOf(project: Pick<Project, 'id' | 'account'>): AutopilotPaus
   return ownAccounts(project) ? (app.projectPauses[project.id] ?? null) : app.autopilotPause;
 }
 
-/** The agent's account as the backend takes it: one the window does not know is Principal's. */
+/** The agent's account (one the window does not know any more is its own still: it gets another at its next start). */
 function accountOf(a: Pick<Agent, 'account'>): string {
-  return app.settings.accounts.some((x) => x.id === a.account) ? a.account : PRINCIPAL;
+  return a.account;
 }
 
 /**

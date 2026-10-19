@@ -102,6 +102,15 @@ fn codex_accounts(h: &Harness) -> (PathBuf, PathBuf) {
     (pro.join("config.toml"), off.join("config.toml"))
 }
 
+/// The machine's account of each harness of `engines` added (ESC-128: the server is declared in
+/// the accounts added alone).
+fn machine_accounts(h: &Harness, engines: &[EngineId]) {
+    let mut s = h.core.settings.read().clone();
+    s.accounts
+        .extend(engines.iter().map(|e| crate::accounts::principal_of(*e)));
+    h.core.save_settings(s).unwrap();
+}
+
 /// The accounts the window is told of, harness by harness, with whether each is declared.
 fn told(h: &Harness) -> Vec<(EngineId, String, bool)> {
     h.core
@@ -116,6 +125,7 @@ fn told(h: &Harness) -> Vec<(EngineId, String, bool)> {
 async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_active_account() {
     let h = harness("mcp-all-on");
     let (pro, off) = codex_accounts(&h);
+    machine_accounts(&h, &[EngineId::Opencode, EngineId::Copilot]);
     write(&opencode_json(&h), USERS_OPENCODE);
     write(&copilot_json(&h), USERS_COPILOT);
     installed(
@@ -192,6 +202,7 @@ async fn the_one_switch_declares_the_server_in_every_harness_installed_and_each_
 async fn turned_off_the_token_changes_first_then_every_file_is_as_it_was_byte_for_byte() {
     let h = harness("mcp-all-off");
     let (pro, off) = codex_accounts(&h);
+    machine_accounts(&h, &[EngineId::Opencode, EngineId::Copilot]);
     write(&opencode_json(&h), USERS_OPENCODE);
     write(&copilot_json(&h), USERS_COPILOT);
     installed(
@@ -247,34 +258,27 @@ async fn a_harness_not_installed_gets_nothing_until_it_is_then_at_once_and_an_ac
     assert!(!principal_toml(&h).exists() && !opencode_json(&h).exists());
     assert_eq!(told(&h), [(EngineId::Claude, "principal".into(), true)]);
 
-    // Copilot installed since (in a terminal): back to the window, it is declared (the window
-    // showing the declarations, or Réglages › Harness, sees to it too).
+    // Copilot installed since (in a terminal), without an account: still nothing (ESC-128).
     installed(&h, &[EngineId::Copilot]);
     let before = runs(&h);
     h.core.declare_on_focus();
     run_after(&h, before).await;
+    assert_eq!(read(&copilot_json(&h)), USERS_COPILOT);
+    // The machine's account of it added: declared at once (back to the window, or from Réglages
+    // › Harness, too).
+    after(&h, |h| machine_accounts(h, &[EngineId::Copilot])).await;
     assert_eq!(current(&COPILOT, &copilot_json(&h)), Some(now_wanted(&h)));
     // The focus again at once brings no run: one a minute at most.
     let before = runs(&h);
     h.core.declare_on_focus();
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     assert_eq!(runs(&h), before);
-    // No Principal of Copilot saved for it (it is made at its first agent).
-    assert!(h
-        .core
-        .settings
-        .read()
-        .accounts
-        .iter()
-        .all(|a| a.engine == EngineId::Claude));
     assert!(h.core.mcp_manual_command("principal-copilot").is_ok());
 
-    // A Copilot account added: declared in its folder at once.
+    // Another Copilot account added: declared in its folder at once.
     let dir = h.dir.join("copilot-pro");
     after(&h, |h| {
         let mut s = h.core.settings.read().clone();
-        s.accounts
-            .push(crate::accounts::principal_of(EngineId::Copilot));
         s.accounts.push(Account {
             id: "copilot-pro".into(),
             name: "Pro".into(),
@@ -303,6 +307,7 @@ async fn a_config_that_cannot_be_read_is_told_with_what_to_paste_and_left_alone(
     let h = harness("mcp-invalid");
     write(&principal_toml(&h), "model = = 1\n");
     write(&copilot_json(&h), "{\"mcpServers\": [");
+    machine_accounts(&h, &[EngineId::Codex, EngineId::Copilot]);
     installed(&h, &[EngineId::Codex, EngineId::Copilot]);
     after(&h, |h| h.core.set_mcp_enabled(true).unwrap()).await;
     let declared = h.core.mcp.declared();

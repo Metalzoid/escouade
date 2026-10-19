@@ -9,6 +9,8 @@ Un harness est le programme qui fait tourner un agent : Claude Code, Codex, Open
 
 Escouade lance le harness de ta machine, avec ton propre compte : installe-en au moins un et connecte-le une fois, comme pour t’en servir dans un terminal. Réglages › Harness liste chacun avec son exécutable, sa version et son état (voir [les réglages des harness](settings-claude-code)).
 
+Puis ajoute-lui un compte dans Réglages › Comptes : aucun harness n’en a au départ, et rien ne démarre sur un harness sans compte. « Ajouter un compte… » propose le compte déjà connecté sur la machine, ou un nouveau (voir [plusieurs comptes](accounts#aucun-compte-au-depart)). Le modèle, l’effort et le mode des nouveaux agents se règlent dans la fiche de chaque compte, avec ceux de son harness.
+
 Dès que deux harness sont installés :
 
 - chaque projet a son « Harness par défaut » (Réglages › Projets), Claude Code sans réglage ;

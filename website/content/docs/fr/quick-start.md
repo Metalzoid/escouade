@@ -6,6 +6,8 @@ Une première session pas à pas : ajouter un projet, créer un agent, choisir s
 
 Il te faut Claude Code installé et connecté à ton compte Claude, et git (voir l’[installation](installation)). Sous macOS, `Ctrl` devient `⌘` dans les raccourcis de cette page.
 
+Au premier lancement, Escouade n’a aucun compte : l’écran d’accueil dit « Aucun compte ». Clique sur « Ajouter un compte… » et garde « Le compte de la machine », ton Claude Code déjà connecté, puis « Ajouter ce compte » (voir [plusieurs comptes](accounts#aucun-compte-au-depart)). Sans compte, aucun agent ne démarre.
+
 ## Ajouter un projet
 
 Un projet est un dossier de code. Sur l’écran d’accueil, clique sur « + Ajouter un projet ». Plus tard, le bouton `+` à droite des onglets de la barre de titre fait la même chose. La fenêtre « Nouveau projet » s’ouvre : c’est un assistant en étapes, listées à gauche, qui règle tout ce qui fait marcher la méthode de travail d’Escouade (agents en worktree, tickets du Kanban, lancements, validation) dès le premier ticket. Chaque étape a « Suivant » et, sauf la première et le récapitulatif, « Passer », qui garde ses valeurs telles qu’elles sont ; un clic sur une étape de la liste y va directement.
@@ -68,7 +70,7 @@ Les modes de permission décident quand Claude te demande l’autorisation d’a
 | « Édits auto » | Les modifications de fichiers sont acceptées sans demander. |
 | « Bypass » | Aucune demande de permission. |
 
-Un nouvel agent démarre avec les valeurs de Réglages › Harness : « Modèle par défaut » (Sonnet), « Effort par défaut » (Moyen) et « Mode de permission par défaut » (Auto). Voir les [réglages des harness](settings-claude-code) et [les agents](managing-agents).
+Un nouvel agent démarre avec le modèle, l’effort et le mode de son compte, réglés dans sa fiche de Réglages › Comptes, « Nouveaux agents » (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir les [réglages des comptes](settings-accounts) et [les agents](managing-agents).
 
 > [!WARNING]
 > En mode « Bypass », Claude agit sans aucune demande de permission : Escouade te le rappelle quand tu le choisis. Réserve-le aux environnements sûrs.

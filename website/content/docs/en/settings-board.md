@@ -98,7 +98,7 @@ The agents that take this project’s tickets. See [the Kanban](board).
 | “Effort” | “Default”, or Low, Medium, High, Very high, Max. | “Default” |
 | “Mode” | “Default”, or the permission mode: Auto, Ask, Plan, Accept edits, Bypass. | “Default” |
 
-“Default” means the matching choice in the [“Harness”](settings-claude-code) tab: “Default model”, “Default effort”, and “Default permission mode”. Until you change them, those are Sonnet, Medium, and Auto.
+“Default” means the matching choice of the account that takes the ticket, on its card in [Settings › Accounts](settings-accounts) (“New agents”): the menu names it after the account a new agent of the project would go to. Until you change them, those are its harness’s: Sonnet, Medium, and Auto for Claude Code.
 
 Permission modes are explained in [agents](managing-agents). In short:
 

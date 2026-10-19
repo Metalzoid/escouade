@@ -10,22 +10,34 @@ Each account is Claude Code run with a configuration folder of its own (the `CLA
 
 This page covers how to use accounts; the full list of the tab’s options is in [the accounts settings](settings-accounts).
 
-## Main
+## No account to begin with
 
-“Main” is your usual Claude account, the one Claude Code used before you added another. It exists from the first launch.
+A first installation has no account, for any harness, Claude Code included: only the accounts you add exist and count (the account an agent or a ticket goes to, switches, handovers to another harness, quotas, statistics, the MCP server, written texts). Settings › Accounts shows each harness installed, with “No account” and an “Add a Codex account…” button while it has none.
+
+Without an account of its harness, nothing starts silently: a new agent, a ticket started, the autopilot, a handover or a written text is refused (“No Claude Code account: add one in Settings › Accounts.”), with an “Add an account…” button on that harness. The first screen and the “Account and commits” step of the “New project” assistant lead there too; from the assistant, the window opens on top of it and what you typed stays.
+
+> [!NOTE]
+> When updating to 1.8.1, the Main account of each harness stays, as an account added (same agents, tickets and statistics), if it is signed in or has served already. A Main never signed in nor used goes. Nothing else changes if you only had your Claude Code account.
+
+## This machine’s account (Main)
+
+“Main” is your usual account of the harness, the one of its usual folder (`~/.claude` for Claude Code), once added as “This machine’s account”. Its card marks it “This machine’s account”.
 
 - Escouade runs it as it always did: it doesn’t give it a configuration folder. It keeps your sign-in and your conversations. Its folder is the one the `CLAUDE_CONFIG_DIR` variable names when it is set for the app, otherwise `~/.claude`. On macOS, giving it a folder would sign you out: Claude Code then changes the name of the keychain entry where it keeps the sign-in.
 - It is called “Main” until you rename it, in the language of the interface.
-- It can’t be removed. Like any other account, it can be renamed, switched off (as long as another account is active), reserved to projects and given its own executable.
+- It is removed like any other account: removing it doesn’t sign the machine out (the confirmation says so). Like them, it can be renamed, switched off (as long as another account of the harness is active), reserved to projects and given its own executable.
 - If it isn’t signed in with a claude.ai account (it runs on an API key, say), the tab says so: “Not signed in with a claude.ai account (API key?)”.
 
 ## Add an account
 
 1. Open the settings (`Ctrl+,`, or ⚙ in the status bar) and the “Accounts” tab.
-2. Click “Add an account…”.
-3. Type the account’s name in “Name” (the field suggests “Pro, Team…”). Two accounts can’t have the same name, whatever the capitals.
-4. Choose what the account takes from Main, under “Share with Main” (see below).
-5. Click “Create and sign in”. The account is created, active and placed last in the list, then the window opens its sign-in.
+2. Click “Add an account…” (or “Add a Codex account…” in the group of a harness without one).
+3. Choose the account:
+   - “This machine’s account”: the account already signed in on this machine, in the harness’s usual folder, offered when the harness is signed in there (“Claude Code is signed in on this machine · ada@example.dev”) and it isn’t added yet (“Added already”). “Add this account” adds it as it is: there is nothing to sign in.
+   - “A new account”: a folder of its own under `~/.escouade`, and its own sign-in. Then go on below.
+4. Type the account’s name in “Name” (the field suggests “Pro, Team…”). Two accounts can’t have the same name, whatever the capitals.
+5. Choose what the account takes from this machine’s account, under “Share with…” (see below).
+6. Click “Create and sign in”. The account is created, active and placed last in the list, then the window opens its sign-in.
 
 Once two harnesses are installed, the window starts with “Harness”: the account’s harness, Claude Code, Codex or Copilot CLI (see [Codex accounts](#codex-accounts) and [Copilot CLI accounts](#copilot-cli-accounts)).
 
@@ -72,7 +84,7 @@ If Claude Code stops before the sign-in, the window says “Claude Code stopped 
 
 A Codex account is Codex started with a folder of its own (the `CODEX_HOME` variable): its ChatGPT sign-in, its sessions and its quota. They are managed in the “Codex accounts” group of the tab, as Claude Code’s are.
 
-- Its “Main” is your usual Codex, `~/.codex`: Escouade starts it without touching `CODEX_HOME`. It shows with the first Codex agent or ticket, or with the first Codex account added.
+- Its “Main” is your usual Codex, `~/.codex`: Escouade starts it without touching `CODEX_HOME`. “Add an account…” offers it as “This machine’s account” when Codex is signed in there.
 - “Add an account…”, harness “Codex”, makes its folder under `~/.escouade/codex/`. It may take from Main `config.toml` (its settings, the Windows sandbox and the trust of your folders included), `AGENTS.md` and its `skills`, `prompts` and `rules` folders, linked or copied, as a Claude Code account does.
 - The sign-in (`auth.json`) is never copied: its token changes each time it is renewed, and two folders using it would sign each other out.
 - “Create and sign in” opens a terminal running `codex login` in the account’s folder: the browser opens on ChatGPT’s sign-in. As soon as `auth.json` is written, the window says “Signed in as” followed by the ChatGPT account’s address.
@@ -94,7 +106,7 @@ Copilot counts in AI credits, by month: the “credits” bar says how much of t
 
 ## OpenCode account
 
-OpenCode has a single account in Escouade: its “Main”, your usual OpenCode config and the providers you connected to it (“Sign in…” runs `opencode auth login`). It shows up with the first OpenCode agent or ticket.
+OpenCode has a single account in Escouade: its “Main”, your usual OpenCode config and the providers you connected to it (“Sign in…” runs `opencode auth login`). “Add an account…” offers it as “This machine’s account” once OpenCode is installed (“OpenCode is installed on this machine”).
 
 OpenCode has no quota: its cost is the one your providers give, 0 with a local model. The status bar shows, instead of the bars, its account’s cost for the day. To cap it, fill in “Daily budget ($)” on its block, in Settings › Accounts (empty by default): once the day’s cost reaches it, the autopilot pauses until midnight, as when a quota is used up, and the status bar shows it (“$0.42 / $5.00”). “Resume now” lifts the pause until midnight.
 
@@ -111,7 +123,8 @@ The “Accounts” tab of the settings lists the accounts. Each change is saved 
 | Folder | The account’s configuration folder, read-only. |
 | Executable | The `claude` this account runs. Empty (“The one in the settings”), it takes the executable of the “Harness” tab. |
 | Sign in… / Sign in again… | Opens the account’s sign-in (see above). |
-| Remove | Removes the account (see below). Missing for Main. |
+| New agents | The “Model”, “Effort” and “Mode” this account’s new agents start with, among its harness’s (the models its harness lists for it, the efforts of its model, its harness’s modes). “The harness’s” takes the harness’s default. |
+| Remove | Removes the account (see below), this machine’s account included. |
 | Reserved to projects | The projects the account is reserved to (see below). |
 
 Under the list, an amber line appears when a project has no active account left to serve it.
@@ -240,13 +253,13 @@ The setting “Continue on the next harness when every account of a harness is s
 
 **Disable.** The “Active” switch keeps the account in the list, with its sign-in, its folder and its conversations, but no new agent, ticket or resume starts on it any more. Its state becomes “Inactive”. Agents already on it stay there; their “Account” menu shows it as “Pro (inactive)”.
 
-**Remove.** The “Remove” button (never on Main) asks for confirmation. The window starts with “Remove the account” followed by the account’s name, then says: “New agents will no longer start on it. Its folder stays on the disk, with its sign-in and its conversations:” and the folder’s path.
+**Remove.** The “Remove” button asks for confirmation. For this machine’s account, the window is titled “Remove this machine’s account” and says the harness stays signed in on this machine: removing it signs nothing out. The window starts with “Remove the account” followed by the account’s name, then says: “New agents will no longer start on it. Its folder stays on the disk, with its sign-in and its conversations:” and the folder’s path.
 
 - While agents that aren’t archived run on the account, removal is refused: “The account is still used by 2 agents.” Archive or delete them first.
 - The account’s folder stays on the disk: Escouade doesn’t erase it, and doesn’t reuse it if you add an account with the same name. To get the account back, add a new one and sign in again.
 - Projects that had this account as “Preferred account” go back to “Automatic”.
 - Its turns stay in the statistics, under “Deleted account (pro)”.
-- An archived agent of this account that you restore later runs on Main.
+- An archived agent of this account that you restore later goes to the account a new agent of its project would go to on the same harness; without an account of that harness, it doesn’t start and says so.
 
 ## Quotas and statistics by account
 

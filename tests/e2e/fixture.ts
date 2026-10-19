@@ -211,6 +211,34 @@ const RENDER_UNSEEN = '--disable-backgrounding-occluded-windows --disable-render
 /** How long `restart()` leaves the app to write its state before it ends it. */
 const SAVE_MS = 1500;
 
+/** The machine's account of a harness, as « Ajouter un compte… » adds it (`accounts::principal_of`). */
+function machineAccount(engine: string): Record<string, unknown> {
+  return {
+    id: engine === 'claude' ? 'principal' : `principal-${engine}`,
+    name: 'Principal',
+    engine,
+    configDir: '',
+    claudePath: '',
+    active: true,
+  };
+}
+
+/** The variable that gives the fake program of each harness other than Claude Code, by harness. */
+const FAKE_OF: Record<string, string> = { codex: 'ESCOUADE_CODEX', opencode: 'ESCOUADE_OPENCODE', copilot: 'ESCOUADE_COPILOT' };
+
+/**
+ * The accounts a test starts with (a first installation has none, ESC-128): the machine's account of Claude Code, and of each
+ * harness whose fake program the test gives (`appEnv`), before those it gives (`preStart`) unless it gives them; none
+ * but its own when it says `noAccounts`.
+ */
+function accountsFor(given: Record<string, unknown>, appEnv: Record<string, string>): unknown[] {
+  const own = (given.accounts as { id: string }[] | undefined) ?? [];
+  if (given.noAccounts) return own;
+  const engines = ['claude', ...Object.keys(FAKE_OF).filter((e) => appEnv[FAKE_OF[e]])];
+  const machine = engines.map(machineAccount).filter((m) => !own.some((a) => a.id === m.id));
+  return [...machine, ...own];
+}
+
 export const test = base.extend<{
   app: App;
   appEnv: Record<string, string>;
@@ -243,6 +271,7 @@ export const test = base.extend<{
     fs.mkdirSync(data);
     // French unless a test asks otherwise, whatever the machine's language (CI runners are English): the tests read the
     // French interface.
+    const given = (preStart.run(root) ?? {}) as Record<string, unknown>;
     fs.writeFileSync(
       path.join(data, 'settings.json'),
       JSON.stringify({
@@ -253,7 +282,10 @@ export const test = base.extend<{
         language,
         // The question of the first start answered (a sandbox never sends anything anyway).
         telemetry: false,
-        ...(preStart.run(root) ?? {}),
+        // Settings of this version: no update to bring them through (ESC-128), unless a test says otherwise.
+        accountsVersion: 1,
+        ...given,
+        accounts: accountsFor(given, appEnv),
       }),
     );
     const repo = makeRepo(root);

@@ -63,6 +63,7 @@ async fn real_copilot() {
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         });
     });
     let id = h
@@ -214,6 +215,7 @@ fn copilot_accounts(h: &Harness, fake: Value) -> PathBuf {
                 active,
                 projects: Vec::new(),
                 daily_budget: None,
+                ..Default::default()
             });
         }
     });
@@ -396,7 +398,7 @@ async fn a_copilot_account_is_added_then_signed_in_by_copilot_login_in_a_termina
         .iter()
         .map(|a| a.id.clone())
         .collect();
-    assert_eq!(ids, ["principal", "principal-copilot", "travail"]);
+    assert_eq!(ids, ["principal", "travail"]);
     h.core
         .update_claude_account(Account {
             claude_path: crate::engine::fake_copilot(),

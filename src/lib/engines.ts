@@ -180,6 +180,15 @@ export function modelsOf(who: { engine: EngineId | null | undefined; account?: s
   return engineOf(who.engine)?.models ?? [];
 }
 
+/**
+ * The model the harness of `who` runs when it is given none (`Core::model_for`): the one it lists as its default for the
+ * account, else the first it lists, else the first it declares.
+ */
+export function defaultModelOf(who: { engine: EngineId | null | undefined; account?: string }): string {
+  const told = toldOf(who);
+  return (told.find((m) => m.default) ?? told[0])?.id ?? engineOf(who.engine)?.models[0]?.id ?? '';
+}
+
 /** The efforts of the harness of `who`, among `all` (in their order): none when it takes none. */
 export function effortsOf<T extends { value: string }>(
   who: { engine: EngineId | null | undefined; model?: string; account?: string },

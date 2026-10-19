@@ -286,6 +286,29 @@ describe('the new project’s assistant', () => {
     app.enginesFound = ['claude'];
   });
 
+  it('leads to « Ajouter un compte… » over the assistant when its harness has no account, and keeps what was typed (ESC-128)', async () => {
+    backend({
+      account_shareable: () => [],
+      account_machine: () => ({ found: true, added: false, connected: false, signsIn: true, email: null, dir: '' }),
+    });
+    app.settings.accounts = [];
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+    const missing = screen.getByText(
+      'Aucun compte Claude Code : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
+    );
+    await userEvent.click(within(missing.parentElement!).getByRole('button', { name: 'Ajouter un compte…' }));
+    expect(await screen.findByRole('dialog', { name: 'Ajouter un compte Claude Code' })).toBeInTheDocument();
+    // Échap closes the one on top alone.
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Ajouter un compte Claude Code' })).not.toBeInTheDocument());
+    // The assistant still there, at its step.
+    expect(screen.getByText(/Aucun compte Claude Code : les agents/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suivant' })).toBeInTheDocument();
+  });
+
   it('fills the worktrees and the launch with what Claude reads of the folder, before the project is made', async () => {
     const be = backend({
       suggest_worktree_steps_at: () => ({ setup: [{ id: 'x', command: 'pnpm i', shell: 'pwsh', cwd: '' }], teardown: [], refused: 0 }),

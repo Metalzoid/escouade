@@ -102,7 +102,7 @@ describe('setDisplay', () => {
     vi.advanceTimersByTime(SAVE_DELAY_MS);
     expect(b.called('save_settings')).toHaveLength(1);
     // The rest of the settings as they are.
-    expect(b.called('save_settings')[0].args.settings).toMatchObject({ uiZoom: 150, sound: true, defaultModel: 'sonnet' });
+    expect(b.called('save_settings')[0].args.settings).toMatchObject({ uiZoom: 150, sound: true, claudePath: '' });
   });
 
   it('keeps the font sizes in range, and does not zoom for them', () => {

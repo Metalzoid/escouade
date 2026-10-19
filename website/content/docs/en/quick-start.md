@@ -6,6 +6,8 @@ A first session step by step: add a project, create an agent, choose its model, 
 
 You need Claude Code installed and signed in to your Claude account, and git (see [installation](installation)). On macOS, `Ctrl` becomes `⌘` in the shortcuts of this page.
 
+On the first launch, Escouade has no account: the first screen says “No account”. Click “Add an account…”, keep “This machine’s account”, your Claude Code already signed in, then “Add this account” (see [multiple accounts](accounts#no-account-to-begin-with)). Without an account, no agent starts.
+
 ## Add a project
 
 A project is a folder of code. On the welcome screen, click “+ Add a project”. Later, the `+` button to the right of the tabs in the title bar does the same. The “New project” window opens: an assistant in steps, listed on the left, that sets everything Escouade’s way of working relies on (agents in worktrees, Kanban tickets, launches, approval) from the first ticket. Each step has “Next” and, except the first one and the summary, “Skip”, which keeps its values as they are; clicking a step in the list goes straight to it.
@@ -68,7 +70,7 @@ The permission modes decide when Claude asks you for permission to act:
 | “Accept edits” | File edits are accepted without asking. |
 | “Bypass” | No permission requests. |
 
-A new agent starts with the values of Settings › Harness: “Default model” (Sonnet), “Default effort” (Medium) and “Default permission mode” (Auto). See the [Harness settings](settings-claude-code) and [agents](managing-agents).
+A new agent starts with the model, effort and mode of its account, set on its card in Settings › Accounts, “New agents” (by default the harness’s: Sonnet, Medium and Auto for Claude Code). See the [account settings](settings-accounts) and [agents](managing-agents).
 
 > [!WARNING]
 > In “Bypass” mode, Claude acts without any permission request: Escouade reminds you of it when you choose it. Keep it for safe environments.

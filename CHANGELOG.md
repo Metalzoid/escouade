@@ -8,10 +8,18 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Réglages › À propos ouvre le site d’Escouade (« Site web », dans la langue de l’interface) et son serveur Discord (« Discord » › « Rejoindre »), pour poser une question, signaler un problème ou suivre ce qui arrive.
 
+### Modifications
+
+- Comptes : plus aucun compte par défaut, pour aucun harness, Claude Code compris. Réglages › Comptes montre chaque harness installé, avec « Aucun compte » tant qu'on n'en a pas ajouté, et seuls les comptes ajoutés comptent : choix du compte d'un agent ou d'un ticket, bascule sur un autre compte, passation à un autre harness, quotas, statistiques, serveur MCP déclaré, textes rédigés. Sans compte pour son harness, un nouvel agent, un ticket ou le pilote auto ne démarre rien en silence : Escouade le dit, avec un bouton « Ajouter un compte… » sur ce harness, sur l'écran d'accueil et à l'étape « Compte et commit » de l'assistant « Nouveau projet » aussi.
+- « Ajouter un compte… » propose, pour le harness choisi, le compte déjà connecté sur la machine (le dossier habituel du harness, avec l'e-mail ou le compte GitHub quand il le dit), s'il n'est pas déjà ajouté, ou un nouveau compte, avec son propre dossier et sa connexion. Le compte de la machine se retire comme les autres, sans déconnecter la machine.
+- Le modèle, l'effort et le mode des nouveaux agents se règlent désormais compte par compte, dans sa fiche de Réglages › Comptes, avec les modèles, les efforts et les modes de son harness (ceux d'un compte Codex sont ceux de Codex). Un nouvel agent prend ceux de son compte ; un ticket, ceux de son ticket, puis du Kanban, puis du compte qui le prend. Le groupe « Nouveaux agents » de Réglages › Harness disparaît.
+- Mise à jour : le compte Principal de chaque harness reste, comme un compte ajouté (agents, tickets et statistiques intacts), s'il est connecté ou s'il a servi ; un Principal jamais connecté ni utilisé disparaît. Les réglages « Nouveaux agents » d'avant passent dans chaque compte Claude Code gardé. Rien d'autre ne change pour qui n'avait que son compte Claude Code.
+
 ### Corrections
 
 - Menu des modèles d'un agent : quand il est long (Claude Code avec la liste de son compte, OpenCode), il montre les favoris d'abord, sous « Favoris », puis un groupe par famille, chacun sous son intitulé : Fable, Opus, Sonnet, Haiku, Mythos (et toute autre famille que le compte annonce) pour Claude Code, du plus récent au plus ancien, le fournisseur pour OpenCode, l'éditeur (GPT, Claude, Gemini…) pour Codex et Copilot CLI ; un modèle sans famille reconnue va dans « Autres ». La recherche filtre dans les groupes et cache ceux qui restent vides ; les flèches passent d'un modèle à l'autre et Entrée choisit. L'étoile des favoris est dessinée, sans le carré gris d'avant : un contour discret pour un modèle hors favoris, plein en couleur d'accent pour un favori. Les favoris des modèles d'OpenCode, dans les réglages, ont le même rendu.
 - Réglages › Harness › OpenCode : la description de la ligne « Modèles » ne s'affiche plus une lettre par ligne ; la liste des modèles passe sous son libellé.
+- Le Composer n’écrit plus « claude-mythos-1 » à la place de « Mythos » une fois le processus de l’agent démarré : un modèle hors des familles connues garde le nom que son compte lui donne.
 
 ## [1.8.0] — 2026-10-19
 

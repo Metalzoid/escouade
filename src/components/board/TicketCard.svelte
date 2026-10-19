@@ -1,6 +1,6 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { pauseOf } from '../../lib/accounts';
+  import { newAgentDefaults, pauseOf } from '../../lib/accounts';
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fWhen } from '../../lib/format';
@@ -43,11 +43,11 @@
   const used = $derived(ticket.column === 'doing' || ticket.column === 'review' ? ticketSpent(ticket, app.agents) : null);
   /**
    * Its own model and effort, which its agent runs over the Kanban's (empty: the Kanban's): the chip beside the key. The
-   * effort is left out when the model its agent runs (the ticket's, else the Kanban's, else the app's) takes none:
+   * effort is left out when the model its agent runs (the ticket's, else the Kanban's, else its account's) takes none:
    * Haiku starts without one.
    */
   const own = $derived.by(() => {
-    const runs = ticket.model || s.model || app.settings.defaultModel;
+    const runs = ticket.model || s.model || newAgentDefaults(project, ticket.engine ?? undefined).model;
     const model = ticket.model ? modelLabel(ticket.model, app.models) : '';
     const effort = ticket.effort && supportsEffort(runs) ? (EFFORTS.find((e) => e.value === ticket.effort)?.label ?? ticket.effort) : '';
     if (!model && !effort) return null;

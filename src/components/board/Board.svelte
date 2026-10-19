@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { pausedAccounts, pauseOf, quotaOf } from '../../lib/accounts';
+  import { addAccount, defaultEngine, hasAccount, pausedAccounts, pauseOf, quotaOf } from '../../lib/accounts';
   import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, settingsSummary } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -29,6 +29,9 @@
   const paused = $derived(pause ? pauseLabel(pause, app.now) : '');
   /** The accounts past the threshold, with several accounts. */
   const over = $derived(pause ? pausedAccounts(pause) : '');
+  /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
+  const engine = $derived(project.engine ?? defaultEngine());
+  const noAccount = $derived(!hasAccount(engine));
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -49,6 +52,7 @@
     {:else if issue}
       <!-- Nor while the target branch cannot start a ticket. -->
       <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
+      {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
     {:else if pause}
       <!-- Nor while the autopilot is paused: the line under the header says why. -->
     {:else}
@@ -171,6 +175,11 @@
     }
     .imp .l {
       display: none;
+    }
+    .add-account {
+      height: 30px;
+      flex: none;
+      font-size: 12px;
     }
     .imp {
       padding: 0 10px;

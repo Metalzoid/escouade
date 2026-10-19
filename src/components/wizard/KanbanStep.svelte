@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { newAgentDefaults } from '../../lib/accounts';
   import { t } from '../../lib/i18n';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { app } from '../../lib/state.svelte';
@@ -97,7 +98,7 @@
   </Row>
   <Row label={t('common.model')}>
     <select class="field select" aria-label={t('common.model')} bind:value={form.config.board.model}>
-      <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(app.settings.defaultModel, app.models) })}</option>
+      <option value="">{t('boardSettings.tab.defaultModel', { model: modelLabel(newAgentDefaults(undefined).model, app.models) })}</option>
       {#each modelOptions(app.models) as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
     </select>
   </Row>

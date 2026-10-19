@@ -23,6 +23,19 @@ export default {
     signInAgain: 'Se reconnecter…',
     remove: 'Supprimer',
     add: 'Ajouter un compte…',
+    /** A harness installed without an account (ESC-128): nothing starts on it. */
+    none: 'Aucun compte',
+    noneHint: 'Aucun agent ni ticket ne démarre sur {harness} avant qu’un compte soit ajouté.',
+    addTo: 'Ajouter un compte {harness}…',
+    /** The Principal of a harness: its usual folder, as it is. */
+    machine: 'Compte de la machine',
+    /** What the account's new agents go with (ESC-128). */
+    defaults: 'Nouveaux agents',
+    defaultModel: 'Modèle',
+    defaultEffort: 'Effort',
+    defaultMode: 'Mode',
+    harnessDefault: 'Celui du harness',
+    harnessDefaultNamed: 'Celui du harness ({name})',
     reserved: 'Réservé aux projets',
     reservedAll: 'Tous les projets',
     /** For a harness without a quota (OpenCode), which goes through the providers' APIs. */
@@ -51,6 +64,11 @@ export default {
       principalNotConnected: 'Pas connecté par un compte claude.ai (clé d’API ?)',
       inactive: 'Inactif',
     },
+    removeMachineConfirm: {
+      title: 'Retirer le compte de la machine « {name} » ?',
+      body: 'Les nouveaux agents ne partiront plus dessus. {harness} reste connecté sur cette machine : le retirer ne déconnecte rien ({path}).',
+      confirm: 'Retirer',
+    },
     removeConfirm: {
       title: 'Supprimer le compte « {name} » ?',
       body: 'Les nouveaux agents ne partiront plus dessus. Son dossier reste sur le disque, avec sa connexion et ses conversations : {path}',
@@ -62,10 +80,26 @@ export default {
   modal: {
     addTitle: 'Ajouter un compte {harness}',
     harness: 'Harness',
+    /** What is added (ESC-128): the machine's account of the harness, or a new one. */
+    kind: 'Compte',
+    machine: 'Le compte de la machine',
+    machineConnected: '{harness} est connecté sur cette machine · {email}',
+    machineConnectedNoEmail: '{harness} est connecté sur cette machine',
+    machineFound: '{harness} est installé sur cette machine',
+    machineNotConnected: '{harness} n’est pas connecté sur cette machine',
+    machineAdded: 'Déjà ajouté',
+    machineChecking: 'Vérification…',
+    machineHint: 'Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations ({path}).',
+    newAccount: 'Un nouveau compte',
+    newHint: 'Un dossier à lui sous ~/.escouade, et sa propre connexion.',
+    addMachine: 'Ajouter ce compte',
     signInTitle: 'Se connecter au compte « {name} »',
     name: 'Nom',
     namePlaceholder: 'Pro, Équipe…',
     share: 'Partager avec {name}',
+    /** The machine's account of the harness, not added (ESC-128): what a new account shares, and what is said of it. */
+    shareMachine: 'Partager avec le compte de la machine',
+    machineName: 'Le compte de la machine',
     files: 'Fichiers',
     folders: 'Dossiers',
     filesCopied: 'copiés (un lien de fichier demande des droits d’administrateur)',

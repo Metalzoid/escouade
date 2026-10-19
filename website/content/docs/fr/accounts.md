@@ -10,22 +10,34 @@ Chaque compte est Claude Code lancé avec son propre dossier de configuration (l
 
 Cette page explique l’usage ; la liste des options de l’onglet est dans [les réglages des comptes](settings-accounts).
 
-## Principal
+## Aucun compte au départ
 
-« Principal » est ton compte Claude habituel, celui que Claude Code utilisait avant que tu en ajoutes un autre. Il existe dès le premier lancement.
+Une première installation n’a aucun compte, pour aucun harness, Claude Code compris : seuls les comptes que tu ajoutes existent et comptent (choix du compte d’un agent ou d’un ticket, bascule, passation à un autre harness, quotas, statistiques, serveur MCP, textes rédigés). Réglages › Comptes montre chaque harness installé, avec « Aucun compte » et le bouton « Ajouter un compte Codex… » tant qu’il n’en a pas.
+
+Sans compte pour son harness, rien ne démarre en silence : un nouvel agent, un ticket lancé, le pilote auto, une passation ou un texte rédigé est refusé (« Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes. »), avec un bouton « Ajouter un compte… » sur ce harness. L’écran d’accueil et l’étape « Compte et commit » de l’assistant « Nouveau projet » y mènent aussi ; depuis l’assistant, la fenêtre s’ouvre par-dessus et ce que tu as saisi reste.
+
+> [!NOTE]
+> À la mise à jour vers la 1.8.1, le compte Principal de chaque harness reste, comme un compte ajouté (mêmes agents, tickets et statistiques), s’il est connecté ou s’il a déjà servi. Un Principal jamais connecté ni utilisé disparaît. Rien d’autre ne change si tu n’avais que ton compte Claude Code.
+
+## Le compte de la machine (Principal)
+
+« Principal » est ton compte habituel du harness, celui de son dossier habituel (`~/.claude` pour Claude Code), une fois ajouté comme « Le compte de la machine ». Sa fiche le marque « Compte de la machine ».
 
 - Escouade le lance comme avant : elle ne lui donne pas de dossier de configuration. Il garde ta connexion et tes conversations. Son dossier est celui de la variable `CLAUDE_CONFIG_DIR` quand elle est définie pour l’app, sinon `~/.claude`. Sous macOS, lui donner un dossier te déconnecterait : Claude Code change alors le nom de l’entrée du trousseau où il garde la connexion.
 - Il s’appelle « Principal » tant que tu ne l’as pas renommé, dans la langue de l’interface.
-- Il ne se supprime pas. Comme les autres comptes, il se renomme, se désactive (tant qu’un autre compte est actif), se réserve à des projets et peut avoir son propre exécutable.
+- Il se retire comme les autres comptes : le retrait ne déconnecte pas la machine (la confirmation le dit). Comme eux, il se renomme, se désactive (tant qu’un autre compte du harness est actif), se réserve à des projets et peut avoir son propre exécutable.
 - S’il n’est pas connecté par un compte claude.ai (avec une clé d’API, par exemple), l’onglet l’indique : « Pas connecté par un compte claude.ai (clé d’API ?) ».
 
 ## Ajouter un compte
 
 1. Ouvre les réglages (`Ctrl+,`, ou ⚙ dans la barre de statut) et l’onglet « Comptes ».
-2. Clique sur « Ajouter un compte… ».
-3. Écris le nom du compte dans « Nom » (le champ suggère « Pro, Équipe… »). Deux comptes ne peuvent pas porter le même nom, majuscules ou non.
-4. Choisis ce que le compte reprend de Principal, sous « Partager avec Principal » (voir ci-dessous).
-5. Clique sur « Créer et se connecter ». Le compte est créé, actif et placé en dernier dans la liste, puis la fenêtre ouvre sa connexion.
+2. Clique sur « Ajouter un compte… » (ou sur « Ajouter un compte Codex… » dans le groupe d’un harness sans compte).
+3. Choisis le compte :
+   - « Le compte de la machine » : le compte déjà connecté sur cette machine, dans le dossier habituel du harness, proposé quand le harness y est connecté (« Claude Code est connecté sur cette machine · ada@exemple.dev ») et qu’il n’est pas déjà ajouté (« Déjà ajouté »). « Ajouter ce compte » l’ajoute tel quel : il n’y a rien à connecter.
+   - « Un nouveau compte » : un dossier à lui sous `~/.escouade`, et sa propre connexion. Continue alors ci-dessous.
+4. Écris le nom du compte dans « Nom » (le champ suggère « Pro, Équipe… »). Deux comptes ne peuvent pas porter le même nom, majuscules ou non.
+5. Choisis ce que le compte reprend du compte de la machine, sous « Partager avec… » (voir ci-dessous).
+6. Clique sur « Créer et se connecter ». Le compte est créé, actif et placé en dernier dans la liste, puis la fenêtre ouvre sa connexion.
 
 Dès que deux harness sont installés, la fenêtre commence par « Harness » : le harness du compte, Claude Code, Codex ou Copilot CLI (voir [les comptes Codex](#comptes-codex) et [les comptes Copilot CLI](#comptes-copilot-cli)).
 
@@ -72,7 +84,7 @@ Si Claude Code s’arrête avant la connexion, la fenêtre écrit « Claude Cod
 
 Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODEX_HOME`) : sa connexion à ChatGPT, ses sessions et son quota. Ils se gèrent dans le groupe « Comptes Codex » de l’onglet, comme ceux de Claude Code.
 
-- Son « Principal » est ton Codex habituel, `~/.codex` : Escouade le lance sans toucher à `CODEX_HOME`. Il apparaît au premier agent ou ticket Codex, ou avec le premier compte Codex ajouté.
+- Son « Principal » est ton Codex habituel, `~/.codex` : Escouade le lance sans toucher à `CODEX_HOME`. « Ajouter un compte… » le propose comme « Le compte de la machine » quand Codex y est connecté.
 - « Ajouter un compte… », harness « Codex », crée son dossier sous `~/.escouade/codex/`. Il peut reprendre de Principal `config.toml` (ses réglages, dont le bac à sable de Windows et la confiance de tes dossiers), `AGENTS.md` et ses dossiers `skills`, `prompts` et `rules`, par lien ou par copie, comme un compte Claude Code.
 - La connexion (`auth.json`) n’est jamais copiée : son jeton change à chaque renouvellement, et deux dossiers qui s’en serviraient se déconnecteraient l’un l’autre.
 - « Créer et se connecter » ouvre un terminal où tourne `codex login` dans le dossier du compte : le navigateur s’ouvre sur la connexion de ChatGPT. Dès qu’`auth.json` est écrit, la fenêtre écrit « Connecté au compte » suivi de l’adresse du compte ChatGPT.
@@ -94,7 +106,7 @@ Copilot compte en crédits d’IA, par mois : la barre « crédits » dit ce q
 
 ## Compte OpenCode
 
-OpenCode n’a qu’un compte dans Escouade : son « Principal », ta config habituelle d’OpenCode et les fournisseurs que tu y as connectés (« Se connecter… » lance `opencode auth login`). Il apparaît au premier agent ou ticket OpenCode.
+OpenCode n’a qu’un compte dans Escouade : son « Principal », ta config habituelle d’OpenCode et les fournisseurs que tu y as connectés (« Se connecter… » lance `opencode auth login`). « Ajouter un compte… » le propose comme « Le compte de la machine » dès qu’OpenCode est installé (« OpenCode est installé sur cette machine »).
 
 OpenCode n’a pas de quota : son coût est celui que donnent tes fournisseurs, 0 avec un modèle local. La barre d’état montre, à la place des barres, le coût du jour de son compte. Pour le borner, remplis « Budget par jour ($) » sur son bloc, dans Réglages › Comptes (vide par défaut) : une fois le coût du jour atteint, le pilote auto se met en pause jusqu’à minuit, comme au quota épuisé, et la barre d’état le montre (« 0,42 $ / 5,00 $ »). « Reprendre maintenant » lève la pause jusqu’à minuit.
 
@@ -111,7 +123,8 @@ L’onglet « Comptes » des réglages liste les comptes. Chaque changement es
 | Dossier | Le dossier de configuration du compte, en lecture seule. |
 | Exécutable | Le `claude` que ce compte lance. Vide (« Celui des réglages »), il prend l’exécutable de l’onglet « Harness ». |
 | Se connecter… / Se reconnecter… | Ouvre la connexion du compte (voir plus haut). |
-| Supprimer | Retire le compte (voir plus bas). Absent pour Principal. |
+| Nouveaux agents | Le « Modèle », l’« Effort » et le « Mode » avec lesquels partent les nouveaux agents de ce compte, parmi ceux de son harness (les modèles que son harness liste pour lui, les efforts de son modèle, les modes de son harness). « Celui du harness » prend le défaut du harness. |
+| Supprimer | Retire le compte (voir plus bas), le compte de la machine compris. |
 | Réservé aux projets | Les projets auxquels le compte est réservé (voir plus bas). |
 
 Sous la liste, une ligne ambre apparaît quand un projet n’a plus aucun compte actif pour le servir.
@@ -128,9 +141,9 @@ Un nouvel agent, ou un ticket que le pilote auto prend, part sur :
 
 L’ordre de la liste décide donc : mets en tête le compte que tu veux user en premier.
 
-Le seuil se règle dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board).
+Le seuil se règle dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board).
 
-Quand le compte qui recevait les nouveaux agents passe le seuil et qu’un autre est disponible, une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. »
+Quand le compte qui recevait les nouveaux agents passe le seuil et qu’un autre est disponible, une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. »
 
 ### Le compte préféré d’un projet
 
@@ -240,13 +253,13 @@ Le réglage « Continuer sur le harness suivant quand tous les comptes d’un h
 
 **Désactiver.** L’interrupteur « Actif » garde le compte dans la liste, avec sa connexion, son dossier et ses conversations, mais plus aucun nouvel agent, ticket ou reprise ne part dessus. L’état devient « Inactif ». Les agents qui y sont déjà y restent ; leur menu « Compte » l’écrit « Pro (inactif) ».
 
-**Supprimer.** Le bouton « Supprimer » (jamais sur Principal) demande confirmation. La fenêtre commence par « Supprimer le compte » suivi du nom du compte, puis dit : « Les nouveaux agents ne partiront plus dessus. Son dossier reste sur le disque, avec sa connexion et ses conversations : » et le chemin du dossier.
+**Supprimer.** Le bouton « Supprimer » demande confirmation. Pour le compte de la machine, la fenêtre s’intitule « Retirer le compte de la machine » et dit que le harness reste connecté sur cette machine : le retirer ne déconnecte rien. La fenêtre commence par « Supprimer le compte » suivi du nom du compte, puis dit : « Les nouveaux agents ne partiront plus dessus. Son dossier reste sur le disque, avec sa connexion et ses conversations : » et le chemin du dossier.
 
 - Tant que des agents non archivés tournent sur le compte, la suppression est refusée : « Le compte sert encore à 2 agents. » Archive-les ou supprime-les d’abord.
 - Le dossier du compte reste sur le disque : Escouade ne l’efface pas, et ne le reprend pas si tu ajoutes un compte du même nom. Pour retrouver le compte, ajoute-en un nouveau et reconnecte-toi.
 - Les projets qui avaient ce compte pour « Compte préféré » repassent en « Automatique ».
 - Ses tours restent dans les statistiques, sous « Compte supprimé (pro) ».
-- Un agent archivé sur ce compte, que tu restaures plus tard, tourne sur Principal.
+- Un agent archivé sur ce compte, que tu restaures plus tard, part sur le compte où irait un nouvel agent de son projet sur le même harness ; sans compte de ce harness, il ne démarre pas et le dit.
 
 ## Quotas et statistiques par compte
 

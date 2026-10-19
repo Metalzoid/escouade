@@ -83,6 +83,19 @@ describe('modelOptions', () => {
     ]);
   });
 
+  it('keeps the name a claude gave a model of no family it knows, once its process reported it too', () => {
+    // ESC-124: Mythos, listed by the account as « Mythos », reported by the process as `claude-mythos-1`.
+    const catalog = [...CATALOG, { value: 'mythos', resolvedModel: 'claude-mythos-1' }];
+    const told = [
+      { id: 'sonnet', label: 'Sonnet' },
+      { id: 'mythos', label: 'Mythos' },
+    ];
+    expect(modelOptions(catalog, told)).toEqual([
+      { value: 'sonnet', label: 'Sonnet 5.5' },
+      { value: 'mythos', label: 'Mythos' },
+    ]);
+  });
+
   it('falls back to the bare names before Claude Code has reported its models', () => {
     expect(modelOptions([]).map((o) => o.label)).toEqual(['Fable', 'Opus', 'Sonnet', 'Haiku']);
   });

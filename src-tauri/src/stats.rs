@@ -290,6 +290,22 @@ impl Stats {
         rows.into_iter().flatten().flatten().collect()
     }
 
+    /// Whether a turn or a message was ever written on `account`: it served (ESC-128).
+    pub fn used_by(&self, account: &str) -> bool {
+        let guard = self.conn.lock();
+        let Some(c) = guard.as_ref() else {
+            return false;
+        };
+        ["turns", "prompts"].iter().any(|table| {
+            c.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE account = ?1)"),
+                [account],
+                |r| r.get::<_, bool>(0),
+            )
+            .unwrap_or(false)
+        })
+    }
+
     /// What the turns cost today, on every account.
     #[cfg(test)]
     pub fn today_cost(&self) -> f64 {

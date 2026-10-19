@@ -712,6 +712,7 @@ async fn a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_e
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         })
     });
     let id = h
@@ -828,6 +829,7 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
             active: true,
             projects: Vec::new(),
             daily_budget: None,
+            ..Default::default()
         })
     });
     let id = h

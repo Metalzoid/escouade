@@ -9,6 +9,8 @@ A harness is the program that runs an agent: Claude Code, Codex, OpenCode or Git
 
 Escouade starts the harness on your machine, with your own account: install at least one and sign in to it once, as you would to use it in a terminal. Settings › Harness lists each one with its executable, its version and its state (see [the harness settings](settings-claude-code)).
 
+Then add it an account in Settings › Accounts: no harness has one to begin with, and nothing starts on a harness without one. “Add an account…” offers the account already signed in on the machine, or a new one (see [multiple accounts](accounts#no-account-to-begin-with)). The model, effort and mode of new agents are set on each account’s card, with its harness’s.
+
 As soon as two harnesses are installed:
 
 - each project has its “Default harness” (Settings › Projects), Claude Code when unset;
