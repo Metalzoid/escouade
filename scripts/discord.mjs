@@ -17,7 +17,10 @@ const RELEASES = 'https://github.com/guillaume-gagnaire/escouade/releases/tag';
 export function discordMessages(notes, tag) {
   const version = String(tag).replace(/^v/, '');
   const head = `## Escouade ${version}\n-# [Release sur GitHub](<${RELEASES}/v${version}>)`;
-  return pack(`${head}\n\n${notes}`.split('\n').flatMap((line) => cutLine(line, LIMIT)), LIMIT);
+  return pack(
+    `${head}\n\n${notes}`.split('\n').flatMap((line) => cutLine(line, LIMIT)),
+    LIMIT,
+  );
 }
 
 /** `line` in pieces of at most `limit` characters, cut at a space when there is one. */

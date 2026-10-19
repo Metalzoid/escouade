@@ -40,7 +40,12 @@ describe('discord messages', () => {
     const words = Array.from({ length: 600 }, (_, i) => `mot${i}`);
     const messages = discordMessages(`- ${words.join(' ')}`, '1.8.0');
     for (const m of messages) expect(m.length).toBeLessThanOrEqual(LIMIT);
-    expect(messages.join(' ').split(/\s+/).filter((w) => w.startsWith('mot'))).toEqual(words);
+    expect(
+      messages
+        .join(' ')
+        .split(/\s+/)
+        .filter((w) => w.startsWith('mot')),
+    ).toEqual(words);
   });
 });
 
