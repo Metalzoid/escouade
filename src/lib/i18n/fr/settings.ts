@@ -109,7 +109,7 @@ export default {
     /** The models of a harness that lists those of its providers (OpenCode). */
     models: {
       label: 'Modèles',
-      desc: 'Ceux des fournisseurs connectés à {engine}. Les favoris (★) viennent en premier dans le menu du composer.',
+      desc: 'Ceux des fournisseurs connectés à {engine}. Les favoris (★) viennent en premier dans le menu du composer, puis les autres par fournisseur.',
       search: 'Rechercher un modèle',
       none: 'Aucun modèle lu pour l’instant : ils le sont au premier agent de ce harness.',
     },

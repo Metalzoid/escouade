@@ -127,6 +127,9 @@ export default {
     none: 'Aucun résultat',
     favorite: 'Ajouter aux favoris',
     unfavorite: 'Retirer des favoris',
+    // The headings of the models' menu: the favorites first, then a group by family, « Autres » for those of none.
+    favorites: 'Favoris',
+    others: 'Autres',
   },
 
   // Closing a project.

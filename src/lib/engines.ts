@@ -5,7 +5,7 @@ import { t } from './i18n';
 import { intlLocale } from './i18n/locale.svelte';
 import { api } from './ipc';
 import { app } from './state.svelte';
-import { supportsAuto, toldAuto } from './models';
+import { modelFamily, modelVersion, supportsAuto, toldAuto } from './models';
 import type { EngineCaps, EngineDecl, EngineId, ToldModel } from './types';
 
 /** The flags of `EngineCaps` that say yes or no. */
@@ -250,20 +250,67 @@ export function searchesModels(who: { engine: EngineId | null | undefined; accou
   return told.length > 8 || told.some((m) => !!m.provider);
 }
 
+/** A model of the composer's menu (`modelMenu`): the group it is shown under, and whether it is a favorite. */
+export interface MenuModel {
+  id: string;
+  label: string;
+  provider?: string;
+  favorite: boolean;
+  /** The heading of its group: « Favoris », its family (its provider on OpenCode), else « Autres ». */
+  group: string;
+}
+
+/** The full id Claude Code runs for `model` (`opus` → `claude-opus-5-5`), as the `claude` of an account told it. */
+function resolvedOf(model: string, account: string | undefined): string | undefined {
+  const all = account ? [app.accountModels[account]] : Object.values(app.accountModels);
+  for (const told of all) {
+    const found = told?.models.find((m) => m.value === model);
+    if (found?.resolvedModel) return found.resolvedModel;
+  }
+  return undefined;
+}
+
 /**
- * The models of the composer's menu for `who`, the favorites first (in their order), each with its provider: what
- * `modelsOf` gives, for a harness that lists them from its providers (OpenCode).
+ * The models of the composer's menu for `who` (what `modelsOf` gives, each with its provider), in groups (ESC-127): the
+ * favorites first, in their order, then one group by family, each in a stable order: Claude Code's by family (Fable, Opus,
+ * Sonnet, Haiku, Mythos, then any other its `claude` lists), the newest first in each; OpenCode's by provider, in the
+ * order it lists them; the others' by the vendor of their id (GPT, Claude, Gemini…). What is of no family comes last, in
+ * « Autres ».
  */
-export function modelMenu(who: {
-  engine: EngineId | null | undefined;
-  account?: string;
-}): { id: string; label: string; provider?: string; favorite: boolean }[] {
+export function modelMenu(who: { engine: EngineId | null | undefined; account?: string }): MenuModel[] {
   const favorites = favoritesOf(who.engine);
   const told = toldOf(who);
-  const all = told.length ? told.map((m) => ({ id: m.id, label: m.label, provider: m.provider })) : modelsOf(who);
-  const rank = (id: string) => {
-    const i = favorites.indexOf(id);
-    return i < 0 ? favorites.length : i;
-  };
-  return all.map((m) => ({ ...m, favorite: favorites.includes(m.id) })).sort((a, b) => rank(a.id) - rank(b.id));
+  const all: { id: string; label: string; provider?: string }[] = told.length
+    ? told.map((m) => ({ id: m.id, label: m.label, provider: m.provider }))
+    : modelsOf(who);
+  const claude = (who.engine ?? engineOf(null)?.id) === 'claude';
+  const byProvider = all.some((m) => !!m.provider);
+  const favored = favorites.flatMap((id) => all.filter((m) => m.id === id));
+  const groups: { name: string; rank: number; models: { m: (typeof all)[number]; version?: number }[] }[] = [];
+  for (const m of all) {
+    if (favorites.includes(m.id)) continue;
+    const resolved = claude ? resolvedOf(m.id, who.account) : undefined;
+    const family = byProvider
+      ? m.provider
+        ? { name: m.provider, rank: 0 }
+        : undefined
+      : modelFamily([m.id, resolved ?? '', m.label], claude);
+    const name = family?.name ?? t('nav.dropdown.others');
+    const rank = family ? family.rank : Infinity;
+    let group = groups.find((g) => g.name === name && g.rank === rank);
+    if (!group) groups.push((group = { name, rank, models: [] }));
+    const version = claude ? (modelVersion(resolved ?? m.id) ?? modelVersion(m.label)) : undefined;
+    group.models.push({ m, version });
+  }
+  // The newest first among Claude Code's (an alias without its full id is the newest of its family): the order listed else.
+  const newest = (v?: number) => v ?? Infinity;
+  const byAge = (a: { version?: number }, b: { version?: number }) =>
+    newest(a.version) === newest(b.version) ? 0 : newest(b.version) > newest(a.version) ? 1 : -1;
+  if (claude) for (const g of groups) g.models.sort(byAge);
+  groups.sort((a, b) => a.rank - b.rank);
+  const menu = (m: (typeof all)[number], group: string, favorite: boolean): MenuModel => ({ ...m, favorite, group });
+  return [
+    ...favored.map((m) => menu(m, t('nav.dropdown.favorites'), true)),
+    ...groups.flatMap((g) => g.models.map(({ m }) => menu(m, g.name, false))),
+  ];
 }

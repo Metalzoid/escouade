@@ -165,7 +165,7 @@
           </Row>
           {#if !decl.models.length}
             <!-- A harness that lists the models of its providers (OpenCode): searched, favorites marked. -->
-            <Row label={t('settings.claude.models.label')} desc={t('settings.claude.models.desc', { engine: decl.name })}>
+            <Row label={t('settings.claude.models.label')} desc={t('settings.claude.models.desc', { engine: decl.name })} wide>
               <ModelFavorites engine={decl.id} />
             </Row>
           {/if}

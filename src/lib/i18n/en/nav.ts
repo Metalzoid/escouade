@@ -106,6 +106,8 @@ export default defineZone('nav', {
     none: 'No match',
     favorite: 'Add to favorites',
     unfavorite: 'Remove from favorites',
+    favorites: 'Favorites',
+    others: 'Others',
   },
 
   project: {

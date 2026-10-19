@@ -129,11 +129,15 @@ test.describe('an agent on OpenCode', () => {
     await expect(menu.getByRole('menuitemradio')).toHaveCount(3);
     await menu.getByRole('searchbox', { name: 'Rechercher' }).fill('studio');
     await expect(menu.getByRole('menuitemradio')).toHaveCount(1);
-    await expect(menu.getByRole('menuitemradio', { name: /Devstral Small/ })).toContainText('LM Studio (local)');
-    // Marked as a favorite: first in the menu, kept.
+    // Under the heading of its provider (ESC-127).
+    await expect(menu.getByRole('group', { name: 'LM Studio (local)' }).getByRole('menuitemradio')).toHaveText([/Devstral Small/]);
+    // Marked as a favorite: first in the menu, in « Favoris », with its provider, kept.
     await menu.getByRole('button', { name: /Ajouter aux favoris : Devstral Small/ }).click();
     await menu.getByRole('searchbox', { name: 'Rechercher' }).fill('');
     await expect(menu.getByRole('menuitemradio').first()).toContainText('Devstral Small');
+    await expect(menu.getByRole('group', { name: 'Favoris' }).getByRole('menuitemradio')).toHaveText([
+      /Devstral Small.*LM Studio \(local\)/,
+    ]);
     // gpt-oss has its variants: the effort's menu offers them, and the prompt sends the one chosen.
     await menu.getByRole('menuitemradio', { name: /gpt-oss/ }).click();
     await page.getByRole('button', { name: /^Effort/ }).click();
@@ -147,9 +151,17 @@ test.describe('an agent on OpenCode', () => {
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await dialog.getByRole('tab', { name: 'Harness' }).click();
     const favorites = dialog.getByTestId('model-favorites-opencode');
+    // The list sits under its label, whose description keeps the width of the row: not a letter a line (ESC-127).
+    const desc = dialog.getByText('Ceux des fournisseurs connectés à OpenCode', { exact: false });
+    const box = (await desc.boundingBox())!;
+    expect(box.width).toBeGreaterThan(300);
+    expect(box.height).toBeLessThan(60);
+    if (process.env.ESCOUADE_E2E_SHOT)
+      await favorites.locator('xpath=..').screenshot({ path: process.env.ESCOUADE_E2E_SHOT.replace(/\.png$/, '-reglages.png') });
     await expect(favorites.getByRole('button', { name: /Retirer des favoris : Devstral Small/ })).toBeVisible();
     await favorites.getByRole('searchbox', { name: 'Rechercher un modèle' }).fill('qwen');
-    await expect(favorites.locator('li')).toHaveCount(1);
+    await expect(favorites.locator('li:not(.gtitle)')).toHaveCount(1);
+    await expect(favorites.locator('.gtitle')).toHaveText(['Ollama (local)']);
   });
 });
 

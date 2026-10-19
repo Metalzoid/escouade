@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
@@ -93,5 +93,66 @@ describe('Dropdown with a search and favorites (ESC-44)', () => {
     render(Dropdown, props({ open: true }));
     expect(screen.queryByRole('searchbox')).toBeNull();
     expect(screen.queryByRole('button', { name: /favoris/ })).toBeNull();
+  });
+});
+
+describe('Dropdown in groups, with a drawn star (ESC-127)', () => {
+  const grouped = [
+    { value: 'sonnet', label: 'Sonnet 5.5', favorite: true, group: 'Favoris' },
+    { value: 'opus', label: 'Opus 5.5', favorite: false, group: 'Opus' },
+    { value: 'claude-opus-5', label: 'Opus 5', favorite: false, group: 'Opus' },
+    { value: 'haiku', label: 'Haiku 5.5', favorite: false, group: 'Haiku' },
+  ];
+  const open = (over: Record<string, unknown> = {}) =>
+    render(Dropdown, props({ options: grouped, value: 'opus', open: true, searchable: true, onFavorite: () => {}, ...over }));
+  const inGroup = (name: string) =>
+    within(screen.getByRole('group', { name }))
+      .getAllByRole('menuitemradio')
+      .map((i) => i.querySelector('.ml')?.textContent);
+
+  it('shows each group under its heading, in the order given', () => {
+    setLang('fr');
+    open();
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Favoris', 'Opus', 'Haiku']);
+    expect([...document.querySelectorAll('.gtitle')].map((h) => h.textContent)).toEqual(['Favoris', 'Opus', 'Haiku']);
+    expect(inGroup('Opus')).toEqual(['Opus 5.5', 'Opus 5']);
+  });
+
+  it('searches in the groups, and hides those left empty', async () => {
+    open();
+    await userEvent.type(screen.getByRole('searchbox'), '5.5');
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Favoris', 'Opus', 'Haiku']);
+    expect(inGroup('Opus')).toEqual(['Opus 5.5']);
+    await userEvent.clear(screen.getByRole('searchbox'));
+    await userEvent.type(screen.getByRole('searchbox'), 'haiku');
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['Haiku']);
+  });
+
+  it('draws its star: an outline for a model that is no favorite, filled for a favorite', () => {
+    setLang('fr');
+    open();
+    const path = (name: string) => screen.getByRole('button', { name }).querySelector('svg path');
+    expect(path('Ajouter aux favoris : Opus 5.5')).toHaveAttribute('fill', 'none');
+    expect(path('Retirer des favoris : Sonnet 5.5')).toHaveAttribute('fill', 'currentColor');
+    // No glyph: the drawing alone.
+    expect(screen.getByRole('button', { name: 'Ajouter aux favoris : Opus 5.5' }).textContent).toBe('');
+  });
+
+  it('goes from model to model with the arrows, the headings and the stars skipped, and picks with Enter', async () => {
+    const onPick = vi.fn();
+    open({ onPick });
+    const items = screen.getAllByRole('menuitemradio');
+    screen.getByRole('searchbox').focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(items[0]).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+    expect(items[3]).toHaveFocus();
+    // From the last, back to the first; up from the first, the search field.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(items[0]).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('searchbox')).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    expect(onPick).toHaveBeenLastCalledWith('opus');
   });
 });

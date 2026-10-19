@@ -7,12 +7,15 @@
     disabled?: boolean;
     /** Marked as a favorite (the menu has favorites: `onFavorite`). */
     favorite?: boolean;
+    /** The heading of the group it is shown under (the models' families, ESC-127): the options of a group follow each other. */
+    group?: string;
   }
 </script>
 
 <script lang="ts">
   import { t } from '../lib/i18n';
   import { tip } from '../lib/tip';
+  import Star from './Star.svelte';
 
   // A compact picker whose menu opens upwards (the composer sits at the bottom of the window).
   let {
@@ -59,8 +62,34 @@
   const listed = $derived.by(() => {
     const q = query.trim().toLowerCase();
     if (!searchable || !q) return options;
-    return options.filter((o) => `${o.label} ${o.detail ?? ''} ${o.value}`.toLowerCase().includes(q));
+    return options.filter((o) => `${o.label} ${o.detail ?? ''} ${o.value} ${o.group ?? ''}`.toLowerCase().includes(q));
   });
+  // The options listed, by group (one without a heading when they have none): a group the search leaves empty is not shown.
+  const sections = $derived.by(() => {
+    const out: { name?: string; options: DropdownOption[] }[] = [];
+    for (const o of listed) {
+      const last = out.at(-1);
+      if (last && last.name === o.group) last.options.push(o);
+      else out.push({ name: o.group, options: [o] });
+    }
+    return out;
+  });
+
+  let menuEl = $state<HTMLElement>();
+  // The arrows go from option to option (the headings and the stars skipped), from the search field too; Enter picks the
+  // one reached, as a button does.
+  function onMenuKeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...(menuEl?.querySelectorAll<HTMLButtonElement>('.item:not(:disabled)') ?? [])];
+    if (!items.length) return;
+    e.preventDefault();
+    const active = document.activeElement;
+    const at = items.findIndex((i) => i === active || i.parentElement?.contains(active));
+    const down = e.key === 'ArrowDown';
+    if (at < 0) (down ? items[0] : items.at(-1))?.focus();
+    else if (!down && at === 0 && search) search.focus();
+    else items[(at + (down ? 1 : -1) + items.length) % items.length].focus();
+  }
 
   const shown = $derived(options.find((o) => o.value === value)?.label ?? (value || '—'));
   const label = $derived(t('nav.dropdown.label', { caption, shown }));
@@ -75,6 +104,33 @@
 </script>
 
 <svelte:window onkeydowncapture={onKeydownCapture} />
+
+{#snippet option(o: DropdownOption)}
+  <div class="row">
+    <button
+      class="item"
+      role="menuitemradio"
+      aria-checked={o.value === value}
+      disabled={o.disabled}
+      use:tip={o.title}
+      onclick={() => onPick(o.value)}
+    >
+      <span class="check" aria-hidden="true">{o.value === value ? '✓' : ''}</span>
+      <span class="ml">{o.label}</span>
+      {#if o.detail}<span class="md">{o.detail}</span>{/if}
+    </button>
+    {#if onFavorite}
+      <button
+        class="star"
+        class:on={o.favorite}
+        aria-pressed={!!o.favorite}
+        aria-label={t(o.favorite ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite') + ' : ' + o.label}
+        use:tip={t(o.favorite ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite')}
+        onclick={() => onFavorite(o.value, !o.favorite)}><Star on={o.favorite} /></button
+      >
+    {/if}
+  </div>
+{/snippet}
 
 <div class="dd">
   <button
@@ -94,7 +150,8 @@
   {#if open && !readonly}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="backdrop" onclick={onToggle}></div>
-    <div class="menu" class:long={searchable} role="menu" aria-label={caption}>
+    <!-- svelte-ignore a11y_interactive_supports_focus -->
+    <div class="menu" class:long={searchable} role="menu" aria-label={caption} bind:this={menuEl} onkeydown={onMenuKeydown}>
       {#if searchable}
         <input
           bind:this={search}
@@ -112,31 +169,15 @@
         />
       {/if}
       <div class="items">
-        {#each listed as o (o.value)}
-          <div class="row">
-            <button
-              class="item"
-              role="menuitemradio"
-              aria-checked={o.value === value}
-              disabled={o.disabled}
-              use:tip={o.title}
-              onclick={() => onPick(o.value)}
-            >
-              <span class="check" aria-hidden="true">{o.value === value ? '✓' : ''}</span>
-              <span class="ml">{o.label}</span>
-              {#if o.detail}<span class="md">{o.detail}</span>{/if}
-            </button>
-            {#if onFavorite}
-              <button
-                class="star"
-                class:on={o.favorite}
-                aria-pressed={!!o.favorite}
-                aria-label={t(o.favorite ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite') + ' : ' + o.label}
-                use:tip={t(o.favorite ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite')}
-                onclick={() => onFavorite(o.value, !o.favorite)}>{o.favorite ? '★' : '☆'}</button
-              >
-            {/if}
-          </div>
+        {#each sections as section, i (section.name ?? i)}
+          {#if section.name}
+            <div class="group" role="group" aria-label={section.name}>
+              <div class="gtitle" aria-hidden="true">{section.name}</div>
+              {#each section.options as o (o.value)}{@render option(o)}{/each}
+            </div>
+          {:else}
+            {#each section.options as o (o.value)}{@render option(o)}{/each}
+          {/if}
         {:else}
           <span class="none">{t('nav.dropdown.none')}</span>
         {/each}
@@ -241,17 +282,42 @@
     flex: 1;
     min-width: 0;
   }
+  /* A star without a background or a border: an outline that shows more on its row's hover and on focus, filled in the
+     accent's color for a favorite. */
   .menu .star {
-    display: block;
+    display: flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
     width: 30px;
     padding: 0;
-    color: var(--dim);
-    text-align: center;
-    font-size: 14px;
+    border: none;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: color-mix(in oklch, var(--dim) 70%, transparent);
+    cursor: pointer;
+  }
+  .row:hover .star,
+  .menu .star:focus-visible {
+    color: var(--muted);
+  }
+  .menu .star:hover {
+    color: var(--text);
   }
   .menu .star.on {
     color: var(--accent);
+  }
+  .group + .group {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+  .gtitle {
+    padding: 4px 10px 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dim);
+    user-select: none;
   }
   .none {
     padding: 7px 10px;
@@ -270,7 +336,7 @@
     cursor: pointer;
   }
   .menu .item:hover:not(:disabled),
-  .menu .star:hover {
+  .menu .item:focus-visible {
     background: var(--elev2);
   }
   .menu .item:disabled {

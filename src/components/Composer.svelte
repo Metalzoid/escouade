@@ -97,11 +97,16 @@
   const busy = $derived(agent.status === 'running' || agent.status === 'waiting');
   // The menus are those of the agent's harness: its models, its efforts, its modes.
   const effortOk = $derived(modelTakes(agent, agent.model, 'effort'));
-  // A harness that lists the models of its providers (OpenCode): a search, the favorites first, each with its provider.
+  // A harness that lists many models, or those of its providers (OpenCode): a search, the favorites first, then a group by
+  // family (by provider); a favorite says its provider, out of its group.
   const manyModels = $derived(searchesModels(agent));
   const modelChoices = $derived(
     manyModels
-      ? modelMenu(agent).map((m) => ({ value: m.id, label: m.label, detail: m.provider, favorite: m.favorite }))
+      ? modelMenu(agent).map((m) => {
+          const cost = modelCost(agent, m.id);
+          const detail = (m.favorite ? m.provider : undefined) ?? cost?.label;
+          return { value: m.id, label: m.label, detail, title: cost?.title, favorite: m.favorite, group: m.group };
+        })
       : modelOptions(app.models, modelsOf(agent)).map((o) => {
           // What it costs beside the others, when its harness bills by model (Copilot: `×3`).
           const cost = modelCost(agent, o.value);

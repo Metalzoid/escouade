@@ -148,6 +148,55 @@ function parseModel(id: string): { family: string; major?: number; minor?: numbe
   return { family: m[1], major: m[2] ? Number(m[2]) : undefined, minor: m[3] ? Number(m[3]) : undefined };
 }
 
+/** The families of Claude Code's models, in the order of its menu (ESC-127): any other it lists comes after them. */
+const CLAUDE_FAMILIES = ['fable', 'opus', 'sonnet', 'haiku', 'mythos'];
+
+/** The families of the models of a harness that runs those of several vendors (Codex, Copilot CLI), by their id, in that order. */
+const VENDOR_FAMILIES: [RegExp, string][] = [
+  [/^(gpt|chatgpt|codex|o\d)/, 'GPT'],
+  [/^claude/, 'Claude'],
+  [/^gemini/, 'Gemini'],
+  [/^grok/, 'Grok'],
+  [/^(mistral|codestral|devstral)/, 'Mistral'],
+  [/^llama/, 'Llama'],
+  [/^qwen/, 'Qwen'],
+  [/^deepseek/, 'DeepSeek'],
+];
+
+const capitalized = (s: string) => s[0].toUpperCase() + s.slice(1);
+
+/**
+ * The family of a model, read from its names (its id, its full id, its label), with its rank among those of its menu: of
+ * Claude Code (`claude`), Opus for `opus`, `claude-opus-5-5` or « Opus 5.5 », Mythos for `claude-mythos-1`, and any other
+ * `claude-<family>` after those it knows; else the vendor of its id (GPT for `gpt-6-luna`, Claude for `claude-sonnet-4.5`).
+ * Undefined for a model of no family recognized (« Autres »).
+ */
+export function modelFamily(names: string[], claude: boolean): { name: string; rank: number } | undefined {
+  const all = names.filter(Boolean).map((n) => n.toLowerCase());
+  if (claude) {
+    for (const n of all) {
+      const at = CLAUDE_FAMILIES.findIndex((f) => new RegExp(`(^|[^a-z])${f}($|[^a-z])`).test(n));
+      if (at >= 0) return { name: capitalized(CLAUDE_FAMILIES[at]), rank: at };
+    }
+    for (const n of all) {
+      const other = n.match(/^claude-([a-z]+)(?:$|[^a-z])/);
+      if (other) return { name: capitalized(other[1]), rank: CLAUDE_FAMILIES.length };
+    }
+    return undefined;
+  }
+  for (const n of all) {
+    const at = VENDOR_FAMILIES.findIndex(([re]) => re.test(n.replace(/^.*\//, '')));
+    if (at >= 0) return { name: VENDOR_FAMILIES[at][1], rank: at };
+  }
+  return undefined;
+}
+
+/** The version a model's name holds (`claude-opus-5-5`, « Opus 5.5 »: 5.5; `claude-3-5-haiku`: 3.5), without its date; none for an alias. */
+export function modelVersion(name: string): number | undefined {
+  const m = name.replace(/\d{8}/g, '').match(/(\d{1,2})(?!\d)(?:[-_.](\d{1,2})(?!\d))?/);
+  return m ? Number(m[1]) + Number(m[2] ?? 0) / 100 : undefined;
+}
+
 /** "claude-opus-5-5" → "Opus 5.5", "claude-haiku-4-5-20251001" → "Haiku 4.5". */
 export function displayModel(id: string): string {
   const p = parseModel(id);

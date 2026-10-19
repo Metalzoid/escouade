@@ -1,21 +1,28 @@
 <script lang="ts">
   import { t } from '../../lib/i18n';
-  import { favoritesOf, setFavorite } from '../../lib/engines';
+  import { modelMenu, setFavorite, type MenuModel } from '../../lib/engines';
   import { app } from '../../lib/state.svelte';
   import type { EngineId } from '../../lib/types';
+  import Star from '../Star.svelte';
 
-  // The models a harness listed for its providers (OpenCode), searched, each marked as a favorite or not: the favorites
-  // come first in the composer's menu. Kept at once, as the accounts are (not part of the settings' draft).
+  // The models a harness listed for its providers (OpenCode), searched, each marked as a favorite or not, grouped as in the
+  // composer's menu (the favorites first, then by provider). Kept at once, as the accounts are (not part of the settings'
+  // draft).
   let { engine }: { engine: EngineId } = $props();
 
   let query = $state('');
-  const favorites = $derived(favoritesOf(engine));
   const models = $derived(app.engineModels[engine] ?? []);
-  const listed = $derived.by(() => {
+  // The models searched, by group: a group the search leaves empty is not shown.
+  const sections = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    const all = q ? models.filter((m) => `${m.label} ${m.provider ?? ''} ${m.id}`.toLowerCase().includes(q)) : models;
-    const rank = (id: string) => (favorites.includes(id) ? favorites.indexOf(id) : favorites.length);
-    return [...all].sort((a, b) => rank(a.id) - rank(b.id));
+    const out: { name: string; models: MenuModel[] }[] = [];
+    for (const m of modelMenu({ engine })) {
+      if (q && !`${m.label} ${m.provider ?? ''} ${m.id} ${m.group}`.toLowerCase().includes(q)) continue;
+      const last = out.at(-1);
+      if (last?.name === m.group) last.models.push(m);
+      else out.push({ name: m.group, models: [m] });
+    }
+    return out;
   });
 </script>
 
@@ -31,20 +38,22 @@
     <p class="empty">{t('settings.claude.models.none')}</p>
   {:else}
     <ul aria-label={t('settings.claude.models.label')}>
-      {#each listed as m (m.id)}
-        {@const on = favorites.includes(m.id)}
-        <li>
-          <button
-            class="star"
-            class:on
-            aria-pressed={on}
-            aria-label={t(on ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite') + ' : ' + m.label}
-            onclick={() => setFavorite(engine, m.id, !on)}>{on ? '★' : '☆'}</button
-          >
-          <span class="name">{m.label}</span>
-          {#if m.provider}<span class="provider">{m.provider}</span>{/if}
-          <span class="id mono">{m.id}</span>
-        </li>
+      {#each sections as section (section.name)}
+        <li class="gtitle" aria-hidden="true">{section.name}</li>
+        {#each section.models as m (m.id)}
+          <li>
+            <button
+              class="star"
+              class:on={m.favorite}
+              aria-pressed={m.favorite}
+              aria-label={t(m.favorite ? 'nav.dropdown.unfavorite' : 'nav.dropdown.favorite') + ' : ' + m.label}
+              onclick={() => setFavorite(engine, m.id, !m.favorite)}><Star on={m.favorite} /></button
+            >
+            <span class="name">{m.label}</span>
+            {#if m.provider && m.favorite}<span class="provider">{m.provider}</span>{/if}
+            <span class="id mono">{m.id}</span>
+          </li>
+        {/each}
       {:else}
         <li class="empty">{t('nav.dropdown.none')}</li>
       {/each}
@@ -81,16 +90,32 @@
   li + li {
     border-top: 1px solid var(--line);
   }
+  /* The star of the composer's menu: an outline without a background, filled in the accent's color for a favorite. */
   .star {
+    display: flex;
+    align-items: center;
     border: none;
+    border-radius: var(--r-sm);
     background: transparent;
-    color: var(--dim);
-    font-size: 14px;
+    color: color-mix(in oklch, var(--dim) 70%, transparent);
     cursor: pointer;
-    padding: 0 2px;
+    padding: 2px;
+  }
+  li:hover .star,
+  .star:focus-visible {
+    color: var(--muted);
+  }
+  .star:hover {
+    color: var(--text);
   }
   .star.on {
     color: var(--accent);
+  }
+  .gtitle {
+    padding-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dim);
   }
   .name {
     font-weight: 600;

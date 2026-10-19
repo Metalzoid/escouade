@@ -8,6 +8,11 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 - Réglages › À propos ouvre le site d’Escouade (« Site web », dans la langue de l’interface) et son serveur Discord (« Discord » › « Rejoindre »), pour poser une question, signaler un problème ou suivre ce qui arrive.
 
+### Corrections
+
+- Menu des modèles d'un agent : quand il est long (Claude Code avec la liste de son compte, OpenCode), il montre les favoris d'abord, sous « Favoris », puis un groupe par famille, chacun sous son intitulé : Fable, Opus, Sonnet, Haiku, Mythos (et toute autre famille que le compte annonce) pour Claude Code, du plus récent au plus ancien, le fournisseur pour OpenCode, l'éditeur (GPT, Claude, Gemini…) pour Codex et Copilot CLI ; un modèle sans famille reconnue va dans « Autres ». La recherche filtre dans les groupes et cache ceux qui restent vides ; les flèches passent d'un modèle à l'autre et Entrée choisit. L'étoile des favoris est dessinée, sans le carré gris d'avant : un contour discret pour un modèle hors favoris, plein en couleur d'accent pour un favori. Les favoris des modèles d'OpenCode, dans les réglages, ont le même rendu.
+- Réglages › Harness › OpenCode : la description de la ligne « Modèles » ne s'affiche plus une lettre par ligne ; la liste des modèles passe sous son libellé.
+
 ## [1.8.0] — 2026-10-19
 
 ### Ajouts

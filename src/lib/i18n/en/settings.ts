@@ -89,7 +89,7 @@ export default defineZone('settings', {
     state: 'State',
     models: {
       label: 'Models',
-      desc: 'Those of the providers connected to {engine}. Favorites (★) come first in the composer’s menu.',
+      desc: 'Those of the providers connected to {engine}. Favorites (★) come first in the composer’s menu, then the others by provider.',
       search: 'Search a model',
       none: 'No model read yet: they are with the first agent of this harness.',
     },

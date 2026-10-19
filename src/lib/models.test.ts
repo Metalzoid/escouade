@@ -2,7 +2,19 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from './state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE } from '../test/ipc';
 import { setLang } from './i18n';
-import { displayModel, EFFORTS, modelLabel, MODES, modelOptions, modeTitle, supportsAuto, supportsEffort, toldAuto } from './models';
+import {
+  displayModel,
+  EFFORTS,
+  modelFamily,
+  modelLabel,
+  MODES,
+  modelOptions,
+  modelVersion,
+  modeTitle,
+  supportsAuto,
+  supportsEffort,
+  toldAuto,
+} from './models';
 
 beforeEach(() => {
   app.engines = [CLAUDE_ENGINE];
@@ -134,5 +146,35 @@ describe('EFFORTS and MODES', () => {
 
   it('keep their values, which are the CLI’s', () => {
     expect(MODES.map((m) => m.value)).toEqual(['auto', 'default', 'plan', 'acceptEdits', 'bypassPermissions']);
+  });
+});
+
+describe('the family and the version of a model (ESC-127)', () => {
+  it('reads the family of Claude Code’s from its id, its full id or its label', () => {
+    expect(modelFamily(['opus'], true)).toEqual({ name: 'Opus', rank: 1 });
+    expect(modelFamily(['claude-haiku-4-5-20251001'], true)).toEqual({ name: 'Haiku', rank: 3 });
+    expect(modelFamily(['claude-3-5-haiku'], true)?.name).toBe('Haiku');
+    expect(modelFamily(['mythos', 'claude-mythos-1'], true)).toEqual({ name: 'Mythos', rank: 4 });
+    expect(modelFamily(['x', '', 'Fable 5.1'], true)?.name).toBe('Fable');
+    // One it does not know, after those it knows.
+    expect(modelFamily(['claude-nova-2'], true)).toEqual({ name: 'Nova', rank: 5 });
+    expect(modelFamily(['labs-preview', 'Aperçu'], true)).toBeUndefined();
+  });
+
+  it('reads the vendor of another harness’s from its id', () => {
+    expect(modelFamily(['gpt-6-luna'], false)?.name).toBe('GPT');
+    expect(modelFamily(['o4-mini'], false)?.name).toBe('GPT');
+    expect(modelFamily(['claude-sonnet-4.5'], false)?.name).toBe('Claude');
+    expect(modelFamily(['google/gemini-3-pro'], false)?.name).toBe('Gemini');
+    expect(modelFamily(['auto'], false)).toBeUndefined();
+  });
+
+  it('reads its version without its date, none for an alias', () => {
+    expect(modelVersion('claude-opus-5-5')).toBe(5.05);
+    expect(modelVersion('Opus 5.5')).toBe(5.05);
+    expect(modelVersion('claude-haiku-4-5-20251001')).toBe(4.05);
+    expect(modelVersion('claude-opus-5')).toBe(5);
+    expect(modelVersion('claude-3-5-haiku')).toBe(3.05);
+    expect(modelVersion('opus')).toBeUndefined();
   });
 });

@@ -423,3 +423,128 @@ describe('the models of the providers of a harness (ESC-44)', () => {
     expect(favoritesOf('opencode')).toEqual(['ollama/gpt-oss']);
   });
 });
+
+describe('the menu of the models in groups (ESC-127)', () => {
+  const told = (id: string, label: string, provider?: string) => ({
+    id,
+    label,
+    efforts: [],
+    defaultEffort: null,
+    images: true,
+    default: false,
+    ...(provider ? { provider } : {}),
+  });
+  const shown = (who: Parameters<typeof modelMenu>[0]) => modelMenu(who).map((m) => `${m.group}: ${m.label}`);
+
+  beforeEach(() => {
+    resetApp();
+    setLang('fr');
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+  });
+
+  it('groups Claude Code’s by family, in their order, the newest first in each, those of none in « Autres »', () => {
+    const resolved = (value: string, resolvedModel: string) => ({ value, resolvedModel });
+    app.accountModels = {
+      principal: {
+        version: '2.1.302',
+        models: [resolved('opus', 'claude-opus-5-5'), resolved('haiku', 'claude-haiku-5-5'), resolved('mythos', 'claude-mythos-1')],
+        catalog: [
+          told('claude-haiku-4-5-20251001', 'Haiku 4.5'),
+          told('opus', 'Opus 5.5'),
+          told('claude-sonnet-4-6', 'Sonnet 4.6'),
+          told('mythos', 'Mythos'),
+          told('claude-opus-5', 'Opus 5'),
+          told('labs-preview', 'Aperçu du labo'),
+          told('haiku', 'Haiku 5.5'),
+          told('claude-nova-2', 'Nova 2'),
+          told('fable', 'Fable 5.1'),
+          told('sonnet', 'Sonnet 5.5'),
+        ],
+      },
+    };
+    const who = { engine: 'claude' as const, account: 'principal' };
+    expect(searchesModels(who)).toBe(true);
+    expect(shown(who)).toEqual([
+      'Fable: Fable 5.1',
+      'Opus: Opus 5.5',
+      'Opus: Opus 5',
+      'Sonnet: Sonnet 5.5',
+      'Sonnet: Sonnet 4.6',
+      'Haiku: Haiku 5.5',
+      'Haiku: Haiku 4.5',
+      'Mythos: Mythos',
+      // A family the claude lists that Escouade does not know: after the others.
+      'Nova: Nova 2',
+      'Autres: Aperçu du labo',
+    ]);
+    // The favorites first, in their order, out of their family.
+    app.settings = { ...app.settings, favoriteModels: { claude: ['claude-sonnet-4-6', 'fable'] } };
+    expect(shown(who).slice(0, 4)).toEqual(['Favoris: Sonnet 4.6', 'Favoris: Fable 5.1', 'Opus: Opus 5.5', 'Opus: Opus 5']);
+    expect(
+      modelMenu(who)
+        .filter((m) => m.favorite)
+        .map((m) => m.id),
+    ).toEqual(['claude-sonnet-4-6', 'fable']);
+    // In English.
+    setLang('en');
+    expect(shown(who)[0]).toBe('Favorites: Sonnet 4.6');
+    expect(shown(who).at(-1)).toBe('Others: Aperçu du labo');
+  });
+
+  it('keeps the order listed of the models of a family that have no version', () => {
+    app.accountModels = {
+      principal: {
+        version: '2.1.302',
+        models: [],
+        catalog: [
+          told('opus-plan', 'Opus Plan'),
+          told('opus', 'Opus'),
+          told('claude-opus-4-1', 'Opus 4.1'),
+          told('opus-fast', 'Opus rapide'),
+        ],
+      },
+    };
+    expect(shown({ engine: 'claude', account: 'principal' })).toEqual([
+      'Opus: Opus Plan',
+      'Opus: Opus',
+      'Opus: Opus rapide',
+      'Opus: Opus 4.1',
+    ]);
+  });
+
+  it('groups OpenCode’s by provider, in the order it lists them, those of none last', () => {
+    app.engineModels = {
+      opencode: [
+        told('ollama/qwen', 'Qwen', 'Ollama (local)'),
+        told('lmstudio/devstral', 'Devstral', 'LM Studio'),
+        told('zen/free', 'Free'),
+        told('ollama/gpt-oss', 'gpt-oss', 'Ollama (local)'),
+      ],
+    };
+    expect(shown({ engine: 'opencode' })).toEqual([
+      'Ollama (local): Qwen',
+      'Ollama (local): gpt-oss',
+      'LM Studio: Devstral',
+      'Autres: Free',
+    ]);
+  });
+
+  it('groups those of Codex or Copilot CLI by the vendor of their id', () => {
+    app.engineModels = {
+      copilot: [
+        told('claude-sonnet-4.5', 'Claude Sonnet 4.5'),
+        told('gpt-5', 'GPT-5'),
+        told('auto', 'Auto'),
+        told('gemini-2.5-pro', 'Gemini 2.5 Pro'),
+        told('o3', 'o3'),
+      ],
+    };
+    expect(shown({ engine: 'copilot' })).toEqual([
+      'GPT: GPT-5',
+      'GPT: o3',
+      'Claude: Claude Sonnet 4.5',
+      'Gemini: Gemini 2.5 Pro',
+      'Autres: Auto',
+    ]);
+  });
+});
