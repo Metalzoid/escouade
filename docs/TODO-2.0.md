@@ -74,6 +74,8 @@ Les couleurs de projet échouent au contrôle : ce sont celles du produit, donc 
 - Icônes SVG tracées en 1,5px sur une grille de 16, une seule famille. Elles remplacent les caractères Unicode qui servent d'icônes : 92 dans les gabarits (× ✓ ↑ ↓ ▾ ▶ ▸ ■ ⌕ ⟳ ⚙…), plus ceux des textes (« ▶ Tester », « ✦ Remplir automatiquement ») et des onglets de réglages (`SETTINGS_TABS`) ; les tracés sont dans l'aperçu (`<symbol id="i-…">`).
 - Mouvement : courbe `cubic-bezier(0.16, 1, 0.3, 1)`. Trois moments seulement : le teint qui glisse, l'anneau de l'agent qui attend, le reflet de « Claude travaille… ». Tout s'arrête avec `prefers-reduced-motion`.
 
+**Mode clair** (demandé par l'utilisateur le 2026-10-19). Le design ci-dessus est le thème sombre ; l'app aura aussi un thème clair, choisi dans Réglages › Application › Affichage › « Thème » (Système, Clair, Sombre), appliqué à chaud, la fenêtre native suivant (`color-scheme`, barre de titre). Comme pour le sombre, il se décide sur l'aperçu avant d'être codé (ESC-129) : jetons du clair à côté de ceux du sombre (surfaces claires teintées par `--p`, filets et survol en noir translucide, textes foncés, états réajustés, bouton principal inversé), contraste AA vérifié pour chaque texte, chaque surface et chaque couleur de projet, versions claires du terminal (xterm), de l'éditeur (CodeMirror) et des graphiques. Thème par défaut proposé : Système, à confirmer par l'utilisateur sur l'aperçu. La table des jetons clairs viendra ici avec ESC-129.
+
 ## Écran par écran
 
 - **Coque.**
@@ -164,7 +166,8 @@ Organisation prévue :
 - la revue de fin d'Impeccable, puis son documenteur.
 
 Lots, dans l'ordre :
-1. **Fondations** : Inter (`@fontsource-variable/inter`), jetons de `src/app.css`, teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
+0. **Mode clair dans l'aperçu** (ESC-129) : le thème clair de chaque écran de `design/app-redesign/`, un sélecteur « Thème », les captures `-light` ; validé par l'utilisateur avant le lot 1.
+1. **Fondations** : Inter (`@fontsource-variable/inter`), jetons de `src/app.css` dans les deux thèmes et le réglage « Thème », teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
    - Nouveau : `EngineMark`, la marque du harness, partout.
 2. **Coque** : `App.svelte`, `TitleBar`, `StatusBar`, `QuotaMeter`, `AccountsPanel`, `Toasts`, `Welcome`.
    - Lot 0 : jauges par harness (`StatusBar`), panneau des comptes groupé par harness (`AccountsPanel`), coût estimé, mise à jour prête dans la barre d'état, `Welcome` sans harness.
@@ -178,10 +181,10 @@ Lots, dans l'ordre :
    - Lot 0 : marque et trombone sur `TicketCard` ; champ « Harness » et pièces jointes en une rangée dans `TicketForm`.
 7. **Git** : `SidePanel`, `FilesPanel`, `FileDiff`, `DiffView`, `DiffModal`, `GitGraph`, `branches/*`, `CommitModal`.
    - Lot 0 : garder la place de l'onglet « PR et CI » (ESC-53 à 70, après la 2.0), sans le coder.
-8. **Terminaux et lancements** : `TerminalView`, `RunView`, `AgentTerminal` (thème xterm), `TestLaunchModal`.
+8. **Terminaux et lancements** : `TerminalView`, `RunView`, `AgentTerminal` (thèmes xterm clair et sombre), `TestLaunchModal`.
    - Lot 0 : la bande de confiance du dossier de Codex dans `AgentTerminal`.
-9. **Éditeur et recherches** : `editor/*`, thème de CodeMirror (`src/lib/editor/theme.ts`), `QuickOpen`, `ConvSearch`.
-10. **Vue d'ensemble et stats** : `Overview`, `Stats`, avec la marque du harness et les coûts estimés.
+9. **Éditeur et recherches** : `editor/*`, thèmes clair et sombre de CodeMirror (`src/lib/editor/theme.ts`), `QuickOpen`, `ConvSearch`.
+10. **Vue d'ensemble et stats** : `Overview`, `Stats`, avec la marque du harness et les coûts estimés, graphiques lisibles dans les deux thèmes.
 11. **Fenêtres et réglages** : `Modal`, `ConfirmModal`, `UpdateModal`, `NewProjectModal`, `AccountModal`, `SettingsModal`, `settings/*`, `ContextMenu`, `Dropdown`, `Splitter`.
     - Nouveaux : `modals/TelemetryModal`, `wizard/*` (`AccountStep`, `Checks`, `CopiedStep`, `IntegrationsStep`, `KanbanStep`, `LaunchStep`, `SummaryStep`, `WorktreesStep`), `settings/ClosedProjects`, `settings/VoiceTab`, `settings/SpeechSettings`.
     - Lot 0 : Réglages › Harness en un groupe par harness ; « Quand un quota est épuisé » dans Comptes ; un onglet « Serveur MCP » (`McpSection`) ; Voix ; Projets (harness par défaut, assistant, projets fermés) ; À propos (statistiques, échec de mise à jour).
@@ -192,7 +195,7 @@ Lots, dans l'ordre :
 - Détecteur sur les fichiers changés. Revue de fin (`impeccable-finish-reviewer`) avec les captures de l'app réelle et celles de l'aperçu.
 - Puis le documenteur, qui écrit le `DESIGN.md` de l'app et `.impeccable/design.json`.
 - Qualité comme d'habitude : TDD pour les deux nouveautés, Vitest, `svelte-check`, build, e2e sur l'app réelle (`npx tauri build --debug --no-bundle`).
-- Les captures de l'app réelle passent par le banc e2e (CDP), à 1440×900 et 1028×779.
+- Les captures de l'app réelle passent par le banc e2e (CDP), à 1440×900 et 1028×779, dans les deux thèmes à chaque lot.
 
 ## À décider ou à vérifier pendant le chantier
 
