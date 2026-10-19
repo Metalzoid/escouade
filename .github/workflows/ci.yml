@@ -16,7 +16,8 @@ jobs:
   test:
     name: Lint, tests and end-to-end
     runs-on: windows-latest
-    timeout-minutes: 45
+    # Its steps took 40 min at 1.8.3 (Rust tests ~14, end-to-end ~18): 45 left no room for a slow runner.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
