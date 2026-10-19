@@ -285,6 +285,9 @@ async fn on_a_free_account_copilots_view_opens_on_auto_without_a_word_about_its_
     let (p, repo) = h.project(false).await;
     let home = copilot_account(&h, &repo, true);
     std::fs::write(home.join("fake.json"), r#"{"free": true}"#).unwrap();
+    // Born in the view (« Vue terminal »): created in Escouade's, its server would open a session first, which the
+    // interface then resumes instead of naming its own (the race of ESC-125, seen here on Linux).
+    h.core.settings.write().terminal_view = true;
     // With an effort, which `auto` does not take.
     let id = h
         .core
@@ -302,7 +305,8 @@ async fn on_a_free_account_copilots_view_opens_on_auto_without_a_word_about_its_
         .unwrap()
         .meta
         .id;
-    h.core.set_agent_view(&id, true).await.unwrap();
+    assert!(h.agent(&id).terminal);
+    assert!(!h.alive(&id), "no server for an agent born in the view");
     assert_eq!(h.agent(&id).model, "gpt-6-luna");
     let refused = "from --model flag is not available";
 
