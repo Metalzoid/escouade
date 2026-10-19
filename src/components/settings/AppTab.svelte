@@ -10,6 +10,7 @@
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { CREDITS_URL } from '../../lib/conversation';
+  import { DISCORD_URL, siteUrl } from '../../lib/links';
   import type { ClaudeLocated, EngineDecl, EngineId, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
@@ -393,6 +394,20 @@
     <Row label={t('settings.about.credits')} desc={t('settings.about.creditsDesc')}>
       <button class="btn ghost" onclick={() => openUrl(CREDITS_URL).catch((e) => app.toast(String(e), 'error'))}
         >{t('settings.about.creditsOpen')}</button
+      >
+    </Row>
+    <Row label={t('settings.about.site')} desc={t('settings.about.siteDesc')}>
+      <button
+        class="btn ghost"
+        aria-label={t('settings.about.siteOpenLabel')}
+        onclick={() => openUrl(siteUrl()).catch((e) => app.toast(String(e), 'error'))}>{t('settings.about.siteOpen')}</button
+      >
+    </Row>
+    <Row label={t('settings.about.discord')} desc={t('settings.about.discordDesc')}>
+      <button
+        class="btn ghost"
+        aria-label={t('settings.about.discordJoinLabel')}
+        onclick={() => openUrl(DISCORD_URL).catch((e) => app.toast(String(e), 'error'))}>{t('settings.about.discordJoin')}</button
       >
     </Row>
   </Group>

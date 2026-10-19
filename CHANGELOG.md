@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Ajouts
+
+- Réglages › À propos ouvre le site d’Escouade (« Site web », dans la langue de l’interface) et son serveur Discord (« Discord » › « Rejoindre »), pour poser une question, signaler un problème ou suivre ce qui arrive.
+
 ## [1.8.0] — 2026-10-19
 
 ### Ajouts

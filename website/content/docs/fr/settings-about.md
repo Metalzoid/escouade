@@ -8,16 +8,19 @@ Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « À propo
 
 ## Escouade
 
-L’onglet n’a qu’un groupe, « Escouade », avec quatre lignes.
+L’onglet n’a qu’un groupe, « Escouade », avec sept lignes.
 
 | Ligne | Ce qu’elle montre ou fait | Par défaut |
 |---|---|---|
-| « Escouade » suivi de la version | La version installée. Dessous, « Claude Code détecté » ou « Claude Code introuvable », selon qu’Escouade trouve `claude`. À droite, le bouton « Rechercher une mise à jour ». | — |
+| « Escouade » suivi de la version | La version installée. Dessous, les harness qu’Escouade trouve sur ta machine (« Harness détectés : Claude Code, Codex »), ou « Aucun harness trouvé ». À droite, le bouton « Rechercher une mise à jour ». | — |
 | « Installer les mises à jour automatiquement » | « Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. » | Activé |
 | « Statistiques d’usage » | « Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code. » À droite, le bouton « En détail » (il ouvre la page [Confidentialité](/privacy/)) et un interrupteur. | Désactivé tant que tu n’as pas accepté la question du premier démarrage |
 | « Données locales » | Le dossier où Escouade garde ses données : `~/.escouade/`. | — |
+| « Crédits et licences » | Les composants et les voix qu’Escouade embarque, avec leur licence. Le bouton « Ouvrir » affiche la liste dans ton navigateur. | — |
+| « Site web » | « escouade.dev : la documentation, les nouveautés et la feuille de route ». Le bouton « Ouvrir » ouvre le site dans ton navigateur, dans la langue de l’interface. | — |
+| « Discord » | « Poser une question, signaler un problème, suivre ce qui arrive ». Le bouton « Rejoindre » ouvre l’invitation au serveur Discord d’Escouade. | — |
 
-Si Claude Code est introuvable, indique son chemin dans l’onglet [« Harness »](settings-claude-code).
+Si un harness installé n’est pas trouvé, indique son chemin dans l’onglet [« Harness »](settings-claude-code).
 
 ## Rechercher une mise à jour
 

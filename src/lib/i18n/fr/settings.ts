@@ -256,6 +256,14 @@ export default {
     telemetryDesc:
       'Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code.',
     telemetryMore: 'En détail',
+    site: 'Site web',
+    siteDesc: 'escouade.dev : la documentation, les nouveautés et la feuille de route',
+    siteOpen: 'Ouvrir',
+    siteOpenLabel: 'Ouvrir le site',
+    discord: 'Discord',
+    discordDesc: 'Poser une question, signaler un problème, suivre ce qui arrive',
+    discordJoin: 'Rejoindre',
+    discordJoinLabel: 'Rejoindre le Discord',
   },
 
   // The « Projets » tab: one project's own settings.

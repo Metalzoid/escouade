@@ -8,16 +8,19 @@ Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About” (“V
 
 ## Escouade
 
-The tab has a single group, “Escouade”, with four lines.
+The tab has a single group, “Escouade”, with seven lines.
 
 | Line | What it shows or does | Default |
 |---|---|---|
-| “Escouade” followed by the version | The installed version. Below it, “Claude Code detected” or “Claude Code not found”, depending on whether Escouade finds `claude`. On the right, the “Check for updates” button. | — |
+| “Escouade” followed by the version | The installed version. Below it, the harnesses Escouade finds on your machine (“Harnesses detected: Claude Code, Codex”), or “No harness found”. On the right, the “Check for updates” button. | — |
 | “Install updates automatically” | “Escouade restarts itself when no agent is working and everything is saved.” | On |
 | “Usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
 | “Local data” | The folder where Escouade keeps its data: `~/.escouade/`. | — |
+| “Credits and licenses” | The components and voices Escouade ships, with their licenses. The “Open” button shows the list in your browser. | — |
+| “Website” | “escouade.dev: the documentation, what’s new and the roadmap”. The “Open” button opens the site in your browser, in the language of the interface. | — |
+| “Discord” | “Ask a question, report a problem, follow what’s coming”. The “Join” button opens the invitation to Escouade’s Discord server. | — |
 
-If Claude Code isn’t found, give its path in the [“Harness”](settings-claude-code) tab.
+If an installed harness isn’t found, give its path in the [“Harness”](settings-claude-code) tab.
 
 ## Check for updates
 

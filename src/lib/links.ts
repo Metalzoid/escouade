@@ -2,6 +2,13 @@
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type { ILinkHandler } from '@xterm/xterm';
+import { locale } from './i18n';
+
+/** The website, in the language of the interface (Réglages › À propos). */
+export const siteUrl = () => (locale.ui === 'en' ? 'https://escouade.dev/en/' : 'https://escouade.dev/');
+
+/** The Discord server of Escouade's community (Réglages › À propos; also on the site and in the README). */
+export const DISCORD_URL = 'https://discord.gg/m3KYtN8gxP';
 
 /** What the system opens for the app: a page of the web, or a mail address. Any other address is not trusted to it. */
 const OUTSIDE = /^(https?:|mailto:)/i;

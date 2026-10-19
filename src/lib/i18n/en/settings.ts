@@ -226,6 +226,14 @@ export default defineZone('settings', {
     telemetryDesc:
       'The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.',
     telemetryMore: 'In detail',
+    site: 'Website',
+    siteDesc: 'escouade.dev: the documentation, what’s new and the roadmap',
+    siteOpen: 'Open',
+    siteOpenLabel: 'Open the website',
+    discord: 'Discord',
+    discordDesc: 'Ask a question, report a problem, follow what’s coming',
+    discordJoin: 'Join',
+    discordJoinLabel: 'Join the Discord server',
   },
 
   project: {

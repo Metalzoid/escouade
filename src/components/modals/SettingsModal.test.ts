@@ -1077,6 +1077,24 @@ describe('SettingsModal', () => {
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ telemetry: false });
   });
 
+  it('opens the website, in the language of the interface, and the Discord server', async () => {
+    const backend = fakeBackend({ 'plugin:opener|open_url': () => null });
+    render(SettingsModal, { tab: 'about' });
+    expect(screen.getByText('Site web')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le site' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Rejoindre le Discord' }));
+    expect(backend.called('plugin:opener|open_url').map((c) => c.args.url)).toEqual([
+      'https://escouade.dev/',
+      'https://discord.gg/m3KYtN8gxP',
+    ]);
+    cleanup();
+    setLang('en');
+    render(SettingsModal, { tab: 'about' });
+    await userEvent.click(screen.getByRole('button', { name: 'Open the website' }));
+    expect(backend.called('plugin:opener|open_url').at(-1)?.args.url).toBe('https://escouade.dev/en/');
+    setLang('fr');
+  });
+
   it('keeps the focus inside, from the tab it opens on', async () => {
     fakeBackend();
     const outside = document.createElement('button');
