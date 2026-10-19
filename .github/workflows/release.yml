@@ -171,25 +171,15 @@ jobs:
         shell: bash
         run: scripts/onnxruntime.sh ${{ runner.os == 'macOS' && 'macos' || 'linux' }}
 
-      # The same notes go into latest.json, which the in-app updater reads.
-      - name: Release notes
-        id: notes
-        shell: bash
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          {
-            echo 'body<<ESCOUADE_NOTES_END'
-            node scripts/changelog.mjs "$TAG"
-            echo 'ESCOUADE_NOTES_END'
-          } >> "$GITHUB_OUTPUT"
-
       # Uploads to the draft the create job made, by its id: tauri-action looks a release up by
       # tag (getReleaseByTag), which does not see a draft, and would make a second release. With
       # releaseId it creates and edits nothing, it only uploads the installers, their signatures
       # and latest.json. A job started again replaces its files of the same name: harmless.
       # tagName is still needed, it rewrites the `…/download/untagged-…/` links a draft gives in
-      # latest.json to `…/download/<tag>/`; releaseBody is the notes of latest.json.
+      # latest.json to `…/download/<tag>/`. No releaseBody: tauri-action hands its inputs to the
+      # build as variables, and Windows starts no process (MSBuild's nodes, whisper.cpp) with one
+      # of more than 32,767 characters, which the notes of 1.8.0 are; the publish job writes them
+      # into latest.json.
       - name: Build, sign and upload to the draft
         uses: tauri-apps/tauri-action@v0
         env:
@@ -199,7 +189,6 @@ jobs:
         with:
           releaseId: ${{ needs.create.outputs.release-id }}
           tagName: ${{ github.ref_name }}
-          releaseBody: ${{ steps.notes.outputs.body }}
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
@@ -217,19 +206,45 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check latest.json and the files it names
+      # The notes of latest.json, which the in-app updater shows, are the version's section of
+      # CHANGELOG.md, as the release's: written here, once the three builds are in (see the build
+      # step for why they don't). Then latest.json and the files it names are checked.
+      - name: Notes of latest.json, then check it and the files it names
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ needs.create.outputs.release-id }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/assets.json"
-          asset=$(jq -r 'map(select(.name == "latest.json")) | first | .id // empty' "$RUNNER_TEMP/assets.json")
+          latest_id() {
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/assets.json"
+            jq -r 'map(select(.name == "latest.json")) | first | .id // empty' "$RUNNER_TEMP/assets.json"
+          }
+          asset=$(latest_id)
           if [ -z "$asset" ]; then
             echo "::error::The draft of $TAG has no latest.json"
             exit 1
           fi
           gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > "$RUNNER_TEMP/latest.json"
+          node scripts/changelog.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
+          node -e '
+            const fs = require("fs");
+            const [file, notes] = process.argv.slice(1);
+            const latest = JSON.parse(fs.readFileSync(file, "utf8"));
+            latest.notes = fs.readFileSync(notes, "utf8").trimEnd();
+            fs.writeFileSync(file, JSON.stringify(latest, null, 2));
+          ' "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/notes.md"
+          jq -e '.notes | length > 0' "$RUNNER_TEMP/latest.json" > /dev/null
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset"
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/latest.json" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" > /dev/null
+          asset=$(latest_id)
+          if [ -z "$asset" ]; then
+            echo "::error::latest.json of $TAG could not be uploaded again with its notes"
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$asset" > "$RUNNER_TEMP/latest.json"
+          jq -e '.notes | length > 0' "$RUNNER_TEMP/latest.json" > /dev/null
           node scripts/release-check.mjs "$RUNNER_TEMP/latest.json" "$RUNNER_TEMP/assets.json" "$TAG"
 
       # By id, as the draft is not found by tag. A pre-release cannot be the latest release. If
