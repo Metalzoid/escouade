@@ -13,6 +13,8 @@ pub mod audio;
 pub mod conversation;
 pub mod models;
 pub mod online;
+pub mod online_catalog;
+pub mod online_speech;
 pub mod source;
 pub mod speech;
 pub mod spoken;
@@ -166,7 +168,13 @@ pub enum VoiceEvent {
         session: u64,
         reading: u64,
         error: Option<String>,
+        /// The voice on line failed and no voice of Piper's stands in: the conversation is on pause (ESC-132).
+        paused: bool,
     },
+    /// What the conversation says once (ESC-132): the voice on line failed and Piper reads now, or the voice chosen
+    /// is refused and the service's default one reads.
+    #[serde(rename_all = "camelCase")]
+    ConvNotice { session: u64, message: String },
     /// The user spoke over the reading `reading`: it stopped, and the sentence is being listened to.
     #[serde(rename_all = "camelCase")]
     ConvBargeIn { session: u64, reading: u64 },
@@ -235,6 +243,8 @@ pub struct Voice {
     source: Box<dyn Source>,
     transcriber: Arc<dyn Transcriber>,
     pub store: Store,
+    /// What the services on line listed of their models and voices (ESC-132).
+    pub catalog: online_catalog::CatalogStore,
     /// The conversation's voice: what speaks, where it is heard, its voices and where they come from.
     engine: Arc<dyn speech::Engine>,
     output: Arc<dyn speech::output::Output>,
@@ -276,9 +286,13 @@ impl Voice {
                 .map(|p| p.join("voices"))
                 .unwrap_or_else(|| PathBuf::from("voices")),
         };
+        let catalog = online_catalog::CatalogStore::in_dir(
+            store.dir.parent().unwrap_or(std::path::Path::new(".")),
+        );
         Self {
             source,
             transcriber,
+            catalog,
             store,
             engine: Arc::new(speech::Fake::new(None)),
             output: Arc::new(speech::output::Silent),
@@ -737,31 +751,77 @@ impl Voice {
                 "This voice is not downloaded."
             ));
         }
-        self.preview.lock().take();
         let model = self.voices.model(&v.id);
+        self.play_preview(volume, |push| {
+            for sentence in self.engine.sentences(text) {
+                let audio = self.engine.synthesize(&model, &sentence, opts)?;
+                push(audio).map_err(|e| anyhow::anyhow!(e))?;
+            }
+            Ok(())
+        })
+    }
+
+    /// « ▶ Écouter » on line (ESC-132): `text` read by the service of `spec` as `choice` says, its sound heard as it
+    /// comes. Blocks until it is heard; a voice the service refuses is told at once, with what it answered.
+    pub fn preview_online(
+        &self,
+        spec: &online::Spec,
+        choice: &online_speech::SpeakChoice,
+        text: &str,
+        volume: f32,
+    ) -> Result<(), online::OnlineError> {
+        let p = spec.provider;
+        let b = online_speech::Blocking::new()
+            .map_err(|e| online::OnlineError::Network(p, e.to_string()))?;
+        let never = AtomicBool::new(false);
+        self.play_preview(volume, |push| {
+            for sentence in online_speech::sentences(text, online_speech::max_chars(p)) {
+                let mut failed = None;
+                b.speak(spec, choice, &sentence, &never, &mut |audio| {
+                    if failed.is_none() {
+                        failed = push(audio).err();
+                    }
+                })?;
+                if let Some(e) = failed {
+                    return Err(online::OnlineError::Network(p, e));
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Plays what `make` pushes (a new preview stops the one before), and waits until it is heard, or stopped.
+    fn play_preview<E>(
+        &self,
+        volume: f32,
+        make: impl FnOnce(&mut dyn FnMut(speech::Audio) -> Result<(), String>) -> Result<(), E>,
+    ) -> Result<(), E> {
+        self.preview.lock().take();
         let (tx, rx) = std::sync::mpsc::channel::<()>();
-        let mut playing: Option<Arc<dyn speech::output::Playing>> = None;
-        for sentence in self.engine.sentences(text) {
-            let audio = self.engine.synthesize(&model, &sentence, opts)?;
+        let mut playing: Option<(Arc<dyn speech::output::Playing>, u32)> = None;
+        make(&mut |audio: speech::Audio| {
             if playing.is_none() {
                 let tx = tx.clone();
-                let p = self
-                    .output
-                    .open(
-                        audio.rate,
-                        volume,
-                        Box::new(move || {
-                            let _ = tx.send(());
-                        }),
-                    )
-                    .map_err(|e| anyhow::anyhow!(e))?;
+                let p = self.output.open(
+                    audio.rate,
+                    volume,
+                    Box::new(move || {
+                        let _ = tx.send(());
+                    }),
+                )?;
                 *self.preview.lock() = Some(p.clone());
-                playing = Some(p);
+                playing = Some((p, audio.rate));
             }
-            playing.as_ref().unwrap().push(&audio.samples);
-        }
+            let (p, rate) = playing.as_ref().unwrap();
+            if audio.rate == *rate {
+                p.push(&audio.samples);
+            } else {
+                p.push(&audio::resample(&audio.samples, audio.rate, *rate));
+            }
+            Ok(())
+        })?;
         drop(tx);
-        let Some(p) = playing else { return Ok(()) };
+        let Some((p, _)) = playing else { return Ok(()) };
         p.finish();
         // Until heard, or stopped (another preview, the window gone): the sender goes with the playback.
         let _ = rx.recv_timeout(Duration::from_secs(120));

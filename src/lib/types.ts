@@ -99,6 +99,8 @@ export interface VoiceSettings {
   transcription: 'local' | 'online';
   /** The service of « En ligne »: `openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`. */
   onlineService: string;
+  /** The model chosen for each service, by its id (ESC-132); none: its default. */
+  onlineModels: Record<string, string>;
 }
 
 /** How the agent's passages are read aloud in a conversation. */
@@ -113,6 +115,59 @@ export interface SpeechSettings {
   volume: number;
   /** The silence that ends what the user says, and sends it (ms). */
   silenceMs: number;
+  /** « Voix générée par » (ESC-132): Piper on the machine (the default), or the service `onlineService` with the key of its dictation. */
+  engine: 'local' | 'online';
+  onlineService: string;
+  /** The model chosen for each service; none: its default. */
+  onlineModels: Record<string, string>;
+  /** The voice chosen, by `<service>|<lang>` (`<service>|<model>|<lang>` when the voices are models of their own); none: the service's default. */
+  onlineVoices: Record<string, string>;
+}
+
+/** A model of a service on line (ESC-132). */
+export interface OnlineModel {
+  id: string;
+  label: string;
+  /** What sets it apart (fast, quality, languages), when the service says it. */
+  note: string;
+  /** The languages it speaks; empty: those of the service. */
+  langs: string[];
+}
+
+/** A voice a service on line lists. */
+export interface OnlineVoice {
+  id: string;
+  name: string;
+  /** Empty: any language. */
+  langs: string[];
+  /** The model it belongs to (Deepgram); empty: any. */
+  model: string;
+  /** Its gender, accent, description. */
+  note: string;
+  /** Made or cloned on the user's account. */
+  own: boolean;
+}
+
+/** What Réglages › Voix shows of a service on line: its models, its voices when its API lists them. */
+export interface ServiceCatalog {
+  service: string;
+  transcribe: OnlineModel[];
+  speak: OnlineModel[];
+  defaultTranscribe: string;
+  defaultSpeak: string;
+  /** Null: its API lists no voice, the field is free. */
+  voices: OnlineVoice[] | null;
+  /** The default voice by `<model>|<lang>`; a language missing: the model does not speak it. */
+  defaultVoices: Record<string, string>;
+  voicesByModel: boolean;
+  voiceExample: string;
+  voicesUrl: string;
+  /** The pace it takes (its bounds); null: its own pace. */
+  speed: [number, number] | null;
+  /** Read from its API (else the documentation's), and when. */
+  listed: boolean;
+  listedAt: number;
+  error: string | null;
 }
 
 /** A voice of the conversation (`voice::speech::catalog`), as Réglages › Voix lists it. */
@@ -146,7 +201,7 @@ export interface SpeechInfo {
 
 /** What starting a conversation answers. */
 export type ConvStarted =
-  | { kind: 'listening'; session: number }
+  | { kind: 'listening'; session: number; notice: string | null }
   | { kind: 'needsModel'; model: string; size: number }
   | { kind: 'needsVoice'; voice: string; size: number }
   | { kind: 'unavailable' };
@@ -186,7 +241,8 @@ export type VoiceEvent =
   | { kind: 'convSpeech'; session: number }
   | { kind: 'convTranscribing'; session: number }
   | { kind: 'convHeard'; session: number; text: string; error: string | null }
-  | { kind: 'convSpoken'; session: number; reading: number; error: string | null }
+  | { kind: 'convSpoken'; session: number; reading: number; error: string | null; paused: boolean }
+  | { kind: 'convNotice'; session: number; message: string }
   | { kind: 'convBargeIn'; session: number; reading: number }
   | { kind: 'convEnded'; session: number; error: string | null };
 

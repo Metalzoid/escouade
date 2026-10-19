@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
+## [Non publié]
+
+### Ajouts
+
+- La conversation vocale peut être lue par un service en ligne (OpenAI, ElevenLabs, Mistral, Deepgram, Groq), avec la même clé que sa dictée, et la voix de ton choix, celles de ton compte comprises. Pour la dictée comme pour la voix, tu choisis aussi le modèle de chaque service.
+
 ## [1.8.2] — 2026-10-19
 
 ### Ajouts

@@ -86,11 +86,16 @@ pub enum Event {
     DictationUsed {
         target: &'static str,
         model: &'static str,
+        /// On line: the service's model (ESC-132).
+        online_model: Option<String>,
     },
-    /// A voice conversation started: the language it is held in and the voice that reads; never what is said.
+    /// A voice conversation started: the language it is held in, the voice that reads, what makes it (`piper` or the
+    /// service on line) and its model; never what is said.
     VoiceConversation {
         lang: &'static str,
         voice: String,
+        engine: &'static str,
+        model: String,
     },
 }
 
@@ -149,8 +154,20 @@ impl Event {
             }
             Event::GitSync { op } => json!({ "op": op }),
             Event::RemoteControlEnabled { from } => json!({ "from": from }),
-            Event::DictationUsed { target, model } => json!({ "target": target, "model": model }),
-            Event::VoiceConversation { lang, voice } => json!({ "lang": lang, "voice": voice }),
+            Event::DictationUsed {
+                target,
+                model,
+                online_model,
+            } => match online_model {
+                Some(m) => json!({ "target": target, "model": model, "online_model": m }),
+                None => json!({ "target": target, "model": model }),
+            },
+            Event::VoiceConversation {
+                lang,
+                voice,
+                engine,
+                model,
+            } => json!({ "lang": lang, "voice": voice, "engine": engine, "model": model }),
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }

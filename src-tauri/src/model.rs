@@ -222,6 +222,8 @@ pub struct VoiceSettings {
     pub transcription: String,
     /// The service of « En ligne » (`voice::online::Provider::id`).
     pub online_service: String,
+    /// The model chosen for each service, by its id (ESC-132); none: its default (`Provider::model`).
+    pub online_models: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for VoiceSettings {
@@ -234,6 +236,7 @@ impl Default for VoiceSettings {
             speech: SpeechSettings::default(),
             transcription: "local".into(),
             online_service: "openai".into(),
+            online_models: Default::default(),
         }
     }
 }
@@ -252,6 +255,15 @@ pub struct SpeechSettings {
     pub volume: f32,
     /// The silence that ends what the user says, and sends it, in milliseconds.
     pub silence_ms: u32,
+    /// Who makes the voice (ESC-132): "local" (Piper, on the machine) or "online" (the service `online_service`, with
+    /// the key of its dictation).
+    pub engine: String,
+    pub online_service: String,
+    /// The model chosen for each service, by its id; none: its default (`online_catalog::default_speak_model`).
+    pub online_models: std::collections::BTreeMap<String, String>,
+    /// The voice chosen, by `<service>|<lang>` (`<service>|<model>|<lang>` for a service whose voices are models of
+    /// their own); none: the service's default voice.
+    pub online_voices: std::collections::BTreeMap<String, String>,
 }
 
 impl Default for SpeechSettings {
@@ -262,6 +274,10 @@ impl Default for SpeechSettings {
             rate: 1.0,
             volume: 1.0,
             silence_ms: 1200,
+            engine: "local".into(),
+            online_service: "openai".into(),
+            online_models: Default::default(),
+            online_voices: Default::default(),
         }
     }
 }

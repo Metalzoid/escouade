@@ -37,6 +37,9 @@ fn conv_choice() -> ConvChoice {
         speak: SpeakOptions::default(),
         volume: 1.0,
         silence_ms: 600,
+        online: None,
+        online_error: None,
+        online_notice: None,
     }
 }
 
@@ -79,7 +82,7 @@ fn wait_for(h: &Harness, f: impl Fn(&VoiceEvent) -> bool) -> VoiceEvent {
 
 fn listening(s: ConvStarted) -> u64 {
     match s {
-        ConvStarted::Listening { session } => session,
+        ConvStarted::Listening { session, .. } => session,
         other => panic!("not listening: {other:?}"),
     }
 }
@@ -126,7 +129,7 @@ fn a_sentence_is_sent_once_its_silence_comes_then_the_passage_is_read_and_it_lis
     // The passage is read, sentence by sentence; once heard, it listens again.
     let reading = h.voice.conversation_say(session, "C'est fait. Les tests passent.").unwrap();
     let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
-    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None });
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None, paused: false });
     assert_eq!(*c.engine.said.lock(), vec!["C'est fait.".to_string(), "Les tests passent.".to_string()]);
     hear(h, 0.5, 0.0);
     hear(h, 0.8, 0.3);
@@ -198,7 +201,7 @@ fn a_hold_that_comes_late_does_not_silence_the_reading_under_way() {
     h.voice.conversation_hold(session);
     hear(h, 1.5, 0.0);
     let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
-    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None });
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None, paused: false });
     h.voice.conversation_stop();
 }
 
@@ -382,7 +385,7 @@ fn a_voice_that_cannot_be_loaded_ahead_is_loaded_at_its_first_sentence() {
     let reading = h.voice.conversation_say(session, "C'est fait.").unwrap();
     hear(h, 0.3, 0.0);
     let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
-    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None });
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None, paused: false });
     assert_eq!(
         *c.engine.loads.lock(),
         vec![speech::FakeLoad { model: h.voice.voices.model("fr_FR-siwis-medium"), ahead: false }]
@@ -421,5 +424,279 @@ fn a_voice_or_a_language_changed_during_the_conversation_is_loaded_and_taken() {
     // Back to French: loaded again (one voice is kept at a time, as Piper does).
     h.voice.conversation_tune(&conv_choice());
     assert_eq!(wait_loads(&c, 3)[2].model, h.voice.voices.model("fr_FR-siwis-medium"));
+    h.voice.conversation_stop();
+}
+
+// The voice on line (ESC-132): a fake service, which reads each sentence as a tone streamed in pieces, in place of
+// Piper; its failures, and Piper standing in.
+
+use super::conversation::OnlineVoice;
+use super::online::tests::{serve_with, Got, Reply, KEY};
+use super::online::{OnlineError, Provider, Spec};
+use super::online_speech::SpeakChoice;
+
+/// A fake OpenAI that reads: 50 ms of a tone a character, in pieces of 100 ms; or answers `status` when it is not 200.
+struct FakeService {
+    _rt: tokio::runtime::Runtime,
+    url: String,
+    got: Arc<Mutex<Vec<Got>>>,
+    status: Arc<std::sync::atomic::AtomicU16>,
+}
+
+fn fake_service() -> FakeService {
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+    let status = Arc::new(std::sync::atomic::AtomicU16::new(200));
+    let st = status.clone();
+    let (url, got) = rt.block_on(serve_with(Arc::new(move |g: &Got| {
+        let status = st.load(Ordering::Acquire);
+        if status != 200 {
+            return Reply::json(status, r#"{"error":{"message":"The server had an error"}}"#);
+        }
+        let body: serde_json::Value = serde_json::from_slice(&g.body).unwrap();
+        let chars = body["input"].as_str().unwrap().chars().count();
+        let n = (chars * 24_000 / 20).min(24_000 * 4);
+        let pcm: Vec<u8> = (0..n)
+            .flat_map(|i| (((i as f32 * 0.09).sin() * 0.3 * 32767.0) as i16).to_le_bytes())
+            .collect();
+        Reply {
+            status: 200,
+            content_type: "application/octet-stream".into(),
+            chunks: pcm.chunks(4_800).map(<[u8]>::to_vec).collect(),
+            gap: Duration::from_millis(20),
+        }
+    })));
+    FakeService { _rt: rt, url, got, status }
+}
+
+fn online_voice(url: &str, voice: &str) -> OnlineVoice {
+    OnlineVoice {
+        spec: Spec { base: url.into(), ..Spec::new(Provider::OpenAi, KEY.into(), reqwest::Client::new()) },
+        choice: SpeakChoice { model: "gpt-4o-mini-tts".into(), voice: voice.into(), lang: "fr".into(), rate: 1.0 },
+        default_voice: "marin".into(),
+    }
+}
+
+impl FakeService {
+    fn online(&self, voice: &str) -> OnlineVoice {
+        online_voice(&self.url, voice)
+    }
+
+    /// The sentences it was asked to read, and with which voice.
+    fn asked(&self) -> Vec<(String, String)> {
+        self.got
+            .lock()
+            .iter()
+            .map(|g| {
+                let b: serde_json::Value = serde_json::from_slice(&g.body).unwrap();
+                (b["input"].as_str().unwrap().to_string(), b["voice"].as_str().unwrap().to_string())
+            })
+            .collect()
+    }
+}
+
+fn conv_online(o: OnlineVoice) -> ConvChoice {
+    ConvChoice { online: Some(o), ..conv_choice() }
+}
+
+fn notices(h: &Harness) -> Vec<String> {
+    conv_events(h)
+        .into_iter()
+        .filter_map(|e| match e {
+            VoiceEvent::ConvNotice { message, .. } => Some(message),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_voice_on_line_reads_the_passage_sentence_by_sentence_without_piper() {
+    let c = conv_harness("conv-online", "");
+    let h = &c.h;
+    let service = fake_service();
+    put_model(&h.voice.store, "base");
+    // No voice of Piper's downloaded: none is asked for.
+    let session = listening(h.voice.conversation_start(conv_online(service.online("cedar"))).unwrap());
+    let started = Instant::now();
+    let reading = h.voice.conversation_say(session, "C'est fait. Les tests passent.").unwrap();
+    let first = wait_for(h, |e| matches!(e, VoiceEvent::ConvSentence { index: 0, .. }));
+    let first_at = started.elapsed();
+    assert!(matches!(first, VoiceEvent::ConvSentence { ref text, .. } if text == "C'est fait."));
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    let all = started.elapsed();
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None, paused: false });
+    assert_eq!(
+        service.asked(),
+        [("C'est fait.".to_string(), "cedar".to_string()), ("Les tests passent.".into(), "cedar".into())]
+    );
+    // Heard in real time, its first sentence long before the end (29 characters: about 1.5 s of sound).
+    assert!(all >= Duration::from_millis(1200), "{all:?}");
+    assert!(first_at < Duration::from_millis(700), "first sentence heard after {first_at:?}");
+    assert!(c.engine.said.lock().is_empty(), "Piper read nothing");
+    assert!(conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvSentence { index: 1, .. })));
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn speaking_over_the_voice_on_line_stops_it_and_the_sentence_is_heard() {
+    let c = conv_harness("conv-online-barge", "attends");
+    let h = &c.h;
+    let service = fake_service();
+    put_model(&h.voice.store, "base");
+    let session = listening(h.voice.conversation_start(conv_online(service.online("marin"))).unwrap());
+    hear(h, 0.3, 0.0);
+    let reading = h
+        .voice
+        .conversation_say(
+            session,
+            "Une première phrase assez longue pour durer quatre secondes entières à la lecture. Une deuxième phrase tout aussi longue, qui dure elle aussi ses quatre secondes. Une troisième phrase, la dernière, aussi longue que les deux autres.",
+        )
+        .unwrap();
+    hear(h, 0.8, 0.05);
+    let end = Instant::now() + Duration::from_secs(8);
+    while !h.events.lock().iter().any(|e| matches!(e, VoiceEvent::ConvBargeIn { .. })) {
+        assert!(Instant::now() < end, "no barge-in: {:?}", conv_events(h));
+        hear(h, 0.1, 0.4);
+    }
+    assert_eq!(
+        wait_for(h, |e| matches!(e, VoiceEvent::ConvBargeIn { .. })),
+        VoiceEvent::ConvBargeIn { session, reading }
+    );
+    hear(h, 0.6, 0.4);
+    hear(h, 1.0, 0.0);
+    let heard = wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
+    assert!(matches!(heard, VoiceEvent::ConvHeard { ref text, .. } if text == "attends"));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvSpoken { .. })));
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn the_service_failing_says_so_once_and_piper_reads_the_rest_of_the_conversation() {
+    let c = conv_harness("conv-online-down", "");
+    let h = &c.h;
+    let service = fake_service();
+    service.status.store(503, Ordering::Release);
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_online(service.online("marin"))).unwrap());
+    let reading = h.voice.conversation_say(session, "C'est fait. Les tests passent.").unwrap();
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    assert_eq!(spoken, VoiceEvent::ConvSpoken { session, reading, error: None, paused: false });
+    assert_eq!(*c.engine.said.lock(), ["C'est fait.", "Les tests passent."]);
+    let n = notices(h);
+    assert_eq!(n.len(), 1, "{n:?}");
+    assert!(n[0].contains("OpenAI") && n[0].contains("503") && n[0].contains("Piper"), "{}", n[0]);
+    assert!(!n[0].contains(KEY));
+    // The next passage: Piper still, the service not asked again, nothing said again.
+    hear(h, 0.5, 0.0);
+    h.voice.conversation_say(session, "Encore une.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: r, .. } if *r == reading + 1));
+    assert_eq!(service.asked().len(), 1);
+    assert_eq!(c.engine.said.lock().len(), 3);
+    assert_eq!(notices(h).len(), 1);
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn the_service_failing_without_a_voice_of_piper_pauses_the_conversation() {
+    let c = conv_harness("conv-online-pause", "");
+    let h = &c.h;
+    let service = fake_service();
+    service.status.store(429, Ordering::Release);
+    put_model(&h.voice.store, "base");
+    let session = listening(h.voice.conversation_start(conv_online(service.online("marin"))).unwrap());
+    let reading = h.voice.conversation_say(session, "C'est fait.").unwrap();
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    let VoiceEvent::ConvSpoken { reading: r, error: Some(error), paused: true, .. } = spoken else {
+        panic!("not paused: {spoken:?}");
+    };
+    assert_eq!(r, reading);
+    assert!(error.contains("OpenAI") && error.contains("quota") && error.contains("pause"), "{error}");
+    // On pause: what the microphone hears is not taken.
+    hear(h, 0.8, 0.3);
+    hear(h, 0.8, 0.0);
+    assert!(c.h.fake.calls.lock().is_empty());
+    // The service back, « Reprendre »: it reads again.
+    service.status.store(200, Ordering::Release);
+    h.voice.conversation_listen(session);
+    h.voice.conversation_say(session, "Reprise.").unwrap();
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: r, .. } if *r == reading + 1));
+    assert!(matches!(spoken, VoiceEvent::ConvSpoken { error: None, paused: false, .. }), "{spoken:?}");
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn a_voice_the_service_refuses_is_said_and_its_default_voice_reads() {
+    let c = conv_harness("conv-online-voice", "");
+    let h = &c.h;
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+    let (url, got) = rt.block_on(serve_with(Arc::new(|g: &Got| {
+        let b: serde_json::Value = serde_json::from_slice(&g.body).unwrap();
+        if b["voice"] == "gone" {
+            return Reply::json(400, r#"{"error":{"message":"Invalid voice gone."}}"#);
+        }
+        Reply { status: 200, content_type: "audio/pcm".into(), chunks: vec![vec![0x10; 9_600]], gap: Duration::ZERO }
+    })));
+    put_model(&h.voice.store, "base");
+    let session = listening(h.voice.conversation_start(conv_online(online_voice(&url, "gone"))).unwrap());
+    h.voice.conversation_say(session, "Un. Deux.").unwrap();
+    let spoken = wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    assert!(matches!(spoken, VoiceEvent::ConvSpoken { error: None, .. }), "{spoken:?}");
+    let voices: Vec<String> = got
+        .lock()
+        .iter()
+        .map(|g| serde_json::from_slice::<serde_json::Value>(&g.body).unwrap()["voice"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(voices, ["gone", "marin", "marin"]);
+    let n = notices(h);
+    assert_eq!(n.len(), 1);
+    assert!(n[0].contains("gone") && n[0].contains("marin") && n[0].contains("Invalid voice"), "{}", n[0]);
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn a_service_without_its_key_leaves_the_reading_to_piper_or_does_not_start() {
+    let c = conv_harness("conv-online-nokey", "");
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    let no_key = ConvChoice { online_error: Some(OnlineError::NoKey(Provider::ElevenLabs)), ..conv_choice() };
+    // No voice of Piper's either: it does not start, and says why.
+    assert_eq!(
+        h.voice.conversation_start(no_key.clone()).unwrap_err(),
+        VoiceError::Online(OnlineError::NoKey(Provider::ElevenLabs))
+    );
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let ConvStarted::Listening { session, notice: Some(notice) } = h.voice.conversation_start(no_key).unwrap() else {
+        panic!("no notice");
+    };
+    assert!(notice.contains("ElevenLabs") && notice.contains("Piper"), "{notice}");
+    h.voice.conversation_say(session, "Bonjour.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { .. }));
+    assert_eq!(*c.engine.said.lock(), ["Bonjour."]);
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn the_voice_on_line_chosen_during_the_conversation_reads_the_next_passage() {
+    let c = conv_harness("conv-online-tune", "");
+    let h = &c.h;
+    let service = fake_service();
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    h.voice.conversation_say(session, "Piper.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: 1, .. }));
+    h.voice.conversation_tune(&conv_online(service.online("coral")));
+    hear(h, 0.4, 0.0);
+    h.voice.conversation_say(session, "En ligne.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: 2, .. }));
+    assert_eq!(*c.engine.said.lock(), ["Piper."]);
+    assert_eq!(service.asked(), [("En ligne.".to_string(), "coral".to_string())]);
+    // Back to Piper.
+    h.voice.conversation_tune(&conv_choice());
+    hear(h, 0.4, 0.0);
+    h.voice.conversation_say(session, "Local.").unwrap();
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: 3, .. }));
+    assert_eq!(c.engine.said.lock().len(), 2);
     h.voice.conversation_stop();
 }

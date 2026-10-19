@@ -57,6 +57,7 @@ import type {
   UiEvent,
   UiState,
   VoiceInfo,
+  ServiceCatalog,
   SpeechInfo,
   ConvStarted,
   VoiceStarted,
@@ -123,6 +124,8 @@ export const api = {
   /** Keeps a service's key in the system keychain (never in a file); fails when the keychain refuses it. */
   voiceOnlineKeySet: (service: string, key: string) => invoke<void>('voice_online_key_set', { service, key }),
   voiceOnlineKeyDelete: (service: string) => invoke<void>('voice_online_key_delete', { service }),
+  /** The models and voices of a service on line (ESC-132): what was listed, read again with the key when `refresh`. */
+  voiceOnlineCatalog: (service: string, refresh = false) => invoke<ServiceCatalog>('voice_online_catalog', { service, refresh }),
   // The voice conversation (ESC-97).
   speechInfo: () => invoke<SpeechInfo>('speech_info'),
   conversationStart: () => invoke<ConvStarted>('conversation_start'),
@@ -138,6 +141,9 @@ export const api = {
   speechDelete: (id: string) => invoke<void>('speech_delete', { id }),
   /** « Écouter »: resolves once heard. */
   speechPreview: (id: string, speaker?: number) => invoke<void>('speech_preview', { id, speaker }),
+  /** « ▶ Écouter » on line: a sentence read by `service` with `model` and `voiceId` in `lang`. */
+  speechPreviewOnline: (service: string, model: string, voiceId: string, lang: string) =>
+    invoke<void>('speech_preview_online', { service, model, voiceId, lang }),
   /** The settings, but for the Claude accounts (their tab changes them with the `account*` calls below). */
   saveSettings: (settings: Settings) => invoke<ShellInfo[]>('save_settings', { settings }),
   /** Where the `claude` of `path` is (blank: the one found by itself), `wslDistro` the distribution for one of WSL. */

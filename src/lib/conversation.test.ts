@@ -255,6 +255,33 @@ describe('the conversation', () => {
     expect(said()).toHaveLength(1);
   });
 
+  it('says once that the voice on line failed, and pauses when no voice of Piper stands in (ESC-132)', async () => {
+    backend = fakeBackend({
+      conversation_start: () => ({ kind: 'listening', session: SESSION, notice: 'Aucune clé ElevenLabs. Piper lit.' }),
+      conversation_say: () => ++reading,
+      get_conversation: () => [],
+    });
+    await startTalking();
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Aucune clé ElevenLabs. Piper lit.' });
+    ev({ kind: 'convHeard', text: 'Résume', error: null });
+    await tick();
+    conversation.observe(a, [
+      { kind: 'text', id: 'm', text: '…', spoken: 'Un résumé.', streaming: false },
+      { kind: 'turn', id: 't', ts: 2, durationMs: 1, cost: 0, tokens: 0, isError: false, interrupted: false, error: null },
+    ]);
+    await tick();
+    ev({ kind: 'convNotice', message: 'OpenAI ne répond pas. La conversation continue avec la voix locale (Piper).' });
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Piper') });
+    expect(conversation.phase).toBe('speaking');
+    ev({ kind: 'convSpoken', reading: 1, error: 'OpenAI refuse : quota. La conversation est en pause.', paused: true });
+    expect(conversation.phase).toBe('paused');
+    expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: 'OpenAI refuse : quota. La conversation est en pause.' });
+    expect(backend.called('conversation_hold').length).toBeGreaterThan(0);
+    // « Reprendre »: it listens again.
+    conversation.resume();
+    expect(conversation.phase).toBe('listening');
+  });
+
   it('says the answer is in the conversation when the agent wrote no passage', async () => {
     await startTalking();
     ev({ kind: 'convHeard', text: 'Bonjour', error: null });

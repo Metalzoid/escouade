@@ -1,18 +1,44 @@
 <script lang="ts">
   import { conversation } from '../../lib/conversation.svelte';
+  import { ONLINE_SERVICES, onlineService } from '../../lib/dictation';
   import { fBytes } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import { modelIn, onlineVoice } from '../../lib/online-voice.svelte';
   import type { SpeechInfo, SpeechVoice } from '../../lib/types';
+  import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import OnlineKey from './OnlineKey.svelte';
+  import OnlineModel from './OnlineModel.svelte';
+  import OnlineVoiceField from './OnlineVoiceField.svelte';
   import Row from './Row.svelte';
 
   // Réglages › Voix, the conversation's part (ESC-97): the voice of each language among those whose licence allows it,
   // « Écouter », its download (size, progress) and its deletion, its licences and the credit it asks for; the pace, the
-  // volume, and the silence that sends what was said. Saved with the other settings.
+  // volume, and the silence that sends what was said. Saved with the other settings. « Voix générée par » (ESC-132):
+  // Piper, or a service on line with the key of its dictation, its model and its voice by language; Piper's voices are
+  // then those that stand in when the service fails.
   const s = $derived(settingsForm.settings.voice.speech);
+  const online = $derived(s.engine === 'online');
+  const service = $derived(onlineService(s.onlineService));
+  const catalog = $derived(onlineVoice.catalogs[service.id]);
+  const model = $derived(modelIn(catalog, 'speak', s.onlineModels[service.id]).id);
+  $effect(() => {
+    if (!online) return;
+    void onlineVoice.loadKeys();
+    void onlineVoice.load(service.id);
+  });
+  /** Whether `model` of the service reads `lang`. */
+  const reads = (lang: string) => !!catalog?.defaultVoices[`${model}|${lang}`];
+  const rateDesc = $derived.by(() => {
+    if (!online) return t('voice.speech.rateDesc');
+    const speed = catalog?.speed;
+    if (!speed) return t('voice.speech.rateNone', { service: service.label });
+    if (service.id === 'deepgram') return t('voice.speech.rateEnglish', { service: service.label, min: speed[0], max: speed[1] });
+    return t('voice.speech.rateService', { service: service.label, min: speed[0], max: speed[1] });
+  });
   let info = $state<SpeechInfo | null>(null);
   let playing = $state<string | null>(null);
   let downloading = $state<Record<string, boolean>>({});
@@ -80,10 +106,67 @@
   };
 </script>
 
-<Group title={t('voice.speech.title')} note={info && !info.available ? t('voice.speech.unavailable') : t('voice.speech.note')}>
+<Group
+  title={t('voice.speech.title')}
+  note={online
+    ? t('voice.speech.onlineNote', { service: service.label, host: service.host })
+    : info && !info.available
+      ? t('voice.speech.unavailable')
+      : t('voice.speech.note')}
+>
+  <Row label={t('voice.speech.engine')} desc={t('voice.speech.engineDesc')}>
+    <Chips
+      label={t('voice.speech.engine')}
+      options={[
+        { value: 'local', label: t('voice.speech.local') },
+        { value: 'online', label: t('voice.speech.online') },
+      ]}
+      bind:value={s.engine}
+    />
+  </Row>
+  {#if online}
+    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { service: service.label })}>
+      <select class="field input service" aria-label={t('voice.speech.serviceLabel')} bind:value={s.onlineService}>
+        {#each ONLINE_SERVICES as o (o.id)}
+          <option value={o.id}>{o.label}</option>
+        {/each}
+      </select>
+    </Row>
+    <OnlineModel
+      {service}
+      purpose="speak"
+      bind:models={s.onlineModels}
+      desc={t('voice.speech.onlineModelDesc', { service: service.label, model: catalog?.defaultSpeak ?? '' })}
+    />
+    <OnlineKey {service} />
+    {#if catalog}
+      {#each LANGS as lang (lang)}
+        {#if reads(lang)}
+          <OnlineVoiceField
+            {catalog}
+            {model}
+            {lang}
+            label={t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })}
+            bind:voices={s.onlineVoices}
+          />
+        {:else}
+          <Row label={t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })}>
+            <p class="meta not-spoken" data-not-spoken={lang}>
+              {t('voice.speech.notSpoken', { service: service.label, model, lang: t(`voice.languages.${lang}`) })}
+            </p>
+          </Row>
+        {/if}
+      {/each}
+    {/if}
+  {/if}
   {#each LANGS as lang (lang)}
     {@const v = chosen(lang)}
-    <Row label={t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })} desc={t('voice.speech.voiceDesc')}>
+    <Row
+      label={online
+        ? t('voice.speech.fallbackFor', { lang: t(`voice.languages.${lang}`) })
+        : t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })}
+      desc={online ? t('voice.speech.fallbackDesc', { service: service.label }) : t('voice.speech.voiceDesc')}
+    >
       <div class="voice" data-speech-lang={lang}>
         <select
           class="field input"
@@ -137,13 +220,13 @@
       </div>
     </Row>
   {/each}
-  <Row label={t('voice.speech.rate')} desc={t('voice.speech.rateDesc')}>
+  <Row label={t('voice.speech.rate')} desc={rateDesc}>
     <div class="slider">
       <input type="range" min="0.5" max="2" step="0.1" aria-label={t('voice.speech.rate')} bind:value={s.rate} />
       <span class="meta mono">{s.rate.toFixed(1)}×</span>
     </div>
   </Row>
-  <Row label={t('voice.speech.volume')}>
+  <Row label={t('voice.speech.volume')} desc={online ? t('voice.speech.volumeDesc') : undefined}>
     <div class="slider">
       <input type="range" min="0" max="1" step="0.05" aria-label={t('voice.speech.volume')} bind:value={s.volume} />
       <span class="meta mono">{Math.round(s.volume * 100)} %</span>
@@ -172,6 +255,16 @@
     padding: 0 10px;
     background: var(--panel);
     font-size: 12px;
+  }
+  .service {
+    width: 340px;
+    max-width: 50%;
+    flex: none;
+  }
+  .not-spoken {
+    margin: 0;
+    max-width: 60%;
+    text-align: right;
   }
   .speaker {
     display: flex;

@@ -6,8 +6,10 @@
 //!
 //! The window leads (`conversation.svelte.ts`): it says when to listen, to hold (the agent works), and what to read.
 
+use super::online::{OnlineError, Spec};
+use super::online_speech::SpeakChoice;
 use super::speech::output::Playing;
-use super::speech::SpeakOptions;
+use super::speech::{Audio, SpeakOptions};
 use super::vad::{self, BargeIn, Endpointer, Heard};
 use super::{audio, Voice, VoiceError, VoiceEvent};
 use parking_lot::Mutex;
@@ -31,6 +33,31 @@ pub struct ConvChoice {
     pub volume: f32,
     /// The silence that ends a sentence, in milliseconds.
     pub silence_ms: u32,
+    /// « Voix générée par » a service on line (ESC-132): what reads in place of Piper.
+    pub online: Option<OnlineVoice>,
+    /// The service chosen could not be asked (no key): Piper reads, or the conversation does not start.
+    pub online_error: Option<OnlineError>,
+    /// What to say of it as it starts (a model the service no longer offers).
+    pub online_notice: Option<String>,
+}
+
+/// The voice of a service on line: the service with its key, how it reads, and its default voice (taken when the one
+/// chosen is refused).
+#[derive(Debug, Clone)]
+pub struct OnlineVoice {
+    pub spec: Spec,
+    pub choice: SpeakChoice,
+    pub default_voice: String,
+}
+
+impl PartialEq for OnlineVoice {
+    fn eq(&self, o: &Self) -> bool {
+        self.spec.provider == o.spec.provider
+            && self.spec.base == o.spec.base
+            && self.spec.key == o.spec.key
+            && self.choice == o.choice
+            && self.default_voice == o.default_voice
+    }
 }
 
 /// What `conversation_start` answers.
@@ -39,17 +66,13 @@ pub struct ConvChoice {
 pub enum ConvStarted {
     Listening {
         session: u64,
+        /// What the conversation says as it starts (the service on line cannot read: Piper does).
+        notice: Option<String>,
     },
     /// Whisper's model must be downloaded first.
-    NeedsModel {
-        model: String,
-        size: u64,
-    },
+    NeedsModel { model: String, size: u64 },
     /// The voice must be downloaded first.
-    NeedsVoice {
-        voice: String,
-        size: u64,
-    },
+    NeedsVoice { voice: String, size: u64 },
     /// No speech on this machine (Intel Macs).
     Unavailable,
 }
@@ -92,10 +115,12 @@ struct Shared {
     reader: Mutex<Reader>,
 }
 
-/// The voice that reads (its model), its speaker and pace, its volume, and the language Whisper is told.
+/// The voice that reads: Piper's (its model, when downloaded) or a service's on line; its speaker and pace, its volume,
+/// and the language Whisper is told.
 #[derive(Debug, Clone, PartialEq)]
 struct Reader {
-    voice: PathBuf,
+    voice: Option<PathBuf>,
+    online: Option<OnlineVoice>,
     speak: SpeakOptions,
     volume: f32,
     language: String,
@@ -113,8 +138,9 @@ impl Voice {
     }
 
     /// Starts a conversation: the microphone opens and listens for a sentence; or says what is missing first.
-    pub fn conversation_start(&self, choice: ConvChoice) -> Result<ConvStarted, VoiceError> {
-        if !self.engine.available() {
+    pub fn conversation_start(&self, mut choice: ConvChoice) -> Result<ConvStarted, VoiceError> {
+        let on_line = choice.online.is_some() || choice.online_error.is_some();
+        if !on_line && !self.engine.available() {
             return Ok(ConvStarted::Unavailable);
         }
         let model = super::models::find(&choice.model)
@@ -126,14 +152,34 @@ impl Voice {
                 size: model.size,
             });
         }
-        let Some(voice) = super::speech::catalog::find(&choice.voice) else {
-            return Err(VoiceError::Other(format!("unknown voice {}", choice.voice)));
-        };
-        if !self.voices.has(voice) {
-            return Ok(ConvStarted::NeedsVoice {
-                voice: voice.id.clone(),
-                size: voice.onnx_size + voice.json_size,
-            });
+        let local = self.local_voice(&choice.voice);
+        let mut notice = choice.online_notice.take();
+        match choice.online_error.take() {
+            // On line, Piper's voice is only what reads if the service fails.
+            _ if choice.online.is_some() => {}
+            // The service cannot be asked: Piper reads, if its voice is here, and it is said once.
+            Some(e) => {
+                if local.is_none() {
+                    return Err(VoiceError::Online(e));
+                }
+                let said = fallback_message(&e);
+                log::warn!("speech: the voice on line cannot read: Piper reads");
+                notice = Some(match notice {
+                    Some(n) => format!("{n} {said}"),
+                    None => said,
+                });
+            }
+            None => {
+                let Some(voice) = super::speech::catalog::find(&choice.voice) else {
+                    return Err(VoiceError::Other(format!("unknown voice {}", choice.voice)));
+                };
+                if !self.voices.has(voice) {
+                    return Ok(ConvStarted::NeedsVoice {
+                        voice: voice.id.clone(),
+                        size: voice.onnx_size + voice.json_size,
+                    });
+                }
+            }
         }
         if self.session.lock().is_some() || self.conv.lock().is_some() {
             return Err(VoiceError::AlreadyListening);
@@ -151,7 +197,8 @@ impl Voice {
             done: AtomicBool::new(false),
             model: self.store.path(model.id),
             reader: Mutex::new(Reader {
-                voice: self.voices.model(&voice.id),
+                voice: local,
+                online: choice.online.clone(),
                 speak: choice.speak.clone(),
                 volume: choice.volume,
                 language: choice.language.clone(),
@@ -179,8 +226,19 @@ impl Voice {
             let p = shared.model.clone();
             std::thread::spawn(move || t.preload(&p));
         }
-        // The voice too (and ONNX Runtime): the first sentence read does not wait for it (ESC-115).
-        self.preload_voice(shared.reader.lock().voice.clone());
+        // The voice too (and ONNX Runtime): the first sentence read does not wait for it (ESC-115). On line, nothing
+        // to load.
+        let reader = shared.reader.lock().clone();
+        if let (Some(v), None) = (reader.voice, &reader.online) {
+            self.preload_voice(v);
+        }
+        if let Some(o) = &reader.online {
+            log::info!(
+                "speech: the conversation reads with {} ({})",
+                o.spec.provider.label(),
+                o.choice.model
+            );
+        }
         *self.conv.lock() = Some(Conversation {
             shared: shared.clone(),
             capture: Mutex::new(Some(capture)),
@@ -191,7 +249,16 @@ impl Voice {
             .name("voice-conversation".into())
             .spawn(move || listen(shared, rate, failure, emit, transcriber))
             .map_err(|e| VoiceError::Other(e.to_string()))?;
-        Ok(ConvStarted::Listening { session: id })
+        Ok(ConvStarted::Listening {
+            session: id,
+            notice,
+        })
+    }
+
+    /// The model of Piper's voice `id`, when it is downloaded and the app can speak here; none else.
+    fn local_voice(&self, id: &str) -> Option<PathBuf> {
+        let v = super::speech::catalog::find(id)?;
+        (self.engine.available() && self.voices.has(v)).then(|| self.voices.model(&v.id))
     }
 
     /// Loads `model` on a thread of its own, ahead of its first sentence. Failing, it is only written down: the first
@@ -219,18 +286,17 @@ impl Voice {
         let Some(s) = self.conv.lock().as_ref().map(|c| c.shared.clone()) else {
             return;
         };
-        let Some(voice) = super::speech::catalog::find(&choice.voice) else {
-            return;
-        };
-        if !self.voices.has(voice) {
+        let local = self.local_voice(&choice.voice);
+        if local.is_none() && choice.online.is_none() {
             log::info!(
                 "speech: {} not downloaded, the conversation keeps its voice",
-                voice.id
+                choice.voice
             );
             return;
         }
         let tuned = Reader {
-            voice: self.voices.model(&voice.id),
+            voice: local,
+            online: choice.online.clone(),
             speak: choice.speak.clone(),
             volume: choice.volume,
             language: choice.language.clone(),
@@ -239,11 +305,21 @@ impl Voice {
         if *reader == tuned {
             return;
         }
-        let new_voice = reader.voice != tuned.voice;
+        let new_voice = reader.voice != tuned.voice || reader.online != tuned.online;
         *reader = tuned;
         if new_voice {
-            log::info!("speech: the conversation now reads in {}", voice.id);
-            self.preload_voice(reader.voice.clone());
+            match (&reader.online, &reader.voice) {
+                (Some(o), _) => log::info!(
+                    "speech: the conversation now reads with {} ({})",
+                    o.spec.provider.label(),
+                    o.choice.model
+                ),
+                (None, Some(v)) => {
+                    log::info!("speech: the conversation now reads in {}", choice.voice);
+                    self.preload_voice(v.clone());
+                }
+                (None, None) => {}
+            }
         }
     }
 
@@ -289,17 +365,134 @@ impl Voice {
         let engine = self.engine.clone();
         let output = self.output.clone();
         let emit = self.emit.clone();
-        let sentences = engine.sentences(text);
         let reader = s.reader.lock().clone();
+        let sentences = match &reader.online {
+            Some(o) => super::online_speech::sentences(
+                text,
+                super::online_speech::max_chars(o.spec.provider),
+            ),
+            None => engine.sentences(text),
+        };
         std::thread::Builder::new()
             .name("voice-speak".into())
             .spawn(move || {
+                let mut feed = Feed {
+                    s: s.clone(),
+                    output,
+                    emit: emit.clone(),
+                    stop: stop.clone(),
+                    reading,
+                    volume: reader.volume,
+                    rate: None,
+                    heard: None,
+                };
+                let mut online = reader.online.clone();
+                let mut blocking: Option<super::online_speech::Blocking> = None;
                 let mut error = None;
-                for (index, sentence) in sentences.into_iter().enumerate() {
+                let mut paused = false;
+                'sentences: for (index, sentence) in sentences.into_iter().enumerate() {
                     if stop.load(Ordering::Acquire) {
                         return;
                     }
-                    let audio = match engine.synthesize(&reader.voice, &sentence, &reader.speak) {
+                    // Its subtitle, when it starts to be heard.
+                    feed.heard = Some({
+                        let s = s.clone();
+                        let emit = emit.clone();
+                        let stop = stop.clone();
+                        let text = sentence.clone();
+                        Box::new(move || {
+                            if !stop.load(Ordering::Acquire) {
+                                emit(VoiceEvent::ConvSentence {
+                                    session: s.id,
+                                    reading,
+                                    index: index as u32,
+                                    text,
+                                });
+                            }
+                        })
+                    });
+                    while let Some(o) = online.clone() {
+                        if blocking.is_none() {
+                            match super::online_speech::Blocking::new() {
+                                Ok(b) => blocking = Some(b),
+                                Err(e) => {
+                                    error = Some(e.to_string());
+                                    break 'sentences;
+                                }
+                            }
+                        }
+                        let b = blocking.as_ref().expect("made above");
+                        let mut failed_output = None;
+                        let r = b.speak(&o.spec, &o.choice, &sentence, &stop, &mut |audio| {
+                            if failed_output.is_none() {
+                                if let Err(e) = feed.push(audio) {
+                                    failed_output = Some(e);
+                                }
+                            }
+                        });
+                        if let Some(e) = failed_output {
+                            error = Some(e);
+                            break 'sentences;
+                        }
+                        if stop.load(Ordering::Acquire) {
+                            return;
+                        }
+                        let e = match r {
+                            Ok(_) => continue 'sentences,
+                            Err(e) => e,
+                        };
+                        let p = o.spec.provider.label();
+                        // A voice the service does not know (any more): its default one, said once.
+                        if super::online_speech::refuses_the_voice(&e)
+                            && o.choice.voice != o.default_voice
+                            && feed.heard.is_some()
+                        {
+                            let voice = o.choice.voice.clone();
+                            let default = o.default_voice.clone();
+                            let why = e.message(crate::i18n::ui());
+                            let message = tr!(
+                                "{why} La voix « {voice} » n’est pas celle de {p} : sa voix par défaut, « {default} », la remplace.",
+                                "{why} The voice “{voice}” is not one of {p}: its default voice, “{default}”, stands in."
+                            );
+                            let mut o = o.clone();
+                            o.choice.voice = o.default_voice.clone();
+                            s.reader.lock().online = Some(o.clone());
+                            online = Some(o);
+                            emit(VoiceEvent::ConvNotice {
+                                session: s.id,
+                                message,
+                            });
+                            continue;
+                        }
+                        let said = fallback_message(&e);
+                        let local = reader.voice.is_some() && engine.available();
+                        log::warn!(
+                            "speech: {p} failed: {}",
+                            if local {
+                                "Piper reads"
+                            } else {
+                                "the conversation pauses"
+                            }
+                        );
+                        if local {
+                            // Piper reads from here on, for the rest of the conversation.
+                            s.reader.lock().online = None;
+                            online = None;
+                            emit(VoiceEvent::ConvNotice {
+                                session: s.id,
+                                message: said,
+                            });
+                        } else {
+                            error = Some(pause_message(&e));
+                            paused = true;
+                            break 'sentences;
+                        }
+                    }
+                    let Some(voice) = &reader.voice else {
+                        error = Some("no voice".into());
+                        break;
+                    };
+                    let audio = match engine.synthesize(voice, &sentence, &reader.speak) {
                         Ok(a) => a,
                         Err(e) => {
                             error = Some(format!("{e:#}"));
@@ -309,65 +502,21 @@ impl Voice {
                     if stop.load(Ordering::Acquire) {
                         return;
                     }
-                    let mut slot = s.playing.lock();
-                    // Stopped while the lock was awaited: the next reading may hold the output by now.
-                    if stop.load(Ordering::Acquire) {
-                        return;
+                    if let Err(e) = feed.push(audio) {
+                        error = Some(e);
+                        break;
                     }
-                    if slot.is_none() {
-                        let done = {
-                            let s = s.clone();
-                            let emit = emit.clone();
-                            Box::new(move || {
-                                if s.reading.load(Ordering::Acquire) != reading {
-                                    return;
-                                }
-                                let mut mode = s.mode.lock();
-                                if *mode == Mode::Speaking {
-                                    *mode = Mode::After(Instant::now());
-                                    drop(mode);
-                                    emit(VoiceEvent::ConvSpoken {
-                                        session: s.id,
-                                        reading,
-                                        error: None,
-                                    });
-                                }
-                            })
-                        };
-                        match output.open(audio.rate, reader.volume, done) {
-                            Ok(p) => *slot = Some(p),
-                            Err(e) => {
-                                error = Some(e);
-                                break;
-                            }
-                        }
-                    }
-                    // Its subtitle, when it starts to be heard.
-                    let heard = {
-                        let s = s.clone();
-                        let emit = emit.clone();
-                        let stop = stop.clone();
-                        Box::new(move || {
-                            if !stop.load(Ordering::Acquire) {
-                                emit(VoiceEvent::ConvSentence {
-                                    session: s.id,
-                                    reading,
-                                    index: index as u32,
-                                    text: sentence,
-                                });
-                            }
-                        })
-                    };
-                    let playing = slot.as_ref().unwrap();
-                    playing.mark(heard);
-                    playing.push(&audio.samples);
+                }
+                if stop.load(Ordering::Acquire) {
+                    return;
                 }
                 log::info!("speech: reading {reading} made");
                 let playing = s.playing.lock().clone();
                 match (playing, error) {
                     (Some(p), None) => p.finish(),
                     (_, error) => {
-                        // Nothing to hear (an empty text), or it failed: it listens again at once.
+                        // Nothing to hear (an empty text), or it failed: it listens again at once; or, the service on
+                        // line failing without a voice of Piper's to stand in, it pauses.
                         if s.reading.load(Ordering::Acquire) == reading
                             && !stop.load(Ordering::Acquire)
                         {
@@ -375,11 +524,16 @@ impl Voice {
                                 log::warn!("speech: {e}");
                             }
                             s.playing.lock().take();
-                            *s.mode.lock() = Mode::Listening;
+                            *s.mode.lock() = if paused {
+                                Mode::Holding
+                            } else {
+                                Mode::Listening
+                            };
                             emit(VoiceEvent::ConvSpoken {
                                 session: s.id,
                                 reading,
                                 error,
+                                paused,
                             });
                         }
                     }
@@ -398,6 +552,89 @@ impl Voice {
             log::info!("voice: conversation stopped");
         }
     }
+}
+
+/// What a reading's sentences are pushed through: the output opened with the first sound, at its rate (a sound of
+/// another rate, Piper's standing in for the service's, brought to it), each sentence's subtitle marked where it starts.
+struct Feed {
+    s: Arc<Shared>,
+    output: Arc<dyn super::speech::output::Output>,
+    emit: super::Emit,
+    stop: Arc<AtomicBool>,
+    reading: u64,
+    volume: f32,
+    rate: Option<u32>,
+    /// The subtitle of the sentence under way, until its first sound is pushed.
+    heard: Option<super::speech::output::Done>,
+}
+
+impl Feed {
+    /// Pushes `audio`; stopped meanwhile, pushes nothing. Fails when the output does not open.
+    fn push(&mut self, audio: Audio) -> Result<(), String> {
+        if self.stop.load(Ordering::Acquire) || audio.samples.is_empty() {
+            return Ok(());
+        }
+        let mut slot = self.s.playing.lock();
+        // Stopped while the lock was awaited: the next reading may hold the output by now.
+        if self.stop.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if slot.is_none() {
+            let done = {
+                let s = self.s.clone();
+                let emit = self.emit.clone();
+                let reading = self.reading;
+                Box::new(move || {
+                    if s.reading.load(Ordering::Acquire) != reading {
+                        return;
+                    }
+                    let mut mode = s.mode.lock();
+                    if *mode == Mode::Speaking {
+                        *mode = Mode::After(Instant::now());
+                        drop(mode);
+                        emit(VoiceEvent::ConvSpoken {
+                            session: s.id,
+                            reading,
+                            error: None,
+                            paused: false,
+                        });
+                    }
+                })
+            };
+            *slot = Some(self.output.open(audio.rate, self.volume, done)?);
+            self.rate = Some(audio.rate);
+        }
+        let rate = self.rate.unwrap_or(audio.rate);
+        let samples = if audio.rate == rate {
+            audio.samples
+        } else {
+            audio::resample(&audio.samples, audio.rate, rate)
+        };
+        let playing = slot.as_ref().expect("opened above");
+        if let Some(heard) = self.heard.take() {
+            playing.mark(heard);
+        }
+        playing.push(&samples);
+        Ok(())
+    }
+}
+
+/// What the conversation says when the service on line fails: why, and who reads now.
+fn fallback_message(e: &OnlineError) -> String {
+    let why = e.message(crate::i18n::ui());
+    tr!(
+        "{why} La conversation continue avec la voix locale (Piper).",
+        "{why} The conversation goes on with the local voice (Piper)."
+    )
+}
+
+/// What it says when the service fails with no voice of Piper's to stand in: it pauses.
+fn pause_message(e: &OnlineError) -> String {
+    let why = e.message(crate::i18n::ui());
+    tr!(
+        "{why} La conversation est en pause : corrige-le, ou télécharge une voix locale dans Réglages › Voix, puis reprends.",
+        "{why} The conversation is paused: fix it, or download a local voice in Settings › Voice, then resume."
+    )
 }
 
 /// The reading under way stops: no more sentences made, nothing more heard.

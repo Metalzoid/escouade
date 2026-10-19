@@ -1,6 +1,6 @@
 # Réglages : Voix
 
-L’onglet « Voix » des réglages règle la dictée (le micro, qui transcrit ce que tu dis, la langue parlée et le raccourci) et la conversation vocale (la voix de chaque langue, sa vitesse, son volume et le silence qui envoie ce que tu as dit).
+L’onglet « Voix » des réglages règle la dictée (le micro, qui transcrit ce que tu dis, la langue parlée et le raccourci) et la conversation vocale (qui génère la voix, la voix de chaque langue, sa vitesse, son volume et le silence qui envoie ce que tu as dit).
 
 ## Ouvrir l’onglet
 
@@ -26,8 +26,9 @@ Ce groupe choisit qui transcrit une dictée, et dans quelle langue. Sous son tit
 |---|---|---|
 | « Transcrite par » | « Local (Whisper) » : la dictée est transcrite sur ta machine. « En ligne » : le son de chaque dictée est envoyé au service choisi, avec ta clé, pour une machine trop lente pour Whisper ou une meilleure qualité. La conversation vocale, elle, est toujours transcrite sur ta machine. | « Local (Whisper) » |
 | « Modèle » (local) | Le modèle de Whisper. Plus gros, il comprend mieux et transcrit plus lentement. Celui choisi se télécharge à la première dictée, ou depuis sa ligne. Il sert aussi à la conversation vocale. | base |
-| « Service » (en ligne) | Le service qui transcrit : OpenAI, Groq, Mistral, ElevenLabs ou Deepgram. La ligne nomme son modèle, payé à l’usage sur ton compte chez lui. | OpenAI |
-| « Clé de <service> » (en ligne) | Ta clé d’API chez ce service. | Aucune |
+| « Service » (en ligne) | Le service qui transcrit : OpenAI, Groq, Mistral, ElevenLabs ou Deepgram, payé à l’usage sur ton compte chez lui. | OpenAI |
+| « Modèle » (en ligne) | Le modèle du service qui transcrit, gardé pour chaque service. | Celui du tableau ci-dessous |
+| « Clé de <service> » (en ligne) | Ta clé d’API chez ce service, la même pour la dictée et pour la voix de la conversation. | Aucune |
 | « Langue parlée » | La langue que Whisper (ou le service) attend : « Celle de l’interface », « Détection automatique », ou une langue précise (Français, English, Deutsch, Español, Italiano, Português, Nederlands). Indiquer la langue rend la transcription plus juste ; la détection automatique convient à qui parle plusieurs langues. | « Celle de l’interface » |
 
 ### Les modèles de Whisper
@@ -47,9 +48,9 @@ Un modèle pas encore téléchargé a un bouton « Télécharger » ; pendant 
 
 ### La dictée en ligne
 
-« En ligne » montre deux lignes à la place de « Modèle » : « Service » et « Clé de <service> ». Les services et leur modèle :
+« En ligne » montre trois lignes à la place des modèles de Whisper : « Service », « Modèle » et « Clé de <service> ». Les services et leur modèle par défaut :
 
-| Service | Adresse | Modèle |
+| Service | Adresse | Modèle par défaut |
 |---|---|---|
 | OpenAI | `api.openai.com` | `gpt-4o-mini-transcribe` |
 | Groq | `api.groq.com` | `whisper-large-v3-turbo` |
@@ -57,7 +58,9 @@ Un modèle pas encore téléchargé a un bouton « Télécharger » ; pendant 
 | ElevenLabs | `api.elevenlabs.io` | `scribe_v2` |
 | Deepgram | `api.deepgram.com` | `nova-3` |
 
-La clé se colle dans le champ (« Colle ta clé d’API »), puis « Enregistrer la clé » ou `Entrée`. Elle part aussitôt dans le trousseau du système, une entrée par service, jamais dans les fichiers d’Escouade ni dans son journal, et n’est jamais réaffichée : la ligne dit « Enregistrée dans le trousseau », avec « Remplacer » et « Effacer la clé ». Sans clé, la ligne dit « Aucune clé enregistrée : la dictée en ligne en a besoin. » Sous Linux, où Escouade n’a pas de trousseau, la clé ne peut pas être enregistrée.
+La clé se colle dans le champ (« Colle ta clé d’API »), puis « Enregistrer la clé » ou `Entrée`. Elle part aussitôt dans le trousseau du système, une entrée par service, jamais dans les fichiers d’Escouade ni dans son journal, et n’est jamais réaffichée : la ligne dit « Enregistrée dans le trousseau », avec « Remplacer » et « Effacer la clé ». Sans clé, la ligne dit « Aucune clé enregistrée : le service en a besoin. » Sous Linux, où Escouade n’a pas de trousseau, la clé ne peut pas être enregistrée. **Une clé par service** : enregistrée une fois, ici ou dans le groupe « Conversation », elle sert à la dictée et à la [voix en ligne](#la-voix-en-ligne).
+
+Le menu « Modèle » liste les modèles du service qui transcrivent, avec ce qui les distingue (« rapide », « plus précis »), celui par défaut en premier. Avec une clé enregistrée, la liste est celle que donne l’API du service, lue avec ta clé et gardée sur ta machine ; « Actualiser la liste » la relit, et la ligne dit quand elle a été lue. Sans clé, ou pour un service dont l’API ne liste pas ses modèles de transcription (ElevenLabs), c’est la liste de sa documentation, livrée avec l’app. Tant que tu n’en choisis pas un autre, c’est le modèle par défaut : la dictée reste celle d’avant. Le modèle choisi est gardé par service : changer de service puis revenir le retrouve. Un modèle que le service ne propose plus est remplacé par celui par défaut, et la ligne le dit (« Groq ne propose plus « … » : son modèle par défaut, « whisper-large-v3-turbo », le remplace. »).
 
 Sous le titre du groupe, l’app dit ce qui part : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers le service choisi, avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté ; le service traite le son selon ses propres conditions. Le détail est sur la page [Confidentialité](/privacy/).
 
@@ -71,15 +74,16 @@ Sous le titre du groupe, l’app dit ce qui part : le son de chaque dictée (un 
 
 ## Conversation
 
-Ce groupe règle la voix qui lit les réponses de l’agent pendant une [conversation vocale](chat#parler-avec-l-agent-conversation-vocale). Sous son titre, l’app dit : « Les réponses sont lues sur ta machine par Piper : rien ne quitte ta machine. » Les voix proposées sont celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque, sauf une exception, signalée.
+Ce groupe règle la voix qui lit les réponses de l’agent pendant une [conversation vocale](chat#parler-avec-l-agent-conversation-vocale) : par défaut Piper, sur ta machine, ou un service en ligne (voir [La voix en ligne](#la-voix-en-ligne)). Sous son titre, l’app dit, avec Piper : « Les réponses sont lues sur ta machine par Piper : rien ne quitte ta machine. » Les voix proposées sont celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque, sauf une exception, signalée.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Voix en Français » | La voix qui lit les réponses quand la conversation se tient en français, parmi 7. | Siwis, qualité moyenne (60 Mo) |
+| « Voix générée par » | « Local (Piper) » : les réponses sont lues sur ta machine. « En ligne » : par le service choisi, avec la clé de sa dictée. | « Local (Piper) » |
+| « Voix en Français » | La voix qui lit les réponses quand la conversation se tient en français, parmi 7. En ligne, elle s’appelle « Voix locale en Français » : celle qui lit si le service ne répond pas. | Siwis, qualité moyenne (60 Mo) |
 | « Voix en English » | La même chose en anglais, parmi 29. | Ljspeech, qualité moyenne (61 Mo) |
 | « Locuteur » | Pour une voix qui a plusieurs locuteurs ou styles, celui qui lit : son nom quand la voix en donne un, sinon son numéro. | Le premier |
-| « Vitesse » | De 0,5× à 2×, par pas de 0,1 : 1 est le rythme de la voix, plus haut elle lit plus vite. | 1,0× |
-| « Volume » | De 0 à 100 %. | 100 % |
+| « Vitesse » | De 0,5× à 2×, par pas de 0,1 : 1 est le rythme de la voix, plus haut elle lit plus vite. En ligne, ramenée dans les bornes du service ; la ligne dit quand il n’en prend pas. | 1,0× |
+| « Volume » | De 0 à 100 %, appliqué sur ta machine, quel que soit le service. | 100 % |
 | « Délai avant l’envoi » | Le silence après lequel ce que tu as dit part à l’agent, de 0,5 à 3 s, par pas de 0,1 s. | 1,2 s |
 
 La conversation se tient dans la « Langue parlée » quand c’est le français ou l’anglais, sinon dans la langue de l’interface.
@@ -95,6 +99,31 @@ Le menu de chaque langue nomme chaque voix avec sa qualité et sa taille, comme 
 **Fuze**, en français, de haute qualité (74 Mo), est la seule voix proposée par exception, ce que sa fiche dit : son modèle ne déclare aucune licence, et son jeu de données, sous CC BY 4.0, a été généré par une voix de synthèse (ElevenLabs v4). Elle a 14 styles, choisis par « Locuteur » : normal (par défaut), joyeuse, excited, colere, triste, surprise, interrogative, storytelling, moqueur, peur, chuchote, determine, fier et degoute.
 
 Les crédits de Piper, eSpeak NG, ONNX Runtime, whisper.cpp et de chaque voix sont dans [Réglages › À propos](settings-about), « Crédits et licences ».
+
+### La voix en ligne
+
+« En ligne », dans « Voix générée par », fait lire les passages par un service, avec **la clé de sa dictée** (une seule entrée du trousseau par service : enregistrée pour la dictée, elle sert déjà ici). Le groupe montre alors « Service », « Modèle de la voix », « Clé de <service> », puis « Voix en Français » et « Voix en English ». Les services, leur modèle et leur voix par défaut :
+
+| Service | Modèle par défaut | Voix par défaut (fr / en) | Vitesse |
+|---|---|---|---|
+| OpenAI | `gpt-4o-mini-tts` | `marin` / `marin` | 0,25× à 4× |
+| Groq | `canopylabs/orpheus-v1-english` | anglais seulement : `hannah` | Son propre rythme |
+| Mistral | `voxtral-mini-tts-2603` | `fr_marie_neutral` / `en_paul_neutral` | Son propre rythme |
+| ElevenLabs | `eleven_flash_v2_5` | George (`JBFqnCBsd6RMkjVDRZzb`) | 0,7× à 1,2× |
+| Deepgram | `aura-2` | `aura-2-agathe-fr` / `aura-2-thalia-en` | 0,7× à 1,5×, en anglais seulement |
+
+Le menu « Modèle de la voix » marche comme celui de la dictée : la liste de l’API du service, lue avec ta clé (par exemple les modèles d’ElevenLabs : Flash v2.5, v4 Turbo, v4, v3…), sinon celle de sa documentation, le modèle par défaut tant que tu n’en choisis pas un autre, gardé par service.
+
+Le champ « Voix en … » dépend du service :
+
+- quand son API liste ses voix (ElevenLabs, Mistral, Deepgram), **il se complète** : tape quelques lettres, la liste filtre par nom, identifiant, genre, accent ou description, sur les voix qui lisent la langue avec ce modèle ; les voix créées ou clonées sur ton compte viennent en premier, marquées « ton compte ». Choisis avec la souris, ou avec les flèches et `Entrée` ; `Échap` ferme la liste ;
+- sinon (OpenAI, Groq), c’est un **champ libre** : écris le nom ou l’identifiant de la voix tel que le service l’attend (la ligne donne un exemple), « Voir ses voix » ouvre la page des voix du service.
+
+Vide, c’est la voix par défaut du service. La voix choisie est gardée par service et par langue (et par modèle chez Deepgram, dont les voix sont des modèles). « ▶ Écouter » lit une phrase avec le service, le modèle et la voix choisis : une voix que le service refuse est dite tout de suite, avec sa réponse. Un modèle qui ne lit pas une langue (Orpheus de Groq en français) : la ligne le dit, et Piper lit la conversation dans cette langue.
+
+Pendant la conversation, rien ne change pour toi : les passages sont lus phrase par phrase, la première demandée tout de suite et les suivantes pendant qu’elle joue, le son joué à mesure qu’il arrive, avec les mêmes sous-titres, le même volume, le même barge-in, la pause et l’arrêt. Sous le titre du groupe, l’app dit ce qui part : le texte de chaque passage lu, phrase par phrase, vers le service, avec ta clé, par le proxy des [réglages réseau](settings-network), jamais le son du micro, qui reste transcrit sur ta machine. Le détail est sur la page [Confidentialité](/privacy/).
+
+Si le service ne répond pas (clé absente ou refusée, quota épuisé, service en panne, réseau ou proxy), la conversation le dit une fois, avec le service et quoi faire, et **Piper lit la suite** si une voix locale est téléchargée ; sinon elle **se met en pause**, et « Reprendre » redemande au service. Une voix que le service ne connaît plus : c’est dit, et sa voix par défaut lit. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.
 
 ### Ce qui est lu à voix haute
 
@@ -115,4 +144,4 @@ Rien ne se télécharge tant que tu ne dictes pas ou ne parles pas avec un agent
 | Les données d’eSpeak NG (prononciation du français et de l’anglais) | Écrites par l’app à la première lecture, sans téléchargement, et réécrites après une mise à jour | `voice/espeak-ng-data/` |
 | ONNX Runtime | Jamais : il est livré avec l’app | Le dossier de l’app |
 
-La dictée en ligne ne télécharge rien. « Effacer », sur la ligne d’un modèle ou d’une voix, libère sa place sur le disque.
+La dictée et la voix en ligne ne téléchargent rien. « Effacer », sur la ligne d’un modèle ou d’une voix, libère sa place sur le disque.

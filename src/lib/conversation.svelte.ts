@@ -140,6 +140,8 @@ class VoiceConversation {
       } else {
         this.session = r.session;
         this.phase = 'listening';
+        // The voice on line cannot read (no key, a language it does not speak): said once, Piper reads (ESC-132).
+        if (r.notice) app.toast(r.notice);
         // A question already waiting (the agent of a ticket asks without being spoken to): asked at once.
         this.recheck();
       }
@@ -238,6 +240,13 @@ class VoiceConversation {
       case 'convSpoken':
         if (!this.ours(e.reading)) break;
         this.reading = null;
+        if (e.paused) {
+          // The voice on line failed, and no voice of Piper stands in: on pause, until « Reprendre » (ESC-132).
+          if (e.error) app.toast(e.error, 'error');
+          this.phase = 'paused';
+          void api.conversationHold(session);
+          break;
+        }
         if (e.error) app.toast(t('voice.speech.previewFailed', { error: e.error }), 'error');
         if (this.after === 'pause') {
           this.phase = 'paused';
@@ -247,6 +256,10 @@ class VoiceConversation {
           this.phase = this.after === 'answer' ? 'question' : 'listening';
           if (this.phase === 'listening') this.recheck();
         }
+        break;
+      case 'convNotice':
+        // The voice on line failed and Piper reads now, or the voice chosen is refused and the default one reads.
+        app.toast(e.message, 'error');
         break;
       case 'convEnded':
         if (e.error) app.toast(e.error, 'error');

@@ -8,7 +8,10 @@
   import { app } from '../../lib/state.svelte';
   import type { VoiceInfo } from '../../lib/types';
   import Chips from './Chips.svelte';
+  import { onlineVoice } from '../../lib/online-voice.svelte';
   import Group from './Group.svelte';
+  import OnlineKey from './OnlineKey.svelte';
+  import OnlineModel from './OnlineModel.svelte';
   import Row from './Row.svelte';
   import SpeechSettings from './SpeechSettings.svelte';
   import { tip } from '../../lib/tip';
@@ -55,48 +58,16 @@
     await load();
   }
 
-  // « En ligne » (ESC-110): the service chosen with the draft, its key kept in the keychain at once (never shown back).
+  // « En ligne » (ESC-110): the service chosen with the draft, its key kept in the keychain at once (never shown back),
+  // the same as the conversation's voice's; its model (ESC-132), its API's list when it gives one.
   const online = $derived(v.transcription === 'online');
   const service = $derived(onlineService(v.onlineService));
-  let keys = $state<string[]>([]);
-  let keyDraft = $state('');
-  let replacing = $state(false);
-  const hasKey = $derived(keys.includes(service.id));
-
-  async function loadKeys() {
-    keys = await api.voiceOnlineKeys().catch(() => []);
-  }
   $effect(() => {
-    void loadKeys();
+    void onlineVoice.loadKeys();
   });
-  // Another service: its own key.
   $effect(() => {
-    void service.id;
-    keyDraft = '';
-    replacing = false;
+    if (online) void onlineVoice.load(service.id);
   });
-
-  async function saveKey() {
-    const label = service.label;
-    try {
-      await api.voiceOnlineKeySet(service.id, keyDraft);
-      keyDraft = '';
-      replacing = false;
-      app.toast(t('voice.settings.keySavedToast', { service: label }));
-    } catch (e) {
-      app.toast(t('voice.settings.keyFailed', { error: String(e) }), 'error');
-    }
-    await loadKeys();
-  }
-
-  async function deleteKey() {
-    try {
-      await api.voiceOnlineKeyDelete(service.id);
-    } catch (e) {
-      app.toast(String(e), 'error');
-    }
-    await loadKeys();
-  }
 
   function record(e: KeyboardEvent) {
     if (!recording) return;
@@ -153,37 +124,20 @@
     />
   </Row>
   {#if online}
-    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { model: service.model, service: service.label })}>
+    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { service: service.label })}>
       <select class="field input" aria-label={t('voice.settings.service')} bind:value={v.onlineService}>
         {#each ONLINE_SERVICES as s (s.id)}
           <option value={s.id}>{s.label}</option>
         {/each}
       </select>
     </Row>
-    <Row
-      label={t('voice.settings.key', { service: service.label })}
-      desc={hasKey ? t('voice.settings.keyDesc') : `${t('voice.settings.keyMissing')} ${t('voice.settings.keyDesc')}`}
-    >
-      <div class="keys">
-        {#if hasKey && !replacing}
-          <span class="ok">{t('voice.settings.keySaved')}</span>
-          <button class="btn ghost" onclick={() => (replacing = true)}>{t('voice.settings.keyReplace')}</button>
-          <button class="btn ghost" onclick={deleteKey}>{t('voice.settings.keyDelete')}</button>
-        {:else}
-          <input
-            class="field input mono"
-            type="password"
-            aria-label={t('voice.settings.key', { service: service.label })}
-            placeholder={t('voice.settings.keyPlaceholder')}
-            autocomplete="off"
-            spellcheck="false"
-            bind:value={keyDraft}
-            onkeydown={(e) => e.key === 'Enter' && keyDraft.trim() && (e.preventDefault(), void saveKey())}
-          />
-          <button class="btn" disabled={!keyDraft.trim()} onclick={saveKey}>{t('voice.settings.keySave')}</button>
-        {/if}
-      </div>
-    </Row>
+    <OnlineModel
+      {service}
+      purpose="transcribe"
+      bind:models={v.onlineModels}
+      desc={t('voice.settings.onlineModelDesc', { service: service.label, model: service.model })}
+    />
+    <OnlineKey {service} />
   {:else}
     <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')}>
       <div class="models" role="radiogroup" aria-label={t('voice.settings.model')}>

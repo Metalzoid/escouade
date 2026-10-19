@@ -190,7 +190,7 @@ pub fn save_settings(
     let remote_was_on = core.settings.read().remote_control_all;
     core.save_window_settings(settings.clone()).map_err(err)?;
     // A conversation under way takes the voice, its language, pace and volume (ESC-115).
-    voice.conversation_tune(&conv_choice(&core.settings.read()).0);
+    voice.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog).0);
     if settings.remote_control_all && !remote_was_on {
         core.telemetry
             .track(Event::RemoteControlEnabled { from: "global" });
@@ -2032,8 +2032,9 @@ pub fn voice_info(voice: VoiceState) -> VoiceInfo {
 fn voice_choice(
     settings: &Settings,
     secrets: &dyn crate::integrations::secrets::SecretStore,
+    catalog: &crate::voice::online_catalog::CatalogStore,
 ) -> Result<crate::voice::Choice, crate::voice::VoiceError> {
-    let online = crate::voice::online::spec_of(settings, secrets)?;
+    let online = crate::voice::online::spec_of(settings, secrets, catalog)?;
     Ok(crate::voice::Choice {
         device: settings.voice.device.clone(),
         model: settings.voice.model.clone(),
@@ -2051,7 +2052,8 @@ fn voice_err(e: crate::voice::VoiceError) -> String {
 /// time, and the answer waits for them.
 #[tauri::command(async)]
 pub fn voice_start(core: CoreState, voice: VoiceState) -> Res<crate::voice::Started> {
-    let choice = voice_choice(&core.settings.read(), &*core.secrets).map_err(voice_err)?;
+    let choice =
+        voice_choice(&core.settings.read(), &*core.secrets, &voice.catalog).map_err(voice_err)?;
     voice.start(&choice).map_err(voice_err)
 }
 
@@ -2078,13 +2080,32 @@ pub async fn voice_stop(
         };
         let settings = core.settings.read().voice.clone();
         // On line, the service stands for the model: never the key nor the text.
-        let model = match crate::voice::online_provider(&settings) {
-            Some(p) => p.id(),
-            None => crate::voice::models::find(&settings.model)
-                .map(|m| m.id)
-                .unwrap_or(crate::voice::models::DEFAULT_MODEL),
+        let (model, online_model) = match crate::voice::online_provider(&settings) {
+            Some(p) => {
+                let chosen = settings
+                    .online_models
+                    .get(p.id())
+                    .map(String::as_str)
+                    .unwrap_or("");
+                let (m, _) = voice.catalog.checked_model(
+                    p,
+                    crate::voice::online_catalog::Purpose::Transcribe,
+                    chosen,
+                );
+                (p.id(), Some(m))
+            }
+            None => (
+                crate::voice::models::find(&settings.model)
+                    .map(|m| m.id)
+                    .unwrap_or(crate::voice::models::DEFAULT_MODEL),
+                None,
+            ),
         };
-        core.telemetry.track(Event::DictationUsed { target, model });
+        core.telemetry.track(Event::DictationUsed {
+            target,
+            model,
+            online_model,
+        });
     }
     Ok(text)
 }
@@ -2106,6 +2127,42 @@ pub fn voice_online_key_set(core: CoreState, service: String, key: String) -> Re
 #[tauri::command(async)]
 pub fn voice_online_key_delete(core: CoreState, service: String) -> Res<()> {
     crate::voice::online::delete_key(&*core.secrets, &service)
+}
+
+/// Réglages › Voix: the models and the voices of `service` (ESC-132). What was listed is kept; `refresh`, or nothing
+/// listed yet with a key kept, reads its API again with the key (only the key goes).
+#[tauri::command]
+pub async fn voice_online_catalog(
+    core: CoreState<'_>,
+    voice: VoiceState<'_>,
+    service: String,
+    refresh: bool,
+) -> Res<crate::voice::online_catalog::ServiceCatalog> {
+    use crate::voice::online_catalog::{catalog, fetch};
+    let p = crate::voice::online::Provider::find(&service)
+        .ok_or_else(|| format!("unknown service {service}"))?;
+    let kept = voice.catalog.get(p);
+    if !refresh && kept.is_some() {
+        return Ok(catalog(p, kept.as_ref(), None));
+    }
+    let settings = core.settings.read().clone();
+    let spec = match crate::voice::online::keyed(p, &settings, &*core.secrets) {
+        Ok(s) => s,
+        // No key: the documentation's, said only when asked.
+        Err(e) => {
+            let error = refresh.then(|| voice_err(e));
+            return Ok(catalog(p, kept.as_ref(), error));
+        }
+    };
+    match fetch(&spec).await {
+        Ok(listed) => {
+            if let Err(e) = voice.catalog.put(p, &listed) {
+                log::warn!("voice: the catalog of {} not kept: {e:#}", p.label());
+            }
+            Ok(catalog(p, Some(&listed), None))
+        }
+        Err(e) => Ok(catalog(p, kept.as_ref(), Some(e.message(i18n::ui())))),
+    }
 }
 
 /// Escape, or the field dictated into gone: the listening and the transcription stop, nothing
@@ -2161,9 +2218,15 @@ fn speak_options(settings: &Settings, voice: &str) -> crate::voice::speech::Spea
 }
 
 /// What a conversation is held with, from `settings`, and its language.
-fn conv_choice(settings: &Settings) -> (crate::voice::conversation::ConvChoice, &'static str) {
+fn conv_choice(
+    settings: &Settings,
+    secrets: &dyn crate::integrations::secrets::SecretStore,
+    catalog: &crate::voice::online_catalog::CatalogStore,
+) -> (crate::voice::conversation::ConvChoice, &'static str) {
     let lang = speech_lang(settings);
     let id = settings.voice.speech.voice(lang);
+    // « Voix générée par » a service on line (ESC-132), with the key of its dictation.
+    let online = crate::voice::online_speech::resolve(settings, secrets, catalog, lang);
     let choice = crate::voice::conversation::ConvChoice {
         device: settings.voice.device.clone(),
         model: settings.voice.model.clone(),
@@ -2172,6 +2235,9 @@ fn conv_choice(settings: &Settings) -> (crate::voice::conversation::ConvChoice, 
         volume: settings.voice.speech.volume.clamp(0.0, 1.0),
         silence_ms: settings.voice.speech.silence_ms,
         voice: id,
+        online: online.online,
+        online_error: online.error,
+        online_notice: online.notice,
     };
     (choice, lang)
 }
@@ -2188,15 +2254,27 @@ pub fn conversation_start(
     core: CoreState,
     voice: VoiceState,
 ) -> Res<crate::voice::conversation::ConvStarted> {
-    let (choice, lang) = conv_choice(&core.settings.read());
-    let id = choice.voice.clone();
+    let (choice, lang) = conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog);
+    // The engine and the model that read, never the text: Piper and its voice, or the service and its model.
+    let (engine, model, id) = match &choice.online {
+        Some(o) => (
+            o.spec.provider.id(),
+            o.choice.model.clone(),
+            o.choice.voice.clone(),
+        ),
+        None => ("piper", "piper".to_string(), choice.voice.clone()),
+    };
     let started = voice.conversation_start(choice).map_err(voice_err)?;
     if matches!(
         started,
         crate::voice::conversation::ConvStarted::Listening { .. }
     ) {
-        core.telemetry
-            .track(Event::VoiceConversation { lang, voice: id });
+        core.telemetry.track(Event::VoiceConversation {
+            lang,
+            voice: id,
+            engine,
+            model,
+        });
     }
     Ok(started)
 }
@@ -2263,19 +2341,60 @@ pub fn speech_preview(
     let lang = crate::voice::speech::catalog::find(&id)
         .map(|v| v.lang.as_str())
         .unwrap_or("fr");
-    let text = if lang == "fr" {
-        "Bonjour ! C’est la voix qui te lira les réponses de tes agents dans Escouade."
-    } else {
-        "Hello! This is the voice that will read your agents’ answers to you in Escouade."
-    };
     voice
         .preview(
             &id,
-            text,
+            preview_text(lang),
             &opts,
             settings.voice.speech.volume.clamp(0.0, 1.0),
         )
         .map_err(err)
+}
+
+/// « ▶ Écouter » on line (ESC-132): a sentence read by `service` with `model` and `voice_id` in `lang`, at the
+/// settings' pace and volume. Returns once it is heard; a voice the service refuses is said at once, with its answer.
+#[tauri::command(async)]
+pub fn speech_preview_online(
+    core: CoreState,
+    voice: VoiceState,
+    service: String,
+    model: String,
+    voice_id: String,
+    lang: String,
+) -> Res<()> {
+    let settings = core.settings.read().clone();
+    let p = crate::voice::online::Provider::find(&service)
+        .ok_or_else(|| format!("unknown service {service}"))?;
+    let spec = crate::voice::online::keyed(p, &settings, &*core.secrets)
+        .map_err(voice_err)?
+        .with_model(&model);
+    let lang = if lang == "en" { "en" } else { "fr" };
+    let choice = crate::voice::online_speech::SpeakChoice {
+        model: spec.model.clone(),
+        voice: voice_id.trim().to_string(),
+        lang: lang.into(),
+        rate: if settings.voice.speech.rate.is_finite() {
+            settings.voice.speech.rate.clamp(0.5, 2.0)
+        } else {
+            1.0
+        },
+    };
+    voice
+        .preview_online(
+            &spec,
+            &choice,
+            preview_text(lang),
+            settings.voice.speech.volume.clamp(0.0, 1.0),
+        )
+        .map_err(|e| e.message(i18n::ui()))
+}
+
+fn preview_text(lang: &str) -> &'static str {
+    if lang == "fr" {
+        "Bonjour ! C’est la voix qui te lira les réponses de tes agents dans Escouade."
+    } else {
+        "Hello! This is the voice that will read your agents’ answers to you in Escouade."
+    }
 }
 
 #[cfg(test)]

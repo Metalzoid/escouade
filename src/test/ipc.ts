@@ -106,9 +106,20 @@ export const SETTINGS: Settings = {
     model: 'base',
     language: 'ui',
     shortcut: 'Mod+Shift+Space',
-    speech: { voices: {}, speakers: {}, rate: 1, volume: 1, silenceMs: 1200 },
+    speech: {
+      voices: {},
+      speakers: {},
+      rate: 1,
+      volume: 1,
+      silenceMs: 1200,
+      engine: 'local',
+      onlineService: 'openai',
+      onlineModels: {},
+      onlineVoices: {},
+    },
     transcription: 'local',
     onlineService: 'openai',
+    onlineModels: {},
   },
 };
 

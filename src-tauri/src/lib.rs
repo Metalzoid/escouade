@@ -531,6 +531,7 @@ pub fn run() {
             commands::voice_online_keys,
             commands::voice_online_key_set,
             commands::voice_online_key_delete,
+            commands::voice_online_catalog,
             commands::speech_info,
             commands::conversation_start,
             commands::conversation_listen,
@@ -542,6 +543,7 @@ pub fn run() {
             commands::speech_download_cancel,
             commands::speech_delete,
             commands::speech_preview,
+            commands::speech_preview_online,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application")

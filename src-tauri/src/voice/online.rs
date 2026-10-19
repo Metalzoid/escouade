@@ -70,7 +70,7 @@ impl Provider {
         }
     }
 
-    /// The model it is asked for.
+    /// The model it transcribes with when the user chose none: the one of ESC-110.
     pub fn model(self) -> &'static str {
         match self {
             Provider::OpenAi => "gpt-4o-mini-transcribe",
@@ -92,6 +92,8 @@ impl Provider {
 #[derive(Clone)]
 pub struct Spec {
     pub provider: Provider,
+    /// The model it is asked for (`Provider::model` by default; the one chosen in the settings).
+    pub model: String,
     pub key: String,
     pub client: reqwest::Client,
     pub base: String,
@@ -101,6 +103,7 @@ impl std::fmt::Debug for Spec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Spec")
             .field("provider", &self.provider)
+            .field("model", &self.model)
             .field("base", &self.base)
             .finish_non_exhaustive()
     }
@@ -110,10 +113,18 @@ impl Spec {
     pub fn new(provider: Provider, key: String, client: reqwest::Client) -> Self {
         Self {
             provider,
+            model: provider.model().into(),
             key,
             client,
             base: provider.base_url().into(),
         }
+    }
+
+    pub fn with_model(mut self, model: &str) -> Self {
+        if !model.trim().is_empty() {
+            self.model = model.trim().to_string();
+        }
+        self
     }
 }
 
@@ -128,6 +139,10 @@ pub enum OnlineError {
     Network(Provider, String),
     /// It answered something else than a text: its status, and what it said.
     Service(Provider, u16, String),
+    /// Too many requests, or the quota of the account is spent (429).
+    Quota(Provider, String),
+    /// It did not read the passage (ESC-132): its status, and what it said.
+    Speech(Provider, u16, String),
 }
 
 impl OnlineError {
@@ -163,6 +178,22 @@ impl OnlineError {
                     lang,
                     "{p} n’a pas transcrit la dictée ({status}) : {e}",
                     "{p} did not transcribe the dictation ({status}): {e}"
+                )
+            }
+            OnlineError::Quota(p, e) => {
+                let p = p.label();
+                tr_in!(
+                    lang,
+                    "{p} refuse pour l’instant : trop de requêtes ou quota épuisé ({e}). Attends un peu, ou vérifie le forfait de ton compte {p}.",
+                    "{p} refuses for now: too many requests or the quota is spent ({e}). Wait a little, or check the plan of your {p} account."
+                )
+            }
+            OnlineError::Speech(p, status, e) => {
+                let p = p.label();
+                tr_in!(
+                    lang,
+                    "{p} n’a pas lu le passage ({status}) : {e}",
+                    "{p} did not read the passage ({status}): {e}"
                 )
             }
         }
@@ -224,7 +255,7 @@ fn multipart(fields: &[(&str, &str)], audio: &[u8]) -> (Vec<u8>, String) {
 fn request(spec: &Spec, audio: &[u8], language: &str) -> reqwest::RequestBuilder {
     let base = spec.base.trim_end_matches('/');
     let lang = (language != "auto" && !language.is_empty()).then_some(language);
-    let model = spec.provider.model();
+    let model = spec.model.as_str();
     match spec.provider {
         Provider::OpenAi | Provider::Groq | Provider::Mistral => {
             let mut fields = vec![("model", model), ("response_format", "json")];
@@ -286,7 +317,7 @@ fn text_of(provider: Provider, body: &serde_json::Value) -> Option<String> {
 
 /// What a service said of an error: its message when it gives one, else the start of its answer;
 /// the key taken out, should it be there.
-fn said(body: &str, key: &str) -> String {
+pub(super) fn said(body: &str, key: &str) -> String {
     let v: Option<serde_json::Value> = serde_json::from_str(body).ok();
     let msg = v
         .as_ref()
@@ -358,6 +389,11 @@ pub async fn transcribe(
         );
         return Err(OnlineError::KeyRefused(p));
     }
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        let e = said(&body, &spec.key);
+        log::warn!("voice: {} answered 429: {e}", p.label());
+        return Err(OnlineError::Quota(p, e));
+    }
     if !status.is_success() {
         let e = said(&body, &spec.key);
         log::warn!("voice: {} answered {}: {e}", p.label(), status.as_u16());
@@ -376,7 +412,7 @@ pub async fn transcribe(
 
 /// What reqwest says of a request that did not get through, with its causes (the proxy's, the
 /// connection's).
-fn network_reason(e: &reqwest::Error) -> String {
+pub(super) fn network_reason(e: &reqwest::Error) -> String {
     let mut out = if e.is_timeout() {
         tr!("délai dépassé", "timed out")
     } else {
@@ -394,15 +430,34 @@ fn network_reason(e: &reqwest::Error) -> String {
     out
 }
 
-/// The service of the settings, with its key from the keychain and the client of their proxy; none
-/// when the dictation is local. No key kept: `NoKey`, told before anything is listened to.
+/// The service of the settings, with its key from the keychain, the model chosen for it (its default when the
+/// service no longer offers it) and the client of their proxy; none when the dictation is local. No key kept: `NoKey`,
+/// told before anything is listened to.
 pub fn spec_of(
     settings: &crate::model::Settings,
     secrets: &dyn SecretStore,
+    catalog: &super::online_catalog::CatalogStore,
 ) -> std::result::Result<Option<Spec>, super::VoiceError> {
     let Some(p) = super::online_provider(&settings.voice) else {
         return Ok(None);
     };
+    let chosen = settings
+        .voice
+        .online_models
+        .get(p.id())
+        .map(String::as_str)
+        .unwrap_or("");
+    let (model, _) = catalog.checked_model(p, super::online_catalog::Purpose::Transcribe, chosen);
+    Ok(Some(keyed(p, settings, secrets)?.with_model(&model)))
+}
+
+/// `p` with its key from the keychain (the one of its dictation, ESC-132: one entry by service) and the client of the
+/// settings' proxy.
+pub fn keyed(
+    p: Provider,
+    settings: &crate::model::Settings,
+    secrets: &dyn SecretStore,
+) -> std::result::Result<Spec, super::VoiceError> {
     let key = secrets
         .get(&p.entry())
         .unwrap_or_else(|e| {
@@ -416,7 +471,7 @@ pub fn spec_of(
         .ok_or(super::VoiceError::Online(OnlineError::NoKey(p)))?;
     let client =
         super::models::client(settings).map_err(|e| super::VoiceError::Other(e.to_string()))?;
-    Ok(Some(Spec::new(p, key, client)))
+    Ok(Spec::new(p, key, client))
 }
 
 /// The services whose key is in the keychain (never the keys).

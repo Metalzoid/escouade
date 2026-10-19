@@ -11,24 +11,24 @@ pub(crate) struct Got {
     /// "POST /v1/listen?model=… HTTP/1.1"
     pub line: String,
     /// The headers, their names in lower case.
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
 }
 
 impl Got {
-    fn header(&self, name: &str) -> Option<&str> {
+    pub fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
             .find(|(n, _)| n == name)
             .map(|(_, v)| v.as_str())
     }
 
-    fn body_text(&self) -> String {
+    pub fn body_text(&self) -> String {
         String::from_utf8_lossy(&self.body).into_owned()
     }
 
     /// The value of the multipart field `name`.
-    fn field(&self, name: &str) -> Option<String> {
+    pub fn field(&self, name: &str) -> Option<String> {
         let body = self.body_text();
         let mark = format!("name=\"{name}\"\r\n\r\n");
         let at = body.find(&mark)? + mark.len();
@@ -37,20 +37,48 @@ impl Got {
     }
 }
 
+/// What a fake service answers a request: its status, its type, and its body in pieces (sent chunked, `gap` apart,
+/// when there are several: a stream).
+#[derive(Debug, Clone)]
+pub(crate) struct Reply {
+    pub status: u16,
+    pub content_type: String,
+    pub chunks: Vec<Vec<u8>>,
+    pub gap: Duration,
+}
+
+impl Reply {
+    pub fn json(status: u16, body: &str) -> Self {
+        Self {
+            status,
+            content_type: "application/json".into(),
+            chunks: vec![body.as_bytes().to_vec()],
+            gap: Duration::ZERO,
+        }
+    }
+}
+
 /// A fake service: every request answered `status` and `body`, what it got kept.
 pub(crate) async fn serve(status: u16, body: &str) -> (String, Arc<Mutex<Vec<Got>>>) {
+    let reply = Reply::json(status, body);
+    serve_with(Arc::new(move |_: &Got| reply.clone())).await
+}
+
+/// A fake service that answers each request what `answer` says, what it got kept.
+pub(crate) async fn serve_with(
+    answer: Arc<dyn Fn(&Got) -> Reply + Send + Sync>,
+) -> (String, Arc<Mutex<Vec<Got>>>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let got = Arc::new(Mutex::new(Vec::new()));
     let g = got.clone();
-    let body = body.to_string();
     tokio::spawn(async move {
         loop {
             let Ok((mut sock, _)) = listener.accept().await else {
                 return;
             };
             let g = g.clone();
-            let body = body.clone();
+            let answer = answer.clone();
             tokio::spawn(async move {
                 let mut buf = Vec::new();
                 let mut chunk = [0u8; 8192];
@@ -83,16 +111,42 @@ pub(crate) async fn serve(status: u16, body: &str) -> (String, Arc<Mutex<Vec<Got
                     }
                     buf.extend_from_slice(&chunk[..n]);
                 }
-                g.lock().push(Got {
+                let got = Got {
                     line,
                     headers,
                     body: buf[head_end..].to_vec(),
-                });
-                let out = format!(
-                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
+                };
+                let r = answer(&got);
+                g.lock().push(got);
+                if r.chunks.len() == 1 {
+                    let body = &r.chunks[0];
+                    let head = format!(
+                        "HTTP/1.1 {} X\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        r.status,
+                        r.content_type,
+                        body.len()
+                    );
+                    let _ = sock.write_all(head.as_bytes()).await;
+                    let _ = sock.write_all(body).await;
+                    return;
+                }
+                let head = format!(
+                    "HTTP/1.1 {} X\r\nContent-Type: {}\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n",
+                    r.status, r.content_type
                 );
-                let _ = sock.write_all(out.as_bytes()).await;
+                if sock.write_all(head.as_bytes()).await.is_err() {
+                    return;
+                }
+                for c in &r.chunks {
+                    let mut piece = format!("{:x}\r\n", c.len()).into_bytes();
+                    piece.extend_from_slice(c);
+                    piece.extend_from_slice(b"\r\n");
+                    if sock.write_all(&piece).await.is_err() || sock.flush().await.is_err() {
+                        return;
+                    }
+                    tokio::time::sleep(r.gap).await;
+                }
+                let _ = sock.write_all(b"0\r\n\r\n").await;
             });
         }
     });
@@ -100,14 +154,21 @@ pub(crate) async fn serve(status: u16, body: &str) -> (String, Arc<Mutex<Vec<Got
 }
 
 /// An address nothing listens on: the network cut.
-fn nowhere() -> String {
+pub(crate) fn nowhere() -> String {
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap();
     drop(l);
     format!("http://{addr}")
 }
 
-const KEY: &str = "sk-test-0123456789abcdef";
+/// A catalog of nothing listed: the documentation's models.
+fn no_catalog() -> crate::voice::online_catalog::CatalogStore {
+    crate::voice::online_catalog::CatalogStore {
+        path: std::env::temp_dir().join("escouade-no-catalog/none.json"),
+    }
+}
+
+pub(crate) const KEY: &str = "sk-test-0123456789abcdef";
 
 fn spec(p: Provider, base: &str) -> Spec {
     Spec {
@@ -407,19 +468,21 @@ fn the_key_is_kept_in_the_keychain_and_only_there() {
     settings.voice.transcription = "online".into();
     settings.voice.online_service = "mistral".into();
     assert!(!serde_json::to_string(&settings).unwrap().contains(KEY));
-    let spec = spec_of(&settings, &store).unwrap().unwrap();
+    let spec = spec_of(&settings, &store, &no_catalog()).unwrap().unwrap();
     assert_eq!((spec.provider, spec.key.as_str()), (Provider::Mistral, KEY));
     assert_eq!(spec.base, "https://api.mistral.ai");
 
     // Local (the default): no key read.
-    assert!(spec_of(&crate::model::Settings::default(), &store)
-        .unwrap()
-        .is_none());
+    assert!(
+        spec_of(&crate::model::Settings::default(), &store, &no_catalog())
+            .unwrap()
+            .is_none()
+    );
 
     // No key for the service chosen: said before anything is listened to.
     settings.voice.online_service = "deepgram".into();
     assert_eq!(
-        spec_of(&settings, &store).unwrap_err(),
+        spec_of(&settings, &store, &no_catalog()).unwrap_err(),
         super::super::VoiceError::Online(OnlineError::NoKey(Provider::Deepgram))
     );
 

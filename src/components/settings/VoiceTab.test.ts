@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dictation } from '../../lib/dictation.svelte';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import type { VoiceInfo } from '../../lib/types';
+import { onlineVoice } from '../../lib/online-voice.svelte';
+import type { ServiceCatalog, VoiceInfo } from '../../lib/types';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
@@ -30,9 +31,34 @@ function open(over: Record<string, (a: any) => unknown> = {}) {
   return backend;
 }
 
+/** What a service's catalog looks like (Groq's, listed when `listed`). */
+function catalog(service: string, listed = false): ServiceCatalog {
+  return {
+    service,
+    transcribe: [
+      { id: 'whisper-large-v3-turbo', label: 'Whisper Large v3 Turbo', note: 'rapide', langs: [] },
+      { id: 'whisper-large-v3', label: 'Whisper Large v3', note: 'plus précis', langs: [] },
+    ],
+    speak: [{ id: 'canopylabs/orpheus-v1-english', label: 'Orpheus English', note: 'anglais seulement', langs: ['en'] }],
+    defaultTranscribe: 'whisper-large-v3-turbo',
+    defaultSpeak: 'canopylabs/orpheus-v1-english',
+    voices: null,
+    defaultVoices: { 'canopylabs/orpheus-v1-english|en': 'hannah' },
+    voicesByModel: false,
+    voiceExample: 'hannah, troy, austin, diana…',
+    voicesUrl: 'https://console.groq.com/docs/text-to-speech/orpheus',
+    speed: null,
+    listed,
+    listedAt: listed ? 1_792_400_000 : 0,
+    error: null,
+  };
+}
+
 describe('Réglages › Voix', () => {
   beforeEach(() => {
     resetApp();
+    onlineVoice.catalogs = {};
+    onlineVoice.keys = [];
     setLang('fr');
     app.modal = { kind: 'settings' };
   });
@@ -50,9 +76,20 @@ describe('Réglages › Voix', () => {
       model: 'base',
       language: 'ui',
       shortcut: 'Mod+Shift+Space',
-      speech: { voices: {}, speakers: {}, rate: 1, volume: 1, silenceMs: 1200 },
+      speech: {
+        voices: {},
+        speakers: {},
+        rate: 1,
+        volume: 1,
+        silenceMs: 1200,
+        engine: 'local',
+        onlineService: 'openai',
+        onlineModels: {},
+        onlineVoices: {},
+      },
       transcription: 'local',
       onlineService: 'openai',
+      onlineModels: {},
     });
   });
 
@@ -80,7 +117,7 @@ describe('Réglages › Voix', () => {
     expect(screen.getByText(/Aucune clé enregistrée/)).toBeInTheDocument();
     await userEvent.selectOptions(select, 'deepgram');
     expect(screen.getByText(/vers Deepgram \(api\.deepgram\.com\)/)).toBeInTheDocument();
-    expect(screen.getByText('Modèle « nova-3 », payé à l’usage sur ton compte Deepgram.')).toBeInTheDocument();
+    expect(screen.getByText('Payé à l’usage sur ton compte Deepgram.')).toBeInTheDocument();
     await save();
     const voice = backend.called('save_settings')[0].args.settings.voice;
     expect(voice.transcription).toBe('online');
@@ -114,6 +151,45 @@ describe('Réglages › Voix', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Effacer la clé' }));
     expect(backend.called('voice_online_key_delete')[0].args).toEqual({ service: 'groq' });
     expect(await screen.findByLabelText('Clé de Groq')).toBeInTheDocument();
+  });
+
+  it('offers the models of the service, today’s by default, and keeps the one chosen by service (ESC-132)', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'groq' };
+    const backend = open({
+      voice_online_keys: () => ['groq'],
+      voice_online_catalog: ({ service, refresh }) => catalog(service, refresh),
+    });
+    const select = (await screen.findByRole('combobox', { name: 'Modèle' })) as HTMLSelectElement;
+    await waitFor(() => expect(select.options).toHaveLength(2));
+    expect([...select.options].map((o) => o.text)).toEqual([
+      'Whisper Large v3 Turbo · rapide (par défaut)',
+      'Whisper Large v3 · plus précis',
+    ]);
+    expect(select.value).toBe('whisper-large-v3-turbo');
+    expect(screen.getByText('Liste de la documentation de Groq : enregistre ta clé pour lire la sienne.')).toBeInTheDocument();
+    // The key is the one of the dictation and of the voice: said on its line.
+    expect(screen.getByText(/la même pour la dictée et pour la voix de la conversation : enregistrée une fois/)).toBeInTheDocument();
+    await userEvent.selectOptions(select, 'whisper-large-v3');
+    // « Actualiser la liste »: read again from the service, with the key.
+    await userEvent.click(screen.getByRole('button', { name: 'Actualiser la liste' }));
+    await waitFor(() => expect(backend.called('voice_online_catalog').some((c) => c.args.refresh)).toBe(true));
+    expect(await screen.findByText(/^Liste lue chez Groq le /)).toBeInTheDocument();
+    await save();
+    expect(backend.called('save_settings')[0].args.settings.voice.onlineModels).toEqual({ groq: 'whisper-large-v3' });
+  });
+
+  it('a model the service no longer offers falls back on its default, and says so', async () => {
+    app.settings.voice = {
+      ...app.settings.voice,
+      transcription: 'online',
+      onlineService: 'groq',
+      onlineModels: { groq: 'whisper-gone' },
+    };
+    open({ voice_online_keys: () => ['groq'], voice_online_catalog: ({ service }) => catalog(service) });
+    expect(
+      await screen.findByText('Groq ne propose plus « whisper-gone » : son modèle par défaut, « whisper-large-v3-turbo », le remplace.'),
+    ).toBeInTheDocument();
+    expect((screen.getByRole('combobox', { name: 'Modèle' }) as HTMLSelectElement).value).toBe('whisper-large-v3-turbo');
   });
 
   it('says when the keychain refuses the key', async () => {

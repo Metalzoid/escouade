@@ -40,8 +40,8 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `tickets_imported` | Tickets are imported | `service`: `jira`, `trello`, `github` or `linear` |
 | `account_created` | A Claude account is added | — |
 | `remote_control_enabled` | Remote control is turned on, by hand or by a setting | `from`: `agent` (right-click on an agent), `project` (a project’s setting) or `global` (the setting for all agents) |
-| `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…), or the service of online dictation (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`) |
-| `voice_conversation` | A voice conversation starts | `lang`: the conversation’s language (`fr`, `en`); `voice`: the Piper voice that reads (`fr_FR-siwis-medium`…); never what is said or read |
+| `dictation_used` | A dictation gave text | `target`: `composer` (the message field), `terminal` (the Claude Code view) or `ticket` (a ticket’s description); `model`: the Whisper model (`tiny`, `base`, `small`…), or the service of online dictation (`openai`, `groq`, `mistral`, `elevenlabs`, `deepgram`); `online_model`: online, the service’s model (`gpt-4o-mini-transcribe`…) |
+| `voice_conversation` | A voice conversation starts | `lang`: the conversation’s language (`fr`, `en`); `voice`: the voice that reads (`fr_FR-siwis-medium`…, or the service’s); `engine`: what makes it (`piper`, or the online service); `model`: its model (`piper`, or the service’s); never what is said or read |
 
 An event says that a feature was used, not on what: never the name of the project, the agent or the branch, nor anything that was written.
 
@@ -71,7 +71,7 @@ Every event also carries:
 - Tokens and secrets.
 - Anything you type.
 - What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings. Online dictation, off by default, is apart: see “Online dictation, if you turn it on”, below.
-- What you say to an agent in a voice conversation, and what it answers aloud: the transcription by Whisper and the voice by Piper happen on your machine, even when dictation is online. Only the voices are downloaded, once each, from Hugging Face, through the proxy of the settings.
+- What you say to an agent in a voice conversation: the transcription by Whisper happens on your machine, even when dictation is online. What it answers aloud is read by Piper on your machine, unless you choose an online voice: see “The conversation’s online voice, if you turn it on”, below. Only Piper’s voices are downloaded, once each, from Hugging Face, through the proxy of the settings.
 
 ## The tool and where the data lives
 
@@ -153,18 +153,28 @@ Escouade has no account or server of its own for your projects, conversations or
 By default, dictation happens on your machine and nothing you say leaves it. In Settings › Voice › “Transcribed by”, you may choose “Online” and a service, with **your own** API key: it is off until you choose it.
 
 - **What leaves**: the sound of each dictation (a WAV file, mono, 16 kHz), once you end it, with the spoken language of the settings and your key. Nothing else: neither the project, nor the code, nor the conversation with the agent, nor the text of tickets. The voice conversation is still transcribed on your machine.
-- **Where**: to the one service chosen, through the proxy of the network settings:
+- **Where**: to the one service chosen, through the proxy of the network settings, with the model chosen in Settings › Voice (by default these):
 
-| Service | Address | Model |
-| --- | --- | --- |
-| OpenAI | `api.openai.com` | `gpt-4o-mini-transcribe` |
-| Groq | `api.groq.com` | `whisper-large-v3-turbo` |
-| Mistral | `api.mistral.ai` | `voxtral-mini-latest` |
-| ElevenLabs | `api.elevenlabs.io` | `scribe_v2` |
-| Deepgram | `api.deepgram.com` | `nova-3` |
+| Service | Address | Dictation model | Voice model |
+| --- | --- | --- | --- |
+| OpenAI | `api.openai.com` | `gpt-4o-mini-transcribe` | `gpt-4o-mini-tts` |
+| Groq | `api.groq.com` | `whisper-large-v3-turbo` | `canopylabs/orpheus-v1-english` |
+| Mistral | `api.mistral.ai` | `voxtral-mini-latest` | `voxtral-mini-tts-2603` |
+| ElevenLabs | `api.elevenlabs.io` | `scribe_v2` | `eleven_flash_v2_5` |
+| Deepgram | `api.deepgram.com` | `nova-3` | `aura-2` |
 
 - **What it does with it**: the service sends the text back, which Escouade puts in the field dictated into. It handles the sound under its own terms, those of your account with it: that is between it and you, Escouade receives none of it.
-- **Your key**: kept in the system keychain (Windows’ Credential Manager, macOS’ Keychain), never in Escouade’s files nor in its log. On Linux, where Escouade has no keychain, it is not saved.
+- **Your key**: kept in the system keychain (Windows’ Credential Manager, macOS’ Keychain), never in Escouade’s files nor in its log. On Linux, where Escouade has no keychain, it is not saved. One key per service: the same serves dictation and the conversation’s voice.
+- **The list of models and voices**: with your key saved, Escouade asks the service for its models (and its voices, your account’s included, when its API lists them); only the key leaves. The list is kept on your machine (`~/.escouade/voice/online-catalog.json`) and read again when you refresh it.
+
+## The conversation’s online voice, if you turn it on
+
+By default, the voice conversation’s answers are read by Piper, on your machine. In Settings › Voice › Conversation › “Voice made by”, you may choose “Online”, a service of the table above and one of its voices, with the key of its dictation: it is off until you choose it.
+
+- **What leaves**: the text of each passage read, sentence by sentence, with the model, the voice, the conversation’s language, the speed when the service takes it, and your key. Never the sound of the microphone: what you say is still transcribed on your machine. Neither the project, nor the code, nor the rest of the conversation.
+- **Where**: to the one service chosen, through the proxy of the network settings.
+- **What it does with it**: it sends the sound back, played on your machine. It handles the text under its own terms, those of your account with it.
+- **If the service does not answer**: the conversation says so, and Piper reads on if one of its voices is downloaded; else it pauses. Escouade’s log never holds your key nor the text read.
 
 ## This site
 
