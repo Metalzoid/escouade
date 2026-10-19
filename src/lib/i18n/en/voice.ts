@@ -42,7 +42,7 @@ export default defineZone('voice', {
     local: 'Local (Whisper)',
     online: 'Online',
     onlineNote:
-      'What leaves, and where: the sound of each dictation (a WAV file), once you end it, to {service} ({host}), with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into, and {service} handles it under its own terms. The voice conversation is still transcribed on your machine.',
+      'What leaves, and where: the sound of each dictation (a WAV file), once you end it, to {service} ({host}), with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into, and {service} handles it under its own terms. In a voice conversation, the sound of each sentence you say goes there too, the same way.',
     service: 'Service',
     serviceDesc: 'Paid per use on your {service} account.',
     onlineModel: 'Model',
@@ -156,7 +156,7 @@ export default defineZone('voice', {
   },
   speech: {
     title: 'Conversation',
-    note: 'Answers are read on your machine by Piper: nothing leaves your machine. The voices offered are those whose license allows it (free model and dataset, no voice of a character, a known person or a brand, but for one exception, marked as such); each one is downloaded once, its checksum checked.',
+    note: 'Answers are read on your machine by Piper: their text does not leave your machine. The voices offered are those whose license allows it (free model and dataset, no voice of a character, a known person or a brand, but for one exception, marked as such); each one is downloaded once, its checksum checked.',
     unavailable: 'Speech is not available: the voice’s engine (ONNX Runtime) is missing from the app.',
     voiceFor: 'Voice in {lang}',
     voiceDesc: 'The one that reads the answers when the conversation is held in this language.',
@@ -189,7 +189,7 @@ export default defineZone('voice', {
     local: 'Local (Piper)',
     online: 'Online',
     onlineNote:
-      'What leaves, and where: the text of each passage read, sentence by sentence, to {service} ({host}), with your key, through the proxy of the network settings. Never the sound of the microphone: what you say is still transcribed on your machine. {service} handles the text under its own terms. If it does not answer, the local voice (Piper) takes over when it is downloaded; else the conversation pauses.',
+      'What leaves, and where: the text of each passage read, sentence by sentence, to {service} ({host}), with your key, through the proxy of the network settings. The sound of the microphone does not go there: what you say is transcribed as your dictation is (the “Transcription” group). {service} handles the text under its own terms. If it does not answer, the local voice (Piper) takes over when it is downloaded; else the conversation pauses.',
     modelLabel: 'Voice model',
     serviceLabel: 'Voice service',
     onlineModelDesc: 'The one of {service} that reads; by default “{model}”.',

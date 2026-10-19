@@ -24,7 +24,7 @@ Ce groupe choisit qui transcrit une dictée, et dans quelle langue. Sous son tit
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Transcrite par » | « Local (Whisper) » : la dictée est transcrite sur ta machine. « En ligne » : le son de chaque dictée est envoyé au service choisi, avec ta clé, pour une machine trop lente pour Whisper ou une meilleure qualité. La conversation vocale, elle, est toujours transcrite sur ta machine. | « Local (Whisper) » |
+| « Transcrite par » | « Local (Whisper) » : la dictée est transcrite sur ta machine. « En ligne » : le son de chaque dictée est envoyé au service choisi, avec ta clé, pour une machine trop lente pour Whisper ou une meilleure qualité. La conversation vocale suit ce choix : en ligne, chaque phrase que tu dis part au même service. | « Local (Whisper) » |
 | « Modèle » (local) | Le modèle de Whisper. Plus gros, il comprend mieux et transcrit plus lentement. Celui choisi se télécharge à la première dictée, ou depuis sa ligne. Il sert aussi à la conversation vocale. | base |
 | « Service » (en ligne) | Le service qui transcrit : OpenAI, Groq, Mistral, ElevenLabs ou Deepgram, payé à l’usage sur ton compte chez lui. | OpenAI |
 | « Modèle » (en ligne) | Le modèle du service qui transcrit, gardé pour chaque service. | Celui du tableau ci-dessous |
@@ -121,7 +121,7 @@ Le champ « Voix en … » dépend du service :
 
 Vide, c’est la voix par défaut du service. La voix choisie est gardée par service et par langue (et par modèle chez Deepgram, dont les voix sont des modèles). « ▶ Écouter » lit une phrase avec le service, le modèle et la voix choisis : une voix que le service refuse est dite tout de suite, avec sa réponse. Un modèle qui ne lit pas une langue (Orpheus de Groq en français) : la ligne le dit, et Piper lit la conversation dans cette langue.
 
-Pendant la conversation, rien ne change pour toi : les passages sont lus phrase par phrase, la première demandée tout de suite et les suivantes pendant qu’elle joue, le son joué à mesure qu’il arrive, avec les mêmes sous-titres, le même volume, le même barge-in, la pause et l’arrêt. Sous le titre du groupe, l’app dit ce qui part : le texte de chaque passage lu, phrase par phrase, vers le service, avec ta clé, par le proxy des [réglages réseau](settings-network), jamais le son du micro, qui reste transcrit sur ta machine. Le détail est sur la page [Confidentialité](/privacy/).
+Pendant la conversation, rien ne change pour toi : les passages sont lus phrase par phrase, la première demandée tout de suite et les suivantes pendant qu’elle joue, le son joué à mesure qu’il arrive, avec les mêmes sous-titres, le même volume, le même barge-in, la pause et l’arrêt. Sous le titre du groupe, l’app dit ce qui part : le texte de chaque passage lu, phrase par phrase, vers le service, avec ta clé, par le proxy des [réglages réseau](settings-network), pas le son du micro, qui suit « Transcrite par ». Le détail est sur la page [Confidentialité](/privacy/).
 
 Si le service ne répond pas (clé absente ou refusée, quota épuisé, service en panne, réseau ou proxy), la conversation le dit une fois, avec le service et quoi faire, et **Piper lit la suite** si une voix locale est téléchargée ; sinon elle **se met en pause**, et « Reprendre » redemande au service. Une voix que le service ne connaît plus : c’est dit, et sa voix par défaut lit. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.
 
@@ -139,7 +139,7 @@ Rien ne se télécharge tant que tu ne dictes pas ou ne parles pas avec un agent
 
 | Quoi | Quand | Où, sous le [dossier de données](data) |
 |---|---|---|
-| Le modèle de Whisper choisi | À la première dictée locale ou conversation | `voice/models/ggml-<modèle>.bin` |
+| Le modèle de Whisper choisi | À la première dictée ou conversation en local | `voice/models/ggml-<modèle>.bin` |
 | La voix de la langue | À la première conversation dans cette langue | `voice/voices/<voix>.onnx` et `<voix>.onnx.json` |
 | Les données d’eSpeak NG (prononciation du français et de l’anglais) | Écrites par l’app à la première lecture, sans téléchargement, et réécrites après une mise à jour | `voice/espeak-ng-data/` |
 | ONNX Runtime | Jamais : il est livré avec l’app | Le dossier de l’app |

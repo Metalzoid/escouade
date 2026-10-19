@@ -2239,10 +2239,23 @@ fn conv_choice(
     let id = settings.voice.speech.voice(lang);
     // « Voix générée par » a service on line (ESC-132), with the key of its dictation.
     let online = crate::voice::online_speech::resolve(settings, secrets, catalog, lang);
+    // « Transcription : En ligne » (ESC-134): each sentence goes to the service of the dictation, told its language.
+    let (transcription, transcription_error) =
+        match crate::voice::online::spec_of(settings, secrets, catalog) {
+            Ok(spec) => (spec, None),
+            Err(e) => (None, Some(e)),
+        };
+    let language = if transcription.is_some() || transcription_error.is_some() {
+        crate::voice::whisper_language(&settings.voice.language, i18n::ui())
+    } else {
+        lang.to_string()
+    };
     let choice = crate::voice::conversation::ConvChoice {
         device: settings.voice.device.clone(),
         model: settings.voice.model.clone(),
-        language: lang.to_string(),
+        language,
+        transcription,
+        transcription_error,
         speak: speak_options(settings, &id),
         volume: settings.voice.speech.volume.clamp(0.0, 1.0),
         silence_ms: settings.voice.speech.silence_ms,

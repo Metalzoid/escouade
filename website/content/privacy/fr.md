@@ -71,7 +71,7 @@ Tous les événements portent aussi :
 - Les jetons et les secrets.
 - Tout ce que tu tapes.
 - Ce que tu dictes : le son du micro et le texte qu’en tire Whisper restent sur ta machine. La transcription s’y fait ; seul le modèle est téléchargé, une fois, depuis Hugging Face (`huggingface.co`), par le proxy des réglages. La dictée en ligne, éteinte par défaut, est à part : voir « La dictée en ligne, si tu l’allumes », plus bas.
-- Ce que tu dis à un agent en conversation vocale : la transcription par Whisper se fait sur ta machine, même quand la dictée est en ligne. Ce qu’il te répond à voix haute est lu par Piper sur ta machine, sauf si tu choisis une voix en ligne : voir « La voix de la conversation en ligne, si tu l’allumes », plus bas. Seules les voix de Piper sont téléchargées, une fois chacune, depuis Hugging Face, par le proxy des réglages.
+- Ce que tu dis à un agent en conversation vocale : la transcription suit celle de la dictée : par Whisper sur ta machine, ou, si la dictée est en ligne, par son service (voir « La dictée en ligne, si tu l’allumes », plus bas). Ce qu’il te répond à voix haute est lu par Piper sur ta machine, sauf si tu choisis une voix en ligne : voir « La voix de la conversation en ligne, si tu l’allumes », plus bas. Seules les voix de Piper sont téléchargées, une fois chacune, depuis Hugging Face, par le proxy des réglages.
 
 ## L’outil et l’endroit où vivent les données
 
@@ -152,7 +152,7 @@ Escouade n’a pas de compte ni de serveur à elle pour tes projets, tes convers
 
 Par défaut, la dictée se fait sur ta machine et rien de ce que tu dis n’en sort. Dans Réglages › Voix › « Transcrite par », tu peux choisir « En ligne » et un service, avec **ta propre clé** d’API : c’est éteint tant que tu ne le choisis pas.
 
-- **Ce qui part** : le son de chaque dictée (un fichier WAV, mono, 16 kHz), une fois que tu la finis, avec la langue parlée des réglages et ta clé. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent, ni le texte des tickets. La conversation vocale, elle, reste transcrite sur ta machine.
+- **Ce qui part** : le son de chaque dictée (un fichier WAV, mono, 16 kHz), une fois que tu la finis, avec la langue parlée des réglages et ta clé. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent, ni le texte des tickets. En conversation vocale, le son de chaque phrase que tu dis part de la même façon, une fois sa fin trouvée par le silence.
 - **Où** : au seul service choisi, par le proxy des réglages réseau, avec le modèle choisi dans Réglages › Voix (par défaut ceux-ci) :
 
 | Service | Adresse | Modèle de la dictée | Modèle de la voix |
@@ -171,7 +171,7 @@ Par défaut, la dictée se fait sur ta machine et rien de ce que tu dis n’en s
 
 Par défaut, les réponses de la conversation vocale sont lues par Piper, sur ta machine. Dans Réglages › Voix › Conversation › « Voix générée par », tu peux choisir « En ligne », un service du tableau ci-dessus et une de ses voix, avec la clé de sa dictée : c’est éteint tant que tu ne le choisis pas.
 
-- **Ce qui part** : le texte de chaque passage lu, phrase par phrase, avec le modèle, la voix, la langue de la conversation, la vitesse quand le service la prend, et ta clé. Jamais le son du micro : ce que tu dis reste transcrit sur ta machine. Ni le projet, ni le code, ni le reste de la conversation.
+- **Ce qui part** : le texte de chaque passage lu, phrase par phrase, avec le modèle, la voix, la langue de la conversation, la vitesse quand le service la prend, et ta clé. Pas le son du micro : ce que tu dis est transcrit comme ta dictée (ci-dessus). Ni le projet, ni le code, ni le reste de la conversation.
 - **Où** : au seul service choisi, par le proxy des réglages réseau.
 - **Ce qu’il en fait** : il renvoie le son, joué sur ta machine. Il traite le texte selon ses propres conditions, celles de ton compte chez lui.
 - **Si le service ne répond pas** : la conversation le dit, et Piper lit la suite si une de ses voix est téléchargée ; sinon elle se met en pause. Le journal d’Escouade ne contient jamais ta clé ni le texte lu.

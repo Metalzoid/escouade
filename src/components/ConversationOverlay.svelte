@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { conversation, type ConvPhase } from '../lib/conversation.svelte';
+  import { onlineService } from '../lib/dictation';
   import { t } from '../lib/i18n';
   import { keyLabel } from '../lib/platform';
   import { draftIfAny } from '../lib/question-answers.svelte';
@@ -15,6 +16,12 @@
   const project = $derived(agent ? app.projects.find((p) => p.id === agent.projectId) : undefined);
   const phase = $derived(conversation.phase);
   const name = $derived(agent?.name ?? '');
+  // « Transcription : En ligne »: the service of the dictation hears each sentence (ESC-134).
+  const said = $derived(
+    phase === 'transcribing' && app.settings.voice?.transcription === 'online'
+      ? t('voice.panel.transcribingOnline', { service: onlineService(app.settings.voice.onlineService).label })
+      : t(`voice.conversation.phase.${phase}` as 'voice.conversation.phase.working', { name }),
+  );
   const subtitle = $derived(conversation.subtitle);
   // The question asked aloud (ESC-131): its choices show under the orb, the voice does not read them; what was
   // understood is lit a moment before the next question.
@@ -176,7 +183,7 @@
   </div>
   <canvas bind:this={canvas} aria-hidden="true"></canvas>
   <div class="state" role="status" aria-live="polite">
-    {t(`voice.conversation.phase.${phase}` as 'voice.conversation.phase.working', { name })}
+    {said}
   </div>
   {#if ask}
     <section class="ask" aria-label={t('voice.conversation.overlay.choices')} data-conversation-ask={ask.index}>

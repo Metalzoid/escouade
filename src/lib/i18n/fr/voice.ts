@@ -44,7 +44,7 @@ export default {
     local: 'Local (Whisper)',
     online: 'En ligne',
     onlineNote:
-      'Ce qui part, et où : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté, et {service} le traite selon ses propres conditions. La conversation vocale, elle, reste transcrite sur ta machine.',
+      'Ce qui part, et où : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté, et {service} le traite selon ses propres conditions. En conversation vocale, le son de chaque phrase que tu dis y part aussi, de la même façon.',
     service: 'Service',
     serviceDesc: 'Payé à l’usage sur ton compte {service}.',
     onlineModel: 'Modèle',
@@ -166,7 +166,7 @@ export default {
   /** Réglages › Voix, the conversation's part. */
   speech: {
     title: 'Conversation',
-    note: 'Les réponses sont lues sur ta machine par Piper : rien ne quitte ta machine. Les voix proposées sont celles dont la licence le permet (modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque, sauf une exception, signalée) ; chacune se télécharge une fois, sa somme de contrôle vérifiée.',
+    note: 'Les réponses sont lues sur ta machine par Piper : leur texte ne quitte pas ta machine. Les voix proposées sont celles dont la licence le permet (modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque, sauf une exception, signalée) ; chacune se télécharge une fois, sa somme de contrôle vérifiée.',
     unavailable: 'La synthèse vocale n’est pas disponible : le moteur de la voix (ONNX Runtime) est introuvable dans l’app.',
     voiceFor: 'Voix en {lang}',
     voiceDesc: 'Celle qui lit les réponses quand la conversation se tient dans cette langue.',
@@ -199,7 +199,7 @@ export default {
     local: 'Local (Piper)',
     online: 'En ligne',
     onlineNote:
-      'Ce qui part, et où : le texte de chaque passage lu, phrase par phrase, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Jamais le son du micro : ce que tu dis reste transcrit sur ta machine. {service} traite le texte selon ses propres conditions. S’il ne répond pas, la voix locale (Piper) prend le relais si elle est téléchargée ; sinon la conversation se met en pause.',
+      'Ce qui part, et où : le texte de chaque passage lu, phrase par phrase, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Le son du micro n’y part pas : ce que tu dis est transcrit comme ta dictée (groupe « Transcription »). {service} traite le texte selon ses propres conditions. S’il ne répond pas, la voix locale (Piper) prend le relais si elle est téléchargée ; sinon la conversation se met en pause.',
     modelLabel: 'Modèle de la voix',
     serviceLabel: 'Service de la voix',
     onlineModelDesc: 'Celui de {service} qui lit ; par défaut « {model} ».',

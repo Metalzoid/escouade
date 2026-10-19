@@ -71,7 +71,7 @@ Every event also carries:
 - Tokens and secrets.
 - Anything you type.
 - What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings. Online dictation, off by default, is apart: see “Online dictation, if you turn it on”, below.
-- What you say to an agent in a voice conversation: the transcription by Whisper happens on your machine, even when dictation is online. What it answers aloud is read by Piper on your machine, unless you choose an online voice: see “The conversation’s online voice, if you turn it on”, below. Only Piper’s voices are downloaded, once each, from Hugging Face, through the proxy of the settings.
+- What you say to an agent in a voice conversation: the transcription follows the dictation’s: by Whisper on your machine, or, when dictation is online, by its service (see “Online dictation, if you turn it on”, below). What it answers aloud is read by Piper on your machine, unless you choose an online voice: see “The conversation’s online voice, if you turn it on”, below. Only Piper’s voices are downloaded, once each, from Hugging Face, through the proxy of the settings.
 
 ## The tool and where the data lives
 
@@ -152,7 +152,7 @@ Escouade has no account or server of its own for your projects, conversations or
 
 By default, dictation happens on your machine and nothing you say leaves it. In Settings › Voice › “Transcribed by”, you may choose “Online” and a service, with **your own** API key: it is off until you choose it.
 
-- **What leaves**: the sound of each dictation (a WAV file, mono, 16 kHz), once you end it, with the spoken language of the settings and your key. Nothing else: neither the project, nor the code, nor the conversation with the agent, nor the text of tickets. The voice conversation is still transcribed on your machine.
+- **What leaves**: the sound of each dictation (a WAV file, mono, 16 kHz), once you end it, with the spoken language of the settings and your key. Nothing else: neither the project, nor the code, nor the conversation with the agent, nor the text of tickets. In a voice conversation, the sound of each sentence you say leaves the same way, once its end is found by the silence.
 - **Where**: to the one service chosen, through the proxy of the network settings, with the model chosen in Settings › Voice (by default these):
 
 | Service | Address | Dictation model | Voice model |
@@ -171,7 +171,7 @@ By default, dictation happens on your machine and nothing you say leaves it. In 
 
 By default, the voice conversation’s answers are read by Piper, on your machine. In Settings › Voice › Conversation › “Voice made by”, you may choose “Online”, a service of the table above and one of its voices, with the key of its dictation: it is off until you choose it.
 
-- **What leaves**: the text of each passage read, sentence by sentence, with the model, the voice, the conversation’s language, the speed when the service takes it, and your key. Never the sound of the microphone: what you say is still transcribed on your machine. Neither the project, nor the code, nor the rest of the conversation.
+- **What leaves**: the text of each passage read, sentence by sentence, with the model, the voice, the conversation’s language, the speed when the service takes it, and your key. Not the sound of the microphone: what you say is transcribed as your dictation is (above). Neither the project, nor the code, nor the rest of the conversation.
 - **Where**: to the one service chosen, through the proxy of the network settings.
 - **What it does with it**: it sends the sound back, played on your machine. It handles the text under its own terms, those of your account with it.
 - **If the service does not answer**: the conversation says so, and Piper reads on if one of its voices is downloaded; else it pauses. Escouade’s log never holds your key nor the text read.

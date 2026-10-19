@@ -40,6 +40,8 @@ fn conv_choice() -> ConvChoice {
         online: None,
         online_error: None,
         online_notice: None,
+        transcription: None,
+        transcription_error: None,
     }
 }
 
@@ -698,5 +700,158 @@ fn the_voice_on_line_chosen_during_the_conversation_reads_the_next_passage() {
     h.voice.conversation_say(session, "Local.").unwrap();
     wait_for(h, |e| matches!(e, VoiceEvent::ConvSpoken { reading: 3, .. }));
     assert_eq!(c.engine.said.lock().len(), 2);
+    h.voice.conversation_stop();
+}
+
+/// « Transcription : En ligne » (ESC-134): the service of the dictation, at `base`.
+fn heard_on_line(base: &str) -> ConvChoice {
+    let mut spec = Spec::new(Provider::Groq, "gsk-test-key".into(), reqwest::Client::new());
+    spec.base = base.into();
+    ConvChoice { transcription: Some(spec), ..conv_choice() }
+}
+
+/// A sentence said, then its silence: what it was heard as.
+fn say_a_sentence(h: &Harness) -> VoiceEvent {
+    hear(h, 0.4, 0.0);
+    hear(h, 1.0, 0.3);
+    hear(h, 1.0, 0.0);
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }))
+}
+
+#[test]
+fn locally_each_sentence_goes_to_whisper_with_its_model_loaded_ahead() {
+    let c = conv_harness("conv-local-ear", "en local");
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: "en local".into(), error: None });
+    let model = h.voice.store.path("base");
+    assert_eq!(*h.fake.models.lock(), std::slice::from_ref(&model));
+    assert_eq!(*h.fake.preloaded.lock(), [model]);
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn on_line_the_conversation_starts_without_whisper_s_model_and_the_service_hears_each_sentence() {
+    let mut c = conv_harness("conv-online-ear", "depuis le service|la suite");
+    c.h.voice.fake_online = true;
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    // No model of Whisper's on the disk: it listens all the same.
+    let choice = ConvChoice { language: "auto".into(), ..heard_on_line("http://127.0.0.1:9") };
+    let session = listening(h.voice.conversation_start(choice).unwrap());
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: "depuis le service".into(), error: None });
+    h.voice.conversation_listen(session);
+    hear(h, 0.4, 0.0);
+    hear(h, 1.0, 0.3);
+    hear(h, 1.0, 0.0);
+    let n = conv_events(h).iter().filter(|e| matches!(e, VoiceEvent::ConvHeard { .. })).count();
+    assert_eq!(n, 2, "{:?}", conv_events(h));
+    // Neither a model given nor one loaded; the dictation's language told.
+    assert_eq!(*h.fake.models.lock(), [PathBuf::new(), PathBuf::new()]);
+    assert!(h.fake.preloaded.lock().is_empty());
+    assert!(h.fake.calls.lock().iter().all(|(_, l)| l == "auto"));
+    assert!(!h.voice.store.dir.exists());
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn on_line_without_the_service_s_key_the_conversation_does_not_start_as_the_dictation() {
+    let c = conv_harness("conv-online-ear-nokey", "");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let choice = ConvChoice {
+        transcription_error: Some(VoiceError::Online(OnlineError::NoKey(Provider::Groq))),
+        ..conv_choice()
+    };
+    assert_eq!(
+        h.voice.conversation_start(choice).unwrap_err(),
+        VoiceError::Online(OnlineError::NoKey(Provider::Groq))
+    );
+    assert!(h.script.opened.lock().is_empty(), "the microphone stayed closed");
+}
+
+#[test]
+fn on_line_the_text_comes_from_the_service_and_its_failure_is_said_as_the_dictation_says_it() {
+    let c = conv_harness("conv-online-ear-real", "never this");
+    let h = &c.h;
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap();
+    let refused = Arc::new(AtomicBool::new(false));
+    let r = refused.clone();
+    let (url, got) = rt.block_on(serve_with(Arc::new(move |_: &Got| {
+        if r.load(Ordering::Acquire) {
+            Reply::json(401, r#"{"error":{"message":"Invalid API Key"}}"#)
+        } else {
+            Reply::json(200, r#"{"text":" Depuis le service "}"#)
+        }
+    })));
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(heard_on_line(&url)).unwrap());
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: "Depuis le service".into(), error: None });
+    assert_eq!(got.lock()[0].line, "POST /v1/audio/transcriptions HTTP/1.1");
+    assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
+    // The key refused: the sentence is said lost once, as the dictation says it, and it listens again.
+    refused.store(true, Ordering::Release);
+    h.events.lock().clear();
+    h.voice.conversation_listen(session);
+    let heard = say_a_sentence(h);
+    let said = VoiceError::Online(OnlineError::KeyRefused(Provider::Groq))
+        .message(crate::i18n::ui(), std::env::consts::OS);
+    assert_eq!(heard, VoiceEvent::ConvHeard { session, text: String::new(), error: Some(said) });
+    assert_eq!(got.lock().len(), 2, "asked once, never again by itself");
+    assert!(h.fake.calls.lock().is_empty());
+    h.voice.conversation_stop();
+}
+
+/// The real ElevenLabs (Scribe) hears a sentence of the conversation (`testdata/question-fr.wav`, played in real time),
+/// with the user's key given to this process only (`ELEVENLABS_API_KEY`): run by hand, never in CI, the key written
+/// nowhere. Prints how long the text took once the sentence's silence came.
+#[test]
+#[ignore]
+fn real_elevenlabs_conversation_sentence() {
+    let key = std::env::var("ELEVENLABS_API_KEY").expect("ELEVENLABS_API_KEY");
+    let c = conv_harness("conv-real-elevenlabs", "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
+    let (samples, rate) = super::source::read_wav(&path).unwrap();
+    let samples = super::audio::resample(&samples, rate, 16_000);
+    let secs = samples.len() as f32 / 16_000.0;
+    let spec = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new());
+    let session = listening(h.voice.conversation_start(ConvChoice { transcription: Some(spec), ..conv_choice() }).unwrap());
+    // Played on a thread of its own, the room quiet after it; the events watched every 5 ms meanwhile.
+    let script = h.script.clone();
+    let quiet = vec![0.001f32; 320];
+    let player = std::thread::spawn(move || {
+        for chunk in std::iter::repeat_n(&quiet[..], 30).chain(samples.chunks(320)).chain(std::iter::repeat_n(&quiet[..], 150)) {
+            script.push(chunk);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    });
+    let mut ended = None;
+    let end = Instant::now() + Duration::from_secs(30);
+    let heard = loop {
+        let events = conv_events(h);
+        if ended.is_none() && events.iter().any(|e| matches!(e, VoiceEvent::ConvTranscribing { .. })) {
+            ended = Some(Instant::now());
+        }
+        if let Some(e) = events.into_iter().find(|e| matches!(e, VoiceEvent::ConvHeard { .. })) {
+            break e;
+        }
+        assert!(Instant::now() < end, "never heard: {:?}", conv_events(h));
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    println!(
+        "{secs:.1} s of sound, heard by ElevenLabs {} ms after its silence: {heard:?}",
+        ended.map(|t| t.elapsed().as_millis()).unwrap_or_default()
+    );
+    player.join().unwrap();
+    let VoiceEvent::ConvHeard { session: s, text, error: None } = heard else {
+        panic!("not heard: {heard:?}");
+    };
+    assert_eq!(s, session);
+    assert!(!text.is_empty());
+    assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
     h.voice.conversation_stop();
 }

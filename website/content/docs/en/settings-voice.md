@@ -24,7 +24,7 @@ This group chooses who transcribes a dictation, and in which language. Under its
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Transcribed by” | “Local (Whisper)”: the dictation is transcribed on your machine. “Online”: the sound of each dictation is sent to the service chosen, with your key, for a machine too slow for Whisper or a better quality. The voice conversation is always transcribed on your machine. | “Local (Whisper)” |
+| “Transcribed by” | “Local (Whisper)”: the dictation is transcribed on your machine. “Online”: the sound of each dictation is sent to the service chosen, with your key, for a machine too slow for Whisper or a better quality. The voice conversation follows this choice: online, each sentence you say goes to the same service. | “Local (Whisper)” |
 | “Model” (local) | The Whisper model. A bigger one understands better and transcribes more slowly. The one chosen downloads at the first dictation, or from its row. It also serves the voice conversation. | base |
 | “Service” (online) | The service that transcribes: OpenAI, Groq, Mistral, ElevenLabs or Deepgram, paid per use on your account with it. | OpenAI |
 | “Model” (online) | The service’s model that transcribes, kept for each service. | The one of the table below |
@@ -121,7 +121,7 @@ The “Voice in …” field depends on the service:
 
 Empty, it is the service’s default voice. The voice chosen is kept per service and per language (and per model with Deepgram, whose voices are models). “▶ Listen” reads a sentence with the service, model and voice chosen: a voice the service refuses is said at once, with its answer. A model that does not read a language (Groq’s Orpheus in French): the row says so, and Piper reads the conversation in that language.
 
-During the conversation, nothing changes for you: the passages are read sentence by sentence, the first one asked at once and the next ones while it plays, the sound played as it comes, with the same subtitles, the same volume, the same barge-in, pause and stop. Under the group’s title, the app says what leaves: the text of each passage read, sentence by sentence, to the service, with your key, through the proxy of the [network settings](settings-network), never the sound of the microphone, which is still transcribed on your machine. The details are on the [Privacy](/privacy/) page.
+During the conversation, nothing changes for you: the passages are read sentence by sentence, the first one asked at once and the next ones while it plays, the sound played as it comes, with the same subtitles, the same volume, the same barge-in, pause and stop. Under the group’s title, the app says what leaves: the text of each passage read, sentence by sentence, to the service, with your key, through the proxy of the [network settings](settings-network), not the sound of the microphone, which follows “Transcribed by”. The details are on the [Privacy](/privacy/) page.
 
 If the service does not answer (key missing or refused, quota spent, service down, network or proxy), the conversation says so once, with the service and what to do, and **Piper reads on** if a local voice is downloaded; else it **pauses**, and “Resume” asks the service again. A voice the service no longer knows: it is said, and its default voice reads. Escouade’s log never holds your key nor the text read.
 
@@ -139,7 +139,7 @@ Nothing downloads until you dictate or talk with an agent. At the first dictatio
 
 | What | When | Where, under the [data folder](data) |
 |---|---|---|
-| The Whisper model chosen | At the first local dictation or conversation | `voice/models/ggml-<model>.bin` |
+| The Whisper model chosen | At the first dictation or conversation in local | `voice/models/ggml-<model>.bin` |
 | The language’s voice | At the first conversation in that language | `voice/voices/<voice>.onnx` and `<voice>.onnx.json` |
 | eSpeak NG’s data (how French and English are pronounced) | Written by the app at the first reading, without a download, and written again after an update | `voice/espeak-ng-data/` |
 | ONNX Runtime | Never: it ships with the app | The app’s folder |

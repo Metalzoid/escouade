@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
+## [Non publié]
+
+### Corrections
+
+- Avec la transcription en ligne, la conversation vocale envoie aussi ce que tu dis au service choisi (ElevenLabs…), comme la dictée : sous Windows, chaque phrase ne met plus des dizaines de secondes à être comprise.
+
 ## [1.8.5] — 2026-10-19
 
 ### Corrections

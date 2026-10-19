@@ -66,6 +66,14 @@ describe('the voice conversation over the whole window', () => {
     expect(sub().textContent).not.toContain('Trop tard.');
   });
 
+  it('says who transcribes the sentence: the machine, or the service of « Transcription : En ligne » (ESC-134)', async () => {
+    render(ConversationOverlay);
+    ev({ kind: 'convTranscribing' });
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Transcription sur ta machine…'));
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'elevenlabs' };
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Transcription par ElevenLabs…'));
+  });
+
   it('follows the level of the voice played and of the microphone', () => {
     ev({ kind: 'convLevel', level: 0.4, played: 0.8 });
     expect(conversation.level).toBe(0.4);

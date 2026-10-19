@@ -262,7 +262,9 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     const service = (await screen.findByRole('combobox', { name: 'Service de la voix' })) as HTMLSelectElement;
     expect([...service.options].map((o) => o.text)).toEqual(['OpenAI', 'Groq', 'Mistral', 'ElevenLabs', 'Deepgram']);
     expect(
-      screen.getByText(/le texte de chaque passage lu, phrase par phrase, vers OpenAI \(api\.openai\.com\).*Jamais le son du micro/),
+      screen.getByText(
+        /le texte de chaque passage lu, phrase par phrase, vers OpenAI \(api\.openai\.com\).*Le son du micro n’y part pas : ce que tu dis est transcrit comme ta dictée/,
+      ),
     ).toBeInTheDocument();
     // Piper's settings are those of « Local (Piper) »: on line, one line says which local voice reads if the service fails.
     expect(

@@ -184,6 +184,9 @@ pub struct Fake {
     pub text: String,
     /// What it was asked, for the tests: the number of samples and the language of each call.
     pub calls: Mutex<Vec<(usize, String)>>,
+    /// The model of each call (empty: the service on line), and the models loaded ahead.
+    pub models: Mutex<Vec<PathBuf>>,
+    pub preloaded: Mutex<Vec<PathBuf>>,
     /// How long it takes.
     pub delay: std::time::Duration,
 }
@@ -193,6 +196,8 @@ impl Fake {
         Self {
             text: text.into(),
             calls: Mutex::new(Vec::new()),
+            models: Mutex::new(Vec::new()),
+            preloaded: Mutex::new(Vec::new()),
             delay: std::time::Duration::ZERO,
         }
     }
@@ -210,6 +215,7 @@ impl Transcriber for Fake {
         if !model.as_os_str().is_empty() && !model.exists() {
             return Err(anyhow!("no model at {}", model.display()));
         }
+        self.models.lock().push(model.to_path_buf());
         self.calls
             .lock()
             .push((samples.len(), language.to_string()));
@@ -224,6 +230,10 @@ impl Transcriber for Fake {
         let parts: Vec<&str> = self.text.split('|').collect();
         let n = self.calls.lock().len();
         Ok(parts[(n - 1).min(parts.len() - 1)].to_string())
+    }
+
+    fn preload(&self, model: &Path) {
+        self.preloaded.lock().push(model.to_path_buf());
     }
 }
 

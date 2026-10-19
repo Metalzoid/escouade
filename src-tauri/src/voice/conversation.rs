@@ -1,15 +1,17 @@
 //! The conversation (ESC-97): the microphone stays open from « Conversation » to « Arrêter ». While it listens, a
-//! sentence is found by its silence (`vad::Endpointer`), transcribed by Whisper, and its text told to the window, which
+//! sentence is found by its silence (`vad::Endpointer`), transcribed by Whisper (« Transcription : En ligne », by the
+//! service of the dictation, ESC-134), and its text told to the window, which
 //! sends it to the agent. While the agent's passage is read aloud (`speak`), what the microphone hears is never
 //! transcribed: it only tells whether the user speaks over the agent (`vad::BargeIn`, which knows the echo of its
 //! voice), which stops the reading and listens. Once the reading is over, it listens again, after the echo's tail.
 //!
 //! The window leads (`conversation.svelte.ts`): it says when to listen, to hold (the agent works), and what to read.
 
-use super::online::{OnlineError, Spec};
+use super::online::{Online, OnlineError, Spec};
 use super::online_speech::SpeakChoice;
 use super::speech::output::Playing;
 use super::speech::{Audio, SpeakOptions};
+use super::transcribe::Transcriber;
 use super::vad::{self, BargeIn, Endpointer, Heard};
 use super::{audio, Voice, VoiceError, VoiceEvent};
 use parking_lot::Mutex;
@@ -24,9 +26,14 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone)]
 pub struct ConvChoice {
     pub device: String,
-    /// Whisper's model and the language it is told.
+    /// Whisper's model and the language it is told (the service's too, on line).
     pub model: String,
     pub language: String,
+    /// « Transcription : En ligne » (ESC-134): the service of the dictation hears each sentence, in place of Whisper,
+    /// whose model is then neither asked for nor loaded.
+    pub transcription: Option<Spec>,
+    /// It cannot be asked (no key): the conversation does not start, as the dictation does not.
+    pub transcription_error: Option<VoiceError>,
     /// The voice that reads (`speech::catalog`), its speaker, pace and volume.
     pub voice: String,
     pub speak: SpeakOptions,
@@ -116,7 +123,7 @@ struct Shared {
 }
 
 /// The voice that reads: Piper's (its model, when downloaded) or a service's on line; its speaker and pace, its volume,
-/// and the language Whisper is told.
+/// and how what it hears is transcribed: by Whisper or the service on line (`ear`), in what language.
 #[derive(Debug, Clone, PartialEq)]
 struct Reader {
     voice: Option<PathBuf>,
@@ -124,6 +131,7 @@ struct Reader {
     speak: SpeakOptions,
     volume: f32,
     language: String,
+    ear: Option<Spec>,
 }
 
 pub(super) struct Conversation {
@@ -139,6 +147,10 @@ impl Voice {
 
     /// Starts a conversation: the microphone opens and listens for a sentence; or says what is missing first.
     pub fn conversation_start(&self, mut choice: ConvChoice) -> Result<ConvStarted, VoiceError> {
+        // The service of the transcription cannot be asked: said before anything is listened to, as the dictation.
+        if let Some(e) = choice.transcription_error.take() {
+            return Err(e);
+        }
         let on_line = choice.online.is_some() || choice.online_error.is_some();
         if !on_line && !self.engine.available() {
             return Ok(ConvStarted::Unavailable);
@@ -146,7 +158,8 @@ impl Voice {
         let model = super::models::find(&choice.model)
             .or_else(|| super::models::find(super::models::DEFAULT_MODEL))
             .expect("the default model is in the catalog");
-        if !self.store.has(model) {
+        // On line, the service hears: no model of Whisper's.
+        if choice.transcription.is_none() && !self.store.has(model) {
             return Ok(ConvStarted::NeedsModel {
                 model: model.id.into(),
                 size: model.size,
@@ -202,6 +215,7 @@ impl Voice {
                 speak: choice.speak.clone(),
                 volume: choice.volume,
                 language: choice.language.clone(),
+                ear: choice.transcription.clone(),
             }),
             choice,
         });
@@ -221,10 +235,17 @@ impl Voice {
         let capture = self.source.open(&shared.choice.device, sink)?;
         let rate = capture.rate();
         log::info!("voice: conversation listening at {rate} Hz");
-        {
-            let t = self.transcriber.clone();
-            let p = shared.model.clone();
-            std::thread::spawn(move || t.preload(&p));
+        match &shared.choice.transcription {
+            Some(spec) => log::info!(
+                "voice: the conversation is transcribed by {} ({})",
+                spec.provider.label(),
+                spec.model
+            ),
+            None => {
+                let t = self.transcriber.clone();
+                let p = shared.model.clone();
+                std::thread::spawn(move || t.preload(&p));
+            }
         }
         // The voice too (and ONNX Runtime): the first sentence read does not wait for it (ESC-115). On line, nothing
         // to load.
@@ -244,10 +265,13 @@ impl Voice {
             capture: Mutex::new(Some(capture)),
         });
         let emit = self.emit.clone();
-        let transcriber = self.transcriber.clone();
+        let ears = Ears {
+            whisper: self.transcriber.clone(),
+            fake_online: self.fake_online,
+        };
         std::thread::Builder::new()
             .name("voice-conversation".into())
-            .spawn(move || listen(shared, rate, failure, emit, transcriber))
+            .spawn(move || listen(shared, rate, failure, emit, ears))
             .map_err(|e| VoiceError::Other(e.to_string()))?;
         Ok(ConvStarted::Listening {
             session: id,
@@ -294,19 +318,42 @@ impl Voice {
             );
             return;
         }
+        let mut reader = s.reader.lock();
+        let ear = match (&choice.transcription, &choice.transcription_error) {
+            (Some(t), _) => Some(t.clone()),
+            // The service can no longer be asked (its key gone): it hears as it did.
+            (None, Some(_)) => reader.ear.clone(),
+            (None, None) => None,
+        };
         let tuned = Reader {
             voice: local,
             online: choice.online.clone(),
             speak: choice.speak.clone(),
             volume: choice.volume,
             language: choice.language.clone(),
+            ear,
         };
-        let mut reader = s.reader.lock();
         if *reader == tuned {
             return;
         }
         let new_voice = reader.voice != tuned.voice || reader.online != tuned.online;
+        let new_ear = reader.ear != tuned.ear;
         *reader = tuned;
+        if new_ear {
+            match &reader.ear {
+                Some(spec) => log::info!(
+                    "voice: the conversation is now transcribed by {} ({})",
+                    spec.provider.label(),
+                    spec.model
+                ),
+                None => {
+                    log::info!("voice: the conversation is now transcribed by Whisper");
+                    let t = self.transcriber.clone();
+                    let p = s.model.clone();
+                    std::thread::spawn(move || t.preload(&p));
+                }
+            }
+        }
         if new_voice {
             match (&reader.online, &reader.voice) {
                 (Some(o), _) => log::info!(
@@ -643,14 +690,35 @@ fn hush(s: &Shared) {
     s.playing.lock().take();
 }
 
+/// What transcribes a sentence: Whisper, or the service on line (the fake transcriber of the tests stands for it too).
+struct Ears {
+    whisper: Arc<dyn Transcriber>,
+    fake_online: bool,
+}
+
+impl Ears {
+    /// The transcriber of `s`'s sentences now, the model it is given (none on line), and its name for the log.
+    fn of(&self, s: &Shared) -> (Arc<dyn Transcriber>, PathBuf, &'static str) {
+        match s.reader.lock().ear.clone() {
+            Some(spec) if !self.fake_online => {
+                let label = spec.provider.label();
+                (Arc::new(Online(spec)), PathBuf::new(), label)
+            }
+            Some(spec) => (self.whisper.clone(), PathBuf::new(), spec.provider.label()),
+            None => (self.whisper.clone(), s.model.clone(), "Whisper"),
+        }
+    }
+}
+
 /// The conversation's ear: frames of 20 ms, taken as its mode says.
 fn listen(
     s: Arc<Shared>,
     rate: u32,
     failure: Arc<Mutex<Option<VoiceError>>>,
     emit: super::Emit,
-    transcriber: Arc<dyn super::transcribe::Transcriber>,
+    ears: Ears,
 ) {
+    let ears = Arc::new(ears);
     let per = (rate * vad::FRAME_MS / 1000).max(1) as usize;
     let mut buf: Vec<f32> = Vec::new();
     let mut recent: VecDeque<Vec<f32>> = VecDeque::new();
@@ -745,14 +813,30 @@ fn listen(
                             emit(VoiceEvent::ConvTranscribing { session: s.id });
                             let s2 = s.clone();
                             let emit = emit.clone();
-                            let t = transcriber.clone();
+                            let ears = ears.clone();
                             std::thread::spawn(move || {
                                 let pcm = audio::resample(&said, rate, audio::WHISPER_RATE);
                                 let never = Arc::new(AtomicBool::new(false));
                                 let language = s2.reader.lock().language.clone();
-                                let text = t
-                                    .transcribe(&s2.model, &pcm, &language, &never)
-                                    .map_err(|e| format!("{e:#}"));
+                                let (t, model, by) = ears.of(&s2);
+                                let started = Instant::now();
+                                let text = t.transcribe(&model, &pcm, &language, &never);
+                                let secs = pcm.len() as f32 / audio::WHISPER_RATE as f32;
+                                let ms = started.elapsed().as_millis();
+                                match &text {
+                                    Ok(_) => log::info!(
+                                        "voice: a sentence of {secs:.1} s transcribed by {by} in {ms} ms"
+                                    ),
+                                    Err(e) => log::warn!(
+                                        "voice: a sentence of {secs:.1} s not transcribed by {by} in {ms} ms: {e:#}"
+                                    ),
+                                }
+                                // Told as the dictation tells it: the service's failure, with what to do about it.
+                                let text = text.map_err(|e| match e.downcast::<OnlineError>() {
+                                    Ok(e) => VoiceError::Online(e)
+                                        .message(crate::i18n::ui(), std::env::consts::OS),
+                                    Err(e) => format!("{e:#}"),
+                                });
                                 if s2.done.load(Ordering::Acquire) {
                                     return;
                                 }

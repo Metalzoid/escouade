@@ -109,6 +109,16 @@ impl std::fmt::Debug for Spec {
     }
 }
 
+/// The same service, asked the same way (its client aside).
+impl PartialEq for Spec {
+    fn eq(&self, o: &Self) -> bool {
+        self.provider == o.provider
+            && self.model == o.model
+            && self.key == o.key
+            && self.base == o.base
+    }
+}
+
 impl Spec {
     pub fn new(provider: Provider, key: String, client: reqwest::Client) -> Self {
         Self {
