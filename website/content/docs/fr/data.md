@@ -16,11 +16,14 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `attachments/<agent>/` | Les fichiers que tu joins aux messages d’un agent, ou que tu colles ou déposes dans son terminal (vue Claude Code), quand ils sont copiés : chacun dans un sous-dossier au nom tiré au hasard (8 caractères), sous son nom d’origine, nettoyé. `attachments/_drafts/` garde les copies d’un ticket pas encore enregistré, vidées après 24 h (au démarrage, puis chaque heure). Effacé avec l’agent, avec son projet quand tu le supprimes pour de bon, ou par la purge si tu l’as réglée (voir [Réglages › Harness](settings-claude-code#pieces-jointes)). Un fichier joint à son emplacement d’origine n’est jamais ici. |
 | `conversations/<agent>.jsonl` | Le journal de chaque conversation, nommé d’après l’identifiant de l’agent, à raison d’une opération (ajout ou correction d’un élément) par ligne. Effacé avec l’agent ; ceux d’un projet fermé restent avec son historique. |
 | `closed-projects/<projet>.json` | L’historique d’un projet fermé, nommé d’après l’identifiant du projet : le projet entier (réglages, Kanban, intégrations, commandes), ses agents (archivés compris), ses tickets, l’agent affiché et la date de fermeture. Ses conversations restent dans `conversations/`, les images et les fichiers de ses tickets dans `tickets/`, les copies de fichiers joints à ses agents dans `attachments/`, ses statistiques dans `stats.db`. Le fichier disparaît quand le projet est rouvert ou que son historique est effacé (voir [Projets fermés](settings-projects#projets-fermes)). |
-| `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes : sa connexion et ses conversations. Principal n’en a pas, il utilise celui de ton propre Claude Code. |
+| `claude/<compte>/` | Le dossier de configuration de Claude Code de chaque compte ajouté dans Réglages › Comptes : sa connexion et ses conversations. Le compte de la machine (Principal) n’en a pas : il utilise celui de ton propre Claude Code. |
 | `mcp-token.json` | Le jeton du serveur MCP pour Claude hors Escouade, seulement quand le trousseau du système le refuse (toujours sous Linux). |
 | `mcp/<agent>.json` | La configuration MCP d’un agent d’Escouade, avec son jeton. Effacée quand son processus s’arrête, et à chaque démarrage et arrêt de l’app. |
 | `tui/<agent>.json` | Les réglages de hooks que la vue Claude Code d’un agent passe à Claude Code. Le jeton n’y est pas : il passe par une variable d’environnement. |
 | `logs/<agent>-setup.log` | La sortie complète de la dernière préparation du worktree d’un agent. Effacé avec l’agent ; celui d’un projet fermé reste avec son historique. |
+| `voice/models/` | Les modèles de Whisper téléchargés pour la dictée et la conversation vocale (`ggml-<modèle>.bin`). Chacun s’efface depuis [Réglages › Voix](settings-voice#les-modeles-de-whisper). |
+| `voice/voices/` | Les voix de la conversation vocale téléchargées (`<voix>.onnx` et `<voix>.onnx.json`). Chacune s’efface depuis Réglages › Voix. |
+| `voice/espeak-ng-data/` | Les données de prononciation d’eSpeak NG (français et anglais), écrites par l’app à la première lecture à voix haute et réécrites après une mise à jour. |
 | `update.json` | La mise à jour en cours d’installation, notée pour le démarrage suivant puis effacée. |
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
@@ -63,11 +66,11 @@ Pour retirer un jeton, déconnecte le service dans Réglages › Intégrations :
 
 Escouade pilote Claude Code et garde ses propres conversations, mais elle s’appuie aussi sur ses données :
 
-- **Les sessions.** Chaque agent a une session Claude Code. Escouade en note l’identifiant dans `state.json` et relance `claude --resume` sur cette session quand l’app redémarre ou qu’un processus arrêté reprend : l’agent retrouve tout son contexte. Les sessions elles-mêmes sont dans le dossier de configuration de Claude Code du compte de l’agent (`~/.claude` par défaut pour Principal, `~/.escouade/claude/<compte>/` pour les autres), sous `projects/`. Supprimer un agent retire sa conversation d’Escouade ; la session Claude Code reste sur le disque. Si une session a disparu, l’agent le dit (« Session Claude introuvable : une nouvelle session sera démarrée au prochain message. »).
+- **Les sessions.** Chaque agent a une session Claude Code. Escouade en note l’identifiant dans `state.json` et relance `claude --resume` sur cette session quand l’app redémarre ou qu’un processus arrêté reprend : l’agent retrouve tout son contexte. Les sessions elles-mêmes sont dans le dossier de configuration de Claude Code du compte de l’agent (`~/.claude` par défaut pour le compte de la machine, `~/.escouade/claude/<compte>/` pour les autres), sous `projects/`. Supprimer un agent retire sa conversation d’Escouade ; la session Claude Code reste sur le disque. Si une session a disparu, l’agent le dit (« Session Claude introuvable : une nouvelle session sera démarrée au prochain message. »).
 - **La connexion, pour les quotas.** Escouade lit, sans l’écrire, la connexion que Claude Code garde pour chaque compte, et s’en sert pour demander ses quotas à Anthropic. Voir [les quotas](usage).
 - **Le transcript, dans la vue Claude Code.** Pour suivre un agent qui tourne dans l’interface de Claude Code, Escouade lit la session qu’il écrit (`projects/<dossier>/<session>.jsonl`). Voir [la vue Claude Code](claude-code-view).
 - **La configuration MCP.** Quand « Les agents peuvent piloter Escouade » est activé (Réglages › Harness), Escouade déclare son serveur MCP dans la configuration de chaque compte actif de chaque harness installé (Claude Code, Codex, OpenCode, Copilot CLI), le jeton en clair. Voir [le serveur MCP](mcp).
-- **Un nouveau compte** reprend de Principal, par lien ou par copie, ses réglages, son `CLAUDE.md`, ses skills, agents, commandes, plugins, hooks et styles de sortie. Jamais sa connexion ni son `.claude.json`.
+- **Un nouveau compte** reprend du compte de la machine, par lien ou par copie, ses réglages, son `CLAUDE.md`, ses skills, agents, commandes, plugins, hooks et styles de sortie. Jamais sa connexion ni son `.claude.json`.
 
 ## Les statistiques d’usage
 
@@ -92,7 +95,7 @@ La copie contient tes réglages, tes projets, tes tickets, tes conversations et 
 Pour la rétablir sur une autre machine, remets le dossier au même endroit, avec tes projets aux mêmes chemins (`state.json` retient des chemins complets). Trois choses ne suivent pas :
 
 - Les jetons des intégrations (sauf sous Linux) : reconnecte chaque service.
-- La connexion de Principal : elle est dans ton Claude Code.
+- La connexion du compte de la machine : elle est dans ton Claude Code.
 - Les sessions des agents, qui sont dans le dossier de Claude Code : sans elles, un agent repart d’une nouvelle session.
 
 ## Remettre à zéro

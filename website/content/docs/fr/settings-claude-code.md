@@ -1,6 +1,6 @@
 # Réglages : Harness
 
-L’onglet « Harness » (« Claude Code » jusqu’à la 1.7) liste les harness des agents, avec leur exécutable et leur version, et règle les nouveaux agents, la vie des processus, les pièces jointes, le remote control et le serveur qui laisse Claude piloter Escouade.
+L’onglet « Harness » (« Claude Code » jusqu’à la 1.7) liste les harness des agents, avec leur exécutable et leur version, et règle la vue des nouveaux agents, la vie des processus, les pièces jointes, le remote control et le serveur qui laisse Claude piloter Escouade.
 
 ## Chaque harness
 

@@ -218,6 +218,40 @@ On this path a keystroke usually takes 10 to 40 ms, and seldom more than 150 ms,
 
 If you see the delay and the log notes nothing, the time was not spent in Escouade: it is in the machine’s display (a remote desktop), or the echo took more than 10 seconds (a keystroke left unanswered is then forgotten). Only a visible window measures its keystrokes.
 
+## Voice
+
+### Dictation or the conversation hears nothing
+
+**Symptom.** Dictation or the [voice conversation](chat#talking-with-the-agent-voice-conversation) stops on a message instead of listening, or a dictation ends on “Nothing heard: speak a little closer to the microphone, then try again.”
+
+**Cause and fix.** The message says which:
+
+- “No microphone found. Plug one in, or pick one in Settings › Voice.”: no microphone is plugged in, or the one chosen in [Settings › Voice](settings-voice#microphone) is gone along with the system’s.
+- “The system keeps the microphone from Escouade.” or “No sound came from the microphone: it is muted, or the system keeps it from Escouade.”: the message gives your system’s steps.
+  - **macOS** asks for permission at the first dictation, and refuses nothing afterwards: an app kept from the microphone gets silence. Open System Settings › Privacy & Security › Microphone, tick Escouade, then restart the app.
+  - **Windows**: Settings › Privacy & security › Microphone, turn on “Microphone access”, then “Let desktop apps access your microphone”.
+  - **Linux**: check that PulseAudio or PipeWire is running, that the microphone is not muted (pavucontrol, or the sound settings), and that your account may use it (the `audio` group).
+- “The microphone is taken by another app.”: close it, or pick another microphone in Settings › Voice.
+- “No sound system answers.” (Linux): start PulseAudio or PipeWire (or check ALSA), then try again.
+- “Nothing heard”: the microphone works, but Whisper found no words. Speak closer to the microphone, and check in Settings › Voice that “Microphone used” is the right one and that “Spoken language” is yours.
+
+### Online dictation fails
+
+**Symptom.** With “Transcribed by” on “Online”, the dictation ends on a message and nothing is written.
+
+**Fix.** The message names the service:
+
+- “No OpenAI key is saved.”: paste your key in [Settings › Voice](settings-voice#online-dictation), or go back to “Local (Whisper)”. On Linux, the key cannot be saved: stay local.
+- “OpenAI refuses the key.”: check it with the service, then “Replace”.
+- “OpenAI does not answer”: check the network and the proxy ([Settings › Network](settings-network)), or go back to local.
+- “OpenAI did not transcribe the dictation”, with the code and reason the service gives: settle what it says on your account with it, or go back to local.
+
+### The voice conversation does not start
+
+**Symptom.** A click on “Conversation” shows “Voice conversation is not available: the voice’s engine (ONNX Runtime) is missing from the app. Reinstall Escouade.”, or the download of a model or a voice fails.
+
+**Fix.** ONNX Runtime ships with the app: if it is missing, reinstall Escouade from [the download page](installation). A download that fails goes through the proxy of the network settings: behind a corporate proxy, check [Settings › Network](settings-network) and that `huggingface.co` can be reached. What downloads, and where, is in [Settings › Voice](settings-voice#what-downloads-and-where).
+
 ## Log and reports
 
 ### Where the app’s log is

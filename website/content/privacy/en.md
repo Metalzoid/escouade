@@ -71,6 +71,7 @@ Every event also carries:
 - Tokens and secrets.
 - Anything you type.
 - What you dictate: the microphone’s sound and the text Whisper makes of it stay on your machine. The transcription happens there; only the model is downloaded, once, from Hugging Face (`huggingface.co`), through the proxy of the settings. Online dictation, off by default, is apart: see “Online dictation, if you turn it on”, below.
+- What you say to an agent in a voice conversation, and what it answers aloud: the transcription by Whisper and the voice by Piper happen on your machine, even when dictation is online. Only the voices are downloaded, once each, from Hugging Face, through the proxy of the settings.
 
 ## The tool and where the data lives
 

@@ -39,7 +39,9 @@ Under the message field, a bar of menus adjusts the agent: “Model”, “Effor
 
 ### Model
 
-The menu offers four models: Fable, Opus, Sonnet, and Haiku. Each is shown with the version Claude Code runs for it, for example “Opus 5.5”; until Claude Code has announced its models (when an agent first starts), only the family name appears. The agent’s card and the conversation header show which model is in use.
+The menu lists the models the agent’s harness announces for its account. For Claude Code: Fable, Opus, Sonnet, and Haiku, each shown with the version Claude Code runs for it, for example “Opus 5.5”, and the other models the account announces, under the name it gives them (“Mythos”); until Claude Code has announced its models (when an agent first starts), only the family name appears. The agent’s card and the conversation header show which model is in use.
+
+When the list is long (more than 8 models, or those of OpenCode’s providers), the menu has a “Search” field and sorts the models into groups, each under its heading: “Favorites” first, then one group per family, and “Others” for a model with no known family. The families are Fable, Opus, Sonnet, Haiku, Mythos (and any other family the account announces) for Claude Code, from the newest model to the oldest; the provider for OpenCode; the maker (GPT, Claude, Gemini…) for Codex and Copilot CLI. The search filters within the groups and hides those left empty; `↑` and `↓` go from one model to the next, and `Enter` picks. A model’s star makes it a favorite (filled, in the accent color) or removes it (a discreet outline); favorites hold for every agent of the same harness.
 
 ### Effort
 

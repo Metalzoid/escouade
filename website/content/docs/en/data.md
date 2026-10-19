@@ -16,11 +16,14 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `attachments/<agent>/` | The files you attach to an agent’s messages, or paste or drop into its terminal (Claude Code view), when they are copied: each in a subfolder with a random name (8 characters), under its original name, cleaned up. `attachments/_drafts/` holds the copies of a ticket not saved yet, emptied after 24 h (at startup, then every hour). Deleted with the agent, with its project when you delete it for good, or by the purge if you set it (see [Settings › Harness](settings-claude-code#attachments)). A file attached at its original location is never in here. |
 | `conversations/<agent>.jsonl` | The log of each conversation, named after the agent’s ID, one operation (an item added or corrected) per line. Deleted with the agent; those of a closed project stay with its history. |
 | `closed-projects/<project>.json` | The history of a closed project, named after the project’s ID: the whole project (settings, Kanban, integrations, commands), its agents (archived ones included), its tickets, the agent on display, and the closing date. Its conversations stay in `conversations/`, its tickets’ images and files in `tickets/`, the copies of files attached to its agents in `attachments/`, its statistics in `stats.db`. The file goes away when the project is reopened or its history is erased (see [Closed projects](settings-projects#closed-projects)). |
-| `claude/<account>/` | The Claude Code configuration folder of each account added in Settings › Accounts: its sign-in and its conversations. Main has none; it uses your own Claude Code’s folder. |
+| `claude/<account>/` | The Claude Code configuration folder of each account added in Settings › Accounts: its sign-in and its conversations. This machine’s account (Main) has none; it uses your own Claude Code’s folder. |
 | `mcp-token.json` | The MCP server’s token for Claude outside Escouade, only when the system keychain refuses it (always on Linux). |
 | `mcp/<agent>.json` | The MCP configuration of an Escouade agent, with its token. Deleted when its process stops, and each time the app starts and quits. |
 | `tui/<agent>.json` | The hook settings that an agent’s Claude Code view passes to Claude Code. The token isn’t in it: it goes through an environment variable. |
 | `logs/<agent>-setup.log` | The full output of the last setup of an agent’s worktree. Deleted with the agent; that of a closed project stays with its history. |
+| `voice/models/` | The Whisper models downloaded for dictation and the voice conversation (`ggml-<model>.bin`). Each one is deleted from [Settings › Voice](settings-voice#whisper-s-models). |
+| `voice/voices/` | The voice conversation’s downloaded voices (`<voice>.onnx` and `<voice>.onnx.json`). Each one is deleted from Settings › Voice. |
+| `voice/espeak-ng-data/` | eSpeak NG’s pronunciation data (French and English), written by the app at the first reading aloud and written again after an update. |
 | `update.json` | The update being installed, noted for the next start and then deleted. |
 | `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
 | `telemetry-id` | The random id of this install, for the usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
@@ -63,11 +66,11 @@ To remove a token, disconnect the service in Settings › Integrations: its entr
 
 Escouade drives Claude Code and keeps its own conversations, but it also relies on Claude Code’s data:
 
-- **Sessions.** Each agent has a Claude Code session. Escouade notes its ID in `state.json` and runs `claude --resume` on that session when the app restarts or a stopped process picks up again: the agent gets its whole context back. The sessions themselves are in the Claude Code configuration folder of the agent’s account (`~/.claude` by default for Main, `~/.escouade/claude/<account>/` for the others), under `projects/`. Deleting an agent removes its conversation from Escouade; the Claude Code session stays on disk. If a session has disappeared, the agent says so (“Claude session not found: a new session will start with your next message.”).
+- **Sessions.** Each agent has a Claude Code session. Escouade notes its ID in `state.json` and runs `claude --resume` on that session when the app restarts or a stopped process picks up again: the agent gets its whole context back. The sessions themselves are in the Claude Code configuration folder of the agent’s account (`~/.claude` by default for this machine’s account, `~/.escouade/claude/<account>/` for the others), under `projects/`. Deleting an agent removes its conversation from Escouade; the Claude Code session stays on disk. If a session has disappeared, the agent says so (“Claude session not found: a new session will start with your next message.”).
 - **The sign-in, for quotas.** Escouade reads, without writing it, the sign-in that Claude Code keeps for each account, and uses it to ask Anthropic for the account’s quotas. See [quotas](usage).
 - **The transcript, in the Claude Code view.** To follow an agent that runs in Claude Code’s own interface, Escouade reads the session it writes (`projects/<folder>/<session>.jsonl`). See [the Claude Code view](claude-code-view).
 - **The MCP configuration.** When “Agents can drive Escouade” is on (Settings › Harness), Escouade declares its MCP server in the configuration of each active account of each harness installed (Claude Code, Codex, OpenCode, Copilot CLI), the token in plain text. See [the MCP server](mcp).
-- **A new account** takes from Main, by link or by copy, its settings, its `CLAUDE.md`, and its skills, agents, commands, plugins, hooks, and output styles. Never its sign-in or its `.claude.json`.
+- **A new account** takes from this machine’s account, by link or by copy, its settings, its `CLAUDE.md`, and its skills, agents, commands, plugins, hooks, and output styles. Never its sign-in or its `.claude.json`.
 
 ## Usage statistics
 
@@ -92,7 +95,7 @@ The copy holds your settings, projects, tickets, conversations, and statistics. 
 To restore it on another machine, put the folder back in the same place, with your projects at the same paths (`state.json` remembers full paths). Three things don’t come along:
 
 - The integration tokens (except on Linux): reconnect each service.
-- Main’s sign-in: it is in your Claude Code.
+- The sign-in of this machine’s account: it is in your Claude Code.
 - The agents’ sessions, which are in Claude Code’s folder: without them, an agent starts over with a new session.
 
 ## Resetting

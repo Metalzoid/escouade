@@ -96,35 +96,25 @@ The microphone, next to the paperclip, dictates the message instead of typing it
 
 The shortcut `Ctrl+Shift+Space` (`⇧⌘Space` on macOS) does the same, short or held, in the field that has the focus. While it listens, a panel shows the microphone’s level and the time; `Esc` cancels without writing anything.
 
-The dictated text is **inserted at the cursor** (it replaces the selection, if any), spaced from the words around it. It is **never sent by itself**: you read it, fix it, then send it with `Enter`. A ticket’s description is dictated the same way (the microphone is next to “Attach”), and so is Claude Code’s prompt in the [Claude Code view](claude-code-view): the microphone is at the top right of the terminal, and the text is typed there as a paste, not submitted.
+The dictated text is **inserted at the cursor** (it replaces the selection, if any), spaced from the words around it. It is **never sent by itself**: you read it, fix it, then send it with `Enter`. A ticket’s description is dictated the same way (the microphone is next to “Attach”), and so is a harness’s prompt in its terminal view (the [Claude Code view](claude-code-view)): the microphone is at the top right of the terminal, and the text is typed there as a paste, not submitted.
 
-The transcription happens **on your machine**, by Whisper (whisper.cpp), on a thread of its own: nothing you say leaves your machine. At the first dictation, Escouade offers to download the “base” model (148 MB), once, from Hugging Face, through the proxy of the [network settings](settings-network); its checksum is checked before it is kept, in `~/.escouade/voice/models`. After that, a sentence is transcribed in one or two seconds.
+The transcription happens **on your machine**, by Whisper (whisper.cpp), on a thread of its own: nothing you say leaves your machine. At the first dictation, Escouade offers to download the “base” model (141 MB), once, from Hugging Face, through the proxy of the [network settings](settings-network); its checksum is checked before it is kept, in `~/.escouade/voice/models`. After that, a sentence is transcribed in one or two seconds.
 
 **Online, if you choose it.** For a machine too slow for Whisper, or a better quality, Settings › Voice › “Transcribed by” › “Online” sends the sound of each dictation, once you end it, to the service chosen: OpenAI, Groq, Mistral (Voxtral), ElevenLabs (Scribe) or Deepgram, with **your own** API key, paid per use on your account with it. It is off by default. Only the sound of the dictation leaves, through the proxy of the [network settings](settings-network); no model is to be downloaded. The key is kept in the system keychain (not on Linux, where it cannot be saved), never in Escouade’s files nor in its log. When the key is refused or the service cannot be reached, the dictation says so, and nothing is written. The voice conversation is still transcribed on your machine. The details are on the [Privacy](/en/privacy/) page.
 
-In **Settings › Voice**:
+[Settings › Voice](settings-voice) chooses the microphone, who transcribes (“Local (Whisper)” and its model, from `tiny`, 74 MB, to `large-v3-turbo`, 1.5 GB, or “Online” and its service), the “Spoken language” and the “Shortcut”.
 
-- “Microphone used”: the system’s by default, or another one;
-- “Transcribed by”: “Local (Whisper)”, the default, or “Online”, with the service and its key (“Save the key”, then “Replace” or “Delete the key”);
-- “Model”: tiny (78 MB, the fastest), base (148 MB, the default), small (488 MB), large-v3-turbo-q5_0 (574 MB), medium (1.5 GB) or large-v3-turbo (1.6 GB, the most accurate). Each one downloads or is deleted from its row; the one chosen downloads at the first dictation;
-- “Spoken language”: the interface’s by default, automatic detection, or a given language;
-- “Shortcut”: “Change”, then press the shortcut you want (with `Ctrl`, `Alt` or `Cmd`, or a key `F1` to `F24`).
-
-When the microphone is refused or missing, Escouade says so, with what to do:
-
-- **macOS** asks for permission at the first dictation. If you refused it, tick Escouade in System Settings › Privacy & Security › Microphone, then restart the app;
-- **Windows**: Settings › Privacy & security › Microphone, “Microphone access”, then “Let desktop apps access your microphone”;
-- **Linux**: PulseAudio or PipeWire must be running, and the microphone not muted (pavucontrol or the sound settings).
+When the microphone is refused or missing, Escouade says so, with your system’s steps (macOS, Windows or Linux): see [troubleshooting](troubleshooting#dictation-or-the-conversation-hears-nothing).
 
 The dictation stops by itself after ten minutes, when the microphone is unplugged (what was said is transcribed), when the window is closed or reloaded, and when the app quits.
 
 ### Talking with the agent (voice conversation)
 
-The **Conversation** button, left of the microphone, holds a spoken conversation with the agent, hands off the keyboard:
+The **Conversation** button, left of the microphone in the message field of the Escouade view, holds a spoken conversation with the agent, hands off the keyboard. It works with every harness (Claude Code, Codex, OpenCode, Copilot CLI); a harness’s terminal view only has the dictation’s microphone. A turn goes like this:
 
 1. you speak; when you stop, what you said **goes by itself** to the agent after a short silence (“Delay before sending”, 1.2 s by default);
 2. the agent works and answers as usual, in the conversation;
-3. it ends its answer with **a short passage written to be read**, less wordy and less technical: Escouade shows it apart under the answer (“🔊 Read aloud”) and **reads it aloud**;
+3. it ends its answer with **a short passage written to be read**, less wordy and less technical: Escouade shows it apart under the answer (“🔊 Read aloud”) and **reads it aloud**. Without that passage, Escouade says “Done. The answer is in the conversation.”;
 4. then it listens again.
 
 During the conversation, **it fills Escouade’s window**: in the middle, a glowing orb that follows the sound, the agent’s voice when it speaks (its edge breathes and its halo grows with the level of the sound read) and your microphone when it listens, with an arc turning while it transcribes and while the agent works; below, the state (“Listening”, “Transcribing on your machine…”, “Alice is working…”, “Alice is answering”). At the bottom, **subtitles** as in a cinema: what you said, as soon as it is transcribed, then what the agent says, sentence by sentence, as it is read. The whole history stays in the conversation. `Esc` or “Stop” leaves the mode and closes the microphone.
@@ -132,15 +122,9 @@ During the conversation, **it fills Escouade’s window**: in the middle, a glow
 - **Cutting in**: speak while it reads, the reading stops at once and Escouade listens. The microphone does not take the agent’s voice for a sentence of yours: while it reads, it only tells whether you speak over it, above the echo of the speakers. Headphones remain the most comfortable.
 - **Questions and permissions**: when the agent asks a question or a permission, Escouade reads it, then your spoken answer answers it: “yes”, “okay” or “go ahead” allow, “no” denies, “always” always allows; an option is said by its name or its rank (“the second”). If Escouade does not understand, or if the question takes several choices, the conversation **pauses** and says so: answer in the window, then “Resume”.
 
-Everything happens **on your machine**: the transcription by Whisper, as for dictation, and the voice by **Piper**, linked into Escouade. At the first conversation, Escouade offers to download the voice (about 60 MB, once, from Hugging Face, its checksum checked). The conversation is held in French or English: the spoken language of the settings, else the interface’s.
+Everything happens **on your machine**: the transcription by Whisper, with the dictation’s model, even when dictation is “Online”, and the voice by **Piper**, linked into Escouade. At the first conversation, Escouade offers to download what is missing: the Whisper model, then the voice (60 MB for the default one), once, from Hugging Face, their checksum checked. The conversation is held in French or English: the spoken language of the settings, else the interface’s.
 
-In **Settings › Voice › Conversation**:
-
-- the **voice** of each language, among those whose license allows it: free model and dataset, no voice of a character, a known person or a brand (7 voices in French, 29 in English). Only one is offered as an exception: **Fuze**, in French, high quality, with 14 styles (“normal” by default, joyeuse, colere, chuchote…); its model declares no license, and its dataset, under CC BY 4.0, was generated with ElevenLabs v4, which its settings say. For each one, its quality, its size, its speaker or style when it has several, “▶ Listen”, “Download” or “Delete”, its license and the credit it asks for;
-- the **speed** and **volume** of the reading;
-- the **delay before sending**: the silence after which what you said goes (0.5 to 3 s).
-
-The credits of Piper, eSpeak NG, ONNX Runtime and each voice are in Settings › About › “Credits and licenses”.
+[Settings › Voice](settings-voice#conversation), “Conversation” group, chooses the voice of each language among those whose license allows it (7 in French, Fuze and its 14 styles among them, 29 in English), its speaker, the speed, the volume and the “Delay before sending”.
 
 ### Mentioning a file with @
 

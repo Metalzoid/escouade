@@ -35,7 +35,7 @@ Without any harness, the welcome screen says “No harness found” with each on
 
 ### The other harnesses
 
-Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode and GitHub Copilot CLI, and a single harness is enough. Install the ones you want and sign in to them; they then show in Settings › Harness, with their version and their state.
+Claude Code isn’t required: Escouade also runs its agents on Codex, OpenCode and GitHub Copilot CLI, and a single harness is enough. Install the ones you want and sign in to them; they then show in Settings › Harness, with their version. Then add each one’s account in Settings › Accounts: only the accounts added start agents (see [the accounts](accounts)).
 
 | Harness | Installation | Sign-in | Tested with |
 |---|---|---|---|
@@ -119,6 +119,7 @@ If `claude` is still not found, set its path in Settings › Harness.
 As long as no project exists, Escouade opens a welcome screen: its logo, the sentence “Add a project to run agents, follow their questions, and open terminals.” and the “+ Add a project” button.
 
 - If no harness is found, a warning says so: “No harness found”, with each one’s install command. Then open the settings with the ⚙ button of the status bar or `Ctrl+,`, “Harness” tab. On macOS, `Ctrl` becomes `⌘`.
+- As long as no account is added, the screen says “No account”: “Add an account: the one already signed in on this machine, or a new one. Only the accounts added start agents.” The “Add an account…” button offers “This machine’s account”, your harness already signed in, or “A new account” (see [the accounts](accounts#add-an-account)).
 - Click “+ Add a project” to open the “New project” window. The [quick start](quick-start) describes it field by field and goes all the way to the first commit.
 - Escouade also asks, in a “Help improve Escouade?” dialog, whether it may send usage statistics: “Share statistics” or “No thanks”. Nothing is sent before you answer. The detail is on the [Privacy](/en/privacy/) page, and the choice can be changed in Settings › About (see the [“About” settings](settings-about)).
 

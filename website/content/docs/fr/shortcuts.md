@@ -61,8 +61,9 @@ Les raccourcis s’écrivent comme l’app les écrit en français : `Ctrl+Maj+A
 | `Maj+Entrée` | Aller à la ligne. | Champ de message |
 | `Échap` | Interrompre Claude. | Champ de message, pendant que l’agent travaille |
 | `↑` | Rappeler le dernier message envoyé, pour le renvoyer tel quel ou modifié (l’original reste dans la conversation). | Champ de message vide |
-| `Ctrl+Maj+Espace` | [Dicter](chat#dicter-un-message) : un appui bref commence et un second finit, maintenu il dicte tant qu’il est enfoncé ; le texte va au curseur, sans être envoyé. Modifiable dans Réglages › Voix. | Le champ de message, la description d’un ticket, le terminal de la vue Claude Code |
+| `Ctrl+Maj+Espace` | [Dicter](chat#dicter-un-message) : un appui bref commence et un second finit, maintenu il dicte tant qu’il est enfoncé ; le texte va au curseur, sans être envoyé. Modifiable dans [Réglages › Voix](settings-voice#utilisation). | Le champ de message, la description d’un ticket, le terminal de la vue Claude Code |
 | `Échap` | Annuler la dictée en cours, sans rien écrire. | Pendant une dictée |
+| `Échap` | Quitter la [conversation vocale](chat#parler-avec-l-agent-conversation-vocale) : le micro se ferme, comme avec « Arrêter ». | Pendant une conversation vocale |
 | `↑` / `↓`, `Entrée` ou `Tab`, `Échap` | Choisir, prendre ou fermer une suggestion `@fichier` ou `/commande`. | Champ de message, liste ouverte |
 
 ## Questions et autorisations

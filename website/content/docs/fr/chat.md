@@ -96,35 +96,25 @@ Le micro, à côté du trombone, dicte le message au lieu de le taper. Deux faç
 
 Le raccourci `Ctrl+Maj+Espace` (`⇧⌘Espace` sous macOS) fait la même chose, appui bref ou maintenu, dans le champ qui a le focus. Pendant l’écoute, un panneau montre le niveau du micro et la durée ; `Échap` annule sans rien écrire.
 
-Le texte dicté est **inséré à l’endroit du curseur** (il remplace la sélection s’il y en a une), séparé des mots voisins par une espace. Il n’est **jamais envoyé tout seul** : tu le relis, le corriges, puis tu l’envoies avec `Entrée`. On dicte de la même façon la description d’un ticket (le micro est à côté de « Joindre ») et, en [vue Claude Code](claude-code-view), le prompt de Claude Code : le micro est en haut à droite du terminal, et le texte y est tapé comme un collage, sans être validé.
+Le texte dicté est **inséré à l’endroit du curseur** (il remplace la sélection s’il y en a une), séparé des mots voisins par une espace. Il n’est **jamais envoyé tout seul** : tu le relis, le corriges, puis tu l’envoies avec `Entrée`. On dicte de la même façon la description d’un ticket (le micro est à côté de « Joindre ») et, en vue terminal d’un harness ([vue Claude Code](claude-code-view)), son prompt : le micro est en haut à droite du terminal, et le texte y est tapé comme un collage, sans être validé.
 
-La transcription se fait **sur ta machine**, par Whisper (whisper.cpp), dans un fil à part : rien de ce que tu dis ne quitte ta machine. À la première dictée, Escouade propose de télécharger le modèle « base » (148 Mo), une seule fois, depuis Hugging Face, par le proxy des [réglages réseau](settings-network) ; sa somme de contrôle est vérifiée avant qu’il soit gardé, dans `~/.escouade/voice/models`. Ensuite, une phrase se transcrit en une à deux secondes.
+La transcription se fait **sur ta machine**, par Whisper (whisper.cpp), dans un fil à part : rien de ce que tu dis ne quitte ta machine. À la première dictée, Escouade propose de télécharger le modèle « base » (141 Mo), une seule fois, depuis Hugging Face, par le proxy des [réglages réseau](settings-network) ; sa somme de contrôle est vérifiée avant qu’il soit gardé, dans `~/.escouade/voice/models`. Ensuite, une phrase se transcrit en une à deux secondes.
 
 **En ligne, si tu le choisis.** Pour une machine trop lente pour Whisper, ou une meilleure qualité, Réglages › Voix › « Transcrite par » › « En ligne » envoie le son de chaque dictée, une fois que tu la finis, au service choisi : OpenAI, Groq, Mistral (Voxtral), ElevenLabs (Scribe) ou Deepgram, avec **ta propre clé** d’API, payée à l’usage sur ton compte chez lui. C’est éteint par défaut. Seul le son de la dictée part, par le proxy des [réglages réseau](settings-network) ; aucun modèle n’est à télécharger. La clé est gardée dans le trousseau du système (pas sous Linux, où elle ne peut pas être enregistrée), jamais dans les fichiers d’Escouade ni dans son journal. Si la clé est refusée ou le service injoignable, la dictée le dit, et rien n’est écrit. La conversation vocale reste transcrite sur ta machine. Le détail est sur la page [Confidentialité](/privacy/).
 
-Dans **Réglages › Voix** :
+[Réglages › Voix](settings-voice) choisit le micro, qui transcrit (« Local (Whisper) » et son modèle, de `tiny`, 74 Mo, à `large-v3-turbo`, 1,5 Go, ou « En ligne » et son service), la « Langue parlée » et le « Raccourci ».
 
-- « Micro utilisé » : celui du système par défaut, ou un autre ;
-- « Transcrite par » : « Local (Whisper) », par défaut, ou « En ligne », avec le service et sa clé (« Enregistrer la clé », puis « Remplacer » ou « Effacer la clé ») ;
-- « Modèle » : tiny (78 Mo, le plus rapide), base (148 Mo, par défaut), small (488 Mo), large-v3-turbo-q5_0 (574 Mo), medium (1,5 Go) ou large-v3-turbo (1,6 Go, le plus juste). Chacun se télécharge ou s’efface depuis sa ligne ; celui choisi se télécharge à la première dictée ;
-- « Langue parlée » : celle de l’interface par défaut, la détection automatique, ou une langue précise ;
-- « Raccourci » : « Changer », puis appuie sur le raccourci voulu (avec `Ctrl`, `Alt` ou `Cmd`, ou une touche `F1` à `F24`).
-
-Si le micro est refusé ou absent, Escouade le dit avec la marche à suivre :
-
-- **macOS** demande la permission à la première dictée. Si tu l’as refusée, coche Escouade dans Réglages Système › Confidentialité et sécurité › Microphone, puis relance l’app ;
-- **Windows** : Paramètres › Confidentialité et sécurité › Microphone, « Accès au microphone » puis « Autoriser les applications de bureau à accéder à votre microphone » ;
-- **Linux** : PulseAudio ou PipeWire doit tourner, et le micro ne doit pas être coupé (pavucontrol ou les réglages du son).
+Si le micro est refusé ou absent, Escouade le dit avec la marche à suivre de ton système (macOS, Windows ou Linux) : voir le [dépannage](troubleshooting#la-dictee-ou-la-conversation-n-entend-rien).
 
 La dictée s’arrête d’elle-même après dix minutes, quand le micro est débranché (ce qui a été dit est transcrit), quand la fenêtre est fermée ou rechargée, et quand l’app quitte.
 
 ### Parler avec l’agent (conversation vocale)
 
-Le bouton **Conversation**, à gauche du micro, fait une conversation à voix haute avec l’agent, sans toucher au clavier :
+Le bouton **Conversation**, à gauche du micro dans le champ de message de la vue d’Escouade, fait une conversation à voix haute avec l’agent, sans toucher au clavier. Elle marche avec tous les harness (Claude Code, Codex, OpenCode, Copilot CLI) ; la vue terminal d’un harness n’a que le micro de la dictée. Un tour se passe ainsi :
 
 1. tu parles ; quand tu te tais, ce que tu as dit **part seul** à l’agent après un court silence (« Délai avant l’envoi », 1,2 s par défaut) ;
 2. l’agent travaille et répond comme d’habitude, dans la conversation ;
-3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« 🔊 Lu à voix haute ») et le **lit à voix haute** ;
+3. il finit sa réponse par **un court passage écrit pour être lu**, moins verbeux et moins technique : Escouade le montre à part sous la réponse (« 🔊 Lu à voix haute ») et le **lit à voix haute**. Sans ce passage, Escouade dit « C’est fait. La réponse est dans la conversation. » ;
 4. puis l’écoute reprend.
 
 Pendant la conversation, **elle occupe toute la fenêtre d’Escouade** : au centre, une orbe lumineuse qui suit le son, la voix de l’agent quand il parle (son bord respire et son halo grandit avec le niveau du son lu) et ton micro quand il t’écoute, avec un arc qui tourne pendant la transcription et pendant que l’agent travaille ; en dessous, l’état (« À l’écoute », « Transcription sur ta machine… », « Alice travaille… », « Alice te répond »). En bas, **des sous-titres** comme au cinéma : ce que tu as dit, dès que c’est transcrit, puis ce que dit l’agent, phrase par phrase, au rythme de la lecture. L’historique complet reste dans la conversation. `Échap` ou « Arrêter » quitte le mode et ferme le micro.
@@ -132,15 +122,9 @@ Pendant la conversation, **elle occupe toute la fenêtre d’Escouade** : au cen
 - **Couper la parole** : parle pendant la lecture, elle s’arrête aussitôt et Escouade t’écoute. Le micro n’entend pas la voix de l’agent pour une phrase de toi : pendant la lecture, il sert seulement à savoir si tu parles par-dessus, au-dessus de l’écho des haut-parleurs. Un casque reste le plus confortable.
 - **Questions et permissions** : quand l’agent pose une question ou demande une permission, Escouade la lit, puis ta réponse dite y répond : « oui », « d’accord » ou « vas-y » autorisent, « non » refuse, « toujours » autorise toujours ; une option se dit par son nom ou son rang (« la deuxième »). Si Escouade ne comprend pas, ou si la question demande plusieurs choix, la conversation se met **en pause** et le dit : réponds dans la fenêtre, puis « Reprendre ».
 
-Tout se passe **sur ta machine** : la transcription par Whisper, comme la dictée, et la voix par **Piper**, liée à Escouade. À la première conversation, Escouade propose de télécharger la voix (environ 60 Mo, une seule fois, depuis Hugging Face, sa somme de contrôle vérifiée). La conversation se tient en français ou en anglais : la langue parlée des réglages, sinon celle de l’interface.
+Tout se passe **sur ta machine** : la transcription par Whisper, avec le modèle de la dictée, même quand la dictée est « En ligne », et la voix par **Piper**, liée à Escouade. À la première conversation, Escouade propose de télécharger ce qui manque : le modèle de Whisper, puis la voix (60 Mo pour celle par défaut), une seule fois, depuis Hugging Face, leur somme de contrôle vérifiée. La conversation se tient en français ou en anglais : la langue parlée des réglages, sinon celle de l’interface.
 
-Dans **Réglages › Voix › Conversation** :
-
-- la **voix** de chaque langue, parmi celles dont la licence le permet : modèle et jeu de données libres, aucune voix de personnage, de personne connue ni de marque (7 voix en français, 29 en anglais). Une seule y est proposée par exception : **Fuze**, en français, de haute qualité, avec 14 styles (« normal » par défaut, joyeuse, colere, chuchote…) ; son modèle ne déclare aucune licence, et son jeu de données, sous CC BY 4.0, a été généré avec ElevenLabs v4, ce que ses réglages disent. Pour chacune, sa qualité, sa taille, son locuteur ou son style s’il y en a plusieurs, « ▶ Écouter », « Télécharger » ou « Effacer », sa licence et le crédit qu’elle demande ;
-- la **vitesse** et le **volume** de la lecture ;
-- le **délai avant l’envoi** : le silence après lequel ce que tu as dit part (de 0,5 à 3 s).
-
-Les crédits de Piper, eSpeak NG, ONNX Runtime et de chaque voix sont dans Réglages › À propos › « Crédits et licences ».
+[Réglages › Voix](settings-voice#conversation), groupe « Conversation », choisit la voix de chaque langue parmi celles dont la licence le permet (7 en français, dont Fuze et ses 14 styles, 29 en anglais), son locuteur, la vitesse, le volume et le « Délai avant l’envoi ».
 
 ### Mentionner un fichier avec @
 

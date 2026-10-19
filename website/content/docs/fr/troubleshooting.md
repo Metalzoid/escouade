@@ -218,6 +218,40 @@ Sur ce chemin, une frappe prend d’ordinaire 10 à 40 ms, et rarement plus de 1
 
 Si tu vois le retard et que le journal ne note rien, le temps n’est pas passé dans Escouade : il est dans l’affichage du poste (un bureau à distance), ou l’écho a mis plus de 10 secondes (une frappe restée sans réponse est alors oubliée). Seule une fenêtre visible mesure ses frappes.
 
+## Voix
+
+### La dictée ou la conversation n’entend rien
+
+**Symptôme.** La dictée ou la [conversation vocale](chat#parler-avec-l-agent-conversation-vocale) s’arrête sur un message au lieu d’écouter, ou une dictée finit sur « Rien entendu : parle un peu plus près du micro, puis réessaie. »
+
+**Cause et solution.** Le message dit laquelle :
+
+- « Aucun micro trouvé. Branche un micro, ou choisis-en un dans Réglages › Voix. » : aucun micro n’est branché, ou celui choisi dans [Réglages › Voix](settings-voice#micro) a disparu avec celui du système.
+- « Le système refuse le micro à Escouade. » ou « Aucun son n’est arrivé du micro : il est coupé, ou le système le refuse à Escouade. » : le message donne la marche à suivre de ton système.
+  - **macOS** demande la permission à la première dictée, et ne refuse rien ensuite : une app privée de micro reçoit du silence. Ouvre Réglages Système › Confidentialité et sécurité › Microphone, coche Escouade, puis relance l’app.
+  - **Windows** : Paramètres › Confidentialité et sécurité › Microphone, allume « Accès au microphone » puis « Autoriser les applications de bureau à accéder à votre microphone ».
+  - **Linux** : vérifie que PulseAudio ou PipeWire tourne, que le micro n’est pas coupé (pavucontrol, ou les réglages du son), et que ton compte peut s’en servir (groupe `audio`).
+- « Le micro est pris par une autre application. » : ferme-la, ou choisis un autre micro dans Réglages › Voix.
+- « Aucun système de son ne répond. » (Linux) : démarre PulseAudio ou PipeWire (ou vérifie ALSA), puis réessaie.
+- « Rien entendu » : le micro marche, mais Whisper n’a pas trouvé de mots. Parle plus près du micro, vérifie dans Réglages › Voix que « Micro utilisé » est le bon, et que « Langue parlée » est la tienne.
+
+### La dictée en ligne échoue
+
+**Symptôme.** Avec « Transcrite par » sur « En ligne », la dictée finit sur un message et rien n’est écrit.
+
+**Solution.** Le message nomme le service :
+
+- « Aucune clé OpenAI n’est enregistrée. » : colle ta clé dans [Réglages › Voix](settings-voice#la-dictee-en-ligne), ou repasse en « Local (Whisper) ». Sous Linux, la clé ne peut pas être enregistrée : reste en local.
+- « OpenAI refuse la clé. » : vérifie-la chez le service, puis « Remplacer ».
+- « OpenAI ne répond pas » : vérifie le réseau et le proxy ([Réglages › Réseau](settings-network)), ou repasse en local.
+- « OpenAI n’a pas transcrit la dictée », avec le code et la raison que donne le service : règle ce qu’elle dit sur ton compte chez lui, ou repasse en local.
+
+### La conversation vocale ne démarre pas
+
+**Symptôme.** Un clic sur « Conversation » affiche « La conversation vocale n’est pas disponible : le moteur de la voix (ONNX Runtime) est introuvable dans l’app. Réinstalle Escouade. », ou le téléchargement d’un modèle ou d’une voix échoue.
+
+**Solution.** ONNX Runtime est livré avec l’app : s’il manque, réinstalle Escouade depuis [la page de téléchargement](installation). Un téléchargement qui échoue passe par le proxy des réglages réseau : derrière un proxy d’entreprise, vérifie [Réglages › Réseau](settings-network) et que `huggingface.co` est joignable. Ce qui se télécharge, et où, est dans [Réglages › Voix](settings-voice#ce-qui-se-telecharge-et-ou).
+
 ## Journal et signalement
 
 ### Où est le journal de l’app

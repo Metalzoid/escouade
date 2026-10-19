@@ -426,6 +426,7 @@ export const fr: Catalog = {
       'settings-integrations': 'Intégrations',
       'settings-terminals': 'Terminaux',
       'settings-network': 'Réseau',
+      'settings-voice': 'Voix',
       'settings-about': 'À propos',
       shortcuts: 'Raccourcis clavier',
       data: 'Données locales',

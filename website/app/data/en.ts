@@ -422,6 +422,7 @@ export const en: Catalog = {
       'settings-integrations': 'Integrations',
       'settings-terminals': 'Terminals',
       'settings-network': 'Network',
+      'settings-voice': 'Voice',
       'settings-about': 'About',
       shortcuts: 'Keyboard shortcuts',
       data: 'Local data',

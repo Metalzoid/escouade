@@ -71,6 +71,7 @@ Tous les événements portent aussi :
 - Les jetons et les secrets.
 - Tout ce que tu tapes.
 - Ce que tu dictes : le son du micro et le texte qu’en tire Whisper restent sur ta machine. La transcription s’y fait ; seul le modèle est téléchargé, une fois, depuis Hugging Face (`huggingface.co`), par le proxy des réglages. La dictée en ligne, éteinte par défaut, est à part : voir « La dictée en ligne, si tu l’allumes », plus bas.
+- Ce que tu dis à un agent en conversation vocale, et ce qu’il te répond à voix haute : la transcription par Whisper et la voix par Piper se font sur ta machine, même quand la dictée est en ligne. Seules les voix sont téléchargées, une fois chacune, depuis Hugging Face, par le proxy des réglages.
 
 ## L’outil et l’endroit où vivent les données
 

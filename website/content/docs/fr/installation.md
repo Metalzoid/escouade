@@ -35,7 +35,7 @@ Sans aucun harness, l’écran d’accueil dit « Aucun harness trouvé » ave
 
 ### Les autres harness
 
-Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur Codex, OpenCode et GitHub Copilot CLI, et un seul harness lui suffit. Installe ceux que tu veux et connecte-les ; ils apparaissent alors dans Réglages › Harness, avec leur version et leur état.
+Claude Code n’est pas obligatoire : Escouade fait aussi tourner ses agents sur Codex, OpenCode et GitHub Copilot CLI, et un seul harness lui suffit. Installe ceux que tu veux et connecte-les ; ils apparaissent alors dans Réglages › Harness, avec leur version. Ajoute ensuite le compte de chacun dans Réglages › Comptes : seuls les comptes ajoutés lancent des agents (voir [les comptes](accounts)).
 
 | Harness | Installation | Connexion | Testé avec |
 |---|---|---|---|
@@ -119,6 +119,7 @@ Si `claude` reste introuvable, indique son chemin dans Réglages › Harness.
 Tant qu’aucun projet n’existe, Escouade ouvre un écran d’accueil : son logo, la phrase « Ajoute un projet pour y lancer des agents, suivre leurs questions et ouvrir des terminaux. » et le bouton « + Ajouter un projet ».
 
 - Si aucun harness n’est trouvé, un avertissement le dit : « Aucun harness trouvé », avec la commande d’installation de chacun. Ouvre alors les réglages avec le bouton ⚙ de la barre d’état ou `Ctrl+,`, onglet « Harness ». Sous macOS, `Ctrl` devient `⌘`.
+- Tant qu’aucun compte n’est ajouté, l’écran dit « Aucun compte » : « Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents. » Le bouton « Ajouter un compte… » propose « Le compte de la machine », ton harness déjà connecté, ou « Un nouveau compte » (voir [les comptes](accounts#ajouter-un-compte)).
 - Clique sur « + Ajouter un projet » pour ouvrir la fenêtre « Nouveau projet ». La [prise en main](quick-start) la décrit champ par champ et va jusqu’au premier commit.
 - Escouade te demande aussi, dans une fenêtre « Aider à améliorer Escouade ? », si elle peut envoyer des statistiques d’usage : « Partager les statistiques » ou « Non merci ». Rien n’est envoyé avant ta réponse. Le détail est sur la page [Confidentialité](/privacy/), et le choix se change dans Réglages › À propos (voir [les réglages « À propos »](settings-about)).
 

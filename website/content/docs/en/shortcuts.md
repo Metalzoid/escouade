@@ -61,8 +61,9 @@ Shortcuts are written the way the app writes them in English: `Ctrl+Shift+A`, `C
 | `Shift+Enter` | New line. | Message field |
 | `Esc` | Interrupt Claude. | Message field, while the agent is working |
 | `↑` | Recall the last message sent, to send it again as is or edited (the original stays in the conversation). | Empty message field |
-| `Ctrl+Shift+Space` | [Dictate](chat#dictating-a-message): a short press starts and another ends, held down it dictates while it is pressed; the text goes at the cursor, not sent. Changed in Settings › Voice. | The message field, a ticket’s description, the terminal of the Claude Code view |
+| `Ctrl+Shift+Space` | [Dictate](chat#dictating-a-message): a short press starts and another ends, held down it dictates while it is pressed; the text goes at the cursor, not sent. Changed in [Settings › Voice](settings-voice#use). | The message field, a ticket’s description, the terminal of the Claude Code view |
 | `Esc` | Cancel the dictation under way, writing nothing. | During a dictation |
+| `Esc` | Leave the [voice conversation](chat#talking-with-the-agent-voice-conversation): the microphone closes, as with “Stop”. | During a voice conversation |
 | `↑` / `↓`, `Enter` or `Tab`, `Esc` | Choose, accept, or close an `@file` or `/command` suggestion. | Message field, list open |
 
 ## Questions and permissions

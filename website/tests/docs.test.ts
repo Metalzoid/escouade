@@ -393,3 +393,21 @@ describe('the pages of the documentation', () => {
     }
   });
 });
+
+describe('the page of the voice settings', () => {
+  const real = (lang: Lang) => render(source(lang, 'settings-voice'), lang);
+
+  it('is in the settings group of the sidebar, named in both languages', () => {
+    expect(DOC_GROUPS.find((g) => g.id === 'settings')?.pages).toContain('settings-voice');
+    expect(CATALOGS.fr.docs.pages['settings-voice']).toBe('Voix');
+    expect(CATALOGS.en.docs.pages['settings-voice']).toBe('Voice');
+  });
+
+  it('is found by the search, by the words of its settings', () => {
+    for (const lang of LANGS) {
+      const entries = searchEntries('settings-voice', real(lang));
+      for (const word of ['Whisper', 'Piper', 'Fuze', 'ElevenLabs', 'ONNX'])
+        expect(searchDocs(entries, word).length, `${lang} ${word}`).toBeGreaterThan(0);
+    }
+  });
+});

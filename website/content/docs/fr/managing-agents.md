@@ -39,7 +39,9 @@ Sous le champ de saisie, une barre de menus règle l’agent : « Modèle », 
 
 ### Modèle
 
-Le menu propose quatre modèles : Fable, Opus, Sonnet et Haiku. Chacun est affiché avec la version que Claude Code lance pour lui, par exemple « Opus 5.5 » ; tant que Claude Code n’a pas annoncé ses modèles (au premier démarrage d’un agent), seul le nom de la famille apparaît. La carte de l’agent et l’en-tête de la conversation rappellent le modèle utilisé.
+Le menu liste les modèles que le harness de l’agent annonce pour son compte. Pour Claude Code : Fable, Opus, Sonnet et Haiku, chacun affiché avec la version que Claude Code lance pour lui, par exemple « Opus 5.5 », et les autres modèles que le compte annonce, sous le nom qu’il leur donne (« Mythos ») ; tant que Claude Code n’a pas annoncé ses modèles (au premier démarrage d’un agent), seul le nom de la famille apparaît. La carte de l’agent et l’en-tête de la conversation rappellent le modèle utilisé.
+
+Quand la liste est longue (plus de 8 modèles, ou ceux des fournisseurs d’OpenCode), le menu a un champ « Rechercher » et range les modèles par groupe, chacun sous son intitulé : « Favoris » d’abord, puis un groupe par famille, et « Autres » pour un modèle sans famille reconnue. Les familles sont Fable, Opus, Sonnet, Haiku, Mythos (et toute autre famille que le compte annonce) pour Claude Code, du modèle le plus récent au plus ancien ; le fournisseur pour OpenCode ; l’éditeur (GPT, Claude, Gemini…) pour Codex et Copilot CLI. La recherche filtre dans les groupes et cache ceux qui restent vides ; `↑` et `↓` passent d’un modèle à l’autre, et `Entrée` choisit. L’étoile d’un modèle en fait un favori (pleine, dans la couleur d’accent) ou le retire (un contour discret) ; les favoris valent pour tous les agents du même harness.
 
 ### Effort
 

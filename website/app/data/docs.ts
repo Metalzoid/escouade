@@ -22,6 +22,7 @@ export const DOC_GROUPS = [
       'settings-integrations',
       'settings-terminals',
       'settings-network',
+      'settings-voice',
       'settings-about',
     ],
   },
