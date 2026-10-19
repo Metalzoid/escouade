@@ -855,3 +855,191 @@ fn real_elevenlabs_conversation_sentence() {
     assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
     h.voice.conversation_stop();
 }
+
+// « Transcription en temps réel » (ESC-136): each sentence streamed to a fake service as it is said.
+
+use super::live::tests::{fake as fake_live, Mode as LiveMode, BY_REQUEST, FINAL, PARTIAL};
+
+/// The conversation heard by `f`'s ElevenLabs, as one speaks.
+fn heard_live(f: &super::live::tests::FakeLive) -> ConvChoice {
+    ConvChoice { transcription: Some(f.spec(Provider::ElevenLabs)), ..conv_choice() }
+}
+
+/// The bytes of 16 kHz sound (16 bits) of `secs`.
+fn pcm_bytes(secs: f32) -> usize {
+    (secs * 32_000.0) as usize
+}
+
+#[test]
+fn as_one_speaks_the_text_is_written_and_its_final_one_goes_to_the_agent_without_the_silence() {
+    let f = fake_live(Provider::ElevenLabs, LiveMode::Speaks);
+    let c = conv_harness("conv-live", "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(heard_live(&f)).unwrap());
+    // A quiet room: nothing opens, nothing goes.
+    hear(h, 1.0, 0.0);
+    assert!(f.conns().is_empty());
+    hear(h, 1.0, 0.3);
+    // Written while it is said, before its end.
+    let partial = wait_for(h, |e| matches!(e, VoiceEvent::ConvPartial { .. }));
+    assert_eq!(partial, VoiceEvent::ConvPartial { session, text: PARTIAL.into() });
+    assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvTranscribing { .. })));
+    hear(h, 1.0, 0.0);
+    let heard = wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
+    assert_eq!(heard, VoiceEvent::ConvHeard { session, text: FINAL.into(), error: None });
+    // Committed once the user went quiet, ahead of the end; nothing by request, nothing by Whisper.
+    let conns = f.conns();
+    assert_eq!(conns.len(), 1);
+    assert_eq!(conns[0].commits, 1, "{:?}", conns[0].texts);
+    assert!(f.requests.lock().is_empty());
+    assert!(h.fake.calls.lock().is_empty());
+    // What went: the sentence (its first syllables kept from before, and the breath before the commit), never the
+    // second of quiet before it nor the one after it.
+    let sent = conns[0].audio;
+    assert!(sent >= pcm_bytes(1.0), "{sent} bytes");
+    assert!(sent <= pcm_bytes(1.0 + 0.3 + 0.35), "{sent} bytes: silence went");
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn nothing_goes_while_the_conversation_holds_and_it_streams_again_once_it_listens() {
+    let f = fake_live(Provider::ElevenLabs, LiveMode::Speaks);
+    let c = conv_harness("conv-live-hold", "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(heard_live(&f)).unwrap());
+    // The agent works: the user speaks, nothing goes.
+    h.voice.conversation_hold(session);
+    hear(h, 0.4, 0.0);
+    hear(h, 1.0, 0.3);
+    hear(h, 0.6, 0.0);
+    assert!(f.conns().is_empty(), "{:?}", f.conns());
+    // A sentence started, then a hold: its stream closes, nothing more sent, no text.
+    h.voice.conversation_listen(session);
+    hear(h, 0.4, 0.0);
+    hear(h, 0.6, 0.3);
+    h.voice.conversation_hold(session);
+    hear(h, 1.0, 0.3);
+    hear(h, 0.6, 0.0);
+    let conns = f.conns();
+    assert_eq!(conns.len(), 1);
+    assert!(!conns[0].ended);
+    assert!(conns[0].audio <= pcm_bytes(0.6 + 0.35), "{} bytes", conns[0].audio);
+    assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvHeard { .. })));
+    // Listening again: the sentence cut by the hold goes on, whole, by request (never lost); the next is streamed.
+    h.voice.conversation_listen(session);
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: BY_REQUEST.into(), error: None });
+    h.events.lock().clear();
+    h.voice.conversation_listen(session);
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: FINAL.into(), error: None });
+    assert_eq!(f.conns().len(), 2);
+    h.voice.conversation_stop();
+}
+
+#[test]
+fn a_stream_that_fails_sends_the_sentence_whole_by_request_and_the_next_ones_too() {
+    for mode in [LiveMode::Fails, LiveMode::Closes, LiveMode::Refuses(403)] {
+        let f = fake_live(Provider::ElevenLabs, mode);
+        let c = conv_harness("conv-live-fails", "never this");
+        let h = &c.h;
+        put_voice(&h.voice, "fr_FR-siwis-medium");
+        let session = listening(h.voice.conversation_start(heard_live(&f)).unwrap());
+        assert_eq!(
+            say_a_sentence(h),
+            VoiceEvent::ConvHeard { session, text: BY_REQUEST.into(), error: None },
+            "{mode:?}"
+        );
+        assert_eq!(*f.requests.lock(), ["POST /v1/speech-to-text HTTP/1.1"], "{mode:?}");
+        // The next sentence goes by request at once: no stream tried again.
+        h.events.lock().clear();
+        h.voice.conversation_listen(session);
+        assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: BY_REQUEST.into(), error: None });
+        assert_eq!(f.conns().len(), 1, "{mode:?}");
+        assert_eq!(f.requests.lock().len(), 2, "{mode:?}");
+        h.voice.conversation_stop();
+    }
+}
+
+#[test]
+fn unticked_each_sentence_goes_whole_as_before() {
+    let f = fake_live(Provider::ElevenLabs, LiveMode::Speaks);
+    let c = conv_harness("conv-live-off", "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let spec = f.spec(Provider::ElevenLabs).with_live(None);
+    let session = listening(h.voice.conversation_start(ConvChoice { transcription: Some(spec), ..conv_choice() }).unwrap());
+    assert_eq!(say_a_sentence(h), VoiceEvent::ConvHeard { session, text: BY_REQUEST.into(), error: None });
+    assert!(f.conns().is_empty());
+    assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvPartial { .. })));
+    h.voice.conversation_stop();
+}
+
+/// The real Scribe v2 Realtime hears a sentence of the conversation as it is said (`testdata/question-fr.wav`, in real
+/// time), the user's key given to this process only (`ELEVENLABS_API_KEY`): run by hand, never in CI. Prints the texts
+/// written while it was said, and when the final one was there.
+#[test]
+#[ignore]
+fn real_elevenlabs_conversation_live() {
+    let key = std::env::var("ELEVENLABS_API_KEY").expect("ELEVENLABS_API_KEY");
+    let c = conv_harness("conv-real-elevenlabs-live", "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
+    let (samples, rate) = super::source::read_wav(&path).unwrap();
+    let samples = super::audio::resample(&samples, rate, 16_000);
+    let spec = Spec::new(Provider::ElevenLabs, key, reqwest::Client::new()).with_live(Some("scribe_v2_realtime".into()));
+    let session = listening(h.voice.conversation_start(ConvChoice { transcription: Some(spec), ..conv_choice() }).unwrap());
+    let script = h.script.clone();
+    let quiet = vec![0.001f32; 320];
+    let started = Instant::now();
+    let player = std::thread::spawn(move || {
+        for chunk in std::iter::repeat_n(&quiet[..], 30).chain(samples.chunks(320)).chain(std::iter::repeat_n(&quiet[..], 150)) {
+            script.push(chunk);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    });
+    let mut partials: Vec<(u128, String)> = Vec::new();
+    let mut ended = None;
+    let end = Instant::now() + Duration::from_secs(30);
+    let heard = loop {
+        let events = conv_events(h);
+        for e in &events {
+            if let VoiceEvent::ConvPartial { text, .. } = e {
+                if !partials.iter().any(|(_, t)| t == text) {
+                    partials.push((started.elapsed().as_millis(), text.clone()));
+                }
+            }
+        }
+        if ended.is_none() && events.iter().any(|e| matches!(e, VoiceEvent::ConvTranscribing { .. })) {
+            ended = Some(Instant::now());
+        }
+        if let Some(e) = events.into_iter().find(|e| matches!(e, VoiceEvent::ConvHeard { .. })) {
+            break e;
+        }
+        assert!(Instant::now() < end, "never heard: {:?}", conv_events(h));
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let after_silence = ended.map(|t| t.elapsed().as_millis()).unwrap_or_default();
+    for (at, t) in &partials {
+        println!("written at {at} ms: {t}");
+    }
+    let silence = conv_choice().silence_ms as u128;
+    let end_at = ended.map(|t| t.duration_since(started).as_millis()).unwrap_or_default();
+    // The last word: the sentence's end less its silence.
+    let last_word = end_at.saturating_sub(silence);
+    let final_at = partials.last().map(|(at, _)| *at).unwrap_or_default();
+    println!(
+        "heard {after_silence} ms after the end of the sentence ({silence} ms of silence, at {end_at} ms); its final text written at {final_at} ms, {} ms after the last word: {heard:?}",
+        final_at.saturating_sub(last_word)
+    );
+    player.join().unwrap();
+    let VoiceEvent::ConvHeard { session: s, text, error: None } = heard else {
+        panic!("not heard: {heard:?}");
+    };
+    assert_eq!(s, session);
+    assert!(!text.is_empty());
+    assert!(partials.len() >= 2, "{partials:?}");
+    assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
+    h.voice.conversation_stop();
+}

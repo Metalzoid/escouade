@@ -57,6 +57,9 @@
         >
           <div class="fill" style:width="{Math.round(dictation.level * 100)}%"></div>
         </div>
+        {#if dictation.partial}
+          <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
+        {/if}
         <span class="muted small">{t('voice.panel.hint', { key })}</span>
       {:else if phase === 'transcribing'}
         <span class="muted"
@@ -64,6 +67,9 @@
             ? t('voice.panel.transcribingOnline', { service: onlineService(app.settings.voice.onlineService).label })
             : t('voice.panel.transcribing')}</span
         >
+        {#if dictation.partial}
+          <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
+        {/if}
       {:else if phase === 'offer' && dictation.offer}
         <span class="strong">{t('voice.panel.offerTitle')}</span>
         <span class="muted small">{t('voice.panel.offerBody', { model: dictation.offer.model, size: fBytes(dictation.offer.size) })}</span>
@@ -196,6 +202,17 @@
   }
   .fill.dl {
     background: var(--accent);
+  }
+  /* What the service understood so far (ESC-136): the last lines, as they are written. */
+  .partial {
+    margin: 0;
+    max-height: 7.5em;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column-reverse;
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.5;
   }
   .actions {
     display: flex;

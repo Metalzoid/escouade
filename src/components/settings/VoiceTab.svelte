@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DEFAULT_SHORTCUT, ONLINE_SERVICES, onlineService, shortcutLabel, shortcutOf } from '../../lib/dictation';
+  import { DEFAULT_SHORTCUT, ONLINE_SERVICES, liveOn, onlineService, shortcutLabel, shortcutOf } from '../../lib/dictation';
   import { dictation } from '../../lib/dictation.svelte';
   import { fBytes } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -68,6 +68,12 @@
   $effect(() => {
     if (online) void onlineVoice.load(service.id);
   });
+  // « Transcription en temps réel » (ESC-136): offered by the service, on unless unticked, kept by service.
+  const live = $derived(liveOn(v, service));
+  const liveModel = $derived(service.live || v.onlineModels[service.id] || service.model);
+  function setLive(on: boolean) {
+    v.onlineLive = { ...(v.onlineLive ?? {}), [service.id]: on };
+  }
 
   function record(e: KeyboardEvent) {
     if (!recording) return;
@@ -111,7 +117,9 @@
 
 <Group
   title={t('voice.settings.transcription')}
-  note={online ? t('voice.settings.onlineNote', { service: service.label, host: service.host }) : t('voice.settings.transcriptionNote')}
+  note={online
+    ? t(live ? 'voice.settings.onlineNoteLive' : 'voice.settings.onlineNote', { service: service.label, host: service.host })
+    : t('voice.settings.transcriptionNote')}
 >
   <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')}>
     <Chips
@@ -137,6 +145,17 @@
       bind:models={v.onlineModels}
       desc={t('voice.settings.onlineModelDesc', { service: service.label, model: service.model })}
     />
+    {#if service.live !== null}
+      <Row
+        label={t('voice.settings.live')}
+        desc={`${t('voice.settings.liveDesc', { service: service.label, model: liveModel })} ${t('voice.settings.livePrice', { service: service.label })}`}
+      >
+        <label class="live">
+          <input type="checkbox" data-voice-live checked={live} onchange={(e) => setLive(e.currentTarget.checked)} />
+          <span>{t('voice.settings.live')}</span>
+        </label>
+      </Row>
+    {/if}
     <OnlineKey {service} />
   {:else}
     <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')}>
@@ -195,6 +214,12 @@
 <SpeechSettings />
 
 <style>
+  .live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
   .input {
     width: 340px;
     max-width: 50%;

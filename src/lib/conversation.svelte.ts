@@ -74,8 +74,11 @@ class VoiceConversation {
   level = $state(0);
   /** How loud the agent's voice being played is (0 to 1): what the orb follows while it speaks. */
   played = $state(0);
-  /** The subtitle: what the user said (once transcribed), or the sentence of the agent being heard. */
-  subtitle = $state<{ who: 'user' | 'agent'; text: string } | null>(null);
+  /**
+   * The subtitle: what the user said (once transcribed; `live`, as they say it, ESC-136), or the sentence of the agent
+   * being heard.
+   */
+  subtitle = $state<{ who: 'user' | 'agent'; text: string; live?: boolean } | null>(null);
   /** What the user said last, and what was read last. */
   heard = $state('');
   said = $state('');
@@ -226,6 +229,11 @@ class VoiceConversation {
         break;
       case 'convTranscribing':
         this.phase = 'transcribing';
+        break;
+      case 'convPartial':
+        // Written as it is said; the final text replaces it once heard.
+        if ((this.phase === 'hearing' || this.phase === 'transcribing') && e.text.trim())
+          this.subtitle = { who: 'user', text: e.text, live: true };
         break;
       case 'convHeard':
         if (e.error) app.toast(e.error, 'error');

@@ -5,8 +5,15 @@
 //! transcribed: it only tells whether the user speaks over the agent (`vad::BargeIn`, which knows the echo of its
 //! voice), which stops the reading and listens. Once the reading is over, it listens again, after the echo's tail.
 //!
+//! With « Transcription en temps réel » (ESC-136), a sentence's sound goes to the service while it is said, from its
+//! start (its first syllables, kept from before) to the user going quiet: its text is written in the window as it comes
+//! (`ConvPartial`), and is final soon after the last word. Nothing else goes: neither the silence before or after it,
+//! nor what is heard while the agent is read or the conversation holds. A stream that fails sends the sentence whole, by
+//! request, as before, and so do the sentences after it.
+//!
 //! The window leads (`conversation.svelte.ts`): it says when to listen, to hold (the agent works), and what to read.
 
+use super::live::{self, LiveStream};
 use super::online::{Online, OnlineError, Spec};
 use super::online_speech::SpeakChoice;
 use super::speech::output::Playing;
@@ -116,6 +123,8 @@ struct Shared {
     /// Samples heard, not yet cut into frames.
     pending: Mutex<Vec<f32>>,
     done: AtomicBool,
+    /// A stream on line failed: the sentences go whole, by request, for the rest of the conversation (ESC-136).
+    live_off: AtomicBool,
     choice: ConvChoice,
     model: PathBuf,
     /// How it reads and hears, which the settings may change while it goes on (`conversation_tune`).
@@ -208,6 +217,7 @@ impl Voice {
             hush: Mutex::new(Arc::new(AtomicBool::new(false))),
             pending: Mutex::new(Vec::new()),
             done: AtomicBool::new(false),
+            live_off: AtomicBool::new(false),
             model: self.store.path(model.id),
             reader: Mutex::new(Reader {
                 voice: local,
@@ -237,9 +247,10 @@ impl Voice {
         log::info!("voice: conversation listening at {rate} Hz");
         match &shared.choice.transcription {
             Some(spec) => log::info!(
-                "voice: the conversation is transcribed by {} ({})",
+                "voice: the conversation is transcribed by {} ({}{})",
                 spec.provider.label(),
-                spec.model
+                spec.live.as_deref().unwrap_or(&spec.model),
+                if spec.live.is_some() { ", live" } else { "" }
             ),
             None => {
                 let t = self.transcriber.clone();
@@ -708,6 +719,80 @@ impl Ears {
             None => (self.whisper.clone(), s.model.clone(), "Whisper"),
         }
     }
+
+    /// The service that hears `s`'s sentences as they are said: « Transcription en temps réel » on, and no stream
+    /// failed yet. The fake transcriber of the end-to-end tests hears them whole.
+    fn live(&self, s: &Shared) -> Option<Spec> {
+        if self.fake_online || s.live_off.load(Ordering::Acquire) {
+            return None;
+        }
+        s.reader.lock().ear.clone().filter(|e| e.live.is_some())
+    }
+
+    /// The stream of a sentence that starts with `start`, its texts told to the window as they come.
+    fn open(
+        &self,
+        s: &Arc<Shared>,
+        emit: &super::Emit,
+        rate: u32,
+        start: &[f32],
+    ) -> Option<LiveStream> {
+        let spec = self.live(s)?;
+        let language = s.reader.lock().language.clone();
+        let (session, emit) = (s.id, emit.clone());
+        let stream = LiveStream::open(
+            &spec,
+            &language,
+            rate,
+            Box::new(move |text| emit(VoiceEvent::ConvPartial { session, text })),
+        );
+        stream.push(start);
+        Some(stream)
+    }
+}
+
+/// The frames kept while the user is quiet after a commit: sent before their next words, should they speak again.
+const RESUME_FRAMES: usize = 5;
+
+/// The sound of a sentence under way, as it goes to its stream: sent while the user speaks; once quiet for
+/// `live::PAUSE`, what was said is committed and the quiet kept back (its last frames only).
+struct Flow {
+    stream: LiveStream,
+    paused: bool,
+    held: VecDeque<Vec<f32>>,
+}
+
+impl Flow {
+    fn new(stream: LiveStream) -> Self {
+        Self {
+            stream,
+            paused: false,
+            held: VecDeque::new(),
+        }
+    }
+
+    /// The next frame, `quiet_ms` into the quiet (0: speech).
+    fn push(&mut self, frame: &[f32], quiet_ms: u32) {
+        if quiet_ms == 0 {
+            for f in self.held.drain(..) {
+                self.stream.push(&f);
+            }
+            self.paused = false;
+            self.stream.push(frame);
+        } else if quiet_ms >= live::PAUSE.as_millis() as u32 {
+            if !self.paused {
+                self.paused = true;
+                self.stream.pause();
+            }
+            self.held.push_back(frame.to_vec());
+            if self.held.len() > RESUME_FRAMES {
+                self.held.pop_front();
+            }
+        } else {
+            // A breath between two words.
+            self.stream.push(frame);
+        }
+    }
 }
 
 /// The conversation's ear: frames of 20 ms, taken as its mode says.
@@ -723,6 +808,9 @@ fn listen(
     let mut buf: Vec<f32> = Vec::new();
     let mut recent: VecDeque<Vec<f32>> = VecDeque::new();
     let mut sentence: Option<Vec<f32>> = None;
+    // Its stream, with « Transcription en temps réel », and when the user last spoke in it.
+    let mut flow: Option<Flow> = None;
+    let mut last_word = Instant::now();
     let mut peak = 0f32;
     let mut told = Instant::now();
     while !s.done.load(Ordering::Acquire) {
@@ -752,6 +840,10 @@ fn listen(
                 recent.pop_front();
             }
             let mode = *s.mode.lock();
+            // Nothing goes on but while it listens: a stream opened before (a hold, a reading) closes, unsent.
+            if mode != Mode::Listening {
+                flow = None;
+            }
             match mode {
                 Mode::Holding => {}
                 Mode::After(at) => {
@@ -775,14 +867,15 @@ fn listen(
                         s.endpointer.lock().start_in_sentence();
                         // What the barge-in heard of the user is the sentence's start (with the echo's last bits).
                         let keep = recent.len().min(20);
-                        sentence = Some(
-                            recent
-                                .iter()
-                                .skip(recent.len() - keep)
-                                .flatten()
-                                .copied()
-                                .collect(),
-                        );
+                        let start: Vec<f32> = recent
+                            .iter()
+                            .skip(recent.len() - keep)
+                            .flatten()
+                            .copied()
+                            .collect();
+                        flow = ears.open(&s, &emit, rate, &start).map(Flow::new);
+                        last_word = Instant::now();
+                        sentence = Some(start);
                         emit(VoiceEvent::ConvBargeIn {
                             session: s.id,
                             reading: s.reading.load(Ordering::Acquire),
@@ -790,47 +883,88 @@ fn listen(
                     }
                 }
                 Mode::Listening => {
-                    let heard = s.endpointer.lock().push(level);
+                    let (heard, quiet) = {
+                        let mut e = s.endpointer.lock();
+                        let heard = e.push(level);
+                        (heard, e.quiet_ms())
+                    };
                     if let Some(sent) = sentence.as_mut() {
                         sent.extend_from_slice(&frame);
+                        if quiet == 0 {
+                            last_word = Instant::now();
+                        }
+                        if let (Some(f), None) = (flow.as_mut(), heard) {
+                            f.push(&frame, quiet);
+                        }
                     }
                     match heard {
                         Some(Heard::Started { frames_ago }) => {
                             let keep = (frames_ago + 5).min(recent.len());
-                            sentence = Some(
-                                recent
-                                    .iter()
-                                    .skip(recent.len() - keep)
-                                    .flatten()
-                                    .copied()
-                                    .collect(),
-                            );
+                            let start: Vec<f32> = recent
+                                .iter()
+                                .skip(recent.len() - keep)
+                                .flatten()
+                                .copied()
+                                .collect();
                             emit(VoiceEvent::ConvSpeech { session: s.id });
+                            flow = ears.open(&s, &emit, rate, &start).map(Flow::new);
+                            last_word = Instant::now();
+                            sentence = Some(start);
                         }
                         Some(Heard::Ended) => {
                             let said = sentence.take().unwrap_or_default();
+                            let stream = flow.take().map(|f| f.stream);
+                            let spoke = last_word;
                             *s.mode.lock() = Mode::Holding;
                             emit(VoiceEvent::ConvTranscribing { session: s.id });
                             let s2 = s.clone();
                             let emit = emit.clone();
                             let ears = ears.clone();
                             std::thread::spawn(move || {
-                                let pcm = audio::resample(&said, rate, audio::WHISPER_RATE);
-                                let never = Arc::new(AtomicBool::new(false));
-                                let language = s2.reader.lock().language.clone();
-                                let (t, model, by) = ears.of(&s2);
-                                let started = Instant::now();
-                                let text = t.transcribe(&model, &pcm, &language, &never);
-                                let secs = pcm.len() as f32 / audio::WHISPER_RATE as f32;
-                                let ms = started.elapsed().as_millis();
-                                match &text {
-                                    Ok(_) => log::info!(
-                                        "voice: a sentence of {secs:.1} s transcribed by {by} in {ms} ms"
-                                    ),
-                                    Err(e) => log::warn!(
-                                        "voice: a sentence of {secs:.1} s not transcribed by {by} in {ms} ms: {e:#}"
-                                    ),
-                                }
+                                let ended = Instant::now();
+                                let secs = said.len() as f32 / rate.max(1) as f32;
+                                let (_, _, by) = ears.of(&s2);
+                                // As it was said: its final text, there by now or soon.
+                                let streamed = stream.and_then(|stream| match stream.finish(live::FINAL_WAIT) {
+                                    Ok(f) => Some(f),
+                                    Err(e) => {
+                                        if !s2.live_off.swap(true, Ordering::AcqRel) {
+                                            log::warn!(
+                                                "voice: the live transcription by {by} failed ({e}): the sentences go whole, by request, from now on"
+                                            );
+                                        }
+                                        None
+                                    }
+                                });
+                                let text = match streamed {
+                                    Some(f) => {
+                                        let after =
+                                            f.ready.saturating_duration_since(spoke).as_millis();
+                                        let wait = ended.elapsed().as_millis();
+                                        log::info!(
+                                            "voice: a sentence of {secs:.1} s transcribed by {by}, live, ready {after} ms after the last word ({wait} ms after its silence)"
+                                        );
+                                        Ok(f.text)
+                                    }
+                                    None => {
+                                        let pcm = audio::resample(&said, rate, audio::WHISPER_RATE);
+                                        let never = Arc::new(AtomicBool::new(false));
+                                        let language = s2.reader.lock().language.clone();
+                                        let (t, model, by) = ears.of(&s2);
+                                        let text = t.transcribe(&model, &pcm, &language, &never);
+                                        let after = spoke.elapsed().as_millis();
+                                        let ms = ended.elapsed().as_millis();
+                                        match &text {
+                                            Ok(_) => log::info!(
+                                                "voice: a sentence of {secs:.1} s transcribed by {by}, by request, ready {after} ms after the last word ({ms} ms after its silence)"
+                                            ),
+                                            Err(e) => log::warn!(
+                                                "voice: a sentence of {secs:.1} s not transcribed by {by} in {ms} ms: {e:#}"
+                                            ),
+                                        }
+                                        text
+                                    }
+                                };
                                 // Told as the dictation tells it: the service's failure, with what to do about it.
                                 let text = text.map_err(|e| match e.downcast::<OnlineError>() {
                                     Ok(e) => VoiceError::Online(e)

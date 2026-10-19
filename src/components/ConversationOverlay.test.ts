@@ -74,6 +74,30 @@ describe('the voice conversation over the whole window', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Transcription par ElevenLabs…'));
   });
 
+  it('writes what the user says as they say it, its end kept, then the final text in its place (ESC-136)', async () => {
+    render(ConversationOverlay);
+    const sub = () => document.querySelector('[data-subtitle]') as HTMLElement;
+    // Not while it waits for a sentence: a late text of the one before is not shown.
+    ev({ kind: 'convPartial', text: 'en retard' });
+    await tick();
+    expect(sub()).toBeNull();
+    ev({ kind: 'convSpeech' });
+    ev({ kind: 'convPartial', text: 'Ajoute un' });
+    await waitFor(() => expect(sub().textContent).toContain('Ajoute un'));
+    expect(sub().dataset.subtitle).toBe('user');
+    expect(sub().hasAttribute('data-live')).toBe(true);
+    const long =
+      'Ajoute un test pour la page des réglages, puis lance la suite, puis commite, puis pousse la branche, puis ouvre la demande de fusion';
+    ev({ kind: 'convPartial', text: long });
+    await waitFor(() => expect(sub().textContent).toContain('ouvre la demande de fusion'));
+    expect(sub().textContent).toContain('…');
+    expect(sub().textContent).not.toContain('Ajoute un test');
+    ev({ kind: 'convTranscribing' });
+    ev({ kind: 'convHeard', text: 'Ajoute un test pour la page des réglages.', error: null });
+    await waitFor(() => expect(sub().hasAttribute('data-live')).toBe(false));
+    expect(sub().textContent).toContain('Ajoute un test pour la page des réglages.');
+  });
+
   it('follows the level of the voice played and of the microphone', () => {
     ev({ kind: 'convLevel', level: 0.4, played: 0.8 });
     expect(conversation.level).toBe(0.4);

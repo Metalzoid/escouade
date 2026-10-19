@@ -123,15 +123,22 @@ export function duration(ms: number): string {
 }
 
 /** The services of « En ligne » (ESC-110): where the sound of a dictation goes, and the model it is given to. */
+// `live`: the model it transcribes with as one speaks (ESC-136, `online::Provider::live_model`); empty: the one chosen
+// (Deepgram); null: it does not (Groq).
 export const ONLINE_SERVICES = [
-  { id: 'openai', label: 'OpenAI', host: 'api.openai.com', model: 'gpt-4o-mini-transcribe' },
-  { id: 'groq', label: 'Groq', host: 'api.groq.com', model: 'whisper-large-v3-turbo' },
-  { id: 'mistral', label: 'Mistral', host: 'api.mistral.ai', model: 'voxtral-mini-latest' },
-  { id: 'elevenlabs', label: 'ElevenLabs', host: 'api.elevenlabs.io', model: 'scribe_v2' },
-  { id: 'deepgram', label: 'Deepgram', host: 'api.deepgram.com', model: 'nova-3' },
+  { id: 'openai', label: 'OpenAI', host: 'api.openai.com', model: 'gpt-4o-mini-transcribe', live: 'gpt-live-transcribe' },
+  { id: 'groq', label: 'Groq', host: 'api.groq.com', model: 'whisper-large-v3-turbo', live: null },
+  { id: 'mistral', label: 'Mistral', host: 'api.mistral.ai', model: 'voxtral-mini-latest', live: 'voxtral-mini-transcribe-realtime-2602' },
+  { id: 'elevenlabs', label: 'ElevenLabs', host: 'api.elevenlabs.io', model: 'scribe_v2', live: 'scribe_v2_realtime' },
+  { id: 'deepgram', label: 'Deepgram', host: 'api.deepgram.com', model: 'nova-3', live: '' },
 ] as const;
 
 export type OnlineService = (typeof ONLINE_SERVICES)[number];
+
+/** « Transcription en temps réel » for `service` (ESC-136): offered by it, and not unticked. */
+export function liveOn(voice: { onlineLive?: Record<string, boolean> } | undefined, service: OnlineService): boolean {
+  return service.live !== null && voice?.onlineLive?.[service.id] !== false;
+}
 
 /** The service of « En ligne » the settings name; OpenAI for one it does not know. */
 export function onlineService(id: string | undefined): OnlineService {

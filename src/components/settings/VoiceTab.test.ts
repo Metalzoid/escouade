@@ -111,10 +111,13 @@ describe('Réglages › Voix', () => {
     expect(screen.queryByRole('radio', { name: /^base/ })).toBeNull();
     const select = screen.getByRole('combobox', { name: 'Service' }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.text)).toEqual(['OpenAI', 'Groq', 'Mistral', 'ElevenLabs', 'Deepgram']);
-    expect(
-      screen.getByText(/le son de chaque dictée \(un fichier WAV\), une fois que tu la finis, vers OpenAI \(api\.openai\.com\)/),
-    ).toBeInTheDocument();
+    // As one speaks by default (ESC-136); Groq, which does not, takes each dictation whole.
+    expect(screen.getByText(/le son de ce que tu dis, au fil de ta parole, vers OpenAI \(api\.openai\.com\)/)).toBeInTheDocument();
     expect(screen.getByText(/Aucune clé enregistrée/)).toBeInTheDocument();
+    await userEvent.selectOptions(select, 'groq');
+    expect(
+      screen.getByText(/le son de chaque dictée \(un fichier WAV\), une fois que tu la finis, vers Groq \(api\.groq\.com\)/),
+    ).toBeInTheDocument();
     await userEvent.selectOptions(select, 'deepgram');
     expect(screen.getByText(/vers Deepgram \(api\.deepgram\.com\)/)).toBeInTheDocument();
     expect(screen.getByText('Payé à l’usage sur ton compte Deepgram.')).toBeInTheDocument();
@@ -176,6 +179,30 @@ describe('Réglages › Voix', () => {
     expect(await screen.findByText(/^Liste lue chez Groq le /)).toBeInTheDocument();
     await save();
     expect(backend.called('save_settings')[0].args.settings.voice.onlineModels).toEqual({ groq: 'whisper-large-v3' });
+  });
+
+  it('« Transcription en temps réel », ticked by default, kept by service, shown only for a service that offers it (ESC-136)', async () => {
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'elevenlabs' };
+    const backend = open({ voice_online_keys: () => [], voice_online_catalog: ({ service }) => catalog(service) });
+    const box = (await screen.findByRole('checkbox', { name: 'Transcription en temps réel' })) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(screen.getByText(/Le texte s’écrit pendant que tu parles/)).toHaveTextContent('« scribe_v2_realtime »');
+    expect(screen.getByText(/En temps réel, ElevenLabs facture la minute plus cher/)).toBeInTheDocument();
+    // What leaves, said as it goes: only while the user speaks.
+    expect(screen.getByText(/au fil de ta parole, vers ElevenLabs \(api\.elevenlabs\.io\)/)).toBeInTheDocument();
+    expect(screen.getByText(/ni le silence, ni la voix de l’agent/)).toBeInTheDocument();
+    await userEvent.click(box);
+    expect(box.checked).toBe(false);
+    expect(screen.getByText(/le son de chaque dictée \(un fichier WAV\), une fois que tu la finis/)).toBeInTheDocument();
+    // Deepgram streams with the model chosen; Groq offers none: no box.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Service' }), 'deepgram');
+    const dg = (await screen.findByRole('checkbox', { name: 'Transcription en temps réel' })) as HTMLInputElement;
+    expect(dg.checked).toBe(true);
+    expect(screen.getByText(/Le texte s’écrit pendant que tu parles/)).toHaveTextContent('« nova-3 »');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Service' }), 'groq');
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Transcription en temps réel' })).toBeNull());
+    await save();
+    expect(backend.called('save_settings')[0].args.settings.voice.onlineLive).toEqual({ elevenlabs: false });
   });
 
   it('a model the service no longer offers falls back on its default, and says so', async () => {

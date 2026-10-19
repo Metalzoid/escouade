@@ -66,6 +66,14 @@ toml_edit = "0.25"
 # machine by whisper.cpp (whisper-rs builds it, with cmake), its model downloaded on demand.
 cpal = "0.18"
 whisper-rs = { version = "0.16", features = ["log_backend"] }
+# The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
+# opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
+tokio-tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
 # A WAV file as the sound source: the end-to-end tests, which have no microphone.
 hound = "3.5"
 # The conversation (`voice::speech`): Piper's voices read on the machine. The text becomes phonemes through eSpeak NG

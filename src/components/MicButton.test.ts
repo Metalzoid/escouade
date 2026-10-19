@@ -75,6 +75,38 @@ describe('MicButton in the composer', () => {
     expect(backend.called('send_message')[0].args.text).toBe('Lance les tests vite puis commite');
   });
 
+  it('on line as one speaks, writes the text in its panel, then puts the final one in the field (ESC-136)', async () => {
+    let give!: (t: string) => void;
+    const a = agent({ id: `m${Math.random()}` });
+    resetApp({ agents: [a] });
+    fakeBackend({
+      get_conversation: () => [],
+      voice_start: () => ({ kind: 'listening', session: 6 }),
+      voice_stop: () => new Promise((r) => (give = r)),
+    });
+    render(Composer, { agent: app.agents[a.id] });
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    await click(mic());
+    await waitFor(() => expect(mic()).toHaveAttribute('aria-pressed', 'true'));
+    const partial = () => document.querySelector('[data-voice-partial]');
+    expect(partial()).toBeNull();
+    // Another dictation's text is not this one's.
+    dictation.take({ kind: 'partial', session: 5, text: 'pas celle-ci' });
+    dictation.take({ kind: 'partial', session: 6, text: 'Ajoute un test' });
+    await waitFor(() => expect(partial()).toHaveTextContent('Ajoute un test'));
+    dictation.take({ kind: 'partial', session: 6, text: 'Ajoute un test pour la page' });
+    await waitFor(() => expect(partial()).toHaveTextContent('Ajoute un test pour la page'));
+    expect(textarea.value).toBe('');
+    await click(mic());
+    // Still shown while the final text comes, then that one in the field, the panel gone.
+    await waitFor(() => expect(panel()).toHaveAttribute('data-voice-phase', 'transcribing'));
+    expect(partial()).toHaveTextContent('Ajoute un test pour la page');
+    give('Ajoute un test pour la page des réglages.');
+    await waitFor(() => expect(textarea.value).toBe('Ajoute un test pour la page des réglages.'));
+    expect(panel()).toBeNull();
+    expect(dictation.partial).toBe('');
+  });
+
   it('held down, it listens until it is let go', async () => {
     const { textarea } = composer('Bonjour');
     await fireEvent.pointerDown(mic(), { button: 0, pointerId: 1 });

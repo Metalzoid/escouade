@@ -85,6 +85,41 @@ impl Provider {
     pub fn entry(self) -> String {
         format!("dictation-{}", self.id())
     }
+
+    /// Whether it transcribes as one speaks (ESC-136), its text coming while the sound goes: Groq does not.
+    pub fn offers_live(self) -> bool {
+        !matches!(self, Provider::Groq)
+    }
+
+    /// The model it transcribes with as one speaks, `chosen` being the one of the settings: ElevenLabs, Mistral and
+    /// OpenAI each have one of their own; Deepgram streams with the one chosen.
+    pub fn live_model(self, chosen: &str) -> String {
+        match self {
+            Provider::ElevenLabs => "scribe_v2_realtime".into(),
+            Provider::Mistral => "voxtral-mini-transcribe-realtime-2602".into(),
+            Provider::OpenAi => "gpt-live-transcribe".into(),
+            Provider::Deepgram | Provider::Groq => chosen.into(),
+        }
+    }
+}
+
+/// The network settings a WebSocket follows (ESC-136), as reqwest's client does: the proxy, who goes around it, and
+/// whether a certificate is checked.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Net {
+    pub proxy: String,
+    pub no_proxy: String,
+    pub insecure: bool,
+}
+
+impl Net {
+    pub fn of(settings: &crate::model::Settings) -> Self {
+        Self {
+            proxy: settings.proxy_url.trim().to_string(),
+            no_proxy: settings.no_proxy.clone(),
+            insecure: settings.insecure_tls,
+        }
+    }
 }
 
 /// What a transcription on line is given: the service, the key, the client of the settings (their
@@ -97,6 +132,10 @@ pub struct Spec {
     pub key: String,
     pub client: reqwest::Client,
     pub base: String,
+    /// « Transcription en temps réel » (ESC-136): the model it streams with; none: each sentence goes whole.
+    pub live: Option<String>,
+    /// What the WebSocket of the transcription as one speaks follows: the client's settings.
+    pub net: Net,
 }
 
 impl std::fmt::Debug for Spec {
@@ -105,6 +144,7 @@ impl std::fmt::Debug for Spec {
             .field("provider", &self.provider)
             .field("model", &self.model)
             .field("base", &self.base)
+            .field("live", &self.live)
             .finish_non_exhaustive()
     }
 }
@@ -116,6 +156,8 @@ impl PartialEq for Spec {
             && self.model == o.model
             && self.key == o.key
             && self.base == o.base
+            && self.live == o.live
+            && self.net == o.net
     }
 }
 
@@ -127,7 +169,15 @@ impl Spec {
             key,
             client,
             base: provider.base_url().into(),
+            live: None,
+            net: Net::default(),
         }
+    }
+
+    /// Streamed with `model` (ESC-136), when the service offers it.
+    pub fn with_live(mut self, model: Option<String>) -> Self {
+        self.live = model.filter(|m| self.provider.offers_live() && !m.trim().is_empty());
+        self
     }
 
     pub fn with_model(mut self, model: &str) -> Self {
@@ -458,7 +508,18 @@ pub fn spec_of(
         .map(String::as_str)
         .unwrap_or("");
     let (model, _) = catalog.checked_model(p, super::online_catalog::Purpose::Transcribe, chosen);
-    Ok(Some(keyed(p, settings, secrets)?.with_model(&model)))
+    // « Transcription en temps réel », on unless unticked (ESC-136).
+    let live = settings
+        .voice
+        .online_live
+        .get(p.id())
+        .copied()
+        .unwrap_or(true);
+    Ok(Some(
+        keyed(p, settings, secrets)?
+            .with_model(&model)
+            .with_live(live.then(|| p.live_model(&model))),
+    ))
 }
 
 /// `p` with its key from the keychain (the one of its dictation, ESC-132: one entry by service) and the client of the
@@ -481,7 +542,10 @@ pub fn keyed(
         .ok_or(super::VoiceError::Online(OnlineError::NoKey(p)))?;
     let client =
         super::models::client(settings).map_err(|e| super::VoiceError::Other(e.to_string()))?;
-    Ok(Spec::new(p, key, client))
+    Ok(Spec {
+        net: Net::of(settings),
+        ..Spec::new(p, key, client)
+    })
 }
 
 /// The services whose key is in the keychain (never the keys).

@@ -51,6 +51,12 @@ export default {
     onlineModelDesc:
       'Celui de {service} qui transcrit ; par défaut « {model} ». La liste est celle de son API, lue avec ta clé, sinon celle de sa documentation.',
     modelDefault: 'par défaut',
+    live: 'Transcription en temps réel',
+    liveDesc:
+      'Le texte s’écrit pendant que tu parles, et la phrase est prête un instant après ton dernier mot : le son part à {service} au fil de ta parole, avec le modèle « {model} ». Décochée, chaque phrase part entière, une fois finie.',
+    livePrice: 'En temps réel, {service} facture la minute plus cher.',
+    onlineNoteLive:
+      'Ce qui part, et où : le son de ce que tu dis, au fil de ta parole, vers {service} ({host}), par un flux chiffré, avec ta clé, par le proxy des réglages réseau. En conversation vocale, seulement pendant que tu parles : ni le silence, ni la voix de l’agent. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté, et {service} le traite selon ses propres conditions. Si le flux ne passe pas (un proxy qui refuse les WebSockets), la phrase part entière, par requête.',
     modelGone: '{service} ne propose plus « {model} » : son modèle par défaut, « {default} », le remplace.',
     refresh: 'Actualiser la liste',
     refreshing: 'Lecture…',

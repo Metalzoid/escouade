@@ -773,3 +773,97 @@ fn the_settings_choose_the_service_only_when_on_line_is_on() {
     s.online_service = "nope".into();
     assert_eq!(online_provider(&s), None);
 }
+
+// « Transcription en temps réel » for the dictation (ESC-136): the sound streamed as it is heard, the text written in its
+// panel, the final one given at the stop.
+
+/// A dictation heard by `f`'s ElevenLabs, as one speaks.
+fn live_choice(f: &live::tests::FakeLive) -> Choice {
+    Choice {
+        online: Some(f.spec(online::Provider::ElevenLabs)),
+        ..choice("base", "fr")
+    }
+}
+
+/// Pushes `secs` of a voice in real time (20 ms at a time).
+fn speak(h: &Harness, secs: f32) {
+    for chunk in voice_tone(16_000, secs).chunks(320) {
+        h.script.push(chunk);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn dictated_as_one_speaks_the_text_is_written_and_the_final_one_comes_at_the_stop() {
+    let f = live::tests::fake(online::Provider::ElevenLabs, live::tests::Mode::Speaks);
+    let h = harness("dictation-live", "never this", 16_000);
+    let id = session(h.voice.start(&live_choice(&f)).unwrap());
+    speak(&h, 0.8);
+    let end = Instant::now() + Duration::from_secs(5);
+    while !h
+        .events
+        .lock()
+        .iter()
+        .any(|e| matches!(e, VoiceEvent::Partial { .. }))
+    {
+        assert!(Instant::now() < end, "no text while it was said");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(h.events.lock().contains(&VoiceEvent::Partial {
+        session: id,
+        text: live::tests::PARTIAL.into()
+    }));
+    let stopped = Instant::now();
+    assert_eq!(h.voice.stop(id).unwrap(), live::tests::FINAL);
+    assert!(stopped.elapsed() < Duration::from_secs(2));
+    // All of it went, once; neither Whisper nor a request.
+    let c = f.conns();
+    assert_eq!(c.len(), 1);
+    assert!(c[0].ended);
+    assert!(c[0].audio >= 32_000 * 7 / 10, "{} bytes", c[0].audio);
+    assert!(f.requests.lock().is_empty());
+    assert!(h.fake.calls.lock().is_empty());
+}
+
+#[test]
+fn a_dictation_whose_stream_fails_goes_whole_by_request_never_lost() {
+    for mode in [
+        live::tests::Mode::Fails,
+        live::tests::Mode::Refuses(401),
+        live::tests::Mode::Mute,
+    ] {
+        let f = live::tests::fake(online::Provider::ElevenLabs, mode);
+        let h = harness("dictation-live-fails", "never this", 16_000);
+        let id = session(h.voice.start(&live_choice(&f)).unwrap());
+        speak(&h, 0.5);
+        assert_eq!(
+            h.voice.stop(id).unwrap(),
+            live::tests::BY_REQUEST,
+            "{mode:?}"
+        );
+        assert_eq!(
+            *f.requests.lock(),
+            ["POST /v1/speech-to-text HTTP/1.1"],
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn a_dictation_unticked_or_with_the_fake_transcriber_streams_nothing() {
+    let f = live::tests::fake(online::Provider::ElevenLabs, live::tests::Mode::Speaks);
+    let h = harness("dictation-live-off", "never this", 16_000);
+    let mut c = live_choice(&f);
+    c.online = c.online.map(|s| s.with_live(None));
+    let id = session(h.voice.start(&c).unwrap());
+    speak(&h, 0.3);
+    assert_eq!(h.voice.stop(id).unwrap(), live::tests::BY_REQUEST);
+    assert!(f.conns().is_empty());
+    // The end-to-end tests' fake transcriber stands for the service: no stream either.
+    let mut h = harness("dictation-live-fake", "Bonjour", 16_000);
+    h.voice.fake_online = true;
+    let id = session(h.voice.start(&live_choice(&f)).unwrap());
+    speak(&h, 0.3);
+    assert_eq!(h.voice.stop(id).unwrap(), "Bonjour");
+    assert!(f.conns().is_empty());
+}

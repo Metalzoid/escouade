@@ -28,6 +28,7 @@ Ce groupe choisit qui transcrit une dictée, et dans quelle langue. Sous son tit
 | « Modèle » (local) | Le modèle de Whisper. Plus gros, il comprend mieux et transcrit plus lentement. Celui choisi se télécharge à la première dictée, ou depuis sa ligne. Il sert aussi à la conversation vocale. | base |
 | « Service » (en ligne) | Le service qui transcrit : OpenAI, Groq, Mistral, ElevenLabs ou Deepgram, payé à l’usage sur ton compte chez lui. | OpenAI |
 | « Modèle » (en ligne) | Le modèle du service qui transcrit, gardé pour chaque service. | Celui du tableau ci-dessous |
+| « Transcription en temps réel » (en ligne, sauf Groq) | Le texte s’écrit pendant que tu parles, et la phrase est prête un instant après ton dernier mot. Gardée pour chaque service ; décochée, chaque dictée et chaque phrase partent entières, une fois finies. Voir [La transcription en temps réel](#la-transcription-en-temps-reel). | Cochée |
 | « Clé de <service> » (en ligne) | Ta clé d’API chez ce service, la même pour la dictée et pour la voix de la conversation. | Aucune |
 | « Langue parlée » | La langue que Whisper (ou le service) attend : « Celle de l’interface », « Détection automatique », ou une langue précise (Français, English, Deutsch, Español, Italiano, Português, Nederlands). Indiquer la langue rend la transcription plus juste ; la détection automatique convient à qui parle plusieurs langues. | « Celle de l’interface » |
 
@@ -62,7 +63,20 @@ La clé se colle dans le champ (« Colle ta clé d’API »), puis « Enregis
 
 Le menu « Modèle » liste les modèles du service qui transcrivent, avec ce qui les distingue (« rapide », « plus précis »), celui par défaut en premier. Avec une clé enregistrée, la liste est celle que donne l’API du service, lue avec ta clé et gardée sur ta machine ; « Actualiser la liste » la relit, et la ligne dit quand elle a été lue. Sans clé, ou pour un service dont l’API ne liste pas ses modèles de transcription (ElevenLabs), c’est la liste de sa documentation, livrée avec l’app. Tant que tu n’en choisis pas un autre, c’est le modèle par défaut : la dictée reste celle d’avant. Le modèle choisi est gardé par service : changer de service puis revenir le retrouve. Un modèle que le service ne propose plus est remplacé par celui par défaut, et la ligne le dit (« Groq ne propose plus « … » : son modèle par défaut, « whisper-large-v3-turbo », le remplace. »).
 
-Sous le titre du groupe, l’app dit ce qui part : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers le service choisi, avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté ; le service traite le son selon ses propres conditions. Le détail est sur la page [Confidentialité](/privacy/).
+### La transcription en temps réel
+
+Sous « Modèle », la case « Transcription en temps réel » est cochée par défaut pour les services qui la proposent : OpenAI, Mistral, ElevenLabs et Deepgram (pas Groq). Le son part alors au service pendant que tu parles, par un flux chiffré, et le texte revient au fil de ta parole : il s’écrit dans la pastille de la dictée, puis le texte définitif va dans le champ, un instant après la fin de la dictée ; en conversation vocale, il s’écrit sous l’orbe, et la phrase est prête quelques centaines de millisecondes après ton dernier mot. La ligne dit le modèle pris et que, chez ce service, la minute en temps réel coûte plus cher :
+
+| Service | Modèle en temps réel |
+|---|---|
+| OpenAI | `gpt-live-transcribe` |
+| Mistral | `voxtral-mini-transcribe-realtime-2602` |
+| ElevenLabs | `scribe_v2_realtime` |
+| Deepgram | Le modèle choisi |
+
+La case est gardée pour chaque service. Décochée, chaque dictée et chaque phrase de la conversation partent entières, une fois finies, comme avant. Si le flux ne passe pas (un proxy d’entreprise qui refuse les WebSockets, par exemple), ou tombe, la phrase part entière, par requête : rien n’est perdu, et la conversation ne réessaie plus le flux jusqu’à la fin.
+
+Sous le titre du groupe, l’app dit ce qui part. Avec « Transcription en temps réel », le son de ce que tu dis, au fil de ta parole, vers le service choisi, avec ta clé, par le proxy des réglages réseau ; en conversation vocale, seulement pendant que tu parles : ni le silence, ni la voix de l’agent. Sinon, le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers le service choisi, avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté ; le service traite le son selon ses propres conditions. Le détail est sur la page [Confidentialité](/privacy/).
 
 ## Utilisation
 

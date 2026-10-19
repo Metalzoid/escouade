@@ -49,6 +49,12 @@ export default defineZone('voice', {
     onlineModelDesc:
       'The one of {service} that transcribes; by default “{model}”. The list is its API’s, read with your key, else its documentation’s.',
     modelDefault: 'default',
+    live: 'Real-time transcription',
+    liveDesc:
+      'The text is written while you speak, and the sentence is ready a moment after your last word: the sound goes to {service} as you speak, with the model “{model}”. Unticked, each sentence goes whole, once over.',
+    livePrice: 'In real time, {service} charges more per minute.',
+    onlineNoteLive:
+      'What leaves, and where: the sound of what you say, as you say it, to {service} ({host}), through an encrypted stream, with your key, through the proxy of the network settings. In a voice conversation, only while you speak: neither the silence, nor the agent’s voice. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into, and {service} handles it under its own terms. If the stream does not get through (a proxy that refuses WebSockets), the sentence goes whole, by request.',
     modelGone: '{service} no longer offers “{model}”: its default model, “{default}”, stands in.',
     refresh: 'Refresh the list',
     refreshing: 'Reading…',

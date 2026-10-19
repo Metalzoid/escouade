@@ -73,6 +73,15 @@ impl Endpointer {
         self.noise
     }
 
+    /// How long it has been quiet within the sentence under way (0 while the user speaks, or outside a sentence).
+    pub fn quiet_ms(&self) -> u32 {
+        if self.speaking {
+            self.quiet_ms
+        } else {
+            0
+        }
+    }
+
     /// Speech had already started when the endpointer was told to listen (a barge-in): it is in a sentence.
     pub fn start_in_sentence(&mut self) {
         self.speaking = true;

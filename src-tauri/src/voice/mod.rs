@@ -11,6 +11,7 @@
 
 pub mod audio;
 pub mod conversation;
+pub mod live;
 pub mod models;
 pub mod online;
 pub mod online_catalog;
@@ -116,6 +117,9 @@ pub enum VoiceEvent {
     /// How loud it is now (0 to 1), and for how long it has listened.
     #[serde(rename_all = "camelCase")]
     Level { session: u64, level: f32, ms: u64 },
+    /// What the service on line has understood so far of the dictation, as one speaks (ESC-136).
+    #[serde(rename_all = "camelCase")]
+    Partial { session: u64, text: String },
     /// It stopped listening by itself (`MAX_LISTEN`, the microphone gone): `error` says why when it
     /// failed. The window then asks for the text (`stop`), or drops it.
     #[serde(rename_all = "camelCase")]
@@ -152,6 +156,10 @@ pub enum VoiceEvent {
     /// A sentence started.
     #[serde(rename_all = "camelCase")]
     ConvSpeech { session: u64 },
+    /// What the service on line has understood so far of the sentence under way, as one speaks (ESC-136): the whole
+    /// of it, replaced by the next.
+    #[serde(rename_all = "camelCase")]
+    ConvPartial { session: u64, text: String },
     /// It ended (its silence came): it is being transcribed.
     #[serde(rename_all = "camelCase")]
     ConvTranscribing { session: u64 },
@@ -234,6 +242,9 @@ struct Session {
     model: PathBuf,
     language: String,
     transcriber: Arc<dyn Transcriber>,
+    /// « Transcription en temps réel » (ESC-136): the stream the sound goes to as it is heard.
+    live: Arc<Mutex<Option<live::LiveStream>>>,
+    provider: Option<online::Provider>,
 }
 
 /// How the window is told, and in what language.
@@ -434,15 +445,21 @@ impl Voice {
         let samples = Arc::new(Mutex::new(Vec::<f32>::new()));
         let peak = Arc::new(AtomicU32::new(0));
         let failure = Arc::new(Mutex::new(None::<VoiceError>));
+        let stream = Arc::new(Mutex::new(None::<live::LiveStream>));
         let sink = {
             let samples = samples.clone();
             let peak = peak.clone();
             let failure = failure.clone();
+            let stream = stream.clone();
             Sink {
                 samples: Box::new(move |chunk: &[f32]| {
                     let l = audio::level(chunk);
                     peak.fetch_max(l.to_bits(), Ordering::Relaxed);
-                    samples.lock().extend_from_slice(chunk);
+                    let mut kept = samples.lock();
+                    kept.extend_from_slice(chunk);
+                    if let Some(s) = stream.lock().as_ref() {
+                        s.push(chunk);
+                    }
                 }),
                 error: Box::new(move |e| {
                     failure.lock().get_or_insert(e);
@@ -462,6 +479,28 @@ impl Voice {
             Some(_) => (self.transcriber.clone(), PathBuf::new()),
             None => (self.transcriber.clone(), self.store.path(model.id)),
         };
+        // As it is heard (ESC-136): the stream opens now, what was heard while the microphone opened sent first.
+        if let Some(spec) = choice
+            .online
+            .as_ref()
+            .filter(|s| s.live.is_some() && !self.fake_online)
+        {
+            let kept = samples.lock();
+            let emit = self.emit.clone();
+            let opened = live::LiveStream::open(
+                spec,
+                &choice.language,
+                rate,
+                Box::new(move |text| emit(VoiceEvent::Partial { session: id, text })),
+            );
+            opened.push(&kept);
+            *stream.lock() = Some(opened);
+            log::info!(
+                "voice: the dictation is transcribed by {} as it is said ({})",
+                spec.provider.label(),
+                spec.live.as_deref().unwrap_or_default()
+            );
+        }
         let mut slot = self.session.lock();
         if slot.is_some() {
             return Err(VoiceError::AlreadyListening);
@@ -485,6 +524,8 @@ impl Voice {
             model: model_path,
             language: choice.language.clone(),
             transcriber,
+            live: stream,
+            provider: choice.online.as_ref().map(|s| s.provider),
         });
         drop(slot);
         let emit = self.emit.clone();
@@ -536,6 +577,8 @@ impl Voice {
         session.done.store(true, Ordering::Release);
         // The microphone is let go before the transcription, which may take seconds.
         drop(session.capture.lock().take());
+        let stream = session.live.lock().take();
+        let stopped = Instant::now();
         let heard = std::mem::take(&mut *session.samples.lock());
         let secs = heard.len() as f32 / session.rate.max(1) as f32;
         log::info!("voice: {secs:.1} s heard");
@@ -555,10 +598,34 @@ impl Voice {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         *self.transcribing.lock() = Some(cancel.clone());
+        // As it was said: its final text, there a moment after the stop; a stream that failed, by request.
+        if let Some(stream) = stream {
+            let p = stream_label(&session);
+            match stream.finish(live::FINAL_WAIT) {
+                Ok(f) => {
+                    self.transcribing.lock().take();
+                    let ms = f.ready.saturating_duration_since(stopped).as_millis();
+                    log::info!("voice: a dictation of {secs:.1} s transcribed by {p}, live, ready {ms} ms after it stopped");
+                    if cancel.load(Ordering::Acquire) {
+                        return Ok(String::new());
+                    }
+                    return Ok(f.text);
+                }
+                Err(e) => log::warn!(
+                    "voice: the live transcription by {p} failed ({e}): the dictation goes whole, by request"
+                ),
+            }
+        }
         let result =
             session
                 .transcriber
                 .transcribe(&session.model, &pcm, &session.language, &cancel);
+        if session.model.as_os_str().is_empty() {
+            log::info!(
+                "voice: a dictation of {secs:.1} s answered by request {} ms after it stopped",
+                stopped.elapsed().as_millis()
+            );
+        }
         self.transcribing.lock().take();
         if cancel.load(Ordering::Acquire) {
             return Ok(String::new());
@@ -654,6 +721,13 @@ impl Voice {
         self.transcriber.unload(&path);
         self.store.delete(id)
     }
+}
+
+/// Who transcribes a dictation, for the log.
+fn stream_label(s: &Session) -> String {
+    s.provider
+        .map(|p| p.label().to_string())
+        .unwrap_or_else(|| "the service".into())
 }
 
 /// What Réglages › Voix shows of the conversation's voices.

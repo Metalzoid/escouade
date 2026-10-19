@@ -471,6 +471,37 @@ fn the_key_is_kept_in_the_keychain_and_only_there() {
     let spec = spec_of(&settings, &store, &no_catalog()).unwrap().unwrap();
     assert_eq!((spec.provider, spec.key.as_str()), (Provider::Mistral, KEY));
     assert_eq!(spec.base, "https://api.mistral.ai");
+    // « Transcription en temps réel », on by default (ESC-136): its model of its own, and the network settings.
+    assert_eq!(
+        spec.live.as_deref(),
+        Some("voxtral-mini-transcribe-realtime-2602")
+    );
+    assert_eq!(spec.net, Net::of(&settings));
+    settings.proxy_url = " http://proxy.corp:8080 ".into();
+    settings.no_proxy = "localhost".into();
+    settings.insecure_tls = true;
+    settings.voice.online_live.insert("mistral".into(), false);
+    let spec = spec_of(&settings, &store, &no_catalog()).unwrap().unwrap();
+    assert_eq!(spec.live, None, "unticked: each sentence whole");
+    assert_eq!(
+        spec.net,
+        Net {
+            proxy: "http://proxy.corp:8080".into(),
+            no_proxy: "localhost".into(),
+            insecure: true
+        }
+    );
+    // Groq offers none: never streamed.
+    save_key(&store, "groq", KEY).unwrap();
+    settings.voice.online_service = "groq".into();
+    assert_eq!(
+        spec_of(&settings, &store, &no_catalog())
+            .unwrap()
+            .unwrap()
+            .live,
+        None
+    );
+    settings.voice.online_service = "mistral".into();
 
     // Local (the default): no key read.
     assert!(

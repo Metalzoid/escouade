@@ -228,6 +228,8 @@ pub struct VoiceSettings {
     pub online_service: String,
     /// The model chosen for each service, by its id (ESC-132); none: its default (`Provider::model`).
     pub online_models: std::collections::BTreeMap<String, String>,
+    /// « Transcription en temps réel » of each service that offers it, by its id (ESC-136); none: on.
+    pub online_live: std::collections::BTreeMap<String, bool>,
 }
 
 impl Default for VoiceSettings {
@@ -241,6 +243,7 @@ impl Default for VoiceSettings {
             transcription: "local".into(),
             online_service: "openai".into(),
             online_models: Default::default(),
+            online_live: Default::default(),
         }
     }
 }

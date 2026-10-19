@@ -103,6 +103,8 @@ export interface VoiceSettings {
   onlineService: string;
   /** The model chosen for each service, by its id (ESC-132); none: its default. */
   onlineModels: Record<string, string>;
+  /** « Transcription en temps réel » of each service that offers it, by its id (ESC-136); none: on. */
+  onlineLive?: Record<string, boolean>;
 }
 
 /** How the agent's passages are read aloud in a conversation. */
@@ -236,12 +238,16 @@ export type VoiceStarted = { kind: 'listening'; session: number } | { kind: 'nee
 export type VoiceEvent =
   | { kind: 'level'; session: number; level: number; ms: number }
   | { kind: 'ended'; session: number; error: string | null }
+  /** What the service has understood of the dictation so far, as one speaks (ESC-136). */
+  | { kind: 'partial'; session: number; text: string }
   | { kind: 'download'; model: string; done: number; total: number }
   | { kind: 'speechDownload'; voice: string; done: number; total: number }
   | { kind: 'convLevel'; session: number; level: number; played: number }
   | { kind: 'convSentence'; session: number; reading: number; index: number; text: string }
   | { kind: 'convSpeech'; session: number }
   | { kind: 'convTranscribing'; session: number }
+  /** What the service has understood of the sentence under way so far, as one speaks (ESC-136). */
+  | { kind: 'convPartial'; session: number; text: string }
   | { kind: 'convHeard'; session: number; text: string; error: string | null }
   | { kind: 'convSpoken'; session: number; reading: number; error: string | null; paused: boolean }
   | { kind: 'convNotice'; session: number; message: string }

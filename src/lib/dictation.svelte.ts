@@ -29,6 +29,8 @@ class Dictation {
   /** How loud it is (0 to 1), and for how long it has listened (ms). */
   level = $state(0);
   ms = $state(0);
+  /** What the service on line has understood so far, as one speaks (ESC-136): the final text replaces it in the field. */
+  partial = $state('');
   /** The field being dictated into. */
   targetId = $state<string | null>(null);
   /** The model to download before the first dictation: what the panel asks. */
@@ -92,6 +94,7 @@ class Dictation {
     this.targetId = target.id;
     this.level = 0;
     this.ms = 0;
+    this.partial = '';
     this.stopOnceListening = false;
     try {
       const r = await api.voiceStart();
@@ -164,9 +167,11 @@ class Dictation {
       if (this.progress?.model === e.model) this.progress = { model: e.model, done: e.done, total: e.total };
       return;
     }
-    if (e.kind !== 'level' && e.kind !== 'ended') return;
+    if (e.kind !== 'level' && e.kind !== 'ended' && e.kind !== 'partial') return;
     if (e.session !== this.session) return;
-    if (e.kind === 'level') {
+    if (e.kind === 'partial') {
+      if (this.phase === 'listening' || this.phase === 'transcribing') this.partial = e.text;
+    } else if (e.kind === 'level') {
       this.level = e.level;
       this.ms = e.ms;
     } else {
@@ -191,6 +196,7 @@ class Dictation {
     this.progress = null;
     this.level = 0;
     this.ms = 0;
+    this.partial = '';
     this.pressedAt = null;
     this.stopOnceListening = false;
   }

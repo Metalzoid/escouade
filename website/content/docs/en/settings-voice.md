@@ -28,6 +28,7 @@ This group chooses who transcribes a dictation, and in which language. Under its
 | “Model” (local) | The Whisper model. A bigger one understands better and transcribes more slowly. The one chosen downloads at the first dictation, or from its row. It also serves the voice conversation. | base |
 | “Service” (online) | The service that transcribes: OpenAI, Groq, Mistral, ElevenLabs or Deepgram, paid per use on your account with it. | OpenAI |
 | “Model” (online) | The service’s model that transcribes, kept for each service. | The one of the table below |
+| “Real-time transcription” (online, but Groq) | The text is written while you speak, and the sentence is ready a moment after your last word. Kept for each service; unticked, each dictation and each sentence go whole, once over. See [Real-time transcription](#real-time-transcription). | Ticked |
 | “<service> key” (online) | Your API key with that service, the same for dictation and for the conversation’s voice. | None |
 | “Spoken language” | The language Whisper (or the service) expects: “The interface’s”, “Automatic detection”, or a given language (Français, English, Deutsch, Español, Italiano, Português, Nederlands). Naming the language makes the transcription more accurate; automatic detection suits those who speak several. | “The interface’s” |
 
@@ -62,7 +63,20 @@ Paste the key in the field (“Paste your API key”), then “Save the key” o
 
 The “Model” menu lists the service’s models that transcribe, with what sets them apart (“fast”, “more accurate”), the default one first. With a key saved, the list is the one the service’s API gives, read with your key and kept on your machine; “Refresh the list” reads it again, and the row says when it was read. Without a key, or for a service whose API does not list its transcription models (ElevenLabs), it is the list of its documentation, shipped with the app. Until you choose another one, it is the default model: dictation stays as it was. The model chosen is kept per service: switching service and back finds it again. A model the service no longer offers is replaced by the default one, and the row says so (“Groq no longer offers “…”: its default model, “whisper-large-v3-turbo”, stands in.”).
 
-Under the group’s title, the app says what leaves: the sound of each dictation (a WAV file), once you end it, to the service chosen, with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into; the service handles the sound under its own terms. The details are on the [Privacy](/privacy/) page.
+### Real-time transcription
+
+Under “Model”, the “Real-time transcription” box is ticked by default for the services that offer it: OpenAI, Mistral, ElevenLabs and Deepgram (not Groq). The sound then goes to the service while you speak, through an encrypted stream, and the text comes back as you speak: it is written in the dictation’s panel, then the final text goes into the field, a moment after the dictation ends; in a voice conversation, it is written under the orb, and the sentence is ready a few hundred milliseconds after your last word. The row says the model taken and that, with this service, a minute in real time costs more:
+
+| Service | Real-time model |
+|---|---|
+| OpenAI | `gpt-live-transcribe` |
+| Mistral | `voxtral-mini-transcribe-realtime-2602` |
+| ElevenLabs | `scribe_v2_realtime` |
+| Deepgram | The model chosen |
+
+The box is kept for each service. Unticked, each dictation and each sentence of the conversation go whole, once over, as before. If the stream does not get through (a corporate proxy that refuses WebSockets, for instance), or drops, the sentence goes whole, by request: nothing is lost, and the conversation does not try the stream again until it ends.
+
+Under the group’s title, the app says what leaves. With “Real-time transcription”, the sound of what you say, as you say it, to the service chosen, with your key, through the proxy of the network settings; in a voice conversation, only while you speak: neither the silence, nor the agent’s voice. Otherwise, the sound of each dictation (a WAV file), once you end it, to the service chosen, with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into; the service handles the sound under its own terms. The details are on the [Privacy](/privacy/) page.
 
 ## Use
 

@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
+## [Non publié]
+
+### Nouveautés
+
+- Avec la transcription en ligne, le texte s’écrit pendant que tu parles, dans la dictée comme dans la conversation vocale, et la phrase est prête un instant après ton dernier mot. Une case de Réglages › Voix l’éteint pour chaque service.
+
 ## [1.8.6] — 2026-10-20
 
 ### Corrections

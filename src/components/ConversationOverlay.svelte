@@ -23,6 +23,13 @@
       : t(`voice.conversation.phase.${phase}` as 'voice.conversation.phase.working', { name }),
   );
   const subtitle = $derived(conversation.subtitle);
+  /** The end of what is being said (ESC-136): its last words, as two lines hold them. */
+  function tail(text: string, max = 110): string {
+    if (text.length <= max) return text;
+    const cut = text.slice(-max);
+    const space = cut.indexOf(' ');
+    return '…' + (space > 0 && space < 20 ? cut.slice(space) : cut);
+  }
   // The question asked aloud (ESC-131): its choices show under the orb, the voice does not read them; what was
   // understood is lit a moment before the next question.
   const ask = $derived(conversation.ask);
@@ -231,10 +238,11 @@
   {/if}
   <div class="subs" aria-live="polite">
     {#if subtitle}
-      {#key subtitle}
-        <div class="sub" data-subtitle={subtitle.who}>
+      <!-- Written as it is said (ESC-136): one subtitle, its text growing, its end shown. -->
+      {#key subtitle.live ? 'live' : subtitle}
+        <div class="sub" data-subtitle={subtitle.who} data-live={subtitle.live ? '' : undefined}>
           <span class="speaker">{subtitle.who === 'user' ? t('voice.conversation.overlay.you') : name}</span>
-          <p class="line" class:user={subtitle.who === 'user'}>{subtitle.text}</p>
+          <p class="line" class:user={subtitle.who === 'user'}>{subtitle.live ? tail(subtitle.text) : subtitle.text}</p>
         </div>
       {/key}
     {/if}
