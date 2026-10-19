@@ -4,13 +4,12 @@
   import { api } from '../../lib/ipc';
   import { anyCan, offered } from '../../lib/engines';
   import { IS_MAC, OS } from '../../lib/platform';
-  import { accountName, engineOfAccount } from '../../lib/accounts';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { CREDITS_URL } from '../../lib/conversation';
   import { DISCORD_URL, siteUrl } from '../../lib/links';
-  import type { ClaudeLocated, EngineDecl, EngineId, EngineInfo } from '../../lib/types';
+  import type { ClaudeLocated, EngineDecl, EngineInfo } from '../../lib/types';
   import { checkForUpdate } from '../../lib/updater';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
@@ -71,17 +70,6 @@
   const harnesses = $derived(app.engines.map((d) => ({ decl: d, info: infos?.find((i) => i.id === d.id) ?? null })));
   /** The one the path of the settings is for: the default harness, until each has its own. */
   const pathOwner = $derived(app.engines[0]?.id);
-  /** The account new agents of `engine` go to: the one « Se connecter… » signs in. */
-  const signInAccount = (engine: EngineId) =>
-    app.settings.accounts.find((a) => a.id === app.usage.current[engine]) ??
-    app.settings.accounts.find((a) => engineOfAccount(a) === engine);
-
-  /** « Se connecter… »: the sign-in of the account new agents of `engine` go to, in a built-in terminal, back to this tab once done. */
-  function signIn(engine: EngineId) {
-    const account = signInAccount(engine);
-    // No account of it yet (ESC-128): « Ajouter un compte… » on it.
-    app.modal = account ? { kind: 'account', accountId: account.id, back: 'claude' } : { kind: 'account', engine, back: 'claude' };
-  }
 
   /** The command that installs a harness on this system. */
   const installOf = (d: EngineDecl) => (OS === 'windows' ? d.install.windows : d.install.unix);
@@ -130,7 +118,6 @@
   {#each harnesses as { decl, info } (decl.id)}
     {@const own = decl.id === pathOwner}
     {@const shown = own ? (info && located?.path && saved ? info : null) : info}
-    {@const account = signInAccount(decl.id)}
     <section class="harness" data-engine={decl.id} aria-label={decl.name}>
       <Group title={decl.name} note={own && located?.nat ? t('settings.claude.nat') : undefined}>
         {#if own}
@@ -151,18 +138,7 @@
               aria-describedby="engine-version-{decl.id}">{shown.version ?? '—'}</span
             >
           </Row>
-          <Row
-            label={t('settings.claude.state')}
-            desc={account ? t('settings.claude.signInDesc', { account: accountName(account) }) : undefined}
-          >
-            <span
-              class="state"
-              class:ok={shown.state === 'ready'}
-              class:bad={shown.state === 'tooOld' || shown.state === 'unsupported'}
-              data-engine-state={shown.state}>{t(`settings.claude.states.${shown.state}`)}</span
-            >
-            <button class="btn" disabled={!account} onclick={() => signIn(decl.id)}>{t('settings.claude.signIn')}</button>
-          </Row>
+          <!-- Accounts are signed in from Réglages › Comptes (ESC-128): the version's line says when none of its is. -->
           {#if !decl.models.length}
             <!-- A harness that lists the models of its providers (OpenCode): searched, favorites marked. -->
             <Row label={t('settings.claude.models.label')} desc={t('settings.claude.models.desc', { engine: decl.name })} wide>
@@ -428,9 +404,6 @@
   .state {
     font-size: 12px;
     color: var(--wait);
-  }
-  .state.ok {
-    color: var(--ok);
   }
   .state.bad {
     color: var(--del);

@@ -4,7 +4,7 @@ import { defineZone } from '../types';
 export default defineZone('settings', {
   tabs: {
     app: { label: 'Application', desc: 'Zoom, text size, and languages' },
-    claude: { label: 'Harness', desc: 'Executables, versions, sign-in, and agent defaults' },
+    claude: { label: 'Harness', desc: 'Executables, versions and the MCP server' },
     accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, saved as you change them' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
@@ -86,7 +86,6 @@ export default defineZone('settings', {
   },
 
   claude: {
-    state: 'State',
     models: {
       label: 'Models',
       desc: 'Those of the providers connected to {engine}. Favorites (★) come first in the composer’s menu, then the others by provider.',
@@ -95,14 +94,7 @@ export default defineZone('settings', {
     },
     states: {
       absent: 'Not found',
-      tooOld: 'Too old',
-      unsupported: 'Not supported',
-      notConnected: 'Not signed in',
-      untested: 'Untested version',
-      ready: 'Ready',
     },
-    signIn: 'Sign in…',
-    signInDesc: 'Opens a built-in terminal to sign in, on the account new agents go to ({account}).',
     install: 'Installation',
     installDesc: 'Not found on this machine: install it with this command, then set its path here if it isn’t on the PATH.',
     executable: 'Executable',
@@ -121,7 +113,7 @@ export default defineZone('settings', {
     version: 'Version',
     versionTested: 'Tested with Escouade (from {oldest} to {newest}).',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
-    versionNotConnected: 'No account signed in: sign in from the Accounts tab.',
+    versionNotConnected: 'No account signed in: add or sign in an account of this harness in the Accounts tab.',
     processes: 'Processes',
     autoResume: 'Auto-resume after the usage limit',
     autoResumeDesc: '“continue” is sent once the quota has reset',

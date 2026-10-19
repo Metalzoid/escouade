@@ -2,6 +2,12 @@
 
 Les changements visibles d'Escouade, version par version. Les notes de chaque release GitHub (et de la mise à jour intégrée) reprennent la section de sa version.
 
+## [Non publié]
+
+### Modifications
+
+- Réglages › Harness n’a plus la ligne « État » ni son bouton « Se connecter… », un reste d’avant les comptes ajoutés : les comptes de chaque harness se connectent dans Réglages › Comptes, où chacun a son état. Sous la version d’un harness dont aucun compte n’est connecté, une phrase renvoie à l’onglet Comptes.
+
 ## [1.8.1] — 2026-10-19
 
 ### Ajouts

@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { addProject, expect, FAKE, send, test } from './fixture';
 
-// Choosing the harness (ESC-29): Réglages › Harness lists each one with its executable, its version, its state and
-// « Se connecter… »; with none found, the first start says « Aucun harness trouvé » with the command that installs each.
+// Choosing the harness (ESC-29): Réglages › Harness lists each one with its executable and its version; its accounts sign
+// in from Réglages › Comptes (1.8.2). With none found, the first start says « Aucun harness trouvé » with the command that
+// installs each.
 
-test('Réglages › Harness shows Claude Code’s executable, version and state, and « Se connecter… » opens its sign-in', async ({ app }) => {
+test('Réglages › Harness shows Claude Code’s executable and version, and sends to Comptes, where its account signs in', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
@@ -13,18 +14,15 @@ test('Réglages › Harness shows Claude Code’s executable, version and state,
   const claude = settings.getByRole('region', { name: 'Claude Code' });
   await expect(claude.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeVisible();
   await expect(claude.locator('[data-state]')).toHaveText('2.1.301');
-  // The test's Claude Code folder has no sign-in.
-  await expect(claude.locator('[data-engine-state]')).toHaveText('Non connecté');
-  await claude.getByRole('button', { name: 'Se connecter…' }).click();
+  // The test's Claude Code folder has no sign-in: the version's line says where to sign in, the tab itself does not.
+  await expect(claude).toContainText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.');
+  await expect(settings.getByRole('button', { name: 'Se connecter…' })).toHaveCount(0);
+  await settings.getByRole('tab', { name: 'Comptes' }).click();
+  await settings.getByRole('listitem', { name: 'Principal' }).getByRole('button', { name: 'Se connecter…' }).click();
   const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Principal »' });
   await expect(signIn).toBeVisible();
-  // Closed: back to the tab it came from.
   await page.keyboard.press('Escape');
   await expect(signIn).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Réglages' }).getByRole('tab', { name: 'Harness' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
 });
 
 test('« Modèle des textes rédigés » offers Claude Haiku alone with Claude Code alone, and Haiku names a new agent', async ({ app }) => {

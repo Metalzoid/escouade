@@ -1,6 +1,6 @@
 # Settings: Harness
 
-The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their executable, version, and state, and sets new agents, how processes live, attachments, remote control, and the server that lets Claude drive Escouade.
+The “Harness” tab (“Claude Code” up to 1.7) lists the harnesses that run the agents, with their executable and version, and sets new agents, how processes live, attachments, remote control, and the server that lets Claude drive Escouade.
 
 ## Each harness
 
@@ -9,11 +9,11 @@ One group per harness, under its name:
 | Line | What it says |
 |---|---|
 | “Executable path” | The harness’s program (see below for Claude Code). |
-| “Version” | The version found, and whether Escouade was tested with it: an older one is refused, with its reason and the command that updates it; a newer one is used, with a warning. |
-| “State” | “Ready”, “Not signed in” (no account signed in), “Untested version”, “Too old”, or “Not found”. “Sign in…” opens, in a built-in terminal, the sign-in of the account new agents go to; the tab comes back once the window is closed. |
+| “Version” | The version found, and whether Escouade was tested with it: an older one is refused, with its reason and the command that updates it; a newer one is used, with a warning. When no account of this harness is signed in, the line adds “No account signed in: add or sign in an account of this harness in the Accounts tab.” |
+| “Models” (OpenCode) | The models of the providers connected to OpenCode, with a search: the favorites first, then one group per provider. A model’s star makes it a favorite, which comes first in its agents’ model menu. |
 | “Installation” | For a harness that isn’t found: the command that installs it (Claude Code: `irm https://claude.ai/install.ps1 \| iex` on Windows, `curl -fsSL https://claude.ai/install.sh \| bash` on macOS and Linux). |
 
-A harness that isn’t found shows only in this tab. At the first start, if none is found, the welcome screen says “No harness found” and gives the command that installs each one; Escouade works as soon as one harness is found.
+A harness’s accounts don’t sign in here but in the [“Accounts”](settings-accounts) tab: each has its state and its “Sign in…” button there. A harness that isn’t found shows only in this tab. At the first start, if none is found, the welcome screen says “No harness found” and gives the command that installs each one; Escouade works as soon as one harness is found.
 
 As soon as two harnesses are installed, the project has its “Default harness” (Settings › Projects), the “▾” button beside “New agent” offers “New agent on …” for each one, and a ticket’s window has its “Harness” field (the project’s by default), which the autopilot follows. As soon as agents run on two harnesses, each one’s harness is named beside it: on its card, in the overview, in its header, and on its ticket’s card. The composer’s menus (models, effort, modes, / commands) are those of the agent’s harness.
 

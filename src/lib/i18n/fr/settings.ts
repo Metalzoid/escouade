@@ -5,7 +5,7 @@ export default {
   // The tabs of the window: their name and what they set (under the title, in the header).
   tabs: {
     app: { label: 'Application', desc: 'Zoom, taille du texte et langues' },
-    claude: { label: 'Harness', desc: 'Exécutables, versions, connexion et réglages des agents' },
+    claude: { label: 'Harness', desc: 'Exécutables, versions et serveur MCP' },
     accounts: { label: 'Comptes', desc: 'Les comptes de chaque harness sur lesquels partent les agents, enregistrés à chaque changement' },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
@@ -104,8 +104,6 @@ export default {
 
   // The « Harness » tab (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode: « Harness » in French too).
   claude: {
-    /** Each harness's group, under its name: its state, and what to do when it is not ready. */
-    state: 'État',
     /** The models of a harness that lists those of its providers (OpenCode). */
     models: {
       label: 'Modèles',
@@ -113,17 +111,10 @@ export default {
       search: 'Rechercher un modèle',
       none: 'Aucun modèle lu pour l’instant : ils le sont au premier agent de ce harness.',
     },
+    /** A harness not found on this machine. */
     states: {
       absent: 'Introuvable',
-      tooOld: 'Trop ancien',
-      unsupported: 'Non pris en charge',
-      notConnected: 'Non connecté',
-      untested: 'Version non testée',
-      ready: 'Prêt',
     },
-    signIn: 'Se connecter…',
-    /** `{account}`: the Claude account new agents go to. */
-    signInDesc: 'Ouvre un terminal intégré pour te connecter, sur le compte où partent les nouveaux agents ({account}).',
     install: 'Installation',
     installDesc: 'Introuvable sur ce poste : installe-le avec cette commande, puis indique son chemin ici s’il n’est pas dans le PATH.',
     executable: 'Exécutable',
@@ -142,7 +133,7 @@ export default {
     version: 'Version',
     versionTested: 'Testée avec Escouade (de la {oldest} à la {newest}).',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
-    versionNotConnected: 'Aucun compte connecté : connecte-toi dans l’onglet Comptes.',
+    versionNotConnected: 'Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
     processes: 'Processus',
     autoResume: 'Reprise automatique après la limite d’usage',
     autoResumeDesc: '« continue » envoyé une fois le quota réinitialisé',
