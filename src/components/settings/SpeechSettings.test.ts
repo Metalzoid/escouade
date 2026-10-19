@@ -239,6 +239,20 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     });
   const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
+  it('says on line that the conversation pauses when the service fails and no local voice is downloaded', async () => {
+    online('elevenlabs');
+    openOnline({ speech_info: () => ({ ...SPEECH, voices: SPEECH.voices.map((v) => ({ ...v, downloaded: false })) }) });
+    expect(
+      await screen.findByText(
+        'La conversation se met en pause : aucune voix locale (Piper) n’est téléchargée. Pour en avoir une en secours, repasse sur « Local (Piper) » et télécharge-la.',
+      ),
+    ).toBeInTheDocument();
+    // Back to Piper: its voices, their downloads and licences, as before.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Voix générée par' })).getByRole('button', { name: 'Local (Piper)' }));
+    expect(await screen.findByRole('combobox', { name: 'Voix en Français' })).toBeInTheDocument();
+    expect(screen.queryByText('Si ElevenLabs ne répond pas')).toBeNull();
+  });
+
   it('is generated locally by Piper by default; on line names the service, what leaves and where', async () => {
     const backend = open();
     const group = await screen.findByRole('group', { name: 'Voix générée par' });
@@ -250,9 +264,18 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     expect(
       screen.getByText(/le texte de chaque passage lu, phrase par phrase, vers OpenAI \(api\.openai\.com\).*Jamais le son du micro/),
     ).toBeInTheDocument();
-    // Piper's voices stay: those that read if the service does not answer.
-    expect(await screen.findByText('Voix locale en Français')).toBeInTheDocument();
+    // Piper's settings are those of « Local (Piper) »: on line, one line says which local voice reads if the service fails.
+    expect(
+      await screen.findByText(
+        'La conversation continue avec la voix locale (Piper) : Siwis (Français). Pour la changer, repasse sur « Local (Piper) ».',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Si OpenAI ne répond pas')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Voix en Français' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Télécharger/ })).toBeNull();
+    expect(screen.queryByText(/^Licence/)).toBeNull();
     await userEvent.selectOptions(service, 'elevenlabs');
+    expect(screen.getByText('Si ElevenLabs ne répond pas')).toBeInTheDocument();
     await save();
     const speech = backend.called('save_settings')[0].args.settings.voice.speech;
     expect(speech.engine).toBe('online');

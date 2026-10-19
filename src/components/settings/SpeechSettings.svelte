@@ -58,6 +58,13 @@
     const id = s.voices[lang] || DEFAULTS[lang];
     return voicesOf(lang).find((v) => v.id === id) ?? voicesOf(lang)[0];
   };
+  /** On line: the local voices that read when the service fails, those chosen and downloaded (« Siwis (Français) »). */
+  const fallbackVoices = $derived(
+    LANGS.flatMap((lang) => {
+      const v = chosen(lang);
+      return v?.downloaded ? [`${v.name} (${t(`voice.languages.${lang}`)})`] : [];
+    }),
+  );
   const quality = (q: string) => {
     const k = q === 'x_low' ? 'xLow' : q;
     return ['low', 'medium', 'high', 'xLow'].includes(k) ? t(`voice.speech.quality.${k as 'low'}`) : q;
@@ -159,14 +166,16 @@
       {/each}
     {/if}
   {/if}
-  {#each LANGS as lang (lang)}
-    {@const v = chosen(lang)}
+  {#if online}
+    <!-- Piper's settings are those of « Local (Piper) »: on line, only what happens when the service fails. -->
     <Row
-      label={online
-        ? t('voice.speech.fallbackFor', { lang: t(`voice.languages.${lang}`) })
-        : t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })}
-      desc={online ? t('voice.speech.fallbackDesc', { service: service.label }) : t('voice.speech.voiceDesc')}
-    >
+      label={t('voice.speech.fallbackLabel', { service: service.label })}
+      desc={fallbackVoices.length ? t('voice.speech.fallbackReady', { voices: fallbackVoices.join(', ') }) : t('voice.speech.fallbackNone')}
+    />
+  {/if}
+  {#each online ? [] : LANGS as lang (lang)}
+    {@const v = chosen(lang)}
+    <Row label={t('voice.speech.voiceFor', { lang: t(`voice.languages.${lang}`) })} desc={t('voice.speech.voiceDesc')}>
       <div class="voice" data-speech-lang={lang}>
         <select
           class="field input"

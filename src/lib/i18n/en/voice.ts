@@ -200,8 +200,10 @@ export default defineZone('voice', {
     noVoices: 'No voice matches.',
     own: 'your account',
     notSpoken: '{service} ({model}) does not read this language: the local voice (Piper) reads the conversation in {lang}.',
-    fallbackFor: 'Local voice in {lang}',
-    fallbackDesc: 'The one that reads if {service} does not answer.',
+    fallbackLabel: 'If {service} doesn’t answer',
+    fallbackReady: 'The conversation goes on with the local voice (Piper): {voices}. To change it, switch back to “Local (Piper)”.',
+    fallbackNone:
+      'The conversation pauses: no local voice (Piper) is downloaded. To have one as a backup, switch back to “Local (Piper)” and download it.',
     rateService: '{service} reads between {min}× and {max}×: the speed is brought within these bounds.',
     rateEnglish: '{service} takes the speed in English only, between {min}× and {max}×.',
     rateNone: '{service} reads at its own pace: the speed does not apply.',

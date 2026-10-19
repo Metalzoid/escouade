@@ -79,7 +79,7 @@ This group sets up the voice that reads the agent’s answers during a [voice co
 | Setting | Effect | Default |
 |---|---|---|
 | “Voice made by” | “Local (Piper)”: the answers are read on your machine. “Online”: by the service chosen, with the key of its dictation. | “Local (Piper)” |
-| “Voice in Français” | The voice that reads the answers when the conversation is held in French, out of 7. Online, it is called “Local voice in Français”: the one that reads if the service does not answer. | Siwis, medium quality (60 MB) |
+| “Voice in Français” | The voice that reads the answers when the conversation is held in French, out of 7. With an “Online” voice, these lines go away: a single one, “If ElevenLabs doesn’t answer” for instance, says which downloaded local voice takes over (or that the conversation pauses). | Siwis, medium quality (60 MB) |
 | “Voice in English” | The same in English, out of 29. | Ljspeech, medium quality (61 MB) |
 | “Speaker” | For a voice with several speakers or styles, the one that reads: its name when the voice gives one, else its number. | The first |
 | “Speed” | From 0.5× to 2×, in steps of 0.1: 1 is the voice’s own pace, higher it reads faster. Online, brought within the service’s bounds; the row says when it takes none. | 1.0× |

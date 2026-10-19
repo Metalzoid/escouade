@@ -4,6 +4,12 @@ Les changements visibles d'Escouade, version par version. Les notes de chaque re
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici.
 
+## [Non publié]
+
+### Corrections
+
+- Avec une voix en ligne, Réglages › Voix ne montre plus les réglages de Piper : une seule ligne dit quelle voix locale prend le relais si le service ne répond pas.
+
 ## [1.8.3] — 2026-10-19
 
 ### Ajouts

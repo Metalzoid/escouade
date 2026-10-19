@@ -79,7 +79,7 @@ Ce groupe règle la voix qui lit les réponses de l’agent pendant une [convers
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Voix générée par » | « Local (Piper) » : les réponses sont lues sur ta machine. « En ligne » : par le service choisi, avec la clé de sa dictée. | « Local (Piper) » |
-| « Voix en Français » | La voix qui lit les réponses quand la conversation se tient en français, parmi 7. En ligne, elle s’appelle « Voix locale en Français » : celle qui lit si le service ne répond pas. | Siwis, qualité moyenne (60 Mo) |
+| « Voix en Français » | La voix qui lit les réponses quand la conversation se tient en français, parmi 7. Avec une voix « En ligne », ces lignes disparaissent : une seule, « Si ElevenLabs ne répond pas » par exemple, dit quelle voix locale téléchargée prend le relais (ou que la conversation se met en pause). | Siwis, qualité moyenne (60 Mo) |
 | « Voix en English » | La même chose en anglais, parmi 29. | Ljspeech, qualité moyenne (61 Mo) |
 | « Locuteur » | Pour une voix qui a plusieurs locuteurs ou styles, celui qui lit : son nom quand la voix en donne un, sinon son numéro. | Le premier |
 | « Vitesse » | De 0,5× à 2×, par pas de 0,1 : 1 est le rythme de la voix, plus haut elle lit plus vite. En ligne, ramenée dans les bornes du service ; la ligne dit quand il n’en prend pas. | 1,0× |

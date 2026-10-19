@@ -210,8 +210,11 @@ export default {
     noVoices: 'Aucune voix ne correspond.',
     own: 'ton compte',
     notSpoken: '{service} ({model}) ne lit pas cette langue : la voix locale (Piper) lit la conversation en {lang}.',
-    fallbackFor: 'Voix locale en {lang}',
-    fallbackDesc: 'Celle qui lit si {service} ne répond pas.',
+    /** On line, what happens when the service fails: `{voices}`, the local voices downloaded. */
+    fallbackLabel: 'Si {service} ne répond pas',
+    fallbackReady: 'La conversation continue avec la voix locale (Piper) : {voices}. Pour la changer, repasse sur « Local (Piper) ».',
+    fallbackNone:
+      'La conversation se met en pause : aucune voix locale (Piper) n’est téléchargée. Pour en avoir une en secours, repasse sur « Local (Piper) » et télécharge-la.',
     rateService: '{service} lit entre {min}× et {max}× : la vitesse est ramenée dans ces bornes.',
     rateEnglish: '{service} ne prend la vitesse qu’en anglais, entre {min}× et {max}×.',
     rateNone: '{service} lit à son propre rythme : la vitesse ne s’applique pas.',
