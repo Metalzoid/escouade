@@ -21,7 +21,8 @@ test('Réglages › Harness shows Claude Code’s executable and version, and se
   await settings.getByRole('listitem', { name: 'Principal' }).getByRole('button', { name: 'Se connecter…' }).click();
   const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Principal »' });
   await expect(signIn).toBeVisible();
-  await page.keyboard.press('Escape');
+  // Its × (Escape may go to the sign-in's terminal once it has the focus).
+  await signIn.getByRole('button', { name: 'Fermer' }).click();
   await expect(signIn).toHaveCount(0);
 });
 
