@@ -283,3 +283,15 @@ jobs:
           done
           echo "::error::The updater would not read $TAG: $url does not say version $expected"
           exit 1
+
+  # Once the updater reads the version, its notes go to the Discord. A job of its own: `gh run
+  # rerun <id> --failed` after a refusal of Discord's posts them again without publishing again,
+  # and a failed build announces nothing. A pre-release is not announced.
+  announce:
+    name: Announce on Discord
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/discord.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

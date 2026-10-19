@@ -1,0 +1,44 @@
+name: Discord
+
+# Posts the notes of a version (its section of CHANGELOG.md) to Escouade's Discord, through the
+# webhook in the DISCORD_WEBHOOK_URL secret: called by the Release once the release is published
+# (release.yml), or by hand for a version already out, `gh workflow run discord.yml -f tag=vX.Y.Z`.
+# By hand, the CHANGELOG is main's, which holds every version's section.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the version, like v1.8.5
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    name: Post the notes on Discord
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # Without the secret (a fork), nothing is posted and the run stays green.
+      - name: Post the notes
+        env:
+          ESCOUADE_DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$ESCOUADE_DISCORD_WEBHOOK" ]; then
+            echo "::notice::No DISCORD_WEBHOOK_URL secret: the notes of $TAG are not posted"
+            exit 0
+          fi
+          node scripts/discord.mjs "$TAG"
