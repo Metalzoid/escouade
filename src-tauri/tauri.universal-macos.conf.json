@@ -1,0 +1,5 @@
+{
+  "build": {
+    "beforeBundleCommand": "sh \"$(git rev-parse --show-toplevel)/scripts/universal-hook.sh\""
+  }
+}
