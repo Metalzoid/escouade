@@ -35,6 +35,8 @@ pub(crate) struct Conn {
     pub texts: Vec<String>,
     /// The bytes of PCM sound it got.
     pub audio: usize,
+    /// That sound, in the order it came (16-bit PCM, little-endian).
+    pub pcm: Vec<u8>,
     pub ended: bool,
     /// The commits (Mistral's flushes) it got.
     pub commits: usize,
@@ -196,15 +198,14 @@ fn error_message(p: Provider) -> String {
 }
 
 /// The sound a message carries (its bytes), whether it ends the sentence, and the message without its sound.
-fn read_client(p: Provider, m: &Message) -> (usize, bool, Option<String>) {
-    let b64len = |s: &str| {
+fn read_client(p: Provider, m: &Message) -> (Vec<u8>, bool, Option<String>) {
+    let decoded = |s: &str| {
         base64::engine::general_purpose::STANDARD
             .decode(s)
-            .map(|b| b.len())
-            .unwrap_or(0)
+            .unwrap_or_default()
     };
     match m {
-        Message::Binary(b) => (b.len(), false, None),
+        Message::Binary(b) => (b.to_vec(), false, None),
         Message::Text(t) => {
             let v: serde_json::Value = serde_json::from_str(t.as_str()).unwrap_or_default();
             let mut kept = v.clone();
@@ -212,7 +213,7 @@ fn read_client(p: Provider, m: &Message) -> (usize, bool, Option<String>) {
                 Provider::ElevenLabs => {
                     kept["audio_base_64"] = "…".into();
                     (
-                        b64len(v["audio_base_64"].as_str().unwrap_or("")),
+                        decoded(v["audio_base_64"].as_str().unwrap_or("")),
                         v["commit"].as_bool() == Some(true),
                     )
                 }
@@ -221,24 +222,24 @@ fn read_client(p: Provider, m: &Message) -> (usize, bool, Option<String>) {
                         kept["audio"] = "…".into();
                     }
                     (
-                        b64len(v["audio"].as_str().unwrap_or("")),
+                        decoded(v["audio"].as_str().unwrap_or("")),
                         v["type"] == "input_audio.end" || v["type"] == "input_audio.flush",
                     )
                 }
-                Provider::Deepgram => (0, v["type"] == "Finalize"),
+                Provider::Deepgram => (Vec::new(), v["type"] == "Finalize"),
                 _ => {
                     if v.get("audio").is_some() {
                         kept["audio"] = "…".into();
                     }
                     (
-                        b64len(v["audio"].as_str().unwrap_or("")),
+                        decoded(v["audio"].as_str().unwrap_or("")),
                         v["type"] == "input_audio_buffer.commit",
                     )
                 }
             };
             (audio, end, Some(kept.to_string()))
         }
-        _ => (0, false, None),
+        _ => (Vec::new(), false, None),
     }
 }
 
@@ -325,7 +326,8 @@ async fn serve_one(
         {
             let mut c = conns.lock();
             let c = &mut c[index];
-            c.audio += audio;
+            c.audio += audio.len();
+            c.pcm.extend_from_slice(&audio);
             if let Some(t) = text {
                 c.texts.push(t);
             }
@@ -334,7 +336,7 @@ async fn serve_one(
                     || matches!(&m, Message::Text(t) if t.as_str().contains("input_audio.end")));
             c.commits += usize::from(end);
         }
-        if audio > 0 {
+        if !audio.is_empty() {
             sounds += 1;
             match mode {
                 Mode::Fails if sounds == 1 => {
@@ -432,42 +434,6 @@ fn each_service_writes_the_text_as_it_hears_then_gives_the_final_one() {
             c.audio
         );
         assert!(f.requests.lock().is_empty(), "{p:?}");
-    }
-}
-
-#[test]
-fn what_was_said_is_committed_as_the_user_goes_quiet_and_the_final_text_is_there_at_the_sentence_s_end(
-) {
-    for p in [
-        Provider::ElevenLabs,
-        Provider::Deepgram,
-        Provider::OpenAi,
-        Provider::Mistral,
-    ] {
-        let f = fake(p, Mode::Speaks);
-        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
-        for frame in speech(0.6).chunks(960) {
-            stream.push(frame);
-        }
-        stream.pause();
-        let deadline = Instant::now() + Duration::from_secs(3);
-        while f.conns().first().map_or(0, |c| c.commits) == 0 && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        std::thread::sleep(Duration::from_millis(100));
-        let end = Instant::now();
-        assert_eq!(stream.finish(FINAL_WAIT).unwrap().text, FINAL, "{p:?}");
-        let ms = end.elapsed().as_millis();
-        let c = f.conns()[0].clone();
-        match p {
-            // Answered already: nothing more to ask, the text is there at once.
-            Provider::ElevenLabs | Provider::OpenAi => {
-                assert_eq!(c.commits, 1, "{p:?}: {:?}", c.texts);
-                assert!(ms < 50, "{p:?}: {ms} ms");
-            }
-            // Deepgram finalizes, then says its last words as it closes; Mistral flushes, then ends.
-            _ => assert!(c.ended, "{p:?}: {:?}", c.texts),
-        }
     }
 }
 

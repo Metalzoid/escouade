@@ -34,8 +34,6 @@ use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest, Message};
 pub const CONNECT_WAIT: Duration = Duration::from_secs(5);
 /// Once the sentence ended, its final text comes within this, or it goes by request.
 pub const FINAL_WAIT: Duration = Duration::from_secs(5);
-/// The quiet after which what was said is committed (`LiveStream::pause`), ahead of the silence that ends a sentence.
-pub const PAUSE: Duration = Duration::from_millis(300);
 /// What is sent at a time: 100 ms of sound.
 const CHUNK_MS: usize = 100;
 
@@ -44,13 +42,11 @@ pub type Partial = Box<dyn Fn(String) + Send + 'static>;
 
 enum Cmd {
     Audio(Vec<f32>),
-    /// The user went quiet: what was said so far is committed, its text asked for ahead of the sentence's end.
-    Pause,
+    /// The sentence is over: all that was sent is committed, its text asked for.
     End,
 }
 
-/// The final text of a sentence, and when it was there: as soon as the user went quiet, when what they said had been
-/// committed and answered by then.
+/// The final text of a sentence, and when it was there.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Final {
     pub text: String,
@@ -96,12 +92,6 @@ impl LiveStream {
     /// Sends `samples` (mono, at the rate it was opened with).
     pub fn push(&self, samples: &[f32]) {
         let _ = self.tx.send(Cmd::Audio(samples.to_vec()));
-    }
-
-    /// The user went quiet (`PAUSE`): what they said is committed now, its text there by the time the sentence ends;
-    /// what the microphone hears next is not sent unless they speak again.
-    pub fn pause(&self) {
-        let _ = self.tx.send(Cmd::Pause);
     }
 
     /// The sentence is over: its final text, or why there is none within `wait` (then it goes by request).
@@ -534,8 +524,6 @@ async fn run(
     let p = spec.provider;
     let target = target_rate(p);
     let now = std::time::Instant::now;
-    // When all that was sent had its text: the final one, unless the user speaks again.
-    let mut ready: Option<std::time::Instant> = None;
     let url = url_of(spec, language);
     let ws = tokio::time::timeout(CONNECT_WAIT, connect(spec, &url))
         .await
@@ -563,7 +551,6 @@ async fn run(
                         }
                         (false, false)
                     }
-                    Some(Cmd::Pause) => (true, false),
                     Some(Cmd::End) => (true, true),
                     // Nobody waits for it any more: it closes.
                     None => {
@@ -573,10 +560,7 @@ async fn run(
                 };
                 let out = std::mem::take(&mut queued);
                 uncommitted += out.len();
-                if !out.is_empty() {
-                    ready = None;
-                }
-                // Nothing new to commit (the user said nothing since): no commit, its answer would not come.
+                // Too little to commit (OpenAI wants 100 ms): no commit, its answer would not come.
                 let commit = commit && uncommitted >= min_commit(p, target);
                 for m in audio_messages(p, &out, commit, end) {
                     sink.send(m).await.map_err(net)?;
@@ -590,7 +574,7 @@ async fn run(
                     // Every commit already answered: the text is there.
                     if let Some(text) = heard.complete(p, true) {
                         let _ = sink.send(Message::Close(None)).await;
-                        return Ok(Final { text, ready: ready.unwrap_or_else(now) });
+                        return Ok(Final { text, ready: now() });
                     }
                 }
             },
@@ -604,9 +588,6 @@ async fn run(
                 match msg {
                     Some(Ok(Message::Text(t))) => match heard.read(p, t.as_str(), ended, &spec.key)? {
                         Said::Partial(text) => {
-                            if uncommitted == 0 && heard.commits > 0 && heard.answered >= heard.commits {
-                                ready.get_or_insert_with(now);
-                            }
                             if text != last_partial {
                                 last_partial = text.clone();
                                 partial(text);

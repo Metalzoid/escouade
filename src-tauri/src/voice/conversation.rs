@@ -6,9 +6,10 @@
 //! voice), which stops the reading and listens. Once the reading is over, it listens again, after the echo's tail.
 //!
 //! With « Transcription en temps réel » (ESC-136), a sentence's sound goes to the service while it is said, from its
-//! start (its first syllables, kept from before) to the user going quiet: its text is written in the window as it comes
-//! (`ConvPartial`), and is final soon after the last word. Nothing else goes: neither the silence before or after it,
-//! nor what is heard while the agent is read or the conversation holds. A stream that fails sends the sentence whole, by
+//! start (its first syllables, kept from before) to its end, its pauses and the silence that ends it included, as the
+//! request sends it (ESC-137): its text is written in the window as it comes (`ConvPartial`), committed at the end
+//! only, and final a few hundred milliseconds after it. Nothing else goes: neither the room before it, nor what is
+//! heard while the agent is read or the conversation holds. A stream that fails sends the sentence whole, by
 //! request, as before, and so do the sentences after it.
 //!
 //! The window leads (`conversation.svelte.ts`): it says when to listen, to hold (the agent works), and what to read.
@@ -108,6 +109,9 @@ enum Mode {
 const TAIL: Duration = Duration::from_millis(300);
 /// What is kept from before a sentence's start: its first syllables.
 const PREROLL_FRAMES: usize = 50;
+/// The frames kept from before the speech that started a sentence (`Heard::Started`'s `frames_ago`): its first
+/// syllables, said low, under what the endpointer hears as speech (ESC-137).
+const LEAD_FRAMES: usize = 15;
 
 /// What the threads of a conversation share.
 struct Shared {
@@ -751,50 +755,6 @@ impl Ears {
     }
 }
 
-/// The frames kept while the user is quiet after a commit: sent before their next words, should they speak again.
-const RESUME_FRAMES: usize = 5;
-
-/// The sound of a sentence under way, as it goes to its stream: sent while the user speaks; once quiet for
-/// `live::PAUSE`, what was said is committed and the quiet kept back (its last frames only).
-struct Flow {
-    stream: LiveStream,
-    paused: bool,
-    held: VecDeque<Vec<f32>>,
-}
-
-impl Flow {
-    fn new(stream: LiveStream) -> Self {
-        Self {
-            stream,
-            paused: false,
-            held: VecDeque::new(),
-        }
-    }
-
-    /// The next frame, `quiet_ms` into the quiet (0: speech).
-    fn push(&mut self, frame: &[f32], quiet_ms: u32) {
-        if quiet_ms == 0 {
-            for f in self.held.drain(..) {
-                self.stream.push(&f);
-            }
-            self.paused = false;
-            self.stream.push(frame);
-        } else if quiet_ms >= live::PAUSE.as_millis() as u32 {
-            if !self.paused {
-                self.paused = true;
-                self.stream.pause();
-            }
-            self.held.push_back(frame.to_vec());
-            if self.held.len() > RESUME_FRAMES {
-                self.held.pop_front();
-            }
-        } else {
-            // A breath between two words.
-            self.stream.push(frame);
-        }
-    }
-}
-
 /// The conversation's ear: frames of 20 ms, taken as its mode says.
 fn listen(
     s: Arc<Shared>,
@@ -809,7 +769,7 @@ fn listen(
     let mut recent: VecDeque<Vec<f32>> = VecDeque::new();
     let mut sentence: Option<Vec<f32>> = None;
     // Its stream, with « Transcription en temps réel », and when the user last spoke in it.
-    let mut flow: Option<Flow> = None;
+    let mut flow: Option<LiveStream> = None;
     let mut last_word = Instant::now();
     let mut peak = 0f32;
     let mut told = Instant::now();
@@ -873,7 +833,7 @@ fn listen(
                             .flatten()
                             .copied()
                             .collect();
-                        flow = ears.open(&s, &emit, rate, &start).map(Flow::new);
+                        flow = ears.open(&s, &emit, rate, &start);
                         last_word = Instant::now();
                         sentence = Some(start);
                         emit(VoiceEvent::ConvBargeIn {
@@ -893,13 +853,15 @@ fn listen(
                         if quiet == 0 {
                             last_word = Instant::now();
                         }
-                        if let (Some(f), None) = (flow.as_mut(), heard) {
-                            f.push(&frame, quiet);
+                        // All of it goes, its quiet too: what the endpointer takes for quiet may be words said
+                        // low, the sentence's end or a soft resume (ESC-137). Committed at its end only.
+                        if let Some(f) = flow.as_ref() {
+                            f.push(&frame);
                         }
                     }
                     match heard {
                         Some(Heard::Started { frames_ago }) => {
-                            let keep = (frames_ago + 5).min(recent.len());
+                            let keep = (frames_ago + LEAD_FRAMES).min(recent.len());
                             let start: Vec<f32> = recent
                                 .iter()
                                 .skip(recent.len() - keep)
@@ -907,13 +869,13 @@ fn listen(
                                 .copied()
                                 .collect();
                             emit(VoiceEvent::ConvSpeech { session: s.id });
-                            flow = ears.open(&s, &emit, rate, &start).map(Flow::new);
+                            flow = ears.open(&s, &emit, rate, &start);
                             last_word = Instant::now();
                             sentence = Some(start);
                         }
                         Some(Heard::Ended) => {
                             let said = sentence.take().unwrap_or_default();
-                            let stream = flow.take().map(|f| f.stream);
+                            let stream = flow.take();
                             let spoke = last_word;
                             *s.mode.lock() = Mode::Holding;
                             emit(VoiceEvent::ConvTranscribing { session: s.id });

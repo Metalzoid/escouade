@@ -871,7 +871,7 @@ fn pcm_bytes(secs: f32) -> usize {
 }
 
 #[test]
-fn as_one_speaks_the_text_is_written_and_its_final_one_goes_to_the_agent_without_the_silence() {
+fn as_one_speaks_the_text_is_written_and_its_final_one_goes_to_the_agent_without_the_room_before_it() {
     let f = fake_live(Provider::ElevenLabs, LiveMode::Speaks);
     let c = conv_harness("conv-live", "never this");
     let h = &c.h;
@@ -888,17 +888,17 @@ fn as_one_speaks_the_text_is_written_and_its_final_one_goes_to_the_agent_without
     hear(h, 1.0, 0.0);
     let heard = wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
     assert_eq!(heard, VoiceEvent::ConvHeard { session, text: FINAL.into(), error: None });
-    // Committed once the user went quiet, ahead of the end; nothing by request, nothing by Whisper.
+    // Committed once, at its end; nothing by request, nothing by Whisper.
     let conns = f.conns();
     assert_eq!(conns.len(), 1);
     assert_eq!(conns[0].commits, 1, "{:?}", conns[0].texts);
     assert!(f.requests.lock().is_empty());
     assert!(h.fake.calls.lock().is_empty());
-    // What went: the sentence (its first syllables kept from before, and the breath before the commit), never the
-    // second of quiet before it nor the one after it.
+    // What went: the sentence (its first syllables kept from before, 0.54 s at most) and the silence that ended it
+    // (0.6 s), as the request sends it; never the second of quiet before it, nor what came after its end.
     let sent = conns[0].audio;
-    assert!(sent >= pcm_bytes(1.0), "{sent} bytes");
-    assert!(sent <= pcm_bytes(1.0 + 0.3 + 0.35), "{sent} bytes: silence went");
+    assert!(sent >= pcm_bytes(1.0 + 0.6), "{sent} bytes");
+    assert!(sent <= pcm_bytes(0.54 + 1.0 + 0.6 + 0.05), "{sent} bytes: the room went");
     h.voice.conversation_stop();
 }
 
@@ -925,7 +925,7 @@ fn nothing_goes_while_the_conversation_holds_and_it_streams_again_once_it_listen
     let conns = f.conns();
     assert_eq!(conns.len(), 1);
     assert!(!conns[0].ended);
-    assert!(conns[0].audio <= pcm_bytes(0.6 + 0.35), "{} bytes", conns[0].audio);
+    assert!(conns[0].audio <= pcm_bytes(0.54 + 0.6 + 0.05), "{} bytes", conns[0].audio);
     assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvHeard { .. })));
     // Listening again: the sentence cut by the hold goes on, whole, by request (never lost); the next is streamed.
     h.voice.conversation_listen(session);
@@ -973,6 +973,133 @@ fn unticked_each_sentence_goes_whole_as_before() {
     assert!(f.conns().is_empty());
     assert!(!conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvPartial { .. })));
     h.voice.conversation_stop();
+}
+
+// The whole sentence goes to its stream (ESC-137): its quiet, its soft start, its end said low, its soft resume after a
+// pause; nothing before it, nothing after its end, and a single commit, at its end.
+
+/// `testdata/question-fr.wav` at 16 kHz: its speech from 0.88 s to 4.56 s, a pause in it from 3.2 s to 3.62 s.
+fn question() -> Vec<f32> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav");
+    let (samples, rate) = super::source::read_wav(&path).unwrap();
+    super::audio::resample(&samples, rate, 16_000)
+}
+
+const SPEECH_FROM: f32 = 0.88;
+const SPEECH_TO: f32 = 4.56;
+
+fn at(secs: f32) -> usize {
+    (secs * 16_000.0) as usize
+}
+
+/// `s` with what is said from `from` to `to` (seconds) brought down to a whisper, under what the endpointer hears.
+fn said_low(mut s: Vec<f32>, from: f32, to: f32) -> Vec<f32> {
+    for x in &mut s[at(from)..at(to)] {
+        *x *= 0.03;
+    }
+    s
+}
+
+/// The test sounds: a start said low (240 ms), an end said low (« la suite », 560 ms), and a pause made longer
+/// (720 ms) with the words after it resumed low (240 ms).
+fn soft_start() -> Vec<f32> {
+    said_low(question(), SPEECH_FROM, SPEECH_FROM + 0.24)
+}
+
+fn soft_end() -> Vec<f32> {
+    said_low(question(), 4.0, SPEECH_TO)
+}
+
+/// Its speech then ends 0.3 s later.
+fn pause_then_soft_resume() -> Vec<f32> {
+    let mut s = said_low(question(), 3.62, 3.86);
+    let pause = vec![0f32; at(0.3)];
+    s.splice(at(3.4)..at(3.4), pause);
+    s
+}
+
+/// What the stream must have got: the 16-bit sound the service is sent.
+fn pcm16(samples: &[f32]) -> Vec<i16> {
+    samples.iter().map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).collect()
+}
+
+/// `sound` said to a conversation heard live by a fake ElevenLabs (with « Délai avant l'envoi » at its default,
+/// 1.2 s), after a quiet room; what its stream got, and how many commits.
+fn streamed(name: &str, sound: &[f32]) -> (Vec<i16>, usize) {
+    let f = fake_live(Provider::ElevenLabs, LiveMode::Speaks);
+    let c = conv_harness(name, "never this");
+    let h = &c.h;
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let choice = ConvChoice { silence_ms: 1200, ..heard_live(&f) };
+    let session = listening(h.voice.conversation_start(choice).unwrap());
+    // Played four times faster than said: the conversation takes its frames as they come.
+    for chunk in played(sound).chunks(320) {
+        h.script.push(chunk);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let heard = wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
+    assert_eq!(heard, VoiceEvent::ConvHeard { session, text: FINAL.into(), error: None });
+    h.voice.conversation_stop();
+    let conns = f.conns();
+    assert_eq!(conns.len(), 1, "{conns:?}");
+    let pcm = conns[0].pcm.chunks(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+    (pcm, conns[0].commits)
+}
+
+/// What the microphone hears: 0.6 s of a quiet room, then `sound`.
+fn played(sound: &[f32]) -> Vec<f32> {
+    let mut all = vec![0.001f32; at(0.6)];
+    all.extend_from_slice(sound);
+    all
+}
+
+/// `got` is the sound played from its start to its end, in order, without a hole: where it starts and ends in it.
+fn span_of(got: &[i16], sound: &[f32]) -> (usize, usize) {
+    let all = pcm16(&played(sound));
+    // ElevenLabs' commit may ride on a hundredth of a second of zeros.
+    let mut got = got;
+    if !all.windows(got.len()).any(|w| w == got) && got.len() > 160 && got[got.len() - 160..].iter().all(|x| *x == 0) {
+        got = &got[..got.len() - 160];
+    }
+    let start = all
+        .windows(got.len().max(1))
+        .position(|w| w == got)
+        .unwrap_or_else(|| panic!("{} samples got, not the sound played in one piece (a hole, or out of order)", got.len()));
+    (start, start + got.len())
+}
+
+/// The sentence went whole: from a little before its first sound (its lead, 0.5 s at most) to its end and the silence
+/// that ended it (no more), with its single commit at the end.
+fn assert_whole(got: &[i16], commits: usize, sound: &[f32], speech_to: f32) {
+    let (start, end) = span_of(got, sound);
+    let lead = at(0.6);
+    let (from, to) = (lead + at(SPEECH_FROM), lead + at(speech_to));
+    assert!(start <= from, "its start is cut: sent from {:.2} s, it starts at {:.2} s", start as f32 / 16e3, from as f32 / 16e3);
+    assert!(start + at(0.5) >= from, "sent from {:.2} s, well before its start", start as f32 / 16e3);
+    assert!(end >= to, "its end is cut: sent up to {:.2} s, it ends at {:.2} s", end as f32 / 16e3, to as f32 / 16e3);
+    assert!(end <= to + at(1.2 + 0.2), "sent up to {:.2} s, past its silence", end as f32 / 16e3);
+    assert_eq!(commits, 1, "committed before the end of the sentence");
+}
+
+#[test]
+fn a_start_said_low_goes_to_the_stream() {
+    let sound = soft_start();
+    let (got, commits) = streamed("conv-live-soft-start", &sound);
+    assert_whole(&got, commits, &sound, SPEECH_TO);
+}
+
+#[test]
+fn an_end_said_low_goes_to_the_stream() {
+    let sound = soft_end();
+    let (got, commits) = streamed("conv-live-soft-end", &sound);
+    assert_whole(&got, commits, &sound, SPEECH_TO);
+}
+
+#[test]
+fn a_pause_and_the_soft_words_after_it_go_to_the_stream_without_a_commit() {
+    let sound = pause_then_soft_resume();
+    let (got, commits) = streamed("conv-live-pause", &sound);
+    assert_whole(&got, commits, &sound, SPEECH_TO + 0.3);
 }
 
 /// The real Scribe v2 Realtime hears a sentence of the conversation as it is said (`testdata/question-fr.wav`, in real
@@ -1042,4 +1169,65 @@ fn real_elevenlabs_conversation_live() {
     assert!(partials.len() >= 2, "{partials:?}");
     assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
     h.voice.conversation_stop();
+}
+
+
+/// The test sounds of ESC-137 (and the sentence as it was said) heard by the real ElevenLabs, live (Scribe v2 Realtime)
+/// then by request (Scribe), in real time, with « Délai avant l'envoi » at its default (1.2 s); the key given to this
+/// process only (`ELEVENLABS_API_KEY`): run by hand, never in CI. Prints both texts, and when the final one was there
+/// after the end of the sentence (its silence over).
+#[test]
+#[ignore]
+fn real_elevenlabs_live_and_by_request_hear_the_whole_sentence() {
+    let key = std::env::var("ELEVENLABS_API_KEY").expect("ELEVENLABS_API_KEY");
+    let hear_real = |name: &str, sound: &[f32], live: bool| -> (String, u128) {
+        let c = conv_harness(&format!("conv-real-137-{name}-{live}"), "never this");
+        let h = &c.h;
+        put_voice(&h.voice, "fr_FR-siwis-medium");
+        let spec = Spec::new(Provider::ElevenLabs, key.clone(), reqwest::Client::new())
+            .with_live(live.then(|| "scribe_v2_realtime".to_string()));
+        let choice = ConvChoice { transcription: Some(spec), silence_ms: 1200, ..conv_choice() };
+        let session = listening(h.voice.conversation_start(choice).unwrap());
+        let script = h.script.clone();
+        let all = played(sound);
+        let player = std::thread::spawn(move || {
+            for chunk in all.chunks(320) {
+                script.push(chunk);
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let mut ended = None;
+        let end = Instant::now() + Duration::from_secs(30);
+        let heard = loop {
+            let events = conv_events(h);
+            if ended.is_none() && events.iter().any(|e| matches!(e, VoiceEvent::ConvTranscribing { .. })) {
+                ended = Some(Instant::now());
+            }
+            if let Some(e) = events.into_iter().find(|e| matches!(e, VoiceEvent::ConvHeard { .. })) {
+                break e;
+            }
+            assert!(Instant::now() < end, "never heard: {:?}", conv_events(h));
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let after = ended.map(|t| t.elapsed().as_millis()).unwrap_or_default();
+        h.voice.conversation_stop();
+        player.join().unwrap();
+        let VoiceEvent::ConvHeard { session: s, text, error: None } = heard else {
+            panic!("not heard: {heard:?}");
+        };
+        assert_eq!(s, session);
+        assert!(h.fake.calls.lock().is_empty(), "Whisper heard nothing");
+        (text, after)
+    };
+    for (name, sound) in [
+        ("as-said", question()),
+        ("soft-start", soft_start()),
+        ("soft-end", soft_end()),
+        ("pause-soft-resume", pause_then_soft_resume()),
+    ] {
+        let (live, live_ms) = hear_real(name, &sound, true);
+        let (request, request_ms) = hear_real(name, &sound, false);
+        println!("{name}: live, {live_ms} ms after the end: {live:?}");
+        println!("{name}: by request, {request_ms} ms after the end: {request:?}");
+    }
 }
