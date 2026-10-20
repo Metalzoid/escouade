@@ -13,7 +13,7 @@ const file = FEATURE_SHOTS.find((s) => s.id === HERO_SHOT)!.file;
 <template>
   <section id="top" class="hero">
     <div class="copy">
-      <a class="pill" :href="CHANGELOG"><i aria-hidden="true" />{{ fmt(text.hero.meta, { version }) }}</a>
+      <a class="pill" :href="CHANGELOG[lang]"><i aria-hidden="true" />{{ fmt(text.hero.meta, { version }) }}</a>
       <h1>
         <span class="line">{{ text.hero.line1 }}</span>
         <span class="line second">{{ text.hero.line2 }}</span>

@@ -13,6 +13,12 @@ describe('discord messages', () => {
     expect(discordMessages(notes, '1.8.5')).toEqual(discordMessages(notes, 'v1.8.5'));
   });
 
+  it('words the link in English for the English channel', () => {
+    expect(discordMessages('### Fixes\n\n- The links.', 'v1.8.5', 'en')).toEqual([
+      `## Escouade 1.8.5\n-# [Release on GitHub](<${RELEASE}>)\n\n### Fixes\n\n- The links.`,
+    ]);
+  });
+
   it('splits long notes between lines, every message within Discord’s limit, nothing lost', () => {
     const items = Array.from({ length: 60 }, (_, i) => `- Entrée ${i} : ${'mot '.repeat(20).trim()}.`);
     const notes = `### Ajouts\n\n${items.join('\n')}`;

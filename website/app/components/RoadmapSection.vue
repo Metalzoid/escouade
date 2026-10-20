@@ -3,7 +3,7 @@ import { fmt } from '~/data/catalog';
 import { CHANGELOG, NEXT, PLAN } from '~/data/site';
 
 // What comes next: the version in the works and what it brings, with its detailed plan and what is already out.
-const { text } = useLang();
+const { lang, text } = useLang();
 </script>
 
 <template>
@@ -21,7 +21,7 @@ const { text } = useLang();
         </ul>
         <p class="links">
           <a class="arrow" :href="PLAN">{{ text.roadmap.plan }}</a>
-          <a class="arrow" :href="CHANGELOG">{{ text.roadmap.changelog }}</a>
+          <a class="arrow" :href="CHANGELOG[lang]">{{ text.roadmap.changelog }}</a>
         </p>
       </div>
     </div>

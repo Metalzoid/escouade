@@ -9,7 +9,11 @@ export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
 export const NEXT = '2.0';
 export const PLAN = `${REPO}/blob/main/docs/TODO-${NEXT}.md`;
-export const CHANGELOG = `${REPO}/blob/main/CHANGELOG.md`;
+/** What is already out, in the page’s language: CHANGELOG.md in French, CHANGELOG.en.md in English. */
+export const CHANGELOG: Record<Lang, string> = {
+  fr: `${REPO}/blob/main/CHANGELOG.md`,
+  en: `${REPO}/blob/main/CHANGELOG.en.md`,
+};
 /** Public address of the site, for links shared on social networks. */
 export const SITE = 'https://escouade.dev/';
 

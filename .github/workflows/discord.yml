@@ -1,29 +1,49 @@
 name: Discord
 
-# Posts the notes of a version (its section of CHANGELOG.md) to Escouade's Discord, through the
-# webhook in the DISCORD_WEBHOOK_URL secret: called by the Release once the release is published
-# (release.yml), or by hand for a version already out, `gh workflow run discord.yml -f tag=vX.Y.Z`.
-# By hand, the CHANGELOG is main's, which holds every version's section.
+# Posts the notes of a version to Escouade's Discord channels, one job per channel: the French one
+# (its section of CHANGELOG.md, through the webhook in the DISCORD_WEBHOOK_URL secret) and the
+# English one (its section of CHANGELOG.en.md, DISCORD_WEBHOOK_URL_EN). Called by the Release once
+# the release is published (release.yml), or by hand for a version already out,
+# `gh workflow run discord.yml -f tag=vX.Y.Z` (`-f lang=en` for the English channel only). By hand,
+# the changelogs are main's, which hold every version's section. A channel refused is posted again
+# alone by `gh run rerun <id> --failed`.
 on:
   workflow_call:
     inputs:
       tag:
         required: true
         type: string
+      lang:
+        type: string
+        default: both
   workflow_dispatch:
     inputs:
       tag:
         description: Tag of the version, like v1.8.5
         required: true
         type: string
+      lang:
+        description: The channels to post to
+        type: choice
+        options: [both, fr, en]
+        default: both
 
 permissions:
   contents: read
 
 jobs:
   post:
-    name: Post the notes on Discord
+    name: Post the notes on Discord (${{ matrix.lang }})
     runs-on: ubuntu-latest
+    strategy:
+      # Each channel on its own: one refused does not keep the other from being posted.
+      fail-fast: false
+      matrix:
+        include:
+          - lang: fr
+            secret: DISCORD_WEBHOOK_URL
+          - lang: en
+            secret: DISCORD_WEBHOOK_URL_EN
     steps:
       - uses: actions/checkout@v7
 
@@ -31,14 +51,17 @@ jobs:
         with:
           node-version: 22
 
-      # Without the secret (a fork), nothing is posted and the run stays green.
+      # Without the channel's secret (a fork), nothing is posted and the run stays green.
       - name: Post the notes
+        if: ${{ inputs.lang == 'both' || inputs.lang == matrix.lang }}
         env:
-          ESCOUADE_DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ESCOUADE_DISCORD_WEBHOOK: ${{ secrets[matrix.secret] }}
           TAG: ${{ inputs.tag }}
+          LANG_OF_CHANNEL: ${{ matrix.lang }}
+          SECRET_NAME: ${{ matrix.secret }}
         run: |
           if [ -z "$ESCOUADE_DISCORD_WEBHOOK" ]; then
-            echo "::notice::No DISCORD_WEBHOOK_URL secret: the notes of $TAG are not posted"
+            echo "::notice::No $SECRET_NAME secret: the notes of $TAG are not posted ($LANG_OF_CHANNEL)"
             exit 0
           fi
-          node scripts/discord.mjs "$TAG"
+          node scripts/discord.mjs "$TAG" --lang "$LANG_OF_CHANNEL"

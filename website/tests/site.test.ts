@@ -263,7 +263,7 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     }
     const hrefs = tags(html, 'a').map((a) => a.href);
     expect(hrefs).toContain(`${REPO}/blob/main/docs/TODO-${NEXT}.md`);
-    expect(hrefs).toContain(`${REPO}/blob/main/CHANGELOG.md`);
+    expect(hrefs).toContain(`${REPO}/blob/main/${lang === 'en' ? 'CHANGELOG.en.md' : 'CHANGELOG.md'}`);
   });
 
   it('says nothing in the other language', () => {

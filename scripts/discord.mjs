@@ -1,22 +1,25 @@
 #!/usr/bin/env node
-// Posts the release notes of a version (its section of CHANGELOG.md) to Escouade's Discord.
-//   node scripts/discord.mjs v1.8.5 --dry-run → prints the messages, posts nothing
-//   node scripts/discord.mjs v1.8.5           → posts them through the webhook in ESCOUADE_DISCORD_WEBHOOK
+// Posts the release notes of a version (its section of the changelog) to one of Escouade's Discord channels.
+//   node scripts/discord.mjs v1.8.5 --dry-run             → prints the French messages (CHANGELOG.md), posts nothing
+//   node scripts/discord.mjs v1.8.5                       → posts them through the webhook in ESCOUADE_DISCORD_WEBHOOK
+//   node scripts/discord.mjs v1.8.5 --lang en [--dry-run] → the same in English, from CHANGELOG.en.md
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FALLBACK, releaseNotes } from './changelog.mjs';
+import { CHANGELOGS, FALLBACKS, changelogText, langOf, releaseNotes } from './changelog.mjs';
 
 /** Discord's limit for the content of one message. */
 export const LIMIT = 2000;
 
 const RELEASES = 'https://github.com/guillaume-gagnaire/escouade/releases/tag';
 
+/** The words of the link to the release, in each channel's language. */
+const RELEASE_LINK = { fr: 'Release sur GitHub', en: 'Release on GitHub' };
+
 /** The notes of `tag` as Discord messages: the version and a link to its release, then the notes, cut between lines. */
-export function discordMessages(notes, tag) {
+export function discordMessages(notes, tag, lang = 'fr') {
   const version = String(tag).replace(/^v/, '');
-  const head = `## Escouade ${version}\n-# [Release sur GitHub](<${RELEASES}/v${version}>)`;
+  const head = `## Escouade ${version}\n-# [${RELEASE_LINK[lang]}](<${RELEASES}/v${version}>)`;
   return pack(
     `${head}\n\n${notes}`.split('\n').flatMap((line) => cutLine(line, LIMIT)),
     LIMIT,
@@ -85,15 +88,17 @@ export async function postMessages(
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [tag, flag] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const lang = langOf(args);
+  const tag = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--lang');
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const notes = releaseNotes(fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8'), tag ?? '');
-  if (!tag || notes === FALLBACK) {
-    console.error(`Pas de section ${tag ?? '(version manquante)'} dans CHANGELOG.md.`);
+  const notes = releaseNotes(changelogText(root, lang), tag ?? '', FALLBACKS[lang]);
+  if (!tag || notes === FALLBACKS[lang]) {
+    console.error(`Pas de section ${tag ?? '(version manquante)'} dans ${CHANGELOGS[lang]}.`);
     process.exit(1);
   }
-  const messages = discordMessages(notes, tag);
-  if (flag === '--dry-run') {
+  const messages = discordMessages(notes, tag, lang);
+  if (args.includes('--dry-run')) {
     process.stdout.write(messages.join('\n\n— — —\n\n') + '\n');
   } else {
     const url = process.env.ESCOUADE_DISCORD_WEBHOOK;
@@ -102,6 +107,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       process.exit(1);
     }
     await postMessages(url, messages);
-    console.log(`${messages.length} message(s) posté(s) sur Discord.`);
+    console.log(`${messages.length} message(s) posté(s) sur Discord (${lang}).`);
   }
 }

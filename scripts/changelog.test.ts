@@ -1,6 +1,10 @@
 // @vitest-environment node
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FALLBACK, releaseNotes } from './changelog.mjs';
+import { CHANGELOGS, FALLBACK, FALLBACKS, changelogText, langOf, releaseNotes } from './changelog.mjs';
+
+const ROOT = path.resolve(__dirname, '..');
 
 const CHANGELOG = `# Journal des versions
 
@@ -39,5 +43,35 @@ describe('release notes', () => {
 
   it('reads a file written with Windows line endings', () => {
     expect(releaseNotes(CHANGELOG.replace(/\n/g, '\r\n'), 'v1.1.0')).toBe("- L'éditeur.");
+  });
+});
+
+describe('the two changelogs', () => {
+  it('reads the language of the command line, French by default, and refuses another', () => {
+    expect(langOf(['v1.8.7'])).toBe('fr');
+    expect(langOf(['v1.8.7', '--lang', 'en'])).toBe('en');
+    expect(() => langOf(['v1.8.7', '--lang', 'de'])).toThrow('de');
+  });
+
+  it('falls back to a sentence in the changelog’s own language', () => {
+    expect(releaseNotes('', 'v9.9.9', FALLBACKS.en)).toBe('See the commits since the previous version.');
+    expect(FALLBACKS.fr).toBe(FALLBACK);
+  });
+
+  // The GitHub release and the English Discord channel take the English section: a version without one would
+  // go out with the fallback sentence. Checked here, by the CI that comes before the tag.
+  it('has, in English, every version of CHANGELOG.md from 1.8.2 on, and what is not out yet', () => {
+    const versions = (text: string) => [...text.matchAll(/^## \[([^\]]+)\]/gm)].map((m) => m[1]);
+    // What is not out yet: « [Non publié] » in French, « [Unreleased] » in English.
+    const fr = versions(changelogText(ROOT, 'fr')).map((v) => (v === 'Non publié' ? 'Unreleased' : v));
+    const en = versions(changelogText(ROOT, 'en'));
+    const since = fr.slice(0, fr.indexOf('1.8.2') + 1);
+    expect(since.length).toBeGreaterThan(0);
+    expect(since.filter((v) => !en.includes(v))).toEqual([]);
+    for (const v of since) expect(releaseNotes(changelogText(ROOT, 'en'), v, '')).not.toBe('');
+  });
+
+  it('names the two files the scripts read', () => {
+    for (const file of Object.values(CHANGELOGS)) expect(fs.existsSync(path.join(ROOT, file))).toBe(true);
   });
 });

@@ -56,8 +56,9 @@ jobs:
           else
             flags=()
             [ "$prerelease" = true ] && flags+=(--prerelease)
-            # The version's section of CHANGELOG.md (a sentence pointing at the commits without one).
-            node scripts/changelog.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
+            # The version's section of CHANGELOG.en.md, in English (a sentence pointing at the
+            # commits without one; a CI test keeps every version in it, scripts/changelog.test.ts).
+            node scripts/changelog.mjs "$TAG" --lang en > "$RUNNER_TEMP/notes.md"
             gh release create "$TAG" --verify-tag --draft --title "Escouade $TAG" \
               --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
             # The list may take a moment to show the new draft.
@@ -207,8 +208,9 @@ jobs:
           node-version: 22
 
       # The notes of latest.json, which the in-app updater shows, are the version's section of
-      # CHANGELOG.md, as the release's: written here, once the three builds are in (see the build
-      # step for why they don't). Then latest.json and the files it names are checked.
+      # CHANGELOG.md, in French (the release's are in English, CHANGELOG.en.md): written here, once
+      # the three builds are in (see the build step for why they don't). Then latest.json and the
+      # files it names are checked.
       - name: Notes of latest.json, then check it and the files it names
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
