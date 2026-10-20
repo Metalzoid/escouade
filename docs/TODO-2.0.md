@@ -1,6 +1,6 @@
 # Escouade 2.0 — à faire
 
-Le chantier principal : le nouveau design de l'app, dans la langue visuelle du site. Viennent ensuite deux chantiers reportés de la 1.8 (voir « Reportés de la 1.8 »).
+Le chantier principal : le nouveau design de l'app, dans la langue visuelle du site. Viennent ensuite deux chantiers reportés de la 1.8 (voir « Reportés de la 1.8 ») et les projets privés (ESC-139 à ESC-142).
 
 Tickets du Kanban d'Escouade, créés le 2026-10-14 : ESC-71 à ESC-85 (les 11 lots, les deux nouveautés, la revue finale, puis la vidéo et le site). Le premier attend la fin de la 1.8, nouveau récit du site (ESC-86) compris.
 
@@ -9,6 +9,19 @@ Tickets du Kanban d'Escouade, créés le 2026-10-14 : ESC-71 à ESC-85 (les 11 l
 La 1.8.0 est sortie avec Codex, OpenCode et Copilot CLI à côté de Claude Code. Deux chantiers de son plan n'y sont pas entrés ; leur plan détaillé reste dans `docs/TODO-1.8.md` :
 - **Hébergeurs de code** (GitHub, GitLab, Bitbucket, Gitea) : les pull requests des tickets suivies jusqu'au merge, avec leur CI et leurs déploiements. Plan : `docs/TODO-1.8.md`, chapitre 2 ; tickets ESC-53 à ESC-70, après le nouveau design.
 - **Cursor CLI**, cinquième harness, par ACP : plan dans `docs/TODO-1.8.md`, chapitre 1 ; tickets ESC-24 (essais réels), ESC-42 et ESC-43 (l'adaptateur, ses comptes et son coût) et ESC-49 (sa vue terminal).
+
+## Projets privés (demandé le 2026-10-20)
+
+« Pouvoir cloisonner totalement chaque projet : un projet isolé ne doit pas être connu d'un agent dans un autre projet, et il faut cloisonner aussi dans le MCP. Rendre ça configurable. » Tickets ESC-139 (réglage et MCP), puis ESC-140 (fichiers), ESC-141 (comptes) et ESC-142 (ce qu'Escouade transmet), qui attendent le premier.
+
+Aujourd'hui, un agent d'Escouade n'agit que dans son projet, mais il lit tous les autres par le serveur MCP (`mcp/act.rs`, `own_project_only` : « it may read the others » ; `list_projects`, `list_agents`, `list_tickets`, `get_agent_summary`, `list_background_work` ouverts à tous les projets), et ses outils de fichiers peuvent lire les dossiers des autres projets, le dossier de données d'Escouade (`~/.escouade` : tickets, images, conversations) et les sessions du harness (`~/.claude/projects/…`).
+
+- [ ] **Le réglage** (ESC-139) : « Projet privé » dans les réglages d'un projet (éteint par défaut), et un défaut pour les nouveaux projets dans Réglages › Projets.
+- [ ] **MCP, dans les deux sens** (ESC-139) : un projet privé n'existe pas pour les agents des autres projets (absent de `list_projects`, ses agents, tickets, sous-agents, tâches de fond et flux de `wait_ticket` invisibles, « introuvable » plutôt que « refusé ») ; ses propres agents ne voient que lui. Chaque outil couvert par un test.
+- [ ] **Fichiers** (ESC-140) : les agents des autres projets ne lisent ni son dossier, ni ses worktrees, ni ses données dans le dossier d'Escouade, ni ses sessions de harness ; les siens ne lisent pas ceux des autres. Par les règles de chaque harness (Claude Code : `permissions.deny` des chemins ; Codex : son bac à sable ; OpenCode et Copilot CLI : ce qu'ils offrent), en disant honnêtement dans l'interface ce qui est un garde-fou et ce qui est une vraie barrière.
+- [ ] **Comptes** (ESC-141) : proposer un compte réservé au projet (« Principal réservable » existe) pour que sessions, mémoire et historique du harness ne soient pas partagés.
+- [ ] **Ce qu'Escouade transmet** (ESC-142) : rien d'un autre projet dans ce qu'il écrit aux agents (consignes, messages, passations, textes rédigés), ni d'un projet privé vers les autres (dupliquer une conversation, copier les réglages d'un projet dans l'assistant « Nouveau projet », dépendances entre tickets).
+- [ ] **À décider** (pris par défaut dans ESC-139, à confirmer) : « Claude (hors Escouade) », le jeton global de l'utilisateur, voit-il quand même tout (c'est l'utilisateur) ou faut-il un jeton par projet ? Un projet privé apparaît-il dans les statistiques et la vue d'ensemble globales (pour l'utilisateur, oui a priori) ?
 
 ## D'où ça vient (2026-10-12)
 
