@@ -312,6 +312,12 @@ export const test = base.extend<{
       // Set for every agent of Escouade (« Les agents tiennent une liste de tâches »), so inherited when one runs
       // the tests: the app never forces it off, and the fake CLI would see it whatever the setting (ESC-111).
       CLAUDE_CODE_ENABLE_TODO_TOOLS: undefined,
+      // The same for what turns Claude Code's own update off (`DISABLE_AUTOUPDATER`, given to every claude Escouade
+      // launches since ESC-133): inherited, the app would take it for the user's choice and never run `claude update`.
+      // A test that wants it sets it in `appEnv`.
+      DISABLE_AUTOUPDATER: undefined,
+      DISABLE_UPDATES: undefined,
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
       ESCOUADE_USAGE_API: NO_USAGE_API,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
