@@ -11,6 +11,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The status bar tells where each quota will end at its reset if you keep your pace (“→ 64 %”), and OpenCode’s day cost at midnight: you see in time when to slow down. A setting in Settings › Accounts turns it off. Thanks to @epommereuil (#12).
 - A subagent shows the model it really runs on, even when its call names none, with every harness. Thanks to @epommereuil (#14).
 
+### Fixes
+
+- With live transcription on Deepgram, a sentence whose stream breaks is no longer lost: it goes whole, as without live transcription.
+
 ## [1.8.8] — 2026-10-20
 
 ### Fixes

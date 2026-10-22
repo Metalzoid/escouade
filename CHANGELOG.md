@@ -11,6 +11,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La barre d’état dit où finira chaque quota à sa remise à zéro si tu gardes ton rythme (« → 64 % »), et le coût du jour d’OpenCode à minuit : tu vois à temps quand ralentir. Un réglage de Réglages › Comptes l’éteint. Merci à @epommereuil (#12).
 - Un sous-agent affiche le modèle sur lequel il tourne vraiment, même quand son appel n’en nomme aucun, avec tous les harness. Merci à @epommereuil (#14).
 
+### Corrections
+
+- En transcription en direct avec Deepgram, une phrase dont le flux se coupe n’est plus perdue : elle part entière, comme sans le direct.
+
 ## [1.8.8] — 2026-10-20
 
 ### Corrections

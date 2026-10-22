@@ -21,6 +21,8 @@ pub(crate) enum Mode {
     Fails,
     /// Closed after the first sound.
     Closes,
+    /// Closed at the sentence's end, before any final text: a stream that breaks then.
+    ClosesAtEnd,
     /// Hears, never gives the final text.
     Mute,
 }
@@ -336,6 +338,10 @@ async fn serve_one(
                     || matches!(&m, Message::Text(t) if t.as_str().contains("input_audio.end")));
             c.commits += usize::from(end);
         }
+        if end && matches!(mode, Mode::ClosesAtEnd) {
+            let _ = ws.close(None).await;
+            return;
+        }
         if !audio.is_empty() {
             sounds += 1;
             match mode {
@@ -538,6 +544,13 @@ fn a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs() {
         assert!(e.to_string().contains("boom"), "{p:?}: {e}");
 
         let f = fake(p, Mode::Closes);
+        let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
+        let e = say(stream, &speech(0.5)).unwrap_err();
+        assert!(matches!(e, OnlineError::Network(..)), "{p:?}: {e:?}");
+
+        // Cut once the end was sent, before any final text: no empty sentence (it would be lost), the cut is said and
+        // the sentence goes by request. Deepgram's close only ends a sentence once it answered its `Finalize`.
+        let f = fake(p, Mode::ClosesAtEnd);
         let stream = LiveStream::open(&f.spec(p), "fr", 48_000, Box::new(|_| {}));
         let e = say(stream, &speech(0.5)).unwrap_err();
         assert!(matches!(e, OnlineError::Network(..)), "{p:?}: {e:?}");

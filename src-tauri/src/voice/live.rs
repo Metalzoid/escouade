@@ -318,6 +318,8 @@ struct Heard {
     answered: usize,
     /// OpenAI: its items in the order they were committed, their text when completed.
     items: Vec<(String, Option<String>)>,
+    /// Deepgram answered its `Finalize` (a result `from_finalize`): its close then ends the sentence; before, it is a cut.
+    finalized: bool,
 }
 
 fn join(parts: &[String], last: &str) -> String {
@@ -437,6 +439,9 @@ impl Heard {
             },
             Provider::Deepgram => match str_at(&v, "/type") {
                 "Results" => {
+                    if v.get("from_finalize").and_then(|x| x.as_bool()) == Some(true) {
+                        self.finalized = true;
+                    }
                     let t = str_at(&v, "/channel/alternatives/0/transcript").to_string();
                     if v.get("is_final").and_then(|x| x.as_bool()) == Some(true) {
                         if !t.trim().is_empty() {
@@ -501,7 +506,7 @@ impl Heard {
     /// The stream closed after the sentence's end: what it said, for a service that says its last words by closing
     /// (Deepgram).
     fn closed(&self, p: Provider) -> Option<String> {
-        (p == Provider::Deepgram).then(|| join(&self.finals, ""))
+        (p == Provider::Deepgram && self.finalized).then(|| join(&self.finals, ""))
     }
 }
 
