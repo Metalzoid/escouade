@@ -727,6 +727,10 @@
               <span class="name">{a.name}</span>
               <span class="status">{fUsd(a.cost)}</span>
             </div>
+            {#if a.worktreeKept}
+              <!-- Its ticket over, its worktree stayed: what it holds would be lost (ESC-143). -->
+              <div class="kept">{a.worktreeKept}</div>
+            {/if}
           </div>
         {/each}
       {/if}
@@ -972,6 +976,12 @@
   }
   .card:focus-visible {
     border-color: var(--accent);
+  }
+  .card.archived .kept {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--wait);
   }
   .card.archived {
     padding: 8px 12px;

@@ -34,11 +34,20 @@ describe('BoardTab in English', () => {
     expect(screen.queryByText('Strategy')).not.toBeInTheDocument();
   });
 
+  it('removes the worktree of a done or deleted ticket by default, and says what it keeps (ESC-143)', async () => {
+    render(BoardTab, { project: app.projects[0] });
+    const cleanup = screen.getByRole('switch', { name: 'Delete the worktree of a done or deleted ticket' });
+    expect(cleanup).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(/A worktree with uncommitted changes or commits neither merged nor pushed is kept/)).toBeInTheDocument();
+    await userEvent.click(cleanup);
+    expect(settingsForm.project!.board.cleanup).toBe(false);
+  });
+
   it('writes the tests, the commit message and the conflicts', () => {
     render(BoardTab, { project: app.projects[0] });
     expect(screen.getByRole('textbox', { name: 'Test command' })).toHaveAttribute('placeholder', 'e.g. npm test');
     expect(screen.getByRole('switch', { name: 'Re-run the tests first' })).toBeDisabled();
-    expect(screen.getByRole('switch', { name: 'Delete the worktree once approved' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Delete the worktree of a done or deleted ticket' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Generated commit message' })).toBeInTheDocument();
     expect(screen.getByText('feat: limit login attempts [DEM-42]')).toBeInTheDocument();
     const conflicts = screen.getByRole('group', { name: 'On conflict' });

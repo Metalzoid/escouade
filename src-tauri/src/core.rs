@@ -1313,6 +1313,16 @@ fn files_not_copied(e: &anyhow::Error) -> String {
     )
 }
 
+/// An agent restored: its worktree went with its branch (merged, then deleted), nothing to make it
+/// again from.
+fn worktree_gone(lang: i18n::Lang, branch: &str) -> String {
+    tr_in!(
+        lang,
+        "Son worktree a été supprimé avec sa branche {branch} (mergée) : il n'est pas recréé.",
+        "Its worktree was removed with its branch {branch} (merged): it isn’t made again."
+    )
+}
+
 /// An agent restored: its worktree, gone, made again at `to`, as another worktree took its folder
 /// `from` meanwhile.
 fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
@@ -5464,9 +5474,9 @@ impl<R: Runtime> Core<R> {
         (!problems.is_empty()).then(|| problems.join(" ; "))
     }
 
-    /// A restored agent whose worktree folder went (removed after a pull request or a push) gets
-    /// it back from its branch, with the project's files to copy and its setup. Without its
-    /// branch (merged, then deleted), it stays as it is.
+    /// A restored agent whose worktree folder went (removed once its ticket was over) gets it back
+    /// from its branch, with the project's files to copy and its setup. Without its branch
+    /// (merged, then deleted), it stays as it is, and its conversation says so.
     async fn restore_worktree(self: &Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
         let (pid, wt) = {
@@ -5477,6 +5487,13 @@ impl<R: Runtime> Core<R> {
             return;
         };
         if !git::branch_exists(&project.path, &wt.branch).await {
+            if !Path::new(&wt.path).exists() {
+                let text = worktree_gone(self.lang().ui, &wt.branch);
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.notice("warn", text, fx);
+                    Ok(())
+                });
+            }
             return;
         }
         let mut moved = None;
@@ -5966,6 +5983,9 @@ impl<R: Runtime> Core<R> {
         let mut joined = None;
         self.with_agent(id, |rt, fx| {
             rt.meta.archived = archived;
+            if !archived {
+                rt.meta.worktree_kept = None;
+            }
             if archived {
                 joined = rt.attach.take().map(|a| a.info.id);
                 let name = self.remote_name(&rt.meta);

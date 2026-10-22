@@ -84,6 +84,8 @@ Right-click a card › “Delete”.
 | “In progress” and “To review” | A confirmation, then the ticket is gone and its agent is archived. |
 | “Done” | The ticket is gone right away, without a confirmation. |
 
+With “Delete the worktree of a done or deleted ticket” ([“Kanban”](settings-board) tab, on by default), the worktrees of the ticket’s agents are deleted too, except those holding uncommitted changes or commits neither merged nor pushed: their archived agent’s card says so. A “Done” ticket left as is then has its agent archived.
+
 Deleting a ticket from the Kanban does not delete it in Jira, Trello, GitHub, or Linear.
 
 Archiving or deleting the agent of an “In progress” or “To review” ticket sends that ticket back to “To do”, from scratch (Escouade asks before archiving: “Its ticket DEM-5 goes back to “To do”.”).

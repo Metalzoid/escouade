@@ -44,6 +44,7 @@ mod integrations;
 mod integrations_tests;
 mod isola;
 mod job;
+mod leftovers;
 mod mcp;
 mod menus;
 mod model;
@@ -486,6 +487,7 @@ pub fn run() {
             commands::ticket_create,
             commands::ticket_update,
             commands::ticket_delete,
+            commands::clean_worktrees,
             commands::ticket_images,
             commands::ticket_prioritize,
             commands::ticket_start,

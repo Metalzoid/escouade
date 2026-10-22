@@ -95,7 +95,7 @@ Claude propose huit commandes au plus par liste. Une commande sur plusieurs lign
 
 La liste « Avant sa suppression » contient ce qu’il faut défaire hors du worktree avant de le supprimer : une base de données ou des conteneurs que la préparation a créés pour lui. Le plus souvent, elle est vide. Elle s’édite comme celle de la préparation, et se remplit aussi avec « ✦ Remplir automatiquement ».
 
-Ces commandes tournent quand un agent est supprimé avec son worktree, et quand le Kanban nettoie le worktree d’un ticket. Chacune tourne même si la précédente a échoué, avec 5 minutes au plus, et leur sortie n’est pas affichée. Si le projet utilise isola (un fichier `.isola.toml`), `isola destroy` passe ensuite. Un problème est signalé une fois l’agent supprimé : « Agent supprimé, mais le démontage du worktree a échoué sur … ».
+Ces commandes tournent quand un agent est supprimé avec son worktree, quand le Kanban nettoie le worktree d’un ticket terminé ou supprimé, et avec « Nettoyer ». Chacune tourne même si la précédente a échoué, avec 5 minutes au plus, et leur sortie n’est pas affichée. Si le projet utilise isola (un fichier `.isola.toml`), `isola destroy` passe ensuite. Un problème est signalé une fois l’agent supprimé : « Agent supprimé, mais le démontage du worktree a échoué sur … ».
 
 ## Travailler sur une branche qui existe déjà
 
@@ -141,14 +141,20 @@ Le merge ne supprime ni le worktree ni la branche de l’agent. Pour les ranger,
 
 Les actions sont dans le menu d’un clic droit sur la carte de l’agent.
 
-- « Archiver » arrête l’agent et garde sa conversation. Son worktree et sa branche restent sur le disque. La confirmation n’apparaît que pour un agent dont le ticket est en cours ou à tester.
-- « Restaurer » ramène un agent archivé. Si son dossier de worktree a disparu entre-temps, par exemple après une pull request ou un push, Escouade le recrée à partir de sa branche, recopie les fichiers du projet et relance la préparation. Si un autre worktree a pris son dossier, le sien est recréé à côté (`-2`) et la conversation l’indique. Si la branche n’existe plus (mergée puis supprimée), l’agent reste tel quel.
+- « Archiver » arrête l’agent et garde sa conversation. Son worktree et sa branche restent sur le disque (le Kanban nettoie celui d’un ticket fini, voir plus bas). La confirmation n’apparaît que pour un agent dont le ticket est en cours ou à tester.
+- « Restaurer » ramène un agent archivé. Si son dossier de worktree a disparu entre-temps, par exemple après une pull request ou un push, Escouade le recrée à partir de sa branche, recopie les fichiers du projet et relance la préparation. Si un autre worktree a pris son dossier, le sien est recréé à côté (`-2`) et la conversation l’indique. Si la branche n’existe plus (mergée puis supprimée), l’agent reste tel quel et sa conversation le dit.
 - « Supprimer… » demande confirmation. La case « Supprimer aussi le worktree et la branche escouade/refacto-auth » est cochée par défaut. Cochée, Escouade arrête l’agent, lance les commandes de démontage, supprime le dossier du worktree puis la branche. Décochée, l’agent disparaît d’Escouade et le worktree et la branche restent sur le disque. Si des fichiers de ce worktree sont ouverts et non enregistrés dans l’éditeur, la fenêtre prévient qu’ils seront perdus.
 
 > [!WARNING]
 > La branche de l’agent est supprimée même si elle n’a pas été mergée : ses commits n’existent alors plus nulle part. Merge-la d’abord si tu veux garder son travail.
 
 Si le nettoyage rencontre un problème (un processus qui tient encore le dossier, un démontage qui échoue), l’agent est supprimé quand même et un message le signale après coup. Fermer un projet ne touche pas à ses worktrees sur le disque.
+
+## Les worktrees qui restent
+
+Le worktree d’un ticket terminé ou supprimé part tout seul (réglage « Supprimer le worktree d’un ticket terminé ou supprimé » de l’onglet [« Kanban »](settings-board)). Pour les autres agents archivés, ou ce qui reste d’avant, Réglages › Projets › « Worktrees restés » › « Nettoyer » supprime les worktrees des agents archivés du projet, après leurs commandes de démontage, et oublie ceux dont le dossier a déjà disparu (`git worktree prune`).
+
+Aucun travail n’y est perdu : un worktree qui a des changements non commités, ou des commits qui ne sont ni dans la branche cible ni dans une autre branche (poussée, proposée en PR), est gardé. La rangée dit combien de worktrees sont supprimés, puis ceux qu’elle garde et pourquoi ; la carte de l’agent archivé le dit aussi. La branche d’un worktree supprimé part avec lui si son travail est dans la branche cible ; sinon elle reste, et « Restaurer » recrée le worktree à partir d’elle.
 
 ## Dupliquer un agent
 

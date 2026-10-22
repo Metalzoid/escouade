@@ -87,6 +87,8 @@ export default {
     },
     removeRunningTitle: 'Supprimer le ticket {key} ?',
     removeRunningBody: 'Son agent est archivé, avec son worktree.',
+    removeRunningCleanup:
+      "Son agent est archivé et son worktree supprimé, sauf s'il garde des changements non commités ou des commits ni mergés ni poussés.",
     approveTitle: 'Valider {key} ?',
     approveBody: 'Le worktree de son agent est supprimé après le merge.',
   },

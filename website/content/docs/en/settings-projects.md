@@ -86,6 +86,7 @@ This group sets the commands Escouade runs when a project worktree opens, and be
 |---|---|
 | “When a worktree opens” | The setup. The commands run in order, before the agent’s first message: dependencies, generated code… Messages wait for them to finish. |
 | “Before a worktree is removed” | The teardown. What the setup created outside the worktree (database, containers…); often nothing. |
+| “Leftover worktrees” | “Clean up” deletes the worktrees of archived agents, after their teardown commands, except those holding uncommitted changes or commits neither merged nor pushed, and says what it did. See [worktrees](worktrees#leftover-worktrees). |
 
 Each command is a numbered line.
 

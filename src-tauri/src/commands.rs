@@ -1636,6 +1636,17 @@ pub async fn ticket_delete(core: CoreState<'_>, id: String) -> Res<()> {
     core.ticket_delete(&id).await.map_err(err)
 }
 
+/// « Nettoyer » in the project's settings: the worktrees its archived agents left (ESC-143).
+#[tauri::command]
+pub async fn clean_worktrees(
+    core: CoreState<'_>,
+    project_id: String,
+) -> Res<crate::leftovers::LeftoverReport> {
+    core.clean_leftover_worktrees(&project_id)
+        .await
+        .map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn ticket_prioritize(core: CoreState, id: String) -> Res<()> {
     core.ticket_prioritize(&id).map_err(err)

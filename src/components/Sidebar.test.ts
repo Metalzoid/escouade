@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
@@ -42,6 +42,21 @@ describe('Sidebar', () => {
     expect(within(cards[0]).getByText('En cours')).toBeInTheDocument();
     expect(within(cards[1]).getByText('Question')).toBeInTheDocument();
     expect(screen.getByText(/Archivés \(1\)/)).toBeInTheDocument();
+  });
+
+  it('says on an archived agent’s card why its worktree was kept (ESC-143)', async () => {
+    fakeBackend();
+    app.agents.a3 = { ...app.agents.a3, worktreeKept: 'worktree gardé : 1 fichier(s) non commité(s)' };
+    app.showArchived = true;
+    // Shown for this test only: the others find the archived agents folded.
+    onTestFinished(() => {
+      app.showArchived = false;
+    });
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /vieux/ });
+    expect(within(card).getByText('worktree gardé : 1 fichier(s) non commité(s)')).toBeInTheDocument();
+    // None on the others.
+    expect(within(screen.getByRole('button', { name: /tests-e2e/ })).queryByText(/worktree gardé/)).not.toBeInTheDocument();
   });
 
   it('says on an agent’s card what it reported doing, until it reports something else', async () => {

@@ -277,7 +277,11 @@ describe('TicketCard', () => {
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
     expect(menu.open!.items.map((i) => i.label)).toEqual(["Ouvrir l'agent", '', 'Supprimer']);
     menu.open!.items.find((i) => i.label === 'Supprimer')!.onClick!();
-    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Supprimer le ticket DEM-1 ?' });
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Supprimer le ticket DEM-1 ?',
+      body: "Son agent est archivé et son worktree supprimé, sauf s'il garde des changements non commités ou des commits ni mergés ni poussés.",
+    });
     await (app.modal as any).onConfirm(false);
     expect(backend.called('ticket_delete')).toEqual([{ cmd: 'ticket_delete', args: { id: 't1' } }]);
     await userEvent.click(screen.getByRole('button', { name: /DEM-1/ }));
@@ -1049,7 +1053,10 @@ describe('TicketCard in English', () => {
     await fireEvent.contextMenu(screen.getByRole('button', { name: /DEM-1/ }));
     expect(menu.open!.items.map((i) => i.label)).toEqual(['Open agent', '', 'Delete']);
     menu.open!.items.find((i) => i.label === 'Delete')!.onClick!();
-    expect(app.modal).toMatchObject({ title: 'Delete ticket DEM-1?', body: 'Its agent is archived, along with its worktree.' });
+    expect(app.modal).toMatchObject({
+      title: 'Delete ticket DEM-1?',
+      body: 'Its agent is archived and its worktree deleted, unless it holds uncommitted changes or commits neither merged nor pushed.',
+    });
   });
 
   it('says how many items of the progress are hidden, with the plural of English', () => {

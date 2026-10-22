@@ -996,6 +996,49 @@ test('a ticket’s test launches leave the launch section, their processes stopp
   await expect(page.getByText(/s'est arrêté en erreur/)).toHaveCount(0);
 });
 
+test('a deleted ticket’s worktree holding work stays, its archived agent says why, and « Nettoyer » removes it once nothing is left (ESC-143)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: /^Kanban/ }).click();
+  await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+  await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Fichier [ok]');
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  const review = page.getByRole('region', { name: 'À tester' });
+  await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
+  // The fake agent left its file there, not committed.
+  const root = path.join(app.repo, '.claude', 'worktrees');
+  const worktree = path.join(
+    root,
+    fs.readdirSync(root).find((n) => n.includes('dem-1'))!,
+  );
+  expect(fs.existsSync(path.join(worktree, 'dem-1.txt'))).toBe(true);
+  await review.getByRole('button', { name: /DEM-1/ }).first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Supprimer' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Supprimer le ticket DEM-1 ?' });
+  await expect(confirm).toContainText(
+    "Son agent est archivé et son worktree supprimé, sauf s'il garde des changements non commités ou des commits ni mergés ni poussés.",
+  );
+  await confirm.getByRole('button', { name: 'Supprimer' }).click();
+  await expect(review.getByText('DEM-1', { exact: true })).toHaveCount(0);
+  // Kept, and its archived agent's card says why.
+  await page.getByRole('button', { name: 'Archivés (1)' }).click();
+  const archived = page.locator('.card.archived');
+  await expect(archived).toContainText('worktree gardé : 1 fichier(s) non commité(s)');
+  expect(fs.existsSync(path.join(worktree, 'dem-1.txt'))).toBe(true);
+  // Its file thrown away by hand: « Nettoyer » removes the worktree, and says so.
+  fs.rmSync(path.join(worktree, 'dem-1.txt'));
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await settings.getByRole('button', { name: 'Nettoyer' }).click();
+  await expect(settings.getByRole('status').filter({ hasText: 'worktree' })).toHaveText('1 worktree supprimé.', { timeout: 30_000 });
+  await expect.poll(() => fs.existsSync(worktree)).toBe(false);
+  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await expect(archived).not.toContainText('worktree gardé');
+});
+
 test('a ticket is written in a large window, a long description included, and added with Ctrl+Enter', async ({ app }) => {
   const { page } = app;
   // The window of the CI runners, close to the narrowest the app allows: the window must fit in it.

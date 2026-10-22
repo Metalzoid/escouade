@@ -11,6 +11,7 @@ use crate::git;
 use crate::i18n::{self, Lang};
 use crate::integrations;
 use crate::isola;
+use crate::leftovers;
 use crate::model::*;
 use crate::telemetry::Event;
 use crate::testlaunch;
@@ -851,8 +852,11 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The ticket goes, and no other waits for it any more; one "En cours" or "À tester" has its
-    /// agent archived (worktree kept). The card is gone for good: an agent that cannot be archived
-    /// is logged, not reported.
+    /// agent archived, one "Terminé" too when it was left as it is in its worktree and the board
+    /// removes the worktrees. With that setting, the worktrees of all its agents then go, but
+    /// those holding work nothing else keeps (`Core::clean_agent_worktree`, which says it on
+    /// their card). The card is gone for good: an agent that cannot be archived is logged, not
+    /// reported.
     pub async fn ticket_delete(self: &Arc<Self>, id: &str) -> Result<()> {
         let (t, freed) = {
             let mut tickets = self.tickets.write();
@@ -888,14 +892,44 @@ impl<R: Runtime> Core<R> {
         for ticket in freed {
             self.hub.emit(UiEvent::Ticket { ticket });
         }
-        if matches!(t.column, Column::Doing | Column::Review) {
-            if let Some(a) = t.agent_id.as_deref().filter(|a| self.agent(a).is_ok()) {
-                if let Err(e) = self.archive_agent(a, true).await {
-                    log::warn!("{}: its agent could not be archived: {e:#}", t.key);
+        let cleanup = self.project(&t.project_id).is_ok_and(|p| p.board.cleanup);
+        let under_way = matches!(t.column, Column::Doing | Column::Review);
+        let mut ours = None;
+        if under_way || cleanup {
+            if let Some(h) = t.agent_id.as_deref().and_then(|a| self.agent(a).ok()) {
+                let (a, proc, ports, archived, worktree) = {
+                    let rt = h.lock();
+                    let m = &rt.meta;
+                    let worktree = m
+                        .worktree
+                        .as_ref()
+                        .is_some_and(|w| Path::new(&w.path).is_dir());
+                    (
+                        m.id.clone(),
+                        rt.proc.clone(),
+                        m.port_base,
+                        m.archived,
+                        worktree,
+                    )
+                };
+                // One left as it is (« Terminé »): archived only for its worktree to go.
+                if !archived && (under_way || worktree) {
+                    if let Err(e) = self.archive_agent(&a, true).await {
+                        log::warn!("{}: its agent could not be archived: {e:#}", t.key);
+                    }
                 }
+                ours = Some((a, proc, ports));
             }
         }
         self.schedule();
+        if cleanup {
+            let mut except = String::new();
+            if let Some((a, proc, ports)) = ours {
+                self.clean_agent_worktree(&a, proc, ports).await;
+                except = a;
+            }
+            self.clean_ticket_worktrees(&t.id, &except).await;
+        }
         Ok(())
     }
 
@@ -2348,6 +2382,26 @@ impl<R: Runtime> Core<R> {
                 self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
                     .await;
             }
+        } else if s.cleanup {
+            // Left as it is (ESC-143): its worktree goes too, with its agent archived, when it
+            // holds nothing that would be lost; else both stay, and the outcome says why.
+            let found = leftovers::unsaved_work(&project.path, &wt, &target).await;
+            match found.unsaved {
+                Some(unsaved) => self.append_outcome(&t.id, |l| format!(" · {}", unsaved.text(l))),
+                None => {
+                    if let Err(e) = self.archive_agent(&agent_id, true).await {
+                        log::warn!("ticket {}: its agent was not archived: {e:#}", t.key);
+                    }
+                    let keep_branch = wt.existing || !found.merged;
+                    let ports = meta.port_base;
+                    self.remove_worktree_of(t, &project, &wt, proc, ports, keep_branch)
+                        .await;
+                }
+            }
+        }
+        if s.cleanup {
+            // Its earlier agents (sent back, then taken over by another): their worktrees too.
+            self.clean_ticket_worktrees(&t.id, &agent_id).await;
         }
         Ok(())
     }
@@ -2493,41 +2547,29 @@ impl<R: Runtime> Core<R> {
         ports: Option<u16>,
         keep_branch: bool,
     ) {
-        if let Some(p) = proc {
-            p.kill();
-            // Gone with all it started (see `wait_gone`); the removal below says if the folder stayed.
-            let _ = p.wait_gone(self.agent_gone()).await;
+        let removed = self
+            .remove_worktree(project, wt, proc, ports, keep_branch)
+            .await;
+        if let Err(e) = removed {
+            log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
+            self.append_outcome(&t.id, board::worktree_kept);
         }
-        if let Some(problem) = self.teardown_worktree(project, wt, ports).await {
-            log::warn!("ticket {}: {problem}", t.key);
-        }
-        for attempt in 1..=10 {
-            let removed = if keep_branch {
-                git::worktree_remove_dir(&project.path, &wt.path).await
-            } else {
-                git::worktree_remove(&project.path, &wt.path, &wt.branch).await
-            };
-            match removed {
-                Ok(()) => break,
-                Err(e) if attempt == 10 => {
-                    log::warn!("ticket {}: worktree not removed: {e:#}", t.key);
-                    let claude = self.lang().claude;
-                    let _ = self.edit_ticket(&t.id, |x| {
-                        for (outcome, lang) in [
-                            (&mut x.outcome, i18n::ui()),
-                            (&mut x.outcome_claude, claude),
-                        ] {
-                            if let Some(outcome) = outcome.as_mut() {
-                                outcome.push_str(&board::worktree_kept(lang));
-                            }
-                        }
-                        Ok(())
-                    });
+    }
+
+    /// Adds `more` (in each language) to the ticket's outcome, on its card and for Claude.
+    fn append_outcome(&self, ticket_id: &str, more: impl Fn(Lang) -> String) {
+        let claude = self.lang().claude;
+        let _ = self.edit_ticket(ticket_id, |x| {
+            for (outcome, lang) in [
+                (&mut x.outcome, i18n::ui()),
+                (&mut x.outcome_claude, claude),
+            ] {
+                if let Some(outcome) = outcome.as_mut() {
+                    outcome.push_str(&more(lang));
                 }
-                Err(_) => tokio::time::sleep(Duration::from_millis(300)).await,
             }
-        }
-        self.git.refresh(&project.id);
+            Ok(())
+        });
     }
 
     // ---------- pull requests, conflicts, rejection ----------

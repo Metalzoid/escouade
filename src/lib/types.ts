@@ -1004,6 +1004,8 @@ export interface Agent {
   worktree: Worktree | null;
   createdAt: number;
   archived: boolean;
+  /** Why its worktree, its ticket over, was kept: work nothing else keeps (ESC-143). */
+  worktreeKept?: string;
   status: AgentStatus;
   tokens: number;
   cost: number;
@@ -2008,4 +2010,10 @@ export interface AttachedFile {
   size: number;
   /** The file itself: nothing was copied. */
   origin: boolean;
+}
+
+/** What « Nettoyer » found in a project's worktrees (ESC-143): those removed, and those kept with why. */
+export interface LeftoverReport {
+  removed: number;
+  kept: { agentId: string; name: string; reason: string }[];
 }

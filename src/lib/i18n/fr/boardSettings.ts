@@ -113,9 +113,9 @@ export default {
     testCommandPlaceholder: 'ex. npm test',
     testsFirst: 'Relancer les tests avant',
     testsFirstDesc: "Bloque l'action si un test échoue et renvoie le ticket à l'agent.",
-    cleanup: 'Supprimer le worktree une fois validé',
+    cleanup: "Supprimer le worktree d'un ticket terminé ou supprimé",
     cleanupDesc:
-      "Libère l'espace disque, après ses commandes de démontage. Après un merge, sa branche part aussi ; poussée ou proposée en PR, elle reste.",
+      "Après ses commandes de démontage, quelle que soit la validation. Un worktree avec des changements non commités ou des commits ni mergés ni poussés est gardé, et c'est dit. Mergée ou vide, sa branche part aussi ; poussée ou proposée en PR, elle reste.",
     commitMessage: 'Message de commit généré',
     onConflict: 'En cas de conflit',
     conflicts: { ask: 'Me demander', agent: "L'agent résout", abort: 'Annuler' },

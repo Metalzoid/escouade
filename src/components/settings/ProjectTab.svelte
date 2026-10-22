@@ -8,9 +8,10 @@
   import { joinPath, tildify } from '../../lib/format';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
+  import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
-  import type { CommitMode, Project, WorktreeStep } from '../../lib/types';
+  import type { CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -24,6 +25,18 @@
   let { project }: { project: Project } = $props();
 
   const draft = $derived(settingsForm.project!);
+
+  /** « Nettoyer »: the worktrees its archived agents left, while it runs, then what it did (ESC-143). */
+  let cleaning = $state(false);
+  let cleaned = $state<{ projectId: string; report: LeftoverReport } | null>(null);
+  async function cleanLeftovers() {
+    const projectId = project.id;
+    cleaning = true;
+    const report = await app.run(api.cleanWorktrees(projectId));
+    cleaning = false;
+    if (report) cleaned = { projectId, report };
+  }
+  const report = $derived(cleaned?.projectId === project.id ? cleaned.report : null);
   /**
    * « Compte préféré »: « Automatique », then each active account of its default harness (the project's own, even switched
    * off since).
@@ -295,6 +308,30 @@
   <Row label={t('settings.project.teardownTitle')} desc={t('settings.project.teardownDesc')} wide>
     <StepList bind:steps={draft.worktreeTeardown} kind="teardown" onadd={() => settingsForm.addStep('teardown')} />
   </Row>
+  <Row label={t('settings.project.leftovers')} desc={t('settings.project.leftoversDesc')} descId="worktrees-leftovers-desc">
+    <button class="btn" aria-describedby="worktrees-leftovers-desc" disabled={cleaning} onclick={cleanLeftovers}>
+      {cleaning ? t('settings.project.leftoversRunning') : t('settings.project.leftoversButton')}
+    </button>
+  </Row>
+  {#if report}
+    <div class="leftovers" role="status">
+      <p>
+        {report.removed
+          ? t('settings.project.leftoversRemoved', { count: report.removed })
+          : report.kept.length
+            ? ''
+            : t('settings.project.leftoversNone')}
+        {#if report.kept.length}{t('settings.project.leftoversKept', { count: report.kept.length })}{/if}
+      </p>
+      {#if report.kept.length}
+        <ul>
+          {#each report.kept as k (k.agentId)}
+            <li><span class="name">{k.name}</span> · {k.reason}</li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  {/if}
 </Group>
 
 <Group title={t('settings.project.launch')} anchor="launch" note={t('settings.project.launchNote')}>
@@ -512,6 +549,22 @@
   .del:hover {
     border-color: var(--del);
     color: var(--del);
+  }
+  .leftovers {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .leftovers p,
+  .leftovers ul {
+    margin: 0;
+  }
+  .leftovers ul {
+    padding-left: 18px;
+  }
+  .leftovers .name {
+    color: var(--text);
+    font-weight: 600;
   }
   .empty {
     padding: 14px 16px;

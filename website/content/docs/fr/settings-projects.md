@@ -86,6 +86,7 @@ Ce groupe règle les commandes qu’Escouade lance quand un worktree du projet s
 |---|---|
 | « À l’ouverture d’un worktree » | La préparation. Les commandes tournent dans l’ordre, avant le premier message de l’agent : dépendances, code généré… Les messages attendent la fin. |
 | « Avant sa suppression » | Le démontage. Ce que la préparation a créé hors du worktree (base de données, conteneurs…) ; souvent rien. |
+| « Worktrees restés » | « Nettoyer » supprime les worktrees des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés, et dit ce qu’il a fait. Voir [les worktrees](worktrees#les-worktrees-qui-restent). |
 
 Chaque commande est une ligne numérotée.
 

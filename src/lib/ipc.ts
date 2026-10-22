@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  LeftoverReport,
   Account,
   MachineAccount,
   AccountForm,
@@ -379,6 +380,7 @@ export const api = {
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),
   ticketDelete: (id: string) => invoke<void>('ticket_delete', { id }),
+  cleanWorktrees: (projectId: string) => invoke<LeftoverReport>('clean_worktrees', { projectId }),
   /** The images of a ticket with their content, for its form; those whose file is gone are left out. */
   ticketImages: (id: string) => invoke<TicketImageData[]>('ticket_images', { id }),
   ticketPrioritize: (id: string) => invoke<void>('ticket_prioritize', { id }),

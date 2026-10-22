@@ -181,7 +181,8 @@
                 app.modal = {
                   kind: 'confirm',
                   title: t('board.card.removeRunningTitle', { key: ticket.key }),
-                  body: t('board.card.removeRunningBody'),
+                  // Its worktree goes too with the board's cleanup, but what holds work (ESC-143).
+                  body: t(s.cleanup ? 'board.card.removeRunningCleanup' : 'board.card.removeRunningBody'),
                   confirm: t('common.delete'),
                   danger: true,
                   onConfirm: remove,

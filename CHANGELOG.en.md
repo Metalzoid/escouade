@@ -15,6 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Escouade can read and drive GitHub pull requests (github.com, GHE.com or your company server): open, merge, checks, logs, reruns, reviews and deployments, while sparing your API quota.
 - An agent whose turn is over but that is still waiting on something no longer says “Done”: its card says “Awaiting”, or the time Claude Code will wake it up, and its tooltip lists what goes on. The agents it drives through the MCP server are listed under its card while they work.
 - A project can be private (Settings › Projects): the agents of the other projects no longer see it through the MCP server, and its own see it alone. You and Claude outside Escouade still see everything; a setting makes every new project private.
+- The worktree of a done ticket, whatever the approval, or of a deleted one goes on its own, without ever losing work: if it holds uncommitted changes or commits neither merged nor pushed, it stays, and you’re told. “Clean up” in Settings › Projects tidies up those of archived agents.
 
 ### Fixes
 

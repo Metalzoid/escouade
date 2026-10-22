@@ -150,7 +150,7 @@ An archived agent only has “Rename”, “Restore”, and “Delete…”.
 
 Archiving keeps the conversation but stops the agent: its Claude process stops, a turn in progress is interrupted, its remote control is turned off, and its test launches stop. The agent leaves the list and joins the “Archived (N)” section at the bottom; a click on it opens it read-only, with an “Agent archived.” banner and a “Restore” button.
 
-If the agent works on an “In progress” or “To review” ticket, a confirmation warns you that the ticket goes back to “To do”. Restoring an agent whose worktree was deleted in the meantime recreates it from its branch, if that still exists. Restoring an agent gives its remote control back if a setting covers it, but not if you had turned it on by hand.
+If the agent works on an “In progress” or “To review” ticket, a confirmation warns you that the ticket goes back to “To do”. Restoring an agent whose worktree was deleted in the meantime (its ticket done or deleted, for example) recreates it from its branch, if that still exists; otherwise its conversation says so. Restoring an agent gives its remote control back if a setting covers it, but not if you had turned it on by hand.
 
 ### Delete
 

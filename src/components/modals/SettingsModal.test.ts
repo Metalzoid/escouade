@@ -486,7 +486,7 @@ describe('SettingsModal', () => {
     expect(screen.getByText('feat: limiter les tentatives de connexion [DEM-42]')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('switch', { name: 'Message de commit généré' }));
     expect(screen.getByText('DEM-42 Limiter les tentatives de connexion')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('switch', { name: 'Supprimer le worktree une fois validé' }));
+    await userEvent.click(screen.getByRole('switch', { name: "Supprimer le worktree d'un ticket terminé ou supprimé" }));
     await save();
     expect(backend.called('board_set')[0].args.settings).toMatchObject({
       testCommand: 'npm test',

@@ -21,7 +21,7 @@ Ce premier groupe dit ce que fait la validation d’un ticket « À tester » 
 
 `ticket/` est le « Préfixe des branches des tickets » du projet, à régler dans l’onglet [« Projets »](settings-projects) (`ticket/` par défaut) ; `<clé>` est la clé du ticket, par exemple `ATL-42`.
 
-Avec les trois premiers choix, Escouade commite d’abord ce que l’agent a laissé dans le worktree, puis fait l’action. Le ticket passe ensuite en « Terminé » et son agent est archivé. Si la branche n’apporte aucune modification, le ticket est terminé sans rien fusionner ni pousser. Avec « Laisser en l’état », le ticket passe aussi en « Terminé », mais l’agent et son worktree restent comme ils sont.
+Avec les trois premiers choix, Escouade commite d’abord ce que l’agent a laissé dans le worktree, puis fait l’action. Le ticket passe ensuite en « Terminé » et son agent est archivé. Si la branche n’apporte aucune modification, le ticket est terminé sans rien fusionner ni pousser. Avec « Laisser en l’état », le ticket passe aussi en « Terminé » ; l’agent et son worktree restent comme ils sont, sauf si le worktree ne garde rien de non sauvegardé (voir « Supprimer le worktree d’un ticket terminé ou supprimé », plus bas).
 
 ### Branche cible
 
@@ -61,9 +61,16 @@ Ce groupe règle ce qui se passe avant l’action choisie plus haut, et après e
 |---|---|---|
 | « Commande de tests » | La commande lancée dans le worktree du ticket, par exemple `npm test`. Elle s’arrête au bout de 20 minutes. | Vide |
 | « Relancer les tests avant » | Lance la commande de tests avant l’action. Si un test échoue, l’action est bloquée et le ticket revient à l’agent avec la fin de la sortie des tests. Le réglage est grisé tant que la commande de tests est vide. | Désactivé |
-| « Supprimer le worktree une fois validé » | Libère l’espace disque : le worktree est supprimé après ses commandes de démontage. Après un merge, la branche du ticket part aussi ; poussée ou proposée en PR, elle reste, comme toute branche que le ticket reprenait. Sans effet avec « Laisser en l’état », où le worktree reste. | Activé |
+| « Supprimer le worktree d’un ticket terminé ou supprimé » | Libère l’espace disque : le worktree d’un ticket terminé, quelle que soit la validation, et celui d’un ticket supprimé, dans n’importe quelle colonne, sont supprimés après leurs commandes de démontage, avec ceux des agents que le ticket a eus avant. Un worktree qui a des changements non commités, ou des commits ni mergés ni poussés, est gardé, et c’est dit (voir ci-dessous). Mergée ou vide, la branche du ticket part aussi ; poussée ou proposée en PR, elle reste, comme toute branche que le ticket reprenait. Désactivé, les worktrees restent. | Activé |
 | « Message de commit généré » | Activé, Haiku écrit le message au format Conventional Commits ; si sa réponse n’est pas utilisable, le message est `feat: <titre> [<clé>]`. Désactivé, le message est `<clé> <titre>`. Un exemple s’affiche sous le réglage, avec la clé de ton projet. | Activé |
 | « En cas de conflit » | Ce que fait un merge qui tombe sur un conflit. Voir plus bas. | « Me demander » |
+
+Escouade ne perd jamais de travail en nettoyant : un worktree n’est supprimé que si ses fichiers sont tous commités et si chaque commit de sa branche est dans la branche cible ou dans une autre branche, locale ou distante. Sinon il reste :
+
+- avec « Laisser en l’état », l’issue du ticket le dit, par exemple « ◇ Laissé dans le worktree · worktree gardé : 2 fichier(s) non commité(s) », et l’agent reste ;
+- pour un ticket supprimé, la carte de son agent archivé le dit, sous son nom, dans la liste « Archivés ».
+
+Restaurer cet agent le remet au travail dans le même worktree. Pour ranger plus tard ce qui reste, utilise « Nettoyer » dans l’onglet [« Projets »](settings-projects).
 
 Le message de commit sert à commiter ce que l’agent a laissé dans le worktree, et de message au squash ; un merge commit garde le message de git. Sa langue suit « Langue des textes rédigés par les agents » (onglet [« Application »](settings-application)).
 

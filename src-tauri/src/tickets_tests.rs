@@ -1087,7 +1087,11 @@ async fn closing_a_project_keeps_its_tickets_and_their_images_until_its_history_
 async fn deleting_a_ticket_in_progress_archives_its_agent_and_keeps_its_worktree() {
     let h = harness("tk-delete-doing");
     let (p, _) = h.project(true).await;
-    h.set_board(&p.id, |s| s.autopilot = false);
+    // Without "Supprimer le worktree" (with it, see ESC-143's tests below).
+    h.set_board(&p.id, |s| {
+        s.autopilot = false;
+        s.cleanup = false;
+    });
     let a = h.core.create_agent(&p.id, None).await.unwrap();
     let worktree = a.meta.worktree.clone().expect("worktree created").path;
     let t = h
@@ -2878,22 +2882,6 @@ async fn archiving_a_ticket_agent_mid_turn_neither_blocks_its_ticket_nor_alerts(
 }
 
 #[tokio::test]
-async fn deleting_a_ticket_under_way_archives_its_agent_and_keeps_its_worktree() {
-    let h = harness("tk-delete-running");
-    let (p, _) = h.project(false).await;
-    let t = h
-        .core
-        .ticket_create(&p.id, draft("Long [lent]", &[], 5))
-        .await
-        .unwrap();
-    let aid = wait_running(&h, &t.id).await;
-    let wt = h.worktree_of(&t.id);
-    h.core.ticket_delete(&t.id).await.unwrap();
-    assert!(h.agent(&aid).archived);
-    assert!(wt.is_dir());
-}
-
-#[tokio::test]
 async fn a_ticket_stopped_mid_start_goes_back_to_do_at_the_next_start() {
     let h = harness("tk-recover-start");
     let (p, _) = h.project(false).await;
@@ -4141,9 +4129,13 @@ async fn validating_left_as_is_keeps_the_agent_and_its_changes() {
     let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
     h.core.ticket_approve(&t.id).await.unwrap();
     let t = h.ticket(&t.id);
+    // Its worktree holds a file not committed: kept, and said (ESC-143).
     assert_eq!(
         (t.column, t.outcome.as_deref()),
-        (Column::Done, Some("◇ Laissé dans le worktree"))
+        (
+            Column::Done,
+            Some("◇ Laissé dans le worktree · worktree gardé : 1 fichier(s) non commité(s)")
+        )
     );
     assert!(!h.agent(t.agent_id.as_deref().unwrap()).archived);
     assert_eq!(git(&wt, &["status", "--porcelain"]), "?? dem-1.txt");
@@ -8535,4 +8527,325 @@ fn a_ticket_agents_mode_is_one_its_own_harness_takes() {
     assert_eq!(on(EngineId::Codex, "claude-haiku-4-5"), "auto");
     assert_eq!(on(EngineId::Codex, "haiku"), "auto");
     assert_eq!(on(EngineId::Copilot, "haiku"), "auto");
+}
+
+// ---------- worktrees of tickets that are over (ESC-143) ----------
+
+#[tokio::test]
+async fn validating_left_as_is_without_anything_unsaved_removes_the_worktree_and_archives_the_agent(
+) {
+    let h = harness("tk-keep-empty");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.action = "keep".into());
+    let (t, wt) = reviewed(&h, &p.id, "Rien [ok] [rien]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.outcome.as_deref()),
+        (Column::Done, Some("◇ Laissé dans le worktree"))
+    );
+    assert!(h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert!(!wt.exists(), "{}", wt.display());
+    // Nothing on it: its branch goes too.
+    assert!(!has_branch(&r, "ticket/dem-1"));
+}
+
+#[tokio::test]
+async fn validating_left_as_is_with_unpushed_commits_keeps_the_worktree_and_says_why() {
+    let h = harness("tk-keep-commits");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| s.action = "keep".into());
+    let (t, wt) = reviewed(&h, &p.id, "Commité [ok] [commite]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(
+        (t.column, t.outcome.as_deref()),
+        (
+            Column::Done,
+            Some(
+                "◇ Laissé dans le worktree · worktree gardé : 1 commit(s) ni mergé(s) ni poussé(s)"
+            )
+        )
+    );
+    assert_eq!(t.outcome_claude, t.outcome);
+    assert!(!h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+}
+
+#[tokio::test]
+async fn validating_left_as_is_with_the_cleanup_off_changes_nothing() {
+    let h = harness("tk-keep-off");
+    let (p, r) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.action = "keep".into();
+        s.cleanup = false;
+    });
+    let (t, wt) = reviewed(&h, &p.id, "Rien [ok] [rien]").await;
+    h.core.ticket_approve(&t.id).await.unwrap();
+    let t = h.ticket(&t.id);
+    assert_eq!(t.outcome.as_deref(), Some("◇ Laissé dans le worktree"));
+    assert!(!h.agent(t.agent_id.as_deref().unwrap()).archived);
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+}
+
+#[tokio::test]
+async fn deleting_a_ticket_under_way_with_nothing_unsaved_removes_its_worktree_after_its_teardown()
+{
+    let h = harness("tk-del-doing");
+    let (p, r) = h.project(false).await;
+    let teardown = h.dir.join("teardown.txt");
+    let script = format!(
+        "node -e \"require('fs').writeFileSync('{}', 'ok')\"",
+        teardown.to_string_lossy().replace('\\', "/")
+    );
+    h.core
+        .update_project(Project {
+            worktree_teardown: vec![wt_step(&script, "")],
+            ..p.clone()
+        })
+        .unwrap();
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    let wt = h.worktree_of(&t.id);
+    h.core.ticket_delete(&t.id).await.unwrap();
+    let a = h.agent(&aid);
+    assert!(a.archived && a.worktree_kept.is_none());
+    assert!(!wt.exists(), "{}", wt.display());
+    // With the project's teardown first; its branch, empty, goes too.
+    assert!(teardown.exists());
+    assert!(!has_branch(&r, "ticket/dem-1"));
+    assert!(!git(&r, &["worktree", "list"]).contains("dem-1"));
+}
+
+#[tokio::test]
+async fn deleting_a_ticket_to_test_with_uncommitted_changes_keeps_its_worktree_on_its_agents_card()
+{
+    let h = harness("tk-del-review");
+    let (p, r) = h.project(false).await;
+    let (t, wt) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    let aid = t.agent_id.clone().unwrap();
+    h.core.ticket_delete(&t.id).await.unwrap();
+    let a = h.agent(&aid);
+    assert!(a.archived);
+    let why = "worktree gardé : 1 fichier(s) non commité(s)";
+    assert_eq!(a.worktree_kept.as_deref(), Some(why));
+    assert!(wt.is_dir() && has_branch(&r, "ticket/dem-1"));
+    assert!(h
+        .events
+        .lock()
+        .iter()
+        .any(|e| e["type"] == "agent" && e["agent"]["worktreeKept"] == why));
+    // Restored, its card says nothing of it any more.
+    h.core.archive_agent(&aid, false).await.unwrap();
+    assert_eq!(h.agent(&aid).worktree_kept, None);
+}
+
+#[tokio::test]
+async fn deleting_a_ticket_with_the_cleanup_off_keeps_its_worktree() {
+    let h = harness("tk-del-off");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.cleanup = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long [lent]", &[], 5))
+        .await
+        .unwrap();
+    let aid = wait_running(&h, &t.id).await;
+    let wt = h.worktree_of(&t.id);
+    h.core.ticket_delete(&t.id).await.unwrap();
+    let a = h.agent(&aid);
+    assert!(a.archived && a.worktree_kept.is_none());
+    assert!(wt.is_dir());
+}
+
+#[tokio::test]
+async fn deleting_a_done_ticket_left_as_is_archives_its_agent_and_cleans_what_it_can() {
+    for (title, kept) in [
+        ("Rien [ok] [rien]", None),
+        (
+            "Fichier [ok]",
+            Some("worktree gardé : 1 fichier(s) non commité(s)"),
+        ),
+    ] {
+        let h = harness(&format!("tk-del-done-{}", kept.is_some()));
+        let (p, _) = h.project(false).await;
+        // Left as it is with the cleanup off: its agent and its worktree stay at the validation.
+        h.set_board(&p.id, |s| {
+            s.action = "keep".into();
+            s.cleanup = false;
+        });
+        let (t, wt) = reviewed(&h, &p.id, title).await;
+        let aid = t.agent_id.clone().unwrap();
+        h.core.ticket_approve(&t.id).await.unwrap();
+        assert!(!h.agent(&aid).archived && wt.is_dir());
+        h.set_board(&p.id, |s| s.cleanup = true);
+        h.core.ticket_delete(&t.id).await.unwrap();
+        let a = h.agent(&aid);
+        assert!(a.archived, "{title}");
+        assert_eq!(a.worktree_kept.as_deref(), kept, "{title}");
+        assert_eq!(wt.is_dir(), kept.is_some(), "{title}");
+    }
+}
+
+#[tokio::test]
+async fn deleting_a_todo_ticket_cleans_the_worktrees_of_its_earlier_agents() {
+    let h = harness("tk-del-todo");
+    let (p, r) = h.project(true).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un", &[], 5))
+        .await
+        .unwrap();
+    // The agents it had, archived when it went back to do: one clean, one with a commit pushed
+    // nowhere.
+    let mut earlier = Vec::new();
+    for _ in 0..2 {
+        let a = h
+            .core
+            .create_agent_with(
+                &p.id,
+                AgentOptions {
+                    ticket_id: Some(t.id.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap()
+            .meta;
+        h.core.archive_agent(&a.id, true).await.unwrap();
+        earlier.push(a);
+    }
+    let dirty = PathBuf::from(&earlier[1].worktree.as_ref().unwrap().path);
+    std::fs::write(dirty.join("x.txt"), "x").unwrap();
+    git(&dirty, &["add", "x.txt"]);
+    git(&dirty, &["commit", "-qm", "x"]);
+    h.core.ticket_delete(&t.id).await.unwrap();
+    let clean = earlier[0].worktree.clone().unwrap();
+    assert!(!Path::new(&clean.path).exists());
+    assert!(!has_branch(&r, &clean.branch));
+    assert!(dirty.is_dir());
+    assert_eq!(
+        h.agent(&earlier[1].id).worktree_kept.as_deref(),
+        Some("worktree gardé : 1 commit(s) ni mergé(s) ni poussé(s)")
+    );
+}
+
+#[tokio::test]
+async fn validating_cleans_the_worktrees_of_the_tickets_earlier_agents() {
+    let h = harness("tk-done-earlier");
+    let (p, r) = h.project(true).await;
+    let (t, _) = reviewed(&h, &p.id, "Fichier [ok]").await;
+    // An earlier agent of the ticket, archived, with its own worktree.
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                ticket_id: Some(t.id.clone()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    h.core.archive_agent(&a.id, true).await.unwrap();
+    let old = a.worktree.clone().unwrap();
+    assert!(Path::new(&old.path).is_dir());
+    h.core.ticket_approve(&t.id).await.unwrap();
+    assert_eq!(h.ticket(&t.id).column, Column::Done);
+    assert!(!Path::new(&old.path).exists());
+    assert!(!has_branch(&r, &old.branch));
+}
+
+#[tokio::test]
+async fn cleaning_leftovers_removes_the_archived_agents_worktrees_but_those_holding_work() {
+    let h = harness("tk-leftovers");
+    let (p, r) = h.project(true).await;
+    let mut made = Vec::new();
+    for _ in 0..4 {
+        made.push(h.core.create_agent(&p.id, None).await.unwrap().meta);
+    }
+    for a in &made[..3] {
+        h.core.archive_agent(&a.id, true).await.unwrap();
+    }
+    let wt = |i: usize| made[i].worktree.clone().unwrap();
+    // One with a file not committed, one with a commit pushed nowhere; the last one is not
+    // archived.
+    std::fs::write(Path::new(&wt(1).path).join("new.txt"), "x").unwrap();
+    let committed = PathBuf::from(&wt(2).path);
+    std::fs::write(committed.join("c.txt"), "c").unwrap();
+    git(&committed, &["add", "c.txt"]);
+    git(&committed, &["commit", "-qm", "c"]);
+    // A worktree whose folder went, still registered by git.
+    let gone = h.dir.join("gone-wt");
+    git(
+        &r,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "gone",
+            &gone.to_string_lossy(),
+        ],
+    );
+    std::fs::remove_dir_all(&gone).unwrap();
+    let report = h.core.clean_leftover_worktrees(&p.id).await.unwrap();
+    assert_eq!(report.removed, 1);
+    let kept: Vec<(&str, &str)> = report
+        .kept
+        .iter()
+        .map(|k| (k.agent_id.as_str(), k.reason.as_str()))
+        .collect();
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    assert!(kept.contains(&(
+        made[1].id.as_str(),
+        "worktree gardé : 1 fichier(s) non commité(s)"
+    )));
+    assert!(kept.contains(&(
+        made[2].id.as_str(),
+        "worktree gardé : 1 commit(s) ni mergé(s) ni poussé(s)"
+    )));
+    assert!(!Path::new(&wt(0).path).exists());
+    assert!(!has_branch(&r, &wt(0).branch));
+    assert!(Path::new(&wt(1).path).is_dir() && committed.is_dir());
+    assert!(Path::new(&wt(3).path).is_dir());
+    assert!(!git(&r, &["worktree", "list"]).contains("gone-wt"));
+}
+
+#[tokio::test]
+async fn an_agent_whose_worktree_was_cleaned_is_restored_from_its_branch_else_told_why() {
+    let h = harness("tk-restore-cleaned");
+    let (p, r) = h.project(true).await;
+    let pushed = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    let merged = h.core.create_agent(&p.id, None).await.unwrap().meta;
+    // Its work committed, and in another branch (as once pushed): its branch stays.
+    let pwt = pushed.worktree.clone().unwrap();
+    let pdir = PathBuf::from(&pwt.path);
+    std::fs::write(pdir.join("p.txt"), "p").unwrap();
+    git(&pdir, &["add", "p.txt"]);
+    git(&pdir, &["commit", "-qm", "p"]);
+    git(&r, &["branch", "copy-of-pushed", &pwt.branch]);
+    for a in [&pushed, &merged] {
+        h.core.archive_agent(&a.id, true).await.unwrap();
+    }
+    let report = h.core.clean_leftover_worktrees(&p.id).await.unwrap();
+    assert_eq!((report.removed, report.kept.len()), (2, 0));
+    assert!(!pdir.exists() && has_branch(&r, &pwt.branch));
+    let mwt = merged.worktree.clone().unwrap();
+    assert!(!has_branch(&r, &mwt.branch));
+    h.core.archive_agent(&pushed.id, false).await.unwrap();
+    assert!(pdir.join("p.txt").is_file());
+    h.core.archive_agent(&merged.id, false).await.unwrap();
+    assert!(!Path::new(&mwt.path).exists());
+    assert!(h.items(&merged.id).iter().any(|i| i["kind"] == "notice"
+        && i["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("Son worktree a été supprimé avec sa branche")));
 }

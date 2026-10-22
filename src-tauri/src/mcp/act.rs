@@ -1297,10 +1297,9 @@ pub(super) async fn delete_ticket<R: Runtime>(
             "This ticket is being approved: wait for the end of its approval to delete it."
         )));
     }
-    // A ticket under way has its agent archived with it.
-    let agent = matches!(t.column, Column::Doing | Column::Review)
-        .then(|| live_agent_of(core, &t))
-        .flatten();
+    // A ticket under way has its agent archived with it; one done and left in its worktree too,
+    // when the board removes the worktrees (ESC-143).
+    let agent = live_agent_of(core, &t);
     core.ticket_delete(&t.id).await.map_err(failure)?;
     // Said as it is: an agent that could not be archived is only logged by the core.
     let archived = agent.is_some_and(|a| core.agent(&a.id).is_ok_and(|h| h.lock().meta.archived));

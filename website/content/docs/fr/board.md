@@ -84,6 +84,8 @@ Clic droit sur une carte › « Supprimer ».
 | « En cours » et « À tester » | Une confirmation, puis le ticket disparaît et son agent est archivé. |
 | « Terminé » | Le ticket disparaît tout de suite, sans confirmation. |
 
+Avec « Supprimer le worktree d’un ticket terminé ou supprimé » (onglet [« Kanban »](settings-board), activé par défaut), les worktrees des agents du ticket sont supprimés aussi, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés : la carte de leur agent archivé le dit. Un ticket « Terminé » laissé en l’état voit alors son agent archivé.
+
 Supprimer un ticket du Kanban ne le supprime pas chez Jira, Trello, GitHub ou Linear.
 
 Archiver ou supprimer l’agent d’un ticket « En cours » ou « À tester » renvoie ce ticket dans « À faire », à zéro (Escouade le demande avant d’archiver : « Son ticket DEM-5 repartira « À faire ». »).

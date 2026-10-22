@@ -95,7 +95,7 @@ Claude suggests eight commands at most per list. A command on several lines, wit
 
 The “Before a worktree is removed” list holds what must be undone outside the worktree before deleting it: a database or containers that the setup created for it. Most often, it is empty. It is edited like the setup list, and is also filled by “✦ Fill in automatically”.
 
-These commands run when an agent is deleted with its worktree, and when the Kanban cleans up a ticket’s worktree. Each one runs even if the previous one failed, with 5 minutes at most, and their output isn’t shown. If the project uses isola (an `.isola.toml` file), `isola destroy` runs afterwards. A problem is reported once the agent is deleted: “Agent deleted, but the worktree teardown failed on …”.
+These commands run when an agent is deleted with its worktree, when the Kanban cleans up the worktree of a done or deleted ticket, and with “Clean up”. Each one runs even if the previous one failed, with 5 minutes at most, and their output isn’t shown. If the project uses isola (an `.isola.toml` file), `isola destroy` runs afterwards. A problem is reported once the agent is deleted: “Agent deleted, but the worktree teardown failed on …”.
 
 ## Working on a branch that already exists
 
@@ -141,14 +141,20 @@ The merge removes neither the agent’s worktree nor its branch. To tidy them up
 
 The actions are in the menu of a right-click on the agent’s card.
 
-- “Archive” stops the agent and keeps its conversation. Its worktree and its branch stay on disk. The confirmation only appears for an agent whose ticket is in progress or to review.
-- “Restore” brings an archived agent back. If its worktree folder has disappeared in the meantime, for example after a pull request or a push, Escouade recreates it from its branch, copies the project’s files again and runs the setup again. If another worktree has taken its folder, its own is recreated beside it (`-2`) and the conversation says so. If the branch no longer exists (merged then deleted), the agent stays as it is.
+- “Archive” stops the agent and keeps its conversation. Its worktree and its branch stay on disk (the Kanban cleans up that of a finished ticket, see below). The confirmation only appears for an agent whose ticket is in progress or to review.
+- “Restore” brings an archived agent back. If its worktree folder has disappeared in the meantime, for example after a pull request or a push, Escouade recreates it from its branch, copies the project’s files again and runs the setup again. If another worktree has taken its folder, its own is recreated beside it (`-2`) and the conversation says so. If the branch no longer exists (merged then deleted), the agent stays as it is and its conversation says so.
 - “Delete…” asks for confirmation. The box “Also delete the worktree and the branch escouade/refacto-auth” is checked by default. Checked, Escouade stops the agent, runs the teardown commands, removes the worktree’s folder, then the branch. Unchecked, the agent disappears from Escouade and the worktree and the branch stay on disk. If files of that worktree are open and unsaved in the editor, the window warns that they will be lost.
 
 > [!WARNING]
 > The agent’s branch is deleted even if it hasn’t been merged: its commits then exist nowhere else. Merge it first if you want to keep its work.
 
 If the cleanup runs into a problem (a process still holding the folder, a teardown that fails), the agent is deleted all the same and a message reports it afterwards. Closing a project doesn’t touch its worktrees on disk.
+
+## Leftover worktrees
+
+The worktree of a done or deleted ticket goes on its own (the “Delete the worktree of a done or deleted ticket” setting of the [“Kanban”](settings-board) tab). For other archived agents, or what is left from before, Settings › Projects › “Leftover worktrees” › “Clean up” deletes the worktrees of the project’s archived agents, after their teardown commands, and forgets those whose folder is already gone (`git worktree prune`).
+
+No work is lost there: a worktree with uncommitted changes, or commits that are neither in the target branch nor in another branch (pushed, proposed as a PR), is kept. The row says how many worktrees were deleted, then those it kept and why; the archived agent’s card says so too. The branch of a deleted worktree goes with it if its work is in the target branch; otherwise it stays, and “Restore” recreates the worktree from it.
 
 ## Duplicating an agent
 

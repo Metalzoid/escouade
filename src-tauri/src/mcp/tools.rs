@@ -1379,7 +1379,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Delete a ticket of any column, as the window's Delete does: the card is gone for good and this cannot be undone; a ticket In progress or To review has its agent archived (its worktree is kept); the tickets that came after it no longer wait for it. Refused while the ticket's approval runs (wait for its end), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. Answers the ticket's key, deleted (true) and agentArchived (whether its agent was archived with it).",
+        description = "Delete a ticket of any column, as the window's Delete does: the card is gone for good and this cannot be undone; a ticket In progress or To review has its agent archived, and with the board's worktree cleanup (on by default) its agents' worktrees are deleted unless they hold uncommitted changes or commits neither merged nor pushed; the tickets that came after it no longer wait for it. Refused while the ticket's approval runs (wait for its end), for your own ticket when you are an agent, and for a ticket of another project when you are an agent. Answers the ticket's key, deleted (true) and agentArchived (whether its agent was archived with it).",
         annotations(
             read_only_hint = false,
             destructive_hint = true,

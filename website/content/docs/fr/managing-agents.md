@@ -150,7 +150,7 @@ Un agent archivé n’a que « Renommer », « Restaurer » et « Supprimer
 
 Archiver garde la conversation mais arrête l’agent : son processus Claude s’arrête, un tour en cours est interrompu, son remote control est coupé, ses lancements de test s’arrêtent. L’agent quitte la liste et rejoint le dépliant « Archivés (N) » en bas ; un clic sur lui l’ouvre en lecture, avec un bandeau « Agent archivé. » et un bouton « Restaurer ».
 
-Si l’agent travaille sur un ticket « En cours » ou « À tester », une confirmation te prévient que le ticket repartira « À faire ». Restaurer un agent dont le worktree a été supprimé entre-temps le recrée à partir de sa branche, si elle existe encore. Restaurer un agent lui rend son remote control si un réglage le couvre, mais pas s’il l’avait activé à la main.
+Si l’agent travaille sur un ticket « En cours » ou « À tester », une confirmation te prévient que le ticket repartira « À faire ». Restaurer un agent dont le worktree a été supprimé entre-temps (son ticket terminé ou supprimé, par exemple) le recrée à partir de sa branche, si elle existe encore ; sinon sa conversation le dit. Restaurer un agent lui rend son remote control si un réglage le couvre, mais pas s’il l’avait activé à la main.
 
 ### Supprimer
 

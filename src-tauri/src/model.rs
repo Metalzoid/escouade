@@ -1152,6 +1152,10 @@ pub struct AgentMeta {
     pub worktree: Option<Worktree>,
     pub created_at: i64,
     pub archived: bool,
+    /// Why its worktree, its ticket over, was kept (`leftovers`): work nothing else keeps. None once
+    /// it went, or when the agent is restored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub worktree_kept: Option<String>,
     pub status: AgentStatus,
     pub tokens: u64,
     pub cost: f64,

@@ -21,7 +21,7 @@ This first group says what approving a ticket in “To review” does (see [the 
 
 `ticket/` is the project’s “Tickets’ branch prefix”, set in the [“Projects”](settings-projects) tab (`ticket/` by default); `<key>` is the ticket’s key, for example `ATL-42`.
 
-With the first three choices, Escouade first commits what the agent left in the worktree, then does the action. The ticket then moves to “Done” and its agent is archived. If the branch brings no change, the ticket is finished with nothing merged or pushed. With “Leave as is”, the ticket also moves to “Done”, but the agent and its worktree stay as they are.
+With the first three choices, Escouade first commits what the agent left in the worktree, then does the action. The ticket then moves to “Done” and its agent is archived. If the branch brings no change, the ticket is finished with nothing merged or pushed. With “Leave as is”, the ticket also moves to “Done”; the agent and its worktree stay as they are, unless the worktree holds nothing unsaved (see “Delete the worktree of a done or deleted ticket”, below).
 
 ### Target branch
 
@@ -61,9 +61,16 @@ This group sets what happens before the action chosen above, and after it.
 |---|---|---|
 | “Test command” | The command run in the ticket’s worktree, for example `npm test`. It’s stopped after 20 minutes. | Empty |
 | “Re-run the tests first” | Runs the test command before the action. If a test fails, the action is blocked and the ticket goes back to the agent with the end of the test output. The setting is grayed out while the test command is empty. | Off |
-| “Delete the worktree once approved” | Frees disk space: the worktree is deleted after its teardown commands. After a merge, the ticket’s branch goes too; if pushed or proposed as a PR, it stays, as does any branch the ticket took up. No effect with “Leave as is”, where the worktree stays. | On |
+| “Delete the worktree of a done or deleted ticket” | Frees disk space: the worktree of a done ticket, whatever the approval, and that of a deleted ticket, in any column, are deleted after their teardown commands, along with those of the agents the ticket had before. A worktree with uncommitted changes, or commits neither merged nor pushed, is kept, and you’re told (see below). Merged or empty, the ticket’s branch goes too; if pushed or proposed as a PR, it stays, as does any branch the ticket took up. Off, worktrees stay. | On |
 | “Generated commit message” | On, Haiku writes the message in the Conventional Commits form; if its answer isn’t usable, the message is `feat: <title> [<key>]`. Off, the message is `<key> <title>`. An example appears under the setting, with your project’s key. | On |
 | “On conflict” | What a merge that hits a conflict does. See below. | “Ask me” |
+
+Escouade never loses work when cleaning up: a worktree is deleted only if all its files are committed and every commit of its branch is in the target branch or in another branch, local or remote. Otherwise it stays:
+
+- with “Leave as is”, the ticket’s outcome says so, for example “◇ Left in the worktree · worktree kept: 2 uncommitted file(s)”, and the agent stays;
+- for a deleted ticket, its archived agent’s card says so, under its name, in the “Archived” list.
+
+Restoring that agent puts it back to work in the same worktree. To tidy up what is left later, use “Clean up” in the [“Projects”](settings-projects) tab.
 
 The commit message is used to commit what the agent left in the worktree, and as the squash’s message; a merge commit keeps git’s message. Its language follows “Language of texts written by the agents” (in the [“Application”](settings-application) tab).
 

@@ -341,6 +341,14 @@ export default {
     setupDesc: "Dans l'ordre, avant le premier message de son agent : dépendances, code généré… Les messages attendent la fin.",
     teardownTitle: 'Avant sa suppression',
     teardownDesc: 'Ce que la préparation a créé hors du worktree (base de données, conteneurs…) ; souvent rien.',
+    leftovers: 'Worktrees restés',
+    leftoversDesc:
+      'Supprime ceux des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés.',
+    leftoversButton: 'Nettoyer',
+    leftoversRunning: 'Nettoyage…',
+    leftoversNone: 'Aucun worktree à supprimer.',
+    leftoversRemoved: { one: '1 worktree supprimé.', other: '{count} worktrees supprimés.' },
+    leftoversKept: { one: '1 gardé :', other: '{count} gardés :' },
     launch: 'Lancement',
     launchNote:
       'Chaque commande tourne dans son propre terminal, en lecture seule. Lance-les depuis la section « Lancement » de la barre latérale.',

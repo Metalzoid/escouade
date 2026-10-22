@@ -99,9 +99,9 @@ export default defineZone('boardSettings', {
     testCommandPlaceholder: 'e.g. npm test',
     testsFirst: 'Re-run the tests first',
     testsFirstDesc: 'Blocks the action if a test fails and sends the ticket back to the agent.',
-    cleanup: 'Delete the worktree once approved',
+    cleanup: 'Delete the worktree of a done or deleted ticket',
     cleanupDesc:
-      'Frees disk space once its teardown commands have run. After a merge, its branch goes too; if pushed or proposed as a PR, it stays.',
+      'After its teardown commands, whatever the approval. A worktree with uncommitted changes or commits neither merged nor pushed is kept, and you’re told. Merged or empty, its branch goes too; if pushed or proposed as a PR, it stays.',
     commitMessage: 'Generated commit message',
     onConflict: 'On conflict',
     conflicts: { ask: 'Ask me', agent: 'Let the agent resolve', abort: 'Cancel' },

@@ -81,6 +81,8 @@ export default defineZone('board', {
     },
     removeRunningTitle: 'Delete ticket {key}?',
     removeRunningBody: 'Its agent is archived, along with its worktree.',
+    removeRunningCleanup:
+      'Its agent is archived and its worktree deleted, unless it holds uncommitted changes or commits neither merged nor pushed.',
     approveTitle: 'Approve {key}?',
     approveBody: 'The worktree of its agent is deleted after the merge.',
   },

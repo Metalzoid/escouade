@@ -36,6 +36,32 @@ describe('ProjectTab', () => {
     expect(app.modal).toEqual({ kind: 'newProject', projectId: 'p2' });
   });
 
+  it('cleans up the worktrees archived agents left, and says which it kept and why (ESC-143)', async () => {
+    let done: (r: unknown) => void = () => {};
+    const backend = fakeBackend({ clean_worktrees: () => new Promise((r) => (done = r)) });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(
+      screen.getByText(
+        'Supprime ceux des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Nettoyer' }));
+    expect(screen.getByRole('button', { name: 'Nettoyage…' })).toBeDisabled();
+    expect(backend.called('clean_worktrees')[0].args).toEqual({ projectId: 'p1' });
+    done({ removed: 2, kept: [{ agentId: 'a1', name: 'api', reason: 'worktree gardé : 1 fichier(s) non commité(s)' }] });
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('2 worktrees supprimés. 1 gardé :');
+    expect(status).toHaveTextContent('api · worktree gardé : 1 fichier(s) non commité(s)');
+    expect(screen.getByRole('button', { name: 'Nettoyer' })).toBeEnabled();
+  });
+
+  it('says when no worktree was left to clean up', async () => {
+    fakeBackend({ clean_worktrees: () => ({ removed: 0, kept: [] }) });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: 'Nettoyer' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Aucun worktree à supprimer.');
+  });
+
   describe('remote control', () => {
     const LABEL = 'Remote control pour les agents de ce projet';
     const REASON = 'Activé pour tous les projets dans Réglages › Harness';
