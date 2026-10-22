@@ -12,11 +12,13 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un sous-agent affiche le modèle sur lequel il tourne vraiment, même quand son appel n’en nomme aucun, avec tous les harness. Merci à @epommereuil (#14).
 - Les agents peuvent partir de la branche cible du Kanban plutôt que de celle du dossier (une case de Réglages › Kanban), et le menu à côté de « Nouvel agent » en crée un sans worktree, ou dans un worktree. Merci à @Metalzoid, dont la PR #6 a lancé l’idée.
 - Réglages › Intégrations a une section « Hébergeurs de code » : connecte GitHub, GitLab, Bitbucket ou Gitea / Forgejo, plusieurs instances chacun, et vois si un jeton a expiré ou quels droits lui manquent. Chaque projet y trouve son compte par son remote, et le compte de github.com est aussi celui de GitHub Issues.
+- Un agent dont le tour est fini mais qui attend encore quelque chose ne dit plus « Terminé » : sa carte dit « Attend », ou l’heure à laquelle Claude Code le relancera, et son infobulle détaille ce qui continue. Les agents qu’il pilote par le serveur MCP sont listés sous sa carte tant qu’ils travaillent.
 
 ### Corrections
 
 - En transcription en direct avec Deepgram, une phrase dont le flux se coupe n’est plus perdue : elle part entière, comme sans le direct.
 - La dictée et la conversation vocale en local (Whisper) sont bien plus rapides, surtout sous Windows : une phrase s’y transcrit en 2,5 s avec large-v3-turbo au lieu de plus d’une minute, et en un quart de seconde avec base.
+- Un agent qui a programmé un tour pour plus tard (`/loop`, une tâche planifiée) n’est plus arrêté pour inactivité avant l’heure : son réveil avait lieu dans le processus arrêté, et donc jamais.
 
 ## [1.8.8] — 2026-10-20
 

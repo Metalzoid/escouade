@@ -507,6 +507,52 @@ mod tests {
 
     const TRANSCRIPT: &str = include_str!("../../../tests/fixtures/tui-transcript.jsonl");
     const HOOKS: &str = include_str!("../../../tests/fixtures/tui-hooks.jsonl");
+    /// The transcript of a real Claude Code 2.1.306 interface (ESC-138): a `Bash` with
+    /// `run_in_background` (« Wait until PR 148 checks finish »), the end of the turn, then 15 s
+    /// later the replayed notification and the turn Claude Code starts on it. Thinking blocks and
+    /// Claude Code's own entries left out, the user's name taken out of the paths.
+    const BG_COMMAND: &str = include_str!("../../../tests/fixtures/tui-background-command.jsonl");
+
+    #[test]
+    fn a_background_command_of_a_real_interface_is_listed_from_its_launch_to_its_notification() {
+        use crate::plan::{BgKind, RunStatus};
+        let mut a = agent();
+        let mut fx = Effects::default();
+        let lines = entries(BG_COMMAND);
+        let launched = lines
+            .iter()
+            .position(|e| e["toolUseResult"]["backgroundTaskId"].is_string())
+            .expect("the launch's result");
+        let notified = lines
+            .iter()
+            .position(|e| e["origin"]["kind"] == "task-notification")
+            .expect("the notification");
+        for (i, e) in lines.iter().enumerate() {
+            a.on_transcript(e, &mut fx);
+            let row = a
+                .meta
+                .plan
+                .as_ref()
+                .and_then(|p| p.bg_tasks.iter().find(|t| t.id == "btzyapwqx").cloned());
+            if i < launched {
+                assert!(row.is_none(), "line {i}");
+                continue;
+            }
+            let row = row.unwrap_or_else(|| panic!("no row at line {i}"));
+            assert_eq!(row.kind, BgKind::Command);
+            assert_eq!(row.title, "Wait until PR 148 checks finish");
+            if i < notified {
+                // Listed from its launch, through the end of the turn.
+                assert_eq!(row.status, RunStatus::Running, "line {i}");
+            } else {
+                assert_eq!(row.status, RunStatus::Done, "line {i}");
+                assert!(row
+                    .summary
+                    .as_deref()
+                    .is_some_and(|s| s.contains("exit code 0")));
+            }
+        }
+    }
 
     fn agent() -> AgentRt {
         let dir = std::env::temp_dir().join(format!("escouade-tui-{}", new_id()));

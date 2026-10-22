@@ -54,6 +54,8 @@ mod opencode_tests;
 mod paths;
 mod plan;
 #[cfg(test)]
+mod plan_later_tests;
+#[cfg(test)]
 mod plan_tests;
 mod planfiles;
 #[cfg(test)]

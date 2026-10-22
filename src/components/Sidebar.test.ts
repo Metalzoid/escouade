@@ -2342,3 +2342,78 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     );
   });
 });
+
+describe('Sidebar: what goes on after the turn of an agent (ESC-138)', () => {
+  const planOf = (over: Record<string, unknown>) =>
+    ({ source: null, tasks: [], agents: [], launched: 0, workflows: [], bgTasks: [], ...over }) as never;
+  const cardOf = (name: RegExp) => screen.getByRole('button', { name });
+  const pending = (card: HTMLElement) => card.querySelector<HTMLElement>('[data-pending]');
+
+  it('says « Attend » instead of « Terminé » while a background task runs, and « Terminé » once it ended', async () => {
+    resetApp({
+      agents: [
+        agent({
+          plan: planOf({
+            bgTasks: [{ id: 'b1', kind: 'command', title: 'Wait until PR 148 checks finish', status: 'running', startedAt: 1 }],
+          }),
+        }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = cardOf(/refacto-auth/);
+    expect(pending(card)).toHaveTextContent('Attend');
+    expect(within(card).queryByText('Terminé')).not.toBeInTheDocument();
+    expect(pending(card)).toHaveAttribute('data-tip', 'Son tour est fini, mais il attend :\n1 tâche de fond en cours');
+    app.agents.a1.plan = planOf({ bgTasks: [{ id: 'b1', kind: 'command', title: 'x', status: 'done', startedAt: 1, endedAt: 2 }] });
+    await waitFor(() => expect(pending(card)).toBeNull());
+    expect(within(card).getByText('Terminé')).toBeInTheDocument();
+  });
+
+  it('says when Claude Code wakes it up', () => {
+    app.now = Date.now();
+    resetApp({
+      agents: [
+        agent({ plan: planOf({ wakes: [{ id: 'loop', kind: 'loop', at: Date.now() + 3_600_000, recurring: false, durable: false }] }) }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(pending(cardOf(/refacto-auth/))).toHaveTextContent(/^Réveil /);
+  });
+
+  it('lists under the card the agents it drives while they work, and opens one', async () => {
+    resetApp({
+      agents: [
+        agent({
+          id: 'chef',
+          name: 'deploiement-socle',
+          plan: planOf({
+            driven: [
+              { agent: 'w1', at: 1 },
+              { ticket: 'DEM-1', at: 2 },
+            ],
+          }),
+        }),
+        agent({ id: 'w1', name: 'pr-149', status: 'running', createdAt: 2 }),
+        agent({ id: 'w2', name: 'pr-148', status: 'waiting', createdAt: 3 }),
+      ],
+      tickets: [ticket({ agentId: 'w2' })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(pending(cardOf(/deploiement-socle/))).toHaveTextContent('Attend');
+    const group = screen.getByRole('group', { name: 'Agents pilotés par deploiement-socle' });
+    expect(within(group).getByRole('button', { name: /^Agents pilotés/ })).toHaveTextContent('Agents pilotés 2 au travail');
+    // The latest driven first.
+    const rows = within(group).getAllByRole('button', { name: /^Ouvrir/ });
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(['Ouvrir pr-148', 'Ouvrir pr-149']);
+    await userEvent.click(rows[1]);
+    expect(app.ui.selectedAgent.p1).toBe('w1');
+    // They are done: the list goes, and so does « Attend ».
+    app.agents.w1.status = 'done';
+    app.agents.w2.status = 'done';
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Agents pilotés par deploiement-socle' })).not.toBeInTheDocument());
+    expect(pending(cardOf(/deploiement-socle/))).toBeNull();
+  });
+});

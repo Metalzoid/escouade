@@ -3509,6 +3509,37 @@ async fn an_agent_with_a_command_running_in_the_background_is_not_idle_stopped()
 }
 
 #[tokio::test]
+async fn an_agent_waiting_for_a_wake_up_of_its_session_is_not_idle_stopped() {
+    use crate::plan::{PlanState, Wake};
+    let h = harness("esc138-idle-wake");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.wait("warm-up", |h| h.alive(&id)).await;
+    // A job of its session (`CronCreate`) fires in its process only: stopping it would lose it.
+    let wake = |at: i64| PlanState {
+        wakes: vec![Wake {
+            id: "j1".into(),
+            at,
+            ..Wake::default()
+        }],
+        ..PlanState::default()
+    };
+    {
+        let handle = h.core.agent(&id).unwrap();
+        let mut rt = handle.lock();
+        rt.meta.plan = Some(wake(now_ms() + 3_600_000));
+        rt.meta.last_activity = 0;
+    }
+    h.core.stop_idle_processes();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(h.alive(&id), "a wake-up to come holds the process");
+    // It fired: nothing is left to keep the process for.
+    h.core.agent(&id).unwrap().lock().meta.plan = Some(wake(now_ms() - 1));
+    h.core.stop_idle_processes();
+    h.wait("idle stop", |h| !h.alive(&id)).await;
+}
+
+#[tokio::test]
 async fn a_freshly_started_process_is_not_idle_stopped() {
     let h = harness("fresh");
     let (p, _) = h.project(false).await;

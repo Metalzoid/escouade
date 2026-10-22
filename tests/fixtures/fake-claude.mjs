@@ -585,6 +585,59 @@ function tuiSession() {
       draw();
       return status('idle');
     }
+    // "commande de fond Ns": a `Bash` with `run_in_background`, as a real 2.1.306 interface writes it, Remote Control or not
+    // (ESC-138): its result with `backgroundTaskId` at once, the end of the turn, then N seconds later the notification it
+    // replays to Claude and the turn it starts on it.
+    const bgTui = prompt.match(/commande de fond (\d+)s/);
+    if (bgTui) {
+      const id = `tool-${process.pid}-${n}`;
+      const task = `b${process.pid}${n}`;
+      const description = 'Wait until PR 148 checks finish';
+      const input = { command: 'gh pr checks 148 --watch', description, run_in_background: true };
+      assistant([{ type: 'tool_use', id, name: 'Bash', input }]);
+      await hook('PreToolUse', { tool_name: 'Bash', tool_input: input });
+      const out = path.join(os.tmpdir(), `${task}.output`);
+      write({
+        type: 'user',
+        uuid: `r-${id}`,
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: id,
+              content: `Command running in background with ID: ${task}. Output is being written to: ${out}. You will be notified when it completes.`,
+            },
+          ],
+        },
+        toolUseResult: { stdout: '', stderr: '', interrupted: false, isImage: false, noOutputExpected: false, backgroundTaskId: task },
+      });
+      await hook('PostToolUse', { tool_name: 'Bash', tool_input: input });
+      assistant([{ type: 'text', text: 'lancé' }]);
+      await hook('Stop', { stop_hook_active: false });
+      write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
+      status('idle');
+      setTimeout(
+        async () => {
+          write({
+            type: 'user',
+            uuid: `n-${id}`,
+            origin: { kind: 'task-notification', producer: 'session-task' },
+            message: {
+              role: 'user',
+              content: `<task-notification>\n<task-id>${task}</task-id>\n<tool-use-id>${id}</tool-use-id>\n<output-file>${out}</output-file>\n<status>completed</status>\n<summary>Background command "${description}" completed (exit code 0)</summary>\n</task-notification>`,
+            },
+          });
+          status('busy');
+          assistant([{ type: 'text', text: 'Les checks sont finis.' }]);
+          await hook('Stop', { stop_hook_active: false });
+          write({ type: 'system', subtype: 'turn_duration', durationMs: 12, isSidechain: false });
+          status('idle');
+        },
+        Number(bgTui[1]) * 1000,
+      );
+      return;
+    }
     // "tard": its registry says it idle a second before its transcript ends the turn.
     if (prompt.includes('tard')) {
       status('idle');

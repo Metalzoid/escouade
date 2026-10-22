@@ -4447,6 +4447,31 @@ npm test")
     /// sent there from the foreground.
     const REAL_BG: &str = include_str!("../../tests/fixtures/real-run-background-tasks.jsonl");
     const REAL_FLIP: &str = include_str!("../../tests/fixtures/real-run-foreground-flip.jsonl");
+    /// Claude Code 2.1.306 on stdout (ESC-138): a `CronCreate` one minute ahead, the turn ends,
+    /// then the job fires and Claude Code starts a turn by itself (no user frame). Left out: the
+    /// thinking blocks, the `system` frames other than the tasks', and the `command_lifecycle` and
+    /// `tool_progress` frames, which Escouade does not read and the schema of the version it tests
+    /// does not have.
+    const REAL_CRON: &str = include_str!("../../tests/fixtures/real-run-cron.jsonl");
+
+    #[test]
+    fn the_frames_of_a_real_run_with_a_job_of_the_session_keep_its_wake_up() {
+        let mut a = rt();
+        replay(&mut a, REAL_CRON);
+        let p = plan(&a);
+        assert_eq!(p.wakes.len(), 1, "{:?}", p.wakes);
+        let w = &p.wakes[0];
+        assert_eq!(w.id, "9efa53bd");
+        assert_eq!(w.at, 1_792_649_820_000);
+        assert!(!w.recurring && !w.durable);
+        assert_eq!(w.schedule.as_deref(), Some("17 8 22 10 *"));
+        assert_eq!(w.prompt.as_deref(), Some("Dis juste: réveil"));
+        // Before its time it holds the process; after, it fired.
+        assert!(p.holds_process(w.at - 1));
+        assert!(!p.holds_process(w.at + 1));
+        // Its own `date` ran in the foreground: no background task.
+        assert!(p.bg_tasks.is_empty());
+    }
 
     fn bg_task(p: &PlanState, title: &str) -> crate::plan::BgTask {
         p.bg_tasks

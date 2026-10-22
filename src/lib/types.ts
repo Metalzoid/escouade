@@ -1215,6 +1215,30 @@ export interface BgTask {
   outputFile?: string;
 }
 
+/** A time Claude Code will start a turn of the agent by itself (ESC-138): a job of its session (`CronCreate`) or the next wake-up of a dynamic loop (`ScheduleWakeup`). */
+export interface Wake {
+  /** The job's id, `loop` for a loop's wake-up. */
+  id: string;
+  kind: 'cron' | 'loop';
+  /** When it fires (the next time, for a recurring job), in ms (epoch). */
+  at: number;
+  recurring: boolean;
+  /** Written down by Claude Code: it outlives the process. */
+  durable: boolean;
+  /** The job's schedule as Claude Code tells it ("17 8 22 10 *"). */
+  schedule?: string;
+  /** The job's prompt, the reason of a loop's wake-up. */
+  prompt?: string;
+}
+
+/** An agent of Escouade the agent set to work through the MCP server (ESC-138): by its id, or by the ticket whose agent it started, sent back or resumed (a key or an id). */
+export interface Driven {
+  agent?: string;
+  ticket?: string;
+  /** When it was last driven, in ms (epoch). */
+  at: number;
+}
+
 /** The end of the output of a background task (`task_output`): 8 KiB at most while it runs, 256 KiB at most once it ended. */
 export interface TaskOutput {
   output: string;
@@ -1243,6 +1267,10 @@ export interface PlanState {
   workflows: WorkflowRun[];
   /** The tasks running in the background (commands, monitors, remote agents, teammates), then the 10 latest ended: 40 at most. */
   bgTasks: BgTask[];
+  /** The times Claude Code will start a turn by itself, 10 at most; absent when none. */
+  wakes?: Wake[];
+  /** The agents of Escouade it drives, the latest last, 20 at most; absent when none. */
+  driven?: Driven[];
 }
 
 /** A choice of Claude Code's model picker: an alias or a full id, and the model it stands for. */

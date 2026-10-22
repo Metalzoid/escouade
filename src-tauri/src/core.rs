@@ -3820,11 +3820,16 @@ impl<R: Runtime> Core<R> {
                 let mut rt = h.lock();
                 // A Remote Control agent must stay reachable from claude.ai. One with a command, a
                 // monitor, a subagent or a workflow running in the background is not idle: they
-                // live in its process, which stopping would kill.
+                // live in its process, which stopping would kill. Nor one waiting for a job of its
+                // session or the wake-up of a loop: they fire only in that process.
                 let idle = rt.proc.is_some()
                     && !rt.meta.remote_control
                     && !rt.meta.status.is_active()
-                    && !rt.meta.plan.as_ref().is_some_and(|p| p.runs_something())
+                    && !rt
+                        .meta
+                        .plan
+                        .as_ref()
+                        .is_some_and(|p| p.holds_process(now_ms()))
                     && rt.meta.last_activity < limit;
                 if idle {
                     rt.detach()

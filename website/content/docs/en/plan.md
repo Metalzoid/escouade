@@ -173,6 +173,20 @@ Background tasks are listed too when the agent is in [the Claude Code view](clau
 - A command that a subagent starts in the foreground isn’t listed; one it starts in the background is, with “Launched by”.
 - Monitors of MCP, remote agents, and teammates are supported from Claude Code’s schemas; Escouade has never seen any on a real stream.
 
+## When its turn is over but the work goes on
+
+An agent can end its turn and leave work going on: subagents or background tasks, a turn Claude Code will start by itself later, or other Escouade agents it set to work through the [MCP server](mcp). Its card then doesn’t say “Done” but “Awaiting”, in the color of a running agent. Hover over the word: the tooltip lists what goes on, for example “1 background task running” or “2 driven agents at work: pr-148, pr-149”. The card goes back to “Done” once nothing runs.
+
+### Wake-ups
+
+Claude Code can schedule a turn for later: a scheduled task of the session (`CronCreate`, what `/loop` does with an interval) or the next wake-up of a loop (`ScheduleWakeup`, `/loop` without an interval). Nothing runs meanwhile, but the agent will resume by itself at that time. When that’s all there is, its card says “Wakes at 2:20 PM”, and the tooltip tells what Claude Code will do. A deleted task (`CronDelete`) or a stopped loop no longer counts. These wake-ups live in the agent’s process: Escouade doesn’t stop it for being idle while one is to come.
+
+### Driven agents
+
+An agent that drives others through the MCP server (it writes to them, creates them, starts, sends back, or resumes their ticket) sees them listed under its card, after its background tasks, in the “Driven agents” group, while one of them works or waits for an answer. Clicking a name opens that agent. The group goes away once they’re all done.
+
+What an agent hands off outside Escouade (a message to another Claude Code session, a cloud routine) isn’t followed: only the tool’s line, in its conversation, says it.
+
 ## When the plan goes away
 
 When all the tasks are done and nothing is running (no subagent, no background task), the banner stays displayed (“7/7 tasks”) until your next message: that message starts a new plan, and the banner starts over from zero with whatever the agent lists next. The banner also works when the agent runs in [the Claude Code view](claude-code-view).

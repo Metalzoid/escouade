@@ -3624,3 +3624,63 @@ async fn real_claude_models() {
         told.catalog.len()
     );
 }
+
+/// ESC-138: a command the agent sends to the background in the Claude Code view, Remote Control or
+/// not, is listed from its launch (its result in the transcript), runs on after the turn (the card
+/// says « Attend », not « Terminé »), and ends with the notification Claude Code replays.
+async fn background_command_in_the_view(remote: bool) {
+    use crate::plan::RunStatus;
+    let h = harness(if remote { "tui-bg-remote" } else { "tui-bg" });
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    let id = agent_on(&h, &p, "pro").await.id;
+    if remote {
+        h.core.set_remote_control(&id, true).await.unwrap();
+    }
+    h.core.set_agent_view(&id, true).await.unwrap();
+    open_interface(&h, &id).await;
+    up(&h, &id).await;
+    let row = |h: &Harness| {
+        h.agent(&id).plan.and_then(|p| {
+            p.bg_tasks
+                .iter()
+                .find(|t| t.title == "Wait until PR 148 checks finish")
+                .cloned()
+        })
+    };
+    h.core
+        .send_message(&id, "commande de fond 4s".into(), Vec::new())
+        .await
+        .unwrap();
+    // Its turn is over, the command runs on: listed, running.
+    h.wait("the turn over with the command running", |h| {
+        h.agent(&id).status == AgentStatus::Done
+            && row(h).is_some_and(|r| r.status == RunStatus::Running)
+    })
+    .await;
+    let started = row(&h).unwrap().started_at;
+    assert!(h.agent(&id).plan.unwrap().runs_something());
+    // It ends with its notification, after the time it ran.
+    h.wait("the command over", |h| {
+        row(h).is_some_and(|r| r.status == RunStatus::Done)
+    })
+    .await;
+    let r = row(&h).unwrap();
+    assert!(
+        r.ended_at.unwrap() - started >= 3_000,
+        "listed from its launch: {started} → {:?}",
+        r.ended_at
+    );
+    assert!(r.summary.unwrap().contains("exit code 0"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_command_in_the_claude_code_view_is_listed_from_its_launch() {
+    background_command_in_the_view(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_command_in_the_claude_code_view_with_remote_control_is_listed_from_its_launch(
+) {
+    background_command_in_the_view(true).await;
+}

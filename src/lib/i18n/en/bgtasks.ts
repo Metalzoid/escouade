@@ -67,4 +67,19 @@ export default defineZone('bgtasks', {
   stop: 'Stop',
   stopHint: 'Stop this task. Claude Code then tells the agent, which costs it a turn.',
   stopInTerminal: 'This task is stopped from Claude Code’s own interface.',
+
+  later: {
+    awaits: 'Awaiting',
+    wakeShort: 'Wakes {when}',
+    intro: 'Its turn is over, but it is waiting on:',
+    subagents: { one: '{count} subagent running', other: '{count} subagents running' },
+    background: { one: '{count} background task running', other: '{count} background tasks running' },
+    driven: { one: '{count} driven agent at work: {names}', other: '{count} driven agents at work: {names}' },
+    wake: 'Claude Code wakes it {when}',
+    wakeRecurring: 'Claude Code wakes it on “{schedule}”',
+    drivenTitle: 'Driven agents',
+    drivenCount: { one: '{count} at work', other: '{count} at work' },
+    drivenToggle: 'Agents driven by {name}',
+    drivenOpen: 'Open {name}',
+  },
 });

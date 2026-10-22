@@ -173,6 +173,20 @@ Les tâches de fond sont listées aussi quand l’agent est dans [la vue Claude 
 - Une commande qu’un sous-agent lance au premier plan n’est pas listée ; celle qu’il lance en arrière-plan l’est, avec « Lancée par ».
 - Les surveillances MCP, les agents distants et les coéquipiers sont pris en charge d’après les schémas de Claude Code ; Escouade n’en a jamais vu sur un vrai flux.
 
+## Quand son tour est fini mais que le travail continue
+
+Un agent peut finir son tour et laisser du travail en cours : des sous-agents ou des tâches de fond, une tâche que Claude Code relancera seul plus tard, ou d’autres agents d’Escouade qu’il a mis au travail par le [serveur MCP](mcp). Sa carte ne dit alors pas « Terminé » mais « Attend », dans la couleur d’un agent en cours. Survole ce mot : l’infobulle détaille ce qui continue, par exemple « 1 tâche de fond en cours » ou « 2 agents pilotés au travail : pr-148, pr-149 ». La carte repasse à « Terminé » quand plus rien ne tourne.
+
+### Les réveils
+
+Claude Code peut programmer un tour pour plus tard : une tâche planifiée de la session (`CronCreate`, ce que fait `/loop` avec un intervalle) ou le prochain réveil d’une boucle (`ScheduleWakeup`, `/loop` sans intervalle). Rien ne tourne en attendant, mais l’agent reprendra seul à l’heure dite. Quand c’est tout ce qui reste, sa carte dit « Réveil à 14:20 », et l’infobulle donne ce que Claude Code fera. Une tâche supprimée (`CronDelete`) ou une boucle arrêtée n’est plus comptée. Ces réveils vivent dans le processus de l’agent : Escouade ne l’arrête pas pour inactivité tant qu’un réveil est à venir.
+
+### Les agents pilotés
+
+Un agent qui en pilote d’autres par le serveur MCP (il leur écrit, en crée, lance, renvoie ou reprend leur ticket) les voit listés sous sa carte, après ses tâches de fond, dans le groupe « Agents pilotés », tant que l’un d’eux travaille ou attend une réponse. Un clic sur un nom ouvre cet agent. Le groupe disparaît quand ils ont tous fini.
+
+Ce qu’un agent confie hors d’Escouade (un message à une autre session de Claude Code, une routine dans le cloud) n’est pas suivi : seule la ligne de l’outil, dans sa conversation, le dit.
+
 ## Quand le plan disparaît
 
 Quand toutes les tâches sont faites et que plus rien ne tourne (ni sous-agent, ni tâche de fond), le bandeau reste affiché (« 7/7 tâches ») jusqu’à ton prochain message : ce message commence un nouveau plan, et le bandeau repart de zéro avec ce que l’agent liste ensuite. Le bandeau marche aussi quand l’agent tourne dans [la vue Claude Code](claude-code-view).

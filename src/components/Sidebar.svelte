@@ -17,6 +17,7 @@
   import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
   import { estimateHint, fSpentUsd, spent } from '../lib/spend';
+  import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
@@ -56,6 +57,8 @@
   /** The same for the background tasks of an agent (ESC-14): their finished ones unfolded, and their lists unrolled. */
   let bgFinishedOpen = $state<Record<string, boolean>>({});
   let bgRunningAll = $state<Record<string, boolean>>({});
+  /** The list of the agents an agent drives (ESC-138), folded by the reader. */
+  let drivenOpen = $state<Record<string, boolean>>({});
   let bgFinishedAll = $state<Record<string, boolean>>({});
   let renameValue = $state('');
 
@@ -446,6 +449,7 @@
       {@const plan = planView(a)?.mini}
       {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
       {@const remote = remoteStateOf(a)}
+      {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
       <div
         class="card"
         class:sel
@@ -517,6 +521,11 @@
           {:else if a.setup}
             <span class="status" style:color="var(--wait)" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}
               >{t('nav.sidebar.settingUp')}</span
+            >
+          {:else if pending}
+            <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
+            <span class="status" style:color={SC.running} use:tip={pendingText(pending, app.now)} data-pending
+              >{pendingLabel(pending, app.now)}</span
             >
           {:else}
             <span class="status" style:color={SC[a.status]}>{statusLabel(a.status)}</span>
@@ -659,6 +668,34 @@
                   {/if}
                 </li>
               {/if}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+      {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
+      {#if driven.length}
+        <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
+        {@const open = drivenOpen[a.id] ?? true}
+        <div class="subs" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
+          <button class="subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
+            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
+            <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
+          </button>
+          {#if open}
+            <!-- svelte-ignore a11y_no_redundant_roles -->
+            <ul class="sub-list" role="list">
+              {#each driven as d (d.id)}
+                <li>
+                  <button class="sub" aria-label={t('bgtasks.later.drivenOpen', { name: d.name })} onclick={() => app.selectAgent(d.id)}>
+                    <span class="sdot running" aria-hidden="true"></span>
+                    <span class="stext"
+                      ><span class="sline"><span class="stitle">{d.name}</span><span class="sstate">{statusLabel(d.status)}</span></span
+                      ></span
+                    >
+                  </button>
+                </li>
+              {/each}
             </ul>
           {/if}
         </div>

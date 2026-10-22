@@ -196,6 +196,81 @@ pub struct BgTask {
     pub output_file: Option<String>,
 }
 
+/// What brings an agent back by itself later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum WakeKind {
+    /// A job of its session (`CronCreate`), until it fires (once) or is deleted (`CronDelete`).
+    #[default]
+    Cron,
+    /// The next wake-up of a dynamic `/loop` (`ScheduleWakeup`): one at a time.
+    Loop,
+}
+
+/// A time Claude Code will start a turn of the agent by itself, as the result of the call that
+/// asked for it says (ESC-138): nothing runs meanwhile, and its process must live until then.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Wake {
+    /// The job's id (`CronCreate`), `loop` for the wake-up of a loop.
+    pub id: String,
+    pub kind: WakeKind,
+    /// When it fires (the next time, for a recurring job), in ms.
+    pub at: i64,
+    /// A recurring job: it goes on after `at`.
+    pub recurring: bool,
+    /// A job Claude Code wrote down, which outlives its process.
+    pub durable: bool,
+    /// The job's schedule as Claude Code tells it (« 17 8 22 10 * »).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<String>,
+    /// What it will do: the job's prompt, the reason of a loop's wake-up.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+}
+
+/// An agent of Escouade the agent drives through its MCP server (ESC-138): one it wrote to or
+/// created (`agent`, its id), or the ticket whose agent it started, sent back or resumed
+/// (`ticket`, as the call named it: a key or an id). Their work goes on in Escouade, after the
+/// agent's turn.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Driven {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticket: Option<String>,
+    /// When it was last driven, in ms.
+    pub at: i64,
+}
+
+/// The most wake-ups a plan keeps, and agents or tickets driven: the latest.
+pub const MAX_WAKES: usize = 10;
+pub const MAX_DRIVEN: usize = 20;
+
+/// The tools of Escouade's MCP server that set another agent to work, and whether they name it by
+/// its ticket (else the answer gives its id).
+const DRIVING_TOOLS: &[(&str, bool)] = &[
+    ("send_message", false),
+    ("create_agent", false),
+    ("start_ticket", true),
+    ("resume_ticket", true),
+    ("reject_ticket", true),
+    ("resolve_conflict", true),
+];
+
+/// How Claude Code names the tools of Escouade's MCP server.
+const ESCOUADE_TOOLS: &str = "mcp__escouade__";
+
+/// Whether `tool` is one of `DRIVING_TOOLS`, and if it names a ticket.
+fn driving(tool: &str) -> Option<bool> {
+    let name = tool.strip_prefix(ESCOUADE_TOOLS)?;
+    DRIVING_TOOLS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, ticket)| *ticket)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PlanState {
@@ -212,6 +287,14 @@ pub struct PlanState {
     /// The tasks running in the background (commands, monitors, remote agents, teammates), then
     /// the latest ended: `MAX_BG` at most.
     pub bg_tasks: Vec<BgTask>,
+    /// The times Claude Code will start a turn by itself (`MAX_WAKES` at most). Kept over a new
+    /// plan: they are still to come.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub wakes: Vec<Wake>,
+    /// The agents of Escouade it drives, the latest last (`MAX_DRIVEN` at most). Kept over a new
+    /// plan and the end of its process: they work on in Escouade.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub driven: Vec<Driven>,
     /// The latest calls looked at: a frame that comes twice counts once.
     #[serde(skip)]
     pub(crate) seen: Seen,
@@ -280,6 +363,11 @@ struct Call {
     tool: String,
     command: Option<String>,
     description: Option<String>,
+    /// For a call that leaves something to happen later (`later_result`): what it names (a job's
+    /// id, a ticket, an agent) or what it asks (a job's prompt, a wake-up's reason).
+    target: Option<String>,
+    /// `ScheduleWakeup` with `stop`.
+    stop: bool,
 }
 
 #[derive(Debug, Default)]
@@ -318,14 +406,24 @@ impl BgMemory {
     /// A call of `Bash`, `PowerShell` or `Monitor` (any thread): its command and description, kept
     /// until its task says it started. A call met again replaces itself.
     fn remember_call(&self, id: &str, name: &str, input: &Value) {
-        if !matches!(name, "Bash" | "PowerShell" | "Monitor") {
-            return;
-        }
+        let target = match name {
+            "Bash" | "PowerShell" | "Monitor" => None,
+            "CronCreate" => words(&input["prompt"]),
+            "CronDelete" => words(&input["id"]),
+            "ScheduleWakeup" => words(&input["reason"]).or_else(|| words(&input["prompt"])),
+            _ => match driving(name) {
+                Some(true) => words(&input["ticket"]),
+                Some(false) => None,
+                None => return,
+            },
+        };
         let call = Call {
             id: id.to_string(),
             tool: name.to_string(),
             command: command_text(&input["command"]),
             description: words(&input["description"]),
+            target,
+            stop: input["stop"] == true,
         };
         let mut rings = self.0.lock();
         if let Some(known) = rings.calls.iter_mut().find(|c| c.id == id) {
@@ -655,6 +753,19 @@ impl PlanState {
             && self.workflows.is_empty()
             && self.bg_tasks.is_empty()
             && self.launched == 0
+            && self.wakes.is_empty()
+            && self.driven.is_empty()
+    }
+
+    /// The wake-ups still to come at `now`: a one-shot one whose time passed has fired.
+    pub fn pending_wakes(&self, now: i64) -> impl Iterator<Item = &Wake> {
+        self.wakes.iter().filter(move |w| w.recurring || w.at > now)
+    }
+
+    /// Its process must live on: something runs in it (`runs_something`), or Claude Code will
+    /// start a turn by itself (`pending_wakes`), which a stopped process never would.
+    pub fn holds_process(&self, now: i64) -> bool {
+        self.runs_something() || self.pending_wakes(now).next().is_some()
     }
 
     /// A plan with nothing in it, that goes on with what another remembered of the calls and of the
@@ -707,10 +818,17 @@ impl PlanState {
             + self.bg_tasks.iter().filter(|t| running(t.status)).count()
     }
 
-    /// Forgets everything (a new conversation, a new plan).
+    /// Forgets everything (a new conversation, a new plan), but what is still to come outside the
+    /// plan: the wake-ups, the agents it drives.
     pub fn reset(&mut self) -> Change {
+        let wakes = std::mem::take(&mut self.wakes);
+        let driven = std::mem::take(&mut self.driven);
         let had = !self.is_empty() || self.title.is_some() || self.plan_file.is_some();
-        *self = Self::default();
+        *self = Self {
+            wakes,
+            driven,
+            ..Self::default()
+        };
         if had {
             Change::Saved
         } else {
@@ -851,6 +969,12 @@ impl PlanState {
                 change = Change::Saved;
             }
         }
+        // The jobs of its session went with it; a durable one is on disk, for the next.
+        let wakes = self.wakes.len();
+        self.wakes.retain(|w| w.durable);
+        if self.wakes.len() != wakes {
+            change = Change::Saved;
+        }
         self.memory.clear_foreground();
         change
     }
@@ -972,6 +1096,126 @@ impl PlanState {
     ) -> Change {
         self.bg_result(tool_use_id, is_error, text, tool_use_result, now)
             .and(self.call_result(tool_use_id, is_error, text, tool_use_result, now))
+            .and(self.later_result(tool_use_id, is_error, text, tool_use_result, now))
+    }
+
+    /// The result of a call that leaves something to happen after the turn, outside the tasks
+    /// Claude Code tells (ESC-138): a job of its session (`CronCreate`, `CronDelete`), the next
+    /// wake-up of a loop (`ScheduleWakeup`), an agent of Escouade set to work (`DRIVING_TOOLS`).
+    /// A failed call leaves nothing.
+    fn later_result(
+        &mut self,
+        call_id: &str,
+        is_error: bool,
+        text: &str,
+        tur: &Value,
+        now: i64,
+    ) -> Change {
+        if is_error {
+            return Change::None;
+        }
+        let Some(call) = self.memory.call(call_id) else {
+            return Change::None;
+        };
+        match call.tool.as_str() {
+            "CronCreate" => {
+                let (Some(id), Some(at)) = (words(&tur["id"]), tur["nextFireAt"].as_i64()) else {
+                    return Change::None;
+                };
+                self.add_wake(
+                    Wake {
+                        id,
+                        kind: WakeKind::Cron,
+                        at,
+                        recurring: tur["recurring"] == true,
+                        durable: tur["durable"] == true,
+                        schedule: words(&tur["humanSchedule"]),
+                        prompt: call.target,
+                    },
+                    now,
+                )
+            }
+            "CronDelete" => {
+                let before = self.wakes.len();
+                self.wakes
+                    .retain(|w| w.kind != WakeKind::Cron || Some(&w.id) != call.target.as_ref());
+                if self.wakes.len() == before {
+                    Change::None
+                } else {
+                    Change::Saved
+                }
+            }
+            "ScheduleWakeup" => {
+                let at = tur["scheduledFor"].as_i64().filter(|at| *at > 0);
+                match at {
+                    Some(at) if !call.stop && tur["stopped"] != true => self.add_wake(
+                        Wake {
+                            id: "loop".into(),
+                            kind: WakeKind::Loop,
+                            at,
+                            prompt: call.target,
+                            ..Wake::default()
+                        },
+                        now,
+                    ),
+                    // None armed: the loop goes on with the one it had, if any.
+                    None if !call.stop && tur["stopped"] != true => Change::None,
+                    _ => {
+                        let before = self.wakes.len();
+                        self.wakes.retain(|w| w.kind != WakeKind::Loop);
+                        if self.wakes.len() == before {
+                            Change::None
+                        } else {
+                            Change::Saved
+                        }
+                    }
+                }
+            }
+            tool => {
+                let Some(by_ticket) = driving(tool) else {
+                    return Change::None;
+                };
+                let answer: Value = serde_json::from_str(text).unwrap_or(Value::Null);
+                let driven = if by_ticket {
+                    let ticket = words(&answer["key"]).or(call.target);
+                    Driven {
+                        agent: None,
+                        ticket,
+                        at: now,
+                    }
+                } else {
+                    Driven {
+                        agent: words(&answer["id"]),
+                        ticket: None,
+                        at: now,
+                    }
+                };
+                if driven.agent.is_none() && driven.ticket.is_none() {
+                    return Change::None;
+                }
+                self.driven
+                    .retain(|d| d.agent != driven.agent || d.ticket != driven.ticket);
+                self.driven.push(driven);
+                if self.driven.len() > MAX_DRIVEN {
+                    let over = self.driven.len() - MAX_DRIVEN;
+                    self.driven.drain(..over);
+                }
+                Change::Saved
+            }
+        }
+    }
+
+    /// `wake` is to come: it replaces the one of the same id (a loop has one), and those that
+    /// fired are forgotten.
+    fn add_wake(&mut self, wake: Wake, now: i64) -> Change {
+        self.wakes
+            .retain(|w| w.id != wake.id && (w.recurring || w.durable || w.at > now));
+        self.wakes.push(wake);
+        if self.wakes.len() > MAX_WAKES {
+            let over = self.wakes.len() - MAX_WAKES;
+            self.wakes.drain(..over);
+        }
+        Change::Saved
     }
 
     /// What the result of a call is to the task list and to the subagents.

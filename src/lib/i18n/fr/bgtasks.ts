@@ -88,4 +88,23 @@ export default {
   stopHint: 'Arrêter cette tâche. Claude Code l’annonce ensuite à l’agent, ce qui lui coûte un tour.',
   /** In the Claude Code view, the window acts on nothing. */
   stopInTerminal: 'Cette tâche s’arrête depuis l’interface de Claude Code.',
+
+  /** ESC-138: the card of an agent whose turn is over while something it left goes on, instead of « Terminé ». */
+  later: {
+    /** Its status, and when the next wake-up is all there is. */
+    awaits: 'Attend',
+    wakeShort: 'Réveil {when}',
+    /** Its tooltip: the first line, then one per thing that goes on. */
+    intro: 'Son tour est fini, mais il attend :',
+    subagents: { one: '{count} sous-agent en cours', other: '{count} sous-agents en cours' },
+    background: { one: '{count} tâche de fond en cours', other: '{count} tâches de fond en cours' },
+    driven: { one: '{count} agent piloté au travail : {names}', other: '{count} agents pilotés au travail : {names}' },
+    wake: 'Claude Code le relance {when}',
+    wakeRecurring: 'Claude Code le relance selon « {schedule} »',
+    /** The fold under the card that lists the agents it drives at work, its count, its group for a screen reader. */
+    drivenTitle: 'Agents pilotés',
+    drivenCount: { one: '{count} au travail', other: '{count} au travail' },
+    drivenToggle: 'Agents pilotés par {name}',
+    drivenOpen: 'Ouvrir {name}',
+  },
 } as const satisfies Tree;
