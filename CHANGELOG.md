@@ -4,6 +4,13 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+### Nouveautés
+
+- La barre d’état dit où finira chaque quota à sa remise à zéro si tu gardes ton rythme (« → 64 % »), et le coût du jour d’OpenCode à minuit : tu vois à temps quand ralentir. Un réglage de Réglages › Comptes l’éteint. Merci à @epommereuil (#12).
+- Un sous-agent affiche le modèle sur lequel il tourne vraiment, même quand son appel n’en nomme aucun, avec tous les harness. Merci à @epommereuil (#14).
+
 ## [1.8.8] — 2026-10-20
 
 ### Corrections
