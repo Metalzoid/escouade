@@ -194,6 +194,12 @@ export default {
     week: { label: '7j' },
     /** `{countdown}`: the time left, as `fCountdown` writes it. */
     reset: 'reset {countdown}',
+    /** The same, when it is also the account new agents go to (no other one takes them). */
+    overageCurrent:
+      '{names} : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, et les nouveaux y partent aussi.',
+    /** The account, over its window, goes on answering as extra usage, billed apart; `{names}`: its name(s). */
+    overage:
+      '{names} : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, les nouveaux partent sur un autre compte.',
     /** After the reset: where the window would end at the pace used so far; `{pct}`: « 112 % ». */
     projected: '→ {pct}',
     /** Before it, for screen readers only (the arrow and the colour say it to the eye). */

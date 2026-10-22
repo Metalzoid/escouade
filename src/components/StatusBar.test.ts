@@ -544,6 +544,33 @@ describe('StatusBar quotas of the accounts', () => {
     expect(meters.every((m) => !m.hasAttribute('tabindex'))).toBe(true);
   });
 
+  it('says the account that goes on in extra usage, while the bar shows the one new agents go to (ESC-147)', () => {
+    two();
+    app.usage = { ...app.usage, accounts: app.usage.accounts.map((u) => (u.id === 'principal' ? { ...u, overage: true } : u)) };
+    render(StatusBar);
+    expect(document.getElementById('quota-description')).toHaveTextContent(
+      /^Principal : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent/,
+    );
+  });
+
+  it('says new agents go on the account in extra usage too, when it is the one they go to (ESC-147)', () => {
+    two();
+    // Pro is the current account: it is the one that goes on in extra usage, no other takes the new agents.
+    app.usage = { ...app.usage, accounts: app.usage.accounts.map((u) => (u.id === 'pro' ? { ...u, overage: true } : u)) };
+    render(StatusBar);
+    const said = document.getElementById('quota-description')!;
+    expect(said).toHaveTextContent(
+      /^Pro\s*: usage supplémentaire en cours, facturé à part\. Les agents déjà lancés y restent, et les nouveaux y partent aussi\./,
+    );
+    expect(said).not.toHaveTextContent('partent sur un autre compte');
+  });
+
+  it('says nothing of extra usage when no account is in it', () => {
+    two();
+    render(StatusBar);
+    expect(document.getElementById('quota-description')).not.toHaveTextContent(/supplémentaire/);
+  });
+
   it('shows the tooltip of a bar when the pointer is over it, in the button too', async () => {
     two();
     render(StatusBar);

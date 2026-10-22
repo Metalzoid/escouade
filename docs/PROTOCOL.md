@@ -85,7 +85,7 @@ Compaction : la chaîne repart de l'entrée `compact_boundary` (`parentUuid: nul
 | `assistant` | message complet (un par bloc de contenu), `parent_tool_use_id` non nul = sous-agent (2.1.300 : `agent_id` en plus, la tâche du sous-agent) |
 | `user` | `tool_result` + `tool_use_result` structuré (Edit/Write : `structuredPatch`, `gitDiff{additions,deletions}` ; Bash : `stdout/stderr` ; AskUserQuestion : `answers`) |
 | `control_request` `can_use_tool` | permission / question : `tool_name`, `input`, `tool_use_id`, `decision_reason`, `permission_suggestions`, `requires_user_interaction`, `agent_id` (2.1.300 : la tâche du sous-agent qui demande, absent pour le fil principal) |
-| `rate_limit_event` | `rate_limit_info.unifiedWindows.{five_hour,seven_day}.{utilization (0-1), resetsAt (epoch s)}` |
+| `rate_limit_event` | `rate_limit_info.unifiedWindows.{five_hour,seven_day}.{utilization (0-1), resetsAt (epoch s)}` ; `rate_limit_info.isUsingOverage` (bool, vrai quand l’usage supplémentaire facturé à part répond au-delà de la fenêtre ; lu depuis ESC-147, avec `overageStatus` allowed/allowed_warning/rejected non lu) |
 | `result` | fin de tour : `subtype` (success / error_*), `duration_ms`, `total_cost_usd` (cumulé process), `usage`, `modelUsage{model:{inputTokens,outputTokens,cacheReadInputTokens,cacheCreationInputTokens,costUSD}}` (cumulé process) |
 
 ## Répondre à `can_use_tool`

@@ -280,3 +280,5 @@ Le réglage « Continuer sur le harness suivant quand tous les comptes d’un h
 
 - La barre de statut montre le quota du compte sur lequel partirait un nouvel agent ; un clic ouvre le détail de chaque compte. Voir [les quotas et le coût](usage).
 - Les [statistiques](stats) se filtrent par compte, et leur tableau « Par compte » met les comptes côte à côte.
+- Quand un compte dépasse son quota de 5 h mais continue en usage supplémentaire (facturé à part, si ton abonnement l’a activé), la barre de statut le dit : les agents déjà lancés restent sur ce compte, seuls les nouveaux partent sur un autre. Pour déplacer un agent, utilise « Reprendre sur un autre compte ».
+- Un compte qui a son propre dossier ne prend jamais l’identité d’une variable de ton environnement (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_SECURESTORAGE_CONFIG_DIR`) : Escouade les écarte pour lui. Principal les garde, comme hors d’Escouade.

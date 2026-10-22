@@ -21,6 +21,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- A second Claude Code account no longer runs as the first one’s identity when your environment sets `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_AUTH_TOKEN`: its quota finally moves on claude.ai.
+- When an account goes on in extra usage at 100 % of its quota, the status bar says so: its running agents stay on it, only new ones go to the other account.
 - With live transcription on Deepgram, a sentence whose stream breaks is no longer lost: it goes whole, as without live transcription.
 - Local dictation and voice conversation (Whisper) are much faster, above all on Windows: a sentence is transcribed there in 2.5 s with large-v3-turbo instead of over a minute, and in a quarter of a second with base.
 - An agent that scheduled a turn for later (`/loop`, a scheduled task) is no longer stopped for being idle before that time: its wake-up happened in the stopped process, so never.

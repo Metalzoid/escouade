@@ -484,6 +484,16 @@ impl UsageSnapshot {
                 u
             })
             .collect();
+        // Extra usage lasts while a window is full: under 100 % (a reading says so) or reset, it is over.
+        let over: Vec<String> = self
+            .accounts
+            .iter()
+            .filter(|a| a.overage && !accounts::over_threshold(&self.accounts, &a.id, 100, now))
+            .map(|a| a.id.clone())
+            .collect();
+        for a in self.accounts.iter_mut().filter(|a| over.contains(&a.id)) {
+            a.overage = false;
+        }
         let lang = crate::i18n::ui();
         for a in &mut self.accounts {
             // Not read yet: taken as signed in, rather than as an account to avoid.
@@ -580,6 +590,56 @@ mod tests {
     use crate::paths::test_dir;
     use serde_json::json;
     use std::collections::BTreeMap;
+
+    /// Settings with Principal alone, and its usage in extra usage with its 5-hour window at `pct`.
+    fn in_overage(pct: f64, resets_at: i64) -> (Settings, UsageSnapshot) {
+        let settings = Settings {
+            accounts: vec![accounts::principal_of(crate::model::EngineId::Claude)],
+            ..Default::default()
+        };
+        let mut u = UsageSnapshot::default();
+        let window = RateWindow {
+            pct,
+            resets_at: Some(resets_at),
+        };
+        u.record(
+            accounts::PRINCIPAL,
+            Reading::claude((Some(window), None)),
+            1_000,
+        );
+        u.account_mut(accounts::PRINCIPAL).overage = true;
+        u.settle(&settings, 1_000);
+        (settings, u)
+    }
+
+    #[test]
+    fn extra_usage_is_over_when_a_reading_shows_every_window_under_100() {
+        let (settings, mut u) = in_overage(100.0, 10_000_000);
+        // Full, its end to come: it stands (the flag is told by the agents' events).
+        assert!(u.account(accounts::PRINCIPAL).unwrap().overage);
+        // An OAuth reading, without the field: the window is at 40 %.
+        let window = RateWindow {
+            pct: 40.0,
+            resets_at: Some(10_000_000),
+        };
+        u.record(
+            accounts::PRINCIPAL,
+            Reading::claude((Some(window), None)),
+            2_000,
+        );
+        u.settle(&settings, 2_000);
+        assert!(!u.account(accounts::PRINCIPAL).unwrap().overage);
+    }
+
+    #[test]
+    fn extra_usage_is_over_when_the_full_window_is_reset() {
+        let (settings, mut u) = in_overage(100.0, 5_000);
+        u.settle(&settings, 4_999);
+        assert!(u.account(accounts::PRINCIPAL).unwrap().overage);
+        // Its end passed, no agent has had a turn since: the status bar must not go on saying it.
+        u.settle(&settings, 5_000 + crate::core::RESUME_MARGIN_MS + 1);
+        assert!(!u.account(accounts::PRINCIPAL).unwrap().overage);
+    }
 
     #[test]
     fn the_cost_of_the_day_is_set_for_each_account_and_in_total() {

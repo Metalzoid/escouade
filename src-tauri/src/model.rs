@@ -1848,6 +1848,10 @@ pub struct AccountUsage {
     pub today_start: i64,
     /// When its windows were last read, ms since epoch (0: not in this run).
     pub updated_at: i64,
+    /// Its agents go on answering over their window, as extra usage billed apart (the last
+    /// `rate_limit_event` of one of them says so, `isUsingOverage`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub overage: bool,
     /// What `connected` and `reason` tell, kept to write them again in another language.
     #[serde(skip)]
     pub problem: Option<SignInProblem>,

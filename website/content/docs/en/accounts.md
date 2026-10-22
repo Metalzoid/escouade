@@ -280,3 +280,5 @@ The setting “Continue on the next harness when every account of a harness is s
 
 - The status bar shows the quota of the account a new agent would start on; a click opens each account’s details. See [quotas and cost](usage).
 - The [statistics](stats) can be filtered by account, and their “By account” table puts the accounts side by side.
+- When an account goes past its 5-hour quota but carries on in extra usage (billed separately, if your plan has it on), the status bar says so: agents already running stay on that account, only new ones go to another. To move an agent, use “Resume on another account”.
+- An account with its own folder never takes on the identity of a variable in your environment (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_SECURESTORAGE_CONFIG_DIR`): Escouade sets them aside for it. Main keeps them, as it does outside Escouade.

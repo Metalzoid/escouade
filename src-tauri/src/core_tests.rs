@@ -9260,6 +9260,83 @@ async fn what_the_claude_of_an_account_tells_of_its_models_decides_their_mode_au
 }
 
 #[tokio::test]
+async fn the_current_account_moving_on_never_moves_the_account_of_a_running_agent() {
+    // ESC-147: Principal at the limit, new agents go to Pro (the status bar's account), but the
+    // agent already started keeps its process, so its account (card, header, quota readings).
+    let h = harness("accounts-current-moves");
+    let (p, _) = h.project(true).await;
+    let pro = second_account(&h);
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    turn_over(&h, &main, "Bonjour").await;
+    h.wait("the quota of Principal", |h| {
+        five_hour_pct(h, "principal") == Some(12.0)
+    })
+    .await;
+    assert_eq!(h.core.account_of(&main), "principal");
+    // Principal reads 100 %: the account new agents go to is now Pro.
+    h.core.update_usage(|u| {
+        u.record(
+            "principal",
+            crate::usage::Reading::claude((
+                Some(RateWindow {
+                    pct: 100.0,
+                    resets_at: Some(now_ms() + 3_600_000),
+                }),
+                None,
+            )),
+            now_ms(),
+        )
+    });
+    assert_eq!(h.core.usage.lock().claude_current(), "pro");
+    assert_eq!(h.core.current_account(EngineId::Claude).id, pro.id);
+    // The agent already started is still on Principal, as its process is.
+    assert_eq!(h.core.account_of(&main), "principal");
+    // An agent started now goes to Pro.
+    let fresh = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    assert_eq!(h.core.account_of(&fresh), "pro");
+    // The next turn of the first is read on Principal, not on Pro.
+    turn_over(&h, &main, "Encore").await;
+    assert_eq!(h.core.account_of(&main), "principal");
+    assert_eq!(five_hour_pct(&h, "pro"), None);
+}
+
+#[tokio::test]
+async fn an_account_answering_as_extra_usage_is_told_so_and_only_it() {
+    // ESC-147: at 100 % of its window an account with extra usage goes on answering; the status
+    // bar must be able to say so, whichever account new agents are sent to.
+    let h = harness("accounts-overage");
+    let (p, _) = h.project(true).await;
+    let pro = second_account(&h);
+    let overage = |h: &Harness, id: &str| {
+        h.core
+            .usage
+            .lock()
+            .account(id)
+            .map(|a| a.overage)
+            .unwrap_or(false)
+    };
+    let main = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    turn_over(&h, &main, "Bonjour").await;
+    h.wait("the quota of Principal", |h| {
+        five_hour_pct(h, "principal") == Some(12.0)
+    })
+    .await;
+    assert!(!overage(&h, "principal"));
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let flag = Path::new(&pro.config_dir).join("fake-overage");
+    std::fs::write(&flag, "").unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    h.wait("Pro in extra usage", |h| overage(h, "pro")).await;
+    assert!(!overage(&h, "principal"));
+    // Its next turn, no longer in extra usage: told too.
+    std::fs::remove_file(&flag).unwrap();
+    turn_over(&h, &id, "Encore").await;
+    h.wait("Pro out of extra usage", |h| !overage(h, "pro"))
+        .await;
+}
+
+#[tokio::test]
 async fn a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_quota() {
     let h = harness("accounts-quota-event");
     // Each agent in its worktree: each its own log of messages.

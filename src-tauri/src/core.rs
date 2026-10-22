@@ -2219,7 +2219,13 @@ impl<R: Runtime> Core<R> {
         }
         if let Some(windows) = fx.rate {
             // The quota of the account the agent's process runs on.
-            self.record_usage(&self.account_of(id), usage::Reading::Windows(windows));
+            let account = self.account_of(id);
+            self.update_usage(|u| {
+                u.record(&account, usage::Reading::Windows(windows), now_ms());
+                if let Some(overage) = fx.overage {
+                    u.account_mut(&account).overage = overage;
+                }
+            });
             // The autopilot pauses (or goes on) as the quotas just read say.
             self.pause_tick();
         }
@@ -8070,6 +8076,7 @@ impl<R: Runtime> Core<R> {
 
     /// What a reading of the account's quota found (a process of the account told it, or the
     /// endpoint did), the quotas settled again (`UsageSnapshot::settle`) and told to the window.
+    #[cfg(test)]
     pub(crate) fn record_usage(&self, account: &str, reading: usage::Reading) {
         self.update_usage(|u| u.record(account, reading, now_ms()));
     }

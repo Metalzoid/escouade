@@ -21,6 +21,7 @@ impl AgentRt {
                     self.limit_resets_at = info["resetsAt"].as_i64().map(|s| s * 1000);
                 }
                 fx.rate = Some(parse_rate_event(info));
+                fx.overage = Some(info["isUsingOverage"].as_bool().unwrap_or(false));
             }
             _ => {}
         }

@@ -21,6 +21,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Un second compte Claude Code ne tourne plus sous l’identité du premier quand ton environnement définit `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` ou `ANTHROPIC_AUTH_TOKEN` : son quota bouge enfin sur claude.ai.
+- Quand un compte continue en usage supplémentaire à 100 % de son quota, la barre d’état le dit : ses agents déjà lancés y restent, seuls les nouveaux partent sur l’autre compte.
 - En transcription en direct avec Deepgram, une phrase dont le flux se coupe n’est plus perdue : elle part entière, comme sans le direct.
 - La dictée et la conversation vocale en local (Whisper) sont bien plus rapides, surtout sous Windows : une phrase s’y transcrit en 2,5 s avec large-v3-turbo au lieu de plus d’une minute, et en un quart de seconde avec base.
 - Un agent qui a programmé un tour pour plus tard (`/loop`, une tâche planifiée) n’est plus arrêté pour inactivité avant l’heure : son réveil avait lieu dans le processus arrêté, et donc jamais.

@@ -651,13 +651,52 @@ pub(crate) fn own_dir(account: &Account) -> Option<&str> {
 /// has one (never for a Principal), and, for every account, those that keep it from updating
 /// itself (`Engine::no_self_update`, ESC-133).
 pub fn launch_env(account: &Account) -> Vec<(String, String)> {
+    launch_env_with(account, &|name| {
+        // Unit tests may run inside a Claude Code session with identity variables of their own.
+        !cfg!(test) && std::env::var_os(name).is_some()
+    })
+}
+
+/// The variables of the app's environment (`inherited` tells whether one is set) that make a
+/// `claude` sign in as someone else than its account's folder says (ESC-147): a token or an API key
+/// takes the place of the login of `CLAUDE_CONFIG_DIR`, `CLAUDE_SECURESTORAGE_CONFIG_DIR` the place
+/// of its folder for the sign-in. Every account with a folder of its own would then run as the
+/// same identity, and bill its turns to it.
+pub(crate) const IDENTITY_VARS: [&str; 3] = [
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+];
+const SECURE_STORAGE_VAR: &str = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
+
+/// `launch_env`, the app's environment told by `inherited`. For an account of Claude Code with a
+/// folder of its own, those of `IDENTITY_VARS` that are set are given empty (read as not set), and
+/// `CLAUDE_SECURESTORAGE_CONFIG_DIR`, when set, its folder: its own sign-in is the one it uses.
+/// Principal, which signs in as the machine's user does, keeps them.
+pub fn launch_env_with(
+    account: &Account,
+    inherited: &dyn Fn(&str) -> bool,
+) -> Vec<(String, String)> {
     let engine = engine::by_id(account.engine);
     let own = match engine.accounts() {
         engine::registry::AccountStore::ConfigDir { var } => {
             own_dir(account).map(|dir| (var.to_string(), dir.to_string()))
         }
     };
+    let mut env: Vec<(String, String)> = Vec::new();
+    if let (Some((_, dir)), EngineId::Claude) = (&own, account.engine) {
+        env.extend(
+            IDENTITY_VARS
+                .iter()
+                .filter(|v| inherited(v))
+                .map(|v| (v.to_string(), String::new())),
+        );
+        if inherited(SECURE_STORAGE_VAR) {
+            env.push((SECURE_STORAGE_VAR.to_string(), dir.clone()));
+        }
+    }
     own.into_iter()
+        .chain(env)
         .chain(engine::no_self_update_env(engine))
         .collect()
 }
@@ -2335,6 +2374,23 @@ mod tests {
         // Another account with no folder runs as Principal does.
         assert_eq!(launch_env(&account("pro", "")), vec![no_update.clone()]);
         assert_eq!(launch_env(&account("pro", "  ")), vec![no_update]);
+    }
+
+    #[test]
+    fn inherited_identity_never_replaces_the_login_of_an_accounts_own_folder() {
+        // ESC-147: a token or key in the app's environment took the place of the secondary's login.
+        let all = |_: &str| true;
+        let dir = "/a/pro";
+        let env = launch_env_with(&account("pro", dir), &all);
+        for var in IDENTITY_VARS {
+            assert!(env.contains(&(var.to_string(), String::new())), "{var}");
+        }
+        assert!(env.contains(&(SECURE_STORAGE_VAR.to_string(), dir.to_string())));
+        assert!(env.contains(&("CLAUDE_CONFIG_DIR".to_string(), dir.to_string())));
+        // Nothing set, nothing added; Principal and an account with no folder keep theirs.
+        assert_eq!(launch_env_with(&account("pro", dir), &|_| false).len(), 2);
+        assert_eq!(launch_env_with(&principal(), &all).len(), 1);
+        assert_eq!(launch_env_with(&account("pro", ""), &all).len(), 1);
     }
 
     #[test]

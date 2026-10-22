@@ -62,7 +62,9 @@ impl Program {
         let mut vars: Vec<(String, String)> = env
             .iter()
             .map(|(k, v)| match k.as_str() {
-                crate::accounts::CONFIG_DIR_VAR => (k.clone(), linux(v)),
+                crate::accounts::CONFIG_DIR_VAR | "CLAUDE_SECURESTORAGE_CONFIG_DIR" => {
+                    (k.clone(), linux(v))
+                }
                 _ => (k.clone(), v.clone()),
             })
             .collect();

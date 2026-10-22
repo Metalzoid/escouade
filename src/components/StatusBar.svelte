@@ -77,7 +77,22 @@
   // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
   // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
   // in its tooltip, one line each, but while the panel that writes them is open).
+  // The accounts of the harness whose agents go on answering as extra usage: running agents stay on them, whatever the bar shows.
+  const inOverage = $derived(app.usage.accounts.filter((u) => u.overage && u.engine === engine));
+  const overageLine = $derived(
+    inOverage.length
+      ? t(inOverage.some((u) => u.id === app.usage.current[engine]) ? 'accounts.quota.overageCurrent' : 'accounts.quota.overage', {
+          names: inOverage
+            .map((u) => {
+              const a = app.settings.accounts?.find((x) => x.id === u.id);
+              return a ? accountName(a) : u.id;
+            })
+            .join(', '),
+        })
+      : '',
+  );
   const quotaLines = $derived([
+    ...(overageLine ? [overageLine] : []),
     ...meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })),
     ...(day ? [day.tip] : []),
   ]);

@@ -169,6 +169,8 @@ export default defineZone('accounts', {
     credits: { label: 'credits', name: 'Credits of the month' },
     week: { label: 'W' },
     reset: 'reset {countdown}',
+    overageCurrent: '{names}: extra usage in progress, billed separately. Agents already running stay on it, and new ones go to it too.',
+    overage: '{names}: extra usage in progress, billed separately. Agents already running stay on it, new ones go to another account.',
     projected: '→ {pct}',
     projectedSr: 'projected at the reset: ',
     projectedCost: '→ {amount}',

@@ -826,10 +826,14 @@ function startSession() {
 
   // The quota windows it tells: full while the account is out of quota; ending from now once [quota-rythme] was asked.
   let paced = false;
+  // While a <dir>/fake-overage file is there, the account answers as extra usage (ESC-147), its 5-hour window full.
+  const overageOn = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-overage'));
   const windows = () => {
     const now = Math.floor(Date.now() / 1000);
     return {
-      five_hour: { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
+      five_hour: overageOn()
+        ? { utilization: 1, resetsAt: now + 3600 }
+        : { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
       seven_day: { utilization: 0.34, resetsAt: paced ? now + 84 * 3600 : 1790805600 },
     };
   };
@@ -872,7 +876,13 @@ function startSession() {
       result: isError ? 'Erreur simulée' : 'ok',
       modelUsage: { [`claude-${model}-test`]: { ...usage, contextWindow: 200000, canonicalModel: `claude-${model}-test` } },
     });
-    out({ type: 'rate_limit_event', rate_limit_info: { unifiedWindows: windows() } });
+    const overage = overageOn();
+    out({
+      type: 'rate_limit_event',
+      rate_limit_info: overage
+        ? { status: 'allowed_warning', isUsingOverage: true, overageStatus: 'allowed', unifiedWindows: windows() }
+        : { unifiedWindows: windows() },
+    });
   }
 
   // AskUserQuestion; once answered, `then` goes on with the turn (else a plain reply ends it). `questions`: its own

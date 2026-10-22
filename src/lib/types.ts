@@ -1498,6 +1498,8 @@ export interface AccountUsage {
   dailyBudget?: number | null;
   /** When its windows were last read (0: not since the app started). */
   updatedAt: number;
+  /** Its agents go on answering over their window, as billed extra usage (`rate_limit_event`). */
+  overage?: boolean;
 }
 
 /** Why no ticket of any board starts, and until when: a quota window over « Pause au-delà du quota », or a usage limit with no resume planned. */

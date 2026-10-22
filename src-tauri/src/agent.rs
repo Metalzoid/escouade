@@ -83,6 +83,8 @@ pub struct Effects {
     pub notify: Option<AgentAlert>,
     pub turns: Vec<TurnRow>,
     pub rate: Option<Vec<crate::model::QuotaMeter>>,
+    /// Whether the agent's account answers as extra usage (`isUsingOverage` of a `rate_limit_event`).
+    pub overage: Option<bool>,
     /// The turn was stopped by the usage limit, which resets then (if Claude Code told).
     pub limited: Option<Option<i64>>,
     pub files_changed: bool,
