@@ -16,6 +16,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - En transcription en direct avec Deepgram, une phrase dont le flux se coupe n’est plus perdue : elle part entière, comme sans le direct.
+- La dictée et la conversation vocale en local (Whisper) sont bien plus rapides, surtout sous Windows : une phrase s’y transcrit en 2,5 s avec large-v3-turbo au lieu de plus d’une minute, et en un quart de seconde avec base.
 
 ## [1.8.8] — 2026-10-20
 

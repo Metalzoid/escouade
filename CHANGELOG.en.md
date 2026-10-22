@@ -16,6 +16,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - With live transcription on Deepgram, a sentence whose stream breaks is no longer lost: it goes whole, as without live transcription.
+- Local dictation and voice conversation (Whisper) are much faster, above all on Windows: a sentence is transcribed there in 2.5 s with large-v3-turbo instead of over a minute, and in a quarter of a second with base.
 
 ## [1.8.8] — 2026-10-20
 
