@@ -12,6 +12,9 @@ pub mod bitbucket;
 pub mod connect;
 pub mod gitea;
 pub mod github;
+pub mod github_api;
+#[cfg(test)]
+mod github_tests;
 pub mod gitlab;
 pub mod remote;
 #[cfg(test)]
@@ -57,6 +60,8 @@ pub struct Capabilities {
     pub review_threads: bool,
     /// Deployments and their environments.
     pub deployments: bool,
+    /// The failed jobs of a pull request can run again.
+    pub rerun: bool,
     pub merge_strategies: Vec<MergeStrategy>,
 }
 
@@ -70,18 +75,24 @@ pub struct PullRequestDraft {
     /// The branch it merges into.
     pub base: String,
     pub draft: bool,
+    /// Who is asked for a review (logins).
+    pub reviewers: Vec<String>,
+    pub labels: Vec<String>,
+    /// The issue the pull request closes once merged: « Closes #n » ends its description.
+    pub closes: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum PrState {
+    #[default]
     Open,
     Closed,
     Merged,
 }
 
 /// A pull request as its host tells it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequest {
     pub number: u64,
@@ -93,6 +104,16 @@ pub struct PullRequest {
     pub base: String,
     /// Conflicts with its base: `Some(false)`; not known yet: none.
     pub mergeable: Option<bool>,
+    /// Reviewers whose last say is an approval.
+    pub approvals: u32,
+    /// A reviewer's last say asks for changes.
+    pub changes_requested: bool,
+    /// Threads of comments on lines not resolved yet.
+    pub open_threads: u32,
+    /// The host merges it by itself once the checks pass.
+    pub auto_merge: bool,
+    /// The checks of its last commit, in one word; none when it has none.
+    pub checks: Option<CheckState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -121,6 +142,32 @@ pub enum ReviewState {
     Approved,
     ChangesRequested,
     Commented,
+}
+
+/// A comment on a line of a review to publish.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewLine {
+    pub path: String,
+    pub line: u32,
+    pub body: String,
+}
+
+/// A review to publish on a pull request, as the user validated it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewDraft {
+    pub state: ReviewState,
+    pub body: String,
+    pub lines: Vec<ReviewLine>,
+}
+
+/// How much of its calls a host leaves, as its answers say.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RateLimit {
+    pub limit: u32,
+    pub remaining: u32,
+    /// When it starts over (seconds since 1970).
+    pub reset: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -205,6 +252,24 @@ pub trait Forge: Send + Sync {
         unsupported("pull_request")
     }
 
+    /// The pull requests (open, merged or closed) whose branch is `branch`, newest first.
+    fn pull_requests_of_branch<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _branch: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
+        unsupported("pull_requests_of_branch")
+    }
+
+    /// Several pull requests of a repository, in as few calls as the host allows.
+    fn pull_requests<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _numbers: &'a [u64],
+    ) -> BoxFuture<'a, Result<Vec<PullRequest>>> {
+        unsupported("pull_requests")
+    }
+
     fn merge<'a>(
         &'a self,
         _repo: &'a RepoRef,
@@ -255,6 +320,41 @@ pub trait Forge: Send + Sync {
         _body: &'a str,
     ) -> BoxFuture<'a, Result<()>> {
         unsupported("comment")
+    }
+
+    /// Run the failed jobs of a pull request's last commit again; how many runs started.
+    fn rerun_failed<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<usize>> {
+        unsupported("rerun_failed")
+    }
+
+    /// Publish a review the user validated.
+    fn review<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _review: &'a ReviewDraft,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("review")
+    }
+
+    /// Answer under a comment of a line (`ReviewComment::id`).
+    fn reply<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _comment: &'a str,
+        _body: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("reply")
+    }
+
+    /// What the host's last answer said of its limit, when it says it.
+    fn rate_limit(&self) -> Option<RateLimit> {
+        None
     }
 
     fn deployments<'a>(

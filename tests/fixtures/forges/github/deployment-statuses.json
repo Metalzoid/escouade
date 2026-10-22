@@ -1,0 +1,23 @@
+[
+  {
+    "id": 20188487713,
+    "state": "success",
+    "creator": {
+      "login": "babakks",
+      "id": 36728931,
+      "gravatar_id": "",
+      "html_url": "https://github.com/babakks",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": true
+    },
+    "description": "",
+    "environment": "production",
+    "target_url": "https://github.com/cli/cli/actions/runs/39624591320/job/119311177697",
+    "created_at": "2026-10-21T15:33:53Z",
+    "updated_at": "2026-10-21T15:33:53Z",
+    "environment_url": "",
+    "log_url": "https://github.com/cli/cli/actions/runs/39624591320/job/119311177697",
+    "performed_via_github_app": null
+  }
+]

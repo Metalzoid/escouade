@@ -12,6 +12,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A subagent shows the model it really runs on, even when its call names none, with every harness. Thanks to @epommereuil (#14).
 - Agents can start from the Kanban’s target branch rather than the folder’s (a box in Settings › Kanban), and the menu next to “New agent” makes one without a worktree, or in a worktree. Thanks to @Metalzoid, whose PR #6 started the idea.
 - Settings › Integrations has a “Code hosts” section: connect GitHub, GitLab, Bitbucket or Gitea / Forgejo, several instances each, and see whether a token has expired or which permissions it lacks. Each project finds its account there through its remote, and the github.com account is GitHub Issues’ one too.
+- Escouade can read and drive GitHub pull requests (github.com, GHE.com or your company server): open, merge, checks, logs, reruns, reviews and deployments, while sparing your API quota.
 - An agent whose turn is over but that is still waiting on something no longer says “Done”: its card says “Awaiting”, or the time Claude Code will wake it up, and its tooltip lists what goes on. The agents it drives through the MCP server are listed under its card while they work.
 
 ### Fixes

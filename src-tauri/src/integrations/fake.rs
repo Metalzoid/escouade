@@ -181,6 +181,27 @@ impl FakeServer {
         });
     }
 
+    /// Answers `method target` with `text` as it is (a log, not JSON), carrying `headers`.
+    pub fn on_text(
+        &self,
+        method: &str,
+        target: &str,
+        status: u16,
+        text: &str,
+        headers: &[(&str, &str)],
+    ) {
+        self.routes.lock().push(Route {
+            method: method.into(),
+            target: target.into(),
+            status,
+            body: text.to_string(),
+            headers: headers
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        });
+    }
+
     fn answer(&self, req: &Request) -> (u16, String, Vec<(String, String)>) {
         let routes = self.routes.lock();
         routes

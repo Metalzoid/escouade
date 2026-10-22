@@ -1,0 +1,24 @@
+{
+  "state": "pending",
+  "statuses": [],
+  "sha": "6ec1ba54542baca6cc5932582634104c83f36a28",
+  "total_count": 0,
+  "repository": {
+    "id": 212613049,
+    "name": "cli",
+    "full_name": "cli/cli",
+    "private": false,
+    "owner": {
+      "login": "cli",
+      "id": 59704711,
+      "gravatar_id": "",
+      "html_url": "https://github.com/cli",
+      "type": "Organization",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "html_url": "https://github.com/cli/cli",
+    "description": "GitHub’s official command line tool",
+    "fork": false
+  }
+}

@@ -19,6 +19,7 @@ impl Provider for GiteaProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            rerun: false,
             draft: true,
             // `merge_when_checks_succeed`, on a protected branch only.
             auto_merge: true,

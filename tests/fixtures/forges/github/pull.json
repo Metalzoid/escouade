@@ -1,0 +1,93 @@
+{
+  "id": 4939114658,
+  "html_url": "https://github.com/cli/cli/pull/14768",
+  "diff_url": "https://github.com/cli/cli/pull/14768.diff",
+  "patch_url": "https://github.com/cli/cli/pull/14768.patch",
+  "number": 14768,
+  "state": "closed",
+  "locked": false,
+  "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+  "user": {
+    "login": "babakks",
+    "id": 36728931,
+    "gravatar_id": "",
+    "html_url": "https://github.com/babakks",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": true
+  },
+  "body": "### Description\n\nThis PR sits on top of #14752 in the refreshable-token stack. Until now the stack pinned a pre-release pseudo-version of `cli/oauth`. The changes are now released, so this moves gh to the tagged version:\n\n- `github.com/cli/oauth` [v1.3.0](https://github.com/cli/oauth/releases/tag/v1.3.0): the token expiry fields are now `time.Duration` values, so `internal/authflow` converts them ",
+  "labels": [],
+  "milestone": null,
+  "active_lock_reason": null,
+  "created_at": "2026-10-20T16:40:41Z",
+  "updated_at": "2026-10-21T12:30:00Z",
+  "closed_at": "2026-10-21T12:29:58Z",
+  "merged_at": "2026-10-21T12:29:58Z",
+  "merge_commit_sha": "99750e1576b40a29afc3cb9e9737eef14fa2bcda",
+  "assignee": null,
+  "assignees": [],
+  "requested_reviewers": [],
+  "requested_teams": [],
+  "head": {
+    "label": "cli:babakks/refresh-token-bump-deps",
+    "ref": "babakks/refresh-token-bump-deps",
+    "sha": "6ec1ba54542baca6cc5932582634104c83f36a28",
+    "user": {
+      "login": "cli",
+      "id": 59704711,
+      "gravatar_id": "",
+      "html_url": "https://github.com/cli",
+      "type": "Organization",
+      "user_view_type": "public",
+      "site_admin": false
+    }
+  },
+  "base": {
+    "label": "cli:trunk",
+    "ref": "trunk",
+    "sha": "ae7b9715976c5508398b11dc8546e1279e10f6fc",
+    "user": {
+      "login": "cli",
+      "id": 59704711,
+      "gravatar_id": "",
+      "html_url": "https://github.com/cli",
+      "type": "Organization",
+      "user_view_type": "public",
+      "site_admin": false
+    }
+  },
+  "author_association": "MEMBER",
+  "auto_merge": null,
+  "stack": {
+    "base": {
+      "ref": "trunk",
+      "sha": null
+    },
+    "id": 1123647,
+    "number": 14457,
+    "position": 15,
+    "size": 15
+  },
+  "draft": false,
+  "merged": true,
+  "mergeable": null,
+  "rebaseable": null,
+  "mergeable_state": "unknown",
+  "merged_by": {
+    "login": "babakks",
+    "id": 36728931,
+    "gravatar_id": "",
+    "html_url": "https://github.com/babakks",
+    "type": "User",
+    "user_view_type": "public",
+    "site_admin": true
+  },
+  "comments": 0,
+  "review_comments": 1,
+  "maintainer_can_modify": false,
+  "commits": 2,
+  "additions": 42,
+  "deletions": 48,
+  "changed_files": 6
+}

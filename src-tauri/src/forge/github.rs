@@ -1,6 +1,7 @@
 //! GitHub: github.com, GHE.com (`<name>.ghe.com`) and GitHub Enterprise Server. Its token is the
-//! `gh` CLI's, else one the user makes. The PR's calls come with its client (ESC-55).
+//! `gh` CLI's, else one the user makes. The PR's calls are in `github_api`.
 
+use super::github_api::Github;
 use super::*;
 
 pub struct GithubProvider;
@@ -38,6 +39,7 @@ impl Provider for GithubProvider {
             reviews: true,
             review_threads: true,
             deployments: true,
+            rerun: true,
             merge_strategies: vec![
                 MergeStrategy::Merge,
                 MergeStrategy::Squash,
@@ -85,54 +87,13 @@ impl Provider for GithubProvider {
     }
 
     fn client(&self, http: reqwest::Client, account: &Credentials) -> Box<dyn Forge> {
-        Box::new(Github {
+        Box::new(Github::new(
             http,
-            base: account
+            account
                 .api
                 .clone()
                 .unwrap_or_else(|| api_base(&account.url)),
-            token: account.token.trim().to_string(),
-        })
-    }
-}
-
-pub struct Github {
-    http: reqwest::Client,
-    base: String,
-    token: String,
-}
-
-impl Github {
-    fn get(&self, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .get(format!("{}{path}", self.base))
-            .bearer_auth(&self.token)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .header("User-Agent", "escouade")
-    }
-}
-
-impl Forge for Github {
-    fn me(&self) -> BoxFuture<'_, Result<Identity>> {
-        Box::pin(async move {
-            let (me, headers) = call(NAME, self.get("/user")).await?;
-            let login = me["login"].as_str().unwrap_or("?").to_string();
-            // A classic token lists its rights; a fine-grained one, none.
-            let scopes = headers
-                .get("x-oauth-scopes")
-                .and_then(|h| h.to_str().ok())
-                .map(|s| {
-                    s.split(',')
-                        .map(|x| x.trim().to_string())
-                        .filter(|x| !x.is_empty())
-                        .collect()
-                });
-            Ok(Identity {
-                label: format!("@{login}"),
-                user: login,
-                scopes,
-            })
-        })
+            account.token.clone(),
+        ))
     }
 }

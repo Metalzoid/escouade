@@ -1,0 +1,46 @@
+{
+  "data": {
+    "repository": {
+      "pullRequests": {
+        "nodes": [
+          {
+            "number": 14768,
+            "url": "https://github.com/cli/cli/pull/14768",
+            "title": "Refreshable tokens: bump cli/oauth to v1.3.0 and fix `gh status` column width",
+            "state": "MERGED",
+            "isDraft": false,
+            "headRefName": "babakks/refresh-token-bump-deps",
+            "baseRefName": "trunk",
+            "mergeable": "UNKNOWN",
+            "autoMergeRequest": null,
+            "latestOpinionatedReviews": {
+              "nodes": [
+                {
+                  "state": "APPROVED"
+                }
+              ]
+            },
+            "reviewThreads": {
+              "nodes": [
+                {
+                  "isResolved": false
+                }
+              ]
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

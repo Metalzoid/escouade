@@ -1,0 +1,28 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "nodes": [
+            {
+              "isResolved": false,
+              "path": "pkg/cmd/status/status.go",
+              "line": 679,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 4335329893,
+                    "author": {
+                      "login": "copilot-pull-request-reviewer"
+                    },
+                    "body": "💭 Commentary: Separate the status layout fix from the OAuth upgrade\n\nOptional: move the column-width correction and its status-test updates into a separate PR. They are independent of token refreshing, and splitting them would allow separate review, backporting, and rollback. This follows the scope guidance in .github/skills/code-review/SKILL.md."
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

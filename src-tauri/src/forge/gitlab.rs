@@ -23,6 +23,7 @@ impl Provider for GitlabProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            rerun: false,
             // `Draft:` before the title.
             draft: true,
             // `merge_when_pipeline_succeeds` (`auto_merge` in later versions).

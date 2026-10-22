@@ -33,6 +33,7 @@ impl Provider for BitbucketProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            rerun: false,
             draft: true,
             // No call merges once the checks pass (BCLOUD-22055, BCLOUD-22062).
             auto_merge: false,
