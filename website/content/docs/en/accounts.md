@@ -4,7 +4,7 @@ Escouade can run your agents on several accounts of each harness (personal, work
 
 ## Why several accounts
 
-A Claude account is a sign-in to claude.ai with its own quotas (a 5-hour window and a weekly window) and its own conversations. With several accounts you keep personal and work apart, or you set aside an account for a client’s projects. When an account reaches the pause threshold, new agents start on another one.
+A Claude account is a sign-in to claude.ai with its own quotas (a 5-hour window and a weekly window) and its own conversations. With several accounts you keep personal and work apart, or you set aside an account for a client’s projects. When an account reaches the pause threshold, new agents start on another one; with “Switch accounts at”, agents already running do too, at the end of their turn.
 
 Each account is Claude Code run with a configuration folder of its own (the `CLAUDE_CONFIG_DIR` variable), so it has its own sign-in, sessions and quota. Escouade never shares one account’s sign-in with another.
 
@@ -158,7 +158,7 @@ A preferred account that has become inactive, that is reserved to other projects
 
 With several accounts, an agent’s input field (see [the chat](chat)) has an “Account” menu next to the model. As long as you haven’t written to the agent, it offers:
 
-- “Automatic (Pro)”: the account the automatic choice would take now (“The project’s, else the first account under the pause threshold.”);
+- “Automatic (Pro)”: the account the automatic choice would take now (“The project’s, else the first account under the pause and switch thresholds.”);
 - every active account that serves the project.
 
 Choosing an account changes the agent’s account before it starts.
@@ -167,7 +167,7 @@ Choosing an account changes the agent’s account before it starts.
 
 From the first message on, an agent’s account can’t change: the menu becomes read-only (“An agent’s account can’t change after its first message (its conversation is filed in that account).”). Claude Code files each conversation in the folder of the account that runs it.
 
-Only one thing moves an agent: “Resume on…” (below), which takes its session along. The statistics count each turn on the account the agent had at that moment.
+Two things move an agent, with its session: “Resume on…” and “Switch accounts at” (below). The statistics count each turn on the account the agent had at that moment.
 
 ## Reserved to projects
 
@@ -212,6 +212,24 @@ The “Accounts” tab says it too, under an account a private project still goe
 The agents of a private project that has an account of its own never switch to a shared account by themselves: past the threshold, its new agents and tickets stay on its account, the automatic resume of a ticket agent only goes to another account of its own, and the automatic handover to another harness only if the account it would take there is its own. Otherwise, they wait for the reset. Without an account of its own, the project keeps its shared accounts, but no automatic switch moves it to another account. To allow it, turn on “Shared accounts at the limit” in the project’s settings. “Resume on…” and “Continue on…” are still yours to click.
 
 What a new account shares with Main when it is made (settings, instructions, skills…) stays shared, never its sessions or its memory.
+
+## Switch accounts before the limit
+
+The “Switch accounts at” setting (Settings › Accounts, “Quotas” group) moves an agent to another account when its own nears the limit: at 80%, 90%, or 95% of its 5-hour window or of its weekly window, whichever comes first. By default it is “At the limit”: nothing moves before it, as before this setting.
+
+At the threshold, an agent is never stopped in the middle of its work:
+
+- it finishes its turn on its account, then its process starts again on the other account, with its session: its next turn goes there;
+- if it waits for your answer (a question, a permission) or a task runs in the background in its process (a command, a monitor, a subagent), it stays while they are there, and moves at the first end of a turn without them;
+- ordinary agents and ticket agents both move; new agents start on the other account directly.
+
+The account it goes to is the project’s preferred account, else the first in the list, as long as it serves the project, is signed in, and is itself under the threshold. A private project that hasn’t turned on “Shared accounts at the limit” only goes to an account reserved to it alone. Only Claude Code moves an agent already running: a Codex, Copilot CLI or OpenCode agent stays on its account, while its new agents follow the threshold.
+
+The conversation says so (“The agent goes on on the Pro account: Main is at 96% of its 5-hour window.”), a notification too, and the agent’s “Account” menu shows the new account once its process has started again on it.
+
+With no usable account, the agent stays where it is and its conversation says why, once: “Main is at 96% of its 5-hour window, but no other Claude Code account can take the agent (under the threshold, signed in, serving this project): it stays there.” If that account carries on in extra usage, it adds: “This account is in extra usage, billed separately.”
+
+No back and forth: an agent that moved to an account only leaves it once that one reaches the threshold in turn, and the first is a choice again only when it resets.
 
 ## Resume an agent stopped by the usage limit
 
@@ -280,5 +298,5 @@ The setting “Continue on the next harness when every account of a harness is s
 
 - The status bar shows the quota of the account a new agent would start on; a click opens each account’s details. See [quotas and cost](usage).
 - The [statistics](stats) can be filtered by account, and their “By account” table puts the accounts side by side.
-- When an account goes past its 5-hour quota but carries on in extra usage (billed separately, if your plan has it on), the status bar says so: agents already running stay on that account, only new ones go to another. To move an agent, use “Resume on another account”.
+- When an account goes past its 5-hour quota but carries on in extra usage (billed separately, if your plan has it on), the status bar says so: agents already running stay on that account, only new ones go to another. To move an agent, use “Resume on another account”, or set “Switch accounts at” below the limit: they then go on on another account at the end of their turn.
 - An account with its own folder never takes on the identity of a variable in your environment (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_SECURESTORAGE_CONFIG_DIR`): Escouade sets them aside for it. Main keeps them, as it does outside Escouade.

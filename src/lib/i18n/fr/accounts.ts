@@ -10,7 +10,8 @@ export default {
     list: 'Comptes',
     /** The accounts of one harness; `{harness}`: « Claude Code ». */
     group: 'Comptes {harness}',
-    order: 'Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre.',
+    order:
+      'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre.',
     name: 'Nom',
     folder: 'Dossier',
     executable: 'Exécutable',
@@ -137,7 +138,7 @@ export default {
     caption: 'Compte',
     auto: 'Automatique ({name})',
     autoNone: 'Automatique (aucun compte)',
-    autoDetail: 'Celui du projet, sinon le premier compte sous le seuil de pause.',
+    autoDetail: 'Celui du projet, sinon le premier compte sous les seuils de pause et de changement de compte.',
     inactive: '{name} (inactif)',
     locked: 'Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte).',
   },
@@ -147,7 +148,7 @@ export default {
     label: 'Compte préféré',
     desc: 'Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.',
     auto: 'Automatique',
-    autoTitle: 'Le premier compte actif sous le seuil de pause, dans l’ordre des comptes',
+    autoTitle: 'Le premier compte actif sous les seuils de pause et de changement de compte, dans l’ordre des comptes',
     inactive: '{name} (inactif)',
   },
 
@@ -200,6 +201,9 @@ export default {
     /** The account, over its window, goes on answering as extra usage, billed apart; `{names}`: its name(s). */
     overage:
       '{names} : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, les nouveaux partent sur un autre compte.',
+    /** The same, while « Changer de compte à » moves its agents (ESC-148). */
+    overageMoving:
+      '{names} : usage supplémentaire en cours, facturé à part. Ses agents passent sur un autre compte à la fin de leur tour, et les nouveaux y partent.',
     /** After the reset: where the window would end at the pace used so far; `{pct}`: « 112 % ». */
     projected: '→ {pct}',
     /** Before it, for screen readers only (the arrow and the colour say it to the eye). */
@@ -221,7 +225,7 @@ export default {
     /** Under a harness without a quota: only what its turns cost. */
     noQuota: 'Pas de quota : seul le coût de ses tours compte.',
     current: 'en cours',
-    over: 'au-delà du seuil de pause',
+    over: 'au-delà du seuil de pause ou de changement de compte',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */
     today: "Aujourd'hui : {amount}",
   },
@@ -241,6 +245,11 @@ export default {
   // The « Quotas » group, at the end of the « Comptes » tab: how the status bar shows them, for every account.
   quotas: {
     title: 'Quotas',
+    /** « Changer de compte à » (ESC-148): its choices are percentages, and « À la limite ». */
+    switchAt: 'Changer de compte à',
+    switchAtLimit: 'À la limite',
+    switchAtDesc:
+      'Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, et les nouveaux agents y partent. « À la limite » : rien ne bouge avant, puis « Reprendre sur un autre compte… » (Harness) décide. « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
     projection: 'Projection des quotas',
     projectionDesc:
       'Dans la barre d’état, après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.',

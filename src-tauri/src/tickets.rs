@@ -13,6 +13,7 @@ use crate::integrations;
 use crate::isola;
 use crate::leftovers;
 use crate::model::*;
+use crate::switching::NoOther;
 use crate::telemetry::Event;
 use crate::testlaunch;
 use crate::ticketfiles;
@@ -1163,7 +1164,9 @@ impl<R: Runtime> Core<R> {
             waiting.contains_key(id)
                 || board::account_pause(&usage, id, threshold, &hold, now).is_some()
         };
-        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, threshold, now);
+        // Under « Changer de compte à » too, when it is the lower (ESC-148).
+        let pick = board::pick_threshold(settings);
+        let usable = |id: &str| !held(id) && !accounts::over_threshold(&usage, id, pick, now);
         let id = accounts::pick_where(settings, preferred, usable)?;
         if !held(&id) {
             return Some(id);
@@ -1641,6 +1644,11 @@ impl<R: Runtime> Core<R> {
             (rt.meta.ticket_id.clone(), rt.meta.resume_at.is_some())
         };
         let limited = end == TurnEnd::Limited;
+        // Its account past « Changer de compte à »: its next turn goes to another one (ESC-148),
+        // before the board sends it one. At the limit, `switch_on_limit` decides.
+        if !limited {
+            self.switch_if_over(agent_id).await;
+        }
         let Some(ticket_id) = ticket_id else {
             // Its harness spent, an agent goes on on another one, with the option (ESC-88).
             if limited && self.handover_on_limit(agent_id).await {
@@ -1738,10 +1746,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The account a ticket's agent stopped by the usage limit goes on on, if there is one and
-    /// the user did not turn that off: the one `accounts::pick` gives (the project's preferred
-    /// account, else the first active one) when it is another than the agent's, usable (signed in,
-    /// under the threshold, no pause after a usage limit, no agent of it waiting for its reset).
-    /// A project that prefers the agent's account keeps it there.
+    /// the user did not turn that off: `other_account` under « Pause au-delà du quota ».
     fn account_to_switch_to(&self, agent_id: &str) -> Option<String> {
         let settings = self.settings.read().clone();
         let ticket = self
@@ -1752,11 +1757,27 @@ impl<R: Runtime> Core<R> {
         if !settings.switch_on_limit || ticket.blocked.is_some() {
             return None;
         }
+        let threshold = board::quota_threshold(settings.quota_pause);
+        self.other_account(agent_id, threshold).ok()
+    }
+
+    /// The account an agent goes on on by itself, leaving its own: the one `accounts::pick` gives
+    /// (the project's preferred account, else the first active one) when it is another than the
+    /// agent's, usable (signed in, under `threshold`, no pause after a usage limit, no agent of it
+    /// waiting for its reset), on the same side of WSL. A project that prefers the agent's account
+    /// keeps it there. Why there is none otherwise: `NoOther::Private` when only the accounts a
+    /// confined private project shares are left (ESC-141).
+    pub(crate) fn other_account(
+        &self,
+        agent_id: &str,
+        threshold: u32,
+    ) -> std::result::Result<String, NoOther> {
+        let settings = self.settings.read().clone();
         let (project, current, engine) = {
-            let rt = self.agent(agent_id).ok()?;
+            let rt = self.agent(agent_id).map_err(|_| NoOther::Nobody)?;
             let rt = rt.lock();
             if rt.meta.archived {
-                return None;
+                return Err(NoOther::Nobody);
             }
             (
                 rt.meta.project_id.clone(),
@@ -1767,7 +1788,7 @@ impl<R: Runtime> Core<R> {
         // No account of its harness serves the project any more: none to go on on. Another
         // harness's would be a handover, not a switch (ESC-88).
         if !accounts::serves_any(&settings, engine, Some(&project)) {
-            return None;
+            return Err(NoOther::Nobody);
         }
         let all = settings;
         let settings = self.project_accounts(&all, engine, &project);
@@ -1775,7 +1796,6 @@ impl<R: Runtime> Core<R> {
             .project(&project)
             .ok()
             .and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
-        let threshold = board::quota_threshold(settings.quota_pause);
         let usage = self.usage.lock().accounts.clone();
         let hold = self.hold.lock().clone();
         let waiting = self.quota_paused();
@@ -1795,12 +1815,16 @@ impl<R: Runtime> Core<R> {
                 && board::account_pause(&usage, id, threshold, &hold, now).is_none()
                 && !accounts::over_threshold(&usage, id, threshold, now)
         };
-        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)?;
+        let target = accounts::pick_where(&settings, preferred.as_deref(), usable)
+            .filter(|t| usable(t))
+            .ok_or(NoOther::Nobody)?;
         // A private project goes on its own to none of the accounts it shares (ESC-141): its agent
-        // waits for the reset, unless « Comptes partagés à la limite » allows it.
+        // stays, unless « Comptes partagés à la limite » allows it.
         let project = self.project(&project).ok();
-        let allowed = project.is_none_or(|p| accounts::may_switch_to(&all, &p, &target));
-        (usable(&target) && allowed).then_some(target)
+        match project.is_none_or(|p| accounts::may_switch_to(&all, &p, &target)) {
+            true => Ok(target),
+            false => Err(NoOther::Private),
+        }
     }
 
     /// The accounts of `engine` as a new agent of the project `project_id` sees them

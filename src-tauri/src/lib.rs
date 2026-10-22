@@ -83,6 +83,9 @@ mod selfupdate;
 #[cfg(unix)]
 mod shellenv;
 mod stats;
+mod switching;
+#[cfg(test)]
+mod switching_tests;
 mod taskout;
 mod telemetry;
 #[cfg(test)]

@@ -341,7 +341,12 @@ pub fn get(settings: &Settings, id: &str) -> Account {
 /// The meters of the account's quota (`usage`) used `threshold` percent or more at `now`, until an
 /// end still to come (as the autopilot counts it, `board::over_threshold`). None for an account of
 /// a harness without a quota: it has no meter.
-fn meters_over(usage: &[AccountUsage], id: &str, threshold: u32, now: i64) -> Vec<QuotaMeter> {
+pub(crate) fn meters_over(
+    usage: &[AccountUsage],
+    id: &str,
+    threshold: u32,
+    now: i64,
+) -> Vec<QuotaMeter> {
     let meters = usage
         .iter()
         .find(|u| u.id == id)
@@ -1250,9 +1255,9 @@ fn unknown(id: &str) -> anyhow::Error {
 
 /// What a move of an agent's session left behind: the account it left, and the resume it waited
 /// for there, which the move dropped.
-struct Moved {
-    from: Account,
-    resume_at: Option<i64>,
+pub(crate) struct Moved {
+    pub(crate) from: Account,
+    pub(crate) resume_at: Option<i64>,
 }
 
 /// Refused: the account is reserved to other projects (« Réservé aux projets »).
@@ -1868,7 +1873,7 @@ impl<R: Runtime> Core<R> {
     /// the folder of `target` (`copy_session`), then the agent's account is changed and the resume
     /// it planned dropped. Nothing is changed when it fails before. The account it left, and the
     /// resume it dropped.
-    async fn move_session(self: &Arc<Self>, id: &str, target: &str) -> Result<Moved> {
+    pub(crate) async fn move_session(self: &Arc<Self>, id: &str, target: &str) -> Result<Moved> {
         let h = self.agent(id)?;
         // Its process is not started again meanwhile (a message, a warm-up wait for the lock).
         let lock = self.spawn_lock(id);

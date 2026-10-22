@@ -41,6 +41,8 @@ export interface Settings {
   favoriteModels?: Partial<Record<EngineId, string[]>>;
   /** « Pause au-delà du quota », in percent (80, 90, 95 or 100): no ticket of any board starts while the 5-hour or the weekly window is used this much. */
   quotaPause: number;
+  /** « Changer de compte à » (ESC-148): 80, 90, 95, or 100 for « À la limite » (nothing moves before the limit). */
+  switchAt: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
   autoUpdate: boolean;
   /** « Statistiques d’usage »: null until the user answered the question of the first start. */

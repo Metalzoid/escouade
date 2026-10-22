@@ -500,7 +500,7 @@ impl UsageSnapshot {
             a.connected = a.problem != Some(SignInProblem::NotSignedIn);
             a.reason = a.problem.map(|p| reason(p, lang));
         }
-        let threshold = board::quota_threshold(settings.quota_pause);
+        let threshold = board::pick_threshold(settings);
         let engines: std::collections::BTreeSet<_> =
             settings.accounts.iter().map(|a| a.engine).collect();
         self.current = engines

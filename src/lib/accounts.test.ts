@@ -12,6 +12,7 @@ import {
   projectionLevel,
   projectsWithoutAccount,
   quotaOf,
+  pickThreshold,
   quotaRows,
   sharedBy,
 } from './accounts';
@@ -206,6 +207,24 @@ describe('the quota of each account', () => {
       ['pro', true],
       ['team', false],
     ]);
+    app.settings.quotaPause = 100;
+    expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, false, false]);
+  });
+
+  it('flags an account past « Changer de compte à » when it is lower than the pause (ESC-148)', () => {
+    app.settings.quotaPause = 100;
+    app.settings.switchAt = 95;
+    app.usage.accounts = [read('principal', { fiveHour: win(96) }), read('pro', { fiveHour: win(94), sevenDay: win(95) })];
+    expect(quotaRows(NOW).map((r) => [r.account.id, r.over])).toEqual([
+      ['principal', true],
+      ['pro', true],
+      ['team', false],
+    ]);
+    expect(pickThreshold()).toBe(95);
+    app.settings.quotaPause = 80;
+    expect(pickThreshold()).toBe(80);
+    // « À la limite »: the pause alone.
+    app.settings.switchAt = 100;
     app.settings.quotaPause = 100;
     expect(quotaRows(NOW).map((r) => r.over)).toEqual([false, false, false]);
   });

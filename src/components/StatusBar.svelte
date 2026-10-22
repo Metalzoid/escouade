@@ -81,14 +81,21 @@
   const inOverage = $derived(app.usage.accounts.filter((u) => u.overage && u.engine === engine));
   const overageLine = $derived(
     inOverage.length
-      ? t(inOverage.some((u) => u.id === app.usage.current[engine]) ? 'accounts.quota.overageCurrent' : 'accounts.quota.overage', {
-          names: inOverage
-            .map((u) => {
-              const a = app.settings.accounts?.find((x) => x.id === u.id);
-              return a ? accountName(a) : u.id;
-            })
-            .join(', '),
-        })
+      ? t(
+          inOverage.some((u) => u.id === app.usage.current[engine])
+            ? 'accounts.quota.overageCurrent'
+            : (app.settings.switchAt ?? 100) < 100
+              ? 'accounts.quota.overageMoving'
+              : 'accounts.quota.overage',
+          {
+            names: inOverage
+              .map((u) => {
+                const a = app.settings.accounts?.find((x) => x.id === u.id);
+                return a ? accountName(a) : u.id;
+              })
+              .join(', '),
+          },
+        )
       : '',
   );
   const quotaLines = $derived([

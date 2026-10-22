@@ -16,11 +16,12 @@
   } from '../../lib/accounts';
   import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
-  import { fList, tildify } from '../../lib/format';
+  import { fList, fPct, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Account, AccountStatus, ClosedProject, EngineId } from '../../lib/types';
+  import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
@@ -92,6 +93,18 @@
     if (!s) return t('accounts.tab.state.checking');
     if (s.connected) return s.email ? t('accounts.tab.state.connected', { email: s.email }) : t('accounts.tab.state.connectedNoEmail');
     return a.id === PRINCIPAL ? t('accounts.tab.state.principalNotConnected') : t('accounts.tab.state.notConnected');
+  }
+
+  /** « Changer de compte à » (ESC-148): a percentage, or « À la limite » (100). */
+  const switchChoices = $derived([
+    ...[80, 90, 95].map((n) => ({ value: n, label: fPct(n) })),
+    { value: 100, label: t('accounts.quotas.switchAtLimit') },
+  ]);
+
+  /** Saved at once, as every setting of this tab. */
+  function setSwitchAt(at: number) {
+    app.settings.switchAt = at;
+    app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
   /** « Projection des quotas »: shown at once, saved with the rest of the app's settings as they are, like the accounts. */
@@ -430,6 +443,14 @@
   </Group>
 {/if}
 <Group title={t('accounts.quotas.title')}>
+  <Row label={t('accounts.quotas.switchAt')} desc={t('accounts.quotas.switchAtDesc')}>
+    <Chips
+      label={t('accounts.quotas.switchAt')}
+      options={switchChoices}
+      mono
+      bind:value={() => app.settings.switchAt ?? 100, setSwitchAt}
+    />
+  </Row>
   <Row label={t('accounts.quotas.projection')} desc={t('accounts.quotas.projectionDesc')}>
     <Switch label={t('accounts.quotas.projection')} bind:on={() => app.settings.quotaProjection !== false, setProjection} />
   </Row>

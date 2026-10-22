@@ -497,6 +497,18 @@ pub fn quota_threshold(saved: u32) -> u32 {
     }
 }
 
+/// The threshold of « Changer de compte à » (ESC-148), as saved (`quota_threshold`): 100 is « À
+/// la limite », where nothing moves before the limit.
+pub fn switch_threshold(settings: &Settings) -> u32 {
+    quota_threshold(settings.switch_at)
+}
+
+/// The use past which an account takes no new agent while another can (`accounts::pick`): the
+/// lower of « Pause au-delà du quota » and « Changer de compte à ».
+pub fn pick_threshold(settings: &Settings) -> u32 {
+    quota_threshold(settings.quota_pause).min(switch_threshold(settings))
+}
+
 impl Hold {
     /// What holds the account `id` back (Principal's are the top-level ones).
     pub fn of(&self, id: &str) -> AccountHold {
@@ -2909,6 +2921,21 @@ mod tests {
         // A hand-edited settings file: 0 would hold every ticket back for good.
         assert_eq!(quota_threshold(0), 100);
         assert_eq!(quota_threshold(85), 100);
+    }
+
+    #[test]
+    fn new_agents_leave_an_account_at_the_lower_of_the_pause_and_the_switch() {
+        let with = |quota_pause, switch_at| Settings {
+            quota_pause,
+            switch_at,
+            ..Default::default()
+        };
+        assert_eq!(pick_threshold(&with(100, 100)), 100);
+        assert_eq!(pick_threshold(&with(100, 95)), 95);
+        assert_eq!(pick_threshold(&with(80, 95)), 80);
+        // A value not offered is the limit, as for the pause.
+        assert_eq!(switch_threshold(&with(100, 0)), 100);
+        assert_eq!(pick_threshold(&with(90, 7)), 90);
     }
 
     #[test]

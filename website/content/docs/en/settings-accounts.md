@@ -6,9 +6,9 @@ The “Accounts” tab lists the accounts agents start on, a group per harness, 
 
 An account is a harness run with its own configuration folder (for Claude Code, its `CLAUDE_CONFIG_DIR`), so with its own sign-in, sessions, and quota. Each account belongs to a single harness, and the tab groups them by harness: “Claude Code accounts”, then those of the other harnesses when they have some. No account exists to begin with: only the ones you add count. A harness installed without an account has its group, with “No account” and “Add a Codex account…”. A harness’s machine account, its “Main”, is your usual install: once added, it runs as it always did, with no folder of its own, and it is removed like the others, without signing the machine out. How accounts and their quotas work is explained in [accounts](accounts) and in [usage](usage).
 
-The note under the first group’s title sums it up: “New agents start on the first active account of their harness under the pause threshold, in this order.” In detail:
+The note under the first group’s title sums it up: “New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.” In detail:
 
-- A new agent starts on an account of its harness, never on another harness’s: the first active account of the group that has no quota window (5-hour or weekly for Claude Code) at the pause threshold.
+- A new agent starts on an account of its harness, never on another harness’s: the first active account of the group that has no quota window (5-hour or weekly for Claude Code) at the pause threshold or at “Switch accounts at” (the lower of the two counts).
 - If every active account has reached the threshold, it starts on the first active account, and [autopilot](autopilot) pauses.
 - A project’s “Preferred account”, in the [“Projects”](settings-projects) tab, goes first as long as it is active.
 - An account “Reserved to projects” only receives the agents and tickets of those projects.
@@ -79,6 +79,16 @@ As soon as two harnesses have accounts, the “Harness order” list shows under
 
 The sign-in (`.credentials.json`) and `.claude.json` are never shared: each account has its own.
 
+## Switch accounts at
+
+In the “Quotas” group, at the bottom of the tab, “Switch accounts at” moves an agent to another account before its own runs out.
+
+| Setting | Effect | Default |
+|---|---|---|
+| “Switch accounts at” | When the 5-hour or weekly window of an agent’s account reaches this threshold, the agent goes on on another account of its harness at the end of its turn, and new agents go there. Choices: 80%, 90%, 95%, or “At the limit”. | At the limit |
+
+“At the limit” is how it worked before: nothing moves before the limit, then “Resume a ticket’s agent stopped by the usage limit on another account” ([“Harness”](settings-claude-code) tab) decides. The two settings work together: the threshold acts at the end of a turn, the resume at the limit on a turn the limit stopped halfway. The details are in [the accounts](accounts#switch-accounts-before-the-limit).
+
 ## The pause threshold
 
 The threshold is set in the [“Kanban”](settings-board) tab, not here, but it decides which accounts Escouade sets aside.
@@ -87,7 +97,7 @@ The threshold is set in the [“Kanban”](settings-board) tab, not here, but it
 |---|---|---|
 | “Pause above quota” (for all projects) | No ticket starts while the 5-hour window or the weekly window is at or above this threshold. Choices: 80%, 90%, 95%, or 100%. | 100% |
 
-An account with a window past the threshold is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause threshold”. Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
+An account with a window past the threshold is set aside in favor of the next one of its harness, and the quota panel marks it “past the pause or switch threshold” (it counts “Switch accounts at” too). Autopilot pauses harness by harness: a ticket waits for one of its harness’s accounts to go back under the threshold, while those of another harness start. A harness without a quota never pauses it.
 
 ## Resuming on another account
 

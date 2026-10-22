@@ -7,7 +7,8 @@ export default defineZone('accounts', {
   tab: {
     list: 'Accounts',
     group: '{harness} accounts',
-    order: 'New agents start on the first active account of their harness under the pause threshold, in this order.',
+    order:
+      'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
     name: 'Name',
     folder: 'Folder',
     executable: 'Executable',
@@ -122,7 +123,7 @@ export default defineZone('accounts', {
     caption: 'Account',
     auto: 'Automatic ({name})',
     autoNone: 'Automatic (no account)',
-    autoDetail: 'The project’s, else the first account under the pause threshold.',
+    autoDetail: 'The project’s, else the first account under the pause and switch thresholds.',
     inactive: '{name} (inactive)',
     locked: 'An agent’s account can’t change after its first message (its conversation is filed in that account).',
   },
@@ -131,7 +132,7 @@ export default defineZone('accounts', {
     label: 'Preferred account',
     desc: 'The account this project’s new agents and tickets go to.',
     auto: 'Automatic',
-    autoTitle: 'The first active account under the pause threshold, in the order of the accounts',
+    autoTitle: 'The first active account under the pause and switch thresholds, in the order of the accounts',
     inactive: '{name} (inactive)',
   },
 
@@ -171,6 +172,8 @@ export default defineZone('accounts', {
     reset: 'reset {countdown}',
     overageCurrent: '{names}: extra usage in progress, billed separately. Agents already running stay on it, and new ones go to it too.',
     overage: '{names}: extra usage in progress, billed separately. Agents already running stay on it, new ones go to another account.',
+    overageMoving:
+      '{names}: extra usage in progress, billed separately. Its agents go on on another account at the end of their turn, and new ones go there.',
     projected: '→ {pct}',
     projectedSr: 'projected at the reset: ',
     projectedCost: '→ {amount}',
@@ -184,7 +187,7 @@ export default defineZone('accounts', {
     title: 'Accounts quota',
     noQuota: 'No quota: only what its turns cost counts.',
     current: 'current',
-    over: 'past the pause threshold',
+    over: 'past the pause or switch threshold',
     today: 'Today: {amount}',
   },
 
@@ -197,6 +200,10 @@ export default defineZone('accounts', {
 
   quotas: {
     title: 'Quotas',
+    switchAt: 'Switch accounts at',
+    switchAtLimit: 'At the limit',
+    switchAtDesc:
+      'When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, and new agents go there. “At the limit”: nothing moves before it, then “Resume a ticket’s agent stopped by the usage limit on another account” (Harness) decides. “Pause above quota” (Kanban) also holds the tickets back once every account has passed it.',
     projection: 'Quota projection',
     projectionDesc:
       'In the status bar, after each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%. For a harness without a quota, the day’s cost projected to midnight, against its budget.',

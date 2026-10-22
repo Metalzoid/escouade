@@ -144,6 +144,52 @@ test.describe('two accounts, a conversation stopped by the usage limit', () => {
   });
 });
 
+// « Changer de compte à » (ESC-148): Principal past 95 % of its 5-hour window (its fake `claude` says 96 % at each turn), the
+// threshold at 95 %. The agent's turn runs on Principal whole, then it goes on on the second account, with its session.
+test.describe('two accounts, the first past « Changer de compte à »', () => {
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        for (const dir of [principalDir(root), proDir(root)]) {
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, '.credentials.json'), SIGNED_IN);
+        }
+        fs.writeFileSync(path.join(principalDir(root), 'fake-pct'), '96');
+        return { switchAt: 95, accounts: [{ id: 'pro', name: 'Pro', configDir: proDir(root), claudePath: '', active: true }] };
+      },
+    },
+  });
+
+  test('the agent finishes its turn on the first account, then goes on on the second and says so', async ({ app }) => {
+    const { page } = app;
+    const [principal, pro] = [principalDir(app.root), proDir(app.root)];
+    await addProject(page, app.repo);
+    await expect(page.getByRole('button', { name: /^Compte\s*:\s*Principal$/ })).toBeVisible();
+    await send(page, 'Bonjour');
+    // Its turn is answered on Principal, then it moves: the conversation and a notification say so.
+    await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
+    await expect(page.getByText('L’agent passe sur le compte Pro : Principal est à 96 % de sa fenêtre de 5 h.')).toBeVisible();
+    await expect(page.getByText(/passe sur Pro : Principal à 96 % de sa fenêtre de 5 h\.$/)).toBeVisible();
+    // Its process started again on Pro, on its session; the composer shows the account it runs on.
+    await expect.poll(() => processes(app.launches())).toEqual([principal, pro]);
+    const resumed = app.launches().filter(isAgent)[1];
+    expect(resumed.argv.some((a) => a.startsWith('--resume='))).toBe(true);
+    await expect(page.getByRole('button', { name: /^Compte\s*:\s*Pro$/ })).toBeVisible();
+    // Its next turn runs there, and it stays there.
+    await send(page, 'Encore');
+    await expect(page.getByText('Bonjour, tu as dit : Encore')).toBeVisible();
+    expect(processes(app.launches())).toEqual([principal, pro]);
+    await expect(page.getByText(/^L’agent passe sur le compte/)).toHaveCount(1);
+
+    // The setting, in Réglages › Comptes.
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    const at = dialog.getByRole('group', { name: 'Changer de compte à' });
+    await expect(at.getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 // The accounts of two harnesses (ESC-30): Claude Code's, and one of Codex saved in the settings, alone (ESC-128: no
 // harness has a Principal the user did not add). No agent runs on Codex here: its accounts are only listed, reserved and
 // put in order.

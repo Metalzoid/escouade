@@ -80,6 +80,7 @@ export const SETTINGS: Settings = {
   handoverOnLimit: false,
   handoverModels: {},
   quotaPause: 100,
+  switchAt: 100,
   autoUpdate: true,
   telemetry: false,
   integrations: {

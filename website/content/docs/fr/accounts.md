@@ -4,7 +4,7 @@ Escouade peut lancer tes agents sur plusieurs comptes de chaque harness (personn
 
 ## À quoi servent plusieurs comptes
 
-Un compte Claude, c’est une connexion à claude.ai avec ses quotas (une fenêtre de 5 heures et une fenêtre hebdomadaire) et ses conversations. Avec plusieurs comptes, tu sépares le perso du pro, ou tu gardes un compte à part pour les projets d’un client. Quand un compte atteint le seuil de pause, les nouveaux agents partent sur un autre.
+Un compte Claude, c’est une connexion à claude.ai avec ses quotas (une fenêtre de 5 heures et une fenêtre hebdomadaire) et ses conversations. Avec plusieurs comptes, tu sépares le perso du pro, ou tu gardes un compte à part pour les projets d’un client. Quand un compte atteint le seuil de pause, les nouveaux agents partent sur un autre ; avec « Changer de compte à », les agents déjà lancés aussi, à la fin de leur tour.
 
 Chaque compte est Claude Code lancé avec son propre dossier de configuration (la variable `CLAUDE_CONFIG_DIR`) : il a donc sa connexion, ses sessions et son quota. Escouade ne partage jamais la connexion d’un compte avec un autre.
 
@@ -158,7 +158,7 @@ Un compte préféré qui est devenu inactif, qui est réservé à d’autres pro
 
 Avec plusieurs comptes, le champ de saisie d’un agent (voir [le chat](chat)) a un menu « Compte » à côté du modèle. Tant que tu n’as rien écrit à l’agent, il propose :
 
-- « Automatique (Pro) » : le compte que le choix automatique prendrait maintenant (« Celui du projet, sinon le premier compte sous le seuil de pause. ») ;
+- « Automatique (Pro) » : le compte que le choix automatique prendrait maintenant (« Celui du projet, sinon le premier compte sous les seuils de pause et de changement de compte. ») ;
 - chaque compte actif qui sert le projet.
 
 Choisir un compte change celui de l’agent avant qu’il ne démarre.
@@ -167,7 +167,7 @@ Choisir un compte change celui de l’agent avant qu’il ne démarre.
 
 Dès le premier message, le compte d’un agent ne change plus : le menu devient en lecture seule (« Le compte d’un agent ne change plus après son premier message (sa conversation est rangée dans ce compte). »). Claude Code range en effet chaque conversation dans le dossier du compte qui la lance.
 
-Une seule chose déplace un agent : « Reprendre sur… » (plus bas), qui emporte sa session. Les statistiques comptent chaque tour sur le compte qu’avait l’agent à ce moment-là.
+Deux choses déplacent un agent, avec sa session : « Reprendre sur… » et « Changer de compte à » (plus bas). Les statistiques comptent chaque tour sur le compte qu’avait l’agent à ce moment-là.
 
 ## Réservé aux projets
 
@@ -212,6 +212,24 @@ L’onglet « Comptes » le dit aussi, sous un compte où part encore un proje
 Les agents d’un projet privé qui a un compte à lui ne basculent jamais d’eux-mêmes sur un compte partagé : au-delà du seuil, ses nouveaux agents et ses tickets restent sur son compte, la reprise automatique d’un agent de ticket ne va que sur un autre compte à lui, et le passage automatique à un autre harness seulement si le compte qu’il y prendrait est à lui. Sinon, ils attendent la remise à zéro. Sans compte à lui, le projet garde ses comptes partagés, mais aucune bascule automatique ne le fait changer de compte. Pour le permettre, allume « Comptes partagés à la limite » dans les réglages du projet. « Reprendre sur… » et « Continuer sur… » restent possibles à la main.
 
 Ce qu’un nouveau compte partage avec Principal à sa création (réglages, instructions, skills…) reste partagé, jamais ses sessions ni sa mémoire.
+
+## Changer de compte avant la limite
+
+Le réglage « Changer de compte à » (Réglages › Comptes, groupe « Quotas ») fait passer un agent sur un autre compte quand le sien approche de la limite : à 80 %, 90 % ou 95 % de sa fenêtre de 5 h ou de sa fenêtre hebdomadaire, la première atteinte. Par défaut, il est « À la limite » : rien ne bouge avant, comme avant ce réglage.
+
+Au seuil, l’agent ne s’arrête jamais en plein travail :
+
+- il finit son tour sur son compte, puis son process repart sur l’autre compte, avec sa session : son tour suivant y part ;
+- s’il attend ta réponse (une question, une permission) ou si une tâche tourne en arrière-plan dans son process (une commande, une surveillance, un sous-agent), il reste tant qu’elles sont là, et passe à la première fin de tour sans elles ;
+- les agents ordinaires comme ceux des tickets passent ; les nouveaux agents partent directement sur l’autre compte.
+
+Le compte d’arrivée est le compte préféré du projet, sinon le premier de la liste, à condition qu’il serve le projet, soit connecté et reste lui-même sous le seuil. Un projet privé qui n’a pas allumé « Comptes partagés à la limite » ne passe que sur un compte réservé à lui seul. Seul Claude Code déplace un agent déjà lancé : un agent Codex, Copilot CLI ou OpenCode reste sur son compte, ses nouveaux agents suivent le seuil.
+
+La conversation le dit (« L’agent passe sur le compte Pro : Principal est à 96 % de sa fenêtre de 5 h. »), une notification aussi, et le menu « Compte » de l’agent montre le nouveau compte une fois son process relancé dessus.
+
+Sans compte utilisable, l’agent reste où il est et sa conversation dit pourquoi, une fois : « Principal est à 96 % de sa fenêtre de 5 h, mais aucun autre compte Claude Code ne peut prendre l’agent (sous le seuil, connecté, servant ce projet) : il y reste. » Si ce compte continue en usage supplémentaire, elle ajoute : « Ce compte est en usage supplémentaire, facturé à part. »
+
+Pas de va-et-vient : un agent passé sur un compte ne le quitte que quand celui-ci atteint le seuil à son tour, et le premier ne redevient un choix qu’à sa remise à zéro.
 
 ## Reprendre un agent arrêté par la limite d’usage
 
@@ -280,5 +298,5 @@ Le réglage « Continuer sur le harness suivant quand tous les comptes d’un h
 
 - La barre de statut montre le quota du compte sur lequel partirait un nouvel agent ; un clic ouvre le détail de chaque compte. Voir [les quotas et le coût](usage).
 - Les [statistiques](stats) se filtrent par compte, et leur tableau « Par compte » met les comptes côte à côte.
-- Quand un compte dépasse son quota de 5 h mais continue en usage supplémentaire (facturé à part, si ton abonnement l’a activé), la barre de statut le dit : les agents déjà lancés restent sur ce compte, seuls les nouveaux partent sur un autre. Pour déplacer un agent, utilise « Reprendre sur un autre compte ».
+- Quand un compte dépasse son quota de 5 h mais continue en usage supplémentaire (facturé à part, si ton abonnement l’a activé), la barre de statut le dit : les agents déjà lancés restent sur ce compte, seuls les nouveaux partent sur un autre. Pour déplacer un agent, utilise « Reprendre sur un autre compte », ou règle « Changer de compte à » sous la limite : ils passent alors sur un autre compte à la fin de leur tour.
 - Un compte qui a son propre dossier ne prend jamais l’identité d’une variable de ton environnement (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_SECURESTORAGE_CONFIG_DIR`) : Escouade les écarte pour lui. Principal les garde, comme hors d’Escouade.

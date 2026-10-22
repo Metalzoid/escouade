@@ -253,15 +253,20 @@ export function quotaOf(project: ProjectLike): number | null {
   return ids.length && times.every((x) => x !== null) ? Math.min(...(times as number[])) : null;
 }
 
+/** The use past which an account takes no new agent while another can: the lower of « Pause au-delà du quota » and « Changer de compte à » (ESC-148), as the backend's `board::pick_threshold`. */
+export function pickThreshold(): number {
+  return Math.min(app.settings.quotaPause, app.settings.switchAt ?? 100);
+}
+
 /**
  * The accounts an agent stopped by the usage limit can go on on (« Reprendre sur <compte> »), in the order of the settings:
- * the active ones of its harness other than its own that are signed in and under « Pause au-delà du quota ». One past the
+ * the active ones of its harness other than its own that are signed in and under the threshold (`pickThreshold`). One past the
  * threshold is left out: the agent would meet the limit again there. Another harness's never is (ESC-88).
  */
 export function resumeTargets(agent: Pick<Agent, 'account'> & { projectId?: string; engine?: EngineId }): Account[] {
   const own = accountOf(agent);
   const engine = agent.engine ?? 'claude';
-  const threshold = app.settings.quotaPause;
+  const threshold = pickThreshold();
   return app.settings.accounts.filter((a) => {
     if (!a.active || a.id === own || engineOfAccount(a) !== engine || !serves(a, agent.projectId)) return false;
     const read = app.usage.accounts.find((u) => u.id === a.id);
@@ -464,7 +469,7 @@ export function quotaRows(now: number): QuotaRow[] {
     } else if (usage?.reason) {
       reasons.push(usage.reason);
     }
-    const threshold = app.settings.quotaPause;
+    const threshold = pickThreshold();
     const over = account.active && anyOver(usage, threshold, now);
     const live = liveCostOf(account.id);
     const byHarness = estimatedBy(engineOfAccount(account));

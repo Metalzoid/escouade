@@ -63,15 +63,15 @@ describe('AccountsPanel', () => {
 
   it('signals an account with a window past the pause threshold, and only that one', () => {
     render(AccountsPanel, { onclose: () => {} });
-    expect(within(group('Principal')).getByText('au-delà du seuil de pause')).toBeInTheDocument();
-    expect(within(group('Pro')).queryByText('au-delà du seuil de pause')).not.toBeInTheDocument();
-    expect(screen.getAllByText('au-delà du seuil de pause')).toHaveLength(1);
+    expect(within(group('Principal')).getByText('au-delà du seuil de pause ou de changement de compte')).toBeInTheDocument();
+    expect(within(group('Pro')).queryByText('au-delà du seuil de pause ou de changement de compte')).not.toBeInTheDocument();
+    expect(screen.getAllByText('au-delà du seuil de pause ou de changement de compte')).toHaveLength(1);
   });
 
   it('does not signal a window past the threshold on an account that is switched off', () => {
     app.usage.accounts = [read('team', { fiveHour: win(100) })];
     render(AccountsPanel, { onclose: () => {} });
-    expect(screen.queryByText('au-delà du seuil de pause')).not.toBeInTheDocument();
+    expect(screen.queryByText('au-delà du seuil de pause ou de changement de compte')).not.toBeInTheDocument();
   });
 
   it('dims an account that is switched off and says so', () => {
@@ -193,7 +193,7 @@ describe('AccountsPanel', () => {
     const dialog = screen.getByRole('dialog', { name: 'Accounts quota' });
     expect(within(dialog).getByRole('group', { name: 'Pro' })).toHaveTextContent('current');
     // Principal is Main in English while it keeps its default name.
-    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause threshold');
+    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause or switch threshold');
     expect(within(dialog).getByRole('group', { name: 'Équipe' })).toHaveTextContent('Inactive');
     const pro = within(dialog).getByRole('group', { name: 'Pro' });
     expect(pro).toHaveTextContent('5h');

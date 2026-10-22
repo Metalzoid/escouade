@@ -839,13 +839,25 @@ function startSession() {
   let paced = false;
   // While a <dir>/fake-overage file is there, the account answers as extra usage (ESC-147), its 5-hour window full.
   const overageOn = () => configDir !== null && fs.existsSync(path.join(configDir, 'fake-overage'));
+  // While a <dir>/fake-pct file is there, the 5-hour window says the percentage it holds, until in an hour (ESC-148);
+  // <dir>/fake-week-pct, the weekly window, until in a day.
+  const pctOf = (name = 'fake-pct') => {
+    const file = configDir === null ? null : path.join(configDir, name);
+    return file && fs.existsSync(file) ? Number(fs.readFileSync(file, 'utf8')) / 100 : null;
+  };
   const windows = () => {
     const now = Math.floor(Date.now() / 1000);
+    const pct = pctOf();
     return {
       five_hour: overageOn()
         ? { utilization: 1, resetsAt: now + 3600 }
-        : { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
-      seven_day: { utilization: 0.34, resetsAt: paced ? now + 84 * 3600 : 1790805600 },
+        : pct !== null
+          ? { utilization: pct, resetsAt: now + 3600 }
+          : { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
+      seven_day:
+        pctOf('fake-week-pct') !== null
+          ? { utilization: pctOf('fake-week-pct'), resetsAt: now + 24 * 3600 }
+          : { utilization: 0.34, resetsAt: paced ? now + 84 * 3600 : 1790805600 },
     };
   };
 

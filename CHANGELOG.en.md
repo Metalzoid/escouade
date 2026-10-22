@@ -21,6 +21,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Nothing of a private project goes to another through Escouade either: the “New project” assistant doesn’t offer to copy its setup, and says so, and what Escouade writes to the agents never names another project.
 - A private project offers to reserve it an account, so that the harness’s sessions, memory and history are shared with no other project, and flags an account still shared. Its agents no longer switch to a shared account by themselves at the usage limit, unless you allow it.
 - A `.escouade.yml` in the repository shares the project’s settings with your team (worktrees, launch, Git, Kanban): Escouade uses it as soon as the project opens and reads it again when it changes, but runs none of its commands without your approval. “Export to .escouade.yml” writes it from a project that is already set up.
+- “Switch accounts at” (Settings › Accounts) moves an agent to another account when its own reaches 80, 90 or 95% of its quota, at the end of its turn, never in the middle of its work; the conversation and a notification say so. By default, “At the limit”: nothing changes.
 
 ### Fixes
 

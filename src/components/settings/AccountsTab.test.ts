@@ -50,6 +50,43 @@ describe('AccountsTab', () => {
     expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
   });
 
+  it('sets « Changer de compte à » at once, « À la limite » by default, and says what it changes', async () => {
+    const b = backend();
+    render(SettingsModal, { tab: 'accounts' });
+    const at = screen.getByRole('group', { name: 'Changer de compte à' });
+    expect(
+      within(at)
+        .getAllByRole('button')
+        .map((x) => x.textContent),
+    ).toEqual(['80 %', '90 %', '95 %', 'À la limite']);
+    // Settings saved before it had none: the limit, as before.
+    expect(within(at).getByRole('button', { name: 'À la limite' })).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByText(/^Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/« Reprendre sur un autre compte… » \(Harness\) décide\. « Pause au-delà du quota » \(Kanban\)/),
+    ).toBeInTheDocument();
+    await userEvent.click(within(at).getByRole('button', { name: '95 %' }));
+    expect(within(at).getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
+    expect(app.settings.switchAt).toBe(95);
+    expect(b.called('save_settings')).toHaveLength(1);
+    expect(b.called('save_settings')[0].args.settings).toMatchObject({ switchAt: 95, accounts: [PRINCIPAL, PRO] });
+    // Not part of the draft: nothing to save, nothing to cancel.
+    expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
+  });
+
+  it('says « Changer de compte à » in English', () => {
+    backend();
+    setLang('en');
+    app.settings = { ...app.settings, switchAt: 90 };
+    render(SettingsModal, { tab: 'accounts' });
+    const at = screen.getByRole('group', { name: 'Switch accounts at' });
+    expect(within(at).getByRole('button', { name: '90%' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(at).getByRole('button', { name: 'At the limit' })).toBeInTheDocument();
+    setLang('fr');
+  });
+
   it('comes after « Claude Code » and shows each account, its folder and whether it is signed in', async () => {
     const b = backend();
     render(SettingsModal, { tab: 'accounts' });
@@ -76,7 +113,9 @@ describe('AccountsTab', () => {
     expect(within(row('Principal')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(
-      screen.getByText('Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause, dans cet ordre.'),
+      screen.getByText(
+        'Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à », dans cet ordre.',
+      ),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
     expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
@@ -399,7 +438,9 @@ describe('AccountsTab', () => {
     expect(within(row('Pro')).getByRole('textbox', { name: 'Executable' })).toHaveAttribute('placeholder', 'The one in the settings');
     expect(screen.getByRole('button', { name: 'Add an account…' })).toBeInTheDocument();
     expect(
-      screen.getByText('New agents start on the first active account of their harness under the pause threshold, in this order.'),
+      screen.getByText(
+        'New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds, in this order.',
+      ),
     ).toBeInTheDocument();
     expect(within(row('Main')).getByText('This machine’s account')).toBeInTheDocument();
     // What its new agents go with: the choices are read at each render, in the language of the interface.

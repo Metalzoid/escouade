@@ -275,7 +275,7 @@ impl Harness {
     }
 
     /// Waits until the quotas were read after the turns that ended (`quotas_read_since_turns`).
-    async fn wait_quotas_read(&self) {
+    pub(crate) async fn wait_quotas_read(&self) {
         self.wait("the quota read after the turns", |h| {
             h.quotas_read_since_turns()
         })
@@ -284,7 +284,7 @@ impl Harness {
 
     /// `reading` of the account's quota, set once the turns that ended have had theirs read: the
     /// one the fake CLI sends right after a turn would otherwise come after it, and replace it.
-    async fn record_usage(&self, account: &str, reading: Reading) {
+    pub(crate) async fn record_usage(&self, account: &str, reading: Reading) {
         self.wait_quotas_read().await;
         self.core.record_usage(account, reading);
     }

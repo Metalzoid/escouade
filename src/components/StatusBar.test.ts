@@ -565,6 +565,18 @@ describe('StatusBar quotas of the accounts', () => {
     expect(said).not.toHaveTextContent('partent sur un autre compte');
   });
 
+  it('says the agents in extra usage leave it at the end of their turn when « Changer de compte à » is set (ESC-148)', () => {
+    two();
+    app.settings.switchAt = 95;
+    app.usage = { ...app.usage, accounts: app.usage.accounts.map((u) => (u.id === 'principal' ? { ...u, overage: true } : u)) };
+    render(StatusBar);
+    const said = document.getElementById('quota-description')!;
+    expect(said).toHaveTextContent(
+      /^Principal\s*: usage supplémentaire en cours, facturé à part\. Ses agents passent sur un autre compte à la fin de leur tour, et les nouveaux y partent\./,
+    );
+    expect(said).not.toHaveTextContent('y restent');
+  });
+
   it('says nothing of extra usage when no account is in it', () => {
     two();
     render(StatusBar);
@@ -789,8 +801,8 @@ describe('StatusBar quotas of the accounts', () => {
     await userEvent.click(button);
     const dialog = screen.getByRole('dialog', { name: 'Accounts quota' });
     expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('current');
-    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause threshold');
-    expect(within(dialog).getByRole('group', { name: 'Pro' })).not.toHaveTextContent('past the pause threshold');
+    expect(within(dialog).getByRole('group', { name: 'Main' })).toHaveTextContent('past the pause or switch threshold');
+    expect(within(dialog).getByRole('group', { name: 'Pro' })).not.toHaveTextContent('past the pause or switch threshold');
   });
 });
 

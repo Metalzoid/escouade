@@ -47,6 +47,12 @@ pub struct Settings {
     /// "Pause au-delà du quota", in percent (80, 90, 95 or 100): no ticket of any board starts
     /// while the 5-hour or the weekly window is used this much or more (`board::autopilot_pause`).
     pub quota_pause: u32,
+    /// « Changer de compte à », in percent (80, 90, 95, or 100: « À la limite »): an agent whose
+    /// account has a quota meter used this much or more goes on, at the end of its turn, on another
+    /// usable account of its harness (`switching`), and new agents go to another one (ESC-148).
+    /// At 100, nothing moves before the limit, where « Reprendre sur un autre compte… »
+    /// (`switch_on_limit`) decides, as before: settings saved before it have 100.
+    pub switch_at: u32,
     /// "Installer les mises à jour automatiquement": a downloaded update restarts the app by
     /// itself once it is at rest (`updates::busy`). Off, the user restarts it, or the update
     /// installs when the app is closed.
@@ -496,6 +502,7 @@ impl Default for Settings {
             insecure_tls: false,
             auto_resume: true,
             quota_pause: 100,
+            switch_at: 100,
             auto_update: true,
             integrations: IntegrationSettings::default(),
             language: "system".into(),
@@ -2296,6 +2303,30 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["quotaPause"], json!(90));
+    }
+
+    #[test]
+    fn settings_saved_before_the_switch_threshold_change_account_at_the_limit_only_and_keep_the_rest(
+    ) {
+        // ESC-148: « À la limite », the behaviour of before; the move at the limit kept as it was.
+        for on in [true, false] {
+            let s: Settings = serde_json::from_value(
+                json!({ "quotaPause": 90, "switchOnLimit": on, "handoverOnLimit": on }),
+            )
+            .unwrap();
+            assert_eq!(
+                (s.switch_at, s.switch_on_limit, s.handover_on_limit),
+                (100, on, on)
+            );
+            assert_eq!(s.quota_pause, 90);
+        }
+        assert_eq!(Settings::default().switch_at, 100);
+        let v = serde_json::to_value(Settings {
+            switch_at: 95,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["switchAt"], json!(95));
     }
 
     #[test]

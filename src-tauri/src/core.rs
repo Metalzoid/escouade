@@ -760,6 +760,10 @@ pub struct Core<R: Runtime = Wry> {
     /// The autopilot's pauses as the window was last told (`refresh_pause`): the one of the
     /// projects that go to any account, and those of the projects that prefer an account.
     pub(crate) pause_shown: Mutex<(Option<AutopilotPause>, BTreeMap<String, AutopilotPause>)>,
+    /// The agents being looked at for a move past « Changer de compte à » (`switch_if_over`).
+    pub(crate) switching: Mutex<HashSet<String>>,
+    /// The account each agent past it was told it stays on, no other taking it: told once.
+    pub(crate) switch_told: Mutex<HashMap<String, String>>,
     /// Blocks of ports reserved for agents being made, or being given one: taken until the agent
     /// holds its own.
     pub(crate) ports_reserved: Mutex<Vec<u16>>,
@@ -1627,6 +1631,8 @@ impl<R: Runtime> Core<R> {
             board_issues: Mutex::default(),
             hold: Mutex::new(saved.hold),
             pause_shown: Mutex::default(),
+            switching: Mutex::default(),
+            switch_told: Mutex::default(),
             ports_reserved: Mutex::default(),
             merge_locks: Mutex::default(),
             claude_accounts_lock: Mutex::default(),
@@ -2232,6 +2238,9 @@ impl<R: Runtime> Core<R> {
             });
             // The autopilot pauses (or goes on) as the quotas just read say.
             self.pause_tick();
+            // Read after its turn ended (Claude Code tells it after the result): its account may
+            // just have passed « Changer de compte à » (ESC-148).
+            self.switch_soon(id);
         }
         if let Some(resets_at) = fx.limited {
             self.plan_resume(id, resets_at);
@@ -2493,7 +2502,7 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    fn notify_agent(
+    pub(crate) fn notify_agent(
         self: &Arc<Self>,
         alert: AgentAlert,
         project_id: &str,
@@ -4118,6 +4127,8 @@ impl<R: Runtime> Core<R> {
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
         // twice, files half written).
         self.wait_setup(id).await;
+        // At rest on an account past « Changer de compte à »: this turn goes to another (ESC-148).
+        self.switch_if_over(id).await;
         // Two attempts: the process may die between being started and receiving the message.
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
@@ -8157,7 +8168,7 @@ impl<R: Runtime> Core<R> {
         // Told under the lock: two changes at once reach the window in the order they were made.
         self.hub.emit(UiEvent::Usage { usage: u.clone() });
         // The account new agents go to changed because the one before passed the threshold.
-        let threshold = board::quota_threshold(settings.quota_pause);
+        let threshold = board::pick_threshold(&settings);
         // Each harness's own: new agents never go to another harness by themselves.
         for (engine, to) in &u.current {
             let Some(from) = before.get(engine) else {
