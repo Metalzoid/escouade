@@ -80,6 +80,7 @@ export default defineZone('accounts', {
     machineHint: 'Its usual folder, as it is: its settings, its sign-in and its conversations ({path}).',
     newAccount: 'A new account',
     newHint: 'A folder of its own under ~/.escouade, and its own sign-in.',
+    reservedTo: 'Reserved to the project “{name}”: its sessions, memory and history will be shared with no other project.',
     addMachine: 'Add this account',
     signInTitle: 'Sign in to the account “{name}”',
     name: 'Name',
@@ -132,6 +133,30 @@ export default defineZone('accounts', {
     auto: 'Automatic',
     autoTitle: 'The first active account under the pause threshold, in the order of the accounts',
     inactive: '{name} (inactive)',
+  },
+
+  private: {
+    own: {
+      one: 'Account reserved to this project: {names}. {harness}’s sessions, memory and history there are shared with no other project.',
+      other: 'Accounts reserved to this project: {names}. {harness}’s sessions, memory and history there are shared with no other project.',
+    },
+    machineToo: 'The machine’s account is still {harness}’s outside Escouade.',
+    shared: {
+      one: 'Its agents may go to {names}, an account shared with other projects: {harness}’s sessions, memory, history and global settings are common there.',
+      other:
+        'Its agents may go to {names}, accounts shared with other projects: {harness}’s sessions, memory, history and global settings are common there.',
+    },
+    add: 'Add a reserved account…',
+    reserve: 'Reserve {name} to this project',
+    reserveTitle: 'The other projects will no longer go to this account.',
+    sharedOnLimit: 'Shared accounts at the limit',
+    sharedOnLimitDesc:
+      'When its reserved accounts reach the usage limit, its agents may go on on a shared account (a switch of account, a handover to another harness). Off, they wait for the reset.',
+    sharing: {
+      one: 'The private project {names} still goes to this account, shared with other projects.',
+      other: 'The private projects {names} still go to this account, shared with other projects.',
+    },
+    reserveTo: 'Reserve to “{name}”',
   },
 
   pause: {

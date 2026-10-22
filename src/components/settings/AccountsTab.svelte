@@ -11,6 +11,7 @@
     engineOrder,
     isPrincipal,
     PRINCIPAL,
+    privateSharing,
     projectsWithoutAccount,
   } from '../../lib/accounts';
   import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf } from '../../lib/engines';
@@ -238,6 +239,7 @@
           {@const reserved = a.projects ?? []}
           {@const closedOnes = closedReserved(a)}
           {@const defaults = defaultsOf(a)}
+          {@const sharing = privateSharing(a)}
           <li class="acct" aria-label={name}>
             <div class="line">
               <input
@@ -370,6 +372,26 @@
                 {#if !reserved.length}<span class="k">· {t('accounts.tab.reservedAll')}</span>{/if}
               </div>
             {/if}
+            <!-- A private project still goes to it, shared (ESC-141): reserved to that project alone, it is no longer. -->
+            {#if sharing.length}
+              <div class="line wrap">
+                <p class="sharing">
+                  {t('accounts.private.sharing', {
+                    count: sharing.length,
+                    names: fList(sharing.map((p) => t('accounts.tab.quoted', { name: p.name }))),
+                  })}
+                </p>
+                {#if sharing.length === 1}
+                  <button
+                    class="btn"
+                    use:tip={t('accounts.private.reserveTitle')}
+                    onclick={() => save({ ...plain(a), projects: [sharing[0].id] })}
+                  >
+                    {t('accounts.private.reserveTo', { name: sharing[0].name })}
+                  </button>
+                {/if}
+              </div>
+            {/if}
             {#if late}<p class="late">{late}</p>{/if}
             {#if refused[a.id]}<p class="refused" role="alert">{refused[a.id]}</p>{/if}
           </li>
@@ -414,6 +436,12 @@
 </Group>
 
 <style>
+  .sharing {
+    flex: 1;
+    margin: 0;
+    font-size: 12px;
+    color: var(--wait);
+  }
   .list {
     margin: 0;
     padding: 0;

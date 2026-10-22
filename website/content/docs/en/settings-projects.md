@@ -33,7 +33,10 @@ When “Remote control for all agents” is on in the [“Harness”](settings-c
 |---|---|---|
 | “Private project” | The agents of the other projects don’t see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything. A lock follows its name, on its tab and in the “Project” row. | Off, or “New projects are private” for a project added |
 
-See [private projects](mcp#private-projects).
+| “Accounts” (private project) | The accounts of its default harness its agents may go to: reserved to it alone, or shared with other projects (sessions, memory, history in common). “Add a reserved account…” and “Reserve Pro to this project” fix it. | — |
+| “Shared accounts at the limit” (private project) | When its reserved accounts reach the usage limit, its agents may go on on a shared account (a switch of account, a handover to another harness). Off, they wait for the reset. | Off |
+
+See [private projects](mcp#private-projects) and [an account for a private project](accounts#an-account-for-a-private-project).
 
 ## Git
 

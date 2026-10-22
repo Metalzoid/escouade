@@ -2,16 +2,17 @@
   import { openPath } from '@tauri-apps/plugin-opener';
   import { tick, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
-  import { anyCan, choosesEngine, engineOptions } from '../../lib/engines';
-  import { accountName, accountsOf, serves } from '../../lib/accounts';
+  import { anyCan, choosesEngine, engineName, engineOptions } from '../../lib/engines';
+  import { accountName, accountsFor, accountsOf, dedicated, defaultEngine, isPrincipal, serves, sharedBy } from '../../lib/accounts';
+  import { api } from '../../lib/ipc';
+  import { fList } from '../../lib/format';
   import { askCloseProject } from '../../lib/project-actions';
   import { joinPath, tildify } from '../../lib/format';
   import { revealHidden } from '../../lib/recipe';
   import { settingsForm, worktreesProblems } from '../../lib/settings.svelte';
-  import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import { PROJECT_COLORS } from '../../lib/theme';
-  import type { CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
+  import type { Account, CommitMode, LeftoverReport, Project, WorktreeStep } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -47,6 +48,22 @@
       .filter((a) => (a.active && serves(a, project.id)) || a.id === draft.account)
       .map((a) => ({ value: a.id, label: a.active ? accountName(a) : t('accounts.project.inactive', { name: accountName(a) }) })),
   ]);
+  /**
+   * A private project's accounts (ESC-141), as drafted: those of its default harness reserved to it alone, and those its
+   * agents may still go to that it shares with other projects (sessions, memory and history common there).
+   */
+  const privateEngine = $derived(draft.engine ?? defaultEngine());
+  const asDrafted = $derived({ id: project.id, account: draft.account, private: draft.private, sharedOnLimit: draft.sharedOnLimit });
+  const ownAccounts = $derived(accountsFor(asDrafted, privateEngine).filter((a) => dedicated(a, project.id)));
+  const sharedAccounts = $derived(sharedBy(asDrafted, privateEngine));
+  const quotedNames = (list: Account[]) => fList(list.map((a) => t('accounts.tab.quoted', { name: accountName(a) })));
+
+  /** « Réserver <compte> à ce projet »: saved at once, as Réglages › Comptes saves its accounts. */
+  async function reserveHere(a: Account) {
+    const list = await app.run(api.accountUpdate({ ...$state.snapshot(a), projects: [project.id] }));
+    if (list) app.settings.accounts = list;
+  }
+
   /** What the field says of a « Dossier des worktrees » that cannot be. */
   const DIR_PROBLEMS = {
     itself: 'settings.project.worktreeDirItself',
@@ -238,6 +255,40 @@
   <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')}>
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
   </Row>
+  {#if draft.private}
+    {@const harness = engineName(privateEngine)}
+    <!-- Its accounts (ESC-141): reserved to it alone, or still shared, with what to do about it. -->
+    <Row label={t('accounts.tab.list')} wide>
+      <div class="private-accounts">
+        {#if ownAccounts.length}
+          <p class="said ok" role="status">
+            {t('accounts.private.own', { count: ownAccounts.length, names: quotedNames(ownAccounts), harness })}
+            {#if ownAccounts.some(isPrincipal)}{t('accounts.private.machineToo', { harness })}{/if}
+          </p>
+        {/if}
+        {#if sharedAccounts.length}
+          <p class="said warn" role="status">
+            {t('accounts.private.shared', { count: sharedAccounts.length, names: quotedNames(sharedAccounts), harness })}
+          </p>
+        {/if}
+        {#if sharedAccounts.length || !ownAccounts.length}
+          <div class="actions start">
+            <button class="btn" onclick={() => (app.modal = { kind: 'account', engine: privateEngine, reserveFor: project.id })}>
+              {t('accounts.private.add')}
+            </button>
+            {#each sharedAccounts as a (a.id)}
+              <button class="btn ghost" use:tip={t('accounts.private.reserveTitle')} onclick={() => reserveHere(a)}>
+                {t('accounts.private.reserve', { name: accountName(a) })}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </Row>
+    <Row label={t('accounts.private.sharedOnLimit')} desc={t('accounts.private.sharedOnLimitDesc')}>
+      <Switch label={t('accounts.private.sharedOnLimit')} bind:on={draft.sharedOnLimit} />
+    </Row>
+  {/if}
 </Group>
 
 <Group title="Git">
@@ -469,6 +520,27 @@
     border-radius: 7px;
     padding: 0;
     cursor: pointer;
+  }
+  .private-accounts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .said {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .said.ok {
+    color: var(--ok);
+  }
+  .said.warn {
+    color: var(--wait);
+  }
+  .actions.start {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
   .remote {
     display: flex;

@@ -360,6 +360,90 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   });
 });
 
+describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
+  const PRIVATE = 'Projet privé';
+  const LIMIT = 'Comptes partagés à la limite';
+  const pro = { id: 'pro', name: 'Pro', configDir: 'C:/acc/pro', claudePath: '', active: true };
+  const principal = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
+
+  beforeEach(() => {
+    setLang('fr');
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'site' })] });
+    app.settings.accounts = [principal, pro];
+    app.modal = { kind: 'settings' };
+  });
+
+  it('says nothing of the accounts of a project that is not private', () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(screen.queryByRole('switch', { name: LIMIT })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter un compte réservé…' })).toBeNull();
+  });
+
+  it('made private, says which shared accounts it still goes to and offers to reserve one', async () => {
+    const backend = fakeBackend({
+      account_update: ({ account }) => [principal, account],
+    });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
+    expect(
+      screen.getByText(
+        'Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés avec d’autres projets : sessions, mémoire, historique et réglages globaux de Claude Code y sont communs.',
+      ),
+    ).toBeVisible();
+    // Pro reserved to it alone, at once: what it shares is now Principal only, at the limit too unless allowed.
+    await userEvent.click(screen.getByRole('button', { name: 'Réserver Pro à ce projet' }));
+    expect(backend.called('account_update')[0].args.account).toMatchObject({ id: 'pro', projects: ['p1'] });
+    expect(
+      await screen.findByText(
+        'Compte réservé à ce projet : « Pro ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/^Ses agents peuvent partir sur/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajouter un compte réservé…' })).toBeNull();
+    // Allowed to go on on a shared account at the limit: Principal is shared again, and said so.
+    const limit = screen.getByRole('switch', { name: LIMIT });
+    expect(limit).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(limit);
+    expect(screen.getByText(/Ses agents peuvent partir sur « Principal », un compte partagé/)).toBeVisible();
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true, sharedOnLimit: true });
+  });
+
+  it('adds an account reserved to it, back to its settings as drafted', async () => {
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: PRIVATE }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ajouter un compte réservé…' }));
+    expect(app.modal).toEqual({ kind: 'account', engine: 'claude', reserveFor: 'p1' });
+  });
+
+  it('says the machine’s account reserved to it is still the harness’s outside Escouade', () => {
+    fakeBackend();
+    app.projects[0].private = true;
+    app.settings.accounts = [
+      { ...principal, projects: ['p1'] },
+      { ...pro, projects: ['p2'] },
+    ];
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(
+      screen.getByText(
+        'Compte réservé à ce projet : « Principal ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet. Le compte de la machine reste celui de Claude Code hors d’Escouade.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('says it in English', async () => {
+    setLang('en');
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: 'Private project' }));
+    expect(screen.getByRole('switch', { name: 'Shared accounts at the limit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a reserved account…' })).toBeInTheDocument();
+    expect(screen.getByText(/Its agents may go to “Main” and “Pro”, accounts shared with other projects/)).toBeVisible();
+  });
+});
+
 describe('ProjectTab: its default harness (ESC-29)', () => {
   beforeEach(() => {
     resetApp({ projects: [project()] });

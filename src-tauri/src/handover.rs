@@ -472,7 +472,8 @@ impl<R: Runtime> Core<R> {
     /// The accounts of `engine` serving `project` that may take an agent now, in the settings'
     /// order, `spent` (an account just stopped by the limit) left out.
     fn usable_accounts(&self, engine: EngineId, project: &str, spent: Option<&str>) -> Vec<String> {
-        let settings = accounts::for_project(&self.settings.read(), engine, Some(project));
+        let all = self.settings.read().clone();
+        let settings = self.project_accounts(&all, engine, project);
         settings
             .accounts
             .iter()
@@ -534,7 +535,7 @@ impl<R: Runtime> Core<R> {
     /// Whether the program of `engine` is found for the account an agent of `project` would go to.
     fn engine_found_for(&self, engine: EngineId, project: &str) -> bool {
         let all = self.settings.read().clone();
-        let settings = accounts::for_project(&all, engine, Some(project));
+        let settings = self.project_accounts(&all, engine, project);
         let Some(first) = settings.accounts.iter().find(|a| a.active) else {
             return false;
         };
@@ -545,7 +546,7 @@ impl<R: Runtime> Core<R> {
     /// one when it is of that harness, else the first usable one, else the first active one.
     fn handover_account(&self, engine: EngineId, project: &str) -> Option<String> {
         let all = self.settings.read().clone();
-        let settings = accounts::for_project(&all, engine, Some(project));
+        let settings = self.project_accounts(&all, engine, project);
         if !settings.accounts.iter().any(|a| a.active) {
             return None;
         }
@@ -556,6 +557,16 @@ impl<R: Runtime> Core<R> {
         accounts::pick_where(&settings, preferred.as_deref(), |id| {
             self.account_usable(id)
         })
+    }
+
+    /// Whether an agent of `project` may go on its own to `engine` at the usage limit: the
+    /// account it would go to there is not one a private project shares (`accounts::may_switch_to`).
+    fn may_hand_over_to(&self, engine: EngineId, project: &str) -> bool {
+        let Ok(p) = self.project(project) else {
+            return true;
+        };
+        self.handover_account(engine, project)
+            .is_some_and(|id| accounts::may_switch_to(&self.settings.read(), &p, &id))
     }
 
     /// When the quota the agent's account of its harness has spent resets: the resume it waits
@@ -825,7 +836,9 @@ impl<R: Runtime> Core<R> {
         let Some(target) = targets
             .into_iter()
             .filter(|e| Some(*e) != left)
-            .find(|e| !self.usable_accounts(*e, &project, None).is_empty())
+            .filter(|e| !self.usable_accounts(*e, &project, None).is_empty())
+            // A private project goes on its own to none of the accounts it shares (ESC-141).
+            .find(|e| self.may_hand_over_to(*e, &project))
         else {
             return false;
         };

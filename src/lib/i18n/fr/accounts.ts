@@ -92,6 +92,8 @@ export default {
     machineHint: 'Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations ({path}).',
     newAccount: 'Un nouveau compte',
     newHint: 'Un dossier à lui sous ~/.escouade, et sa propre connexion.',
+    /** Added from a private project's settings (ESC-141). */
+    reservedTo: 'Réservé au projet « {name} » : ses sessions, sa mémoire et son historique ne seront partagés avec aucun autre projet.',
     addMachine: 'Ajouter ce compte',
     signInTitle: 'Se connecter au compte « {name} »',
     name: 'Nom',
@@ -147,6 +149,34 @@ export default {
     auto: 'Automatique',
     autoTitle: 'Le premier compte actif sous le seuil de pause, dans l’ordre des comptes',
     inactive: '{name} (inactif)',
+  },
+
+  /** A private project's accounts (ESC-141), in its settings and in Réglages › Comptes. `{names}`: quoted, as in a sentence. */
+  private: {
+    own: {
+      one: 'Compte réservé à ce projet : {names}. Sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
+      other:
+        'Comptes réservés à ce projet : {names}. Sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
+    },
+    /** After `own` when the machine's account is one of them. */
+    machineToo: 'Le compte de la machine reste celui de {harness} hors d’Escouade.',
+    shared: {
+      one: 'Ses agents peuvent partir sur {names}, un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de {harness} y sont communs.',
+      other:
+        'Ses agents peuvent partir sur {names}, des comptes partagés avec d’autres projets : sessions, mémoire, historique et réglages globaux de {harness} y sont communs.',
+    },
+    add: 'Ajouter un compte réservé…',
+    reserve: 'Réserver {name} à ce projet',
+    reserveTitle: 'Les autres projets ne partiront plus sur ce compte.',
+    sharedOnLimit: 'Comptes partagés à la limite',
+    sharedOnLimitDesc:
+      'À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé (changement de compte, passage à un autre harness). Éteint, ils attendent la remise à zéro.',
+    /** Réglages › Comptes, under an account a private project shares. */
+    sharing: {
+      one: 'Le projet privé {names} part encore sur ce compte, partagé avec d’autres projets.',
+      other: 'Les projets privés {names} partent encore sur ce compte, partagé avec d’autres projets.',
+    },
+    reserveTo: 'Réserver à « {name} »',
   },
 
   // Under the autopilot's pause: the accounts that are past « Pause au-delà du quota ».

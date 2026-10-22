@@ -576,3 +576,32 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(screen.getByRole('button', { name: 'Move Harness nu up' })).toBeInTheDocument();
   });
 });
+
+describe('AccountsTab: an account a private project shares (ESC-141)', () => {
+  beforeEach(() => {
+    setLang('fr');
+    resetApp({ projects: [project({ id: 'p1', name: 'client', private: true }), project({ id: 'p2', name: 'site' })] });
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
+    app.modal = { kind: 'settings', tab: 'accounts' };
+  });
+
+  it('says a private project still goes to it, and reserves it to that project alone', async () => {
+    const b = backend({ account_update: ({ account }) => [PRINCIPAL, account] });
+    render(SettingsModal, { tab: 'accounts' });
+    const said = 'Le projet privé « client » part encore sur ce compte, partagé avec d’autres projets.';
+    expect(within(row('Principal')).getByText(said)).toBeVisible();
+    expect(within(row('Pro')).getByText(said)).toBeVisible();
+    await userEvent.click(within(row('Pro')).getByRole('button', { name: 'Réserver à « client »' }));
+    expect(b.called('account_update')[0].args.account).toEqual({ ...PRO, projects: ['p1'] });
+    // Its own now: neither account says it any more (it goes to Pro alone).
+    await waitFor(() => expect(screen.queryByText(said)).not.toBeInTheDocument());
+  });
+
+  it('says nothing of an account reserved to the private project alone, nor of a project that is not private', () => {
+    backend();
+    app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['p1'] }];
+    app.projects[0].sharedOnLimit = false;
+    render(SettingsModal, { tab: 'accounts' });
+    expect(screen.queryByText(/part encore sur ce compte/)).not.toBeInTheDocument();
+  });
+});

@@ -289,6 +289,39 @@ describe('AccountModal', () => {
     expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
   });
 
+  it('asked by a private project, makes a new account reserved to it alone and goes back to its settings (ESC-141)', async () => {
+    app.projects = [{ ...app.projects[0], id: 'p1', name: 'client', private: true }];
+    const reservedPro = { ...PRO, projects: ['p1'] };
+    const b = backend([OUT, IN], {
+      account_machine: () => ({
+        found: true,
+        added: false,
+        connected: true,
+        signsIn: true,
+        email: 'ada@atlas.dev',
+        dir: 'C:\\Users\\ada\\.claude',
+      }),
+      account_update: () => [PRINCIPAL, reservedPro],
+    });
+    render(AccountModal, { engine: 'claude', reserveFor: 'p1' });
+    expect(
+      screen.getByText(
+        'Réservé au projet « client » : ses sessions, sa mémoire et son historique ne seront partagés avec aucun autre projet.',
+      ),
+    ).toBeInTheDocument();
+    // The machine's account may be added, but a new one is offered first: its folder is the harness's outside Escouade.
+    await screen.findByText(/Claude Code est connecté sur cette machine/);
+    expect(screen.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Nom' }), 'Client');
+    await userEvent.click(screen.getByRole('button', { name: 'Créer et se connecter' }));
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(1));
+    expect(b.called('account_update')[0].args.account).toMatchObject({ id: 'pro', projects: ['p1'] });
+    expect(app.settings.accounts).toEqual([PRINCIPAL, reservedPro]);
+    await vi.advanceTimersByTimeAsync(2000);
+    await userEvent.click(await screen.findByRole('button', { name: 'Terminé' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+  });
+
   it('waits a moment more for the email Claude Code writes after the sign-in', async () => {
     backend([OUT, { ...IN, email: null }, { ...IN, email: null }]);
     app.settings.accounts = [PRINCIPAL, PRO];

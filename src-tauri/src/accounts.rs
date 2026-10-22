@@ -13,7 +13,7 @@ use crate::board;
 use crate::core::Core;
 use crate::engine::{self, Process};
 use crate::i18n::Lang;
-use crate::model::{Account, AccountUsage, EngineId, QuotaMeter, Settings};
+use crate::model::{Account, AccountUsage, EngineId, Project, QuotaMeter, Settings};
 use crate::pty::TermInfo;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -417,6 +417,49 @@ pub fn for_project(settings: &Settings, engine: EngineId, project: Option<&str>)
         a.active = false;
     }
     s
+}
+
+/// Whether the account is reserved to `project` alone (« Réservé aux projets »): the only
+/// accounts whose sessions, memory and history a private project shares with no other (ESC-141).
+pub fn dedicated(account: &Account, project: &str) -> bool {
+    matches!(account.projects.as_slice(), [p] if p == project)
+}
+
+/// Whether the agents of the project never go on their own to an account it shares with other
+/// projects: a private project that did not allow it (« Comptes partagés à la limite »).
+pub fn confined(project: &Project) -> bool {
+    project.private && !project.shared_on_limit
+}
+
+/// `for_project` for `project` itself. A confined one (`confined`) with an active account of
+/// `engine` reserved to it alone goes to those only, and to the one it prefers (« Compte
+/// préféré », the user's own choice): the others are taken as switched off, so that an account
+/// past the threshold sends neither its new agents, its tickets nor a handover to a shared one.
+pub fn for_project_of(settings: &Settings, engine: EngineId, project: &Project) -> Settings {
+    let mut s = for_project(settings, engine, Some(&project.id));
+    let own = |a: &Account| dedicated(a, &project.id);
+    if confined(project) && s.accounts.iter().any(|a| a.active && own(a)) {
+        let preferred = project.account.trim();
+        for a in s
+            .accounts
+            .iter_mut()
+            .filter(|a| !own(a) && a.id != preferred)
+        {
+            a.active = false;
+        }
+    }
+    s
+}
+
+/// Whether an agent of `project` may go on its own (at the usage limit: a switch of account, a
+/// handover) to the account `id`: always, but for a confined project only to an account reserved
+/// to it alone.
+pub fn may_switch_to(settings: &Settings, project: &Project, id: &str) -> bool {
+    !confined(project)
+        || settings
+            .accounts
+            .iter()
+            .any(|a| a.id == id && dedicated(a, &project.id))
 }
 
 /// Whether an active account of `engine` serves new agents of `project` (none: of no project).
@@ -2994,6 +3037,43 @@ mod tests {
         let over = [used("principal", 100.0, end)];
         assert_eq!(pick(&other, &over, 95, None, NOW).as_deref(), Some("team"));
         assert_eq!(pick(&client, &over, 95, None, NOW).as_deref(), Some("pro"));
+    }
+
+    #[test]
+    fn a_private_project_with_an_account_of_its_own_goes_to_it_alone_unless_it_allowed_shared_ones()
+    {
+        let mut s = three();
+        // Pro is the client's alone, Team the client's and another's, Principal everyone's.
+        s.accounts[1].projects = vec!["client".into()];
+        s.accounts[2].projects = vec!["client".into(), "other".into()];
+        assert!(dedicated(&s.accounts[1], "client"));
+        assert!(!dedicated(&s.accounts[2], "client"));
+        assert!(!dedicated(&s.accounts[0], "client"));
+        let mut client = crate::core::blank_project("C:/client");
+        client.id = "client".into();
+        // Not private: every account that serves it, as before.
+        let of =
+            |s: &Settings, p: &Project| candidates(&for_project_of(s, EngineId::Claude, p), None);
+        assert_eq!(of(&s, &client), ["principal", "pro", "team"]);
+        assert!(may_switch_to(&s, &client, "team"));
+        client.private = true;
+        assert_eq!(of(&s, &client), ["pro"]);
+        assert!(may_switch_to(&s, &client, "pro"));
+        assert!(!may_switch_to(&s, &client, "team"));
+        assert!(!may_switch_to(&s, &client, "principal"));
+        // The account it prefers, though shared, stays the user's choice.
+        client.account = "team".into();
+        assert_eq!(of(&s, &client), ["pro", "team"]);
+        // « Comptes partagés à la limite »: as any project.
+        client.account.clear();
+        client.shared_on_limit = true;
+        assert_eq!(of(&s, &client), ["principal", "pro", "team"]);
+        assert!(may_switch_to(&s, &client, "team"));
+        // Private with no account of its own: it shares them all already, none is taken away.
+        client.shared_on_limit = false;
+        s.accounts[1].projects.clear();
+        assert_eq!(of(&s, &client), ["principal", "pro", "team"]);
+        assert!(!may_switch_to(&s, &client, "pro"));
     }
 
     #[test]

@@ -6693,6 +6693,89 @@ async fn the_agent_of_a_blocked_ticket_stays_where_it_is_at_the_limit() {
     assert_eq!(h.core.hold.lock().of("pro").limit_until, None);
 }
 
+/// P made private (« Projet privé »), « Comptes partagés à la limite » as `shared`, and the
+/// accounts `own` reserved to it alone; the others serve every project (ESC-141).
+fn private_with_own(h: &Harness, p: &Project, own: &[&str], shared: bool) {
+    let mut project = h.core.project(&p.id).unwrap();
+    project.private = true;
+    project.shared_on_limit = shared;
+    h.core.update_project(project).unwrap();
+    h.set_settings(|s| {
+        for a in s
+            .accounts
+            .iter_mut()
+            .filter(|a| own.contains(&a.id.as_str()))
+        {
+            a.projects = vec![p.id.clone()];
+        }
+    });
+}
+
+#[tokio::test]
+async fn a_private_projects_agent_does_not_go_on_on_a_shared_account_at_the_limit() {
+    let h = harness("tk-limit-private");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    // Pro is P's own, Équipe and Principal serve every project: it waits for Pro's reset.
+    private_with_own(&h, &p, &["pro"], false);
+    a_limited_ticket_stays_on_pro(&h, &p).await;
+}
+
+#[tokio::test]
+async fn a_private_projects_agent_goes_on_on_a_shared_account_when_the_user_allowed_it() {
+    let h = harness("tk-limit-private-allowed");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    private_with_own(&h, &p, &["pro"], true);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(h.agent_of(&t.id).account, "equipe");
+}
+
+#[tokio::test]
+async fn a_private_projects_agent_goes_on_on_another_account_of_its_own_at_the_limit() {
+    let h = harness("tk-limit-private-own");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    // Pro and Équipe are both P's own: the move stays among them.
+    private_with_own(&h, &p, &["pro", "equipe"], false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Un [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(h.agent_of(&t.id).account, "equipe");
+}
+
+#[tokio::test]
+async fn a_private_projects_new_agents_stay_on_its_own_account_past_the_threshold() {
+    let h = harness("tk-private-new");
+    let (p, _) = h.project(false).await;
+    pro_then_team_then_principal(&h);
+    private_with_own(&h, &p, &["pro"], false);
+    used_for_an_hour(&h, "pro", 100.0).await;
+    // Past the threshold, Pro would hand its new agents to Équipe: P's stay on Pro.
+    assert_eq!(
+        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        "pro"
+    );
+    // Allowed, or not private, they go to Équipe as any project's do.
+    let mut project = h.core.project(&p.id).unwrap();
+    project.shared_on_limit = true;
+    h.core.update_project(project).unwrap();
+    assert_eq!(
+        h.core.account_for_new(&p.id, EngineId::Claude).unwrap(),
+        "equipe"
+    );
+}
+
 #[tokio::test]
 async fn a_tickets_agent_waits_when_no_other_account_is_usable() {
     let h = harness("tk-limit-stay-none");

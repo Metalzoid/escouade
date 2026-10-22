@@ -19,12 +19,17 @@
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
   // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  // `reserveFor` (a private project's settings, ESC-141): the account added is reserved to that project alone, a new one
+  // offered first (the machine's is its folder outside Escouade too), and it closes back to that project's settings.
   let {
     accountId,
     back,
     engine: asked,
+    reserveFor,
     onclose,
-  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; onclose?: () => void } = $props();
+  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
+  /** The project the account is added for, while it is open still. */
+  const reservedTo = $derived(reserveFor ? app.projects.find((p) => p.id === reserveFor) : undefined);
 
   /** What the modal says of the folders of a harness's accounts: Claude Code's unless the harness has its own. */
   const SAYS: Partial<Record<EngineId, { nothing: Key; never: Key; hint: Key }>> = {
@@ -150,7 +155,7 @@
       .then((m) => {
         if (of !== engine) return;
         machine = m;
-        kind = m.connected && !m.added ? 'machine' : 'new';
+        kind = m.connected && !m.added && !reserveFor ? 'machine' : 'new';
       })
       .catch(() => (machine = null));
   }
@@ -167,7 +172,7 @@
     busy = true;
     error = null;
     try {
-      const made = await api.accountAddMachine(engine);
+      const made = await reserved(await api.accountAddMachine(engine));
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
       void app.run(api.refreshUsage());
       close();
@@ -201,13 +206,21 @@
     return () => mountTerminal(id, null);
   });
 
+  /** The account made, reserved to `reserveFor` alone when it is asked for (the backend then gives every account). */
+  async function reserved(made: Account): Promise<Account> {
+    if (!reserveFor) return made;
+    const list = await api.accountUpdate({ ...made, projects: [reserveFor] });
+    app.settings.accounts = list;
+    return list.find((a) => a.id === made.id) ?? made;
+  }
+
   async function create() {
     if (!name.trim() || busy) return;
     busy = true;
     error = null;
     try {
       const share = (shareable ?? []).filter((n) => checked[n]);
-      const made = await api.accountCreate(name.trim(), share, mode, engine);
+      const made = await reserved(await api.accountCreate(name.trim(), share, mode, engine));
       // The backend tells them all (`accounts`): this one at once.
       if (!app.settings.accounts.some((a) => a.id === made.id)) app.settings.accounts = [...app.settings.accounts, made];
       account = made;
@@ -305,6 +318,7 @@
   function close() {
     stop();
     if (onclose) onclose();
+    else if (reserveFor) app.modal = { kind: 'settings', tab: 'projects', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }
 
@@ -329,6 +343,7 @@
 
 <!-- Signing in, only its × closes it: the account stays, not signed in. -->
 <Modal {title} width={account ? 820 : 600} onclose={close} footer={!account || signedIn ? actions : undefined}>
+  {#if reservedTo}<p class="note" role="note">{t('accounts.modal.reservedTo', { name: reservedTo.name })}</p>{/if}
   {#if !account}
     {#if engines.length > 1}
       <div class="field-row">

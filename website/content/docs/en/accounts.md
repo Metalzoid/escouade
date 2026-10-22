@@ -198,6 +198,21 @@ An account that was reserved to that project alone therefore serves no open proj
 
 That tab shows the closed project in the account’s “Reserved to projects” row, ticked and marked “(closed)”, for example “Client (closed)”. Untick it to free the account: with nothing ticked, it serves every project again. When you reopen the project (see [Closed projects](settings-projects#closed-projects)), its reservations are still there: there is nothing to redo. If you erase the history, when closing or later under “Closed projects”, the project leaves every account’s list. The project’s “Preferred account”, for its part, goes back to “Automatic” on reopening if its account no longer exists.
 
+### An account for a private project
+
+Two projects on the same account share its folder: the harness’s sessions, memory, history and global settings. A [private project](mcp#private-projects) is only fully partitioned with an account reserved to it alone: ticked for that project and no other.
+
+As soon as you turn on “Private project” in the project’s settings, the “Accounts” row says where its agents may go. An account reserved to it alone: “Account reserved to this project: “Pro”. Claude Code’s sessions, memory and history there are shared with no other project.” An account still shared, in amber: “Its agents may go to “Main”, an account shared with other projects: Claude Code’s sessions, memory, history and global settings are common there.” To fix it:
+
+- “Add a reserved account…” opens “Add an account”, on a new account with its own folder. The account made is reserved to the project alone, then you are back in its settings.
+- “Reserve Main to this project” reserves an existing account to the project alone at once: the other projects no longer go to it.
+
+The “Accounts” tab says it too, under an account a private project still goes to: “The private project “Client” still goes to this account, shared with other projects.”, with “Reserve to “Client””.
+
+The agents of a private project that has an account of its own never switch to a shared account by themselves: past the threshold, its new agents and tickets stay on its account, the automatic resume of a ticket agent only goes to another account of its own, and the automatic handover to another harness only if the account it would take there is its own. Otherwise, they wait for the reset. Without an account of its own, the project keeps its shared accounts, but no automatic switch moves it to another account. To allow it, turn on “Shared accounts at the limit” in the project’s settings. “Resume on…” and “Continue on…” are still yours to click.
+
+What a new account shares with Main when it is made (settings, instructions, skills…) stays shared, never its sessions or its memory.
+
 ## Resume an agent stopped by the usage limit
 
 ### What happens at the limit

@@ -108,6 +108,7 @@ type ProjectFields = Pick<
   | 'remoteControl'
   | 'engine'
   | 'private'
+  | 'sharedOnLimit'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -138,6 +139,8 @@ export interface ProjectDraft {
   engine: EngineId | null;
   /** « Projet privé ». */
   private: boolean;
+  /** « Comptes partagés à la limite ». */
+  sharedOnLimit: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -160,6 +163,7 @@ function draftOf(p: Project): ProjectDraft {
     remoteControl,
     engine,
     private: isPrivate,
+    sharedOnLimit,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -181,6 +185,8 @@ function draftOf(p: Project): ProjectDraft {
     engine: engine ?? null,
     // Absent from a project of the window's tests made before ESC-139.
     private: !!isPrivate,
+    // Absent from a project of the window's tests made before ESC-141.
+    sharedOnLimit: !!sharedOnLimit,
     board,
     integrations,
   };
@@ -230,6 +236,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     remoteControl: d.remoteControl,
     engine: d.engine,
     private: d.private,
+    sharedOnLimit: d.sharedOnLimit,
   };
 }
 

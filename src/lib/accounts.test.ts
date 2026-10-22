@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, project, resetApp, usageOf } from '../test/ipc';
 import {
+  dedicated,
   fProjection,
   newAgentAccount,
   overThreshold,
@@ -12,6 +13,7 @@ import {
   projectsWithoutAccount,
   quotaOf,
   quotaRows,
+  sharedBy,
 } from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
@@ -40,6 +42,24 @@ describe('the accounts of a project', () => {
     // Before the backend told which: the first active one.
     app.usage.current = { claude: '' };
     expect(newAgentAccount(project())?.id).toBe('principal');
+  });
+
+  it('sends a private project’s new agents to its own accounts alone, past the threshold too, unless it allowed shared ones (ESC-141)', () => {
+    const client = project({ id: 'client', private: true });
+    app.projects = [client];
+    app.settings.accounts = [PRINCIPAL, { ...PRO, projects: ['client'] }, TEAM];
+    // The backend says Principal is where new agents go now (Pro past the threshold): not the client's.
+    app.usage.current = { claude: 'principal' };
+    expect(newAgentAccount(client)?.id).toBe('pro');
+    expect(sharedBy(client)).toEqual([]);
+    expect(dedicated({ projects: ['client'] }, 'client')).toBe(true);
+    expect(dedicated({ projects: ['client', 'site'] }, 'client')).toBe(false);
+    // Allowed: as any project.
+    app.projects = [{ ...client, sharedOnLimit: true }];
+    expect(newAgentAccount(app.projects[0])?.id).toBe('principal');
+    expect(sharedBy(app.projects[0]).map((a) => a.id)).toEqual(['principal']);
+    // Not private: nothing it shares is told.
+    expect(sharedBy(project({ id: 'client' }))).toEqual([]);
   });
 
   it('never goes to an account reserved to other projects, and a project with accounts of its own waits for them', () => {

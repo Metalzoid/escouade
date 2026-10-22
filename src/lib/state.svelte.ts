@@ -106,7 +106,7 @@ export type Modal =
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId }
+  | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs. */

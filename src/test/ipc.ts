@@ -148,6 +148,7 @@ export function project(over: Partial<Project> = {}): Project {
     remoteControl: false,
     engine: null,
     private: false,
+    sharedOnLimit: false,
     ...over,
   };
 }

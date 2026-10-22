@@ -1092,7 +1092,7 @@ impl<R: Runtime> Core<R> {
         projects
             .iter()
             .filter_map(|p| {
-                let settings = accounts::for_project(&all, p.engine(), Some(&p.id));
+                let settings = accounts::for_project_of(&all, p.engine(), p);
                 let preferred = accounts::preferred(&settings, &p.account);
                 if preferred.is_none() && accounts::candidates(&settings, None) == any {
                     return None;
@@ -1117,7 +1117,7 @@ impl<R: Runtime> Core<R> {
             let name = project.map_or_else(|| project_id.to_string(), |p| p.name);
             return Err(accounts::no_account(&name, engine));
         }
-        let settings = accounts::for_project(&all, engine, Some(project_id));
+        let settings = self.project_accounts(&all, engine, project_id);
         let preferred =
             project.and_then(|p| accounts::preferred(&settings, &p.account).map(str::to_string));
         self.pick_account(&settings, preferred.as_deref())
@@ -1762,7 +1762,8 @@ impl<R: Runtime> Core<R> {
         if !accounts::serves_any(&settings, engine, Some(&project)) {
             return None;
         }
-        let settings = accounts::for_project(&settings, engine, Some(&project));
+        let all = settings;
+        let settings = self.project_accounts(&all, engine, &project);
         let preferred = self
             .project(&project)
             .ok()
@@ -1788,7 +1789,26 @@ impl<R: Runtime> Core<R> {
                 && !accounts::over_threshold(&usage, id, threshold, now)
         };
         let target = accounts::pick_where(&settings, preferred.as_deref(), usable)?;
-        usable(&target).then_some(target)
+        // A private project goes on its own to none of the accounts it shares (ESC-141): its agent
+        // waits for the reset, unless « Comptes partagés à la limite » allows it.
+        let project = self.project(&project).ok();
+        let allowed = project.is_none_or(|p| accounts::may_switch_to(&all, &p, &target));
+        (usable(&target) && allowed).then_some(target)
+    }
+
+    /// The accounts of `engine` as a new agent of the project `project_id` sees them
+    /// (`accounts::for_project_of`); one the app does not know, as any project
+    /// (`accounts::for_project`).
+    pub(crate) fn project_accounts(
+        &self,
+        all: &Settings,
+        engine: EngineId,
+        project_id: &str,
+    ) -> Settings {
+        match self.project(project_id) {
+            Ok(p) => accounts::for_project_of(all, engine, &p),
+            Err(_) => accounts::for_project(all, engine, Some(project_id)),
+        }
     }
 
     /// Sends the ticket's agent a message; when it cannot, the ticket is blocked with the reason.

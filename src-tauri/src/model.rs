@@ -590,6 +590,11 @@ pub struct Project {
     /// window see every project.
     #[serde(default)]
     pub private: bool,
+    /// « Comptes partagés à la limite » (a private project, ESC-141): its agents may go on on an
+    /// account it shares with other projects when its own reach the usage limit. Off: they wait
+    /// for the reset (`accounts::confined`).
+    #[serde(default)]
+    pub shared_on_limit: bool,
 }
 
 impl Project {

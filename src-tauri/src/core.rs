@@ -1335,7 +1335,7 @@ fn worktree_moved(lang: i18n::Lang, from: &str, to: &str) -> String {
 
 /// A project of the folder `path` with the settings a new one starts from, and no id: what
 /// `add_project` fills in, or what the new project's assistant asks Claude about before it is made.
-fn blank_project(path: &str) -> Project {
+pub(crate) fn blank_project(path: &str) -> Project {
     Project {
         id: String::new(),
         name: String::new(),
@@ -1357,6 +1357,7 @@ fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        shared_on_limit: false,
     }
 }
 
@@ -6632,6 +6633,7 @@ impl<R: Runtime> Core<R> {
         cur.engine = p.engine;
         // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`).
         cur.private = p.private;
+        cur.shared_on_limit = p.shared_on_limit;
         let dir_changed = cur.worktree_dir != worktree_dir;
         cur.worktree_dir = worktree_dir;
         cur.agent_branch_prefix = agent_prefix;

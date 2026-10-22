@@ -198,6 +198,21 @@ Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet o
 
 Cet onglet montre le projet fermé dans la ligne « Réservé aux projets » du compte, coché et marqué « (fermé) », par exemple « Client (fermé) ». Décoche-le pour libérer le compte : sans case cochée, il sert de nouveau tous les projets. Quand tu rouvres le projet (voir [Projets fermés](settings-projects#projets-fermes)), ses réservations sont toujours là : il n’y a rien à refaire. Si tu effaces l’historique, à la fermeture ou plus tard dans « Projets fermés », le projet sort de la liste de chaque compte. Le « Compte préféré » du projet, lui, repasse sur « Automatique » à la réouverture si son compte n’existe plus.
 
+### Un compte pour un projet privé
+
+Deux projets sur le même compte partagent son dossier : les sessions, la mémoire, l’historique et les réglages globaux du harness. Un [projet privé](mcp#les-projets-prives) n’est cloisonné tout à fait qu’avec un compte réservé à lui seul : coché pour ce projet et aucun autre.
+
+Dès que tu allumes « Projet privé » dans les réglages du projet, la rangée « Comptes » dit où ses agents peuvent partir. Un compte réservé à lui seul : « Compte réservé à ce projet : « Pro ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet. » Un compte encore partagé, en ambre : « Ses agents peuvent partir sur « Principal », un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de Claude Code y sont communs. » Pour y remédier :
+
+- « Ajouter un compte réservé… » ouvre « Ajouter un compte », sur un nouveau compte, avec son propre dossier. Le compte créé est réservé au projet seul, puis tu reviens à ses réglages.
+- « Réserver Principal à ce projet » réserve tout de suite un compte existant au projet seul : les autres projets n’y partent plus.
+
+L’onglet « Comptes » le dit aussi, sous un compte où part encore un projet privé : « Le projet privé « Client » part encore sur ce compte, partagé avec d’autres projets. », avec « Réserver à « Client » ».
+
+Les agents d’un projet privé qui a un compte à lui ne basculent jamais d’eux-mêmes sur un compte partagé : au-delà du seuil, ses nouveaux agents et ses tickets restent sur son compte, la reprise automatique d’un agent de ticket ne va que sur un autre compte à lui, et le passage automatique à un autre harness seulement si le compte qu’il y prendrait est à lui. Sinon, ils attendent la remise à zéro. Sans compte à lui, le projet garde ses comptes partagés, mais aucune bascule automatique ne le fait changer de compte. Pour le permettre, allume « Comptes partagés à la limite » dans les réglages du projet. « Reprendre sur… » et « Continuer sur… » restent possibles à la main.
+
+Ce qu’un nouveau compte partage avec Principal à sa création (réglages, instructions, skills…) reste partagé, jamais ses sessions ni sa mémoire.
+
 ## Reprendre un agent arrêté par la limite d’usage
 
 ### Ce qui se passe à la limite

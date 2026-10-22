@@ -689,6 +689,11 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /**
+   * « Comptes partagés à la limite » (a private project): its agents may go on on an account it shares with other projects
+   * when its own reach the usage limit (`accounts::confined`).
+   */
+  sharedOnLimit: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

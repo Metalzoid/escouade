@@ -523,6 +523,52 @@ async fn with_the_option_an_agent_whose_harness_is_spent_goes_on_by_itself_and_i
 }
 
 #[tokio::test]
+async fn a_private_projects_agent_is_handed_over_by_the_option_only_to_an_account_of_its_own() {
+    let h = harness("handover-private");
+    let (p, _) = two_projects(&h).await;
+    h.core
+        .save_settings({
+            let mut s = h.core.settings.read().clone();
+            s.handover_on_limit = true;
+            // Relais, Minimal's account, serves every project now.
+            s.accounts
+                .iter_mut()
+                .find(|a| a.id == "relais")
+                .unwrap()
+                .projects = vec![];
+            s
+        })
+        .unwrap();
+    let mut project = h.core.project(&p.id).unwrap();
+    project.private = true;
+    h.core.update_project(project).unwrap();
+    // P is private, Relais shared: the agent waits for the reset, on Claude Code.
+    let id = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &id, "Bonjour").await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let a = h.agent(&id);
+    assert_eq!((a.engine, a.handed_from), (EngineId::Claude, None));
+    assert!(a.resume_at.is_some());
+    // By hand, the user still may (« Continuer sur Minimal »).
+    assert_eq!(h.core.handover_targets(&id).unwrap(), [EngineId::Bench]);
+    // Relais P's own again: the next one goes on on it by itself.
+    h.core
+        .save_settings({
+            let mut s = h.core.settings.read().clone();
+            s.accounts
+                .iter_mut()
+                .find(|a| a.id == "relais")
+                .unwrap()
+                .projects = vec![p.id.clone()];
+            s
+        })
+        .unwrap();
+    let next = agent_on(&h, &p, "pro").await.id;
+    turn_over(&h, &next, "Bonjour").await;
+    agent_when(&h, &next, "the handover", |m| m.engine == EngineId::Bench).await;
+}
+
+#[tokio::test]
 async fn a_ticket_agent_handed_over_by_the_option_keeps_its_ticket_going() {
     let h = harness("handover-ticket");
     let (p, _) = two_projects(&h).await;

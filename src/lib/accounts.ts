@@ -143,9 +143,48 @@ export function accountsOf(engine: EngineId = defaultEngine()): Account[] {
   return (app.settings.accounts ?? []).filter((a) => engineOfAccount(a) === engine);
 }
 
-/** The active accounts of `engine` a new agent of the project may go to, in order (`accounts::for_project`). */
-export function usableFor(project: string | undefined, engine: EngineId = defaultEngine()): Account[] {
+/** The active accounts of `engine` that serve new agents of the project (none: of no project), in order (`accounts::for_project`). */
+function servingFor(project: string | undefined, engine: EngineId): Account[] {
   return (app.settings.accounts ?? []).filter((a) => a.active && engineOfAccount(a) === engine && serves(a, project));
+}
+
+/** Whether the account is reserved to the project alone: the only ones a private project shares with no other (`accounts::dedicated`). */
+export function dedicated(a: Pick<Account, 'projects'>, project: string): boolean {
+  const reserved = a.projects ?? [];
+  return reserved.length === 1 && reserved[0] === project;
+}
+
+/** A project as `accountsFor` reads it: a draft's fields will do. */
+export type PrivateLike = Pick<Project, 'id' | 'account'> & { private?: boolean; sharedOnLimit?: boolean };
+
+/**
+ * The active accounts of `engine` a new agent of the project may go to, in order (`accounts::for_project_of`): a private
+ * project that did not allow shared ones at the limit (« Comptes partagés à la limite ») and has accounts of its own goes
+ * to those alone, and to the one it prefers.
+ */
+export function accountsFor(project: PrivateLike, engine: EngineId = defaultEngine()): Account[] {
+  const all = servingFor(project.id, engine);
+  if (!project.private || project.sharedOnLimit || !all.some((a) => dedicated(a, project.id))) return all;
+  return all.filter((a) => dedicated(a, project.id) || a.id === project.account);
+}
+
+/**
+ * The accounts of `engine` a private project's agents may go to that it shares with other projects: there, sessions,
+ * memory and history of the harness are theirs too. None for a project that is not private.
+ */
+export function sharedBy(project: PrivateLike, engine: EngineId = defaultEngine()): Account[] {
+  return project.private ? accountsFor(project, engine).filter((a) => !dedicated(a, project.id)) : [];
+}
+
+/** The private projects whose agents may go to the account although it is not theirs alone (`sharedBy`). */
+export function privateSharing(a: Account): Project[] {
+  return app.projects.filter((p) => p.private && sharedBy(p, engineOfAccount(a)).some((x) => x.id === a.id));
+}
+
+/** The active accounts of `engine` a new agent of the project may go to, in order (`accountsFor`; none: of no project). */
+export function usableFor(project: string | undefined, engine: EngineId = defaultEngine()): Account[] {
+  const p = project ? app.projects.find((x) => x.id === project) : undefined;
+  return p ? accountsFor(p, engine) : servingFor(project, engine);
 }
 
 /** The harness a project's new agents and tickets run on unless they say theirs. */

@@ -76,6 +76,43 @@ test.describe('two accounts, the first out of quota', () => {
   });
 });
 
+// « Projet privé » (ESC-141): an account reserved to it alone, and no move to a shared one at the usage limit.
+test.describe('a private project, two accounts, the first out of quota', () => {
+  test.use({ preStart: { run: twoAccounts('Pro') } });
+
+  test('is offered an account of its own, and its ticket waits for it at the limit rather than go on on the shared one', async ({
+    app,
+  }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { firstAgent: false });
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    // Made private, it says what it still shares, and how to have an account of its own.
+    await expect(dialog.getByText(/^Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés/)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Ajouter un compte réservé…' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Réserver Principal à ce projet' }).click();
+    await expect(dialog.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
+    await expect(dialog.getByText(/^Ses agents peuvent partir sur/)).toBeHidden();
+    await expect(dialog.getByRole('switch', { name: 'Comptes partagés à la limite' })).toHaveAttribute('aria-checked', 'false');
+    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(dialog).toBeHidden();
+
+    // Its ticket starts on Principal, out of quota: it meets the limit there and waits for its reset, with « Reprendre sur
+    // un autre compte » switched on: Pro is shared with the other projects.
+    await page.getByRole('button', { name: /^Kanban/ }).click();
+    await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+    await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Premier [ok]');
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+    const doing = page.getByRole('region', { name: 'En cours' });
+    await expect(doing.getByRole('button', { name: /DEM-1/ }).getByText(/^Reprise à /)).toBeVisible({ timeout: 60_000 });
+    // The autopilot waits for Principal alone, the project's own: Pro, under its threshold, would not hold it back.
+    await expect(page.getByRole('status').filter({ hasText: /Pilote auto en pause.*Le compte Principal a passé le seuil/ })).toBeVisible();
+    expect(processes(app.launches())).toEqual([principalDir(app.root)]);
+  });
+});
+
 test.describe('two accounts, a conversation stopped by the usage limit', () => {
   test.use({ preStart: { run: twoAccounts('Pro') } });
 
