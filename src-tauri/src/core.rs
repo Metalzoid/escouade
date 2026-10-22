@@ -782,6 +782,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) forge_health: Mutex<HashMap<String, crate::forge::connect::Status>>,
     /// The tokens of the code hosts' CLIs (`glab`, `gh` for another instance), once asked for.
     pub(crate) forge_cli_tokens: Mutex<HashMap<String, String>>,
+    /// When the pull requests of each agent were last asked of its code host (`agentprs`).
+    pub(crate) pr_reads: Mutex<HashMap<String, Instant>>,
     /// What the sync of imported tickets is asked to do (a change to tell, failed operations to
     /// try again), one at a time and in order, by a single worker (made at the first one).
     pub(crate) sync_queue: Mutex<Option<integrations::sync::SyncSender>>,
@@ -1634,6 +1636,7 @@ impl<R: Runtime> Core<R> {
             forges: RwLock::new(crate::forge::Registry::standard()),
             forge_health: Mutex::default(),
             forge_cli_tokens: Mutex::default(),
+            pr_reads: Mutex::default(),
             sync_queue: Mutex::default(),
             pending_syncs: Mutex::new(integrations::sync::SyncQueue::new(pending_syncs)),
             import_lock: tokio::sync::Mutex::new(()),
@@ -5889,7 +5892,8 @@ impl<R: Runtime> Core<R> {
             if rt.meta.named {
                 return Ok(());
             }
-            rt.meta.worktree.clone()
+            // A branch with a pull request (ESC-64) keeps its name: the pull request is its.
+            rt.meta.worktree.clone().filter(|_| rt.meta.prs.is_empty())
         };
         // The branch first, as well as it can be: the agent is said named only once the worktree
         // is on its last branch (renamed or not), so that whoever sees it named (a commit

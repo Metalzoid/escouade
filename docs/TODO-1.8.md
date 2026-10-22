@@ -1030,10 +1030,12 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - [ ] **Pilote auto** : un ticket en revue ne compte dans les agents en parallèle que quand son agent travaille.
 
 ### Les PR hors tickets
-- [ ] **Agent ordinaire** : « Ouvrir une PR » sur sa branche (en-tête de la conversation, clic droit sur sa carte, sélecteur de branches).
-  - Push, puis titre et description proposés par Haiku, comme le message de commit ; brouillon au choix.
-  - Sa carte montre ensuite l'état de la PR et de sa CI.
-  - « L'agent corrige » et « L'agent traite les retours » s'y font en un clic, jamais seuls.
+- [x] **Agent ordinaire** (ESC-64, `agentprs.rs`) : « Ouvrir une PR » sur sa branche (en-tête de la conversation, clic droit sur sa carte, sélecteur de branches).
+  - Push, puis titre et description proposés par le modèle des textes rédigés, d'après les commits et le diff de la branche (repli : les sujets des commits) ; brouillon au choix ; rien ne part avant « Pousser et ouvrir ».
+  - Sa carte montre ensuite l'état de la PR et de sa CI : trois numéros au plus, ceux à merger d'abord, cliquables, avec état, CI et relecture dans l'infobulle ; les mêmes dans l'en-tête. Lien par la branche de l'agent, quel que soit l'auteur, une branche de fork du même nom écartée ; lecture à la sélection de l'agent puis chaque minute tant qu'il est affiché, au plus toutes les 20 s, plus rien une fois toutes mergées. La branche d'un agent qui a une PR n'est plus renommée à son nom.
+  - « L'agent corrige » (checks en échec et fin de leurs journaux) et « L'agent corrige les retours » (demandes de changement, fils non résolus) s'y font en un clic, jamais seuls ; l'agent est prié de ne rien publier sous les fils.
+  - Un hébergeur sans client encore (`Capabilities::pull_requests` à faux : GitLab, Bitbucket, Gitea) : rien ne s'affiche, ni numéros ni « Ouvrir une PR » (de même sans remote ou sans compte : `AgentMeta::pr_word`).
+  - Reste : essai réel sur GitHub (compte de l'utilisateur) ; GitLab, Bitbucket Cloud et Gitea/Forgejo avec leurs clients (ESC-56 à 58), à essayer en vrai plus tard.
 - [ ] **Vue « Pull requests » du projet**, à côté du Kanban : les PR ouvertes du dépôt (les miennes, celles où on me demande une relecture, toutes), avec CI, relectures, conflit et âge. Actions :
   - ouvrir dans le navigateur ;
   - « Lancer un agent sur cette PR » : un worktree sur sa branche, comme « Reprendre une branche existante… ». Une PR venue d'un fork se récupère par `refs/pull/<n>/head` (GitHub, Gitea) ou `refs/merge-requests/<n>/head` (GitLab) ; pour Bitbucket, à voir ;

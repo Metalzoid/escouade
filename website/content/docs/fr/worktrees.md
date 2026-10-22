@@ -137,6 +137,18 @@ Un merge qui a des conflits est annulé : le dossier du projet reste comme avant
 
 Le merge ne supprime ni le worktree ni la branche de l’agent. Pour les ranger, supprime l’agent avec son worktree (voir ci-dessous) ; pour nettoyer d’un coup les branches déjà mergées, utilise « Branches mergées » dans [le sélecteur de branches](branches). Pour les tickets du Kanban, la validation se charge du commit, du merge ou de la pull request selon les réglages (voir [les réglages du Kanban](settings-board)).
 
+## Ouvrir une pull request
+
+Plutôt que de merger toi-même, tu peux proposer le travail d’un agent en pull request, sur GitHub pour l’instant (GitLab, Bitbucket et Gitea viendront). Il faut que le projet ait son dépôt distant chez l’hébergeur et un compte connecté dans [Réglages › Intégrations](settings-integrations) ; sinon, rien ne le propose.
+
+« Ouvrir une PR » est dans l’en-tête de la conversation, dans le menu d’un clic droit sur la carte de l’agent, et dans le menu de sa branche du [sélecteur de branches](branches). La fenêtre propose un titre et une description, rédigés par le modèle des textes rédigés d’après les commits et le diff de la branche : relis-les, corrige-les, choisis la branche cible et le brouillon si tu veux. Rien ne part avant « Pousser et ouvrir », qui pousse la branche puis ouvre la PR. Les fichiers non commités du worktree n’y sont pas, et la fenêtre le dit.
+
+La carte de l’agent montre ensuite ses PR sous ses lignes, trois au plus, celles à merger d’abord : leur numéro ouvre la PR dans le navigateur, et son infobulle dit son état, sa CI et ses relectures. Escouade les relit quand tu affiches l’agent, puis chaque minute tant qu’il est affiché, et plus du tout une fois mergées. Une PR ouverte par quelqu’un d’autre sur la même branche compte aussi.
+
+Quand la CI échoue, « L’agent corrige » envoie à l’agent les checks en échec avec la fin de leurs journaux. Quand une relecture demande des changements ou laisse des fils ouverts, « L’agent corrige les retours » lui envoie les demandes et les commentaires, chacun avec son fichier et sa ligne. Ces messages ne partent que quand tu cliques : l’agent corrige, commite et pousse, et la PR se met à jour. Il ne répond pas sous les fils à ta place.
+
+Une fois une PR ouverte, la branche de l’agent garde son nom, même s’il est renommé ensuite.
+
 ## Archiver, restaurer, supprimer
 
 Les actions sont dans le menu d’un clic droit sur la carte de l’agent.

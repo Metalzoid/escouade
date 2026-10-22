@@ -3,6 +3,9 @@
 mod i18n;
 mod accounts;
 mod agent;
+mod agentprs;
+#[cfg(test)]
+mod agentprs_tests;
 mod attach;
 mod attachfiles;
 #[cfg(test)]
@@ -459,6 +462,10 @@ pub fn run() {
             commands::git_diff_refs,
             commands::create_agent_on_branch,
             commands::integrate_base,
+            commands::agent_pr_propose,
+            commands::agent_pr_open,
+            commands::agent_prs_refresh,
+            commands::agent_pr_fix,
             commands::set_remote_control,
             commands::stats,
             commands::refresh_usage,

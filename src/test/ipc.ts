@@ -20,6 +20,7 @@ import type {
   EngineDecl,
   GitInfo,
   Project,
+  PullRequest,
   QuotaMeter,
   RateWindow,
   Settings,
@@ -197,6 +198,8 @@ export function agent(over: Partial<Agent> = {}): Agent {
     resumeAt: null,
     ticketId: null,
     progressLine: null,
+    prs: [],
+    prWord: null,
     appendPrompt: null,
     portBase: null,
     recipe: null,
@@ -212,6 +215,27 @@ export function agent(over: Partial<Agent> = {}): Agent {
     terminalId: null,
     tuiExit: null,
     isola: false,
+    ...over,
+  };
+}
+
+/** An agent's pull request (ESC-64), open, its CI green. */
+export function pullRequest(over: Partial<PullRequest> = {}): PullRequest {
+  return {
+    number: 7,
+    url: 'https://github.com/acme/demo/pull/7',
+    title: 'Connexion par jeton',
+    state: 'open',
+    draft: false,
+    head: 'escouade/login',
+    base: 'main',
+    mergeable: true,
+    approvals: 0,
+    changesRequested: false,
+    openThreads: 0,
+    autoMerge: false,
+    checks: 'success',
+    fork: false,
     ...over,
   };
 }

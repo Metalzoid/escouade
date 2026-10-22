@@ -8,6 +8,9 @@ import type {
   AccountView,
   ForgeForm,
   ForgesView,
+  PrFix,
+  PrProposal,
+  PullRequest,
   Agent,
   AttachedFile,
   Attachment,
@@ -295,6 +298,15 @@ export const api = {
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
   mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),
   integrateBase: (id: string) => invoke<Integration>('integrate_base', { id }),
+  /** « Ouvrir une PR » (ESC-64): the title and the description proposed from the agent's branch. */
+  agentPrPropose: (id: string) => invoke<PrProposal>('agent_pr_propose', { id }),
+  /** Pushes the agent's branch, then opens its pull request as the user validated it. */
+  agentPrOpen: (id: string, form: { title: string; body: string; base: string; draft: boolean }) =>
+    invoke<PullRequest>('agent_pr_open', { id, form }),
+  /** Reads the agent's pull requests again: at most every 20 s, unless `now`. */
+  agentPrsRefresh: (id: string, now = false) => invoke<void>('agent_prs_refresh', { id, now }),
+  /** « L'agent corrige » / « L'agent corrige les retours » on pull request `number`. */
+  agentPrFix: (id: string, number: number, fix: PrFix) => invoke<void>('agent_pr_fix', { id, number, fix }),
   getCommands: (id: string) => invoke<SlashCommand[]>('get_commands', { id }),
   fileSuggestions: (id: string, query: string) => invoke<string[]>('file_suggestions', { id, query }),
   gitFiles: (projectId: string, agentId: string | null) => invoke<FileChange[]>('git_files', { projectId, agentId }),

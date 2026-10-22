@@ -122,6 +122,8 @@ export type Modal =
    * written, back from a dialog that took its place.
    */
   | { kind: 'commit'; projectId: string; agentId: string | null; resume?: CommitDraft }
+  /** « Ouvrir une PR » on an ordinary agent's branch (ESC-64): its title and description proposed, then read and edited. */
+  | { kind: 'pullRequest'; agentId: string }
   /**
    * « Nouvelle branche » on a project. `start`: where it starts (a branch, or the commit the graph gave), the current
    * branch by default; `resume`: what had been written, back from the question of the stash.

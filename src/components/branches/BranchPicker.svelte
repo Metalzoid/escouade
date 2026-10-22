@@ -7,6 +7,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { menu, type MenuItem } from '../../lib/menu.svelte';
+  import { prMenuItem } from '../../lib/prs';
   import { app } from '../../lib/state.svelte';
   import type { BranchInfo } from '../../lib/types';
   import { tip } from '../../lib/tip';
@@ -239,6 +240,10 @@
         },
       });
     }
+    // The branch of an ordinary agent's worktree: « Ouvrir une PR… » on it (ESC-64), once the picker is gone.
+    const owner = held(b)?.agent;
+    const pr = owner && app.agents[owner] ? prMenuItem(app.agents[owner], release) : null;
+    if (pr) items.push(pr);
     if (deletable(b)) {
       if (items.length) items.push({ label: '', separator: true });
       items.push({

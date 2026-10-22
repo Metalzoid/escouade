@@ -137,6 +137,18 @@ A merge with conflicts is aborted: the project folder stays as it was and an err
 
 The merge removes neither the agent’s worktree nor its branch. To tidy them up, delete the agent with its worktree (see below); to clean up the branches already merged in one go, use “Merged branches” in [the branch picker](branches). For Kanban tickets, the approval takes care of the commit, the merge or the pull request according to the settings (see [the Kanban settings](settings-board)).
 
+## Opening a pull request
+
+Rather than merging yourself, you can offer an agent’s work as a pull request, on GitHub for now (GitLab, Bitbucket and Gitea will follow). The project needs its remote on the code host and an account connected in [Settings › Integrations](settings-integrations); otherwise nothing offers it.
+
+“Open a PR” is in the conversation’s header, in the menu of a right click on the agent’s card, and in the menu of its branch in the [branch picker](branches). The window proposes a title and a description, written by the model for written texts from the branch’s commits and diff: read them, edit them, pick the target branch and a draft if you want. Nothing goes out before “Push and open”, which pushes the branch then opens the pull request. The worktree’s uncommitted files are not in it, and the window says so.
+
+The agent’s card then shows its pull requests under its lines, three at most, the ones to merge first: their number opens the pull request in the browser, and its tooltip tells its state, its CI and its reviews. Escouade reads them again when you show the agent, then every minute while it is shown, and no more once merged. A pull request someone else opened on the same branch counts too.
+
+When the CI fails, “Agent fixes it” sends the agent the failed checks with the end of their logs. When a review asks for changes or leaves open threads, “Agent addresses the feedback” sends it the requests and the comments, each with its file and line. These messages only go when you click: the agent fixes, commits and pushes, and the pull request updates. It doesn’t reply under the threads for you.
+
+Once a pull request is open, the agent’s branch keeps its name, even if the agent is renamed later.
+
 ## Archiving, restoring, deleting
 
 The actions are in the menu of a right-click on the agent’s card.

@@ -1057,6 +1057,10 @@ export interface Agent {
   ticketId: string | null;
   /** What the agent last reported of its work through Escouade's MCP server (120 characters at most), until its next report. */
   progressLine: string | null;
+  /** Its pull requests (ESC-64), as its code host last told them, the ones to merge first: none when its host has no client yet. */
+  prs: PullRequest[];
+  /** The code host's word for them: « MR » on GitLab, « PR » elsewhere; null until read. */
+  prWord: string | null;
   /** The ticket's protocol, appended to Claude Code's system prompt. */
   appendPrompt: string | null;
   /** First of the 10 ports reserved for its test launches. */
@@ -2018,6 +2022,51 @@ export interface AttachedFile {
   /** The file itself: nothing was copied. */
   origin: boolean;
 }
+
+/** A pull request's state on its code host. */
+export type PrState = 'open' | 'closed' | 'merged';
+
+/** The checks of a pull request's last commit, in one word. */
+export type CheckState = 'pending' | 'success' | 'failure' | 'skipped';
+
+/** A pull request (a merge request on GitLab) as its code host tells it (`forge::PullRequest`). */
+export interface PullRequest {
+  number: number;
+  url: string;
+  title: string;
+  state: PrState;
+  draft: boolean;
+  head: string;
+  base: string;
+  /** Conflicts with its base: false; not known yet: null. */
+  mergeable: boolean | null;
+  approvals: number;
+  changesRequested: boolean;
+  /** Threads of comments on lines not resolved yet. */
+  openThreads: number;
+  autoMerge: boolean;
+  /** Null when it has no check. */
+  checks: CheckState | null;
+  fork: boolean;
+}
+
+/** « Ouvrir une PR »: what the model proposes, which the user reads and edits (`agentprs::PrProposal`). */
+export interface PrProposal {
+  title: string;
+  body: string;
+  head: string;
+  base: string;
+  word: string;
+  host: string;
+  canDraft: boolean;
+  /** Files of its worktree not committed: not in the pull request. */
+  uncommitted: number;
+  /** The model did not answer: made from the commits. */
+  fallback: boolean;
+}
+
+/** What a correction hands the agent: the failed checks, or the review's feedback. */
+export type PrFix = 'checks' | 'reviews';
 
 /** What « Nettoyer » found in a project's worktrees (ESC-143): those removed, and those kept with why. */
 export interface LeftoverReport {

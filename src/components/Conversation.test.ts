@@ -34,7 +34,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent } from '../lib/types';
 import { answerClock, settle } from '../test/conversation';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, pullRequest, resetApp, ticket } from '../test/ipc';
 import { openTerminal } from '../lib/terminals';
 import Conversation from './Conversation.svelte';
 import ContextMenu from './ContextMenu.svelte';
@@ -2257,5 +2257,56 @@ describe('« Vue OpenCode » (ESC-46)', () => {
     render(Conversation, { agent: a, project: project() });
     await userEvent.click(screen.getByRole('button', { name: 'Vue OpenCode' }));
     expect(b.called('set_agent_view')[0].args).toEqual({ id: 'oa2', terminal: true });
+  });
+});
+
+describe('Conversation header — the agent’s pull requests (ESC-64)', () => {
+  const WT = { path: 'C:\wt\login', branch: 'escouade/login', baseBranch: 'main', existing: false };
+  afterEach(() => setLang('fr'));
+
+  it('reads them when the agent is shown, and offers « Ouvrir une PR » while none is open', async () => {
+    const a = agent({ id: 'pr1', worktree: WT, prWord: 'PR' });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    await waitFor(() => expect(b.called('agent_prs_refresh').map((c) => c.args)).toEqual([{ id: 'pr1', now: false }]));
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir une PR' }));
+    expect(app.modal).toEqual({ kind: 'pullRequest', agentId: 'pr1' });
+  });
+
+  it('reads them but offers no « Ouvrir une PR » while the backend has not said its host opens them (no remote, a host without a client yet, no account)', async () => {
+    const a = agent({ id: 'pr5', worktree: WT });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    await waitFor(() => expect(b.called('agent_prs_refresh')).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Ouvrir une PR' })).not.toBeInTheDocument();
+  });
+
+  it('shows their numbers, each opening in the browser, and no « Ouvrir une PR » once one is open', () => {
+    const prs = [pullRequest({ number: 12, checks: 'failure' }), pullRequest({ number: 9, state: 'merged' })];
+    const a = agent({ id: 'pr2', worktree: WT, prs, prWord: 'MR' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.getByRole('button', { name: 'Ouvrir la MR #12 dans le navigateur (ouverte)' })).toHaveTextContent('✗#12');
+    expect(screen.getByRole('button', { name: 'Ouvrir la MR #9 dans le navigateur (mergée)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ouvrir une MR' })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing to a ticket’s agent nor to one without a worktree, and is said in English', () => {
+    const a = agent({ id: 'pr3', worktree: WT, ticketId: 't1' });
+    resetApp({ projects: [project()], agents: [a] });
+    const b = fakeBackend({ get_conversation: () => [] });
+    const r = render(Conversation, { agent: a, project: project() });
+    expect(screen.queryByRole('button', { name: 'Ouvrir une PR' })).not.toBeInTheDocument();
+    expect(b.called('agent_prs_refresh')).toHaveLength(0);
+    r.unmount();
+    setLang('en');
+    const c = agent({ id: 'pr4', worktree: WT, prWord: 'PR' });
+    resetApp({ projects: [project()], agents: [c] });
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: c, project: project() });
+    expect(screen.getByRole('button', { name: 'Open a PR' })).toBeInTheDocument();
   });
 });

@@ -1191,6 +1191,12 @@ pub struct AgentMeta {
     /// one line of `PROGRESS_LINE_MAX` characters at most: shown on its card and its ticket's,
     /// until its next call.
     pub progress_line: Option<String>,
+    /// Its pull requests (ESC-64), as its code host last told them: those whose branch is its
+    /// worktree's, whoever opened them, a fork's branch of the same name left out. Shown on its
+    /// card and in its conversation's header.
+    pub prs: Vec<crate::forge::PullRequest>,
+    /// The code host's word for them: « MR » on GitLab, « PR » elsewhere. None until read.
+    pub pr_word: Option<String>,
     /// Appended to Claude Code's system prompt at every start (the ticket's protocol), on one line.
     pub append_prompt: Option<String>,
     /// First of the 10 ports reserved for its test launches.

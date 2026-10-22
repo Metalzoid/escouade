@@ -102,6 +102,9 @@ function seed() {
           assignee: null,
         },
       ],
+      // The pull requests opened by the app (ESC-64), from #101: open, their CI running, until POST
+      // /__github/pulls/<n> sets what a test wants of them ({ checks: 'FAILURE', changesRequested: true, … }).
+      pulls: [],
     },
     writes: [],
   };
@@ -119,6 +122,11 @@ export function startFakeTrackers(port = 0) {
       const send = (status, value) => {
         const text = value === undefined ? '' : JSON.stringify(value);
         res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(text);
+      };
+      // A text as it is (a job's log).
+      send.text = (status, text) => {
+        res.writeHead(status, { 'Content-Type': 'text/plain' });
         res.end(text);
       };
       const json = () => {
@@ -255,6 +263,111 @@ export function startFakeTrackers(port = 0) {
       labels: i.labels.map((name) => ({ name })),
       assignee: i.assignee ? { login: i.assignee } : null,
     });
+    // ---------- GitHub's pull requests (ESC-64) ----------
+    m = p.match(/^\/__github\/pulls\/(\d+)$/);
+    if (m) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (!pull) return send(404, { message: 'Not Found' });
+      Object.assign(pull, json() ?? {});
+      return send(200, pull);
+    }
+    const node = (x) => ({
+      number: x.number,
+      url: `https://github.com/acme/demo/pull/${x.number}`,
+      title: x.title,
+      state: x.state,
+      isDraft: x.draft,
+      headRefName: x.head,
+      baseRefName: x.base,
+      mergeable: 'MERGEABLE',
+      isCrossRepository: false,
+      autoMergeRequest: null,
+      latestOpinionatedReviews: { nodes: x.changesRequested ? [{ state: 'CHANGES_REQUESTED' }] : [] },
+      reviewThreads: { nodes: x.changesRequested ? [{ isResolved: false }] : [] },
+      commits: { nodes: [{ commit: { statusCheckRollup: { state: x.checks } } }] },
+    });
+    if (p === '/github/graphql') {
+      const q = json() ?? {};
+      if (q.operationName === 'PullsOfBranch')
+        return send(200, {
+          data: {
+            repository: {
+              pullRequests: {
+                nodes: g.pulls
+                  .filter((x) => x.head === q.variables.branch)
+                  .reverse()
+                  .map(node),
+              },
+            },
+          },
+        });
+      if (q.operationName === 'Threads') {
+        const x = g.pulls.find((y) => y.number === q.variables.number);
+        const thread = {
+          isResolved: false,
+          path: 'src/app.ts',
+          line: 1,
+          comments: { nodes: [{ databaseId: 1, author: { login: 'bob' }, body: 'Ce nom est peu clair.' }] },
+        };
+        return send(200, { data: { repository: { pullRequest: { reviewThreads: { nodes: x?.changesRequested ? [thread] : [] } } } } });
+      }
+      return send(200, { data: null, errors: [{ message: `unknown operation ${q.operationName}` }] });
+    }
+    if (p === '/github/repos/acme/demo/pulls' && method === 'POST') {
+      const b = json();
+      const pull = {
+        number: 101 + g.pulls.length,
+        title: b.title,
+        body: b.body,
+        head: b.head,
+        base: b.base,
+        draft: !!b.draft,
+        state: 'OPEN',
+        checks: 'PENDING',
+        changesRequested: false,
+      };
+      g.pulls.push(pull);
+      return send(201, {
+        number: pull.number,
+        html_url: `https://github.com/acme/demo/pull/${pull.number}`,
+        title: pull.title,
+        state: 'open',
+        draft: pull.draft,
+        head: { ref: pull.head },
+        base: { ref: pull.base },
+      });
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)(\/reviews)?$/);
+    if (m) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (!pull) return send(404, { message: 'Not Found' });
+      if (m[2])
+        return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
+      return send(200, { number: pull.number, head: { sha: `sha${pull.number}`, ref: pull.head } });
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/commits\/sha(\d+)\/(check-runs|status)$/);
+    if (m) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (m[2] === 'status') return send(200, { statuses: [] });
+      const failed = pull?.checks === 'FAILURE';
+      return send(200, {
+        check_runs: [
+          {
+            id: 77,
+            name: 'test',
+            status: 'completed',
+            conclusion: failed ? 'failure' : 'success',
+            html_url: 'https://github.com/acme/demo/actions/runs/7/job/77',
+            app: { slug: 'github-actions' },
+          },
+        ],
+      });
+    }
+    if (p === '/github/repos/acme/demo/actions/jobs/77/logs')
+      return send.text(200, 'npm test\nFAIL src/app.test.ts\n  expected 2, got 1\n');
+    m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
+    if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) return send(200, []);
+
     if (p === '/github/user') return send(200, { login: 'ada' });
     if (p === '/github/user/repos') return send(200, [{ full_name: 'acme/demo' }, { full_name: 'ada/blog' }]);
     if (p === '/github/repos/acme/demo/labels')

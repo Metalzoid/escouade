@@ -22,7 +22,7 @@ mod tests;
 
 use anyhow::{anyhow, Result};
 use reqwest::header::HeaderMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -46,6 +46,10 @@ pub enum MergeStrategy {
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
+    /// Its client opens pull requests and reads them (state, checks, reviews): GitHub's since
+    /// ESC-55, the others with their clients. Without it, an agent's card shows none, without an
+    /// error.
+    pub pull_requests: bool,
     /// A pull request may open as a draft.
     pub draft: bool,
     /// The host merges by itself once the checks pass.
@@ -82,7 +86,7 @@ pub struct PullRequestDraft {
     pub closes: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum PrState {
     #[default]
@@ -91,9 +95,9 @@ pub enum PrState {
     Merged,
 }
 
-/// A pull request as its host tells it.
-#[derive(Debug, Clone, PartialEq, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
+/// A pull request as its host tells it (kept with an agent's data: `AgentMeta::prs`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct PullRequest {
     pub number: u64,
     pub url: String,
@@ -114,9 +118,11 @@ pub struct PullRequest {
     pub auto_merge: bool,
     /// The checks of its last commit, in one word; none when it has none.
     pub checks: Option<CheckState>,
+    /// Its branch is a fork's: another repository's branch that only bears the same name.
+    pub fork: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum CheckState {
     Pending,

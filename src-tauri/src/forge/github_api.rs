@@ -396,6 +396,7 @@ fn run_state(run: &Value) -> CheckState {
 /// What a pull request's GraphQL fragment asks: its state, its reviews' last say, its open threads
 /// and the checks of its last commit, all in one.
 const PR_FIELDS: &str = "number url title state isDraft headRefName baseRefName mergeable \
+    isCrossRepository \
     autoMergeRequest { enabledAt } \
     latestOpinionatedReviews(first: 50) { nodes { state } } \
     reviewThreads(first: 100) { nodes { isResolved } } \
@@ -435,6 +436,7 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
             .filter(|t| t["isResolved"] == false)
             .count() as u32,
         auto_merge: !p["autoMergeRequest"].is_null(),
+        fork: p["isCrossRepository"].as_bool().unwrap_or(false),
         checks: match p["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["state"].as_str() {
             Some("SUCCESS") => Some(CheckState::Success),
             Some("FAILURE" | "ERROR") => Some(CheckState::Failure),

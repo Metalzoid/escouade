@@ -32,6 +32,7 @@ impl Provider for GithubProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            pull_requests: true,
             draft: true,
             auto_merge: true,
             checks: true,

@@ -73,6 +73,8 @@
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
 // nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
 // it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
+// Asked for a pull request (<commits>), it answers a title (« Le travail de l’agent, proposé par le faux claude », with
+// " (en)" in English) and the commits it read as the description.
 // Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
 // question and its role both), a name ends with "-en", a direct commit's message with " (en)"; with
 // a question and a role that disagree, "mixed" says so in the same places.
@@ -326,6 +328,15 @@ if (argv[0] === 'mcp') {
       const asked = tongue(input.includes('<files>'));
       const result = `feat: proposé par le faux claude${asked === 'fr' ? '' : ` (${asked})`}\n\nD'après « ${latest} ». Diff de : ${diffed.join(', ')}.`;
       process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result }));
+      return;
+    }
+    // A pull request's title and description (ESC-64): from the commits it read.
+    if (input.includes('<commits>')) {
+      const commits = input.match(/<commits>\n([\s\S]*?)<\/commits>/)?.[1].trim() ?? '';
+      const asked = tongue(input.startsWith('Write the title'));
+      const title =
+        asked === 'fr' ? 'Le travail de l’agent, proposé par le faux claude' : `The agent’s work, proposed by the fake claude (${asked})`;
+      process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: `${title}\n\n${commits}` }));
       return;
     }
     // A ticket's commit message.

@@ -661,3 +661,36 @@ describe('BranchPicker in English', () => {
     expect(menu.open!.items.map((i) => i.label)).toEqual(['Start an agent on this branch', '', 'Delete branch…']);
   });
 });
+
+describe('BranchPicker — the pull request of an agent’s branch (ESC-64)', () => {
+  const WT = { path: 'C:\code\demo-api\.claude\worktrees\a1', branch: 'escouade/refacto-auth', baseBranch: 'main', existing: false };
+
+  beforeEach(() => menu.close());
+
+  it('offers « Ouvrir une PR… » on the branch of an ordinary agent, the picker gone first', async () => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth', worktree: WT, prWord: 'PR' })] });
+    const { onclose } = setup();
+    await loaded();
+    await fireEvent.contextMenu(option('escouade/refacto-auth'));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Ouvrir une PR…']);
+    menu.open!.items[0].onClick!();
+    expect(onclose).toHaveBeenCalled();
+    await waitFor(() => expect(app.modal).toEqual({ kind: 'pullRequest', agentId: 'a1' }));
+  });
+
+  it('offers nothing on the branch of an agent whose code host does not open pull requests', async () => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth', worktree: WT })] });
+    setup();
+    await loaded();
+    await fireEvent.contextMenu(option('escouade/refacto-auth'));
+    expect(menu.open).toBeNull();
+  });
+
+  it('offers nothing on a ticket agent’s branch, whose board opens its pull request', async () => {
+    resetApp({ agents: [agent({ id: 'a1', name: 'refacto-auth', worktree: WT, prWord: 'PR', ticketId: 't1' })] });
+    setup();
+    await loaded();
+    await fireEvent.contextMenu(option('escouade/refacto-auth'));
+    expect(menu.open).toBeNull();
+  });
+});

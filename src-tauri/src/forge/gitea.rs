@@ -19,6 +19,8 @@ impl Provider for GiteaProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            // Its client comes later (ESC-56 to ESC-58).
+            pull_requests: false,
             rerun: false,
             draft: true,
             // `merge_when_checks_succeed`, on a protected branch only.

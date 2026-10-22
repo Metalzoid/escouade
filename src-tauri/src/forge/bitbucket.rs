@@ -33,6 +33,8 @@ impl Provider for BitbucketProvider {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
+            // Its client comes later (ESC-56 to ESC-58).
+            pull_requests: false,
             rerun: false,
             draft: true,
             // No call merges once the checks pass (BCLOUD-22055, BCLOUD-22062).

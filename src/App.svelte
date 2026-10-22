@@ -27,6 +27,7 @@
   import TaskView from './components/TaskView.svelte';
   import AccountModal from './components/modals/AccountModal.svelte';
   import CommitModal from './components/modals/CommitModal.svelte';
+  import PrModal from './components/modals/PrModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
   import NewProjectModal from './components/modals/NewProjectModal.svelte';
   import RenameModal from './components/modals/RenameModal.svelte';
@@ -222,6 +223,8 @@
   <QuickOpen projectId={app.modal.projectId} source={app.modal.source} />
 {:else if app.modal?.kind === 'commit'}
   <CommitModal projectId={app.modal.projectId} agentId={app.modal.agentId} resume={app.modal.resume} />
+{:else if app.modal?.kind === 'pullRequest'}
+  <PrModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'newBranch'}
   <NewBranchModal projectId={app.modal.projectId} start={app.modal.start} resume={app.modal.resume} />
 {:else if app.modal?.kind === 'mergedBranches'}

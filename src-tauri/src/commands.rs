@@ -1082,6 +1082,39 @@ pub async fn integrate_base(core: CoreState<'_>, id: String) -> Res<crate::core:
     core.integrate_base(&id).await.map_err(err)
 }
 
+/// « Ouvrir une PR » on an ordinary agent's branch: the title and the description proposed.
+#[tauri::command]
+pub async fn agent_pr_propose(core: CoreState<'_>, id: String) -> Res<crate::agentprs::PrProposal> {
+    core.agent_pr_propose(&id).await.map_err(err)
+}
+
+/// Pushes the agent's branch and opens its pull request as the user validated it.
+#[tauri::command]
+pub async fn agent_pr_open(
+    core: CoreState<'_>,
+    id: String,
+    form: crate::agentprs::PrForm,
+) -> Res<crate::forge::PullRequest> {
+    core.agent_pr_open(&id, form).await.map_err(err)
+}
+
+/// Reads the agent's pull requests again (at most every 20 s unless `now`).
+#[tauri::command]
+pub async fn agent_prs_refresh(core: CoreState<'_>, id: String, now: bool) -> Res<()> {
+    core.agent_prs_refresh(&id, now).await.map_err(err)
+}
+
+/// « L'agent corrige » / « L'agent corrige les retours » on pull request `number`.
+#[tauri::command]
+pub async fn agent_pr_fix(
+    core: CoreState<'_>,
+    id: String,
+    number: u64,
+    fix: crate::agentprs::PrFix,
+) -> Res<()> {
+    core.agent_pr_fix(&id, number, fix).await.map_err(err)
+}
+
 /// The statistics of a period, of every account or (`account`) of one.
 #[tauri::command(async)]
 pub fn stats(

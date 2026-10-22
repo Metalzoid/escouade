@@ -6,7 +6,7 @@ import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { app } from '../lib/state.svelte';
 import { openTerminal } from '../lib/terminals';
-import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp, ticket } from '../test/ipc';
+import { agent, BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, pullRequest, resetApp, ticket } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
@@ -2430,5 +2430,85 @@ describe('Sidebar: what goes on after the turn of an agent (ESC-138)', () => {
     app.agents.w2.status = 'done';
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Agents pilotés par deploiement-socle' })).not.toBeInTheDocument());
     expect(pending(cardOf(/deploiement-socle/))).toBeNull();
+  });
+});
+
+describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
+  const WT = { path: 'C:\wt\login', branch: 'escouade/login', baseBranch: 'main', existing: false };
+  afterEach(() => setLang('fr'));
+
+  it('shows its pull requests under its card, and hands the corrections to the agent on a click only', async () => {
+    const prs = [
+      pullRequest({ number: 12, checks: 'failure', changesRequested: true, openThreads: 2 }),
+      pullRequest({ number: 9, state: 'merged' }),
+      pullRequest({ number: 5, state: 'closed', checks: 'failure' }),
+      pullRequest({ number: 3, state: 'closed' }),
+    ];
+    resetApp({ projects: [project()], agents: [agent({ worktree: WT, prs, prWord: 'PR' })] });
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    const group = within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' }));
+    expect(group.getAllByRole('button', { name: /^Ouvrir la PR/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Ouvrir la PR #12 dans le navigateur (ouverte)',
+      'Ouvrir la PR #9 dans le navigateur (mergée)',
+      'Ouvrir la PR #5 dans le navigateur (fermée)',
+    ]);
+    const tipped = getByTip(
+      screen.getByRole('group', { name: 'Pull requests de refacto-auth' }),
+      'PR #12 · Connexion par jeton\nouverte · CI en échec · changements demandés · 2 fils ouverts',
+    );
+    expect(tipped).toBe(group.getByRole('button', { name: /PR #12/ }));
+    // Only the open one has something to correct; nothing was sent by itself.
+    expect(group.getAllByRole('button', { name: 'L’agent corrige' })).toHaveLength(1);
+    expect(group.getAllByRole('button', { name: 'L’agent corrige les retours' })).toHaveLength(1);
+    expect(backend.called('agent_pr_fix')).toHaveLength(0);
+    await userEvent.click(group.getByRole('button', { name: 'L’agent corrige' }));
+    await userEvent.click(group.getByRole('button', { name: 'L’agent corrige les retours' }));
+    expect(backend.called('agent_pr_fix').map((c) => c.args)).toEqual([
+      { id: 'a1', number: 12, fix: 'checks' },
+      { id: 'a1', number: 12, fix: 'reviews' },
+    ]);
+    // The card's menu goes to the open one.
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    expect(menu.open!.items.map((i) => i.label)).toContain('Voir la PR #12');
+  });
+
+  it('offers « Ouvrir une PR… » in the card’s menu of an agent with a branch, and shows nothing without a pull request', async () => {
+    resetApp({
+      projects: [project()],
+      agents: [
+        agent({ worktree: WT, prWord: 'PR' }),
+        agent({ id: 'a2', name: 'sans-branche', createdAt: 2 }),
+        agent({ id: 'a3', name: 'sans-hebergeur', worktree: WT, createdAt: 3 }),
+      ],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    expect(screen.queryByRole('group', { name: /Pull requests/ })).not.toBeInTheDocument();
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    const item = menu.open!.items.find((i) => i.label === 'Ouvrir une PR…')!;
+    item.onClick!();
+    await waitFor(() => expect(app.modal).toEqual({ kind: 'pullRequest', agentId: 'a1' }));
+    menu.close();
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /sans-branche/ }));
+    expect(menu.open!.items.map((i) => i.label)).not.toContain('Ouvrir une PR…');
+    menu.close();
+    // A branch, but no code host that opens pull requests (no remote, GitLab for now, no account).
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /sans-hebergeur/ }));
+    expect(menu.open!.items.map((i) => i.label)).not.toContain('Ouvrir une PR…');
+  });
+
+  it('says it in English', async () => {
+    setLang('en');
+    resetApp({
+      projects: [project()],
+      agents: [agent({ worktree: WT, prs: [pullRequest({ number: 12, checks: 'failure', openThreads: 1 })], prWord: 'MR' })],
+    });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const group = within(screen.getByRole('group', { name: 'Pull requests of refacto-auth' }));
+    expect(group.getByRole('button', { name: 'Open MR #12 in the browser (open)' })).toBeInTheDocument();
+    expect(group.getByRole('button', { name: 'Agent fixes it' })).toBeInTheDocument();
+    expect(group.getByRole('button', { name: 'Agent addresses the feedback' })).toBeInTheDocument();
   });
 });

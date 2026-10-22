@@ -7,6 +7,7 @@
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { can, canFork, choosesEngine, engineName, engineOptions, showsCost, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
+  import { canFixChecks, canFixReviews, cardPrs, fixPr, openPr, prGlyph, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
   import { ticketTag } from '../lib/board';
   import { shortBranch } from '../lib/branches';
@@ -114,6 +115,8 @@
       ...(a.worktree && !a.archived
         ? [{ label: t('branches.integrate.menu', { base: a.worktree.baseBranch }), onClick: () => integrateBase(a) }]
         : []),
+      // « Ouvrir une PR… » on its branch (ESC-64), « Voir la PR #n » once one is open.
+      ...[prMenuItem(a, tick)].filter((x): x is MenuItem => x !== null),
       ...(a.archived
         ? []
         : [
@@ -563,6 +566,38 @@
           <div class="ticket-tag mono">▸ {tag}</div>
         {/if}
       </div>
+      {@const prs = cardPrs(a)}
+      {#if prs.length}
+        <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
+             opens it, the corrections go to the agent on a click only. -->
+        {@const word = prWord(a)}
+        <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
+          {#each prs as p (p.number)}
+            <div class="pr" data-pr={p.number}>
+              <button
+                class="prnum mono {prTone(p)}"
+                aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+                use:tip={{ text: prTip(word, p), aria: false }}
+                onclick={() => openPr(p)}><span class="prglyph" aria-hidden="true">{prGlyph(p)}</span>#{p.number}</button
+              >
+              {#if !a.archived && canFixChecks(p)}
+                <button
+                  class="prfix"
+                  use:tip={t('prs.fixChecksHint', { agent: a.name, word, number: p.number })}
+                  onclick={() => fixPr(a, p, 'checks')}>{t('prs.fixChecks')}</button
+                >
+              {/if}
+              {#if !a.archived && canFixReviews(p)}
+                <button
+                  class="prfix"
+                  use:tip={t('prs.fixReviewsHint', { agent: a.name, word, number: p.number })}
+                  onclick={() => fixPr(a, p, 'reviews')}>{t('prs.fixReviews')}</button
+                >
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
       {@const subs = sidebarSubs(a)}
       {#if subs}
         <!-- Under the card, not in it (the card is a button): its subagents, unfolded while one runs. -->
@@ -1082,6 +1117,62 @@
     font-size: 10.5px;
     color: var(--muted);
     white-space: nowrap;
+  }
+  /* The pull requests under a card (ESC-64): their numbers, colored by what to look at first, and the corrections. */
+  .prs {
+    margin: -2px 0 4px 29px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .pr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .prnum,
+  .prfix {
+    height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .prnum {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+  .prnum.ok .prglyph {
+    color: var(--ok);
+  }
+  .prnum.fail .prglyph {
+    color: var(--del);
+  }
+  .prnum.wait .prglyph {
+    color: var(--wait);
+  }
+  .prnum.merged .prglyph {
+    color: var(--info);
+  }
+  .prnum.dim {
+    color: var(--dim);
+  }
+  .prfix {
+    color: var(--text);
+  }
+  .prnum:hover,
+  .prfix:hover {
+    background: color-mix(in oklch, var(--elev) 55%, transparent);
+    color: var(--text);
   }
   /* The subagents under a card: a line that folds them, then their rows, indented like the card's lines. A list shows its
      first rows and a button unrolls the others: it never scrolls inside the list of the agents, which scrolls already. */

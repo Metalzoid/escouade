@@ -6,6 +6,20 @@
   import { api } from '../lib/ipc';
   import { withoutPassage } from '../lib/conversation';
   import { canSwitchView, inHarnessView, switchView } from '../lib/agent-actions';
+  import {
+    askOpenPr,
+    canOpenPr,
+    cardPrs,
+    openPr,
+    openPrOf,
+    prGlyph,
+    prTip,
+    prTone,
+    prWord,
+    PRS_EVERY_MS,
+    refreshPrs,
+    stateWord,
+  } from '../lib/prs';
   import { conversationOf, type ReadingPlace } from '../lib/conversations.svelte';
   import { bgCount } from '../lib/bgtasks';
   import { splitEscouade } from '../lib/escouade';
@@ -117,6 +131,17 @@
   const labels = $derived(subagentLabels(conv.items));
   const branch = $derived(agent.worktree?.branch ?? app.git[project.id]?.branch ?? '');
   const files = $derived(app.git[project.id]?.agents[agent.id] ?? 0);
+  // Its pull requests (ESC-64): read when it is shown, then every minute while it is (the backend asks its host at most
+  // every 20 s, and no more once they are merged).
+  const prs = $derived(cardPrs(agent));
+  const word = $derived(prWord(agent));
+  const agentId = $derived(agent.id);
+  $effect(() => {
+    const id = agentId;
+    untrack(() => refreshPrs(app.agents[id]));
+    const timer = setInterval(() => refreshPrs(app.agents[id]), PRS_EVERY_MS);
+    return () => clearInterval(timer);
+  });
   const used = $derived(spent(agent));
   // How full the context is, out of the window of the conversation's model (once a turn told it).
   const context = $derived.by(() => {
@@ -554,6 +579,26 @@
         <span class="mono glyph">{termGlyph}</span><span class="lbl">{t('conv.header.terminal')}</span>
       </button>
     {/if}
+    <!-- Its pull requests, each opening in the browser; « Ouvrir une PR » while none is open (ESC-64). -->
+    {#each prs as p (p.number)}
+      <button
+        class="btn pr mono {prTone(p)}"
+        aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+        use:tip={{ text: prTip(word, p), aria: false }}
+        data-pr={p.number}
+        onclick={() => openPr(p)}><span class="glyph" aria-hidden="true">{prGlyph(p)}</span>#{p.number}</button
+      >
+    {/each}
+    {#if canOpenPr(agent) && !openPrOf(agent)}
+      <button
+        class="btn openpr"
+        aria-label={t('prs.openButton', { word })}
+        use:tip={t('prs.openHint', { word, branch: agent.worktree?.branch ?? '' })}
+        onclick={() => askOpenPr(agent)}
+      >
+        <span class="mono glyph">⇡</span><span class="lbl">{t('prs.openButton', { word })}</span>
+      </button>
+    {/if}
     {#if agent.recipe || agent.isola}
       {#if canTest(agent)}
         <button
@@ -930,9 +975,30 @@
     .edit .lbl,
     .term .lbl,
     .test .lbl,
-    .view .lbl {
+    .view .lbl,
+    .openpr .lbl {
       display: none;
     }
+  }
+  /* A pull request's number: its glyph colored by what to look at first (ESC-64). */
+  .pr {
+    gap: 5px;
+    font-size: 11.5px;
+  }
+  .pr.ok .glyph {
+    color: var(--ok);
+  }
+  .pr.fail .glyph {
+    color: var(--del);
+  }
+  .pr.wait .glyph {
+    color: var(--wait);
+  }
+  .pr.merged .glyph {
+    color: var(--info);
+  }
+  .pr.dim {
+    color: var(--dim);
   }
   @container (max-width: 440px) {
     .opt2 {
