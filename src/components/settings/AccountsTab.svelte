@@ -21,6 +21,8 @@
   import { app } from '../../lib/state.svelte';
   import type { Account, AccountStatus, ClosedProject, EngineId } from '../../lib/types';
   import Group from './Group.svelte';
+  import Row from './Row.svelte';
+  import Switch from './Switch.svelte';
   import { tip } from '../../lib/tip';
 
   // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
@@ -89,6 +91,12 @@
     if (!s) return t('accounts.tab.state.checking');
     if (s.connected) return s.email ? t('accounts.tab.state.connected', { email: s.email }) : t('accounts.tab.state.connectedNoEmail');
     return a.id === PRINCIPAL ? t('accounts.tab.state.principalNotConnected') : t('accounts.tab.state.notConnected');
+  }
+
+  /** « Projection des quotas »: shown at once, saved with the rest of the app's settings as they are, like the accounts. */
+  function setProjection(on: boolean) {
+    app.settings.quotaProjection = on;
+    app.run(api.saveSettings($state.snapshot(app.settings)));
   }
 
   /** The harness moved by `by` places in « Ordre des harness ». */
@@ -399,6 +407,11 @@
     </ol>
   </Group>
 {/if}
+<Group title={t('accounts.quotas.title')}>
+  <Row label={t('accounts.quotas.projection')} desc={t('accounts.quotas.projectionDesc')}>
+    <Switch label={t('accounts.quotas.projection')} bind:on={() => app.settings.quotaProjection !== false, setProjection} />
+  </Row>
+</Group>
 
 <style>
   .list {

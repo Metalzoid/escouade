@@ -6,7 +6,10 @@ export default {
   tabs: {
     app: { label: 'Application', desc: 'Zoom, taille du texte et langues' },
     claude: { label: 'Harness', desc: 'Exécutables, versions et serveur MCP' },
-    accounts: { label: 'Comptes', desc: 'Les comptes de chaque harness sur lesquels partent les agents, enregistrés à chaque changement' },
+    accounts: {
+      label: 'Comptes',
+      desc: 'Les comptes de chaque harness sur lesquels partent les agents, et leurs quotas, enregistrés à chaque changement',
+    },
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },

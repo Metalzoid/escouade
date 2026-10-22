@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { setLang } from '../lib/i18n';
+import { app } from '../lib/state.svelte';
 import QuotaMeter from './QuotaMeter.svelte';
 
 /** A time of day on October 10th, in the time zone of the machine (the tooltip writes it there). */
@@ -124,6 +125,57 @@ describe('QuotaMeter in the status bar', () => {
     expect(screen.getByText('reset 3h01')).toBeInTheDocument();
     await rerender({ minutes: 300, usage: { pct: 42, resetsAt: SOON }, now: NOW + 3600_000 });
     expect(screen.getByText('reset 2h01')).toBeInTheDocument();
+  });
+});
+
+describe('QuotaMeter projection', () => {
+  /** A 5 h window with 2 h gone (3 h left). */
+  const fiveHour = (pct: number) => ({ minutes: 300, usage: { pct, resetsAt: NOW + 3 * 3600_000 }, now: NOW });
+
+  it('writes after the reset where the window ends at this pace, green up to 80 %', () => {
+    const { container } = render(QuotaMeter, fiveHour(20));
+    // Read « projection à la remise à zéro : → 50 % » (the words for screen readers only).
+    expect(container).toHaveTextContent('reset 3h00 projection à la remise à zéro : → 50 %');
+    expect(container.querySelector('.p .sr')).toHaveTextContent('projection à la remise à zéro :');
+    expect(screen.getByText('→ 50 %')).toHaveClass('ok');
+  });
+
+  it('turns amber past 80 % and red past 100 %', async () => {
+    const { rerender } = render(QuotaMeter, fiveHour(34));
+    expect(screen.getByText('→ 85 %')).toHaveClass('warn');
+    await rerender(fiveHour(40));
+    expect(screen.getByText('→ 100 %')).toHaveClass('warn');
+    await rerender(fiveHour(48));
+    expect(screen.getByText('→ 120 %')).toHaveClass('over');
+  });
+
+  it('writes none in the first minutes of the window, nor without a reset', async () => {
+    const { container, rerender } = render(QuotaMeter, { minutes: 300, usage: { pct: 3, resetsAt: NOW + 298 * 60_000 }, now: NOW });
+    expect(container).not.toHaveTextContent('→');
+    await rerender({ minutes: 300, usage: { pct: 40, resetsAt: null }, now: NOW });
+    expect(container).not.toHaveTextContent('→');
+  });
+
+  it('projects the month’s credits to their reset', () => {
+    const now = Date.UTC(2026, 9, 11);
+    render(QuotaMeter, { minutes: null, usage: { pct: 20, resetsAt: Date.UTC(2026, 10, 1) }, now });
+    expect(screen.getByText('→ 62 %')).toHaveClass('ok');
+  });
+
+  it('writes none when « Projection des quotas » is off', () => {
+    app.settings.quotaProjection = false;
+    try {
+      const { container } = render(QuotaMeter, fiveHour(20));
+      expect(container).toHaveTextContent('reset 3h00');
+      expect(container).not.toHaveTextContent('→');
+    } finally {
+      app.settings.quotaProjection = true;
+    }
+  });
+
+  it('is in the panel too, after the reset', () => {
+    const { container } = render(QuotaMeter, { ...fiveHour(20), detail: true });
+    expect(spaces(container.textContent)).toMatch(/20 %\s*reset 3h00\s*projection à la remise à zéro : → 50 %/);
   });
 });
 

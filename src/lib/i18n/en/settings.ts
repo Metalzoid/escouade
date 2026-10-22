@@ -5,7 +5,7 @@ export default defineZone('settings', {
   tabs: {
     app: { label: 'Application', desc: 'Zoom, text size, and languages' },
     claude: { label: 'Harness', desc: 'Executables, versions and the MCP server' },
-    accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, saved as you change them' },
+    accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, and their quotas, saved as you change them' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },

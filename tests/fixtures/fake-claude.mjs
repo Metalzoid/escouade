@@ -28,6 +28,8 @@
 // A user message with [ferme-lentement] makes the process take 800 ms to end once its input is
 // closed, and write {"type":"closed"} to its session just before it does (a resume that copies
 // the session before the process is gone misses that line). Without CLAUDE_CONFIG_DIR, none of this.
+// [quota-rythme] in a message makes the quota windows it tells from then on end a little later than now, as a window
+// half way through does: 5 h at 50 % with 3 h left (→ 125 % at its reset), 7 days at 34 % with 3 days and a half left.
 // `claude mcp add|remove|get|list` keep the user scope's MCP servers in <folder>/.claude.json (see mcpCommand).
 // What Escouade tells it is read in French or in English (« Langue des textes rédigés par Claude »):
 // each scenario below is recognized in both, its answers stay the same.
@@ -769,11 +771,15 @@ function startSession() {
     fs.appendFileSync(file, JSON.stringify({ ...entry, sessionId, cwd: process.cwd() }) + '\n');
   }
 
-  // The quota windows it tells: full while the account is out of quota.
-  const windows = () => ({
-    five_hour: { utilization: limited() ? 1 : 0.12, resetsAt: 1790558400 },
-    seven_day: { utilization: 0.34, resetsAt: 1790805600 },
-  });
+  // The quota windows it tells: full while the account is out of quota; ending from now once [quota-rythme] was asked.
+  let paced = false;
+  const windows = () => {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      five_hour: { utilization: limited() ? 1 : paced ? 0.5 : 0.12, resetsAt: paced ? now + 3 * 3600 : 1790558400 },
+      seven_day: { utilization: 0.34, resetsAt: paced ? now + 84 * 3600 : 1790805600 },
+    };
+  };
 
   // `parent`: the call of the subagent that makes this message (null: the main thread).
   function assistant(block, id = `msg_${process.pid}_${++msg}`, parent = null) {
@@ -1849,6 +1855,7 @@ function startSession() {
     if (attached.length) return readAttached(attached);
     if (text.includes('<escouade-voice>')) return voiceTurn(text);
     if (text.includes('[ferme-lentement]')) slowClose = true;
+    if (text.includes('[quota-rythme]')) paced = true;
     if (text.includes('crash')) process.exit(3);
     if (text.includes('grandchild')) {
       // Like a dev server started by the Bash tool: must die with the agent's process tree. Node ends

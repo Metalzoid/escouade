@@ -299,6 +299,78 @@ export function overThreshold(w: RateWindow | null, threshold: number, now: numb
   return !!w && w.pct + 1e-6 >= threshold && w.resetsAt !== null && w.resetsAt > now;
 }
 
+/**
+ * Where a window would end if it went on at the pace used so far: its percentage spread over the time gone, to its whole
+ * length. The month's credits (`minutes` null, Copilot CLI) are a window of the month that ends at their reset. None for a
+ * window whose end is unknown or past, nor while it is too early (`tooEarly`).
+ */
+export function projectedPct(minutes: number | null, w: RateWindow | null, now: number): number | null {
+  if (!w?.resetsAt) return null;
+  const length = minutes === null ? w.resetsAt - monthBefore(w.resetsAt) : minutes * 60_000;
+  const left = w.resetsAt - now;
+  if (left <= 0) return null;
+  const gone = Math.min(length, length - left);
+  if (tooEarly(gone, length)) return null;
+  return (w.pct * length) / gone;
+}
+
+const DAY_MS = 24 * 3_600_000;
+
+/**
+ * Too early to project, `gone` into a window of `length`. One of a day or so waits for a tenth of itself (30 minutes of a
+ * 5 h window, a turn or two would take it far past 100 %; 2 h 24 of a day); a longer one (a week's, a month's) for a whole
+ * day, for the nights to count: a morning's work spread over a week as if it went on day and night would make the start
+ * of every week red.
+ */
+function tooEarly(gone: number, length: number): boolean {
+  return gone < (length < 2 * DAY_MS ? length * 0.1 : DAY_MS);
+}
+
+/**
+ * The same day and time a month before `ts`, in UTC (the credits come back on the 1st, 00:00 UTC); the last day of that
+ * month when it is shorter (March 31st → February 28th, not March 3rd).
+ */
+function monthBefore(ts: number): number {
+  const d = new Date(ts);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d.getTime();
+}
+
+/**
+ * Where the day's cost would end at midnight at the pace since midnight, for a harness without a quota (OpenCode): null
+ * while it is too early (`tooEarly`: until 2 h 24), as for a window.
+ */
+export function projectedDayCost(cost: number, now: number): number | null {
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const next = new Date(midnight);
+  next.setDate(next.getDate() + 1);
+  const length = next.getTime() - midnight.getTime();
+  const gone = now - midnight.getTime();
+  if (tooEarly(gone, length)) return null;
+  return (cost * length) / gone;
+}
+
+/**
+ * The colour of a projection: past 100 % the window runs out before its end, past 80 % it comes close. Rounded as it is
+ * written, so that « 100 % » is never red.
+ */
+export function projectionLevel(pct: number): 'ok' | 'warn' | 'over' {
+  const p = Math.round(pct);
+  if (p > 100) return 'over';
+  if (p > 80) return 'warn';
+  return 'ok';
+}
+
+/** A projection as it is written: « 112 % », « 999+ % » past that (early in a window, a few turns go far). */
+export function fProjection(pct: number): string {
+  return Math.round(pct) > 999 ? t('format.percent', { n: '999+' }) : fPct(pct);
+}
+
 /** One account in the panel of the quotas. */
 export interface QuotaRow {
   account: Account;

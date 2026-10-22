@@ -164,6 +164,12 @@ export default {
     week: { label: '7j' },
     /** `{countdown}`: the time left, as `fCountdown` writes it. */
     reset: 'reset {countdown}',
+    /** After the reset: where the window would end at the pace used so far; `{pct}`: « 112 % ». */
+    projected: '→ {pct}',
+    /** Before it, for screen readers only (the arrow and the colour say it to the eye). */
+    projectedSr: 'projection à la remise à zéro : ',
+    /** After the day's cost of a harness without a quota: where it would end at midnight; `{amount}`: « 3,40 $ ». */
+    projectedCost: '→ {amount}',
     /** The value of a bar: `{pct}`: « 42 % »; `{date}`: « 10/10 »; `{time}`: « 18:00 ». */
     tip: '{pct} · remise à zéro le {date} à {time}',
     unavailable: 'Quota indisponible',
@@ -194,6 +200,14 @@ export default {
     failed: 'La reprise sur {account} a échoué : {error}.',
     /** `{account}`: the account the agent came from. */
     back: 'Revenir sur {account}',
+  },
+
+  // The « Quotas » group, at the end of the « Comptes » tab: how the status bar shows them, for every account.
+  quotas: {
+    title: 'Quotas',
+    projection: 'Projection des quotas',
+    projectionDesc:
+      'Dans la barre d’état, après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.',
   },
 
   // « Ordre des harness », in the « Comptes » tab once there are two harnesses.

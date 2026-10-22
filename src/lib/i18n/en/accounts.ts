@@ -144,6 +144,9 @@ export default defineZone('accounts', {
     credits: { label: 'credits', name: 'Credits of the month' },
     week: { label: 'W' },
     reset: 'reset {countdown}',
+    projected: '→ {pct}',
+    projectedSr: 'projected at the reset: ',
+    projectedCost: '→ {amount}',
     tip: '{pct} · resets on {date} at {time}',
     unavailable: 'Quota unavailable',
     line: '{name}: {tip}',
@@ -163,6 +166,13 @@ export default defineZone('accounts', {
     another: 'Resume on another account',
     failed: 'Resuming on {account} failed: {error}.',
     back: 'Go back to {account}',
+  },
+
+  quotas: {
+    title: 'Quotas',
+    projection: 'Quota projection',
+    projectionDesc:
+      'In the status bar, after each quota, where it will stand at its reset at the current pace (“→ 64%”): green, amber past 80%, red past 100%. For a harness without a quota, the day’s cost projected to midnight, against its budget.',
   },
 
   engineOrder: {

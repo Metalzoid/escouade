@@ -1,6 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agent, project, resetApp, usageOf } from '../test/ipc';
-import { newAgentAccount, overThreshold, pausedAccounts, pauseOf, projectsWithoutAccount, quotaOf, quotaRows } from './accounts';
+import {
+  fProjection,
+  newAgentAccount,
+  overThreshold,
+  pausedAccounts,
+  pauseOf,
+  projectedDayCost,
+  projectedPct,
+  projectionLevel,
+  projectsWithoutAccount,
+  quotaOf,
+  quotaRows,
+} from './accounts';
 import { setLang } from './i18n';
 import { app } from './state.svelte';
 import type { Account, AccountUsage, AutopilotPause, RateWindow } from './types';
@@ -231,5 +243,78 @@ describe('the quota of each account', () => {
     expect(reasons.principal).toEqual(['Not signed in with a claude.ai account (API key?)']);
     expect(reasons.pro).toEqual(['Not signed in']);
     expect(reasons.team).toEqual(['Inactive']);
+  });
+});
+
+describe('the projection of a window at its reset', () => {
+  const H = 3600_000;
+  const NOW = 1_000 * H;
+
+  it('spreads what is used over the time gone, to the whole window', () => {
+    // 2 h of 5 gone, 40 % used: 100 % at the reset.
+    expect(projectedPct(300, { pct: 40, resetsAt: NOW + 3 * H }, NOW)).toBeCloseTo(100);
+    // Half the week gone, 30 % used.
+    expect(projectedPct(10080, { pct: 30, resetsAt: NOW + 84 * H }, NOW)).toBeCloseTo(60);
+    expect(projectedPct(300, { pct: 0, resetsAt: NOW + 3 * H }, NOW)).toBe(0);
+  });
+
+  it('takes the month’s credits as a window of the month that ends at their reset', () => {
+    // Back on November 1st, 00:00 UTC: October has 31 days; 10 days gone, 20 % used.
+    const reset = Date.UTC(2026, 10, 1);
+    expect(projectedPct(null, { pct: 20, resetsAt: reset }, Date.UTC(2026, 9, 11))).toBeCloseTo(62);
+    // Half a day in: too early.
+    expect(projectedPct(null, { pct: 1, resetsAt: reset }, Date.UTC(2026, 9, 1, 12))).toBeNull();
+    // A reset on the 31st: the month before ends on the 30th (or the 28th), not on the 1st or 3rd of the next one.
+    // From April 30th to May 31st: 31 days, 15 and a half gone, 25 % used.
+    expect(projectedPct(null, { pct: 25, resetsAt: Date.UTC(2026, 4, 31) }, Date.UTC(2026, 4, 15, 12))).toBeCloseTo(50);
+    // From February 28th to March 31st: 31 days.
+    expect(projectedPct(null, { pct: 25, resetsAt: Date.UTC(2026, 2, 31) }, Date.UTC(2026, 2, 15, 12))).toBeCloseTo(50);
+  });
+
+  it('says nothing for an unknown or past end, nor too early: a tenth of a 5 h window, a whole day of a week', () => {
+    expect(projectedPct(300, null, NOW)).toBeNull();
+    expect(projectedPct(300, { pct: 40, resetsAt: null }, NOW)).toBeNull();
+    expect(projectedPct(300, { pct: 40, resetsAt: NOW }, NOW)).toBeNull();
+    // 29 minutes of 5 h gone: too early, a turn or two would take it far past 100 %; 30 minutes: a tenth.
+    expect(projectedPct(300, { pct: 5, resetsAt: NOW + 271 * 60_000 }, NOW)).toBeNull();
+    expect(projectedPct(300, { pct: 5, resetsAt: NOW + 270 * 60_000 }, NOW)).toBeCloseTo(50);
+    // A week's: a morning's work (15 % in 8 h) would say « → 315 % » as if it went on day and night; nothing before a
+    // whole day, then the pace of that day (20 % in 24 h: 140 %).
+    expect(projectedPct(10080, { pct: 15, resetsAt: NOW + 160 * H }, NOW)).toBeNull();
+    expect(projectedPct(10080, { pct: 20, resetsAt: NOW + 144 * H }, NOW)).toBeCloseTo(140);
+  });
+
+  it('takes a reset further than the window as a window just started', () => {
+    expect(projectedPct(300, { pct: 5, resetsAt: NOW + 6 * H }, NOW)).toBeNull();
+  });
+
+  it('is green up to 80 %, amber up to 100 %, red past it, as it is written', () => {
+    expect(projectionLevel(80)).toBe('ok');
+    expect(projectionLevel(80.4)).toBe('ok');
+    expect(projectionLevel(81)).toBe('warn');
+    expect(projectionLevel(100.4)).toBe('warn');
+    expect(projectionLevel(100.6)).toBe('over');
+  });
+
+  it('writes the percentage, « 999+ » past it', () => {
+    setLang('fr');
+    expect(fProjection(112.3)).toBe('112 %');
+    expect(fProjection(999.4)).toBe('999 %');
+    expect(fProjection(4000)).toBe('999+ %');
+  });
+});
+
+describe('the projection of the day’s cost at midnight', () => {
+  /** A time of day today, in the time zone of the machine. */
+  const at = (h: number, m = 0) => new Date(2026, 9, 20, h, m).getTime();
+
+  it('spreads the cost since midnight over the whole day', () => {
+    expect(projectedDayCost(1, at(12))).toBeCloseTo(2);
+    expect(projectedDayCost(3, at(18))).toBeCloseTo(4);
+  });
+
+  it('says nothing in the first tenth of the day (2 h 24)', () => {
+    expect(projectedDayCost(0.2, at(2, 20))).toBeNull();
+    expect(projectedDayCost(0.2, at(2, 30))).not.toBeNull();
   });
 });
