@@ -3799,6 +3799,23 @@ async fn a_start_that_waited_for_the_lock_of_a_deleted_agent_starts_nothing() {
     assert!(handle.lock().proc.is_none());
 }
 
+/// The warm-up of a new agent comes as late as the runtime lets it: archived meanwhile, it would
+/// start a process nothing closes, which holds the folder of the agent's worktree (on Windows, its
+/// cleanup then failed after minutes).
+#[tokio::test]
+async fn the_warm_up_of_an_agent_archived_meanwhile_starts_nothing() {
+    let h = harness("warm-archived");
+    let (p, _) = h.project(false).await;
+    let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    h.core.archive_agent(&id, true).await.unwrap();
+    let handle = h.core.agent(&id).unwrap();
+    // The warm-up the creation made, if it was not through yet, and one made now.
+    let warmed = h.core.ensure_process_for(&id, true).await;
+    assert_eq!(warmed.err().unwrap().to_string(), "L’agent est archivé.");
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(handle.lock().proc.is_none());
+}
+
 #[cfg(windows)]
 fn process_exists(pid: u32) -> bool {
     let out = Command::new("tasklist")

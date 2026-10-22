@@ -24,6 +24,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- An agent archived right after it was created no longer leaves a process running that held its folder: the worktree of a deleted or validated ticket goes instead of staying, sometimes minutes later.
 - A second Claude Code account no longer runs as the first one’s identity when your environment sets `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_AUTH_TOKEN`: its quota finally moves on claude.ai.
 - When an account goes on in extra usage at 100 % of its quota, the status bar says so: its running agents stay on it, only new ones go to the other account.
 - With live transcription on Deepgram, a sentence whose stream breaks is no longer lost: it goes whole, as without live transcription.

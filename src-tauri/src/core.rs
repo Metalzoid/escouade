@@ -2544,16 +2544,27 @@ impl<R: Runtime> Core<R> {
 
     /// Returns the agent's live process, starting it (with --resume) when needed.
     pub async fn ensure_process(self: &Arc<Self>, id: &str) -> Result<Process> {
+        self.ensure_process_for(id, false).await
+    }
+
+    /// `ensure_process`; `warming`: only the warm-up of a new agent, which comes as late as the
+    /// runtime lets it, and finds the agent archived meanwhile: no process is started for it then
+    /// (nothing would close it, and it would hold the folder of its worktree).
+    pub(crate) async fn ensure_process_for(
+        self: &Arc<Self>,
+        id: &str,
+        warming: bool,
+    ) -> Result<Process> {
         // What a start resumes: its session, or a copy's original's, from where it was copied.
         let resumes = |m: &AgentMeta| (m.session_id.clone(), m.fork_of.clone(), m.fork_at.clone());
         let before = resumes(&self.agent(id)?.lock().meta);
-        match self.start_process(id).await {
+        match self.start_process(id, warming).await {
             // What it was to resume could not be (the session, or a copy's point in its
             // original's): its exit handler dropped it, so a second start goes on without it.
             Err(e)
                 if e.is::<StartupFailure>() && resumes(&self.agent(id)?.lock().meta) != before =>
             {
-                self.start_process(id).await
+                self.start_process(id, warming).await
             }
             other => other,
         }
@@ -2573,19 +2584,34 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    async fn start_process(self: &Arc<Self>, id: &str) -> Result<Process> {
+    async fn start_process(self: &Arc<Self>, id: &str, warming: bool) -> Result<Process> {
         let h = self.agent(id)?;
-        self.start_process_of(&h, id).await
+        self.start_process_in(&h, id, warming).await
     }
 
     /// `start_process` of the agent `h` (`id`), as found at the call.
+    #[cfg(test)]
     pub(crate) async fn start_process_of(
         self: &Arc<Self>,
         h: &AgentHandle,
         id: &str,
     ) -> Result<Process> {
+        self.start_process_in(h, id, false).await
+    }
+
+    async fn start_process_in(
+        self: &Arc<Self>,
+        h: &AgentHandle,
+        id: &str,
+        warming: bool,
+    ) -> Result<Process> {
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
+        // Archived while its warm-up waited for the lock (the archive has it too, and found no
+        // process to close).
+        if warming && h.lock().meta.archived {
+            bail!(tr!("L’agent est archivé.", "The agent is archived."));
+        }
         // Deleted while it waited for the lock (the deletion has its own, now gone): a process
         // started now would run, unseen, in the folder that is being removed.
         if !self
@@ -3224,7 +3250,7 @@ impl<R: Runtime> Core<R> {
                 if let Ok(h) = c.agent(&id) {
                     c.stop_unseen_interface(&h);
                 }
-            } else if let Err(e) = c.ensure_process(&id).await {
+            } else if let Err(e) = c.ensure_process_for(&id, true).await {
                 log::warn!("warm-up failed: {e:#}");
             }
         });
