@@ -2,12 +2,63 @@
 //! or its name (in a project when one is given), a ticket by its id or its key (any case). A name
 //! that fits none, or several, is an error the model reads, with the choices it has (`CHOICES`
 //! at most): it asks again with one of them.
+//!
+//! Only among what the caller sees (`Sight`): a private project, its agents and its tickets are
+//! named, listed and offered as choices to its own agents alone, and the agents of a private project
+//! see nothing else. What a caller does not see is not found, in the same words as what does not
+//! exist.
 
 use super::tools::ToolError;
+use super::Caller;
 use crate::core::Core;
 use crate::model::{AgentMeta, Project, Ticket};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tauri::Runtime;
+
+/// The projects a caller of the server sees (« Projet privé », ESC-139).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Sight {
+    /// Claude outside Escouade: the user's own token, every project.
+    All,
+    /// An agent of a project that is not private: every project but the private ones.
+    Shared { private: HashSet<String> },
+    /// An agent of a private project: its own alone.
+    Own(String),
+}
+
+impl Sight {
+    /// What `caller` sees, as the projects are now. An agent the core no longer has sees the
+    /// projects that are not private.
+    pub(crate) fn of<R: Runtime>(core: &Core<R>, caller: &Caller) -> Self {
+        let Caller::Agent(id) = caller else {
+            return Self::All;
+        };
+        let own = core
+            .agent(id)
+            .ok()
+            .map(|h| h.lock().meta.project_id.clone());
+        let projects = core.projects.read();
+        if let Some(own) = own.filter(|own| projects.iter().any(|p| p.id == *own && p.private)) {
+            return Self::Own(own);
+        }
+        Self::Shared {
+            private: projects
+                .iter()
+                .filter(|p| p.private)
+                .map(|p| p.id.clone())
+                .collect(),
+        }
+    }
+
+    /// Whether the project `project_id` is seen.
+    pub(crate) fn sees(&self, project_id: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::Shared { private } => !private.contains(project_id),
+            Self::Own(own) => own == project_id,
+        }
+    }
+}
 
 /// The most choices an error lists.
 pub(crate) const CHOICES: usize = 5;
@@ -16,7 +67,11 @@ pub(crate) const CHOICES: usize = 5;
 const TITLE_MAX: usize = 60;
 
 /// The project `asked` names: its id, else its name in any case.
-pub(crate) fn project<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Project, ToolError> {
+pub(crate) fn project<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    asked: &str,
+) -> Result<Project, ToolError> {
     let asked = asked.trim();
     if asked.is_empty() {
         return Err(ToolError::Failed(tr!(
@@ -24,7 +79,9 @@ pub(crate) fn project<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Project
             "Give a project: its id or its name."
         )));
     }
-    let projects = core.projects.read().clone();
+    let sight = Sight::of(core, caller);
+    let mut projects = core.projects.read().clone();
+    projects.retain(|p| sight.sees(&p.id));
     let label = |p: &Project| format!("{} (id {})", p.name, p.id);
     match named(&projects, asked, |p| &p.id, |p| &p.name) {
         Named::One(p) => Ok(p.clone()),
@@ -76,6 +133,7 @@ impl AgentRef {
 /// name in any case among the agents not archived, else among the archived ones.
 pub(crate) fn agent<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     asked: &str,
     project: Option<&Project>,
 ) -> Result<AgentRef, ToolError> {
@@ -86,12 +144,13 @@ pub(crate) fn agent<R: Runtime>(
             "Give an agent: its id or its name."
         )));
     }
+    let sight = Sight::of(core, caller);
     let mut agents: Vec<AgentRef> = core
         .agents
         .read()
         .values()
         .map(|h| AgentRef::of(&h.lock().meta))
-        .filter(|a| project.is_none_or(|p| a.project_id == p.id))
+        .filter(|a| sight.sees(&a.project_id) && project.is_none_or(|p| a.project_id == p.id))
         .collect();
     agents.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));
     if let Some(a) = agents.iter().find(|a| a.id == asked) {
@@ -166,14 +225,19 @@ pub(crate) fn agent<R: Runtime>(
 
 /// The ticket `asked` names: its id, else its key in any case (a key may be in two projects whose
 /// keys have the same prefix).
-pub(crate) fn ticket<R: Runtime>(core: &Core<R>, asked: &str) -> Result<Ticket, ToolError> {
-    ticket_in(core, asked, None)
+pub(crate) fn ticket<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    asked: &str,
+) -> Result<Ticket, ToolError> {
+    ticket_in(core, caller, asked, None)
 }
 
 /// `ticket`, among the tickets of `project` when one is given: a ticket comes after, or goes
 /// before, one of its own project.
 pub(crate) fn ticket_in<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     asked: &str,
     project: Option<&Project>,
 ) -> Result<Ticket, ToolError> {
@@ -184,8 +248,9 @@ pub(crate) fn ticket_in<R: Runtime>(
             "Give a ticket: its key or its id."
         )));
     }
+    let sight = Sight::of(core, caller);
     let mut tickets = core.tickets.read().clone();
-    tickets.retain(|t| project.is_none_or(|p| t.project_id == p.id));
+    tickets.retain(|t| sight.sees(&t.project_id) && project.is_none_or(|p| t.project_id == p.id));
     // The newest first among the choices.
     tickets.sort_by(|a, b| (b.created_at, &b.id).cmp(&(a.created_at, &a.id)));
     let projects = project_names(core);

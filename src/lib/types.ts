@@ -75,6 +75,8 @@ export interface Settings {
   terminalView: boolean;
   /** « Remote control pour tous les agents »: every agent of every project is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
   remoteControlAll: boolean;
+  /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
+  privateProjects: boolean;
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */
@@ -685,6 +687,8 @@ export interface Project {
   remoteControl: boolean;
   /** « Harness par défaut »: the one its new agents and tickets run on unless they say theirs; null: Claude Code. */
   engine: EngineId | null;
+  /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
+  private: boolean;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

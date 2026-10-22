@@ -5,7 +5,7 @@
 
 use super::files::{self, FileView};
 use super::images::{self, ImageView};
-use super::resolve;
+use super::resolve::{self, Sight};
 use super::tools::ToolError;
 use super::Caller;
 use crate::accounts;
@@ -151,10 +151,15 @@ impl ColumnCounts {
     }
 }
 
-/// `list_projects`: every project, in the window's order.
-pub(super) async fn projects<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
+/// `list_projects`: every project the caller sees (`resolve::Sight`), in the window's order.
+pub(super) async fn projects<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+) -> Result<String, ToolError> {
+    let sight = Sight::of(core, caller);
     // One lock at a time (the order is projects before tickets, see `Core`).
-    let projects = core.projects.read().clone();
+    let mut projects = core.projects.read().clone();
+    projects.retain(|p| sight.sees(&p.id));
     // The settings' lock after the projects' one is released: never two at a time.
     let remote_all = core.settings.read().remote_control_all;
     let mut tickets: HashMap<String, ColumnCounts> = HashMap::new();
@@ -225,12 +230,17 @@ struct AgentRow {
     remote: RemoteRead,
 }
 
-/// `list_agents`: the agents not archived, oldest first, of every project or of `project`.
+/// `list_agents`: the agents not archived, oldest first, of every project the caller sees or of
+/// `project`.
 pub(super) fn agents<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
-    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
+    let sight = Sight::of(core, caller);
+    let scope = project
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
     let projects: HashMap<String, String> = core
         .projects
         .read()
@@ -242,7 +252,7 @@ pub(super) fn agents<R: Runtime>(
     let rows: Vec<AgentRow> = core
         .agent_views()
         .into_iter()
-        .filter(|v| !v.meta.archived)
+        .filter(|v| !v.meta.archived && sight.sees(&v.meta.project_id))
         .filter(|v| scope.as_ref().is_none_or(|p| v.meta.project_id == p.id))
         .map(|v| AgentRow {
             work: WorkCounts::of(v.meta.plan.as_ref()),
@@ -301,10 +311,11 @@ struct TicketRow {
 /// `list_tickets`: the tickets of `project`, of every column or of `column`, in the board's order.
 pub(super) fn tickets<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     project: &str,
     column: Option<Column>,
 ) -> Result<String, ToolError> {
-    let project = resolve::project(core, project)?;
+    let project = resolve::project(core, caller, project)?;
     let names: HashMap<String, String> = core
         .agents
         .read()
@@ -531,7 +542,7 @@ pub(super) fn ticket<R: Runtime>(
     asked: Option<&str>,
 ) -> Result<String, ToolError> {
     let t = match asked.map(str::trim).filter(|a| !a.is_empty()) {
-        Some(asked) => resolve::ticket(core, asked)?,
+        Some(asked) => resolve::ticket(core, caller, asked)?,
         None => own_ticket(core, caller)?,
     };
     json(&ticket_view(core, &t))
@@ -618,8 +629,12 @@ pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) ->
 }
 
 /// `get_board`: the Kanban settings of `project`.
-pub(super) async fn board<R: Runtime>(core: &Core<R>, project: &str) -> Result<String, ToolError> {
-    let project = resolve::project(core, project)?;
+pub(super) async fn board<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project: &str,
+) -> Result<String, ToolError> {
+    let project = resolve::project(core, caller, project)?;
     json(&board_view(core, &project).await)
 }
 
@@ -738,11 +753,14 @@ struct Summary {
 /// `get_agent_summary`: the agent `agent` names (in `project` when given), summed up.
 pub(super) fn agent_summary<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     agent: &str,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
-    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
-    let found = resolve::agent(core, agent, scope.as_ref())?;
+    let scope = project
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
+    let found = resolve::agent(core, caller, agent, scope.as_ref())?;
     let h = core.agent(&found.id).map_err(|_| {
         ToolError::Failed(tr!(
             "L’agent {name} n’existe plus.",
@@ -1047,15 +1065,19 @@ fn request_row(agent: RequestAgent, w: Waiting) -> RequestRow {
 
 /// `list_requests`: the requests waiting for an answer, in the order they came, of the agent
 /// `agent` names (in `project` when given), of the agents of `project`, or of every agent not
-/// archived.
+/// archived of the projects the caller sees.
 pub(super) fn requests<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     agent: Option<&str>,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
-    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
+    let sight = Sight::of(core, caller);
+    let scope = project
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
     let only = agent
-        .map(|a| resolve::agent(core, a, scope.as_ref()))
+        .map(|a| resolve::agent(core, caller, a, scope.as_ref()))
         .transpose()?;
     let projects: HashMap<String, String> = core
         .projects
@@ -1072,7 +1094,11 @@ pub(super) fn requests<R: Runtime>(
         let m = &rt.meta;
         let wanted = match &only {
             Some(a) => m.id == a.id,
-            None => !m.archived && scope.as_ref().is_none_or(|p| m.project_id == p.id),
+            None => {
+                !m.archived
+                    && sight.sees(&m.project_id)
+                    && scope.as_ref().is_none_or(|p| m.project_id == p.id)
+            }
         };
         if !wanted {
             continue;

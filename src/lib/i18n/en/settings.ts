@@ -249,6 +249,10 @@ export default defineZone('settings', {
     remoteDesc:
       'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
     remoteGlobal: 'On for all projects in Settings › Harness',
+    privateTitle: 'Privacy',
+    private: 'Private project',
+    privateDesc:
+      'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
     worktreeDir: 'Worktrees folder',
@@ -311,6 +315,12 @@ export default defineZone('settings', {
     closeDesc:
       'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
     closeButton: 'Close the project…',
+  },
+
+  newProjects: {
+    title: 'New projects',
+    private: 'New projects are private',
+    privateDesc: 'Each project added is private from the start. Existing ones keep their setting.',
   },
 
   closed: {

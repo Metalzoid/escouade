@@ -78,6 +78,8 @@ const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
     'attachKeepDays',
     'remoteControlAll',
   ],
+  // What a project added starts with: shown under the project's own settings.
+  projects: ['privateProjects'],
   notifications: ['sound', 'osNotifications', 'notifyFor'],
   voice: ['voice'],
   terminals: ['pwshPath', 'bashPath', 'wslDistro'],
@@ -105,6 +107,7 @@ type ProjectFields = Pick<
   | 'ticketBranchPrefix'
   | 'remoteControl'
   | 'engine'
+  | 'private'
 >;
 
 /** Which commands of a project's worktrees: run once one is made, or before one is removed. */
@@ -133,6 +136,8 @@ export interface ProjectDraft {
   remoteControl: boolean;
   /** « Harness par défaut »: null is Claude Code. */
   engine: EngineId | null;
+  /** « Projet privé ». */
+  private: boolean;
   board: BoardSettings;
   /** Its sources in external ticket systems (the « Intégrations » tab). */
   integrations: ProjectIntegrations;
@@ -154,6 +159,7 @@ function draftOf(p: Project): ProjectDraft {
     ticketBranchPrefix,
     remoteControl,
     engine,
+    private: isPrivate,
     board,
     integrations,
   } = $state.snapshot(p);
@@ -173,6 +179,8 @@ function draftOf(p: Project): ProjectDraft {
     remoteControl,
     // Absent from a project of the window's tests made before 1.8.
     engine: engine ?? null,
+    // Absent from a project of the window's tests made before ESC-139.
+    private: !!isPrivate,
     board,
     integrations,
   };
@@ -221,6 +229,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     ticketBranchPrefix: d.ticketBranchPrefix.trim(),
     remoteControl: d.remoteControl,
     engine: d.engine,
+    private: d.private,
   };
 }
 
@@ -326,8 +335,8 @@ class SettingsForm {
     const own = !!keys && keys.some((k) => k in changes(settingsOf(this.#base.settings), settingsOf(this.settings)));
     if (tab === 'integrations') return own || Object.keys(this.projects).some((id) => this.#linksChanged(id));
     if (tab === 'board') return own || Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
+    if (tab === 'projects') return own || Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
     if (keys) return own;
-    if (tab === 'projects') return Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
     return false;
   }
 

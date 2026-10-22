@@ -284,6 +284,11 @@ export default {
       'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
     remoteGlobal: 'Activé pour tous les projets dans Réglages › Harness',
+    /** The group of « Projet privé », after the remote control. */
+    privateTitle: 'Confidentialité',
+    private: 'Projet privé',
+    privateDesc:
+      'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
     worktreeDir: 'Dossier des worktrees',
@@ -353,6 +358,13 @@ export default {
   },
 
   // The projects closed with their history kept (under the « Projets » tab).
+  /** The « Projets » tab, for every project: what a project added starts with. */
+  newProjects: {
+    title: 'Nouveaux projets',
+    private: 'Nouveaux projets privés',
+    privateDesc: 'Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.',
+  },
+
   closed: {
     title: 'Projets fermés',
     note: 'Leur historique est gardé : ajouter un projet dans leur dossier le retrouve.',

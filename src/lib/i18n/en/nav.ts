@@ -78,6 +78,7 @@ export default defineZone('nav', {
     attention: 'Needs a look: {names}',
     delta: 'Uncommitted git changes',
     waiting: 'Agents waiting for an answer',
+    private: 'Private project: unseen by the agents of the other projects',
     addProject: 'Add a project',
     openEditor: 'Open the project’s editor',
     openEditorTitle: 'Browse and edit the project’s files',

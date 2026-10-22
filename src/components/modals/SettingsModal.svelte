@@ -9,6 +9,8 @@
   import ApplicationTab from '../settings/ApplicationTab.svelte';
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
+  import NewProjects from '../settings/NewProjects.svelte';
+  import PrivateMark from '../PrivateMark.svelte';
   import IntegrationsTab from '../settings/IntegrationsTab.svelte';
   import ProjectTab from '../settings/ProjectTab.svelte';
   import VoiceTab from '../settings/VoiceTab.svelte';
@@ -129,7 +131,8 @@
                 class:on={p.id === settingsForm.projectId}
                 aria-pressed={p.id === settingsForm.projectId}
                 onclick={() => (settingsForm.projectId = p.id)}
-                ><span class="sw" style:background={d?.color ?? p.color}></span>{d?.name.trim() || p.name}</button
+                ><span class="sw" style:background={d?.color ?? p.color}></span>{d?.name.trim() ||
+                  p.name}{#if d?.private ?? p.private}<PrivateMark />{/if}</button
               >
             {/each}
           </div>
@@ -149,7 +152,7 @@
             <p class="none">{t('settings.modal.noProject')}</p>
           {/if}
           <!-- Also with no project open: that is when a folder's old history is most worth finding. -->
-          {#if current.id === 'projects'}<ClosedProjects />{/if}
+          {#if current.id === 'projects'}<NewProjects /><ClosedProjects />{/if}
         {:else if current.id === 'app'}
           <ApplicationTab />
         {:else if current.id === 'accounts'}

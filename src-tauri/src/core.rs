@@ -1346,6 +1346,7 @@ fn blank_project(path: &str) -> Project {
         ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
         remote_control: false,
         engine: None,
+        private: false,
     }
 }
 
@@ -6485,6 +6486,8 @@ impl<R: Runtime> Core<R> {
             color: color.to_string(),
             worktree_per_agent,
             created_at: now_ms(),
+            // « Nouveaux projets privés »: a history brought back keeps its own.
+            private: self.settings.read().private_projects,
             ..blank_project(&path)
         };
         let accounts: Vec<String> = self
@@ -6607,6 +6610,8 @@ impl<R: Runtime> Core<R> {
         cur.commit_mode = p.commit_mode;
         cur.account = account;
         cur.engine = p.engine;
+        // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`).
+        cur.private = p.private;
         let dir_changed = cur.worktree_dir != worktree_dir;
         cur.worktree_dir = worktree_dir;
         cur.agent_branch_prefix = agent_prefix;

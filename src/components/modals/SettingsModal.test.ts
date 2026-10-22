@@ -1018,8 +1018,7 @@ describe('SettingsModal', () => {
       const headings = within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent);
-      expect(headings.at(-2)).toBe('Zone sensible');
-      expect(headings.at(-1)).toBe('Projets fermés');
+      expect(headings.slice(-3)).toEqual(['Zone sensible', 'Nouveaux projets', 'Projets fermés']);
       // Another tab of the project does not carry them.
       await userEvent.click(tab('Kanban'));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
@@ -1403,7 +1402,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading', { level: 3 })
         .map((h) => h.textContent),
-    ).toEqual(['Identity', 'Remote control', 'Git', 'Worktrees', 'Launch', 'Setup assistant', 'Danger zone']);
+    ).toEqual(['Identity', 'Remote control', 'Privacy', 'Git', 'Worktrees', 'Launch', 'Setup assistant', 'Danger zone', 'New projects']);
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();

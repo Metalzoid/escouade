@@ -22,6 +22,7 @@
   } from '../lib/tab-strip';
   import { PROJECT_COLORS } from '../lib/theme';
   import type { Project } from '../lib/types';
+  import PrivateMark from './PrivateMark.svelte';
   import { tip } from '../lib/tip';
 
   /** Width of the fades at the edges of the tabs, and the room left around a tab brought into view. */
@@ -315,6 +316,7 @@
             >
               <span class="swatch" style:background={p.color}></span>
               <span class="name">{p.name}</span>
+              {#if p.private}<PrivateMark />{/if}
               {#if s.running && !s.waiting}<span class="dot" style="width:6px;height:6px;background:var(--ok)"></span>{/if}
               {#if s.changes > 0}
                 <span class="delta" use:tip={t('nav.titleBar.delta')}>Δ {s.changes}</span>

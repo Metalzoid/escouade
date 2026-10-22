@@ -27,6 +27,14 @@ Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désacti
 
 Quand « Remote control pour tous les agents » est allumé dans l’onglet [« Harness »](settings-claude-code), l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Harness ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur retrouve son état. Voir [le remote control](remote-control).
 
+## Confidentialité
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Projet privé » | Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout. Un cadenas suit son nom, sur son onglet et dans la rangée « Projet ». | Désactivé, ou « Nouveaux projets privés » pour un projet ajouté |
+
+Voir [les projets privés](mcp#les-projets-prives).
+
 ## Git
 
 | Réglage | Effet | Par défaut |
@@ -136,6 +144,14 @@ La fenêtre de confirmation a une case « Effacer aussi son historique (convers
 Fermer le projet agit tout de suite, sans attendre « Enregistrer », et ramène aux réglages avec le brouillon tel qu’il était.
 
 Fermer est refusé tant que la validation d’un ticket du projet tourne : « La validation du ticket DEM-3 est en cours : attends sa fin pour fermer le projet. » Attends qu’elle se termine, puis ferme le projet.
+
+## Nouveaux projets
+
+Ce groupe vaut pour tous les projets : il est là même sans projet ouvert.
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Nouveaux projets privés » | Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage, et un projet rouvert avec son historique garde le sien. | Désactivé |
 
 ## Projets fermés
 

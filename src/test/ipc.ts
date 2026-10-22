@@ -99,6 +99,7 @@ export const SETTINGS: Settings = {
   claudeSelfUpdate: true,
   terminalView: false,
   remoteControlAll: false,
+  privateProjects: false,
   uiZoom: 100,
   quotaProjection: true,
   terminalFontSize: 12.5,
@@ -146,6 +147,7 @@ export function project(over: Partial<Project> = {}): Project {
     ticketBranchPrefix: 'ticket/',
     remoteControl: false,
     engine: null,
+    private: false,
     ...over,
   };
 }

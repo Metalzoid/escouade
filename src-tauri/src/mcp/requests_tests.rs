@@ -607,7 +607,8 @@ async fn a_request_that_goes_between_the_check_and_the_answer_is_told_as_gone() 
     let h = harness("mcp-req-not-answered");
     let p = project(&h).await;
     let a = asking(&h, &p, "agent-1", "permission").await;
-    let found = crate::mcp::resolve::agent(&h.core, &a.id, None).unwrap();
+    let found =
+        crate::mcp::resolve::agent(&h.core, &crate::mcp::Caller::External, &a.id, None).unwrap();
     let why = || anyhow::anyhow!("Claude ne tourne plus pour cet agent");
     // Still waiting: what the core said is the refusal.
     let still = super::act::not_answered(&h.core, &found, "req_perm", why());

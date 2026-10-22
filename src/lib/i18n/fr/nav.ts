@@ -96,6 +96,8 @@ export default {
     attention: 'À voir : {names}',
     delta: 'Modifications git non commitées',
     waiting: 'Agents en attente de réponse',
+    /** The lock of a private project (« Projet privé »), on its tab and in the settings. */
+    private: 'Projet privé : invisible pour les agents des autres projets',
     addProject: 'Ajouter un projet',
     openEditor: 'Ouvrir l’éditeur du projet',
     openEditorTitle: 'Parcourir et éditer les fichiers du projet',

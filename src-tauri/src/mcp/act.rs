@@ -12,7 +12,8 @@
 //! - a ticket that comes after tickets not done is launched by hand only once the user agreed in
 //!   the window (a confirmation): here it is refused, and the refusal says which tickets;
 //! - an agent never writes to nor stops itself, and acts on its own project alone (it reads the
-//!   others: the tools that read are open);
+//!   others: the tools that read are open), but a private project is not found by the agents of
+//!   the others, and its own agents find no other (`resolve::Sight`);
 //! - a project's Kanban settings are set as the window's form sets them (`set_board`, the same
 //!   function of the core), under its checks; what runs without a question stays the user's, given
 //!   in the window: the mode `bypassPermissions` (kept when the Kanban is on it already) and the
@@ -102,8 +103,8 @@ fn agent_only(caller: &Caller) -> Result<&str, ToolError> {
     }
 }
 
-/// An agent of Escouade acts on its own project alone (it may read the others); Claude outside
-/// Escouade acts on any.
+/// An agent of Escouade acts on its own project alone (it may read the others it sees,
+/// `resolve::Sight`); Claude outside Escouade acts on any.
 pub(super) fn own_project_only<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -347,12 +348,13 @@ pub(crate) fn visible_line(text: &str) -> String {
 /// The ids of the tickets of `project` the keys (or ids) name.
 fn after_ids<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     project: &Project,
     asked: &[String],
 ) -> Result<Vec<String>, ToolError> {
     asked
         .iter()
-        .map(|k| resolve::ticket_in(core, k, Some(project)).map(|t| t.id))
+        .map(|k| resolve::ticket_in(core, caller, k, Some(project)).map(|t| t.id))
         .collect()
 }
 
@@ -469,7 +471,7 @@ pub(super) async fn create_ticket<R: Runtime>(
     caller: &Caller,
     a: CreateTicketArgs,
 ) -> Result<String, ToolError> {
-    let project = resolve::project(core, &a.project)?;
+    let project = resolve::project(core, caller, &a.project)?;
     own_project_only(core, caller, &project.id)?;
     // The copies of the drafts the core does not move into the ticket go once the call is over.
     let mut drafted = Drafted::new(core);
@@ -479,7 +481,12 @@ pub(super) async fn create_ticket<R: Runtime>(
         criteria: criteria(a.criteria.as_deref().unwrap_or_default())?,
         // The default number of loops, as the window's form starts with.
         max_loops: 0,
-        after: after_ids(core, &project, a.after.as_deref().unwrap_or_default())?,
+        after: after_ids(
+            core,
+            caller,
+            &project,
+            a.after.as_deref().unwrap_or_default(),
+        )?,
         // Its own branch: the tools do not name an existing one.
         branch: String::new(),
         // Last: files named by a path are read only once the rest is checked.
@@ -511,7 +518,7 @@ pub(super) async fn update_ticket<R: Runtime>(
     caller: &Caller,
     a: UpdateTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     // An empty list is none given.
     let (add, remove) = (
@@ -564,7 +571,7 @@ pub(super) async fn update_ticket<R: Runtime>(
         },
         max_loops: t.max_loops,
         after: match &a.after {
-            Some(new) => after_ids(core, &project, new)?,
+            Some(new) => after_ids(core, caller, &project, new)?,
             None => t.after.clone(),
         },
         // Not the tools' to change: the ticket keeps the branch the window gave it.
@@ -608,7 +615,7 @@ pub(super) fn move_ticket<R: Runtime>(
     caller: &Caller,
     a: MoveTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     let before = a.before.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let target;
@@ -617,7 +624,7 @@ pub(super) fn move_ticket<R: Runtime>(
         (PositionArg::Bottom, None) => MoveTo::Bottom,
         (PositionArg::Before, Some(asked)) => {
             let project = project_of(core, &t.project_id)?;
-            target = resolve::ticket_in(core, asked, Some(&project))?.id;
+            target = resolve::ticket_in(core, caller, asked, Some(&project))?.id;
             MoveTo::Before(&target)
         }
         (PositionArg::Before, None) => {
@@ -644,7 +651,7 @@ pub(super) fn start_ticket<R: Runtime>(
     caller: &Caller,
     a: StartTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
     let model = model_setting(core, a.model.as_deref())?;
@@ -1011,7 +1018,7 @@ pub(super) async fn set_board<R: Runtime>(
     caller: &Caller,
     a: SetBoardArgs,
 ) -> Result<(String, String), ToolError> {
-    let project = resolve::project(core, &a.project)?;
+    let project = resolve::project(core, caller, &a.project)?;
     own_project_only(core, caller, &project.id)?;
     let model = model_setting(core, a.model.as_deref())?;
     // Git is read only for a target that is not the Kanban's own: giving that one back needs no
@@ -1121,7 +1128,7 @@ pub(super) fn approve_ticket<R: Runtime>(
     caller: &Caller,
     a: ApproveTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     // Its own work merged without a review: that is the user's call.
     not_own_ticket(
@@ -1147,7 +1154,7 @@ pub(super) async fn reject_ticket<R: Runtime>(
     caller: &Caller,
     a: RejectTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     not_own_ticket(
         core,
@@ -1189,7 +1196,7 @@ pub(super) async fn resume_ticket<R: Runtime>(
     caller: &Caller,
     a: ResumeTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     // Where the window would go ahead: a message to the ticket's agent, else a new agent. One that
@@ -1221,7 +1228,7 @@ pub(super) async fn resolve_conflict<R: Runtime>(
     caller: &Caller,
     a: ResolveConflictArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     if t.column != Column::Review {
@@ -1253,7 +1260,7 @@ pub(super) fn dismiss_block<R: Runtime>(
     caller: &Caller,
     a: DismissBlockArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     if t.column != Column::Review {
@@ -1280,7 +1287,7 @@ pub(super) async fn delete_ticket<R: Runtime>(
     caller: &Caller,
     a: DeleteTicketArgs,
 ) -> Result<String, ToolError> {
-    let t = resolve::ticket(core, &a.ticket)?;
+    let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     // Its approval would go on without it: merging a ticket that is gone.
@@ -1357,7 +1364,7 @@ pub(super) async fn create_agent<R: Runtime>(
     caller: &Caller,
     a: CreateAgentArgs,
 ) -> Result<String, ToolError> {
-    let project = resolve::project(core, &a.project)?;
+    let project = resolve::project(core, caller, &a.project)?;
     own_project_only(core, caller, &project.id)?;
     let message = a.message.trim();
     if message.is_empty() {
@@ -1425,8 +1432,10 @@ pub(super) fn other_agent<R: Runtime>(
     project: Option<&str>,
     itself: String,
 ) -> Result<resolve::AgentRef, ToolError> {
-    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
-    let found = resolve::agent(core, asked, scope.as_ref())?;
+    let scope = project
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
+    let found = resolve::agent(core, caller, asked, scope.as_ref())?;
     if matches!(caller, Caller::Agent(id) if *id == found.id) {
         return Err(ToolError::Refused(itself));
     }

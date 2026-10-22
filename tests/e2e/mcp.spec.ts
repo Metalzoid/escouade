@@ -225,6 +225,56 @@ test.describe('the switch saved on, the app starting', () => {
   });
 });
 
+// « Projet privé » (ESC-139): what the agents of each project see of the others through the server.
+test.describe('a private project', () => {
+  test.use({ preStart: { run: () => ({ mcpEnabled: true }) } });
+
+  /** The server as the agent of the launch `argv` reaches it: with its own token. */
+  function agentServer(argv: string[]) {
+    const entry = JSON.parse(fs.readFileSync(optionValue(argv, '--mcp-config'), 'utf8')).mcpServers.escouade;
+    return { url: entry.url, token: String(entry.headers.Authorization).replace(/^Bearer /, '') };
+  }
+
+  /** The names of the projects `list_projects` gives `server`'s caller. */
+  async function projectNames(server: { url: string; token: string }) {
+    const init = { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1.0.0' } };
+    expect((await rpc(server, 1, 'initialize', init)).status).toBe(200);
+    await rpc(server, null, 'notifications/initialized', {});
+    const answer = await rpc(server, 2, 'tools/call', { name: 'list_projects', arguments: {} });
+    const rows = JSON.parse(answer.json.result.content[0].text) as { name: string }[];
+    return rows.map((r) => r.name).sort();
+  }
+
+  test('is listed to its own agents alone, who see no other, and the user sees both', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    await expect.poll(() => streams(app).length).toBe(1);
+    const open = agentServer(streams(app)[0].argv);
+    await addProject(page, app.repo, { name: 'coffre' });
+    await expect.poll(() => streams(app).length).toBe(2);
+    const vault = agentServer(streams(app)[1].argv);
+    // Before: neither is private, each agent sees both.
+    expect(await projectNames(open)).toEqual(['coffre', 'demo-api']);
+    // « Projet privé » switched on in the settings of « coffre ».
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await dialog.getByRole('button', { name: 'coffre' }).click();
+    await dialog.getByRole('switch', { name: 'Projet privé' }).click();
+    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(dialog).toBeHidden();
+    // Its tab says so; the other's does not.
+    const lock = 'Projet privé : invisible pour les agents des autres projets';
+    await expect(page.locator('.tabs .tab').filter({ hasText: 'coffre' }).getByRole('img', { name: lock })).toBeVisible();
+    await expect(page.locator('.tabs .tab').filter({ hasText: 'demo-api' }).getByRole('img', { name: lock })).toHaveCount(0);
+    expect(await projectNames(open)).toEqual(['demo-api']);
+    expect(await projectNames(vault)).toEqual(['coffre']);
+    // Claude outside Escouade, the user's own token: both.
+    await expect.poll(() => declared(app)?.token ?? null).not.toBeNull();
+    expect(await projectNames(declared(app)!)).toEqual(['coffre', 'demo-api']);
+  });
+});
+
 test.describe('« Les agents peuvent piloter Escouade » in every harness installed', () => {
   test.use({ appEnv: { ESCOUADE_CODEX: FAKE_CODEX, ESCOUADE_OPENCODE: FAKE_OPENCODE, ESCOUADE_COPILOT: FAKE_COPILOT } });
 

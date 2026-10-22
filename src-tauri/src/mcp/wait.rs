@@ -13,6 +13,7 @@
 use super::read::{answerable_views, json};
 use super::resolve;
 use super::tools::{ToolError, WaitTicketArgs};
+use super::Caller;
 use crate::core::Core;
 use crate::model::{Column, Ticket};
 use base64::Engine;
@@ -213,6 +214,7 @@ struct Answer {
 /// (its client gave up the request): there is then no one to answer, and the wait stops.
 pub(super) async fn wait<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     a: WaitTicketArgs,
     cancelled: impl Future<Output = ()>,
 ) -> Result<String, ToolError> {
@@ -232,7 +234,7 @@ pub(super) async fn wait<R: Runtime>(
     // A ticket named twice is watched once.
     let mut tickets: Vec<Seen> = Vec::new();
     for asked in &a.tickets {
-        let t = resolve::ticket(core, asked)?;
+        let t = resolve::ticket(core, caller, asked)?;
         if !tickets.iter().any(|s| s.id == t.id) {
             tickets.push(Seen::of(core, &t));
         }

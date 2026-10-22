@@ -131,6 +131,9 @@ pub struct Settings {
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
+    /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
+    /// (`Project::private`) from the start. Off by default.
+    pub private_projects: bool,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -516,6 +519,7 @@ impl Default for Settings {
             attach_big_text: "path".into(),
             attach_keep_days: 0,
             remote_control_all: false,
+            private_projects: false,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -581,6 +585,11 @@ pub struct Project {
     /// theirs. None: Claude Code (and for a project saved before 1.8).
     #[serde(default)]
     pub engine: Option<EngineId>,
+    /// « Projet privé »: through the MCP server, the agents of the other projects do not know it,
+    /// and its own agents know it alone (`mcp::resolve::Sight`). Claude outside Escouade and the
+    /// window see every project.
+    #[serde(default)]
+    pub private: bool,
 }
 
 impl Project {

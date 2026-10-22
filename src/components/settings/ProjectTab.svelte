@@ -220,6 +220,13 @@
   </Group>
 {/if}
 
+<!-- « Projet privé »: what the agents of the other projects see of it through the MCP server. -->
+<Group title={t('settings.project.privateTitle')}>
+  <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')}>
+    <Switch label={t('settings.project.private')} bind:on={draft.private} />
+  </Row>
+</Group>
+
 <Group title="Git">
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />

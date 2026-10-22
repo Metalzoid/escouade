@@ -62,7 +62,8 @@ describe('ProjectTab', () => {
       render(SettingsModal, { tab: 'projects', projectId: 'p1' });
       const names = headings();
       expect(names.indexOf('Remote control')).toBe(names.indexOf('Identité') + 1);
-      expect(names.indexOf('Git')).toBe(names.indexOf('Remote control') + 1);
+      expect(names.indexOf('Confidentialité')).toBe(names.indexOf('Remote control') + 1);
+      expect(names.indexOf('Git')).toBe(names.indexOf('Confidentialité') + 1);
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'false');
       expect(remote).toBeEnabled();
@@ -252,6 +253,84 @@ describe('ProjectTab', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'MCP server' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch', { name: 'Agents can use Escouade' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectTab: « Projet privé » (ESC-139)', () => {
+  const LABEL = 'Projet privé';
+  const DEFAULT = 'Nouveaux projets privés';
+  const tab = (name: string) => screen.getByRole('tab', { name });
+
+  beforeEach(() => {
+    setLang('fr');
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'site', private: true })] });
+    app.modal = { kind: 'settings' };
+  });
+
+  it('is off by default, says what it changes, and is saved with the project', async () => {
+    const backend = fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const own = screen.getByRole('switch', { name: LABEL });
+    expect(own).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('heading', { name: 'Confidentialité' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
+      ),
+    ).toBeVisible();
+    await userEvent.click(own);
+    expect(tab('Projets')).toHaveClass('changed');
+    await save();
+    expect(backend.called('update_project')).toHaveLength(1);
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true });
+    expect(app.projects[0].private).toBe(true);
+    expect(backend.called('save_settings')).toHaveLength(0);
+  });
+
+  it('shows a private project as it is, its lock among the projects of the settings', async () => {
+    const backend = fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+    expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
+    const lock = 'Projet privé : invisible pour les agents des autres projets';
+    expect(screen.getByRole('button', { name: /site/ })).toContainElement(screen.getByRole('img', { name: lock }));
+    expect(screen.getAllByRole('img', { name: lock })).toHaveLength(1);
+    // Put back as it was: nothing to save.
+    await userEvent.click(screen.getByRole('switch', { name: LABEL }));
+    await userEvent.click(screen.getByRole('switch', { name: LABEL }));
+    await save();
+    expect(backend.called('update_project')).toHaveLength(0);
+  });
+
+  it('sets the default of the new projects, off until switched on, also with no project open', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(screen.getByRole('heading', { name: 'Nouveaux projets' })).toBeInTheDocument();
+    const byDefault = screen.getByRole('switch', { name: DEFAULT });
+    expect(byDefault).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText('Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.')).toBeVisible();
+    await userEvent.click(byDefault);
+    expect(tab('Projets')).toHaveClass('changed');
+    await save();
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ privateProjects: true });
+    expect(app.settings.privateProjects).toBe(true);
+    // The projects that exist keep their own.
+    expect(backend.called('update_project')).toHaveLength(0);
+  });
+
+  it('offers the default with no project open', () => {
+    fakeBackend();
+    resetApp({ projects: [] });
+    render(SettingsModal, { tab: 'projects' });
+    expect(screen.getByRole('switch', { name: DEFAULT })).toBeInTheDocument();
+  });
+
+  it('says it in English', () => {
+    setLang('en');
+    fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    expect(screen.getByRole('switch', { name: 'Private project' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'New projects are private' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Private project: unseen by the agents of the other projects' })).toBeInTheDocument();
   });
 });
 

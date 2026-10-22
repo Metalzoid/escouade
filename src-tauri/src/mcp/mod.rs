@@ -29,6 +29,8 @@ mod images_tests;
 pub(crate) mod install;
 #[cfg(test)]
 mod install_tests;
+#[cfg(test)]
+mod private_tests;
 mod read;
 #[cfg(test)]
 mod remote_tests;

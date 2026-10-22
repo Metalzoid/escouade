@@ -131,11 +131,14 @@ fn plan_for<R: Runtime>(
 /// The agent `asked` names (in `project` when given), its status and its plan.
 fn plan_of<R: Runtime>(
     core: &Core<R>,
+    caller: &Caller,
     asked: &str,
     project: Option<&str>,
 ) -> Result<(resolve::AgentRef, AgentStatus, Option<PlanState>), ToolError> {
-    let scope = project.map(|p| resolve::project(core, p)).transpose()?;
-    let found = resolve::agent(core, asked, scope.as_ref())?;
+    let scope = project
+        .map(|p| resolve::project(core, caller, p))
+        .transpose()?;
+    let found = resolve::agent(core, caller, asked, scope.as_ref())?;
     let (status, plan) = plan_for(core, &found)?;
     Ok((found, status, plan))
 }
@@ -395,7 +398,7 @@ pub(super) fn list<R: Runtime>(
     agent: &str,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
-    let (found, status, plan) = plan_of(core, agent, project)?;
+    let (found, status, plan) = plan_of(core, caller, agent, project)?;
     // The same test as `own_project_only`, which refuses where this only says less.
     let full = own_project_only(core, caller, &found.project_id).is_ok();
     json(&Listing {
@@ -463,7 +466,7 @@ pub(super) async fn output<R: Runtime>(
     caller: &Caller,
     a: GetBackgroundOutputArgs,
 ) -> Result<String, ToolError> {
-    let (found, _, plan) = plan_of(core, &a.agent, a.project.as_deref())?;
+    let (found, _, plan) = plan_of(core, caller, &a.agent, a.project.as_deref())?;
     // The sheet of an agent is open to all, the files of its tasks are the files of its project: an
     // agent of Escouade reads those of its own.
     own_project_only(core, caller, &found.project_id)?;

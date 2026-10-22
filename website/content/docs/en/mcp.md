@@ -174,9 +174,19 @@ The “Agents can drive Escouade” switch also serves Escouade’s agents, thos
 - **On**, each agent receives the server when its process starts, with a token of its own: it acts in its own name, never as Claude outside Escouade. It reads the tickets and the agents, and can create tickets or start other agents, which uses quota, and take the tickets of its project through to their approval, except its own. It also sees the questions and permission requests of the agents of every project, and can answer those of the agents of its own project.
 - **Off**, the agents already running lose the tools at once, and Escouade keeps its server away from every agent that starts, even when an `escouade` entry is left in your Claude Code config: its tools are refused, and the server itself is not loaded (Escouade starts the agent with Claude Code’s `deniedMcpServers` setting). The agent therefore gets neither the tools nor the server’s instructions.
 - **An agent already running** when you turn the switch on keeps a process without the tools. Its conversation shows “Escouade’s tools at the next start” with “Restart”: its process stops and the next one resumes the same session: the conversation stays. The button is disabled while the agent is busy (its turn, a question or permission waiting for your answer, the setup of its worktree, a subagent, a workflow, a command or a monitor in the background) and comes back when that is over. A command, a dev server or a monitor doesn’t end by itself: the card then says to stop its background tasks first, from their view (“Stop”; see [background tasks](plan#background-tasks)). In the Claude Code view, “Restart” starts its interface again. Settings › Harness says how many agents are in that case.
-- It is not a partition: an agent only acts in its own project, but reads the others (except the images and the files of their tickets, the output of their background tasks, and the report of their subagents, and it only sees the type, the status, and the duration of those subagents and tasks).
+- Between projects that are not private, it is not a partition: an agent only acts in its own project, but reads the others (except the images and the files of their tickets, the output of their background tasks, and the report of their subagents, and it only sees the type, the status, and the duration of those subagents and tasks). To partition a project, make it private (below).
 
 The server runs while the switch is on, and stops with the app.
+
+### Private projects
+
+A project’s “Private project” setting (Settings › Projects, “Privacy” group, off by default) partitions it in the server, both ways, for Escouade’s agents:
+
+- **The agents of the other projects don’t know it.** It is not in `list_projects`, `list_agents` or `list_requests`, and a tool that names it, by its id, its name, one of its tickets or one of its agents, answers that it can’t find it, with the same message as for a name that doesn’t exist: nothing gives away that it exists.
+- **Its own agents see it alone.** `list_projects` gives only their project, and every other project, private or not, can’t be found by them in the same way. They read and act in their project as before.
+- **You see everything**: Claude outside Escouade (the token declared in your harnesses) sees every project, and so does the window (tabs, overview, statistics).
+
+Projects that are not private see each other as before. A lock follows a private project’s name, on its tab and in the settings. The change applies from the next call, without restarting the agents. To make every new project private, turn on “New projects are private” in the same tab. It is not a sandbox: an agent keeps its other tools (files, terminal).
 
 > [!NOTE]
 > Up to 1.7, each project had its own “Agents can use Escouade” switch (Settings › Projects › MCP server). It is gone: a project that had it on while “Claude can drive Escouade” was off no longer gives the server to its agents until you turn “Claude and the agents can drive Escouade” on.

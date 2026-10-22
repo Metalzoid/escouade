@@ -252,7 +252,7 @@ pub(super) async fn fetch<R: Runtime>(
     a: GetTicketFileArgs,
 ) -> Result<String, ToolError> {
     let t = match a.ticket.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-        Some(asked) => resolve::ticket(core, asked)?,
+        Some(asked) => resolve::ticket(core, caller, asked)?,
         None => own_ticket(core, caller)?,
     };
     // The sheet of a ticket (`get_ticket`) is open to all, its files are the files of its project:

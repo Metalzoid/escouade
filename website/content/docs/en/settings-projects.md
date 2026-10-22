@@ -27,6 +27,14 @@ To set an agent apart, right-click its card, then “Turn off remote control”.
 
 When “Remote control for all agents” is on in the [“Harness”](settings-claude-code) tab, the project’s switch shows on and grayed out, with “On for all projects in Settings › Harness”. The project’s own choice is kept: once the global setting is off, the switch goes back to its state. See [remote control](remote-control).
 
+## Privacy
+
+| Setting | Effect | Default |
+|---|---|---|
+| “Private project” | The agents of the other projects don’t see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything. A lock follows its name, on its tab and in the “Project” row. | Off, or “New projects are private” for a project added |
+
+See [private projects](mcp#private-projects).
+
 ## Git
 
 | Setting | Effect | Default |
@@ -136,6 +144,14 @@ The confirmation window has a box “Also erase its history (conversations, tick
 Closing the project acts right away, without waiting for “Save”, and takes you back to the settings with the draft as it was.
 
 Closing is refused while an approval of one of the project’s tickets is running (“The ticket DEM-3 is being approved: wait for the end of its approval to close the project.”). Once it has finished, close the project.
+
+## New projects
+
+This group applies to every project: it is there even with no project open.
+
+| Setting | Effect | Default |
+|---|---|---|
+| “New projects are private” | Each project added is private from the start. Existing ones keep their setting, and a project reopened with its history keeps its own. | Off |
 
 ## Closed projects
 

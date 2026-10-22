@@ -52,6 +52,15 @@ describe('TitleBar', () => {
     expect(screen.getByRole('button', { name: /demo-api/ })).not.toHaveClass('alert');
   });
 
+  it('marks a private project with a lock that says what it means, and no other (ESC-139)', () => {
+    fakeBackend();
+    app.projects[1] = { ...app.projects[1], private: true };
+    render(TitleBar);
+    const lock = screen.getByRole('img', { name: 'Projet privé : invisible pour les agents des autres projets' });
+    expect(screen.getByRole('button', { name: /studio-web/ })).toContainElement(lock);
+    expect(screen.getByRole('button', { name: /demo-api/ }).querySelector('.private-mark')).toBeNull();
+  });
+
   it('shows one tab per project with its waiting badge and git counter', () => {
     fakeBackend();
     app.git = { p1: gitInfo({ modified: 2, added: 1, total: 3 }) };

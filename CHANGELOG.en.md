@@ -14,6 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Settings › Integrations has a “Code hosts” section: connect GitHub, GitLab, Bitbucket or Gitea / Forgejo, several instances each, and see whether a token has expired or which permissions it lacks. Each project finds its account there through its remote, and the github.com account is GitHub Issues’ one too.
 - Escouade can read and drive GitHub pull requests (github.com, GHE.com or your company server): open, merge, checks, logs, reruns, reviews and deployments, while sparing your API quota.
 - An agent whose turn is over but that is still waiting on something no longer says “Done”: its card says “Awaiting”, or the time Claude Code will wake it up, and its tooltip lists what goes on. The agents it drives through the MCP server are listed under its card while they work.
+- A project can be private (Settings › Projects): the agents of the other projects no longer see it through the MCP server, and its own see it alone. You and Claude outside Escouade still see everything; a setting makes every new project private.
 
 ### Fixes
 

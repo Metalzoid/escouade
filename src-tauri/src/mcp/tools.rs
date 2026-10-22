@@ -961,11 +961,11 @@ pub struct SplitTicketArgs {
 #[tool_router(vis = "pub(crate)")]
 impl<R: Runtime> Tools<R> {
     #[tool(
-        description = "List Escouade's projects, in the app's order: for each one its id, name, folder, current git branch (null when none), number of agents (archived ones left out), number of tickets in each column of its Kanban board (todo, doing, review, done), and its Remote Control settings: remoteControl (the project's own, which makes its agents reachable from claude.ai) and remoteControlAll (the global one, the same on every row, which covers every agent of every project). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's projects, in the app's order (for an agent of Escouade, those it sees: a private project is listed to its own agents alone, and they see no other project): for each one its id, name, folder, current git branch (null when none), number of agents (archived ones left out), number of tickets in each column of its Kanban board (todo, doing, review, done), and its Remote Control settings: remoteControl (the project's own, which makes its agents reachable from claude.ai) and remoteControlAll (the global one, the same on every row, which covers every agent of every project). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_projects(&self, ctx: ToolCtx<R>) -> CallToolResult {
-        let result = read::projects(&ctx.core).await;
+        let result = read::projects(&ctx.core, &ctx.caller).await;
         ctx.reply("list_projects", "", result)
     }
 
@@ -978,7 +978,7 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<ListAgentsArgs>,
     ) -> CallToolResult {
-        let result = read::agents(&ctx.core, args.project.as_deref());
+        let result = read::agents(&ctx.core, &ctx.caller, args.project.as_deref());
         let asked = summary(&[("project", args.project.as_deref())]);
         ctx.reply("list_agents", &asked, result)
     }
@@ -992,7 +992,12 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<ListTicketsArgs>,
     ) -> CallToolResult {
-        let result = read::tickets(&ctx.core, &args.project, args.column.map(Column::from));
+        let result = read::tickets(
+            &ctx.core,
+            &ctx.caller,
+            &args.project,
+            args.column.map(Column::from),
+        );
         let asked = summary(&[
             ("project", Some(&args.project)),
             ("column", args.column.map(ColumnArg::name)),
@@ -1067,7 +1072,7 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<GetBoardArgs>,
     ) -> CallToolResult {
-        let result = read::board(&ctx.core, &args.project).await;
+        let result = read::board(&ctx.core, &ctx.caller, &args.project).await;
         let asked = summary(&[("project", Some(&args.project))]);
         ctx.reply("get_board", &asked, result)
     }
@@ -1090,7 +1095,8 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<GetAgentSummaryArgs>,
     ) -> CallToolResult {
-        let result = read::agent_summary(&ctx.core, &args.agent, args.project.as_deref());
+        let result =
+            read::agent_summary(&ctx.core, &ctx.caller, &args.agent, args.project.as_deref());
         let asked = summary(&[
             ("agent", Some(&args.agent)),
             ("project", args.project.as_deref()),
@@ -1144,7 +1150,12 @@ impl<R: Runtime> Tools<R> {
         ctx: ToolCtx<R>,
         Parameters(args): Parameters<ListRequestsArgs>,
     ) -> CallToolResult {
-        let result = read::requests(&ctx.core, args.agent.as_deref(), args.project.as_deref());
+        let result = read::requests(
+            &ctx.core,
+            &ctx.caller,
+            args.agent.as_deref(),
+            args.project.as_deref(),
+        );
         let asked = summary(&[
             ("agent", args.agent.as_deref()),
             ("project", args.project.as_deref()),
@@ -1167,7 +1178,7 @@ impl<R: Runtime> Tools<R> {
         let asked = summary(&[("tickets", Some(&tickets)), ("timeout", timeout.as_deref())]);
         // Cancelled when the client leaves: its connection closes (a stateless request has no
         // other way to be cancelled).
-        let result = wait::wait(&ctx.core, args, context.ct.cancelled()).await;
+        let result = wait::wait(&ctx.core, &ctx.caller, args, context.ct.cancelled()).await;
         ctx.reply("wait_ticket", &asked, result)
     }
 
@@ -1664,7 +1675,7 @@ impl<R: Runtime> Tools<R> {
 #[tool_handler(
     router = self.router,
     name = "escouade",
-    instructions = "Escouade runs Claude Code agents on a Kanban board of tickets, project by project. Its tools read and act on its projects, agents, tickets and Kanban settings. Name a project by its id or its name, an agent by its id or its name, a ticket by its key (like ATL-12) or its id."
+    instructions = "Escouade runs Claude Code agents on a Kanban board of tickets, project by project. Its tools read and act on its projects, agents, tickets and Kanban settings. Name a project by its id or its name, an agent by its id or its name, a ticket by its key (like ATL-12) or its id. A private project is known to its own agents alone, and they know no other project."
 )]
 impl<R: Runtime> ServerHandler for Tools<R> {
     /// A call goes to its tool, which logs it (`ToolCtx::reply`); one the router answers itself
