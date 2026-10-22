@@ -304,6 +304,51 @@ async fn the_agents_of_a_private_project_find_no_other_project() {
 }
 
 #[tokio::test]
+async fn a_ticket_comes_after_no_ticket_of_a_private_project_nor_the_other_way() {
+    // ESC-142: `after` names tickets of the ticket's own project; a private one's is not found,
+    // in the words of a ticket nothing has, and the other projects' are not found by its agents.
+    let w = world("mcp-private-after").await;
+    // A ticket « À faire » of each, the one whose `after` changes.
+    let todo = [
+        put(&w.h, ticket(&w.open, "PUB-2", "À faire", Column::Todo, 4)),
+        put(&w.h, ticket(&w.vault, "SEC-2", "À faire", Column::Todo, 5)),
+    ];
+    for (caller, own, hidden) in [(0, 0, 2), (2, 2, 0), (2, 2, 1)] {
+        let c = as_agent(&w.h, &w.agents[caller].id).await;
+        let project = [&w.open, &w.neighbour, &w.vault][own].name.clone();
+        let own_ticket = todo[own / 2].key.clone();
+        let calls = [
+            (
+                "create_ticket",
+                json!({ "project": project, "title": "Après", "after": ["{}"] }),
+            ),
+            (
+                "update_ticket",
+                json!({ "ticket": own_ticket, "after": ["{}"] }),
+            ),
+        ];
+        let traces = traces(&w, hidden);
+        for (tool, args) in calls {
+            let (missing, error) = call(&c, tool, with_name(&args, MISSING)).await;
+            assert!(error && missing.contains(MISSING), "{tool}: {missing}");
+            for asked in names_of(&w, hidden, Names::Ticket) {
+                let (text, error) = call(&c, tool, with_name(&args, &asked)).await;
+                assert!(error, "{tool} {asked}: {text}");
+                assert_eq!(text.replace(&asked, MISSING), missing, "{tool} {asked}");
+                for trace in traces.iter().filter(|t| !asked.contains(t.as_str())) {
+                    assert!(!text.contains(trace.as_str()), "{tool} {asked}: {text}");
+                }
+            }
+        }
+        c.cancel().await.unwrap();
+    }
+    // Nothing was made, nor does any ticket wait for another.
+    let tickets = w.h.core.tickets.read().clone();
+    assert_eq!(tickets.len(), 5);
+    assert!(tickets.iter().all(|t| t.after.is_empty()));
+}
+
+#[tokio::test]
 async fn the_lists_show_each_caller_the_projects_it_sees() {
     let w = world("mcp-private-lists").await;
     let (open, neighbour, vault) = (&w.open.id, &w.neighbour.id, &w.vault.id);

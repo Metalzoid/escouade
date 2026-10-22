@@ -181,7 +181,7 @@ impl Harness {
         self.wait(what, |h| pred(&h.ticket(id))).await
     }
 
-    fn agent_of(&self, ticket_id: &str) -> AgentMeta {
+    pub(crate) fn agent_of(&self, ticket_id: &str) -> AgentMeta {
         self.agent(self.ticket(ticket_id).agent_id.as_deref().unwrap())
     }
 

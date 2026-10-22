@@ -46,6 +46,10 @@ export default {
     copyDesc: 'Worktrees, lancement, Git, Kanban et compte, vérifiés dans ce dépôt. Les intégrations et les tickets ne sont pas copiés.',
     copyFrom: 'Projet copié',
     noOther: 'Aucun autre projet ouvert à copier.',
+    privateLeftOut: {
+      one: 'Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.',
+      other: '{count} projets privés ne sont pas proposés : rien d’un projet privé ne passe à un autre.',
+    },
     recommended: 'Configuration recommandée',
     recommendedDesc:
       'Un worktree par agent, merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l’agent résout les conflits.',

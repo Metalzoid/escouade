@@ -195,6 +195,42 @@ describe('the new project’s assistant', () => {
     expect(screen.getByRole('textbox', { name: 'Commande' })).toHaveValue('npm ci');
   });
 
+  it('never offers a private project to copy, and says why (ESC-142)', async () => {
+    // The project on screen is private: the other one is offered in its place.
+    resetApp({ projects: [project(), { ...webShop, private: true }] });
+    app.ui.activeProject = 'web';
+    app.modal = { kind: 'newProject' };
+    const be = backend();
+    const { unmount } = render(NewProjectModal);
+    await typePath();
+    await userEvent.click(screen.getByRole('radio', { name: /^Copier la configuration/ }));
+    const source = screen.getByRole('combobox', { name: 'Projet copié' });
+    expect(source).toHaveValue('p1');
+    expect(
+      within(source)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['demo-api']);
+    expect(screen.getByText('Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.')).toBeInTheDocument();
+    // Nothing of it is asked for in the new folder: the folders checked are those of the project copied.
+    await waitFor(() => expect(be.called('inspect_setup').length).toBeGreaterThan(0));
+    expect(be.called('inspect_setup').some((c) => (c.args.dirs as string[]).includes('api'))).toBe(false);
+    unmount();
+
+    // Only private projects besides: no copy at all, and the reason stays.
+    resetApp({
+      projects: [
+        { ...project(), private: true },
+        { ...webShop, private: true },
+      ],
+    });
+    app.modal = { kind: 'newProject' };
+    render(NewProjectModal);
+    await typePath();
+    expect(screen.queryByRole('radio', { name: /^Copier la configuration/ })).not.toBeInTheDocument();
+    expect(screen.getByText('2 projets privés ne sont pas proposés : rien d’un projet privé ne passe à un autre.')).toBeInTheDocument();
+  });
+
   it('starts from the recommended setup, and « Créer sans l’assistant » makes the project with Escouade’s defaults', async () => {
     const be = backend();
     render(NewProjectModal);

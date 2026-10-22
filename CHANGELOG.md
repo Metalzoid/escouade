@@ -16,6 +16,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent dont le tour est fini mais qui attend encore quelque chose ne dit plus « Terminé » : sa carte dit « Attend », ou l’heure à laquelle Claude Code le relancera, et son infobulle détaille ce qui continue. Les agents qu’il pilote par le serveur MCP sont listés sous sa carte tant qu’ils travaillent.
 - Un projet peut être privé (Réglages › Projets) : les agents des autres projets ne le voient plus par le serveur MCP, et les siens ne voient que lui. Toi et Claude hors Escouade voyez toujours tout ; un réglage rend privé chaque nouveau projet.
 - Le worktree d’un ticket terminé, quelle que soit la validation, ou supprimé part tout seul, sans jamais perdre de travail : s’il garde des changements non commités ou des commits ni mergés ni poussés, il reste, et c’est dit. « Nettoyer » dans Réglages › Projets range ceux des agents archivés.
+- Rien d’un projet privé ne passe non plus à un autre par Escouade : l’assistant « Nouveau projet » ne propose pas d’en copier la configuration, et le dit, et ce qu’Escouade écrit aux agents ne nomme jamais un autre projet.
 
 ### Corrections
 

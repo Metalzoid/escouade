@@ -309,6 +309,9 @@
                 {/if}
               </div>
             {/each}
+            {#if form.privateLeftOut}
+              <p class="cd private">{t('wizard.start.privateLeftOut', { count: form.privateLeftOut })}</p>
+            {/if}
           </div>
         {/if}
       {:else}
@@ -612,6 +615,9 @@
     color: var(--muted);
     font-size: 12px;
     line-height: 1.45;
+  }
+  .private {
+    margin: 0;
   }
   .source {
     margin: 0 14px 12px 42px;

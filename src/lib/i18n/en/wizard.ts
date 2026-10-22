@@ -43,6 +43,10 @@ export default defineZone('wizard', {
     copyDesc: 'Worktrees, launch, Git, Kanban and account, checked in this repository. Integrations and tickets are not copied.',
     copyFrom: 'Project copied',
     noOther: 'No other open project to copy.',
+    privateLeftOut: {
+      one: 'A private project isn’t offered: nothing of a private project goes to another.',
+      other: '{count} private projects aren’t offered: nothing of a private project goes to another.',
+    },
     recommended: 'Recommended setup',
     recommendedDesc:
       'A worktree per agent, squash merge into the current branch, worktree deleted once approved, conventional commits, the agent resolves conflicts.',

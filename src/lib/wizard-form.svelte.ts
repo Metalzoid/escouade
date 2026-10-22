@@ -65,8 +65,10 @@ export class WizardForm {
 
   steps = $derived(stepsFor(this.start));
   source = $derived(app.projects.find((p) => p.id === this.sourceId) ?? null);
-  /** The other projects open, those the assistant may copy. */
-  sources = $derived.by(() => app.projects.filter((p) => p.id !== this.project?.id));
+  /** The other projects open, those the assistant may copy: never a private one (« Projet privé », nothing of it goes to another project). */
+  sources = $derived.by(() => app.projects.filter((p) => p.id !== this.project?.id && !p.private));
+  /** The other projects left out of `sources` for being private, which the start says. */
+  privateLeftOut = $derived(app.projects.filter((p) => p.id !== this.project?.id && p.private).length);
   items = $derived<CopyItem[]>(this.source ? copyItems(this.source, this.setup, app.settings.accounts, accountName) : []);
   /** What would keep the way of working from working, as set so far. */
   problems = $derived.by<ControlId[]>(() =>

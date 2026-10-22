@@ -188,6 +188,13 @@ A project’s “Private project” setting (Settings › Projects, “Privacy�
 
 Projects that are not private see each other as before. A lock follows a private project’s name, on its tab and in the settings. The change applies from the next call, without restarting the agents. To make every new project private, turn on “New projects are private” in the same tab. It is not a sandbox: an agent keeps its other tools (files, terminal).
 
+Outside the server too, Escouade passes nothing from a private project to another:
+
+- **Copying the setup**: the “New project” assistant never offers a private project as the source, and says so under its choices (“A private project isn’t offered: nothing of a private project goes to another.”). Copying a project that isn’t private into a private one still works.
+- **Duplicating the conversation**: the copy stays in the project of the agent copied. Nothing moves an agent, a conversation or a ticket to another project.
+- **Dependencies**: “After” only offers the tickets of the same project, and through the server a private project’s ticket can’t be found in `after` as anywhere else. `split_ticket` splits within the agent’s project.
+- **What Escouade writes to the agents** (a ticket’s instructions, messages, reminders, handover to another harness, names, branches, commit messages) only comes from the agent’s ticket, project and conversation: never the name nor the content of another project. Written texts are asked for without any session kept.
+
 > [!NOTE]
 > Up to 1.7, each project had its own “Agents can use Escouade” switch (Settings › Projects › MCP server). It is gone: a project that had it on while “Claude can drive Escouade” was off no longer gives the server to its agents until you turn “Claude and the agents can drive Escouade” on.
 

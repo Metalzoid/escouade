@@ -188,6 +188,13 @@ Le réglage « Projet privé » d’un projet (Réglages › Projets, groupe �
 
 Les projets qui ne sont pas privés se voient entre eux comme avant. Un cadenas suit le nom d’un projet privé, sur son onglet et dans les réglages. Le changement vaut dès l’appel suivant, sans relancer les agents. Pour que chaque nouveau projet le soit, allume « Nouveaux projets privés » dans le même onglet. Ce n’est pas un bac à sable : un agent garde ses autres outils (fichiers, terminal).
 
+Hors du serveur non plus, Escouade ne fait rien passer d’un projet privé à un autre :
+
+- **Copier la configuration** : l’assistant « Nouveau projet » ne propose jamais un projet privé comme source, et le dit sous ses choix (« Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre. »). Copier un projet qui ne l’est pas dans un projet privé reste possible.
+- **Dupliquer la conversation** : la copie reste dans le projet de l’agent copié. Rien ne déplace un agent, une conversation ou un ticket vers un autre projet.
+- **Dépendances** : « Après » ne propose que les tickets du même projet, et par le serveur un ticket d’un projet privé est introuvable dans `after` comme ailleurs. `split_ticket` découpe dans le projet de l’agent.
+- **Ce qu’Escouade écrit aux agents** (consignes d’un ticket, messages, relances, passation à un autre harness, noms, branches, messages de commit) vient seulement du ticket, du projet et de la conversation de l’agent : jamais le nom ni le contenu d’un autre projet. Les textes rédigés sont demandés sans session gardée.
+
 > [!NOTE]
 > Jusqu’à la 1.7, chaque projet avait son interrupteur « Les agents peuvent utiliser Escouade » (Réglages › Projets › Serveur MCP). Il n’existe plus : un projet qui l’avait allumé alors que « Claude peut piloter Escouade » était éteint ne donne plus le serveur à ses agents tant que tu n’allumes pas « Claude et les agents peuvent piloter Escouade ».
 

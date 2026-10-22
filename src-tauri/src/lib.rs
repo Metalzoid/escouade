@@ -62,6 +62,8 @@ mod planfiles;
 #[cfg(test)]
 mod planfiles_tests;
 mod pricing;
+#[cfg(test)]
+mod private_tests;
 mod proc;
 #[cfg(test)]
 mod process_tests;

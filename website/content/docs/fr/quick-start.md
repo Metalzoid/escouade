@@ -19,7 +19,7 @@ Un projet est un dossier de code. Sur l’écran d’accueil, clique sur « + A
 | « Dossier » | Le chemin du projet. « Parcourir… » ouvre le sélecteur de dossier. Sous le champ, une ligne dit ce qu’Escouade sait du dossier : « Dépôt git détecté · branche main · propre » (ou le nombre de fichiers modifiés), « Aucun dépôt git · un dépôt sera initialisé » ou « Dossier introuvable ». |
 | « Nom » | Rempli avec le nom du dossier, que tu peux changer. « Aperçu de l’onglet » montre l’onglet tel qu’il sera. |
 | « Couleur » | Une des 14 couleurs proposées ; la première qu’aucun projet n’utilise encore est choisie d’office. Elle teinte l’onglet et l’interface quand le projet est affiché. |
-| « Point de départ » | « Copier la configuration d’un projet » (avec la liste des projets ouverts, celui affiché d’abord), « Configuration recommandée » (choisie par défaut) ou « Partir de zéro » (les valeurs par défaut d’Escouade). |
+| « Point de départ » | « Copier la configuration d’un projet » (avec la liste des projets ouverts, celui affiché d’abord, sans les projets privés), « Configuration recommandée » (choisie par défaut) ou « Partir de zéro » (les valeurs par défaut d’Escouade). |
 
 La configuration recommandée : un worktree par agent, validation par merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l’agent résout les conflits, commits rédigés par l’agent.
 

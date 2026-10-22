@@ -19,7 +19,7 @@ A project is a folder of code. On the welcome screen, click “+ Add a project�
 | “Folder” | The path of the project. “Browse…” opens the folder picker. Under the field, a line says what Escouade knows about the folder: “Git repository detected · branch main · clean” (or the number of changed files), “No git repository · one will be initialized” or “Folder not found”. |
 | “Name” | Filled in with the folder’s name, which you can change. “Tab preview” shows the tab as it will look. |
 | “Color” | One of the 14 colors offered; the first one no project uses yet is picked for you. It tints the tab and the interface while the project is on screen. |
-| “Starting point” | “Copy a project’s setup” (with the list of open projects, the one on screen first), “Recommended setup” (chosen by default) or “Start from scratch” (Escouade’s defaults). |
+| “Starting point” | “Copy a project’s setup” (with the list of open projects, the one on screen first, private ones left out), “Recommended setup” (chosen by default) or “Start from scratch” (Escouade’s defaults). |
 
 The recommended setup: a worktree per agent, approval by a squash merge into the current branch, worktree deleted once approved, conventional commits, the agent resolves conflicts, commits written by the agent.
 
