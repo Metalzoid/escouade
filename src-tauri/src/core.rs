@@ -7,7 +7,7 @@ use crate::board;
 use crate::closed;
 use crate::conv;
 use crate::convsearch;
-use crate::engine::{self, EngineProcess, OneShot, Process, Remote, Spawn, Weight};
+use crate::engine::{self, EngineProcess, Escouade, OneShot, Process, Remote, Spawn, Weight};
 use crate::fsedit;
 use crate::git::{self, GitService};
 use crate::hub::Hub;
@@ -2596,8 +2596,10 @@ impl<R: Runtime> Core<R> {
         {
             return Err(agent_not_found());
         }
-        if let Some(p) = h.lock().proc.clone() {
-            if p.is_alive() {
+        // Taken apart: the agent is not held while its process may be stopped (`refence`).
+        let live = h.lock().proc.clone();
+        if let Some(p) = live {
+            if p.is_alive() && !self.refence(h, id).await? {
                 return Ok(p);
             }
         }
@@ -2666,8 +2668,19 @@ impl<R: Runtime> Core<R> {
         // Escouade's MCP server, as this agent (a token of its own) or kept out of it.
         let access = self.agent_access(id, engine);
         spawn.escouade = self.with_refusal_file(id, engine, access);
+        // « Projet privé »: the paths its tools are refused, in a settings file of its own for a
+        // harness that reads them so. Not written, it does not start: it would read them.
+        let privacy = self.agent_privacy(id);
+        spawn.fence = self.agent_fence(id);
+        if !spawn.fence.is_empty() {
+            let refused = matches!(spawn.escouade, Escouade::Denied { .. });
+            if let Some(v) = engine.fence_settings(refused, &spawn.fence, &spawn.program) {
+                spawn.settings = Some(self.write_fence_settings(id, &v)?);
+            }
+        }
         // Given back when this process ends, unless a newer one of the agent has its own.
         let token = spawn.escouade.token().map(str::to_string);
+        let fence = spawn.fence.clone();
         let started = std::time::Instant::now();
         let (w1, w2) = (Arc::downgrade(self), Arc::downgrade(self));
         let (h1, h2) = (h.clone(), h.clone());
@@ -2700,6 +2713,8 @@ impl<R: Runtime> Core<R> {
         {
             let mut rt = h.lock();
             rt.attach(proc.clone());
+            rt.fence = fence;
+            rt.privacy = privacy;
             // Read under its lock: a `mark_escouade_next` (or a switch turned off) that comes after
             // sees the process, and one that came before is read here: a token forgotten meanwhile
             // gives nothing (no lock of the settings or the server is held while an agent's is
@@ -6646,7 +6661,8 @@ impl<R: Runtime> Core<R> {
         cur.commit_mode = p.commit_mode;
         cur.account = account;
         cur.engine = p.engine;
-        // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`).
+        // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`), the
+        // harnesses at each start of an agent, before its next turn (`fence`).
         cur.private = p.private;
         cur.shared_on_limit = p.shared_on_limit;
         let dir_changed = cur.worktree_dir != worktree_dir;

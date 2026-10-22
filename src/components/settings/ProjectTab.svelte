@@ -86,6 +86,14 @@
     (['agent', 'direct'] as const).map((value) => ({ value, label: t(`settings.project.commitModes.${value}`) })),
   );
 
+  /** What keeps a private project's files from the other projects' agents, harness by harness (ESC-140). */
+  const FENCE = [
+    { id: 'claude', name: 'Claude Code', kind: 'guard' },
+    { id: 'codex', name: 'Codex', kind: 'barrier' },
+    { id: 'opencode', name: 'OpenCode', kind: 'guard' },
+    { id: 'copilot', name: 'Copilot CLI', kind: 'guard' },
+  ] as const;
+
   /** Asks before closing it, then comes back to these settings, their draft as it was. */
   function askClose() {
     // Taken now: the tab is gone while the confirmation is open.
@@ -261,10 +269,23 @@
   </Group>
 {/if}
 
-<!-- « Projet privé »: what the agents of the other projects see of it through the MCP server. -->
+<!-- « Projet privé »: what the agents of the other projects see of it through the MCP server, what keeps its files
+     from them, harness by harness (a guard or a barrier, said as it is), then, for a private one, its accounts. -->
 <Group title={t('settings.project.privateTitle')}>
   <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')}>
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
+  </Row>
+  <Row label={t('settings.project.fenceTitle')} desc={t('settings.project.fenceDesc')} wide>
+    <ul class="fence" aria-label={t('settings.project.fenceTitle')}>
+      {#each FENCE as f (f.id)}
+        <li>
+          <span class="engine">{f.name}</span>
+          <span class="kind" class:barrier={f.kind === 'barrier'}>{t(`settings.project.fenceKind.${f.kind}`)}</span>
+          <span class="how">{t(`settings.project.fenceHow.${f.id}`)}</span>
+        </li>
+      {/each}
+    </ul>
+    <p class="at">{t('settings.project.fenceNote')}</p>
   </Row>
   {#if draft.private}
     {@const harness = engineName(privateEngine)}
@@ -539,10 +560,45 @@
     padding: 0;
     cursor: pointer;
   }
+  .fence {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
   .private-accounts {
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  .fence li {
+    display: grid;
+    grid-template-columns: 96px 84px 1fr;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .engine {
+    font-weight: 600;
+  }
+  .kind {
+    justify-self: start;
+    padding: 1px 7px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .kind.barrier {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .how {
+    color: var(--muted);
+    text-wrap: pretty;
   }
   .said {
     margin: 0;

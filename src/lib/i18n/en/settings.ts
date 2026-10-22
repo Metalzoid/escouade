@@ -253,6 +253,20 @@ export default defineZone('settings', {
     private: 'Private project',
     privateDesc:
       'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
+    fenceTitle: 'Its files',
+    fenceDesc:
+      'The agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder or its harness sessions. Its own read none of these for the other projects, nor the rest of Escouade’s folder. A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands.',
+    fenceKind: { guard: 'Guard', barrier: 'Barrier' },
+    fenceHow: {
+      claude:
+        'Refused to its file tools and to the commands it recognizes (cat, sed…), not to a script that opens a file itself. With its sandbox turned on (macOS, Linux, WSL2), all its commands are refused too.',
+      codex: 'Its sandbox refuses them to all its commands, except in Bypass mode, which has none.',
+      opencode: 'Refused to its tools and to the commands that name them. It has no sandbox.',
+      copilot:
+        'Escouade refuses what it asks about these paths right away. Nothing is guaranteed in Bypass mode, nor in the Copilot CLI view, where its requests don’t go through Escouade.',
+    },
+    fenceNote:
+      'A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. An agent already running takes this setting before its next turn (its process starts again, its conversation stays); a terminal view, at its next launch.',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
     worktreeDir: 'Worktrees folder',

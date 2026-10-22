@@ -647,6 +647,8 @@ mod tests {
                 command,
             },
             access: &access,
+            fence: &crate::fence::Fence::default(),
+            program: &Program::Native(std::path::PathBuf::new()),
         })
     }
 

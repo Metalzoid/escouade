@@ -289,6 +289,21 @@ export default {
     private: 'Projet privé',
     privateDesc:
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
+    /** Under « Projet privé »: what keeps its files from the other projects' agents, harness by harness (ESC-140). */
+    fenceTitle: 'Ses fichiers',
+    fenceDesc:
+      'Les agents des autres projets ne lisent ni n’écrivent son dossier, ses worktrees, ses données dans le dossier d’Escouade ni ses sessions de harness. Les siens ne lisent rien de tout cela pour les autres projets, ni le reste du dossier d’Escouade. Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes.',
+    fenceKind: { guard: 'Garde-fou', barrier: 'Barrière' },
+    fenceHow: {
+      claude:
+        'Refusés à ses outils de fichiers et aux commandes qu’il reconnaît (cat, sed…), pas à un script qui ouvre un fichier lui-même. Avec son bac à sable activé (macOS, Linux, WSL2), toutes ses commandes sont refusées aussi.',
+      codex: 'Son bac à sable les refuse à toutes ses commandes, sauf en mode Bypass, qui n’en a pas.',
+      opencode: 'Refusés à ses outils et aux commandes qui les nomment. Il n’a pas de bac à sable.',
+      copilot:
+        'Escouade refuse d’office ce qu’il demande sur ces chemins. Rien n’est garanti en mode Bypass, ni en vue Copilot CLI, où ses demandes ne passent pas par Escouade.',
+    },
+    fenceNote:
+      'Une barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Un agent déjà lancé prend ce réglage avant son prochain tour (son process repart, sa conversation reste) ; une vue terminal, à son prochain lancement.',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
     worktreeDir: 'Dossier des worktrees',

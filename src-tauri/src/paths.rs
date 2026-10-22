@@ -333,6 +333,14 @@ impl DataDir {
         self.mcp_agents().join(format!("{agent_id}.json"))
     }
 
+    /// The settings of the agent's process that tell it its fence (« Projet privé »,
+    /// `Engine::fence_settings`), rewritten at each of its starts: never removed while it runs,
+    /// its harness may read them again.
+    pub fn fence_settings(&self, agent_id: &str) -> PathBuf {
+        let name = if is_plain_id(agent_id) { agent_id } else { "_" };
+        self.0.join("fence").join(format!("{name}.json"))
+    }
+
     /// The settings an agent refused Escouade's tools is started with (`--settings`): Escouade's
     /// server kept out of it, whatever config declares it (`Engine::refusal`).
     pub fn mcp_refusal_file(&self) -> PathBuf {

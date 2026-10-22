@@ -136,7 +136,15 @@ impl TerminalView for ClaudeTerminal {
     }
 
     fn launch(&self, l: &TerminalLaunch) -> TerminalArgs {
-        let settings = settings(l.hooks.url, l.hooks.token_var, l.access);
+        let mut settings = settings(l.hooks.url, l.hooks.token_var, l.access);
+        if !l.fence.is_empty() {
+            if let (Some(o), Value::Object(f)) = (
+                settings.as_object_mut(),
+                crate::fence::claude_settings(l.fence, l.program),
+            ) {
+                o.extend(f);
+            }
+        }
         TerminalArgs {
             args: tui_args(l.meta, l.session, l.remote, l.private_file),
             file: Some(serde_json::to_vec_pretty(&settings).unwrap_or_default()),

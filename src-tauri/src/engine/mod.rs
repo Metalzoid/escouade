@@ -190,6 +190,12 @@ pub struct Spawn {
     /// ticket's files.
     pub read_dirs: Vec<PathBuf>,
     pub escouade: Escouade,
+    /// The paths its tools are refused (« Projet privé », `fence`): each harness is told them its
+    /// way.
+    pub fence: crate::fence::Fence,
+    /// A settings file of its own (Claude Code: `--settings`, `Engine::fence_settings`), written
+    /// for its fence: it holds the refusal of Escouade's server too, Claude Code reading one only.
+    pub settings: Option<PathBuf>,
     /// Who it is and the account it runs on, for the log.
     pub label: String,
     pub account: String,
@@ -212,6 +218,8 @@ impl Spawn {
             start: Start::of(meta),
             read_dirs: Vec::new(),
             escouade: Escouade::Denied { file: None },
+            fence: crate::fence::Fence::default(),
+            settings: None,
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
             takes_effort: None,
@@ -470,6 +478,18 @@ pub trait Engine: Send + Sync {
     /// The arguments and variables of a process given or refused the server, as `escouade` says.
     /// Never the token among the arguments: a file or a variable holds it.
     fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch;
+
+    /// The settings that tell its process the paths of `fence` refused, as `program` names them,
+    /// with its refusal of Escouade's server when `refused` (`refusal`): written in a file of the
+    /// agent's own (`Spawn::settings`). None: the harness is told its fence otherwise.
+    fn fence_settings(
+        &self,
+        _refused: bool,
+        _fence: &crate::fence::Fence,
+        _program: &Program,
+    ) -> Option<Value> {
+        None
+    }
 
     // ----- « <harness> peut piloter Escouade » (`mcp::install`) -----
 

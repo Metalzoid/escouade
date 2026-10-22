@@ -16,7 +16,6 @@ use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
-#[cfg(test)]
 use super::Program;
 use super::{
     BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, PermissionAnswer, Process, Ready,
@@ -446,8 +445,26 @@ fn args(s: &Spawn) -> Vec<String> {
             .iter()
             .map(|d| format!("--add-dir={}", d.display())),
     );
-    a.extend(mcp::launch(&s.escouade).args);
+    if let (Some(own), Escouade::Granted { .. }) = (&s.settings, &s.escouade) {
+        a.extend(["--settings".into(), own.to_string_lossy().into_owned()]);
+    }
+    a.extend(mcp::launch(&with_settings(s)).args);
     a
+}
+
+/// What `s` is given of Escouade's server, its settings file of its own (`Spawn::settings`: its
+/// fence) read in place of the refusal's (Claude Code reads the last `--settings` only, and it
+/// holds the refusal too); given the server, its settings before it.
+fn with_settings(s: &Spawn) -> Escouade {
+    let Some(own) = &s.settings else {
+        return s.escouade.clone();
+    };
+    match &s.escouade {
+        Escouade::Denied { .. } => Escouade::Denied {
+            file: Some(own.clone()),
+        },
+        granted => granted.clone(),
+    }
 }
 
 /// The arguments of the conversation of the agent of `m` (the tests').
@@ -670,6 +687,21 @@ impl Engine for Claude {
 
     fn escouade_launch(&self, escouade: &Escouade) -> super::mcp::Launch {
         mcp::launch(escouade)
+    }
+
+    fn fence_settings(
+        &self,
+        refused: bool,
+        fence: &crate::fence::Fence,
+        program: &Program,
+    ) -> Option<Value> {
+        let mut v = crate::fence::claude_settings(fence, program);
+        if refused {
+            if let (Some(o), Value::Object(r)) = (v.as_object_mut(), mcp::refusal()) {
+                o.extend(r);
+            }
+        }
+        Some(v)
     }
 
     fn declared(&self, config: &std::path::Path) -> Standing {

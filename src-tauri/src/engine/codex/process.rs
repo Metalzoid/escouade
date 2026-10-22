@@ -336,7 +336,11 @@ impl CodexProcess {
         }
         p["cwd"] = json!(self.cwd);
         p["model"] = json!(s.settings.model);
-        p["sandbox"] = json!(super::sandbox_mode(&s.settings.mode));
+        // Fenced, its mode's profile (`mode_params`), declared by its process's options
+        // (`fence_args`); none in « Sans permissions », whose sandbox is none.
+        if p.get("permissions").is_none() {
+            p["sandbox"] = json!(super::sandbox_mode(&s.settings.mode));
+        }
         match &self.start {
             Start::New => {
                 if let Some(i) = &self.instructions {

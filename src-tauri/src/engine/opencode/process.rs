@@ -281,11 +281,14 @@ impl Inner {
     /// permission winning: each mode gives all of them).
     fn set_rules(self: &Arc<Self>) {
         let Ok(session) = self.session() else { return };
-        let mode = self.state.lock().settings.mode.clone();
+        let rules = {
+            let s = self.state.lock();
+            rules(&s.settings.mode, &s.settings.fence)
+        };
         self.fire(
             Method::PATCH,
             format!("/session/{session}"),
-            Some(json!({ "permission": rules(&mode) })),
+            Some(json!({ "permission": rules })),
         );
     }
 
@@ -373,8 +376,11 @@ impl Inner {
 
     /// Its session: a new one, the one it resumes, or a copy of its original's.
     async fn open(self: &Arc<Self>) -> Result<(Value, &'static str)> {
-        let mode = self.state.lock().settings.mode.clone();
-        let new = || json!({ "title": self.title, "permission": rules(&mode) });
+        let rules = {
+            let s = self.state.lock();
+            rules(&s.settings.mode, &s.settings.fence)
+        };
+        let new = || json!({ "title": self.title, "permission": rules.clone() });
         let srv = &self.server;
         match &self.start {
             Start::Resume { session } => {

@@ -113,7 +113,14 @@ const launch = {
   token: !!process.env.ESCOUADE_MCP_TOKEN,
   tui: argv[0] !== 'app-server',
 };
+// Its launch and what it is sent, in its account's folder too when it is there: the tests of an
+// account read them in `requests.jsonl`.
+function noteInHome(entry) {
+  const home = process.env.CODEX_HOME;
+  if (home && fs.existsSync(home)) fs.appendFileSync(path.join(home, 'requests.jsonl'), JSON.stringify(entry) + '\n');
+}
 log({ launch });
+noteInHome({ launch });
 const ui = await import('./fake-codex-tui.mjs');
 if (argv[0] !== 'app-server') {
   ui.tui(argv, log);
@@ -542,6 +549,7 @@ async function startTurn(params) {
 
 function handle(msg) {
   log({ in: msg });
+  noteInHome({ in: msg });
   // An answer to one of our requests.
   if (msg.method === undefined) {
     const w = waiting.get(msg.id);

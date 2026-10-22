@@ -209,15 +209,25 @@ pub(crate) fn tui_args(l: &TerminalLaunch) -> Vec<String> {
             format!("model_reasoning_effort={}", toml_string(&m.effort)),
         ]);
     }
-    match m.mode.as_str() {
-        "auto" => a.push("--approve-for-me".into()),
-        "bypassPermissions" => a.push("--dangerously-bypass-approvals-and-sandbox".into()),
-        mode => a.extend([
+    // « Projet privé »: Escouade's profile of its mode, in place of its sandbox (`-s`, which
+    // Codex would take over the profile).
+    let fence = crate::fence::spelled(l.fence, l.program);
+    let profile = (!fence.is_empty())
+        .then(|| super::fence_profile(&m.mode))
+        .flatten();
+    match (m.mode.as_str(), profile) {
+        ("auto", _) => a.push("--approve-for-me".into()),
+        ("bypassPermissions", _) => a.push("--dangerously-bypass-approvals-and-sandbox".into()),
+        (_, Some(_)) => a.extend(["-a".into(), "on-request".into()]),
+        (mode, None) => a.extend([
             "-a".into(),
             "on-request".into(),
             "-s".into(),
             super::sandbox_mode(mode).into(),
         ]),
+    }
+    if let Some(profile) = profile {
+        a.extend(super::fence_args(&fence, profile));
     }
     a.extend(["-c".into(), "tools.update_plan.enabled=true".into()]);
     if let Some(p) = m

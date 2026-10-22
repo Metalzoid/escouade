@@ -78,6 +78,7 @@ pub struct CopilotProcess {
     cwd: String,
     instructions: Option<String>,
     escouade: bool,
+    fence: Vec<String>,
     /// Its account has a folder of its own (`COPILOT_HOME`): not its Principal.
     own_home: bool,
     /// The last lines of its standard error: what its exit tells in the conversation.
@@ -98,6 +99,9 @@ pub(super) struct Opts {
     pub instructions: Option<String>,
     /// Escouade's server is given to it (`--additional-mcp-config`): its entry stays on.
     pub escouade: bool,
+    /// The paths its tools are refused (« Projet privé »), as it names them: a permission it asks
+    /// that names one is refused by Escouade at once (`fenced`).
+    pub fence: Vec<String>,
 }
 
 /// The variables a token of GitHub reaches Copilot in, taken before its own sign-in.
@@ -135,6 +139,7 @@ pub(super) async fn read_quota(
         settings: Settings::default(),
         instructions: None,
         escouade: false,
+        fence: Vec::new(),
     };
     let p = CopilotProcess::spawn(opts, Box::new(|_| {}), Box::new(|_, _| {}))?;
     let read = async {
@@ -207,6 +212,7 @@ impl CopilotProcess {
             settings,
             instructions,
             escouade,
+            fence,
         } = opts;
         let own_home = own_home(&env);
         let launch = program.launch(&cwd, &args, &env)?;
@@ -289,6 +295,7 @@ impl CopilotProcess {
             cwd,
             instructions,
             escouade,
+            fence,
             own_home,
             tail: tail.clone(),
             on_frame: on_frame.clone(),
@@ -465,6 +472,25 @@ impl CopilotProcess {
         match event["type"].as_str().unwrap_or_default() {
             "session.idle" if event["agentId"].is_null() => {
                 self.state.lock().busy = false;
+            }
+            // « Projet privé »: refused at once, never a card the user could accept.
+            "permission.requested" if super::fenced(&data["permissionRequest"], &self.fence) => {
+                if let Some(rid) = data["requestId"].as_str() {
+                    log::info!(
+                        "copilot: {} of a path of another project refused (private project)",
+                        data["permissionRequest"]["kind"]
+                            .as_str()
+                            .unwrap_or_default()
+                    );
+                    let feedback = super::fence_refusal(i18n::ui());
+                    let _ = self.answer_pending(
+                        "session.permissions.handlePendingPermissionRequest",
+                        rid,
+                        "result",
+                        json!({ "kind": "reject", "feedback": feedback }),
+                    );
+                }
+                return;
             }
             kind @ ("permission.requested"
             | "user_input.requested"

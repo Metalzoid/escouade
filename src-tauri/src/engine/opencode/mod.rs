@@ -66,6 +66,9 @@ pub(crate) struct Settings {
     pub effort: String,
     /// Escouade's mode.
     pub mode: String,
+    /// The paths its tools are refused (« Projet privé »), as OpenCode names them: rules of its
+    /// session, after its mode's (`rules`).
+    pub fence: Vec<String>,
 }
 
 /// The provider and the model of `<provider>/<model>` (a model's id may hold more slashes).
@@ -87,7 +90,7 @@ pub(crate) fn agent_of(mode: &str) -> &'static str {
 /// Codex's modes are: the files of the agent's folder changed without a question, a command asked,
 /// `git add` and `git commit` accepted at once in « Accepter les modifications ». The last rule that
 /// matches wins, and a session merges them: each mode gives all of them.
-pub(crate) fn rules(mode: &str) -> Value {
+pub(crate) fn rules(mode: &str, fence: &[String]) -> Value {
     let (bash, git, edit, web, outside) = match mode {
         "bypassPermissions" => ("allow", "allow", "allow", "allow", "allow"),
         "acceptEdits" => ("ask", "allow", "allow", "ask", "ask"),
@@ -96,14 +99,42 @@ pub(crate) fn rules(mode: &str) -> Value {
         _ => ("ask", "ask", "allow", "ask", "ask"),
     };
     let rule = |p: &str, pattern: &str, a: &str| json!({ "permission": p, "pattern": pattern, "action": a });
-    json!([
+    let mut all = vec![
         rule("bash", "*", bash),
         rule("bash", "git add *", git),
         rule("bash", "git commit *", git),
         rule("edit", "*", edit),
         rule("webfetch", "*", web),
         rule("external_directory", "*", outside),
-    ])
+    ];
+    all.extend(fence_rules(fence));
+    Value::Array(all)
+}
+
+/// « Projet privé » (ESC-140): each path of a fence refused to the tools that take a path (`read`,
+/// `edit`, `list`, and `external_directory`, which OpenCode asks of any tool reaching out of the
+/// agent's folder), and to a command that names it (`bash`, a guard: a command can reach it
+/// without naming it). After the mode's rules: the last that matches wins, whatever the mode. Under
+/// Windows, in both spellings (`\` and `/`): `*` of OpenCode's patterns is any character.
+pub(crate) fn fence_rules(fence: &[String]) -> Vec<Value> {
+    let rule =
+        |p: &str, pattern: String| json!({ "permission": p, "pattern": pattern, "action": "deny" });
+    let mut out = Vec::new();
+    for path in fence {
+        let mut spellings = vec![path.clone()];
+        if path.contains('\\') {
+            spellings.push(path.replace('\\', "/"));
+        }
+        for p in &spellings {
+            let sep = if p.contains('\\') { '\\' } else { '/' };
+            for permission in ["read", "edit", "list", "external_directory"] {
+                out.push(rule(permission, p.clone()));
+                out.push(rule(permission, format!("{p}{sep}*")));
+            }
+            out.push(rule("bash", format!("*{p}*")));
+        }
+    }
+    out
 }
 
 /// The id of the card of a plan to approve, its turn over on it (`agent/opencode.rs`).
@@ -627,6 +658,7 @@ impl Engine for Opencode {
             model: spawn.model.clone(),
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
+            fence: crate::fence::spelled(&spawn.fence, &spawn.program),
         };
         let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
         let opts = process::Opts {
@@ -717,10 +749,84 @@ mod tests {
     }
 
     #[test]
+    fn a_fenced_session_is_refused_each_path_whatever_its_mode() {
+        // As OpenCode reads them: the last rule whose permission and pattern match, `*` any
+        // character.
+        fn matches(pattern: &str, what: &str) -> bool {
+            let parts: Vec<&str> = pattern.split('*').collect();
+            let mut rest = what;
+            for (i, part) in parts.iter().enumerate() {
+                if i == 0 {
+                    let Some(r) = rest.strip_prefix(part) else {
+                        return false;
+                    };
+                    rest = r;
+                } else if i == parts.len() - 1 {
+                    return rest.ends_with(part);
+                } else {
+                    let Some(at) = rest.find(part) else {
+                        return false;
+                    };
+                    rest = &rest[at + part.len()..];
+                }
+            }
+            rest.is_empty()
+        }
+        let fence = vec!["C:/code/secret".to_string()];
+        let action = |mode: &str, p: &str, what: &str| {
+            rules(mode, &fence)
+                .as_array()
+                .unwrap()
+                .iter()
+                .rev()
+                .find(|r| r["permission"] == p && matches(r["pattern"].as_str().unwrap(), what))
+                .map(|r| r["action"].as_str().unwrap().to_string())
+                .unwrap()
+        };
+        for mode in ["default", "acceptEdits", "plan", "bypassPermissions"] {
+            for p in ["read", "edit", "list", "external_directory"] {
+                assert_eq!(action(mode, p, "C:/code/secret"), "deny", "{mode} {p}");
+                assert_eq!(
+                    action(mode, p, "C:/code/secret/a.txt"),
+                    "deny",
+                    "{mode} {p}"
+                );
+            }
+            assert_eq!(
+                action(mode, "bash", "cat C:/code/secret/a.txt"),
+                "deny",
+                "{mode}"
+            );
+        }
+        // The rest as the mode says.
+        assert_eq!(
+            action("bypassPermissions", "external_directory", "C:/code/other"),
+            "allow"
+        );
+        assert_eq!(action("default", "bash", "ls"), "ask");
+        // A path of Windows in both spellings.
+        let both = fence_rules(&[r"C:\code\secret".to_string()]);
+        let patterns: Vec<&str> = both
+            .iter()
+            .filter(|r| r["permission"] == "read")
+            .map(|r| r["pattern"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            patterns,
+            [
+                r"C:\code\secret",
+                r"C:\code\secret\*",
+                "C:/code/secret",
+                "C:/code/secret/*"
+            ]
+        );
+    }
+
+    #[test]
     fn each_mode_of_escouade_has_its_rules_and_agent_in_opencode() {
         // As OpenCode reads them: the last rule whose permission and pattern match.
         let action = |mode: &str, p: &str, what: &str| {
-            rules(mode)
+            rules(mode, &[])
                 .as_array()
                 .unwrap()
                 .iter()

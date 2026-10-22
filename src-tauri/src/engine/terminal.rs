@@ -55,6 +55,9 @@ pub struct TerminalLaunch<'a> {
     pub hooks: HookServer<'a>,
     /// Escouade's MCP server given to it, or refused.
     pub access: &'a Escouade,
+    /// The paths its tools are refused (« Projet privé »), and its program, which spells them.
+    pub fence: &'a crate::fence::Fence,
+    pub program: &'a Program,
 }
 
 /// How an interface is started.

@@ -38,6 +38,19 @@ When “Remote control for all agents” is on in the [“Harness”](settings-c
 
 See [private projects](mcp#private-projects) and [an account for a private project](accounts#an-account-for-a-private-project).
 
+### Its files
+
+For a private project, the agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder (tickets, attached files, conversations) or its harness sessions. Its own agents read none of these for the other projects, nor the rest of Escouade’s folder. Escouade gives these rules to each harness when an agent starts, and the tab says, under “Private project”, what each one guarantees:
+
+| Harness | Protection | What is not guaranteed |
+|---|---|---|
+| Claude Code | Guard: its rules refuse these paths to its file tools and to the commands it recognizes (`cat`, `sed`, `Get-Content`…), even in Bypass mode. | A script that opens a file itself. With its sandbox turned on (macOS, Linux, WSL2), all its commands are held too. |
+| Codex | Barrier: its sandbox refuses these paths to all its commands. | Bypass mode, which has no sandbox. |
+| OpenCode | Guard: its rules refuse these paths to its tools and to the commands that name them. | A command that reaches them without naming them: it has no sandbox. |
+| Copilot CLI | Guard: Escouade refuses what it asks about these paths right away, without offering it to you. | Bypass mode, where it asks nothing, and the Copilot CLI view, where its requests don’t go through Escouade. |
+
+A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands. A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. When you change “Private project”, an agent already running takes its new rules before its next turn: its process starts again, its conversation stays. An agent open in a terminal view takes them at its next launch.
+
 ## Git
 
 | Setting | Effect | Default |

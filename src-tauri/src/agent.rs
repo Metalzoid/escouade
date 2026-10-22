@@ -252,6 +252,10 @@ pub struct AgentRt {
     /// Its live process (or interface) was started with Escouade's server kept out of it
     /// (`Escouade::Denied`).
     pub(crate) without_escouade: bool,
+    /// The paths its live process was started refused (« Projet privé », `fence`).
+    pub(crate) fence: crate::fence::Fence,
+    /// The projects' privacy its fence was made from: changed, its process starts again.
+    pub(crate) privacy: crate::fence::Privacy,
     /// « Outils d'Escouade au prochain démarrage »: that process has none of Escouade's tools,
     /// which a start now would give (`Core::mark_escouade_next`, ESC-91).
     pub(crate) escouade_next: bool,
@@ -522,6 +526,8 @@ impl AgentRt {
             view_after_handover: false,
             unprompted: None,
             without_escouade: false,
+            fence: crate::fence::Fence::default(),
+            privacy: crate::fence::Privacy::default(),
             escouade_next: false,
             codex: codex::CodexState::default(),
             copilot: copilot::CopilotState::default(),

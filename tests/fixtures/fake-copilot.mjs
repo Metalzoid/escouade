@@ -312,12 +312,16 @@ function main() {
         );
         await say(s, r.success ? `J’ai modifié ${path.basename(file)}.` : 'Modification refusée.');
       } else if (p.includes('lecture')) {
-        const file = path.join(s.cwd, 'README.md');
-        await tool(s, 'view', { path: file }, async (id) => {
+        // « lecture de <chemin> »: that path, else the folder's README.
+        const named = prompt.match(/lecture de (\S+)/);
+        const file = named ? named[1] : path.join(s.cwd, 'README.md');
+        const r = await tool(s, 'view', { path: file }, async (id) => {
           const a = await permission(s, id, { kind: 'read', intention: `Read file: ${file}`, path: file });
-          return approved(a) ? { success: true, result: { content: 'contenu' } } : { success: false, error: { message: 'denied' } };
+          return approved(a)
+            ? { success: true, result: { content: 'contenu' } }
+            : { success: false, error: { message: `denied${a && a.feedback ? `: ${a.feedback}` : ''}` } };
         });
-        await say(s, 'Fichier lu.');
+        await say(s, r.success ? 'Fichier lu.' : 'Lecture refusée.');
       } else if (p.includes('web')) {
         const r = await tool(s, 'web_fetch', { url: 'https://example.com' }, async (id) => {
           const a = await permission(s, id, { kind: 'url', intention: 'Fetch content from this URL.', url: 'https://example.com' });

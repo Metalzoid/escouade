@@ -38,6 +38,19 @@ Quand « Remote control pour tous les agents » est allumé dans l’onglet [�
 
 Voir [les projets privés](mcp#les-projets-prives) et [un compte pour un projet privé](accounts#un-compte-pour-un-projet-prive).
 
+### Ses fichiers
+
+Pour un projet privé, les agents des autres projets ne lisent ni n’écrivent son dossier, ses worktrees, ses données dans le dossier d’Escouade (tickets, fichiers joints, conversations) ni ses sessions de harness. Ses propres agents ne lisent rien de tout cela pour les autres projets, ni le reste du dossier d’Escouade. Escouade donne ces règles à chaque harness au démarrage d’un agent, et l’onglet dit, sous « Projet privé », ce que chacun garantit :
+
+| Harness | Protection | Ce qui n’est pas garanti |
+|---|---|---|
+| Claude Code | Garde-fou : ses règles refusent ces chemins à ses outils de fichiers et aux commandes qu’il reconnaît (`cat`, `sed`, `Get-Content`…), même en mode Bypass. | Un script qui ouvre un fichier lui-même. Avec son bac à sable activé (macOS, Linux, WSL2), toutes ses commandes sont tenues aussi. |
+| Codex | Barrière : son bac à sable refuse ces chemins à toutes ses commandes. | Le mode Bypass, qui n’a pas de bac à sable. |
+| OpenCode | Garde-fou : ses règles refusent ces chemins à ses outils et aux commandes qui les nomment. | Une commande qui les atteint sans les nommer : il n’a pas de bac à sable. |
+| Copilot CLI | Garde-fou : Escouade refuse d’office ce qu’il demande sur ces chemins, sans te le proposer. | Le mode Bypass, où il ne demande rien, et la vue Copilot CLI, où ses demandes ne passent pas par Escouade. |
+
+Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Une vraie barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Quand tu changes « Projet privé », un agent déjà lancé prend ses nouvelles règles avant son prochain tour : son process repart, sa conversation reste. Un agent ouvert en vue terminal les prend à son prochain lancement.
+
 ## Git
 
 | Réglage | Effet | Par défaut |

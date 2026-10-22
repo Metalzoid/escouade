@@ -1314,6 +1314,8 @@ impl<R: Runtime> Core<R> {
         }
         self.ready_for_wsl(&program, h);
         let access = self.agent_access(id, harness);
+        // « Projet privé »: the paths its tools are refused.
+        let fence = self.agent_fence(id);
         let (url, command) = (hook_url(port), crate::engine::terminal::hook_command());
         let started_from = view.launch(&TerminalLaunch {
             meta: &meta,
@@ -1327,6 +1329,8 @@ impl<R: Runtime> Core<R> {
                 command: command.as_deref(),
             },
             access: &access,
+            fence: &fence,
+            program: &program,
         });
         let mut args = started_from.args;
         // The folder of the files joined to its messages, read without a question: the window

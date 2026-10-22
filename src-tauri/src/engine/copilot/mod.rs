@@ -281,6 +281,41 @@ pub(crate) fn catalog(
 /// The answer « Pour cette session » to the permission `data` (`permission.requested`): what it is
 /// remembered for, by its kind. Never `approve-permanently` nor `approve-for-location`, which write
 /// a rule of their own in Copilot's config (decided by the user on 2026-10-18).
+/// « Projet privé » (ESC-140): whether the permission `r` Copilot asks (its `permissionRequest`)
+/// names a path of `fence` (as Copilot names them): the path read or written, those its command
+/// may touch, or its command's text. Copilot asks for any path out of the agent's folder but in
+/// « Tout accepter » (`allow-all`), where nothing is asked, and a command can reach a path it
+/// does not name: a guard of Escouade's, not a barrier.
+pub(crate) fn fenced(r: &Value, fence: &[String]) -> bool {
+    if fence.is_empty() {
+        return false;
+    }
+    let mut texts: Vec<&str> = ["path", "resolvedPath", "fileName", "fullCommandText"]
+        .iter()
+        .filter_map(|k| r[*k].as_str())
+        .collect();
+    for k in ["possiblePaths", "resolvedPaths"] {
+        texts.extend(
+            r[k].as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str),
+        );
+    }
+    texts
+        .iter()
+        .any(|t| fence.iter().any(|p| crate::fence::names(t, p)))
+}
+
+/// What the agent is told of a permission `fenced` refused, in `lang`.
+pub(crate) fn fence_refusal(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Refusé par Escouade : ce chemin est celui d’un autre projet, et l’un des deux est privé.",
+        "Refused by Escouade: this path is another project’s, and one of the two is private."
+    )
+}
+
 pub(crate) fn session_approval(data: &Value) -> Value {
     let r = &data["permissionRequest"];
     let approval = match r["kind"].as_str().unwrap_or_default() {
@@ -795,6 +830,7 @@ impl Engine for Copilot {
             mode: spawn.mode.clone(),
         };
         let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
+        let fence = crate::fence::spelled(&spawn.fence, &spawn.program);
         let opts = process::Opts {
             program: spawn.program,
             cwd: spawn.cwd,
@@ -804,6 +840,7 @@ impl Engine for Copilot {
             escouade: matches!(spawn.escouade, Escouade::Granted { file: Some(_), .. }),
             settings,
             instructions,
+            fence,
         };
         let p: Process = CopilotProcess::spawn(opts, on_frame, on_exit)?;
         Ok(p)
@@ -928,6 +965,38 @@ mod tests {
         assert_eq!(sonnet.default_effort.as_deref(), Some("medium"));
         assert!(sonnet.images && sonnet.default);
         assert_eq!(models[1].multiplier.as_deref(), Some("0.33"));
+    }
+
+    #[test]
+    fn a_permission_that_names_a_path_of_the_fence_is_refused_by_escouade() {
+        let fence = vec![r"C:\Code\Secret".to_string()];
+        // Read, written, in a command, among the paths a command may touch.
+        for r in [
+            json!({ "kind": "read", "path": "C:/code/secret/a.txt" }),
+            json!({ "kind": "write", "fileName": r"C:\Code\Secret\b.rs" }),
+            json!({ "kind": "shell", "fullCommandText": r"Get-Content C:\Code\Secret\a.txt" }),
+            json!({ "kind": "shell", "fullCommandText": "x", "possiblePaths": [r"C:\Code\Secret"] }),
+        ] {
+            assert_eq!(
+                fenced(&r, &fence),
+                cfg!(windows) || r["kind"] != "read",
+                "{r}"
+            );
+        }
+        assert!(!fenced(
+            &json!({ "kind": "read", "path": r"C:\Code\Other\a.txt" }),
+            &fence
+        ));
+        assert!(!fenced(
+            &json!({ "kind": "url", "url": "https://x" }),
+            &fence
+        ));
+        // No fence, nothing refused.
+        assert!(!fenced(
+            &json!({ "kind": "read", "path": r"C:\Code\Secret\a.txt" }),
+            &[]
+        ));
+        assert_ne!(fence_refusal(Lang::Fr), fence_refusal(Lang::En));
     }
 
     #[test]

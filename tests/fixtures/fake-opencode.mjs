@@ -281,7 +281,8 @@ if (argv[0] === 'run') {
   };
   const model = opt('--model') || '';
   log({ run: { argv, cwd: process.cwd(), config, prompt } });
-  if (ACCOUNT) fs.appendFileSync(path.join(ACCOUNT, 'launches.jsonl'), JSON.stringify({ run: { argv, config, prompt } }) + '\n');
+  if (ACCOUNT && fs.existsSync(ACCOUNT))
+    fs.appendFileSync(path.join(ACCOUNT, 'launches.jsonl'), JSON.stringify({ run: { argv, config, prompt } }) + '\n');
   const sid = `ses_run${Date.now().toString(16)}${process.pid}`;
   fs.writeFileSync(RUNS, JSON.stringify([...runSessions(), sid]));
   const out = (v) => process.stdout.write(JSON.stringify({ timestamp: Date.now(), sessionID: sid, ...v }) + '\n');
@@ -724,6 +725,9 @@ const server = http.createServer(async (req, res) => {
   const dir = url.searchParams.get('directory') || process.cwd();
   const p = url.pathname;
   log({ req: { method: req.method, path: p, directory: url.searchParams.get('directory'), body } });
+  // In its account's folder too: the tests of an account read it there.
+  if (ACCOUNT && fs.existsSync(ACCOUNT))
+    fs.appendFileSync(path.join(ACCOUNT, 'requests.jsonl'), JSON.stringify({ method: req.method, path: p, body }) + '\n');
   const json = (v, status = 200) => {
     res.writeHead(status, { 'content-type': 'application/json' });
     res.end(JSON.stringify(v));

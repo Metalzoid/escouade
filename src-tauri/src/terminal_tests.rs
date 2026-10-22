@@ -79,6 +79,8 @@ fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
             command: None,
         },
         access: &access,
+        fence: &crate::fence::Fence::default(),
+        program: &engine::Program::Native(std::path::PathBuf::new()),
     });
     assert_eq!(
         launch.args,

@@ -71,6 +71,64 @@ pub(crate) struct Settings {
     pub effort: String,
     /// Escouade's mode (`default`, `plan`…), turned into Codex's by `mode_params`.
     pub mode: String,
+    /// The paths its sandbox refuses (« Projet privé »), as Codex names them: a permissions
+    /// profile of Escouade's in place of the sandbox of its mode (`fence_profile`).
+    pub fence: Vec<String>,
+}
+
+/// « Projet privé » (ESC-140): Codex's permissions profiles, its sandbox with the paths of a fence
+/// refused (`deny`: neither read nor written by its commands, tried on 0.163.0 under Windows).
+/// Its sandbox enforces them: none in « Sans permissions », which has none.
+pub(crate) const FENCE_PROFILE: &str = "escouade-fence";
+/// The same, read only: the mode Plan.
+pub(crate) const FENCE_PLAN_PROFILE: &str = "escouade-fence-plan";
+
+/// The profile of a fenced agent in `mode`; None in « Sans permissions » (no sandbox).
+pub(crate) fn fence_profile(mode: &str) -> Option<&'static str> {
+    match mode {
+        "bypassPermissions" => None,
+        "plan" => Some(FENCE_PLAN_PROFILE),
+        _ => Some(FENCE_PROFILE),
+    }
+}
+
+/// The options (`-c`) of a process of Codex that declare both profiles with `paths` refused, and
+/// `default` its profile (`default_permissions`, which Codex wants once it has profiles). Declared
+/// for the process, not a thread's `config`: Codex reads its config again for a turn that names
+/// its profile, and a thread's is not in it (« failed to load workspace requirements », tried on
+/// 0.163.0). The plan's holds the paths, read only; the other is it with its folder written, as
+/// `workspace-write` is (the paths once: a `.cmd` launcher takes 8,191 characters). A path of
+/// Windows with `/`: Codex reads it so, its `\` an escape in a string of its config.
+pub(crate) fn fence_args(paths: &[String], default: &str) -> Vec<String> {
+    let deny: Vec<String> = paths
+        .iter()
+        .map(|p| {
+            let p = if p.starts_with('/') {
+                p.clone()
+            } else {
+                p.replace('\\', "/")
+            };
+            format!("{}=\"deny\"", toml_string(&p))
+        })
+        .collect();
+    vec![
+        "-c".into(),
+        format!("default_permissions={}", toml_string(default)),
+        "-c".into(),
+        format!(
+            "permissions.{FENCE_PLAN_PROFILE}={{extends=\":read-only\", filesystem={{{}}}}}",
+            deny.join(", ")
+        ),
+        "-c".into(),
+        format!(
+            "permissions.{FENCE_PROFILE}={{extends=\"{FENCE_PLAN_PROFILE}\", filesystem={{\":workspace_roots\"=\"write\", \":tmpdir\"=\"write\"}}}}"
+        ),
+    ]
+}
+
+/// `s` as a string of TOML (JSON's escapes are TOML's).
+fn toml_string(s: &str) -> String {
+    serde_json::to_string(s).unwrap_or_default()
 }
 
 /// The sandbox of a thread in `mode` (`thread/start`): read only to plan, none without
@@ -94,17 +152,26 @@ pub(crate) fn mode_params(s: &Settings, _cwd: &str) -> Value {
         // accepts the git commands of its worktree (`agent/codex.rs`).
         _ => ("on-request", workspace_write(), "user"),
     };
+    let profile = (!s.fence.is_empty())
+        .then(|| fence_profile(&s.mode))
+        .flatten();
     let collaboration = if s.mode == "plan" { "plan" } else { "default" };
     let mut settings = json!({ "model": s.model, "developer_instructions": null });
     if !s.effort.is_empty() {
         settings["reasoning_effort"] = json!(s.effort);
     }
-    json!({
+    let mut p = json!({
         "approvalPolicy": approval,
         "approvalsReviewer": reviewer,
         "sandboxPolicy": sandbox,
         "collaborationMode": { "mode": collaboration, "settings": settings },
-    })
+    });
+    // Fenced: its profile, which Codex takes in place of a sandbox policy (not both).
+    if let (Some(profile), Some(o)) = (profile, p.as_object_mut()) {
+        o.remove("sandboxPolicy");
+        o.insert("permissions".into(), json!(profile));
+    }
+    p
 }
 
 fn workspace_write() -> Value {
@@ -301,6 +368,14 @@ fn args(s: &Spawn) -> Vec<String> {
         home.and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok())
             .is_some_and(|text| declares_escouade(&text))
     };
+    // « Projet privé »: its profiles, which its threads and turns name (`mode_params`).
+    if !s.fence.is_empty() {
+        let paths = crate::fence::spelled(&s.fence, &s.program);
+        a.extend(fence_args(
+            &paths,
+            fence_profile(&s.mode).unwrap_or(FENCE_PROFILE),
+        ));
+    }
     if !matches!(s.escouade, Escouade::Denied { .. }) || declared() {
         a.extend(escouade_launch(&s.escouade).args);
     }
@@ -560,6 +635,7 @@ impl Engine for Codex {
             model: spawn.model.clone(),
             effort: spawn.effort.clone(),
             mode: spawn.mode.clone(),
+            fence: crate::fence::spelled(&spawn.fence, &spawn.program),
         };
         let instructions = spawn.append_prompt.clone().filter(|p| !p.trim().is_empty());
         let opts = process::Opts {
@@ -620,6 +696,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_fenced_agent_runs_in_escouades_profile_of_its_mode_with_the_paths_refused() {
+        let of = |mode: &str| {
+            mode_params(
+                &Settings {
+                    mode: mode.into(),
+                    fence: vec!["C:/code/secret".into()],
+                    ..Default::default()
+                },
+                "C:/p",
+            )
+        };
+        // In place of a sandbox policy: Codex takes one or the other.
+        for (mode, profile) in [
+            ("default", FENCE_PROFILE),
+            ("acceptEdits", FENCE_PROFILE),
+            ("auto", FENCE_PROFILE),
+            ("plan", FENCE_PLAN_PROFILE),
+        ] {
+            let p = of(mode);
+            assert_eq!(p["permissions"], profile, "{mode}");
+            assert!(p.get("sandboxPolicy").is_none(), "{mode}");
+        }
+        // « Sans permissions » has no sandbox to refuse anything.
+        let bypass = of("bypassPermissions");
+        assert!(bypass.get("permissions").is_none());
+        assert_eq!(bypass["sandboxPolicy"]["type"], "dangerFullAccess");
+        // Declared for its process: the paths once, in the plan's, which the other extends.
+        let args = fence_args(
+            &[r"C:\code\secret".into(), "/home/me/x".into()],
+            FENCE_PLAN_PROFILE,
+        );
+        assert_eq!(
+            args,
+            [
+                "-c",
+                "default_permissions=\"escouade-fence-plan\"",
+                "-c",
+                "permissions.escouade-fence-plan={extends=\":read-only\", filesystem={\"C:/code/secret\"=\"deny\", \"/home/me/x\"=\"deny\"}}",
+                "-c",
+                "permissions.escouade-fence={extends=\"escouade-fence-plan\", filesystem={\":workspace_roots\"=\"write\", \":tmpdir\"=\"write\"}}",
+            ]
+        );
+    }
+
+    #[test]
     fn each_mode_of_escouade_has_its_policy_and_sandbox_in_codex() {
         let of = |mode: &str| {
             mode_params(
@@ -627,6 +748,7 @@ mod tests {
                     model: "gpt-6-luna".into(),
                     effort: "low".into(),
                     mode: mode.into(),
+                    ..Default::default()
                 },
                 "C:/p",
             )

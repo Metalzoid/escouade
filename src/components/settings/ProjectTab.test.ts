@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -311,6 +311,23 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true });
     expect(app.projects[0].private).toBe(true);
     expect(backend.called('save_settings')).toHaveLength(0);
+  });
+
+  it('says, harness by harness, whether its files are kept by a guard or a barrier (ESC-140)', () => {
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const list = screen.getByRole('list', { name: 'Ses fichiers' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows).toHaveLength(4);
+    const kind = (name: string) => rows.find((r) => r.textContent?.startsWith(name))!.querySelector('.kind')!.textContent;
+    expect(kind('Claude Code')).toBe('Garde-fou');
+    expect(kind('Codex')).toBe('Barrière');
+    expect(kind('OpenCode')).toBe('Garde-fou');
+    expect(kind('Copilot CLI')).toBe('Garde-fou');
+    // What each cannot guarantee, said.
+    expect(within(list).getByText(/sauf en mode Bypass, qui n’en a pas/)).toBeVisible();
+    expect(within(list).getByText(/Rien n’est garanti en mode Bypass, ni en vue Copilot CLI/)).toBeVisible();
+    expect(within(list).getByText(/pas à un script qui ouvre un fichier lui-même/)).toBeVisible();
+    expect(screen.getByText(/Une barrière pour tous les harness demanderait un compte système par projet/)).toBeVisible();
   });
 
   it('shows a private project as it is, its lock among the projects of the settings', async () => {
