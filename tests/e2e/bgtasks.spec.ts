@@ -358,10 +358,12 @@ test('two tasks at once are counted together, each with its own output, and a vi
   const task = brief(view);
   const control = path.join(app.root, 'fake-claude.control.jsonl');
 
-  // The first one is running and its turn is over, before the second goes.
+  // The first one is running and its turn is over, before the second goes: the agent waits for it.
   await expect(chip).toHaveAttribute('data-count', '1');
   await expect(conv.getByText('Lancé en arrière-plan.')).toBeVisible();
-  await expect(page.locator('aside.side .card .status').first()).toHaveText('Terminé');
+  const status = page.locator('aside.side .card .status').first();
+  await expect(status).toHaveText('Attend');
+  await expect(status).toHaveAttribute('data-tip', 'Son tour est fini, mais il attend :\n1 tâche de fond en cours');
   await send(page, `surveillance de fond ${FOREVER}s`);
 
   // The chip says two, the section lists both: the oldest first.
