@@ -66,7 +66,7 @@ At the top, a two-button switch: “Agents” shows an agent’s conversation, �
 
 ### The list of agents
 
-The “Agents” header carries the number of agents in the project and the “+ New agent” button (`Ctrl+N`). The ▾ arrow to its right opens “New agent on a branch…”. With no agent, the list says “No agents.” with a “Create an agent” button.
+The “Agents” header carries the number of agents in the project and the “+ New agent” button (`Ctrl+N`). The ▾ arrow to its right opens “New agent on a branch…” and “New agent without a worktree” (or “in a worktree”, depending on the project’s setting). With no agent, the list says “No agents.” with a “Create an agent” button.
 
 Each agent is a card:
 

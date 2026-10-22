@@ -12,6 +12,9 @@ export default {
     newAgentTitle: 'Nouvel agent ({shortcut})',
     /** The menu beside « Nouvel agent », from two harnesses found on: one entry each. */
     newAgentOn: 'Nouvel agent sur {engine}',
+    /** The same menu: an agent the other way round from « Un worktree par agent ». */
+    newAgentNoWorktree: 'Nouvel agent sans worktree',
+    newAgentInWorktree: 'Nouvel agent dans un worktree',
     /** The brand of an agent's harness (its card, the overview, its header), once agents run on two. */
     engineMark: 'Harness : {engine}',
     empty: 'Aucun agent.',

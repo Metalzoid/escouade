@@ -902,6 +902,9 @@ pub struct BoardSettings {
     /// Where tickets merge, the base of their PR and of their branch. Empty until the first
     /// ticket, which sets the project's current branch.
     pub target: String,
+    /// « Les agents partent de la branche cible »: a new agent's worktree starts from `target`,
+    /// its base, whatever branch the project's folder is on (`Core::agent_start`).
+    pub agents_from_target: bool,
     /// "merge" (merge commit), "squash" or "rebase".
     pub strategy: String,
     pub draft: bool,
@@ -930,6 +933,7 @@ impl Default for BoardSettings {
         Self {
             action: "merge".into(),
             target: String::new(),
+            agents_from_target: false,
             strategy: "squash".into(),
             draft: false,
             tests_first: false,

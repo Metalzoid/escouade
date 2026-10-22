@@ -23,6 +23,9 @@ export default {
     switching: 'Changement de branche…',
     /** The branch the project's folder is on, read to a screen reader. */
     current: 'Branche du dossier du projet',
+    /** To choose the Kanban's target: the one it is now, and the tag of the folder's branch. */
+    chosen: 'Branche cible actuelle',
+    folder: 'dossier du projet',
     /** `{agent}`: the agent whose worktree holds the branch. */
     usedBy: 'utilisée par l’agent {agent}',
     /** `{branch}`, `{agent}`: also what the toast says when the backend refuses because of it. */

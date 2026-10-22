@@ -329,6 +329,58 @@ pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
     )
 }
 
+/// Where a new agent starts when « Les agents partent de la branche cible » is on: the local
+/// `target`, moved first to its upstream as fetched last (no fetch: the agent is made at once)
+/// when it is only behind it, so that what it starts from is its base too. When it can't be moved
+/// (checked out, commits not pushed) the agent starts from it as it is, and the sentence says so;
+/// with no such local branch, from HEAD (None).
+async fn agent_start(root: &str, target: &str) -> (Option<String>, Option<String>) {
+    if !git::branch_exists(root, target).await {
+        return (
+            None,
+            Some(tr!(
+                "La branche cible « {target} » n’existe pas : l’agent part de la branche du dossier du projet.",
+                "The target branch “{target}” doesn’t exist: the agent starts from the branch of the project’s folder."
+            )),
+        );
+    }
+    let from = Some(target.to_string());
+    let Some(up) = git::upstream_of(root, target).await else {
+        return (from, None);
+    };
+    let remote = format!("{}/{}", up.remote, up.branch);
+    let local = format!("refs/heads/{target}");
+    let behind = git::ahead_of(root, &local, &up.tracking).await.unwrap_or(0);
+    if behind == 0 {
+        return (from, None);
+    }
+    let commits = |n: u32| {
+        if n == 1 {
+            "1 commit".to_string()
+        } else {
+            format!("{n} commits")
+        }
+    };
+    let ahead = git::ahead_of(root, &up.tracking, &local).await.unwrap_or(0);
+    let why = if ahead > 0 {
+        tr!(
+            "« {target} » a des commits non poussés et {remote} {theirs} qu’elle n’a pas : l’agent part de la « {target} » locale, sans eux.",
+            "“{target}” has commits not pushed and {remote} {theirs} it doesn’t have: the agent starts from the local “{target}”, without them.",
+            theirs = commits(behind)
+        )
+    } else {
+        match git::fast_forward_branch(root, target, &up.tracking).await {
+            Ok(()) => return (from, None),
+            Err(e) => tr!(
+                "{remote} a {theirs} que « {target} » n’a pas, mais elle n’a pas pu avancer ({e}) : l’agent part de la « {target} » locale, sans eux.",
+                "{remote} has {theirs} “{target}” doesn’t have, but it couldn’t move forward ({e}): the agent starts from the local “{target}”, without them.",
+                theirs = commits(behind)
+            ),
+        }
+    };
+    (from, Some(why))
+}
+
 /// Refused: the branch an agent (or a ticket's) was asked to work on is the board's target branch,
 /// which the tickets are merged into (the Kanban's, not an agent's to work on directly).
 pub(crate) fn target_branch_refusal(lang: i18n::Lang) -> String {
@@ -4917,6 +4969,8 @@ impl<R: Runtime> Core<R> {
         let copied_from = o.copy_of.as_ref().and_then(|c| c.worktree.as_ref());
         // The folders of the app's agents' worktrees: a new one never takes one of them.
         let held = self.held_worktrees();
+        // Why it does not start from the board's target, when it was to (`agent_start`).
+        let mut start_notice = None;
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
             // A branch that exists: the agent works on it, whatever else is asked.
             (Some(branch), _, _) => Some(
@@ -4943,14 +4997,8 @@ impl<R: Runtime> Core<R> {
                 None => None,
             },
             (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => Some(
-                git::worktree_add(
-                    &project.path,
-                    &project.worktrees_root(),
-                    &held,
-                    &project.agent_branch_prefix,
-                    &name,
-                )
-                .await,
+                self.agent_worktree(&project, &held, &name, &mut start_notice)
+                    .await,
             ),
             (None, None, None) => None,
         };
@@ -5020,7 +5068,11 @@ impl<R: Runtime> Core<R> {
         let fresh = meta.worktree.clone();
         let h = Arc::new(Mutex::new(AgentRt::new(meta, &conversations)));
         // After the conversation a copy starts with.
-        for text in warning.into_iter().chain(o.copy_of.and_then(|c| c.notice)) {
+        for text in warning
+            .into_iter()
+            .chain(start_notice)
+            .chain(o.copy_of.and_then(|c| c.notice))
+        {
             let mut fx = Effects::default();
             h.lock().notice("warn", text, &mut fx);
         }
@@ -6175,6 +6227,46 @@ impl<R: Runtime> Core<R> {
         } else {
             git::head_branch(root).await
         }
+    }
+
+    /// A new agent's own worktree, on a new branch: from HEAD of the project's folder, or from the
+    /// board's target when « Les agents partent de la branche cible » is on (`agent_start`, which
+    /// may say in `notice` why it starts from the local target as it is, or from HEAD).
+    async fn agent_worktree(
+        &self,
+        project: &Project,
+        held: &[PathBuf],
+        name: &str,
+        notice: &mut Option<String>,
+    ) -> Result<(String, String, String)> {
+        let target = project.board.target.trim();
+        let root = match self.toplevel(&project.path).await {
+            Some(root) if project.board.agents_from_target && !target.is_empty() => root,
+            _ => {
+                return git::worktree_add(
+                    &project.path,
+                    &project.worktrees_root(),
+                    held,
+                    &project.agent_branch_prefix,
+                    name,
+                )
+                .await
+            }
+        };
+        // Not while a switch or a pull moves the branches.
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        let (from, why) = agent_start(&root, target).await;
+        *notice = why;
+        git::worktree_add_from(
+            &project.path,
+            &project.worktrees_root(),
+            held,
+            &project.agent_branch_prefix,
+            name,
+            from.as_deref(),
+        )
+        .await
     }
 
     /// The worktree of an agent on the branch `name`, which exists (a local one, or a remote one

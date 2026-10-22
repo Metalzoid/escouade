@@ -1085,7 +1085,25 @@ pub async fn worktree_add(
     prefix: &str,
     name: &str,
 ) -> Result<(String, String, String)> {
-    let base = current_branch(repo).await;
+    worktree_add_from(repo, root, held, prefix, name, None).await
+}
+
+/// `worktree_add`, from the local branch `from` when given (its base then), else from HEAD.
+pub async fn worktree_add_from(
+    repo: &str,
+    root: &Path,
+    held: &[PathBuf],
+    prefix: &str,
+    name: &str,
+    from: Option<&str>,
+) -> Result<(String, String, String)> {
+    if from.is_some_and(|b| b.starts_with('-')) {
+        bail!(invalid_branch(from.unwrap_or_default()));
+    }
+    let base = match from {
+        Some(b) => b.to_string(),
+        None => current_branch(repo).await,
+    };
     if base.is_empty() || base == "HEAD" {
         bail!(tr!(
             "le dépôt n'a pas encore de commit : impossible de créer un worktree",
@@ -1104,7 +1122,11 @@ pub async fn worktree_add(
     }
     let branch = format!("{prefix}{dir_name}");
     let path_s = root.join(&dir_name).to_string_lossy().to_string();
-    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, "HEAD"]).await?;
+    let start = match from {
+        Some(b) => format!("refs/heads/{b}"),
+        None => "HEAD".into(),
+    };
+    run_hooks(repo, &["worktree", "add", "-b", &branch, &path_s, &start]).await?;
     Ok((path_s, branch, base))
 }
 
@@ -1386,6 +1408,63 @@ pub async fn ahead_of(repo: &str, base: &str, branch: &str) -> Result<u32> {
             n = n.trim()
         ))
     })
+}
+
+/// Moves the local branch `branch` to `to` (a ref, `refs/remotes/origin/main`) when that is a
+/// fast-forward, without fetching nor touching any folder: refused when `branch` has a commit `to`
+/// has not, and when it is checked out (its folder would no longer match it). Nothing is moved
+/// when it has moved since it was read (`update-ref` compares).
+pub async fn fast_forward_branch(repo: &str, branch: &str, to: &str) -> Result<()> {
+    if branch.starts_with('-') || to.starts_with('-') {
+        bail!(invalid_branch(branch));
+    }
+    let local = format!("refs/heads/{branch}");
+    let old = text(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{local}^{{commit}}"),
+        ],
+    )
+    .await?;
+    let new = text(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{to}^{{commit}}"),
+        ],
+    )
+    .await?;
+    if run(
+        repo,
+        &["merge-base", "--is-ancestor", old.trim(), new.trim()],
+    )
+    .await
+    .is_err()
+    {
+        bail!(tr!(
+            "« {branch} » a des commits que {to} n’a pas",
+            "“{branch}” has commits {to} doesn’t have",
+            to = short_ref(to)
+        ));
+    }
+    if let Some(path) = checkout_of(repo, branch).await? {
+        bail!(tr!(
+            "« {branch} » est extraite dans {path}",
+            "“{branch}” is checked out in {path}"
+        ));
+    }
+    let message = format!("escouade: fast-forward to {}", short_ref(to));
+    run(
+        repo,
+        &["update-ref", "-m", &message, &local, new.trim(), old.trim()],
+    )
+    .await
+    .map(|_| ())
 }
 
 /// The folders of the repository's worktrees, the main one included.

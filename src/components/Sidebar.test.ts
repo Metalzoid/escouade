@@ -116,7 +116,7 @@ describe('Sidebar', () => {
     const backend = fakeBackend({ create_agent: () => agent({ id: 'a4', name: 'agent-3', createdAt: 4 }) });
     render(Sidebar, { project: project() });
     await userEvent.click(screen.getByRole('button', { name: /Nouvel agent/ }));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null });
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: null });
     expect(app.agent?.id).toBe('a4');
   });
 
@@ -134,7 +134,7 @@ describe('Sidebar', () => {
       render(Sidebar, { project: project() });
       expect(more()).toHaveAttribute('aria-haspopup', 'menu');
       await userEvent.click(more());
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…', 'Nouvel agent dans un worktree']);
       // The button itself still makes an agent at once.
       expect(screen.getByRole('button', { name: /^\+?\s*Nouvel agent$/ })).toBeInTheDocument();
     });
@@ -192,10 +192,42 @@ describe('Sidebar', () => {
       fakeBackend(handlers());
       render(Sidebar, { project: project() });
       await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
-      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…']);
+      expect(menu.open!.items.map((i) => i.label)).toEqual(['New agent on a branch…', 'New agent in a worktree']);
       menu.open!.items[0].onClick!();
       menu.close();
       expect(await screen.findByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
+    });
+  });
+
+  describe('a new agent the other way round from « Un worktree par agent » (ESC-144)', () => {
+    const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
+
+    it('makes one without a worktree in a project that gives each its own, and one in a worktree otherwise', async () => {
+      const backend = fakeBackend({ create_agent: (a: any) => agent({ id: 'a8', name: 'agent-8', projectId: a.projectId, createdAt: 8 }) });
+      const { unmount } = render(Sidebar, { project: project({ worktreePerAgent: true }) });
+      await userEvent.click(more());
+      const without = menu.open!.items.find((i) => i.label === 'Nouvel agent sans worktree')!;
+      expect(menu.open!.items.map((i) => i.label)).not.toContain('Nouvel agent dans un worktree');
+      without.onClick!();
+      menu.close();
+      await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
+      expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: false });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a8'));
+      unmount();
+      render(Sidebar, { project: project({ worktreePerAgent: false }) });
+      await userEvent.click(more());
+      menu.open!.items.find((i) => i.label === 'Nouvel agent dans un worktree')!.onClick!();
+      menu.close();
+      await waitFor(() => expect(backend.called('create_agent')).toHaveLength(2));
+      expect(backend.called('create_agent')[1].args).toEqual({ projectId: 'p1', model: null, engine: null, isolated: true });
+    });
+
+    it('is written in English', async () => {
+      setLang('en');
+      fakeBackend();
+      render(Sidebar, { project: project({ worktreePerAgent: true }) });
+      await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
+      expect(menu.open!.items.map((i) => i.label)).toContain('New agent without a worktree');
     });
   });
 
@@ -2275,7 +2307,7 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     render(Sidebar, { project: project({ engine: 'codex' }) });
     // One harness found: as before.
     await userEvent.click(more());
-    expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…']);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Nouvel agent sur une branche…', 'Nouvel agent dans un worktree']);
     menu.close();
     app.enginesFound = ['claude', 'codex'];
     await userEvent.click(more());
@@ -2284,11 +2316,12 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
       'Nouvel agent sur Claude Code',
       '',
       'Nouvel agent sur une branche…',
+      'Nouvel agent dans un worktree',
     ]);
     menu.open!.items[1].onClick!();
     menu.close();
     await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
-    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude' });
+    expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null });
   });
 
   it('shows the brand of each agent’s harness only once agents run on two', () => {

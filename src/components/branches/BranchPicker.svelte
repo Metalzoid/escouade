@@ -15,6 +15,7 @@
   // under them what is done to branches (create one, clean up, sync). `anchor`: the button, to open over it (under it
   // when there is more room there). In `pick` mode it only chooses a branch for an agent or a ticket, `onpick` being
   // given it: the branch of the project's folder and those a worktree has can't be chosen, and nothing else is offered.
+  // In `target` mode it chooses the Kanban's target branch: any local one, but those of the agents and the tickets.
   let {
     projectId,
     anchor,
@@ -22,16 +23,23 @@
     mode = 'switch',
     onpick,
     over = false,
+    chosen,
   }: {
     projectId: string;
     anchor?: HTMLElement;
     onclose: () => void;
-    mode?: 'switch' | 'pick';
+    mode?: 'switch' | 'pick' | 'target';
     onpick?: (b: BranchInfo) => void;
     /** Opened from a dialog: over it, not under its overlay. */
     over?: boolean;
+    /** In `target` mode, the target as it is now (the settings' draft), checked in the list. */
+    chosen?: string;
   } = $props();
-  const picking = $derived(mode === 'pick');
+  const picking = $derived(mode !== 'switch');
+  const targeting = $derived(mode === 'target');
+  const title = $derived(
+    targeting ? t('boardSettings.tab.targetBranch') : picking ? t('branches.agent.pickTitle') : t('branches.picker.title'),
+  );
 
   /** Branches shown per group: a repository can have thousands of remote ones, which the search finds. */
   const SHOWN = 300;
@@ -82,8 +90,14 @@
     void load();
   });
 
-  const locals = $derived((branches ?? []).filter((b) => !b.remote));
-  const remotes = $derived((branches ?? []).filter((b) => b.remote));
+  const project = $derived(app.projects.find((p) => p.id === projectId));
+  /** The prefixes of the agents' and the tickets' branches, the project's and the default ones: no target among them. */
+  const ownPrefixes = $derived(
+    [project?.agentBranchPrefix, project?.ticketBranchPrefix, 'escouade/', 'ticket/'].map((p) => p?.trim() ?? '').filter(Boolean),
+  );
+  const all = $derived(branches ?? []);
+  const locals = $derived(all.filter((b) => !b.remote && !(targeting && ownPrefixes.some((p) => b.name.startsWith(p)))));
+  const remotes = $derived(targeting ? [] : all.filter((b) => b.remote));
   const localByName = $derived(new Map(locals.map((b) => [b.name, b])));
 
   /** The local branch a worktree other than the project's folder has, when picking `b` would need it. */
@@ -96,12 +110,13 @@
   const isFolder = (b: BranchInfo) => b.current || (b.remote && !!b.trackedBy && !!localByName.get(b.trackedBy)?.current);
 
   /** The board's target branch, which the tickets are merged into: the local branch, or the remote one that tracks it. */
-  const target = $derived(app.projects.find((p) => p.id === projectId)?.board.target.trim() ?? '');
+  const target = $derived(project?.board.target.trim() ?? '');
   const isTarget = (b: BranchInfo) =>
     !!target && (b.remote ? (b.trackedBy ?? b.name.slice(b.name.indexOf('/') + 1)) === target : b.name === target);
 
   /** Why `b` can't be picked: an agent's worktree (or another one) has its branch, or, to pick one for an agent, the folder does, or the board's target. */
   function reasonOf(b: BranchInfo): string | null {
+    if (targeting) return null;
     // The target first: when the folder is on it, that is the reason.
     if (picking && isTarget(b)) return t('branches.agent.isTargetBranch');
     if (picking && isFolder(b)) return t('branches.agent.isFolderBranch');
@@ -111,6 +126,7 @@
 
   /** The short word after a branch's name. */
   function tagOf(b: BranchInfo): string | null {
+    if (targeting) return b.current ? t('branches.picker.folder') : null;
     const h = held(b);
     if (h) return h.agent ? t('branches.picker.usedBy', { agent: app.agents[h.agent]?.name ?? '?' }) : t('branches.picker.otherWorktree');
     if (b.remote) return b.trackedBy ? t('branches.picker.trackedBy', { branch: b.trackedBy }) : null;
@@ -294,7 +310,7 @@
   role="dialog"
   tabindex="-1"
   aria-modal="true"
-  aria-label={picking ? t('branches.agent.pickTitle') : t('branches.picker.title')}
+  aria-label={title}
   style:left="{place.left}px"
   style:bottom={place.bottom === undefined ? undefined : `${place.bottom}px`}
   style:top={place.top === undefined ? undefined : `${place.top}px`}
@@ -325,7 +341,7 @@
     id="branch-list"
     role="listbox"
     tabindex="-1"
-    aria-label={picking ? t('branches.agent.pickTitle') : t('branches.picker.title')}
+    aria-label={title}
     bind:this={list}
     onmousedown={(e) => e.preventDefault()}
   >
@@ -335,6 +351,7 @@
           <div class="grp" id="branch-group-{g.id}">{g.label}</div>
           {#each g.rows as r (r.b.name)}
             {@const b = r.b}
+            {@const checked = targeting ? b.name === (chosen ?? target) : b.current}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="row"
@@ -344,7 +361,7 @@
               role="option"
               tabindex="-1"
               aria-selected={r.index === cursor}
-              aria-current={b.current ? 'true' : undefined}
+              aria-current={checked ? 'true' : undefined}
               aria-disabled={r.why ? 'true' : undefined}
               aria-describedby={r.index === cursor ? 'branch-description' : undefined}
               use:tip={r.why ?? undefined}
@@ -352,9 +369,9 @@
               onmousemove={() => (active = b.name)}
               oncontextmenu={(e) => onContextMenu(e, b)}
             >
-              <span class="chk" aria-hidden="true">{b.current ? '✓' : ''}</span>
+              <span class="chk" aria-hidden="true">{checked ? '✓' : ''}</span>
               <span class="name">{b.name}</span>
-              {#if b.current}<span class="sr">{t('branches.picker.current')}</span>{/if}
+              {#if checked}<span class="sr">{targeting ? t('branches.picker.chosen') : t('branches.picker.current')}</span>{/if}
               {#if r.tag}<span class="tag">{r.tag}</span>{/if}
               {#if b.ahead || b.behind}
                 <span class="ab">

@@ -3,11 +3,11 @@
   import { commitPreview } from '../../lib/board';
   import { fPct } from '../../lib/format';
   import { t } from '../../lib/i18n';
-  import { api } from '../../lib/ipc';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { BoardAction, BoardSettings, Project } from '../../lib/types';
+  import BranchPicker from '../branches/BranchPicker.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
@@ -20,19 +20,9 @@
   const draft = $derived(settingsForm.project!);
   const b = $derived(draft.board);
   const target = $derived(b.target || app.git[project.id]?.branch || 'main');
-  /** The local branches, by project. */
-  let branches = $state<Record<string, string[]>>({});
-
-  $effect(() => {
-    const id = project.id;
-    if (branches[id]) return;
-    api
-      .gitBranches(id)
-      .then((list) => {
-        branches[id] = list;
-      })
-      .catch(() => {});
-  });
+  /** The target branch is chosen in the branch picker, searched: a repository may have many branches. */
+  let choosing = $state(false);
+  let targetButton = $state<HTMLButtonElement>();
 
   // The choices below are texts: derived, so that they follow the language of the interface.
   const ACTION_IDS: BoardAction[] = ['merge', 'pr', 'push', 'keep'];
@@ -68,9 +58,21 @@
     <div class="box">
       <div class="line">
         <span class="k">{t('boardSettings.tab.targetBranch')}</span>
-        {#each branches[project.id]?.length ? branches[project.id] : [target] as br (br)}
-          <button class="chip mono" class:on={target === br} aria-pressed={target === br} onclick={() => (b.target = br)}>⎇ {br}</button>
-        {/each}
+        <button
+          class="chip mono on"
+          aria-haspopup="dialog"
+          aria-label={t('boardSettings.tab.targetBranchChoose', { branch: target })}
+          bind:this={targetButton}
+          onclick={() => (choosing = true)}>⎇ {target} ▾</button
+        >
+      </div>
+      <div class="line wide">
+        <span class="txt"
+          ><span class="l">{t('boardSettings.tab.agentsFromTarget')}</span><span class="d"
+            >{t('boardSettings.tab.agentsFromTargetDesc', { branch: target })}</span
+          ></span
+        >
+        <Switch label={t('boardSettings.tab.agentsFromTarget')} bind:on={b.agentsFromTarget} />
       </div>
       {#if b.action === 'merge'}
         <div class="line">
@@ -93,6 +95,18 @@
     </div>
   {/if}
 </Group>
+
+{#if choosing}
+  <BranchPicker
+    over
+    projectId={project.id}
+    anchor={targetButton}
+    mode="target"
+    chosen={target}
+    onclose={() => (choosing = false)}
+    onpick={(br) => (b.target = br.name)}
+  />
+{/if}
 
 <Group title={t('boardSettings.tab.beforeAfter')}>
   <Row label={t('boardSettings.tab.testCommand')} hint={t('boardSettings.tab.testCommandHint')}>
@@ -230,6 +244,10 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .line.wide {
+    flex-wrap: nowrap;
+    gap: 16px;
   }
   .k {
     width: 110px;

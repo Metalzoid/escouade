@@ -25,9 +25,15 @@ With the first three choices, Escouade first commits what the agent left in the 
 
 ### Target branch
 
-Shown with “Merge into a branch” and “Open a pull request”. The project’s local branches are offered. It’s the branch tickets are merged into, and also the base of each ticket’s branch and of its PR. By default it’s the branch checked out in the project’s folder when the first ticket starts; Escouade keeps it from then on. If the branch doesn’t exist, approval stops with an error.
+Shown with “Merge into a branch” and “Open a pull request”. The ⎇ button opens the branch picker, with its search: it offers the project’s local branches, without those of the agents and the tickets (`escouade/…`, `ticket/…`). It’s the branch tickets are merged into, and also the base of each ticket’s branch and of its PR. By default it’s the branch checked out in the project’s folder when the first ticket starts; Escouade keeps it from then on. If the branch doesn’t exist, approval stops with an error.
 
 The merge happens in the project’s folder when the target branch is checked out there (it’s refused if tracked files have uncommitted changes), otherwise in a temporary worktree. It’s refused if the target branch is checked out in an agent’s worktree. See [worktrees](worktrees).
+
+### Agents start from the target branch
+
+Off by default. On, every new agent that gets a worktree starts from the target branch, and merges into it, even when the project’s folder is on another branch. It helps when your folder stays on a work branch while the agents should start from `main`.
+
+The agent is made at once, without waiting for the network: Escouade starts from what the last fetch (every 5 minutes) brought. When the remote branch is ahead and your local branch is only behind, the local one first moves up to it. When the local one is checked out in a folder or has commits not pushed, the agent starts from the local one as it is, and its conversation tells you.
 
 ### Strategy
 

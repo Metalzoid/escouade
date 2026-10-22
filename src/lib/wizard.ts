@@ -44,6 +44,7 @@ export interface WizardConfig {
 const DEFAULT_BOARD: WizardConfig['board'] = {
   action: 'merge',
   target: '',
+  agentsFromTarget: false,
   strategy: 'squash',
   draft: false,
   testsFirst: false,

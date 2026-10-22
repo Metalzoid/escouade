@@ -7,7 +7,7 @@ import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { PROJECT_COLORS } from '../../lib/theme';
 import type { ClaudeUpdateStatus, EngineInfo, RunCommand } from '../../lib/types';
-import { BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
+import { BARE_ENGINE, board, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
@@ -28,6 +28,13 @@ const backendSaving = (over: Record<string, (a: any) => unknown> = {}) =>
   fakeBackend({
     save_settings: () => [],
     git_branches: () => ['main', 'release'],
+    branch_list: () => [
+      branchInfo({ name: 'main', current: true }),
+      branchInfo({ name: 'release' }),
+      branchInfo({ name: 'escouade/agent-1' }),
+      branchInfo({ name: 'ticket/DEM-4' }),
+      branchInfo({ name: 'origin/main', remote: true, trackedBy: 'main' }),
+    ],
     board_set: (a: any) => ({ ...app.projects.find((p) => p.id === a.projectId), board: a.settings }),
     ...over,
   });
@@ -412,7 +419,9 @@ describe('SettingsModal', () => {
     const backend = backendSaving();
     render(SettingsModal, { tab: 'board', projectId: 'p1' });
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(await screen.findByRole('button', { name: '⎇ release' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Branche cible : main. Choisir une autre branche' }));
+    await userEvent.click(await within(await screen.findByRole('dialog', { name: 'Branche cible' })).findByText('release'));
+    expect(screen.getByRole('button', { name: 'Branche cible : release. Choisir une autre branche' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rebase' }));
     expect(screen.queryByRole('switch', { name: 'PR en brouillon' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /Ouvrir une pull request/ }));
@@ -426,6 +435,37 @@ describe('SettingsModal', () => {
     });
     expect(app.projects[0].board).toMatchObject({ action: 'pr', target: 'release' });
     expect(app.modal).toBeNull();
+  });
+
+  it('chooses the target branch in the branch picker, without the agents’ and the tickets’ branches (ESC-144)', async () => {
+    backendSaving();
+    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('button', { name: 'Branche cible : main. Choisir une autre branche' }));
+    const picker = await screen.findByRole('dialog', { name: 'Branche cible' });
+    await within(picker).findByText('release');
+    const names = within(picker)
+      .getAllByRole('option')
+      .map((o) => o.querySelector('.name')!.textContent);
+    expect(names).toEqual(['main', 'release']);
+    // The folder's branch can be the target; the one it is now is checked.
+    const main = within(picker).getByText('main').closest('[role="option"]')!;
+    expect(main).not.toHaveAttribute('aria-disabled');
+    expect(main).toHaveAttribute('aria-current', 'true');
+    expect(within(main as HTMLElement).getByText('dossier du projet')).toBeInTheDocument();
+    // Searched as the branch button's picker is.
+    await userEvent.type(within(picker).getByRole('combobox'), 'rel');
+    expect(within(picker).getAllByRole('option')).toHaveLength(1);
+  });
+
+  it('lets the agents start from the target branch, off until turned on (ESC-144)', async () => {
+    const backend = backendSaving();
+    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    const on = screen.getByRole('switch', { name: 'Les agents partent de la branche cible' });
+    expect(on).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/^Chaque nouvel agent à worktree part de main,/)).toBeInTheDocument();
+    await userEvent.click(on);
+    await save();
+    expect(backend.called('board_set')[0].args.settings).toMatchObject({ agentsFromTarget: true });
   });
 
   it('hides the target branch when the work is only pushed or kept', async () => {

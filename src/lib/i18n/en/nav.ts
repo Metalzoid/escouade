@@ -9,6 +9,8 @@ export default defineZone('nav', {
     newAgent: 'New agent',
     newAgentTitle: 'New agent ({shortcut})',
     newAgentOn: 'New agent on {engine}',
+    newAgentNoWorktree: 'New agent without a worktree',
+    newAgentInWorktree: 'New agent in a worktree',
     engineMark: 'Harness: {engine}',
     empty: 'No agents.',
     createAgent: 'Create an agent',

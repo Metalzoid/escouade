@@ -66,7 +66,7 @@ En haut, un sélecteur à deux boutons : « Agents » affiche la conversation 
 
 ### La liste des agents
 
-L’en-tête « Agents » porte le nombre d’agents du projet et le bouton « + Nouvel agent » (`Ctrl+N`). La flèche ▾ à sa droite ouvre « Nouvel agent sur une branche… ». Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
+L’en-tête « Agents » porte le nombre d’agents du projet et le bouton « + Nouvel agent » (`Ctrl+N`). La flèche ▾ à sa droite ouvre « Nouvel agent sur une branche… » et « Nouvel agent sans worktree » (ou « dans un worktree », selon le réglage du projet). Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
 
 Chaque agent est une carte :
 

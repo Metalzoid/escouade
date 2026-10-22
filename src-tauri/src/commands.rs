@@ -579,11 +579,14 @@ pub async fn erase_closed_project(core: CoreState<'_>, id: String) -> Res<()> {
 }
 
 #[tauri::command]
+/// `isolated`: in a worktree of its own or not, whatever « Un worktree par agent » says (« Nouvel
+/// agent dans un worktree », « sans worktree »).
 pub async fn create_agent(
     core: CoreState<'_>,
     project_id: String,
     model: Option<String>,
     engine: Option<crate::model::EngineId>,
+    isolated: Option<bool>,
 ) -> Res<AgentView> {
     let agent = core
         .create_agent_with(
@@ -591,6 +594,7 @@ pub async fn create_agent(
             AgentOptions {
                 model,
                 engine,
+                isolated,
                 select: true,
                 ..Default::default()
             },

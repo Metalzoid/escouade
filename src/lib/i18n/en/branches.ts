@@ -23,6 +23,8 @@ export default defineZone('branches', {
     switching: 'Switching branch…',
     /** The branch the project's folder is on, read to a screen reader. */
     current: 'Branch of the project’s folder',
+    chosen: 'Current target branch',
+    folder: 'project’s folder',
     /** `{agent}`: the agent whose worktree holds the branch. */
     usedBy: 'used by agent {agent}',
     /** `{branch}`, `{agent}`: also what the toast says when the backend refuses because of it. */

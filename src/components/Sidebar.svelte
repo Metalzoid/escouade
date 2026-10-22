@@ -294,6 +294,11 @@
           pickingBranch = true;
         },
       },
+      // The other way round from « Un worktree par agent »: without one in a project that gives one, in one otherwise.
+      {
+        label: project.worktreePerAgent ? t('nav.sidebar.newAgentNoWorktree') : t('nav.sidebar.newAgentInWorktree'),
+        onClick: () => app.newAgent(project.id, null, !project.worktreePerAgent),
+      },
     ]);
   }
 

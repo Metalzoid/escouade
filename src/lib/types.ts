@@ -798,6 +798,8 @@ export type BoardAction = 'merge' | 'pr' | 'push' | 'keep';
 export interface BoardSettings {
   action: BoardAction;
   target: string;
+  /** « Les agents partent de la branche cible »: a new agent's worktree starts from `target`, its base. */
+  agentsFromTarget: boolean;
   strategy: 'merge' | 'squash' | 'rebase';
   draft: boolean;
   testsFirst: boolean;

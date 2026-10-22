@@ -14,6 +14,7 @@ Each agent is a Claude Code session: a conversation, a model, an effort, a permi
 |---|---|
 | Create an agent in the project on screen | `Ctrl+N`, or the “+ New agent” button at the top of the list |
 | Create the first agent of a project that has none | “Create an agent” in the empty list, or “New agent” in the middle of the window (“No agents in this project.”) |
+| Make an agent without a worktree, or in one, once | The ▾ button to the right of “New agent”, then “New agent without a worktree” (project with “One worktree per agent”) or “New agent in a worktree” (the others) |
 | Work on a branch that already exists | The ▾ button to the right of “New agent” (“Other ways to create an agent”), then “New agent on a branch…”: pick the branch in the picker |
 | Start from a branch in the branch picker | Right-click a branch, then “Start an agent on this branch” |
 | Create an agent along with a project | In the “New project” window, the “Create a first agent” switch (on by default) also offers the model for that agent |
@@ -81,7 +82,7 @@ The page on [accounts](accounts) explains how to add them and what “Resume on�
 
 ## Working in a worktree or on an existing branch
 
-By default, an agent works in the project’s folder, like you. With the “One worktree per agent” option, each new agent gets its own worktree: a folder of its own, on a new branch `escouade/<name>` created from the project’s branch. Its changes stay separate, and you merge them whenever you want. You choose the option when you create the project, in the project settings, or by right-clicking the project’s tab and then “Turn on a worktree per agent”; it only applies to agents created afterwards.
+By default, an agent works in the project’s folder, like you. With the “One worktree per agent” option, each new agent gets its own worktree: a folder of its own, on a new branch `escouade/<name>` created from the project’s branch, or from the Kanban’s target branch with “Agents start from the target branch” (see [the Kanban settings](settings-board)). Its changes stay separate, and you merge them whenever you want. You choose the option when you create the project, in the project settings, or by right-clicking the project’s tab and then “Turn on a worktree per agent”; it only applies to agents created afterwards.
 
 - The agent’s card shows its branch after a `⎇`.
 - If the project has setup commands (dependencies, generated code…), they run in the new worktree before the agent’s first message: the card says “Setting up…”, and your first message goes out once the setup is done.

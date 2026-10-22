@@ -210,8 +210,9 @@ export const api = {
   closedProjects: () => invoke<ClosedProject[]>('closed_projects'),
   /** The history of a closed project, erased for good (an entry the app cannot read: its one file). */
   eraseClosedProject: (id: string) => invoke<void>('erase_closed_project', { id }),
-  createAgent: (projectId: string, model: string | null = null, engine: EngineId | null = null) =>
-    invoke<Agent>('create_agent', { projectId, model, engine }),
+  /** `isolated`: in a worktree of its own or not, whatever « Un worktree par agent » says; null: as it says. */
+  createAgent: (projectId: string, model: string | null = null, engine: EngineId | null = null, isolated: boolean | null = null) =>
+    invoke<Agent>('create_agent', { projectId, model, engine, isolated }),
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null, engine: EngineId | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model, engine }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),

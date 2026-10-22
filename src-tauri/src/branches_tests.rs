@@ -1589,3 +1589,163 @@ async fn the_base_is_not_integrated_while_the_agent_works_or_has_changes_or_cann
     assert!(e.to_string().contains("« main »"), "{e}");
     assert_eq!(git(&wt, &["rev-parse", "HEAD"]), head);
 }
+
+/// A project with a worktree per agent whose folder is on `work` (a commit of its own), main
+/// tracking origin, and origin's main one commit ahead of the local one (fetched, not pulled),
+/// « Les agents partent de la branche cible » on, main the target. Returns the commit origin's main
+/// is on.
+async fn from_target(h: &Harness) -> (Project, PathBuf, String) {
+    let (p, r) = h.project(true).await;
+    remote(h, &r);
+    commit_change(&r, "const a = 2;\n", "on origin");
+    git(&r, &["push", "-q", "origin", "main"]);
+    let ahead = git(&r, &["rev-parse", "main"]);
+    git(&r, &["switch", "-qc", "work", "main~1"]);
+    git(&r, &["branch", "-qf", "main", "work"]);
+    std::fs::write(r.join("notes.md"), "work\n").unwrap();
+    git(&r, &["add", "notes.md"]);
+    git(&r, &["commit", "-qm", "work"]);
+    let board = BoardSettings {
+        target: "main".into(),
+        agents_from_target: true,
+        ..p.board.clone()
+    };
+    h.core.board_set(&p.id, board).unwrap();
+    (h.core.project(&p.id).unwrap(), r, ahead)
+}
+
+fn warnings(h: &Harness, id: &str) -> Vec<String> {
+    h.items(id)
+        .iter()
+        .filter(|i| i["kind"] == "notice" && i["level"] == "warn")
+        .map(|i| i["text"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_new_agent_starts_from_the_target_moved_forward_to_its_remote_and_merges_into_it() {
+    for squash in [true, false] {
+        let h = harness(&format!("esc144-ff-{squash}"));
+        let (p, r, ahead) = from_target(&h).await;
+        let a = h.core.create_agent(&p.id, None).await.unwrap();
+        let wt = a.meta.worktree.clone().unwrap();
+        // From origin's main, which the local main now is on too: its base is what it started from.
+        assert_eq!(wt.base_branch, "main");
+        assert_eq!(git(&r, &["rev-parse", "main"]), ahead);
+        assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), ahead);
+        assert!(!Path::new(&wt.path).join("notes.md").exists());
+        assert_eq!(current(&r), "work");
+        assert!(warnings(&h, &a.meta.id).is_empty());
+        // Nothing done: nothing to merge.
+        let e = h
+            .core
+            .merge_agent(&a.meta.id, squash, true)
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("Rien à merger"), "{e:#}");
+        commit_change(Path::new(&wt.path), "const a = 3;\n", "agent change");
+        h.core.merge_agent(&a.meta.id, squash, true).await.unwrap();
+        // One commit (or a merge commit) on top of origin's main: nothing diverged.
+        assert_eq!(current(&r), "main");
+        assert_eq!(app_ts(&r), "const a = 3;\n");
+        git(&r, &["merge-base", "--is-ancestor", "origin/main", "main"]);
+        assert_eq!(
+            git(&r, &["rev-list", "--count", "origin/main..main"]),
+            if squash { "1" } else { "2" }
+        );
+        assert_eq!(git(&r, &["rev-list", "--count", "main..origin/main"]), "0");
+    }
+}
+
+#[tokio::test]
+async fn a_target_checked_out_in_the_folder_is_started_from_as_it_is_and_the_agent_says_so() {
+    let h = harness("esc144-checked-out");
+    let (p, r, ahead) = from_target(&h).await;
+    git(&r, &["switch", "-q", "main"]);
+    let local = git(&r, &["rev-parse", "main"]);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    // Not moved under the folder: the agent starts where main is, which is its base.
+    assert_eq!(git(&r, &["rev-parse", "main"]), local);
+    assert_ne!(local, ahead);
+    assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), local);
+    assert_eq!(wt.base_branch, "main");
+    let said = warnings(&h, &a.meta.id);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].starts_with("origin/main a 1 commit que « main » n’a pas, mais elle n’a pas pu avancer (« main » est extraite dans ")
+            && said[0].ends_with(") : l’agent part de la « main » locale, sans eux."),
+        "{said:?}"
+    );
+    // Nothing to merge either.
+    let e = h
+        .core
+        .merge_agent(&a.meta.id, true, false)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("Rien à merger"), "{e:#}");
+}
+
+#[tokio::test]
+async fn a_target_with_commits_not_pushed_is_started_from_as_it_is_and_the_agent_says_so() {
+    let h = harness("esc144-unpushed");
+    let (p, r, ahead) = from_target(&h).await;
+    git(&r, &["branch", "-qf", "main", "work"]);
+    let local = git(&r, &["rev-parse", "main"]);
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(git(&r, &["rev-parse", "main"]), local);
+    assert_ne!(local, ahead);
+    assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), local);
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(
+        warnings(&h, &a.meta.id),
+        ["« main » a des commits non poussés et origin/main 1 commit qu’elle n’a pas : l’agent part de la « main » locale, sans eux."]
+    );
+}
+
+#[tokio::test]
+async fn without_the_setting_or_a_target_a_new_agent_starts_from_the_folders_branch() {
+    let h = harness("esc144-off");
+    let (p, r, _) = from_target(&h).await;
+    let work = git(&r, &["rev-parse", "work"]);
+    let main = git(&r, &["rev-parse", "main"]);
+    let off = BoardSettings {
+        agents_from_target: false,
+        ..p.board.clone()
+    };
+    h.core.board_set(&p.id, off).unwrap();
+    let a = h.core.create_agent(&p.id, None).await.unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    assert_eq!(wt.base_branch, "work");
+    assert_eq!(git(Path::new(&wt.path), &["rev-parse", "HEAD"]), work);
+    // Nothing moved.
+    assert_eq!(git(&r, &["rev-parse", "main"]), main);
+    // A target that is no branch: from the folder's, as the agent says.
+    let gone = BoardSettings {
+        target: "release".into(),
+        agents_from_target: true,
+        ..p.board.clone()
+    };
+    h.core.board_set(&p.id, gone).unwrap();
+    let b = h.core.create_agent(&p.id, None).await.unwrap();
+    assert_eq!(b.meta.worktree.unwrap().base_branch, "work");
+    assert_eq!(
+        warnings(&h, &b.meta.id),
+        ["La branche cible « release » n’existe pas : l’agent part de la branche du dossier du projet."]
+    );
+    // An agent without worktree is not concerned.
+    let c = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                isolated: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(c.meta.worktree.is_none());
+    assert!(warnings(&h, &c.meta.id).is_empty());
+}

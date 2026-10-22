@@ -15,6 +15,7 @@ Chaque agent est une session Claude Code : une conversation, un modèle, un effo
 | Créer un agent dans le projet affiché | `Ctrl+N`, ou le bouton « + Nouvel agent » en haut de la liste |
 | Créer le premier agent d’un projet qui n’en a pas | « Créer un agent » dans la liste vide, ou « Nouvel agent » au milieu de la fenêtre (« Aucun agent dans ce projet. ») |
 | Travailler sur une branche qui existe déjà | Le bouton ▾ à droite de « Nouvel agent » (« Autres façons de créer un agent »), puis « Nouvel agent sur une branche… » : choisis la branche dans le sélecteur |
+| Créer un agent sans worktree, ou dans un worktree, une fois | Le bouton ▾ à droite de « Nouvel agent », puis « Nouvel agent sans worktree » (projet à « Un worktree par agent ») ou « Nouvel agent dans un worktree » (les autres) |
 | Partir d’une branche depuis le sélecteur de branches | Clic droit sur une branche, puis « Lancer un agent sur cette branche » |
 | Créer un agent en même temps qu’un projet | Dans la fenêtre « Nouveau projet », l’interrupteur « Créer un premier agent » (activé par défaut) propose aussi le modèle de cet agent |
 
@@ -81,7 +82,7 @@ La page sur [les comptes](accounts) explique comment en ajouter et ce que fait �
 
 ## Travailler dans un worktree ou sur une branche existante
 
-Par défaut, un agent travaille dans le dossier du projet, comme toi. Avec l’option « Un worktree par agent », chaque nouvel agent reçoit son propre worktree : un dossier à lui, sur une nouvelle branche `escouade/<nom>` créée à partir de la branche du projet. Ses modifications restent à part, et tu les merges quand tu veux. L’option se choisit à la création du projet, dans les réglages du projet, ou par un clic droit sur l’onglet du projet puis « Activer le worktree par agent » ; elle ne concerne que les agents créés ensuite.
+Par défaut, un agent travaille dans le dossier du projet, comme toi. Avec l’option « Un worktree par agent », chaque nouvel agent reçoit son propre worktree : un dossier à lui, sur une nouvelle branche `escouade/<nom>` créée à partir de la branche du projet, ou de la branche cible du Kanban avec « Les agents partent de la branche cible » (voir [les réglages du Kanban](settings-board)). Ses modifications restent à part, et tu les merges quand tu veux. L’option se choisit à la création du projet, dans les réglages du projet, ou par un clic droit sur l’onglet du projet puis « Activer le worktree par agent » ; elle ne concerne que les agents créés ensuite.
 
 - La carte de l’agent affiche sa branche après un `⎇`.
 - Si le projet a des commandes de préparation (dépendances, code généré…), elles tournent dans le nouveau worktree avant le premier message de l’agent : la carte dit « Préparation… », et ton premier message part une fois la préparation finie.

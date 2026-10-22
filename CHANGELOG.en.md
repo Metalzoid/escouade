@@ -10,6 +10,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - The status bar tells where each quota will end at its reset if you keep your pace (“→ 64 %”), and OpenCode’s day cost at midnight: you see in time when to slow down. A setting in Settings › Accounts turns it off. Thanks to @epommereuil (#12).
 - A subagent shows the model it really runs on, even when its call names none, with every harness. Thanks to @epommereuil (#14).
+- Agents can start from the Kanban’s target branch rather than the folder’s (a box in Settings › Kanban), and the menu next to “New agent” makes one without a worktree, or in a worktree. Thanks to @Metalzoid, whose PR #6 started the idea.
 
 ### Fixes
 
