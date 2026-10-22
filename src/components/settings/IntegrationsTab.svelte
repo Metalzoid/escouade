@@ -9,6 +9,7 @@
   import { app } from '../../lib/state.svelte';
   import type { AccountForm, Column, Container, ExternalState, Project, Service } from '../../lib/types';
   import Chips from './Chips.svelte';
+  import ForgesSection from './ForgesSection.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
@@ -274,6 +275,8 @@
     {/if}
   {/each}
 </Group>
+
+<ForgesSection />
 
 <Group title={t('integrations.sources.title', { project: draft.name.trim() || project.name })}>
   {#if !connected.length}

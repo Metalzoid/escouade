@@ -34,6 +34,7 @@ mod engines_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;
+mod forge;
 mod fsedit;
 mod git;
 mod handover;
@@ -493,6 +494,12 @@ pub fn run() {
             commands::ticket_dismiss,
             commands::board_set,
             commands::autopilot_resume,
+            commands::forges,
+            commands::forge_check,
+            commands::forge_connect,
+            commands::forge_disconnect,
+            commands::forge_guess,
+            commands::forge_token_page,
             commands::integration_connect,
             commands::integration_disconnect,
             commands::integration_containers,

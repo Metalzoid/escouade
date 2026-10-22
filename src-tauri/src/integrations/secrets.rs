@@ -335,10 +335,11 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
             Some(a) => fill(store, service, a),
         }
     }
+    let forges = crate::forge::accounts::load(store, &mut accounts);
     // Written again once secrets or entries to forget left it, and while secrets stay: readable
     // by its owner only.
     let kept = accounts.views().iter().any(|v| v.in_file);
-    if (moved && !file_copy) || forgot || kept {
+    if (moved && !file_copy) || forgot || kept || forges {
         if let Err(e) = save_accounts(data, &accounts) {
             log::error!("{e:#}");
         }
@@ -359,6 +360,7 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
             a.token.clear();
         }
     }
+    crate::forge::accounts::strip(&mut saved, accounts.file_copy);
     let bytes = serde_json::to_vec_pretty(&saved)?;
     paths::write_private(&data.integrations_file(), &bytes)
         .with_context(|| saving_accounts(crate::i18n::ui()))?;

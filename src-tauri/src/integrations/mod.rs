@@ -27,6 +27,12 @@ pub struct Accounts {
     pub trello: Option<Account>,
     pub github: Option<Account>,
     pub linear: Option<Account>,
+    /// The code hosts' accounts but github.com's (`github`): one per instance
+    /// (`crate::forge::accounts`).
+    pub forges: Vec<crate::forge::accounts::ForgeAccount>,
+    /// The hosts whose token a « Déconnecter » could not take out of the keychain: taken out at
+    /// the next start, unless the instance has a token of its own again.
+    pub forget_forges: Vec<String>,
     /// The services whose entry in the system's keychain a « Déconnecter » (or a switch to the
     /// GitHub CLI's token) could not delete: deleted at the next start, unless the service has a
     /// token of its own again. Their names only, never a secret.
@@ -351,8 +357,16 @@ pub(crate) async fn call_page(
 }
 
 async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, HeaderMap)> {
+    send_named(service.label(), rb).await
+}
+
+/// `send` for a service known by its name only (a code host).
+pub(crate) async fn send_named(
+    name: &str,
+    rb: reqwest::RequestBuilder,
+) -> Result<(Value, HeaderMap)> {
     let resp = rb.send().await.map_err(|e| {
-        let (name, e) = (service.label(), anyhow::Error::from(e.without_url()));
+        let e = anyhow::Error::from(e.without_url());
         anyhow!(tr!(
             "{name} injoignable : {e:#}",
             "{name} can’t be reached: {e:#}"
@@ -364,7 +378,7 @@ async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, H
     if !(200..300).contains(&status) {
         return Err(HttpError {
             status,
-            message: http_error(service, status, &text),
+            message: http_error_in(crate::i18n::ui(), name, status, &text),
         }
         .into());
     }
@@ -372,7 +386,6 @@ async fn send(service: Service, rb: reqwest::RequestBuilder) -> Result<(Value, H
         return Ok((Value::Null, headers));
     }
     let v = serde_json::from_str(&text).map_err(|_| {
-        let name = service.label();
         anyhow!(tr!(
             "{name} : réponse illisible",
             "{name}: unreadable answer"
@@ -422,11 +435,15 @@ pub(crate) fn lasting(e: &anyhow::Error) -> bool {
 
 /// An HTTP error of `service`, and what its body says.
 pub fn http_error(service: Service, status: u16, body: &str) -> String {
-    http_error_in(crate::i18n::ui(), service, status, body)
+    http_error_in(crate::i18n::ui(), service.label(), status, body)
 }
 
-fn http_error_in(lang: crate::i18n::Lang, service: Service, status: u16, body: &str) -> String {
-    let name = service.label();
+pub(crate) fn http_error_in(
+    lang: crate::i18n::Lang,
+    name: &str,
+    status: u16,
+    body: &str,
+) -> String {
     let tail = said(body).map(|m| format!(" — {m}")).unwrap_or_default();
     match status {
         401 => tr_in!(
@@ -516,11 +533,11 @@ mod tests {
         use crate::i18n::Lang::En;
         assert_eq!(
             [
-                http_error_in(En, Service::Jira, 401, ""),
-                http_error_in(En, Service::Github, 403, r#"{"message":"Bad credentials"}"#),
-                http_error_in(En, Service::Trello, 404, "model not found\n"),
-                http_error_in(En, Service::Trello, 429, ""),
-                http_error_in(En, Service::Github, 502, "<html>Bad gateway</html>"),
+                http_error_in(En, "Jira", 401, ""),
+                http_error_in(En, "GitHub", 403, r#"{"message":"Bad credentials"}"#),
+                http_error_in(En, "Trello", 404, "model not found\n"),
+                http_error_in(En, "Trello", 429, ""),
+                http_error_in(En, "GitHub", 502, "<html>Bad gateway</html>"),
             ],
             [
                 "Jira refuses these credentials (401)",

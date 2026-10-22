@@ -1,0 +1,352 @@
+<script lang="ts">
+  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { fList } from '../../lib/format';
+  import { forgeBadge } from '../../lib/forges';
+  import { t } from '../../lib/i18n';
+  import Rich from '../../lib/i18n/Rich.svelte';
+  import { api } from '../../lib/ipc';
+  import { app } from '../../lib/state.svelte';
+  import type { ForgeAccountView, ForgeForm, ForgesView } from '../../lib/types';
+  import Group from './Group.svelte';
+
+  // The code hosts' accounts, one per instance: how each stands (checked when the tab opens), the
+  // projects whose remote is on it, and the hosts of the projects' remotes without one.
+  let view = $state<ForgesView | null>(null);
+  let checking = $state(false);
+  let form = $state<ForgeForm | null>(null);
+  let sending = $state(false);
+  let guessing = $state(false);
+  let refused = $state('');
+
+  const provider = (kind: string) => view?.providers.find((p) => p.kind === kind);
+  const chosen = $derived(form ? provider(form.kind) : undefined);
+
+  function take(v: ForgesView | null | undefined) {
+    if (!v) return;
+    view = v;
+    if (v.issues?.length) app.accounts = v.issues;
+  }
+
+  /** GitHub Issues' account is github.com's: connected or gone there, the list follows. */
+  const issuesAccount = $derived(app.accounts.find((a) => a.service === 'github' && a.connected)?.label ?? '');
+
+  $effect(() => {
+    void issuesAccount;
+    api.forges().then(take, () => {});
+    checking = true;
+    api
+      .forgeCheck()
+      .then(take, () => {})
+      .finally(() => (checking = false));
+  });
+
+  async function recheck() {
+    checking = true;
+    take(await app.run(api.forgeCheck()));
+    checking = false;
+  }
+
+  function open(kind = view?.providers[0]?.kind ?? 'github', url = '') {
+    refused = '';
+    form = { kind, url, email: '', token: '' };
+  }
+
+  /** « Connecter <hôte> »: its kind, by its name, else by asking it. */
+  async function openFor(url: string, kind: string | null) {
+    open(kind ?? view?.providers[0]?.kind ?? 'github', url);
+    if (kind) return;
+    guessing = true;
+    try {
+      const guessed = await api.forgeGuess(url);
+      if (form && guessed) form.kind = guessed;
+      else if (form) refused = t('integrations.forges.unknownKind');
+    } catch (e) {
+      refused = String(e);
+    } finally {
+      guessing = false;
+    }
+  }
+
+  async function connect() {
+    if (!form || sending) return;
+    sending = true;
+    refused = '';
+    try {
+      take(await api.forgeConnect($state.snapshot(form)));
+      form = null;
+    } catch (e) {
+      refused = String(e);
+    } finally {
+      sending = false;
+    }
+  }
+
+  async function disconnect(a: ForgeAccountView) {
+    take(await app.run(api.forgeDisconnect(a.host)));
+  }
+
+  async function tokenPage() {
+    if (!form) return;
+    const url = await app.run(api.forgeTokenPage(form.kind, form.url));
+    if (url) app.run(openUrl(url));
+  }
+
+  /** What its last check found, in a sentence. */
+  function standing(a: ForgeAccountView): { text: string; tone: 'on' | 'warn' | 'bad' | '' } {
+    const label = a.label;
+    switch (a.status.health) {
+      case 'connected':
+        return { text: t('integrations.forges.connected', { label }), tone: 'on' };
+      case 'missingScopes':
+        return { text: t('integrations.forges.missing', { scopes: a.status.missing.join(', ') }), tone: 'warn' };
+      case 'expired':
+        return { text: t('integrations.forges.expired', { label }), tone: 'bad' };
+      case 'unreachable':
+        return { text: t('integrations.forges.unreachable', { label }), tone: 'bad' };
+      case 'unread':
+        return { text: t('integrations.forges.unread'), tone: 'warn' };
+      default:
+        return { text: checking ? t('integrations.forges.checking') : t('integrations.forges.unchecked', { label }), tone: '' };
+    }
+  }
+</script>
+
+{#snippet badge(kind: string | null)}
+  {@const b = forgeBadge(kind)}
+  <span class="badge" style:background={b.color} style:color={b.ink} aria-hidden="true">{b.letter}</span>
+{/snippet}
+
+<Group title={t('integrations.forges.title')} note={t('integrations.forges.note')}>
+  {#if view && !view.accounts.length && !view.unknown.length && !form}
+    <p class="empty">{t('integrations.forges.empty')}</p>
+  {/if}
+  {#each view?.accounts ?? [] as a (a.host)}
+    {@const st = standing(a)}
+    <div class="acct" role="group" aria-label={a.host}>
+      {@render badge(a.kind)}
+      <div class="txt">
+        <span class="l">{a.name} <span class="host">· {a.host}</span></span>
+        <span class="d {st.tone}">{st.text}</span>
+        {#if a.status.health === 'missingScopes'}<span class="d">{a.label}</span>{/if}
+        {#if a.status.error && a.status.health !== 'connected'}<span class="d why">{a.status.error}</span>{/if}
+        {#if a.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
+        {#if a.viaCli}<span class="d">{t('integrations.forges.viaCli', { cli: provider(a.kind)?.cli ?? 'gh' })}</span>{/if}
+        {#if a.issues}<span class="d">{t('integrations.forges.issues')}</span>{/if}
+        {#if a.projects.length}
+          <span class="d">{t('integrations.forges.projects', { count: a.projects.length, list: fList(a.projects) })}</span>
+        {/if}
+      </div>
+      <button class="btn small ghost" aria-label={t('integrations.forges.disconnectHost', { host: a.host })} onclick={() => disconnect(a)}
+        >{t('integrations.forges.disconnect')}</button
+      >
+    </div>
+  {/each}
+  {#each view?.unknown ?? [] as u (u.host)}
+    <div class="acct" role="group" aria-label={u.host}>
+      {@render badge(u.kind)}
+      <div class="txt">
+        <span class="l">{u.kind ? (provider(u.kind)?.name ?? u.host) : u.host} <span class="host">· {u.host}</span></span>
+        <span class="d">{t('integrations.forges.noAccount', { count: u.projects.length, list: fList(u.projects) })}</span>
+      </div>
+      <button class="btn small" onclick={() => openFor(u.url, u.kind)}>{t('integrations.forges.connectHost', { host: u.host })}</button>
+    </div>
+  {/each}
+  {#if form}
+    <form
+      class="connect"
+      aria-label={t('integrations.forges.formLabel')}
+      onsubmit={(e) => {
+        e.preventDefault();
+        connect();
+      }}
+    >
+      <label
+        ><span>{t('integrations.forges.kind')}</span><select class="field" bind:value={form.kind} disabled={guessing}>
+          {#each view?.providers ?? [] as p (p.kind)}<option value={p.kind}>{p.name}</option>{/each}
+        </select></label
+      >
+      <label
+        ><span>{t('integrations.forges.address')}</span><input
+          class="field mono"
+          bind:value={form.url}
+          placeholder={chosen?.defaultHost ?? 'git.example.com'}
+          spellcheck="false"
+        /></label
+      >
+      {#if chosen?.needsEmail}
+        <label
+          ><span>{t('integrations.accounts.email')}</span><input
+            class="field"
+            bind:value={form.email}
+            placeholder="ada@atlas.dev"
+            spellcheck="false"
+          /></label
+        >
+      {/if}
+      <label
+        ><span
+          >{#if chosen?.cli}<Rich k="integrations.forges.token"
+              >{#snippet hint()}<em>{t('integrations.forges.tokenHint', { cli: chosen.cli ?? '' })}</em>{/snippet}</Rich
+            >{:else}{t('integrations.accounts.token')}{/if}</span
+        ><input
+          class="field mono"
+          type="password"
+          bind:value={form.token}
+          placeholder={chosen?.cli ? `${chosen.cli} auth login` : ''}
+          autocomplete="off"
+        /></label
+      >
+      {#if chosen}<p class="d">{t('integrations.forges.scopes', { scopes: chosen.scopes.join(', ') })}</p>{/if}
+      <button type="button" class="link" onclick={tokenPage}>{t('integrations.forges.createToken')}</button>
+      {#if guessing}<p class="d">{t('integrations.forges.guessing')}</p>{/if}
+      {#if refused}<p class="error" role="alert">{refused}</p>{/if}
+      <div class="actions">
+        <button type="button" class="btn small ghost" onclick={() => (form = null)}>{t('common.cancel')}</button>
+        <button type="submit" class="btn small primary" disabled={sending || guessing}
+          >{sending ? t('integrations.accounts.checking') : t('integrations.accounts.connect')}</button
+        >
+      </div>
+    </form>
+  {:else}
+    <div class="foot">
+      <button class="btn small" onclick={() => open()}>{t('integrations.forges.connectEllipsis')}</button>
+      {#if view?.accounts.length}
+        <button class="btn small ghost" disabled={checking} onclick={recheck}
+          >{checking ? t('integrations.forges.checking') : t('integrations.forges.recheck')}</button
+        >
+      {/if}
+    </div>
+  {/if}
+</Group>
+
+<style>
+  .badge {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 3px;
+    flex: none;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .acct {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+  }
+  .acct:not(:first-child),
+  .connect,
+  .foot {
+    border-top: 1px solid var(--line);
+  }
+  .txt {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .l {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .host {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .d {
+    margin: 0;
+    font-size: 11.5px;
+    color: var(--dim);
+    overflow-wrap: anywhere;
+  }
+  .d.on {
+    color: var(--muted);
+  }
+  .d.warn {
+    color: var(--wait);
+  }
+  .d.bad {
+    color: var(--del);
+  }
+  .d.why {
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .small {
+    height: 30px;
+    font-size: 12.5px;
+    padding: 0 14px;
+  }
+  .empty {
+    margin: 0;
+    padding: 14px 16px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .foot {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .connect {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px 14px 58px;
+  }
+  .connect label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12.5px;
+  }
+  .connect label > span {
+    width: 110px;
+    flex: none;
+    color: var(--muted);
+  }
+  .connect em {
+    font-style: normal;
+    color: var(--dim);
+  }
+  .connect .field {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--panel);
+    font-size: 12.5px;
+  }
+  .link {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--text);
+  }
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .error {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--del);
+    overflow-wrap: anywhere;
+  }
+</style>

@@ -57,6 +57,21 @@ export const ALLOWED: Allowed[] = [
     text: 'claude-ready',
     why: 'un exemple d’étiquette, la même dans toutes les langues',
   },
+  {
+    file: 'src/components/settings/ForgesSection.svelte',
+    text: 'git.example.com',
+    why: 'un exemple d’instance, le même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/ForgesSection.svelte',
+    text: 'ada@atlas.dev',
+    why: 'un exemple d’adresse, la même dans toutes les langues',
+  },
+  {
+    file: 'src/components/settings/ForgesSection.svelte',
+    text: '${…} auth login',
+    why: 'la commande de la CLI de l’hébergeur (gh, glab), la même dans toutes les langues',
+  },
 
   // L6 — board, stats
 

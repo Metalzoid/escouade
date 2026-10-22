@@ -11,6 +11,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La barre d’état dit où finira chaque quota à sa remise à zéro si tu gardes ton rythme (« → 64 % »), et le coût du jour d’OpenCode à minuit : tu vois à temps quand ralentir. Un réglage de Réglages › Comptes l’éteint. Merci à @epommereuil (#12).
 - Un sous-agent affiche le modèle sur lequel il tourne vraiment, même quand son appel n’en nomme aucun, avec tous les harness. Merci à @epommereuil (#14).
 - Les agents peuvent partir de la branche cible du Kanban plutôt que de celle du dossier (une case de Réglages › Kanban), et le menu à côté de « Nouvel agent » en crée un sans worktree, ou dans un worktree. Merci à @Metalzoid, dont la PR #6 a lancé l’idée.
+- Réglages › Intégrations a une section « Hébergeurs de code » : connecte GitHub, GitLab, Bitbucket ou Gitea / Forgejo, plusieurs instances chacun, et vois si un jeton a expiré ou quels droits lui manquent. Chaque projet y trouve son compte par son remote, et le compte de github.com est aussi celui de GitHub Issues.
 
 ### Corrections
 

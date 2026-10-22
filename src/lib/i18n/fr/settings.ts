@@ -13,7 +13,7 @@ export default {
     notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
     projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
     board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: { label: 'Intégrations', desc: 'Jira, Trello, GitHub Issues et Linear' },
+    integrations: { label: 'Intégrations', desc: 'Jira, Trello, GitHub Issues, Linear et hébergeurs de code' },
     terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
     network: {
       label: 'Réseau',

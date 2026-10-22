@@ -2,6 +2,7 @@
 // tests/fixtures/fake-trackers.mjs: an account connected, a source linked, tickets imported, and
 // their external ones moved and commented while the fake `claude` works them.
 
+import { execFileSync } from 'node:child_process';
 import { addProject, expect, test } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
@@ -111,7 +112,9 @@ test('the automatic import brings the GitHub issues that carry its label', async
   const github = settings.getByRole('form', { name: 'Connexion à GitHub Issues' });
   await github.getByLabel(/Jeton/).fill('ghp_jeton');
   await github.getByRole('button', { name: 'Connecter' }).click();
-  await expect(settings.getByText('Connecté · @ada')).toBeVisible();
+  // Issues' account, and github.com's among the code hosts: the same one.
+  await expect(settings.getByText('Connecté · @ada')).toHaveCount(2);
+  await expect(settings.getByRole('group', { name: 'github.com' })).toContainText('Sert aussi à GitHub Issues');
   await settings.getByRole('combobox', { name: 'Dépôt GitHub Issues' }).selectOption('acme/demo');
   await expect(settings.getByRole('combobox', { name: 'GitHub Issues — En cours' })).toHaveValue('label:in-progress');
   await expect(settings.getByRole('combobox', { name: 'GitHub Issues — Terminé' })).toHaveValue('label:à tester');
@@ -128,4 +131,40 @@ test('the automatic import brings the GitHub issues that carry its label', async
   await expect(todo.getByRole('button', { name: 'Ouvrir #42 dans GitHub Issues' })).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/1 ticket importé depuis GitHub dans demo-api/)).toBeVisible();
   await expect(todo.getByRole('button', { name: /#43/ })).toHaveCount(0);
+});
+
+test('the self-hosted GitLab of a project is connected from its remote, and the rights its token lacks are listed', async ({ app }) => {
+  const { page } = app;
+  // Its remote is on an instance no account is connected for (the fake GitLab).
+  execFileSync('git', ['remote', 'add', 'origin', `${trackers.url}/acme/web/app.git`], { cwd: app.repo, stdio: 'pipe' });
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages' });
+  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await expect(settings.getByRole('heading', { name: 'Hébergeurs de code' })).toBeVisible();
+  await expect(settings.getByRole('group', { name: '127.0.0.1' })).toContainText('Aucun compte, pour le projet demo-api');
+
+  // « Connecter <hôte> »: its address from the remote, its kind asked of it.
+  await settings.getByRole('button', { name: 'Connecter 127.0.0.1', exact: true }).click();
+  const form = settings.getByRole('form', { name: 'Connexion à un hébergeur' });
+  await expect(form.getByLabel('Hébergeur')).toHaveValue('gitlab');
+  await expect(form.getByLabel('Adresse')).toHaveValue(trackers.url);
+  await expect(form.getByText('Droits à donner au jeton : api')).toBeVisible();
+  await form.getByLabel(/^Jeton/).fill('bad');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+  await expect(form.getByRole('alert')).toHaveText('GitLab refuse ces identifiants (401) — Bad credentials');
+  await form.getByLabel(/^Jeton/).fill('glpat-jeton');
+  await form.getByRole('button', { name: 'Connecter' }).click();
+
+  // Connected, the right it lacks said, the project on it.
+  const host = new URL(trackers.url).host;
+  const account = settings.getByRole('group', { name: host });
+  await expect(account).toContainText('GitLab');
+  await expect(account).toContainText('Droits manquants : api');
+  await expect(account).toContainText('Projet : demo-api');
+  await expect(settings.getByRole('button', { name: 'Connecter 127.0.0.1', exact: true })).toHaveCount(0);
+
+  // Disconnected: the host is back without an account.
+  await settings.getByRole('button', { name: `Déconnecter ${host}` }).click();
+  await expect(settings.getByRole('button', { name: 'Connecter 127.0.0.1', exact: true })).toBeVisible();
 });

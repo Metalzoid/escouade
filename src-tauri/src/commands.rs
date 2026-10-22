@@ -1881,6 +1881,44 @@ pub async fn http_ready(url: String) -> bool {
     crate::testlaunch::http_ready(&url).await
 }
 
+// ---------- code hosts ----------
+
+#[tauri::command]
+pub async fn forges(core: CoreState<'_>) -> Res<crate::forge::connect::ForgesView> {
+    Ok(core.forges_view().await)
+}
+
+#[tauri::command]
+pub async fn forge_check(core: CoreState<'_>) -> Res<crate::forge::connect::ForgesView> {
+    Ok(core.forge_check().await)
+}
+
+#[tauri::command]
+pub async fn forge_connect(
+    core: CoreState<'_>,
+    form: crate::forge::connect::ForgeForm,
+) -> Res<crate::forge::connect::ForgesView> {
+    core.forge_connect(form).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn forge_disconnect(
+    core: CoreState<'_>,
+    host: String,
+) -> Res<crate::forge::connect::ForgesView> {
+    core.forge_disconnect(&host).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn forge_guess(core: CoreState<'_>, url: String) -> Res<Option<String>> {
+    core.forge_guess(&url).await.map_err(err)
+}
+
+#[tauri::command]
+pub fn forge_token_page(core: CoreState, kind: String, url: String) -> Res<String> {
+    core.forge_token_page(&kind, &url).map_err(err)
+}
+
 // ---------- external ticket systems ----------
 
 #[tauri::command]

@@ -519,7 +519,7 @@ describe('settingsForm', () => {
       'Voice / Dictating messages: microphone, transcription model, language and shortcut',
       'Projects / Settings specific to each project',
       'Kanban / Autopilot and approved tickets',
-      'Integrations / Jira, Trello, GitHub Issues, and Linear',
+      'Integrations / Jira, Trello, GitHub Issues, Linear, and code hosts',
       'Terminals / Shells available in the built-in terminals',
       'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
       'About / Version and local data',

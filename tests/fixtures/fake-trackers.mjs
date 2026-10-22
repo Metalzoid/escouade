@@ -144,7 +144,7 @@ export function startFakeTrackers(port = 0) {
   const bad = (headers, url) => {
     const auth = headers.authorization ?? '';
     const basic = auth.startsWith('Basic ') ? Buffer.from(auth.slice(6), 'base64').toString().split(':').pop() : null;
-    return basic === 'bad' || auth === 'Bearer bad' || url.searchParams.get('token') === 'bad';
+    return basic === 'bad' || auth === 'Bearer bad' || headers['private-token'] === 'bad' || url.searchParams.get('token') === 'bad';
   };
 
   function route(method, url, json, send, headers) {
@@ -155,6 +155,12 @@ export function startFakeTrackers(port = 0) {
       return send(200, {});
     }
     if (bad(headers, url)) return send(401, p.startsWith('/1/') ? 'invalid token' : { message: 'Bad credentials', errorMessages: [] });
+
+    // ---------- GitLab (a self-hosted instance: its API at the root) ----------
+    if (p === '/api/v4/version') return send(headers['private-token'] ? 200 : 401, { message: '401 Unauthorized' });
+    if (p === '/api/v4/user') return send(200, { username: 'ada' });
+    // A token that may only read: the API right is missing.
+    if (p === '/api/v4/personal_access_tokens/self') return send(200, { scopes: ['read_api', 'read_user'] });
 
     // ---------- Jira ----------
     const j = db.jira;

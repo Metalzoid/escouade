@@ -9,7 +9,7 @@ export default defineZone('settings', {
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
     projects: { label: 'Projects', desc: 'Settings specific to each project' },
     board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: { label: 'Integrations', desc: 'Jira, Trello, GitHub Issues, and Linear' },
+    integrations: { label: 'Integrations', desc: 'Jira, Trello, GitHub Issues, Linear, and code hosts' },
     terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
     network: {
       label: 'Network',

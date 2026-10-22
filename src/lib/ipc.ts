@@ -5,6 +5,8 @@ import type {
   AccountForm,
   AccountStatus,
   AccountView,
+  ForgeForm,
+  ForgesView,
   Agent,
   AttachedFile,
   Attachment,
@@ -392,6 +394,12 @@ export const api = {
   autopilotResume: () => invoke<void>('autopilot_resume'),
   gitBranches: (projectId: string) => invoke<string[]>('git_branches', { projectId }),
   /** Checks the credentials with the service, then saves them (apart, never sent back). */
+  forges: () => invoke<ForgesView>('forges'),
+  forgeCheck: () => invoke<ForgesView>('forge_check'),
+  forgeConnect: (form: ForgeForm) => invoke<ForgesView>('forge_connect', { form }),
+  forgeDisconnect: (host: string) => invoke<ForgesView>('forge_disconnect', { host }),
+  forgeGuess: (url: string) => invoke<string | null>('forge_guess', { url }),
+  forgeTokenPage: (kind: string, url: string) => invoke<string>('forge_token_page', { kind, url }),
   integrationConnect: (service: Service, account: AccountForm) => invoke<AccountView>('integration_connect', { service, account }),
   integrationDisconnect: (service: Service) => invoke<AccountView[]>('integration_disconnect', { service }),
   /** Jira projects, Trello boards, GitHub repositories (the project's own first). */

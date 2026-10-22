@@ -41,6 +41,38 @@ export default {
     createLinearKey: "Créer une clé d'API Linear",
   },
 
+  // The code hosts' accounts: one per instance, with what each check found.
+  forges: {
+    title: 'Hébergeurs de code',
+    note: "Un compte par instance (github.com, celle de l'entreprise…) : chaque projet trouve le sien par son remote. Le compte de github.com sert aussi à GitHub Issues.",
+    empty: 'Aucun hébergeur connecté.',
+    connected: 'Connecté · {label}',
+    unchecked: '{label} · pas encore vérifié',
+    checking: 'Vérification…',
+    expired: 'Jeton expiré ou révoqué · {label}',
+    missing: 'Droits manquants : {scopes}',
+    unreachable: 'Injoignable · {label}',
+    unread: 'Trousseau du système illisible : relance Escouade ou reconnecte le compte.',
+    viaCli: 'Jeton de {cli}',
+    issues: 'Sert aussi à GitHub Issues',
+    projects: { one: 'Projet : {list}', other: 'Projets : {list}' },
+    noAccount: { one: 'Aucun compte, pour le projet {list}', other: 'Aucun compte, pour les projets {list}' },
+    connectHost: 'Connecter {host}',
+    connectEllipsis: 'Connecter un hébergeur…',
+    recheck: 'Vérifier',
+    disconnect: 'Déconnecter',
+    disconnectHost: 'Déconnecter {host}',
+    formLabel: 'Connexion à un hébergeur',
+    kind: 'Hébergeur',
+    address: 'Adresse',
+    token: 'Jeton {hint}',
+    tokenHint: '(vide : celui de {cli})',
+    createToken: 'Créer un jeton',
+    scopes: 'Droits à donner au jeton : {scopes}',
+    guessing: "Recherche du type d'hébergeur…",
+    unknownKind: "Type d'hébergeur introuvable : choisis-le.",
+  },
+
   // The project's sources.
   sources: {
     title: 'Sources liées à {project}',

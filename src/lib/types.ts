@@ -427,6 +427,77 @@ export interface AccountView {
 }
 
 /** The form of « Connecter… »: the fields its service asks for. */
+/** What a code host can do, as its provider declares it. */
+export interface ForgeCapabilities {
+  draft: boolean;
+  autoMerge: boolean;
+  checks: boolean;
+  jobLogs: boolean;
+  reviews: boolean;
+  reviewThreads: boolean;
+  deployments: boolean;
+  mergeStrategies: ('merge' | 'squash' | 'rebase')[];
+}
+
+/** A code host Escouade knows (GitHub, GitLab, Bitbucket, Gitea / Forgejo). */
+export interface ForgeProvider {
+  kind: string;
+  name: string;
+  /** « MR » on GitLab, « PR » elsewhere. */
+  requestWord: string;
+  /** Its public instance (github.com), if it has one. */
+  defaultHost: string | null;
+  /** Its tokens belong to an e-mail (Bitbucket). */
+  needsEmail: boolean;
+  /** Its CLI, whose token serves when none is given (gh, glab). */
+  cli: string | null;
+  /** The rights its tokens need. */
+  scopes: string[];
+  capabilities: ForgeCapabilities;
+}
+
+export type ForgeHealth = 'unchecked' | 'connected' | 'expired' | 'missingScopes' | 'unreachable' | 'unread';
+
+/** A code host's account: one per instance. */
+export interface ForgeAccountView {
+  kind: string;
+  name: string;
+  host: string;
+  url: string;
+  label: string;
+  viaCli: boolean;
+  inFile: boolean;
+  /** github.com's: GitHub Issues' account too. */
+  issues: boolean;
+  status: { health: ForgeHealth; missing: string[]; error: string | null };
+  /** The projects whose remote is on its instance. */
+  projects: string[];
+}
+
+/** A host of the projects' remotes without an account. */
+export interface UnknownForgeHost {
+  host: string;
+  /** Its instance's address, as the remote tells it. */
+  url: string;
+  kind: string | null;
+  projects: string[];
+}
+
+export interface ForgesView {
+  providers: ForgeProvider[];
+  accounts: ForgeAccountView[];
+  unknown: UnknownForgeHost[];
+  /** The ticket systems' accounts (github.com's is GitHub Issues' one). */
+  issues: AccountView[];
+}
+
+export interface ForgeForm {
+  kind: string;
+  url: string;
+  email: string;
+  token: string;
+}
+
 export interface AccountForm {
   site: string;
   email: string;

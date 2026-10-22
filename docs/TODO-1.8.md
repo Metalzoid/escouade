@@ -978,21 +978,23 @@ But : Escouade suit le travail des agents après le push, jusqu'à la production
 - « Branches mergées » et la base du projet comptent déjà une branche mergée par une PR, une fois récupérée par fetch.
 
 ### Connexions
-- [ ] **Un compte par instance**, et plusieurs par hébergeur (pro et perso, github.com et l'instance de l'entreprise) :
+- [x] **Un compte par instance**, et plusieurs par hébergeur (pro et perso, github.com et l'instance de l'entreprise) :
   - GitHub : github.com, GHE.com et GitHub Enterprise Server (les mêmes hôtes que les comptes Copilot GHE du chapitre 1) ;
   - GitLab : gitlab.com et les instances auto-hébergées ;
   - Bitbucket Cloud. Bitbucket Data Center, dont l'API diffère, attend une autre version ;
   - Gitea et Forgejo, Codeberg compris.
-- [ ] **Le projet trouve son compte par son remote** (celui de la branche cible, sinon `origin`) : l'hôte donne le compte.
+- [x] **Le projet trouve son compte par son remote** (celui de la branche cible, sinon `origin`) : l'hôte donne le compte.
   - `board::github_repo` devient un analyseur par hébergeur : https, ssh, forme scp, port ssh, sous-groupes de GitLab (`groupe/sous-groupe/projet`), `workspace/dépôt` de Bitbucket.
   - Un hôte inconnu propose « Connecter <hôte> ». Le type d'une instance auto-hébergée se devine en sondant `/api/v4/version` (GitLab) et `/api/v1/version` (Gitea, Forgejo).
-- [ ] **Jetons**, gardés dans le trousseau comme aujourd'hui :
+- [x] **Jetons**, gardés dans le trousseau comme aujourd'hui :
   - GitHub : celui de `gh` (`gh auth token --hostname <hôte>`), sinon un jeton à droits fins. Droits à documenter : pull requests et contenu en écriture ; checks, statuts, Actions et déploiements en lecture.
   - GitLab : un jeton personnel (`api`), ou celui de `glab`. Aucune commande `glab auth token` n'est connue : il faudrait lire la sortie de `glab auth status --show-token --hostname <hôte>`.
   - Bitbucket Cloud : un jeton d'API Atlassian à scopes (e-mail du compte + jeton). D'après Atlassian, les mots de passe d'application ne se créent plus depuis le 2025-09-09, et leur retrait était prévu le 2026-07-28.
   - Gitea et Forgejo : un jeton d'accès à scopes.
-- [ ] **Une connexion, deux usages** : le compte GitHub d'Issues et celui des PR ne font qu'un (`Accounts.github` devient le compte de github.com).
-- [ ] **Réglages › Intégrations** : une section « Hébergeurs de code », avec l'état de chaque compte (connecté, jeton expiré, droits manquants listés) et les projets qui s'en servent.
+- [x] **Une connexion, deux usages** : le compte GitHub d'Issues et celui des PR ne font qu'un (`Accounts.github` devient le compte de github.com).
+- [x] **Réglages › Intégrations** : une section « Hébergeurs de code », avec l'état de chaque compte (connecté, jeton expiré, droits manquants listés) et les projets qui s'en servent.
+- [x] **Interface commune** (ESC-54, 2026-10-22) : `forge::Provider` et `forge::Forge`, capacités déclarées, un faux hébergeur branché par un test sans toucher au cœur (voir SPEC, « Hébergeurs de code »). Les clients ne savent encore que dire qui est le jeton ; leurs appels de PR viennent avec ESC-55 à ESC-58.
+- [ ] **À essayer en vrai** (décidé le 2026-10-16) : GitLab (jeton personnel et `glab`, sonde `/api/v4/version`), Bitbucket Cloud (jeton d'API Atlassian) et Gitea / Forgejo (sonde `/api/v1/version`) ont été écrits d'après leur documentation et testés sur de faux serveurs seulement ; GitHub Enterprise Server et GHE.com aussi.
 
 ### Les PR des tickets
 - [ ] **Ouvrir la PR par l'API** des quatre hébergeurs : `gh` n'est plus nécessaire, il reste une source de jeton.

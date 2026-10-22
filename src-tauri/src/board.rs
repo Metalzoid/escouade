@@ -1313,22 +1313,12 @@ pub fn worktree_kept(lang: Lang) -> String {
 
 // ---------- GitHub ----------
 
-/// (owner, repository) of a GitHub remote's address (https, ssh, scp-like).
+/// (owner, repository) of a github.com remote's address, whatever its form: the code hosts'
+/// analyzer (`forge::Registry::analyze`) reads it.
 pub fn github_repo(url: &str) -> Option<(String, String)> {
-    let url = url.trim();
-    let path = match url.strip_prefix("git@github.com:") {
-        Some(p) => p,
-        None => {
-            let rest = url.split_once("://")?.1;
-            let host_path = rest.rsplit_once('@').map_or(rest, |(_, h)| h);
-            host_path.strip_prefix("github.com/")?
-        }
-    };
-    let path = path.trim_end_matches('/');
-    let path = path.strip_suffix(".git").unwrap_or(path);
-    let (owner, repo) = path.split_once('/')?;
-    (!owner.is_empty() && !repo.is_empty() && !repo.contains('/'))
-        .then(|| (owner.to_string(), repo.to_string()))
+    let r = crate::forge::Registry::standard().analyze(url, |_| None)?;
+    (r.kind.as_deref() == Some("github") && r.host == "github.com")
+        .then_some((r.repo.namespace, r.repo.name))
 }
 
 /// Percent-encoding of everything but the unreserved characters (and `/` when `keep_slash`).

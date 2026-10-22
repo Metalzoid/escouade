@@ -454,7 +454,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The GitHub CLI's token (`gh auth token`), asked once.
-    async fn gh_token(&self) -> Result<String> {
+    pub(crate) async fn gh_token(&self) -> Result<String> {
         if let Some(t) = self.gh_token.lock().clone() {
             return Ok(t);
         }
