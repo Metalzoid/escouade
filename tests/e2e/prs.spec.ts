@@ -72,13 +72,15 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
   // Shown again: it finds its code host.
   await showAgain(page);
 
-  // The project's first agent, in its worktree, and its work committed there.
+  // The project's first agent, in its worktree, and its work committed there. The repository's own
+  // comes first in the list: left out by its place, as its path may be spelled otherwise (8.3 names
+  // of the Windows runner).
   const worktrees = () =>
     git(app.repo, 'worktree', 'list', '--porcelain')
       .split('\n')
       .filter((l) => l.startsWith('worktree '))
       .map((l) => l.slice('worktree '.length))
-      .filter((w) => path.resolve(w) !== path.resolve(app.repo));
+      .slice(1);
   await expect.poll(() => worktrees().length).toBe(1);
   const wt = worktrees()[0];
   const branch = git(wt, 'branch', '--show-current');
