@@ -69,6 +69,25 @@ struct Route {
     body: String,
     /// Headers of the answer besides its type and length (GitHub's `Link`).
     headers: Vec<(String, String)>,
+    /// Answers the next request only (`on_once`): the route before it answers the ones after.
+    once: bool,
+}
+
+impl Route {
+    fn matches(&self, req: &Request) -> bool {
+        // `/graphql#<operation>`: a GraphQL operation, by the `operationName` of its body.
+        if let Some((path, op)) = self.target.split_once('#') {
+            return self.method == req.method
+                && path == req.path()
+                && req.json()["operationName"].as_str() == Some(op);
+        }
+        self.method == req.method
+            && if self.target.contains('?') {
+                self.target == req.target
+            } else {
+                self.target == req.path()
+            }
+    }
 }
 
 #[derive(Clone)]
@@ -178,7 +197,23 @@ impl FakeServer {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
+            once: false,
         });
+    }
+
+    /// `on_with`, for the next request only: the route set before it answers the ones after.
+    pub fn on_once(
+        &self,
+        method: &str,
+        target: &str,
+        status: u16,
+        body: Value,
+        headers: &[(&str, &str)],
+    ) {
+        self.on_with(method, target, status, body, headers);
+        if let Some(route) = self.routes.lock().last_mut() {
+            route.once = true;
+        }
     }
 
     /// Answers `method target` with `text` as it is (a log, not JSON), carrying `headers`.
@@ -199,30 +234,25 @@ impl FakeServer {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect(),
+            once: false,
         });
     }
 
     fn answer(&self, req: &Request) -> (u16, String, Vec<(String, String)>) {
-        let routes = self.routes.lock();
-        routes
-            .iter()
-            .rev()
-            .find(|r| {
-                // `/graphql#<operation>`: a GraphQL operation, by the `operationName` of its body.
-                if let Some((path, op)) = r.target.split_once('#') {
-                    return r.method == req.method
-                        && path == req.path()
-                        && req.json()["operationName"].as_str() == Some(op);
-                }
-                r.method == req.method
-                    && if r.target.contains('?') {
-                        r.target == req.target
-                    } else {
-                        r.target == req.path()
-                    }
-            })
-            .map(|r| (r.status, r.body.clone(), r.headers.clone()))
-            .unwrap_or((404, r#"{"message":"Not Found"}"#.into(), Vec::new()))
+        let mut routes = self.routes.lock();
+        // The last route set for the request wins; one set `on_once` is used up by it.
+        let Some(i) = routes.iter().rposition(|r| r.matches(req)) else {
+            return (404, r#"{"message":"Not Found"}"#.into(), Vec::new());
+        };
+        let route = &routes[i];
+        let (once, answer) = (
+            route.once,
+            (route.status, route.body.clone(), route.headers.clone()),
+        );
+        if once {
+            routes.remove(i);
+        }
+        answer
     }
 
     pub fn requests(&self) -> Vec<Request> {

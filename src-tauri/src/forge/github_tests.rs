@@ -3,7 +3,7 @@
 //! small made-up ones for what the recording does not hold (a failing job, a refusal).
 
 use super::github::GithubProvider;
-use super::github_api::{graphql_url, Github, Pace};
+use super::github_api::{graphql_url, Github, Pace, CACHE_MAX};
 use super::*;
 use crate::integrations::fake::FakeServer;
 use serde_json::json;
@@ -386,6 +386,56 @@ async fn checks_and_statuses_are_read_whatever_their_outcome() {
 }
 
 #[tokio::test]
+async fn the_check_runs_of_a_commit_are_read_on_every_page() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/repos/o/r/pulls/3",
+        200,
+        json!({"head": {"sha": "abc"}}),
+    );
+    let run = |name: &str, id: u64| {
+        json!({"name": name, "id": id, "status": "completed", "conclusion": "success",
+               "html_url": format!("https://github.com/o/r/runs/{id}"), "app": {"slug": "github-actions"}})
+    };
+    // The answer is an object whose `check_runs` is the list; its `Link` leads to the next page.
+    let next = format!(
+        "<{}/repos/o/r/commits/abc/check-runs?per_page=100&page=2>; rel=\"next\"",
+        server.url
+    );
+    server.on_with(
+        "GET",
+        "/repos/o/r/commits/abc/check-runs?per_page=100",
+        200,
+        json!({"total_count": 3, "check_runs": [run("build", 1), run("test", 2)]}),
+        &[("Link", &next)],
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/commits/abc/check-runs?per_page=100&page=2",
+        200,
+        json!({"total_count": 3, "check_runs": [run("lint", 3)]}),
+    );
+    server.on(
+        "GET",
+        "/repos/o/r/commits/abc/status",
+        200,
+        json!({"statuses": []}),
+    );
+    let repo = RepoRef {
+        namespace: "o".into(),
+        name: "r".into(),
+    };
+    let checks = client(&server).checks(&repo, 3).await.unwrap();
+    assert_eq!(
+        checks.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+        ["build", "test", "lint"],
+        "the second page is read too"
+    );
+    assert_eq!(requests_to(&server, "/repos/o/r/commits/abc/check-runs"), 2);
+}
+
+#[tokio::test]
 async fn a_jobs_log_is_read_as_the_text_it_is() {
     let server = FakeServer::start().await;
     server.on_text(
@@ -404,6 +454,36 @@ async fn a_jobs_log_is_read_as_the_text_it_is() {
     // A job gone from GitHub (logs expire) is an error that says so.
     let e = client(&server).job_log(&repo(), "1").await.unwrap_err();
     assert!(format!("{e:#}").contains("404"), "{e:#}");
+}
+
+#[tokio::test]
+async fn a_jobs_log_redirected_to_another_host_is_read_without_the_token() {
+    let api = FakeServer::start().await;
+    // Where GitHub keeps the text: another host, which must not get the token.
+    let storage = FakeServer::start().await;
+    storage.on_text("GET", "/logs/119211823435.txt", 200, JOB_LOG, &[]);
+    api.on_with(
+        "GET",
+        "/repos/cli/cli/actions/jobs/119211823435/logs",
+        302,
+        Value::Null,
+        &[(
+            "Location",
+            &format!("{}/logs/119211823435.txt", storage.url),
+        )],
+    );
+    let log = client(&api).job_log(&repo(), "119211823435").await.unwrap();
+    assert_eq!(log, JOB_LOG, "the text the redirection leads to");
+    let asked = api.requests();
+    assert_eq!(asked.len(), 1);
+    assert_eq!(asked[0].headers["authorization"], "Bearer ghp_test");
+    let followed = storage.requests();
+    assert_eq!(followed.len(), 1, "the redirection is followed");
+    assert!(
+        !followed[0].headers.contains_key("authorization"),
+        "the token stays on GitHub's host: {:?}",
+        followed[0].headers
+    );
 }
 
 #[tokio::test]
@@ -856,6 +936,47 @@ async fn a_conditional_read_that_changed_nothing_is_served_from_what_was_kept() 
 }
 
 #[tokio::test]
+async fn the_kept_answers_are_bounded_and_the_oldest_leaves_first() {
+    let server = FakeServer::start().await;
+    let github = client(&server);
+    let repo = repo();
+    // One address more than the cache keeps, each answered with a tag of its own.
+    let newest = CACHE_MAX as u64 + 1;
+    for n in 1..=newest {
+        server.on_with(
+            "GET",
+            &format!("/repos/cli/cli/pulls/{n}/reviews?per_page=100"),
+            200,
+            json!([]),
+            &[("ETag", &format!("\"{n}\""))],
+        );
+        github.reviews(&repo, n).await.unwrap();
+    }
+    // The newest and the one before it are still kept: their reads are conditional.
+    for n in [newest, 2] {
+        github.reviews(&repo, n).await.unwrap();
+        let sent = server
+            .requests()
+            .last()
+            .unwrap()
+            .headers
+            .get("if-none-match")
+            .cloned();
+        assert_eq!(sent, Some(format!("\"{n}\"")), "address {n} is kept");
+    }
+    // The oldest was let go: its read asks without the condition.
+    github.reviews(&repo, 1).await.unwrap();
+    let sent = server
+        .requests()
+        .last()
+        .unwrap()
+        .headers
+        .get("if-none-match")
+        .cloned();
+    assert_eq!(sent, None, "the oldest answer was let go");
+}
+
+#[tokio::test]
 async fn long_lists_are_followed_page_after_page() {
     let server = FakeServer::start().await;
     let next = format!(
@@ -993,6 +1114,72 @@ async fn far_from_the_limit_the_client_does_not_wait() {
     for _ in 0..3 {
         github.me().await.unwrap();
     }
+    assert_eq!(github.waited(), Duration::ZERO);
+}
+
+#[tokio::test]
+async fn a_secondary_limit_is_waited_out_then_asked_once_more() {
+    let server = FakeServer::start().await;
+    // Answers every call, and GitHub refuses the first one for its secondary limit.
+    server.on("GET", "/user", 200, json!({"login": "ada"}));
+    server.on_once(
+        "GET",
+        "/user",
+        429,
+        json!({"message": "You have exceeded a secondary rate limit."}),
+        &[("retry-after", "30")],
+    );
+    let github =
+        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
+            slow_below: 0.1,
+            max_wait: Duration::from_millis(300),
+        });
+    let before = std::time::Instant::now();
+    assert_eq!(github.me().await.unwrap().user, "ada");
+    let elapsed = before.elapsed();
+    // Thirty seconds asked, at most `max_wait` waited.
+    assert!(elapsed >= Duration::from_millis(250), "waited: {elapsed:?}");
+    assert!(elapsed < Duration::from_secs(10), "waited: {elapsed:?}");
+    assert!(github.waited() >= Duration::from_millis(250));
+    assert_eq!(requests_to(&server, "/user"), 2, "asked once more, no more");
+}
+
+#[tokio::test]
+async fn a_secondary_limit_that_holds_is_said_after_one_more_try() {
+    let server = FakeServer::start().await;
+    // No `retry-after` here: GitHub's message is what names the secondary limit.
+    server.on(
+        "GET",
+        "/user",
+        403,
+        json!({"message": "You have exceeded a secondary rate limit. Please wait a few minutes."}),
+    );
+    let github =
+        Github::new(reqwest::Client::new(), server.url.clone(), "t".into()).with_pace(Pace {
+            slow_below: 0.1,
+            max_wait: Duration::from_millis(100),
+        });
+    let e = github.me().await.expect_err("refused");
+    assert!(format!("{e:#}").contains("403"), "{e:#}");
+    assert_eq!(
+        requests_to(&server, "/user"),
+        2,
+        "one retry, then it is said"
+    );
+}
+
+#[tokio::test]
+async fn another_refusal_is_not_asked_again() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/user",
+        403,
+        json!({"message": "Resource not accessible by integration"}),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    assert!(github.me().await.is_err());
+    assert_eq!(requests_to(&server, "/user"), 1);
     assert_eq!(github.waited(), Duration::ZERO);
 }
 

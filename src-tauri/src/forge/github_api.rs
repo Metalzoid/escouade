@@ -10,7 +10,7 @@
 use super::*;
 use parking_lot::Mutex;
 use serde_json::json;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -18,6 +18,12 @@ const NAME: &str = "GitHub";
 
 /// Pages followed at most for a list.
 const MAX_PAGES: usize = 10;
+
+/// Addresses whose answer is kept for the conditional reads: the oldest one goes first.
+pub const CACHE_MAX: usize = 500;
+
+/// How long a secondary limit is waited for when GitHub says nothing about when (its advice).
+const SECONDARY_WAIT: Duration = Duration::from_secs(60);
 
 /// When and how long the client slows down.
 #[derive(Debug, Clone, Copy)]
@@ -62,13 +68,39 @@ struct Reply {
     text: String,
 }
 
+/// The answers of conditional reads, by URL: the entity tag and the JSON it went with. At most
+/// `CACHE_MAX` of them; the one stored first is the one let go.
+#[derive(Default)]
+struct Cache {
+    answers: HashMap<String, (String, Value)>,
+    /// The URLs of `answers`, the oldest first.
+    order: VecDeque<String>,
+}
+
+impl Cache {
+    fn get(&self, url: &str) -> Option<&(String, Value)> {
+        self.answers.get(url)
+    }
+
+    /// Keeps `answer` for `url`; an answer already kept for it is replaced where it stands.
+    fn put(&mut self, url: String, answer: (String, Value)) {
+        if self.answers.insert(url.clone(), answer).is_none() {
+            self.order.push_back(url);
+            if self.order.len() > CACHE_MAX {
+                if let Some(oldest) = self.order.pop_front() {
+                    self.answers.remove(&oldest);
+                }
+            }
+        }
+    }
+}
+
 pub struct Github {
     http: reqwest::Client,
     base: String,
     graphql: String,
     token: String,
-    /// The answers of conditional reads, by URL: the entity tag and the JSON it went with.
-    cache: Mutex<HashMap<String, (String, Value)>>,
+    cache: Mutex<Cache>,
     /// The last limit each resource (`core`, `graphql`) said.
     limits: Mutex<HashMap<String, RateLimit>>,
     pace: Pace,
@@ -146,17 +178,22 @@ impl Github {
             .header("User-Agent", "escouade")
     }
 
+    /// Waits `delay`, which counts in `waited`.
+    async fn pause(&self, delay: Duration) {
+        if !delay.is_zero() {
+            self.waited
+                .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
+            tokio::time::sleep(delay).await;
+        }
+    }
+
     /// Waits as long as the limit of `resource` asks.
     async fn slow_down(&self, resource: &str) {
         let delay = match self.limits.lock().get(resource) {
             Some(rl) => self.pace.delay(rl, now()),
             None => Duration::ZERO,
         };
-        if !delay.is_zero() {
-            self.waited
-                .fetch_add(delay.as_millis() as u64, Ordering::Relaxed);
-            tokio::time::sleep(delay).await;
-        }
+        self.pause(delay).await;
     }
 
     fn learn_limit(&self, headers: &HeaderMap) {
@@ -178,9 +215,25 @@ impl Github {
         }
     }
 
-    /// Sends a call after the wait the limit asks for; a status other than a success or a 304 is
-    /// an error that says what GitHub said.
-    async fn send(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
+    /// How long GitHub asks to wait before a call is made again when it refuses it for its
+    /// secondary limit: the `retry-after` it sends, else the advice of a minute when its message
+    /// names the limit. None for any other answer.
+    fn secondary_limit(reply: &Reply) -> Option<Duration> {
+        if reply.status != 403 && reply.status != 429 {
+            return None;
+        }
+        match header(&reply.headers, "retry-after").and_then(|v| v.trim().parse::<u64>().ok()) {
+            Some(seconds) => Some(Duration::from_secs(seconds)),
+            None => reply
+                .text
+                .to_lowercase()
+                .contains("secondary rate limit")
+                .then_some(SECONDARY_WAIT),
+        }
+    }
+
+    /// Sends a call once, after the wait the limit of `resource` asks for, whatever it answers.
+    async fn transmit(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
         self.slow_down(resource).await;
         let resp = rb.send().await.map_err(|e| {
             let e = anyhow::Error::from(e.without_url());
@@ -193,18 +246,36 @@ impl Github {
         let headers = resp.headers().clone();
         let text = resp.text().await.unwrap_or_default();
         self.learn_limit(&headers);
-        if !(200..300).contains(&status) && status != 304 {
-            return Err(crate::integrations::HttpError {
-                status,
-                message: crate::integrations::http_error_in(crate::i18n::ui(), NAME, status, &text),
-            }
-            .into());
-        }
         Ok(Reply {
             status,
             headers,
             text,
         })
+    }
+
+    /// Sends a call after the wait the limit asks for. A secondary limit is waited out, at most
+    /// `Pace::max_wait`, then the call is sent once more. A status other than a success or a 304
+    /// is an error that says what GitHub said.
+    async fn send(&self, resource: &str, rb: reqwest::RequestBuilder) -> Result<Reply> {
+        let again = rb.try_clone();
+        let mut reply = self.transmit(resource, rb).await?;
+        if let (Some(again), Some(asked)) = (again, Self::secondary_limit(&reply)) {
+            self.pause(asked.min(self.pace.max_wait)).await;
+            reply = self.transmit(resource, again).await?;
+        }
+        if !(200..300).contains(&reply.status) && reply.status != 304 {
+            return Err(crate::integrations::HttpError {
+                status: reply.status,
+                message: crate::integrations::http_error_in(
+                    crate::i18n::ui(),
+                    NAME,
+                    reply.status,
+                    &reply.text,
+                ),
+            }
+            .into());
+        }
+        Ok(reply)
     }
 
     fn json(reply: &Reply) -> Result<Value> {
@@ -245,9 +316,7 @@ impl Github {
         }
         let value = Self::json(&reply)?;
         if let Some(tag) = header(&reply.headers, "etag") {
-            self.cache
-                .lock()
-                .insert(key, (tag.to_string(), value.clone()));
+            self.cache.lock().put(key, (tag.to_string(), value.clone()));
         }
         Ok((value, next))
     }
@@ -258,11 +327,21 @@ impl Github {
 
     /// Every item of a list, page after page.
     async fn list(&self, path: &str) -> Result<Vec<Value>> {
+        self.pages(path, None).await
+    }
+
+    /// Every item of a list, page after page: the answer is the list itself, or an object holding
+    /// it under `key` (the check runs of a commit are one).
+    async fn pages(&self, path: &str, key: Option<&str>) -> Result<Vec<Value>> {
         let mut out = Vec::new();
         let mut url = path.to_string();
         for _ in 0..MAX_PAGES {
             let (page, next) = self.read(&url).await?;
-            out.extend(page.as_array().cloned().unwrap_or_default());
+            let items = match key {
+                Some(key) => &page[key],
+                None => &page,
+            };
+            out.extend(items.as_array().cloned().unwrap_or_default());
             match next {
                 Some(n) => url = n,
                 None => break,
@@ -336,13 +415,16 @@ impl Github {
         let sha = self.head_sha(repo, number).await?;
         let base = Self::repo_path(repo);
         let runs = self
-            .get(&format!("{base}/commits/{sha}/check-runs?per_page=100"))
+            .pages(
+                &format!("{base}/commits/{sha}/check-runs?per_page=100"),
+                Some("check_runs"),
+            )
             .await?;
         let statuses = self
             .get(&format!("{base}/commits/{sha}/status?per_page=100"))
             .await?;
         let mut out = Vec::new();
-        for run in runs["check_runs"].as_array().into_iter().flatten() {
+        for run in &runs {
             out.push(Check {
                 name: run["name"].as_str().unwrap_or("?").to_string(),
                 state: run_state(run),
