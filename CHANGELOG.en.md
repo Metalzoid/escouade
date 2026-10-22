@@ -19,6 +19,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The worktree of a done ticket, whatever the approval, or of a deleted one goes on its own, without ever losing work: if it holds uncommitted changes or commits neither merged nor pushed, it stays, and you’re told. “Clean up” in Settings › Projects tidies up those of archived agents.
 - Nothing of a private project goes to another through Escouade either: the “New project” assistant doesn’t offer to copy its setup, and says so, and what Escouade writes to the agents never names another project.
 - A private project offers to reserve it an account, so that the harness’s sessions, memory and history are shared with no other project, and flags an account still shared. Its agents no longer switch to a shared account by themselves at the usage limit, unless you allow it.
+- A `.escouade.yml` in the repository shares the project’s settings with your team (worktrees, launch, Git, Kanban): Escouade uses it as soon as the project opens and reads it again when it changes, but runs none of its commands without your approval. “Export to .escouade.yml” writes it from a project that is already set up.
 
 ### Fixes
 

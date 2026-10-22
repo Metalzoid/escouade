@@ -16,6 +16,8 @@
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import SharedMark from './SharedMark.svelte';
+  import SharedSection from './SharedSection.svelte';
   import StepList from './StepList.svelte';
   import Switch from './Switch.svelte';
   import { tip } from '../../lib/tip';
@@ -162,7 +164,13 @@
 
 {#snippet prefixRow(kind: 'agent' | 'ticket', value: string, invalid: boolean, set: (v: string) => void)}
   {@const label = t(`settings.project.${kind}Prefix`)}
-  <Row {label} desc={t(`settings.project.${kind}PrefixDesc`, { prefix: value.trim() })} descId="{kind}-prefix-desc" wide>
+  <Row
+    {label}
+    desc={t(`settings.project.${kind}PrefixDesc`, { prefix: value.trim() })}
+    descId="{kind}-prefix-desc"
+    wide
+    shared="git.{kind}_branch_prefix"
+  >
     <input
       class="field input mono setting"
       spellcheck="false"
@@ -193,6 +201,9 @@
   </ul>
 {/snippet}
 
+<!-- Its .escouade.yml first: its commands may wait for the user to read them. -->
+<SharedSection {project} />
+
 <Group title={t('settings.project.identity')}>
   <Row label={t('common.name')}>
     <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
@@ -217,7 +228,7 @@
   </Row>
   <!-- From two harnesses found on: the one of its new agents and tickets (none chosen: Claude Code). -->
   {#if choosesEngine()}
-    <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')}>
+    <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')} shared="agents.engine">
       <Chips
         label={t('settings.project.engine')}
         options={engineOptions(draft.engine)}
@@ -292,10 +303,16 @@
 </Group>
 
 <Group title="Git">
-  <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')}>
+  <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')} shared="worktrees.per_agent">
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
-  <Row label={t('settings.project.worktreeDir')} desc={t('settings.project.worktreeDirDesc')} descId="worktree-dir-desc" wide>
+  <Row
+    label={t('settings.project.worktreeDir')}
+    desc={t('settings.project.worktreeDirDesc')}
+    descId="worktree-dir-desc"
+    wide
+    shared="worktrees.dir"
+  >
     <input
       class="field input mono setting"
       spellcheck="false"
@@ -315,7 +332,7 @@
   </Row>
   {@render prefixRow('agent', draft.agentBranchPrefix, problems.agentPrefix, (v) => (draft.agentBranchPrefix = v))}
   {@render prefixRow('ticket', draft.ticketBranchPrefix, problems.ticketPrefix, (v) => (draft.ticketBranchPrefix = v))}
-  <Row label={t('settings.project.copy')} desc={t('settings.project.copyDesc')} descId="copy-desc" wide>
+  <Row label={t('settings.project.copy')} desc={t('settings.project.copyDesc')} descId="copy-desc" wide shared="worktrees.copy">
     <textarea
       class="field mono copy"
       rows="3"
@@ -325,7 +342,7 @@
       bind:value={draft.copy}
     ></textarea>
   </Row>
-  <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')}>
+  <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
 </Group>
@@ -353,10 +370,10 @@
       () => settle(() => delete settingsForm.proposal[project.id], suggestButton),
     )}
   {/if}
-  <Row label={t('settings.project.setupTitle')} desc={t('settings.project.setupDesc')} wide>
+  <Row label={t('settings.project.setupTitle')} desc={t('settings.project.setupDesc')} wide shared="worktrees.setup">
     <StepList bind:steps={draft.worktreeSetup} kind="setup" onadd={() => settingsForm.addStep('setup')} />
   </Row>
-  <Row label={t('settings.project.teardownTitle')} desc={t('settings.project.teardownDesc')} wide>
+  <Row label={t('settings.project.teardownTitle')} desc={t('settings.project.teardownDesc')} wide shared="worktrees.teardown">
     <StepList bind:steps={draft.worktreeTeardown} kind="teardown" onadd={() => settingsForm.addStep('teardown')} />
   </Row>
   <Row label={t('settings.project.leftovers')} desc={t('settings.project.leftoversDesc')} descId="worktrees-leftovers-desc">
@@ -387,6 +404,7 @@
 
 <Group title={t('settings.project.launch')} anchor="launch" note={t('settings.project.launchNote')}>
   <div class="fill">
+    <div class="shared"><SharedMark keys="launch" /></div>
     <Row label={t('settings.project.fill')} desc={t('settings.project.fillLaunchDesc')} descId="launch-suggest-desc">
       <button
         class="btn suggest"
@@ -649,6 +667,9 @@
   }
   .suggest {
     flex-shrink: 0;
+  }
+  .shared:not(:empty) {
+    padding: 10px 16px 0;
   }
   /* Its row stands apart from the commands below, whose boxes have no border above. */
   .fill {

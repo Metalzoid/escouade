@@ -1359,6 +1359,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        shared: Default::default(),
         shared_on_limit: false,
     }
 }
@@ -6575,6 +6576,9 @@ impl<R: Runtime> Core<R> {
         } else {
             self.request_save();
         }
+        // Its `.escouade.yml` sets it up, and says so (ESC-146): before its folders are watched, the
+        // worktrees' one may come from it.
+        let project = self.read_shared(&project.id, true).unwrap_or(project);
         self.watch_project(&project);
         if reopened {
             // Its tickets may start, its agents are counted, its Remote Control ones are
@@ -6627,6 +6631,7 @@ impl<R: Runtime> Core<R> {
             .iter_mut()
             .find(|x| x.id == p.id)
             .ok_or_else(project_not_found)?;
+        let before = cur.clone();
         let account_changed = cur.account != account;
         let remote_changed = cur.remote_control != p.remote_control;
         let renamed = cur.name != p.name;
@@ -6652,9 +6657,14 @@ impl<R: Runtime> Core<R> {
         let imported = std::mem::take(&mut cur.integrations.imported);
         cur.integrations = crate::integrations::checked_links(p.integrations);
         cur.integrations.imported = imported;
+        // What the window set of its `.escouade.yml`: kept on this machine, ahead of the file.
+        let kept = crate::projectfile::keep_local(&before, cur);
         let updated = cur.clone();
         drop(projects);
         self.request_save();
+        if !kept.is_empty() {
+            self.kept_on_machine(&updated, kept.len());
+        }
         // Its next worktrees go elsewhere, maybe out of its folder: watched there too.
         if dir_changed {
             self.watch_project(&updated);
@@ -6914,6 +6924,8 @@ impl<R: Runtime> Core<R> {
     }
 
     pub(crate) async fn compute_git(self: &Arc<Self>, project_id: &str) {
+        // Its folder changed: its `.escouade.yml` too, maybe (a pull, another branch).
+        self.read_shared(project_id, false);
         let Ok(project) = self.project(project_id) else {
             return;
         };

@@ -3,6 +3,7 @@
   import { busy, COLUMNS, columnTickets, pauseLabel, placesLabel, settingsSummary } from '../../lib/board';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
+  import { hasPending } from '../../lib/shared-file';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import BoardColumn from './BoardColumn.svelte';
@@ -93,6 +94,16 @@
       <span class="why" use:tip={{ text: paused, cut: true }}>{paused}</span>
       {#if over}<span class="over" use:tip={{ text: over, cut: true }}>{over}</span>{/if}
       <button class="resume" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
+    </div>
+  {/if}
+  {#if hasPending(project)}
+    <!-- Its .escouade.yml brought commands that wait for the user: nothing of them runs until then (ESC-146). -->
+    <div class="pause shared" role="status">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="why" use:tip={{ text: t('settings.shared.banner'), cut: true }}>{t('settings.shared.banner')}</span>
+      <button class="resume" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
+        >{t('settings.shared.bannerButton')}</button
+      >
     </div>
   {/if}
   <div class="cols">

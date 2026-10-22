@@ -177,6 +177,47 @@ describe('the new project’s assistant', () => {
     expect(app.ui.activeProject).toBe('new');
   });
 
+  it('starts from the folder’s .escouade.yml above the recommended setup, its commands left for the project (ESC-146)', async () => {
+    const preview = project({
+      id: '',
+      path: 'C:\\code\\atlas',
+      worktreePerAgent: true,
+      worktreeDir: '../atlas-wt',
+      board: board({ strategy: 'rebase', draft: true }),
+      shared: {
+        local: [],
+        trusted: '',
+        file: {
+          keys: ['worktrees.per_agent', 'worktrees.dir', 'board.merge_strategy', 'worktrees.setup'],
+          values: {},
+          warnings: [],
+          error: null,
+          version: 1,
+          pending: { hash: 'h', commands: { 'worktrees.setup': [{ command: 'npm ci' }] } },
+        },
+      },
+    });
+    const be = backend({ shared_preview: () => preview });
+    render(NewProjectModal);
+    await typePath();
+    const file = await screen.findByRole('radio', { name: /^Réglages de .escouade.yml/ });
+    // Chosen by itself, first, and says what it read and that its commands will wait.
+    await waitFor(() => expect(file).toHaveAttribute('aria-checked', 'true'));
+    const starts = screen.getAllByRole('radio').map((r) => r.querySelector('.ct')?.textContent);
+    expect(starts.slice(0, 3)).toEqual(['Réglages de .escouade.yml', 'Copier la configuration d’un projet', 'Configuration recommandée']);
+    expect(file).toHaveTextContent(
+      'Réglages lus dans .escouade.yml, le fichier partagé du dépôt : 4 réglages. Ses commandes attendront ton accord une fois le projet créé.',
+    );
+    expect(be.called('shared_preview').at(-1)?.args).toEqual({ path: 'C:\\code\\atlas' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await next();
+    expect(step()).toBe('worktrees');
+    expect(screen.getByRole('switch', { name: 'Un worktree par agent' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('textbox', { name: 'Dossier des worktrees' })).toHaveValue('../atlas-wt');
+    // Its setup is no command of the assistant: it waits for the user, once the project is made.
+    expect(screen.queryByDisplayValue('npm ci')).toBeNull();
+  });
+
   it('waits for the copy to be checked in the new folder before it goes on: what is taken is known by then', async () => {
     let answer: ((s: SetupInfo) => void) | undefined;
     backend({ inspect_setup: ({ dirs }) => ((dirs as string[]).length ? new Promise((r) => (answer = r)) : setup()) });

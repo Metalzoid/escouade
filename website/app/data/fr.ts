@@ -429,6 +429,7 @@ export const fr: Catalog = {
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
       shortcuts: 'Raccourcis clavier',
+      'escouade-yml': '.escouade.yml',
       data: 'Données locales',
       updates: 'Mises à jour',
       troubleshooting: 'Dépannage',

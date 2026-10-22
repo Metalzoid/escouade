@@ -1402,7 +1402,18 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading', { level: 3 })
         .map((h) => h.textContent),
-    ).toEqual(['Identity', 'Remote control', 'Privacy', 'Git', 'Worktrees', 'Launch', 'Setup assistant', 'Danger zone', 'New projects']);
+    ).toEqual([
+      '.escouade.yml',
+      'Identity',
+      'Remote control',
+      'Privacy',
+      'Git',
+      'Worktrees',
+      'Launch',
+      'Setup assistant',
+      'Danger zone',
+      'New projects',
+    ]);
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();

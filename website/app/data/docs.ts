@@ -26,7 +26,7 @@ export const DOC_GROUPS = [
       'settings-about',
     ],
   },
-  { id: 'reference', pages: ['shortcuts', 'data', 'updates', 'troubleshooting'] },
+  { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 
 export type DocGroupId = (typeof DOC_GROUPS)[number]['id'];

@@ -548,6 +548,35 @@ pub fn update_project(core: CoreState, project: Project) -> Res<()> {
     Ok(())
 }
 
+/// « Faire confiance à ces commandes »: those of the project's `.escouade.yml` the user read.
+#[tauri::command(async)]
+pub fn shared_trust(core: CoreState, project_id: String, hash: String) -> Res<Project> {
+    core.trust_shared(&project_id, &hash).map_err(err)
+}
+
+/// « Exporter vers .escouade.yml » (`keys` none), or « Écrire dans .escouade.yml » of the keys
+/// kept on this machine.
+#[tauri::command(async)]
+pub fn shared_write(
+    core: CoreState,
+    project_id: String,
+    keys: Option<Vec<String>>,
+) -> Res<Project> {
+    core.write_shared(&project_id, keys).map_err(err)
+}
+
+/// « Reprendre la valeur du fichier »: a key kept on this machine follows the file again.
+#[tauri::command(async)]
+pub fn shared_unkeep(core: CoreState, project_id: String, key: String) -> Res<Project> {
+    core.unkeep_shared(&project_id, &key).map_err(err)
+}
+
+/// The settings the `.escouade.yml` of a folder gives a new project (the assistant's start).
+#[tauri::command(async)]
+pub fn shared_preview(path: String) -> Option<Project> {
+    crate::projectfile::preview(&path)
+}
+
 #[tauri::command(async)]
 pub fn reorder_projects(core: CoreState, ids: Vec<String>) {
     core.reorder_projects(&ids);

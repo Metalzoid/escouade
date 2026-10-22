@@ -46,6 +46,13 @@ export default {
     copyDesc: 'Worktrees, lancement, Git, Kanban et compte, vérifiés dans ce dépôt. Les intégrations et les tickets ne sont pas copiés.',
     copyFrom: 'Projet copié',
     noOther: 'Aucun autre projet ouvert à copier.',
+    /** The folder's .escouade.yml (ESC-146), above the recommended setup. */
+    file: 'Réglages de .escouade.yml',
+    fileDesc: {
+      one: 'Réglages lus dans .escouade.yml, le fichier partagé du dépôt : {count} réglage.',
+      other: 'Réglages lus dans .escouade.yml, le fichier partagé du dépôt : {count} réglages.',
+    },
+    filePending: 'Ses commandes attendront ton accord une fois le projet créé.',
     privateLeftOut: {
       one: 'Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.',
       other: '{count} projets privés ne sont pas proposés : rien d’un projet privé ne passe à un autre.',

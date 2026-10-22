@@ -366,4 +366,38 @@ export default defineZone('settings', {
     downN: 'Move command {n} down',
     deleteN: 'Delete command {n}',
   },
+  shared: {
+    title: '.escouade.yml',
+    none: 'This repository has no .escouade.yml. Export this project’s settings to share them with your team: the file is committed with the code.',
+    read: {
+      one: 'Settings read from .escouade.yml (version {version}): {count} setting defined by the file.',
+      other: 'Settings read from .escouade.yml (version {version}): {count} settings defined by the file.',
+    },
+    error: '.escouade.yml can’t be read, nothing of it applies: {text}',
+    warningAt: 'Line {line}: {text}',
+    warningsTitle: 'To check in the file',
+    pendingTitle: 'Commands waiting for your approval',
+    pendingDesc:
+      'These commands come from .escouade.yml. Escouade won’t run them until you trust them: read them in full. If the file changes them, you’ll be asked again.',
+    trust: 'Trust these commands',
+    trusted: 'Commands approved: they apply to the project.',
+    keys: {
+      setup: 'Worktree setup',
+      teardown: 'Worktree teardown',
+      launch: 'Launch',
+      test: 'Test command',
+    },
+    export: 'Export to .escouade.yml',
+    exportDesc:
+      'Writes this project’s shareable settings into the file, at the root of the repository (comments and unknown keys kept). Nothing personal: no name, color, account, remote control or private project.',
+    exported: '.escouade.yml written. Commit it to share it.',
+    fromFile: 'Defined by .escouade.yml',
+    fromFilePending: 'Defined by .escouade.yml, waiting for your approval',
+    local: 'Local setting of this machine: it goes before .escouade.yml.',
+    writeKey: 'Write into .escouade.yml',
+    useFile: 'Use the file’s value',
+    written: 'Written into .escouade.yml.',
+    banner: 'The commands of .escouade.yml wait for your approval: they don’t run yet.',
+    bannerButton: 'Read them',
+  },
 });

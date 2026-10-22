@@ -209,6 +209,14 @@ export const api = {
   /** « Faire un premier commit »: the folder made a repository if need be, with an empty first commit. */
   firstCommit: (path: string) => invoke<void>('first_commit', { path }),
   updateProject: (project: Project) => invoke<void>('update_project', { project }),
+  /** « Faire confiance à ces commandes »: those of the project’s `.escouade.yml` read (`hash`). */
+  sharedTrust: (projectId: string, hash: string) => invoke<Project>('shared_trust', { projectId, hash }),
+  /** « Exporter vers .escouade.yml » (no `keys`), or « Écrire dans .escouade.yml » of the keys given. */
+  sharedWrite: (projectId: string, keys?: string[]) => invoke<Project>('shared_write', keys ? { projectId, keys } : { projectId }),
+  /** « Reprendre la valeur du fichier »: a key kept on this machine follows the file again. */
+  sharedUnkeep: (projectId: string, key: string) => invoke<Project>('shared_unkeep', { projectId, key }),
+  /** The settings the `.escouade.yml` of a folder gives a new project, its commands left out; null without one. */
+  sharedPreview: (path: string) => invoke<Project | null>('shared_preview', { path }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
   /** `erase`: its history goes too (conversations, tickets, settings); else it is kept as a closed project. */
   removeProject: (id: string, erase: boolean) => invoke<void>('remove_project', { id, erase }),

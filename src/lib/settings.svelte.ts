@@ -347,6 +347,17 @@ class SettingsForm {
     return false;
   }
 
+  /**
+   * The project as the backend has it now (its `.escouade.yml` applied, ESC-146): its draft follows, unless it holds
+   * changes of the user's, which stay as typed.
+   */
+  refresh(p: Project) {
+    if (!this.projects[p.id] || !empty(this.#projectChanges(p.id)) || !empty(this.#boardChanges(p.id)) || this.#linksChanged(p.id)) return;
+    const d = draftOf(p);
+    this.#base = { ...this.#base, projects: { ...this.#base.projects, [p.id]: d } };
+    this.projects[p.id] = structuredClone(d);
+  }
+
   /** A launch command for the project on screen in the modal, run by the first shell found. */
   addCommand() {
     this.project?.runCommands.push({ id: crypto.randomUUID(), name: '', command: '', shell: app.shells[0]?.id ?? 'pwsh', cwd: '' });

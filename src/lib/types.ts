@@ -689,11 +689,48 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /** Its `.escouade.yml`: the keys kept on this machine, the commands trusted, the file as last read. Absent from a project of the window’s tests made before ESC-146. */
+  shared?: ProjectShared;
   /**
    * « Comptes partagés à la limite » (a private project): its agents may go on on an account it shares with other projects
    * when its own reach the usage limit (`accounts::confined`).
    */
   sharedOnLimit: boolean;
+}
+
+/** Something of a `.escouade.yml` that was left out, with its line. */
+export interface SharedWarning {
+  line: number | null;
+  text: string;
+}
+
+/** Commands of a `.escouade.yml` the user has not trusted yet: inactive until then. */
+export interface SharedPending {
+  /** What « Faire confiance à ces commandes » trusts, no other. */
+  hash: string;
+  /** By key (`worktrees.setup`, `launch`, `board.test_command`…), as the file writes them. */
+  commands: Record<string, unknown>;
+}
+
+/** A `.escouade.yml` as its project last read it. */
+export interface SharedFile {
+  /** The keys it sets (`board.merge_strategy`…). */
+  keys: string[];
+  /** Their values in the file. */
+  values: Record<string, unknown>;
+  warnings: SharedWarning[];
+  /** Why it could not be read at all. */
+  error: SharedWarning | null;
+  version: number;
+  pending: SharedPending | null;
+}
+
+export interface ProjectShared {
+  /** The keys of the file set otherwise on this machine: their value goes first. */
+  local: string[];
+  trusted: string;
+  /** None while the project has no `.escouade.yml`. */
+  file: SharedFile | null;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */

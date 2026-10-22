@@ -1,0 +1,291 @@
+{
+  "$id": "https://escouade.dev/schemas/escouade.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "The Escouade settings a project's team shares through its repository.",
+  "properties": {
+    "agents": {
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "description": "The harness the project's new agents and tickets run on.",
+          "enum": ["claude", "codex", "copilot", "opencode"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "board": {
+      "additionalProperties": false,
+      "properties": {
+        "agents_from_target": {
+          "description": "A new agent's worktree starts from the target branch.",
+          "type": "boolean"
+        },
+        "draft_pr": {
+          "description": "Pull requests open as drafts.",
+          "type": "boolean"
+        },
+        "merge_strategy": {
+          "description": "How a ticket's branch merges.",
+          "enum": ["merge", "squash", "rebase"],
+          "type": "string"
+        },
+        "on_approve": {
+          "description": "What approving a ticket does with its branch.",
+          "enum": ["merge", "pr", "push", "keep"],
+          "type": "string"
+        },
+        "on_conflict": {
+          "description": "What a merge conflict does: ask, have the agent resolve it, or give up.",
+          "enum": ["ask", "agent", "abort"],
+          "type": "string"
+        },
+        "remove_worktree": {
+          "description": "A ticket's worktree is removed once it is done.",
+          "type": "boolean"
+        },
+        "target_branch": {
+          "description": "Where tickets merge: the base of their branch and of their pull request.",
+          "type": "string"
+        },
+        "test_command": {
+          "description": "The project's tests. Needs the user's approval.",
+          "type": "string"
+        },
+        "tests_before_approve": {
+          "description": "The tests run again before a ticket is approved.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "git": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_branch_prefix": {
+          "description": "A new agent's branch is <prefix><name>.",
+          "type": "string"
+        },
+        "commit_mode": {
+          "description": "Who writes the commits asked from the files panel: the agent, or the app with a proposed message.",
+          "enum": ["agent", "direct"],
+          "type": "string"
+        },
+        "conventional_commits": {
+          "description": "Commit messages in the Conventional Commits form.",
+          "type": "boolean"
+        },
+        "ticket_branch_prefix": {
+          "description": "A ticket's branch is <prefix><key>.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "launch": {
+      "description": "The commands that launch the project (« Lancement »). Need the user's approval.",
+      "oneOf": [
+        {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "cwd": {
+                "description": "A folder relative to the repository (or the worktree).",
+                "type": "string"
+              },
+              "name": {
+                "description": "As the window shows it.",
+                "type": "string"
+              },
+              "shell": {
+                "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                "type": "string"
+              }
+            },
+            "required": ["name", "command"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "cwd": {
+              "description": "A folder relative to the repository (or the worktree).",
+              "type": "string"
+            },
+            "name": {
+              "description": "As the window shows it.",
+              "type": "string"
+            },
+            "shell": {
+              "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+              "type": "string"
+            }
+          },
+          "required": ["name", "command"],
+          "type": "object"
+        }
+      ]
+    },
+    "version": {
+      "description": "The version of this file's format (1 today).",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "worktrees": {
+      "additionalProperties": false,
+      "properties": {
+        "copy": {
+          "description": "Untracked files copied into every new worktree (glob patterns).",
+          "oneOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "dir": {
+          "description": "Where the worktrees go, relative to the repository (empty: .claude/worktrees).",
+          "type": "string"
+        },
+        "per_agent": {
+          "description": "Each new agent works in a worktree of its own.",
+          "type": "boolean"
+        },
+        "setup": {
+          "description": "Run in every new worktree before its agent starts. Needs the user's approval.",
+          "oneOf": [
+            {
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "cwd": {
+                        "description": "A folder relative to the repository (or the worktree).",
+                        "type": "string"
+                      },
+                      "shell": {
+                        "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["command"],
+                    "type": "object"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "description": "A folder relative to the repository (or the worktree).",
+                      "type": "string"
+                    },
+                    "shell": {
+                      "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                      "type": "string"
+                    }
+                  },
+                  "required": ["command"],
+                  "type": "object"
+                }
+              ]
+            }
+          ]
+        },
+        "teardown": {
+          "description": "Run in a worktree before it is removed. Needs the user's approval.",
+          "oneOf": [
+            {
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "cwd": {
+                        "description": "A folder relative to the repository (or the worktree).",
+                        "type": "string"
+                      },
+                      "shell": {
+                        "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["command"],
+                    "type": "object"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "description": "A folder relative to the repository (or the worktree).",
+                      "type": "string"
+                    },
+                    "shell": {
+                      "description": "pwsh, powershell, bash, zsh, wsl…; the system's default one when empty or not found.",
+                      "type": "string"
+                    }
+                  },
+                  "required": ["command"],
+                  "type": "object"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": ["version"],
+  "title": ".escouade.yml",
+  "type": "object"
+}

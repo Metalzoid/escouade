@@ -415,4 +415,44 @@ export default {
     downN: 'Descendre la commande {n}',
     deleteN: 'Supprimer la commande {n}',
   },
+  // The project’s .escouade.yml (ESC-146): what it sets, its commands waiting, the settings kept on this machine.
+  shared: {
+    title: '.escouade.yml',
+    /** What the group says of the file, by its state. */
+    none: 'Ce dépôt n’a pas de .escouade.yml. Exporte les réglages de ce projet pour les partager avec ton équipe : le fichier se commite avec le code.',
+    read: {
+      one: 'Réglages lus dans .escouade.yml (version {version}) : {count} réglage défini par le fichier.',
+      other: 'Réglages lus dans .escouade.yml (version {version}) : {count} réglages définis par le fichier.',
+    },
+    error: '.escouade.yml illisible, rien n’en est appliqué : {text}',
+    /** A warning of the file, `{line}` its line. */
+    warningAt: 'Ligne {line} : {text}',
+    warningsTitle: 'À vérifier dans le fichier',
+    pendingTitle: 'Commandes en attente de ton accord',
+    pendingDesc:
+      'Ces commandes viennent de .escouade.yml. Escouade ne les lance pas tant que tu ne leur as pas fait confiance : lis-les en entier. Si le fichier les change, il te le redemandera.',
+    trust: 'Faire confiance à ces commandes',
+    trusted: 'Commandes approuvées : elles s’appliquent au projet.',
+    /** The keys of the commands, as the list names them. */
+    keys: {
+      setup: 'Préparation des worktrees',
+      teardown: 'Démontage des worktrees',
+      launch: 'Lancement',
+      test: 'Commande de tests',
+    },
+    export: 'Exporter vers .escouade.yml',
+    exportDesc:
+      'Écrit les réglages partageables de ce projet dans le fichier, à la racine du dépôt (commentaires et clés inconnues gardés). Rien de personnel : ni nom, ni couleur, ni compte, ni remote control, ni projet privé.',
+    exported: '.escouade.yml écrit. Commite-le pour le partager.',
+    /** The marks of a setting. */
+    fromFile: 'Défini par .escouade.yml',
+    fromFilePending: 'Défini par .escouade.yml, en attente de ton accord',
+    local: 'Réglage local de cette machine : il passe devant .escouade.yml.',
+    writeKey: 'Écrire dans .escouade.yml',
+    useFile: 'Reprendre la valeur du fichier',
+    written: 'Écrit dans .escouade.yml.',
+    /** On the project’s board, while its commands wait. */
+    banner: 'Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.',
+    bannerButton: 'Les lire',
+  },
 } as const satisfies Tree;

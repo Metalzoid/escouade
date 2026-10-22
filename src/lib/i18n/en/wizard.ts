@@ -43,6 +43,12 @@ export default defineZone('wizard', {
     copyDesc: 'Worktrees, launch, Git, Kanban and account, checked in this repository. Integrations and tickets are not copied.',
     copyFrom: 'Project copied',
     noOther: 'No other open project to copy.',
+    file: 'Settings from .escouade.yml',
+    fileDesc: {
+      one: 'Settings read from .escouade.yml, the repository’s shared file: {count} setting.',
+      other: 'Settings read from .escouade.yml, the repository’s shared file: {count} settings.',
+    },
+    filePending: 'Its commands will wait for your approval once the project is made.',
     privateLeftOut: {
       one: 'A private project isn’t offered: nothing of a private project goes to another.',
       other: '{count} private projects aren’t offered: nothing of a private project goes to another.',

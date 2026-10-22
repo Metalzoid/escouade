@@ -8,8 +8,11 @@ import { DEFAULT_AGENT_PREFIX, DEFAULT_TICKET_PREFIX } from './worktrees';
 
 export type { SetupInfo };
 
-/** Where the assistant starts from: another project's settings, the recommended ones, Escouade's defaults, or (an existing project's) its own. */
-export type Start = 'copy' | 'recommended' | 'blank' | 'current';
+/**
+ * Where the assistant starts from: the folder's .escouade.yml (ESC-146), another project's settings, the recommended ones,
+ * Escouade's defaults, or (an existing project's) its own.
+ */
+export type Start = 'file' | 'copy' | 'recommended' | 'blank' | 'current';
 
 /** The steps, in their order. */
 export type StepId = 'start' | 'copied' | 'worktrees' | 'launch' | 'kanban' | 'account' | 'integrations' | 'summary';

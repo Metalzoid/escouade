@@ -425,6 +425,7 @@ export const en: Catalog = {
       'settings-voice': 'Voice',
       'settings-about': 'About',
       shortcuts: 'Keyboard shortcuts',
+      'escouade-yml': '.escouade.yml',
       data: 'Local data',
       updates: 'Updates',
       troubleshooting: 'Troubleshooting',

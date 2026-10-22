@@ -1,15 +1,26 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import SharedMark from './SharedMark.svelte';
 
-  // A setting: its label (and hint), what it does, its control on the right, or under it when `wide`.
+  // A setting: its label (and hint), what it does, its control on the right, or under it when `wide`; `shared`, the keys
+  // of the project's .escouade.yml it shows, marked when the file sets them.
   let {
     label,
     hint = '',
     desc = '',
     descId,
     wide = false,
+    shared,
     children,
-  }: { label: string; hint?: string; desc?: string; descId?: string; wide?: boolean; children?: Snippet } = $props();
+  }: {
+    label: string;
+    hint?: string;
+    desc?: string;
+    descId?: string;
+    wide?: boolean;
+    shared?: string | string[];
+    children?: Snippet;
+  } = $props();
 </script>
 
 <div class="row" class:wide>
@@ -18,6 +29,7 @@
       >{label}{#if hint}&nbsp;<span class="h">{hint}</span>{/if}</span
     >
     {#if desc}<span class="d" id={descId}>{desc}</span>{/if}
+    {#if shared}<SharedMark keys={shared} />{/if}
   </div>
   {#if children}{@render children()}{/if}
 </div>

@@ -70,6 +70,9 @@ mod private_tests;
 mod proc;
 #[cfg(test)]
 mod process_tests;
+mod projectfile;
+#[cfg(test)]
+mod projectfile_tests;
 mod pty;
 mod resources;
 mod search;
@@ -407,6 +410,10 @@ pub fn run() {
             commands::first_commit,
             commands::create_project,
             commands::update_project,
+            commands::shared_trust,
+            commands::shared_write,
+            commands::shared_unkeep,
+            commands::shared_preview,
             commands::reorder_projects,
             commands::remove_project,
             commands::closed_projects,

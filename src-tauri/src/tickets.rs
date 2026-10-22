@@ -939,6 +939,7 @@ impl<R: Runtime> Core<R> {
     /// stay between 1 and 6.
     pub fn board_set(self: &Arc<Self>, project_id: &str, s: BoardSettings) -> Result<Project> {
         let default = BoardSettings::default();
+        let kept;
         let one_of = |v: String, known: &[&str], fallback: String| {
             if known.contains(&v.as_str()) {
                 v
@@ -952,6 +953,7 @@ impl<R: Runtime> Core<R> {
                 .iter_mut()
                 .find(|p| p.id == project_id)
                 .ok_or_else(project_not_found)?;
+            let before = p.clone();
             let target = s.target.trim();
             p.board = BoardSettings {
                 prefix: p.board.prefix.clone(),
@@ -967,8 +969,13 @@ impl<R: Runtime> Core<R> {
                 max_parallel: s.max_parallel.clamp(1, 6),
                 ..s
             };
+            // What the window set of its `.escouade.yml`: kept on this machine, ahead of the file.
+            kept = crate::projectfile::keep_local(&before, p).len();
             p.clone()
         };
+        if kept > 0 {
+            self.kept_on_machine(&project, kept);
+        }
         self.hub.emit(UiEvent::Project {
             project: project.clone(),
         });

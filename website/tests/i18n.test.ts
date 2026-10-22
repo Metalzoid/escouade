@@ -65,6 +65,7 @@ describe('catalogs', () => {
         'docs.pages.settings-claude-code',
         'docs.pages.settings-notifications',
         'docs.pages.settings-board',
+        'docs.pages.escouade-yml',
       ].sort(),
     );
   });

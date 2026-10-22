@@ -62,6 +62,8 @@
       form.info = i;
       infoPath = p;
       if (i) prefill();
+      // Its .escouade.yml, if it has one: the settings the project starts from.
+      await form.readShared();
       // Another folder: what is copied by default is checked again in it.
       if (form.start === 'copy' && form.sourceId) form.chooseSource(form.sourceId);
       else await form.check();
@@ -100,10 +102,18 @@
   );
 
   const STARTS = $derived<{ id: Start; label: string; desc: string }[]>(
-    (existing ? (['current', 'copy', 'recommended', 'blank'] as const) : (['copy', 'recommended', 'blank'] as const))
-      .filter((id) => id !== 'copy' || form.sources.length)
-      .map((id) => ({ id, label: t(`wizard.start.${id}`), desc: t(`wizard.start.${id}Desc`) })),
+    (existing ? (['current', 'copy', 'recommended', 'blank'] as const) : (['file', 'copy', 'recommended', 'blank'] as const))
+      .filter((id) => (id !== 'copy' || form.sources.length) && (id !== 'file' || form.shared))
+      .map((id) => ({ id, label: t(`wizard.start.${id}`), desc: id === 'file' ? fileDesc : t(`wizard.start.${id}Desc`) })),
   );
+
+  /** What the folder's .escouade.yml sets, and whether its commands will wait for the user. */
+  const fileDesc = $derived.by(() => {
+    const file = form.shared?.shared?.file;
+    if (!file) return '';
+    const read = t('wizard.start.fileDesc', { count: file.keys.length });
+    return file.pending ? `${read} ${t('wizard.start.filePending')}` : read;
+  });
 
   const at = $derived(form.steps.indexOf(form.step));
   const last = $derived(form.step === 'summary');

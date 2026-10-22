@@ -11,6 +11,7 @@
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
+  import SharedMark from './SharedMark.svelte';
   import Switch from './Switch.svelte';
 
   // A project's Kanban: what validating a ticket does, and the agents that take its tickets (its draft:
@@ -54,6 +55,7 @@
       </button>
     {/each}
   </div>
+  <SharedMark keys="board.on_approve" />
   {#if b.action === 'merge' || b.action === 'pr'}
     <div class="box">
       <div class="line">
@@ -66,6 +68,7 @@
           onclick={() => (choosing = true)}>⎇ {target} ▾</button
         >
       </div>
+      <SharedMark keys="board.target_branch" />
       <div class="line wide">
         <span class="txt"
           ><span class="l">{t('boardSettings.tab.agentsFromTarget')}</span><span class="d"
@@ -74,6 +77,7 @@
         >
         <Switch label={t('boardSettings.tab.agentsFromTarget')} bind:on={b.agentsFromTarget} />
       </div>
+      <SharedMark keys="board.agents_from_target" />
       {#if b.action === 'merge'}
         <div class="line">
           <span class="k">{t('boardSettings.tab.strategy')}</span>
@@ -86,11 +90,13 @@
             >
           {/each}
         </div>
+        <SharedMark keys="board.merge_strategy" />
       {:else}
         <div class="line">
           <span class="k">{t('boardSettings.tab.draftPr')}</span>
           <Switch label={t('boardSettings.tab.draftPr')} bind:on={b.draft} />
         </div>
+        <SharedMark keys="board.draft_pr" />
       {/if}
     </div>
   {/if}
@@ -109,7 +115,7 @@
 {/if}
 
 <Group title={t('boardSettings.tab.beforeAfter')}>
-  <Row label={t('boardSettings.tab.testCommand')} hint={t('boardSettings.tab.testCommandHint')}>
+  <Row label={t('boardSettings.tab.testCommand')} hint={t('boardSettings.tab.testCommandHint')} shared="board.test_command">
     <input
       class="field mono input"
       placeholder={t('boardSettings.tab.testCommandPlaceholder')}
@@ -118,20 +124,24 @@
       bind:value={b.testCommand}
     />
   </Row>
-  <Row label={t('boardSettings.tab.testsFirst')} desc={t('boardSettings.tab.testsFirstDesc')}>
+  <Row label={t('boardSettings.tab.testsFirst')} desc={t('boardSettings.tab.testsFirstDesc')} shared="board.tests_before_approve">
     <Switch
       label={t('boardSettings.tab.testsFirst')}
       disabled={!b.testCommand.trim()}
       bind:on={() => b.testsFirst && !!b.testCommand.trim(), (v) => (b.testsFirst = v)}
     />
   </Row>
-  <Row label={t('boardSettings.tab.cleanup')} desc={t('boardSettings.tab.cleanupDesc')}>
+  <Row label={t('boardSettings.tab.cleanup')} desc={t('boardSettings.tab.cleanupDesc')} shared="board.remove_worktree">
     <Switch label={t('boardSettings.tab.cleanup')} bind:on={b.cleanup} />
   </Row>
-  <Row label={t('boardSettings.tab.commitMessage')} desc={commitPreview(b, draft.name.trim() || project.name)}>
+  <Row
+    label={t('boardSettings.tab.commitMessage')}
+    desc={commitPreview(b, draft.name.trim() || project.name)}
+    shared="git.conventional_commits"
+  >
     <Switch label={t('boardSettings.tab.commitMessage')} bind:on={b.conventional} />
   </Row>
-  <Row label={t('boardSettings.tab.onConflict')}>
+  <Row label={t('boardSettings.tab.onConflict')} shared="board.on_conflict">
     <Chips label={t('boardSettings.tab.onConflict')} options={conflicts} bind:value={b.conflict} />
   </Row>
 </Group>

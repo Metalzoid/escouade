@@ -19,6 +19,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Le worktree d’un ticket terminé, quelle que soit la validation, ou supprimé part tout seul, sans jamais perdre de travail : s’il garde des changements non commités ou des commits ni mergés ni poussés, il reste, et c’est dit. « Nettoyer » dans Réglages › Projets range ceux des agents archivés.
 - Rien d’un projet privé ne passe non plus à un autre par Escouade : l’assistant « Nouveau projet » ne propose pas d’en copier la configuration, et le dit, et ce qu’Escouade écrit aux agents ne nomme jamais un autre projet.
 - Un projet privé propose de lui réserver un compte, pour que sessions, mémoire et historique du harness ne soient partagés avec aucun autre projet, et signale un compte encore partagé. Ses agents ne basculent plus d’eux-mêmes sur un compte partagé à la limite d’usage, sauf si tu le permets.
+- Un `.escouade.yml` dans le dépôt partage les réglages du projet avec ton équipe (worktrees, lancement, Git, Kanban) : Escouade s’en sert dès l’ouverture et le relit quand il change, mais ne lance aucune de ses commandes sans ton accord. « Exporter vers .escouade.yml » l’écrit depuis un projet déjà réglé.
 
 ### Corrections
 

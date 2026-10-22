@@ -595,6 +595,10 @@ pub struct Project {
     /// for the reset (`accounts::confined`).
     #[serde(default)]
     pub shared_on_limit: bool,
+    /// Its `.escouade.yml` (ESC-146): the keys kept on this machine, the commands trusted, the file
+    /// as last read.
+    #[serde(default)]
+    pub shared: crate::projectfile::ProjectShared,
 }
 
 impl Project {

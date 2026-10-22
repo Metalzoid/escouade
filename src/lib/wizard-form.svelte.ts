@@ -49,6 +49,13 @@ export class WizardForm {
   filling = $state<'worktrees' | 'launch' | null>(null);
   /** What `config` was last made from: made again when the start or what is copied changes, not otherwise. */
   #madeFrom = '';
+  /**
+   * The settings the folder's .escouade.yml gives (ESC-146), its commands left out (they wait for the user once the
+   * project is made): the start « Réglages de .escouade.yml ». Null without one.
+   */
+  shared = $state<Project | null>(null);
+  /** A start chosen by the user: the folder's file no longer picks it. */
+  #chosen = false;
 
   /** `project`: an existing project set up anew (Réglages › Projets), else a new one. */
   constructor(readonly project: Project | null = null) {
@@ -81,6 +88,7 @@ export class WizardForm {
 
   /** Starts from another project: the one on screen by default, its settings checked as `copyItems` says. */
   chooseStart(start: Start) {
+    this.#chosen = true;
     this.start = start;
     if (start === 'copy' && !this.source)
       this.chooseSource(this.sources.find((p) => p.id === app.ui.activeProject)?.id ?? this.sources[0]?.id ?? '');
@@ -108,6 +116,19 @@ export class WizardForm {
     this.checked = on ? [...new Set([...this.checked, id])] : this.checked.filter((x) => x !== id);
   }
 
+  /**
+   * Reads the folder's .escouade.yml: its settings are where a new project starts from, above the recommended ones, unless
+   * the user chose another start; without one, that start goes.
+   */
+  async readShared() {
+    const path = this.path.trim();
+    const shared = this.project || !path ? null : await api.sharedPreview(path).catch(() => null);
+    if (this.path.trim() !== path) return;
+    this.shared = shared;
+    if (shared && !this.#chosen) this.start = 'file';
+    else if (!shared && this.start === 'file') this.start = 'recommended';
+  }
+
   /** Checks the folder again: its commit and branches, the folders of the commands copied or set, the worktrees folder. */
   async check() {
     const path = this.path.trim();
@@ -126,7 +147,7 @@ export class WizardForm {
   }
 
   #signature() {
-    return JSON.stringify([this.start, this.sourceId, [...this.checked].sort()]);
+    return JSON.stringify([this.start, this.sourceId, [...this.checked].sort(), this.start === 'file' ? this.path.trim() : '']);
   }
 
   /** The settings the start gives, made again only when the start or what is copied changed since. */
@@ -137,6 +158,7 @@ export class WizardForm {
     if (this.start === 'current' && this.project) this.config = configOf(this.project);
     else if (this.start === 'blank') this.config = blankConfig();
     else if (this.start === 'recommended') this.config = recommendedConfig();
+    else if (this.start === 'file' && this.shared) this.config = configOf($state.snapshot(this.shared));
     else if (this.source) this.config = applyCopy(blankConfig(), $state.snapshot(this.source), new Set(this.checked), this.setup);
   }
 

@@ -31,6 +31,26 @@ describe('Board', () => {
     app.enginesFound = ['claude'];
   });
 
+  it('says while the commands of its .escouade.yml wait for the user, and leads to them (ESC-146)', async () => {
+    fakeBackend();
+    const waiting = {
+      local: [],
+      trusted: '',
+      file: { keys: ['launch'], values: {}, warnings: [], error: null, version: 1, pending: { hash: 'h', commands: { launch: [] } } },
+    };
+    app.projects[0].shared = waiting;
+    render(Board, { project: app.projects[0] });
+    expect(screen.getByText('Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Les lire' }));
+    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+  });
+
+  it('says nothing of a .escouade.yml whose commands are trusted', () => {
+    fakeBackend();
+    render(Board, { project: app.projects[0] });
+    expect(screen.queryByText(/attendent ton accord/)).toBeNull();
+  });
+
   it('shows the four columns with their counts and the board header', () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
