@@ -237,6 +237,13 @@ impl AgentRt {
         if matches!(owner, Owner::Other) {
             return;
         }
+        // A subagent's message tells the model it runs on: not always the one its start named
+        // (its definition's), the first it was sent to may differ.
+        if let (Some(call), "assistant.message" | "assistant.usage", Some(model)) =
+            (parent.as_deref(), kind, d["model"].as_str())
+        {
+            self.child_model(call, model, fx);
+        }
         match kind {
             "user.message" | "assistant.turn_start" if own => {
                 if !self.meta.status.is_active() {

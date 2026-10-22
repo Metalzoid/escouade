@@ -646,6 +646,19 @@ impl AgentRt {
         }
     }
 
+    /// A message of the subagent `call` came from `model` (`PlanState::on_child_model`): the plan
+    /// is only taken up when that is news, not at every message of the subagent.
+    pub(crate) fn child_model(&mut self, call: &str, model: &str, fx: &mut Effects) {
+        if self
+            .meta
+            .plan
+            .as_ref()
+            .is_some_and(|plan| plan.tells_model(call, model))
+        {
+            self.plan_apply(fx, |plan| plan.on_child_model(call, model));
+        }
+    }
+
     /// The process is gone: what the plan has running is interrupted (the caller sends the view).
     fn interrupt_plan(&mut self) -> Change {
         let now = now_ms();
@@ -1503,6 +1516,7 @@ fn item_input(name: &str, input: &Value) -> Value {
 struct EndedRun {
     id: String,
     status: RunStatus,
+    model: Option<String>,
     tokens: Option<u64>,
     tools: u32,
     started_at: i64,
@@ -1519,6 +1533,9 @@ impl EndedRun {
         if let Some(tokens) = self.tokens {
             run["tokens"] = tokens.into();
         }
+        if let Some(model) = &self.model {
+            run["model"] = model.as_str().into();
+        }
         run
     }
 }
@@ -1532,6 +1549,7 @@ fn ended_runs(plan: Option<&PlanState>) -> Vec<EndedRun> {
             .map(|a| EndedRun {
                 id: a.id.clone(),
                 status: a.status,
+                model: a.model.clone(),
                 tokens: a.tokens,
                 tools: a.tools,
                 started_at: a.started_at,
@@ -3923,6 +3941,50 @@ npm test")
     }
 
     #[test]
+    fn a_subagent_shows_the_model_its_messages_come_from_and_keeps_it_once_ended() {
+        let mut a = rt();
+        call(
+            &mut a,
+            None,
+            "a1",
+            "Agent",
+            json!({"description":"Lire","subagent_type":"Explore","prompt":"Lis"}),
+        );
+        assert_eq!(plan(&a).agents[0].model, None);
+        let mut fx = Effects::default();
+        a.handle_frame(
+            &json!({"type":"assistant","message":{"id":"m-s1","model":"claude-haiku-5-5",
+                "content":[{"type":"text","text":"Je lis."}]},"parent_tool_use_id":"a1"}),
+            &mut fx,
+        );
+        assert_eq!(
+            plan(&a).agents[0].model.as_deref(),
+            Some("claude-haiku-5-5")
+        );
+        assert!(fx.agent_changed && fx.save);
+        // The agent's own messages are not its subagent's.
+        a.handle_frame(
+            &json!({"type":"assistant","message":{"id":"m-0","model":"claude-opus-5-5",
+                "content":[{"type":"text","text":"J'attends."}]},"parent_tool_use_id":null}),
+            &mut Effects::default(),
+        );
+        assert_eq!(
+            plan(&a).agents[0].model.as_deref(),
+            Some("claude-haiku-5-5")
+        );
+        returns(
+            &mut a,
+            "a1",
+            "Trouvé",
+            json!({"status":"completed","agentId":"x","totalToolUseCount":1,"totalDurationMs":10,"totalTokens":50}),
+        );
+        assert_eq!(
+            a.conv.get("a1").unwrap()["run"]["model"],
+            "claude-haiku-5-5"
+        );
+    }
+
+    #[test]
     fn the_report_and_the_totals_of_a_subagent_stay_with_its_call_in_the_conversation() {
         let mut a = rt();
         background_subagent(&mut a);
@@ -3940,7 +4002,7 @@ npm test")
         let row = plan(&a).agents[0].clone();
         assert_eq!(
             item["run"],
-            json!({"status":"done","tokens":700,"tools":4,"startedAt":row.started_at,"endedAt":row.ended_at})
+            json!({"status":"done","model":"haiku","tokens":700,"tools":4,"startedAt":row.started_at,"endedAt":row.ended_at})
         );
         // The window hears of it, the log keeps it.
         assert!(fx
@@ -4994,7 +5056,8 @@ npm test")
         for row in &p.agents {
             assert_eq!(row.status, RunStatus::Done, "{}", row.title);
             assert!(row.background, "{}", row.title);
-            assert_eq!(row.model.as_deref(), Some("haiku"));
+            // Asked for as « haiku »: the model its messages came from.
+            assert_eq!(row.model.as_deref(), Some("claude-haiku-5-5"));
             assert_eq!(row.kind.as_deref(), Some("general-purpose"));
             // What it did, told at its end: the tools it used and its tokens.
             assert_eq!(row.tools, 5, "{}", row.title);
