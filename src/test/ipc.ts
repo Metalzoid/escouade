@@ -210,6 +210,7 @@ export function agent(over: Partial<Agent> = {}): Agent {
     account: 'principal',
     movedFrom: null,
     handedFrom: null,
+    signIn: null,
     activity: null,
     setup: null,
     terminal: false,
