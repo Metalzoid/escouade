@@ -4,7 +4,7 @@ Cette page décrit la fenêtre des réglages (ses onglets, son ouverture, son en
 
 ## La fenêtre des réglages
 
-Les réglages d’Escouade tiennent dans une seule fenêtre, avec un onglet par sujet. Ouvre-la avec `Ctrl+,` (`⌘,` sous macOS) ou avec le bouton ⚙ de la [barre d’état](interface). Elle s’ouvre sur l’onglet « Harness », sauf quand un bouton l’ouvre directement sur l’onglet qui le concerne : le bouton ⚙ de l’en-tête du [Kanban](board) ouvre « Kanban », le menu d’un projet ouvre « Projets ». Le raccourci ne fait rien tant qu’une autre fenêtre est ouverte.
+Les réglages d’Escouade tiennent dans une seule fenêtre, avec un onglet par sujet. Ouvre-la avec `Ctrl+,` (`⌘,` sous macOS) ou avec le bouton « Réglages », en bas de la [barre des projets](interface). Elle s’ouvre sur l’onglet « Harness », sauf quand un bouton l’ouvre directement sur l’onglet qui le concerne : le bouton ⚙ de l’en-tête du [Kanban](board) ouvre « Kanban », le menu d’un projet ouvre « Projets ». Le raccourci ne fait rien tant qu’une autre fenêtre est ouverte.
 
 ### Les onglets
 

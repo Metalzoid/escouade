@@ -185,7 +185,12 @@ export default defineZone('accounts', {
   panel: {
     open: 'Quota by account (current account: {name})',
     title: 'Accounts quota',
+    label: 'Quota by account',
     noQuota: 'No quota: only what its turns cost counts.',
+    budget: 'Daily budget',
+    budgetReset: 'Reset at midnight.',
+    projectionNote:
+      'After each quota, where it will be at its reset at the current pace: green, orange past 80%, red past 100%. The status bar only shows those past 80%.',
     current: 'current',
     over: 'past the pause or switch threshold',
     today: 'Today: {amount}',

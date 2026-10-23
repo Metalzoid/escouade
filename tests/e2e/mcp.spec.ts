@@ -263,10 +263,11 @@ test.describe('a private project', () => {
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(dialog).toBeHidden();
-    // Its tab says so; the other's does not.
+    // Its tile says so; the other's does not.
     const lock = 'Projet privé : invisible pour les agents des autres projets';
-    await expect(page.locator('.tabs .tab').filter({ hasText: 'coffre' }).getByRole('img', { name: lock })).toBeVisible();
-    await expect(page.locator('.tabs .tab').filter({ hasText: 'demo-api' }).getByRole('img', { name: lock })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'coffre, privé' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'coffre, privé' }).locator('.lock')).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^demo-api/ }).locator('.lock')).toHaveCount(0);
     expect(await projectNames(open)).toEqual(['demo-api']);
     expect(await projectNames(vault)).toEqual(['coffre']);
     // Claude outside Escouade, the user's own token: both.

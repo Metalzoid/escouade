@@ -6,14 +6,14 @@ Sous macOS, `Ctrl` devient `⌘` pour les raccourcis (sauf `Ctrl+Tab`).
 
 ## La vue d’ensemble
 
-La vue d’ensemble prend la place du projet affiché pour lister tous les agents de tous les projets. Ouvre-la avec le bouton « Vue d’ensemble » de la barre de titre, à gauche des onglets de projets, ou avec `Ctrl+Maj+A` (le raccourci marche aussi depuis un terminal). Le même bouton ou le même raccourci la referme ; `Échap` aussi, et tu retrouves la vue qu’elle cachait : le projet ou les statistiques.
+La vue d’ensemble prend la place du projet affiché pour lister tous les agents de tous les projets. Ouvre-la avec le bouton « Vue d’ensemble », en haut de la barre des projets, ou avec `Ctrl+Maj+A` (le raccourci marche aussi depuis un terminal). Le même bouton ou le même raccourci la referme ; `Échap` aussi, et tu retrouves la vue qu’elle cachait : le projet ou les statistiques.
 
 ### Ce qu’elle montre
 
 L’en-tête donne le compte : « 2 projets · 7 agents · 3 en cours ». Dessous, les agents sont rangés en groupes :
 
 1. **« Attend ta réponse »** : les agents au statut « Question », de tous les projets, celui qui attend depuis le plus longtemps en premier, avec le nom de son projet.
-2. **Un groupe par projet**, dans l’ordre des onglets, avec sa couleur ; les agents y sont dans l’ordre de la barre latérale.
+2. **Un groupe par projet**, dans l’ordre de la barre des projets, avec sa couleur ; les agents y sont dans l’ordre de la barre latérale.
 
 Un agent n’apparaît qu’une fois, et les agents archivés ne sont pas listés. Chaque ligne a six colonnes :
 
@@ -58,7 +58,7 @@ Seule la première demande de chaque agent est montrée ; quand tu y réponds, l
 
 `Ctrl+J` et `Ctrl+Tab` marchent aussi depuis un terminal. Le bouton « N en attente » de la barre d’état, en bas, fait la même chose que `Ctrl+J`.
 
-Pour garder un œil sur les autres projets sans les ouvrir, regarde leurs onglets : une pastille donne le nombre d’agents qui attendent une réponse, un point vert signale qu’un agent travaille, « Δ 7 » compte les fichiers modifiés, et un onglet qui clignote en ambre, vert ou rouge signale un agent à voir (voir [les notifications](notifications)). La barre d’état compte les agents « actifs », « en attente » et « terminés ».
+Pour garder un œil sur les autres projets sans les ouvrir, regarde leurs tuiles, dans la barre des projets : une pastille donne le nombre d’agents qui attendent une réponse, un point vert signale qu’un agent travaille, l’infobulle compte les fichiers modifiés (« Δ 7 »), et une tuile qui clignote en ambre, vert ou rouge signale un agent à voir (voir [les notifications](notifications)). La barre d’état compte les agents « actifs », « en attente » et « terminés ».
 
 ## Rechercher dans les conversations
 

@@ -58,7 +58,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByRole('textbox').last()).toHaveAttribute('placeholder', 'Envoyer un message à hello-fake-en…');
   await expect(page.getByRole('button', { name: 'Envoyer' })).toBeVisible();
   await expect(footer).toContainText('1 terminé');
-  await expect(footer).toContainText('5h');
+  await expect(footer).toContainText('5 h');
   await expect(page.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveAttribute('aria-valuenow', '12');
   await expect(page.getByRole('meter', { name: 'Quota sur 7 jours' })).toBeVisible();
   expect(JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).language).toBe('fr');

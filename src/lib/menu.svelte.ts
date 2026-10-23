@@ -13,6 +13,10 @@ export interface MenuItem {
   title?: string;
   /** Why it is disabled, written under it: what cannot be done stays in its place, greyed, with its reason (choice 17 of the 2.0 design). */
   reason?: string;
+  /** A line under its label that says more of it (always shown, unlike `reason`). */
+  detail?: string;
+  /** A project's colour, as a small tile, in place of an icon (a closed project to reopen). */
+  swatch?: string;
   /** An icon of the app before its label. */
   icon?: IconName;
   /** A row of colors to pick from, named by the label. */

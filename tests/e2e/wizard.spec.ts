@@ -109,7 +109,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   await dialog.getByRole('switch', { name: 'Créer un premier agent' }).click();
   await dialog.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator('.tab', { hasText: 'atlas' })).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: /^atlas/ })).toHaveAttribute('aria-selected', 'true');
 
   // A ticket of the new project: its worktree is prepared by the copied step, and it is validated as copied.
   await page.getByRole('button', { name: /^Kanban/ }).click();

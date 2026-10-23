@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, send, test, type App } from './fixture';
+import { addProject, expect, openNewProject, send, test, type App } from './fixture';
 
 // Closing a project keeps its history (ESC-89): adding its folder again gives it back, unless it was erased.
 
@@ -66,9 +66,9 @@ async function doSomeWork(page: Page) {
   await expect(page.getByRole('region', { name: 'À faire' }).getByRole('button', { name: /DEM-1/ })).toBeVisible();
 }
 
-/** Closes the project from its tab's menu, keeping its history unless `erase` ticks the box. */
+/** Closes the project from its tile's menu, keeping its history unless `erase` ticks the box. */
 async function closeProject(page: Page, name: string, opts: { erase?: boolean } = {}) {
-  const tab = page.locator('.tab', { hasText: name });
+  const tab = page.getByRole('tab', { name: new RegExp(`^${name}`) });
   await tab.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Fermer le projet…' }).click();
   const dialog = page.getByRole('dialog', { name: `Fermer « ${name} » ?` });
@@ -87,10 +87,7 @@ async function closeProject(page: Page, name: string, opts: { erase?: boolean } 
  * not by its title: the title may change once the folder has a history.
  */
 async function typeFolder(page: Page, folder: string) {
-  await page
-    .getByRole('button', { name: /Ajouter un projet/ })
-    .first()
-    .click();
+  await openNewProject(page);
   const dialog = page.getByRole('dialog').filter({ has: page.getByPlaceholder(FOLDER_PLACEHOLDER) });
   await dialog.getByPlaceholder(FOLDER_PLACEHOLDER).fill(folder);
   await expect(dialog.getByText(/Dépôt git détecté/)).toBeVisible();
@@ -142,7 +139,7 @@ test('a closed project comes back with its agent, its conversation and its ticke
   await expect(dialog).toBeHidden();
 
   // The project is back, with its own id, its agent and its ticket; the file of its history is gone.
-  await expect(page.locator('.tab', { hasText: 'demo-api' })).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: /^demo-api/ })).toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => savedProjectIds(app)).toEqual([projectId]);
   await expect.poll(() => closedFiles(app)).toEqual([]);
   // Its agent's card in the sidebar (the conversation shown has cards of its own: its turns).
@@ -182,7 +179,7 @@ test('a blank project leaves the history among the closed projects, where it is 
   await noFirstAgent(wizard);
   await wizard.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(wizard).toBeHidden();
-  await expect(page.locator('.tab', { hasText: 'demo-vierge' })).toHaveClass(/active/);
+  await expect(page.getByRole('tab', { name: /^demo-vierge/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.card .name')).toHaveCount(0);
   await page.getByRole('button', { name: /^Kanban/ }).click();
   await expect(page.getByRole('button', { name: 'Nouveau ticket' })).toBeVisible();

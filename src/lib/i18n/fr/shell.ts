@@ -16,8 +16,24 @@ export default {
     /** ESC-128: harnesses found, no account added yet. */
     noAccount: 'Aucun compte',
     noAccountDesc: 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.',
-    noEngineDesc: 'Installe l’un d’eux, puis indique son chemin dans Réglages › Harness s’il n’est pas dans le PATH :',
-    addProject: 'Ajouter un projet',
+    /** `{where}`: « Réglages › Harness », in bold. */
+    noEngineDesc:
+      'Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans {where} s’il n’est pas dans le PATH.',
+    harnessSettings: 'Réglages › Harness',
+    harnessSettingsButton: 'Réglages › Harness…',
+    /** `{harness}`: its name. */
+    copy: 'Copier la commande de {harness}',
+    copied: 'Commande copiée',
+    /** The machine's own account of a harness found: signed in (as whom), or not. */
+    machine: 'Connecté sur cette machine',
+    machineAs: 'Connecté sur cette machine · {email}',
+    notConnected: 'Installé, pas connecté',
+    searchAgain: 'Chercher à nouveau',
+    searched: 'Cherché dans le PATH',
+    searchedWsl: 'Cherché dans le PATH et dans WSL ({distro})',
+    /** The panel with no project, once a harness and an account are there. */
+    title: 'Un premier projet',
+    addProject: 'Ajouter un projet…',
   },
   /** The window that adds a project. */
   newProject: {
@@ -112,9 +128,14 @@ export default {
   },
   /** The bar at the bottom of the window. */
   status: {
-    active: { one: '{count} actif', other: '{count} actifs' },
-    waiting: '{n} en attente',
-    done: { one: '{count} terminé', other: '{count} terminés' },
+    /** After the count, in bold: « 4 actifs ». */
+    activeWord: { one: 'actif', other: 'actifs' },
+    waitingWord: 'en attente',
+    doneWord: { one: 'terminé', other: 'terminés' },
+    /** A group of quota gauges, as its tooltip and a screen reader name it; with several accounts, the account shown. */
+    harnessAccount: '{harness}, {account}',
+    /** Beside a harness whose account answers as extra usage, billed apart. */
+    overage: 'usage supplémentaire',
     /** `{key}`: the shortcut. */
     nextWaiting: 'Aller au prochain agent en attente ou à voir ({key})',
     procsTitle: 'Processus des agents en cours (avec les outils et serveurs MCP qu’ils lancent)',
@@ -136,14 +157,19 @@ export default {
       never: 'jamais',
       goneShort: 'distante supprimée',
       unpublishedShort: 'non publiée',
+      /** The commits to pull and to push, beside their arrows, to a screen reader. */
+      behindShort: { one: '{count} commit à tirer', other: '{count} commits à tirer' },
+      aheadShort: { one: '{count} commit à pousser', other: '{count} commits à pousser' },
     },
     restartIn: 'Redémarrage dans {seconds} s',
-    updateReady: 'Mise à jour {version} prête · Redémarrer',
+    /** `{restart}`: « Redémarrer », in bold. */
+    updateReady: 'Mise à jour {version} prête · {restart}',
+    restart: 'Redémarrer',
     updating: 'Mise à jour {version}…',
     sound: 'Son des notifications',
+    /** `{state}`: On or Off. */
+    soundTip: 'Son des notifications : {state}',
     soundOn: 'On',
     soundOff: 'Off',
-    /** `{key}`: the shortcut. */
-    settings: 'Réglages ({key})',
   },
 } as const satisfies Tree;

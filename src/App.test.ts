@@ -663,7 +663,7 @@ describe('App frame', () => {
     start('', { agents: [] });
     expect(await screen.findByText('Aucun agent dans ce projet.')).toBeInTheDocument();
     expect(
-      within(screen.getByText('Aucun agent dans ce projet.').parentElement!).getByRole('button', { name: '+ Nouvel agent' }),
+      within(screen.getByText('Aucun agent dans ce projet.').parentElement!).getByRole('button', { name: 'Nouvel agent' }),
     ).toBeInTheDocument();
   });
 
@@ -676,7 +676,7 @@ describe('App frame', () => {
     start('', { agents: [] });
     expect(await screen.findByText('No agents in this project.')).toBeInTheDocument();
     expect(
-      within(screen.getByText('No agents in this project.').parentElement!).getByRole('button', { name: '+ New agent' }),
+      within(screen.getByText('No agents in this project.').parentElement!).getByRole('button', { name: 'New agent' }),
     ).toBeInTheDocument();
     emit({ type: 'quitRequested', unsaved: 2 });
     const ask = await screen.findByRole('dialog', { name: 'Quit Escouade?' });
@@ -697,7 +697,7 @@ describe('App branches', () => {
     const view = start('', { handlers: { branch_list: () => BRANCHES, ...handlers } });
     await screen.findByRole('main');
     emit({ type: 'git', projectId: 'p1', git: gitInfo({ upstream: 'origin/main', hasRemote: true }) });
-    return { ...view, button: await screen.findByRole('button', { name: /⎇ main/ }) };
+    return { ...view, button: await screen.findByRole('button', { name: /^main/ }) };
   }
 
   it('switches branch from the status bar: the question about the changes takes the focus and gives it back to the button', async () => {

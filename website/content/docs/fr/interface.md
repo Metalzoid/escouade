@@ -1,47 +1,46 @@
 # L’interface
 
-Un tour de la fenêtre d’Escouade, région par région : la barre de titre et les onglets des projets, la barre latérale des agents, l’en-tête et la conversation, le panneau latéral, les deux dispositions, la barre d’état, les réglages et ce qui change sous macOS.
+Un tour de la fenêtre d’Escouade, région par région : la barre des projets et la barre de titre, la barre latérale des agents, l’en-tête et la conversation, le panneau latéral, les deux dispositions, la barre d’état, les réglages et ce qui change sous macOS.
 
 ## La fenêtre d’un coup d’œil
 
 ![La fenêtre d’Escouade : les onglets des projets en haut, la liste des agents à gauche, la conversation de l’agent choisi au centre et la barre d’état en bas](/images/agents.jpg)
 
-La fenêtre a cinq zones :
+La fenêtre a six zones :
 
-- **la barre de titre**, en haut : les onglets des projets et quelques boutons ;
-- **la barre latérale**, à gauche : les agents du projet affiché, le lancement du projet et ses terminaux ;
+- **la barre des projets**, tout à gauche : une tuile par projet ouvert, la vue d’ensemble, les statistiques et les réglages ;
+- **la barre de titre**, en haut : le nom du projet affiché, la recherche et l’éditeur ;
+- **la barre latérale**, à côté de la barre des projets : les agents du projet affiché, le lancement du projet et ses terminaux ;
 - **la zone principale**, au centre : la conversation de l’agent choisi, ou une autre vue du projet (Kanban, éditeur, terminal, journal d’une commande de lancement) ;
 - **le panneau latéral**, à droite, quand il est ouvert : les fichiers non commités et l’historique git ;
 - **la barre d’état**, en bas : les agents actifs, les quotas, le coût du jour et la branche.
 
 La fenêtre s’ouvre en 1440 × 900 et ne descend pas sous 1000 × 600. Escouade retient sa taille et sa position d’un lancement à l’autre.
 
-Les messages brefs (une confirmation, une erreur) s’affichent en bas à droite, au-dessus de la barre d’état, et disparaissent seuls : au bout de 3 secondes et demie, de 7 secondes pour une erreur, de 12 pour un message qui porte un bouton.
+Les messages brefs (une confirmation, une erreur, un changement de compte) s’affichent en bas, au centre, au-dessus de la barre d’état, précédés d’une icône (une coche verte pour une réussite, un bouclier rouge pour une erreur), et disparaissent seuls : au bout de 3 secondes et demie, de 7 secondes pour une erreur, de 12 pour un message qui porte un bouton.
 
 Fermer la fenêtre ne quitte pas Escouade et ne coupe pas les agents : elle se range dans la zone de notification (la barre des menus sous macOS). Un clic sur l’icône, « Afficher » dans son menu, ou le lancement d’Escouade une seconde fois la ramène. « Quitter » dans le menu de l’icône arrête l’application ; si des fichiers de l’éditeur ne sont pas enregistrés, la fenêtre revient d’abord et demande « Quitter Escouade ? » (bouton « Quitter quand même »). L’infobulle de l’icône dit combien d’agents attendent une réponse.
 
-## La barre de titre et les onglets des projets
+## La barre des projets
 
-De gauche à droite : le logo, le bouton « Vue d’ensemble », un onglet par projet suivi du bouton `+` (« Ajouter un projet »), puis « Éditeur » (quand un projet est affiché) et « Stats ». Sous Windows et Linux, Escouade dessine elle-même les boutons de la fenêtre (« Réduire », « Agrandir » ou « Restaurer », « Fermer »). Les parties vides de la barre servent à déplacer la fenêtre.
+Une colonne étroite, à gauche, de la barre de titre à la barre d’état, comme les espaces de travail de Slack. De haut en bas : « Vue d’ensemble », une tuile par projet ouvert, le bouton `+` (« Ajouter un projet »), puis, en bas, « Stats » et « Réglages ». Au premier démarrage, sans projet, elle ne garde que `+` et « Réglages ».
 
-Quand les onglets ne tiennent pas dans la barre, ils défilent : à la molette, au pavé tactile, ou par la fine barre de défilement qui paraît sous eux au survol. Le bouton `+` reste visible à leur droite, et la partie vide qui déplace la fenêtre aussi. Un fondu au bord dit qu’il y a des onglets cachés de ce côté ; il clignote dans la couleur de l’alerte quand l’un d’eux clignote. L’onglet du projet affiché revient de lui-même dans la barre, quelle que soit la façon de l’afficher (clic, notification, raccourci, « Vue d’ensemble »).
+### Une tuile de projet
 
-### Un onglet de projet
-
-Un onglet montre un carré de la couleur du projet, son nom, puis des signes qui ne s’affichent que s’ils ont lieu d’être :
+Une tuile est un carré de la couleur du projet avec deux lettres : les initiales des deux premiers mots de son nom (« demo-api » donne « DA »), sinon ses deux premières lettres. La tuile du projet affiché a un trait au bord de la barre et un anneau de sa couleur. Des signes s’ajoutent quand ils ont lieu d’être :
 
 | Signe | Ce qu’il veut dire |
 |---|---|
-| Point vert | Un agent du projet travaille et aucun n’attend ta réponse. |
-| « Δ 7 » | Le nombre de modifications git non commitées du projet (infobulle « Modifications git non commitées »). |
-| Pastille ambre avec un nombre | Autant d’agents du projet attendent ta réponse (infobulle « Agents en attente de réponse »). |
-| Onglet qui clignote | Un agent du projet a posé une question, a terminé ou a échoué pendant que tu regardais ailleurs. L’infobulle liste les agents (« À voir : … »). Le clignotement est rouge pour une erreur, ambre pour une question, vert pour une fin, la plus pressante l’emportant. Il s’arrête quand tu affiches l’agent, la fenêtre au premier plan. |
+| Pastille ambre avec un nombre, en haut à droite | Autant d’agents du projet attendent ta réponse. |
+| Point vert, en bas à droite | Un agent du projet travaille. |
+| Cadenas, en bas à gauche | Le projet est privé. Voir [Réglages : Projets](settings-projects). |
+| Anneau qui respire | Un agent du projet a posé une question, a terminé ou a échoué pendant que tu regardais ailleurs : rouge pour une erreur, ambre pour une question, vert pour une fin, la plus pressante l’emportant. Il s’arrête quand tu affiches l’agent, la fenêtre au premier plan. |
 
-L’infobulle d’un onglet donne aussi le chemin du dossier du projet.
+L’infobulle, à droite de la tuile, donne le nom du projet et son raccourci (`Ctrl 1` à `Ctrl 9`), puis les agents qui attendent et ceux qui travaillent, les agents à voir (« À voir : … ») et les modifications git non commitées (« Δ 7 · modifications non commitées ») ; « Rien en cours, rien de modifié » sinon.
 
 - Un clic affiche le projet. `Ctrl+1` à `Ctrl+9` affichent le projet n.
-- Glisse un onglet pour changer l’ordre des projets ; l’ordre est gardé. Près d’un bord de la barre, les onglets défilent, pour le déposer parmi ceux qui étaient cachés.
-- Un clic droit, ou un clic du milieu, ouvre le menu du projet :
+- Glisse une tuile pour changer l’ordre des projets : sa place reste en creux et un trait dit où elle tombe. `Alt+↑` et `Alt+↓` déplacent la tuile qui a le focus. L’ordre est gardé.
+- Un clic droit, ou un clic du milieu, ouvre le menu du projet ; le nom du projet dans la barre de titre ouvre le même :
 
 | Entrée | Ce qu’elle fait |
 |---|---|
@@ -50,13 +49,21 @@ L’infobulle d’un onglet donne aussi le chemin du dossier du projet.
 | « Activer le worktree par agent » ou « Désactiver le worktree par agent » | Bascule l’option pour les nouveaux agents du projet. Voir les [worktrees](worktrees). |
 | « Réglages du projet… » | Ouvre les réglages, onglet Projets, sur ce projet. |
 | « Ouvrir le dossier » | Ouvre le dossier du projet dans le gestionnaire de fichiers du système. |
-| « Fermer le projet… » | Retire le projet de l’application après confirmation : ses agents, ses terminaux et ses lancements s’arrêtent. Son historique (conversations, tickets, réglages) est gardé, et ajouter un projet dans le même dossier le retrouve ; une case de la confirmation permet de l’effacer aussi. Les fichiers et les worktrees sur le disque ne sont pas touchés. Voir [Réglages : Projets](settings-projects#projets-fermes). |
+| « Monter » et « Descendre » | Déplacent la tuile d’une place (`Alt+↑`, `Alt+↓`). |
+| « Fermer le projet… » | Retire le projet de l’application après confirmation : ses agents, ses terminaux et ses lancements s’arrêtent. Son historique (conversations, tickets, réglages) est gardé, et `+` le rouvre ; une case de la confirmation permet de l’effacer aussi. Les fichiers et les worktrees sur le disque ne sont pas touchés. Voir [Réglages : Projets](settings-projects#projets-fermes). |
+
+Quand les projets ne tiennent pas dans la colonne, la liste défile entre « Vue d’ensemble » et `+`, ses bords fondus disant qu’il y en a d’autres. La tuile du projet affiché revient d’elle-même dans la vue, quelle que soit la façon de l’afficher (clic, notification, raccourci, « Vue d’ensemble »). Un projet hors de vue dont un agent attend se signale par une pastille ambre sous la liste (ou au-dessus) : un clic l’amène dans la vue.
 
 ### Les boutons de la barre
 
 - **« Vue d’ensemble »** (`Ctrl+Maj+A`) affiche les agents de tous les projets sur une page ; le même bouton, ou le même raccourci, la referme. Voir [suivre ses agents](overview).
-- **« Éditeur »** ouvre l’éditeur sur le dossier du projet (« Parcourir et éditer les fichiers du projet »). Voir [l’éditeur](editor).
-- **« Stats »** affiche les statistiques de consommation. Voir les [statistiques](stats).
+- **`+`** ouvre l’assistant « Nouveau projet ». Quand des projets ont été fermés, il ouvre d’abord un menu court : « Ajouter un projet… », les derniers projets fermés avec « Rouvrir », et « Tous les projets fermés… » (Réglages › Projets).
+- **« Stats »** affiche les statistiques de consommation ; un second clic revient au projet. Voir les [statistiques](stats).
+- **« Réglages »** (`Ctrl+,`) ouvre la fenêtre des réglages.
+
+## La barre de titre
+
+Au-dessus de la barre des projets, le logo (sous Windows et Linux). Au-dessus de la barre latérale, le nom du projet affiché : sa pastille, son nom, le cadenas d’un projet privé, le nombre de modifications git non commitées (« Δ 7 ») et une flèche ; un clic ouvre le menu du projet. Au centre, « Rechercher » (`Ctrl+K`) cherche dans les conversations de tous les agents. À droite, « Éditeur » ouvre l’éditeur sur le dossier du projet (« Parcourir et éditer les fichiers du projet », voir [l’éditeur](editor)), puis, sous Windows et Linux, les boutons de la fenêtre (« Réduire », « Agrandir » ou « Restaurer », « Fermer »). Les parties vides de la barre servent à déplacer la fenêtre.
 
 ## La barre latérale
 
@@ -184,22 +191,21 @@ De gauche à droite :
 
 | Élément | Ce qu’il montre |
 |---|---|
-| `● N actifs` | Le nombre d’agents « En cours ». |
-| `● N en attente` | Le nombre d’agents « Question », en ambre quand il y en a. Un clic va à l’agent suivant qui attend ou qui est à voir (`Ctrl+J`). |
-| `✓ N terminés` | Le nombre d’agents « Terminé ». |
-| `N Claude · mémoire · CPU` | Les processus Claude en cours, avec les outils et les serveurs MCP qu’ils lancent ; l’infobulle détaille agent par agent. |
-| `5h … reset 3h01` et `7j … reset 4j 12h` | Les quotas du compte en cours, fenêtre de 5 heures et de 7 jours : une barre (qui vire à l’ambre au-delà de 80 %) et le temps avant la remise à zéro. Le pourcentage est dans l’infobulle. Avec plusieurs comptes, le nom du compte en cours précède les barres et un clic ouvre le panneau « Quotas des comptes ». |
-| `Aujourd'hui 3,48 $` | Ce que tes agents ont coûté aujourd’hui, précédé de « ≈ » tant qu’un tour tourne. |
-| `⎇ main ↑1 ↓3` | La branche du projet affiché, avec les commits à pousser (↑) et à tirer (↓). Un clic ouvre le sélecteur de branches. « non publiée » ou « distante supprimée » remplace les flèches quand la branche n’a pas de suivi. |
+| `N actifs` | Le nombre d’agents « En cours ». |
+| `N en attente Ctrl J` | Le nombre d’agents « Question », en ambre quand il y en a. Un clic va à l’agent suivant qui attend ou qui est à voir (`Ctrl+J`). |
+| `N terminés` | Le nombre d’agents « Terminé ». |
+| `N agents · mémoire · CPU` | Les processus des agents en cours, avec les outils et les serveurs MCP qu’ils lancent ; l’infobulle détaille agent par agent. |
 | Mise à jour | « Mise à jour X prête · Redémarrer » quand une mise à jour est téléchargée : un clic ouvre la fenêtre de la mise à jour. Pendant le téléchargement, la barre dit « Mise à jour X… » ; quand un redémarrage automatique est prévu, « Redémarrage dans N s » et le bouton « Plus tard » prennent la place. Voir les [mises à jour](updates). |
-| `♪ On` ou `♪ Off` | Active ou coupe le son des notifications. |
-| `⚙` | Ouvre les réglages (`Ctrl+,`). |
+| `Claude 5 h 22 % 7 j 36 %` | Un groupe de jauges par harness qui fait travailler des agents (celui de l’agent affiché d’abord) : le nom du harness, puis chaque fenêtre de quota du compte où partent ses nouveaux agents, une barre fine (ambre au-delà de 80 %) et son pourcentage. La remise à zéro est dans l’infobulle. Une projection (« → 86 % ») ne s’affiche qu’au-delà de 80 %, en orange, en rouge au-delà de 100 %. Un harness sans quota (OpenCode) montre son coût du jour sur son budget (« 0,42 $ / 5 $ »). « usage supplémentaire », en ambre, dit qu’un compte du harness répond au-delà de son quota, facturé à part. Un clic ouvre le panneau « Quotas des comptes » : chaque compte, groupé par harness, avec toutes ses fenêtres, leurs projections et leur remise à zéro, son coût du jour, le budget d’OpenCode et les crédits de Copilot CLI. Sous 1240 pixels de large, les pourcentages, les projections et « usage supplémentaire » laissent la place : le panneau les écrit. |
+| `Aujourd'hui 3,48 $` | Ce que tes agents ont coûté aujourd’hui, précédé de « ≈ » quand une part en est estimée. |
+| `main ↑1 ↓3` | La branche du projet affiché, avec les commits à pousser et à tirer. Un clic ouvre le sélecteur de branches. « non publiée » ou « distante supprimée » remplace les flèches quand la branche n’a pas de suivi. |
+| Haut-parleur | Active ou coupe le son des notifications. |
 
 Voir [les quotas et le coût](usage) et [les branches](branches).
 
 ## Les réglages
 
-`Ctrl+,` ou le bouton ⚙ de la barre d’état ouvre la fenêtre des réglages : les onglets à gauche, le contenu à droite. Un onglet modifié est marqué ; « Enregistrer » enregistre tous les onglets d’un coup et « Annuler » (ou `Échap`) ferme la fenêtre sans enregistrer. L’onglet « Comptes » fait exception : il enregistre à chaque changement. Les onglets « Projets », « Kanban » et « Intégrations » règlent un projet à la fois, choisi en haut ; « Réglages du projet… » dans le menu d’un onglet de projet ouvre la fenêtre sur ce projet.
+`Ctrl+,` ou le bouton « Réglages », en bas de la barre des projets, ouvre la fenêtre des réglages : les onglets à gauche, le contenu à droite. Un onglet modifié est marqué ; « Enregistrer » enregistre tous les onglets d’un coup et « Annuler » (ou `Échap`) ferme la fenêtre sans enregistrer. L’onglet « Comptes » fait exception : il enregistre à chaque changement. Les onglets « Projets », « Kanban » et « Intégrations » règlent un projet à la fois, choisi en haut ; « Réglages du projet… » dans le menu d’un projet ouvre la fenêtre sur ce projet.
 
 | Onglet | Page |
 |---|---|
@@ -216,7 +222,7 @@ Voir [les quotas et le coût](usage) et [les branches](branches).
 
 ## Sous macOS
 
-- **Barre de titre native.** macOS dessine lui-même les boutons de la fenêtre (rouge, jaune, vert) à gauche de la barre de titre, avant les onglets ; Escouade n’affiche pas les siens. Le bouton rouge range la fenêtre dans la barre des menus, comme sous Windows et Linux, et `⌘Q` ou « Quitter Escouade » arrête l’application.
+- **Barre de titre native.** macOS dessine lui-même les boutons de la fenêtre (rouge, jaune, vert) à gauche de la barre de titre, au-dessus de la barre des projets, à la place du logo ; Escouade n’affiche pas les siens. Le bouton rouge range la fenêtre dans la barre des menus, comme sous Windows et Linux, et `⌘Q` ou « Quitter Escouade » arrête l’application.
 - **`⌘` à la place de `Ctrl`.** Tous les raccourcis de cette page prennent `⌘` (`⌘N`, `⌘,`, `⌘K`, `⇧⌘L`…), sauf `Ctrl+Tab` et `Ctrl+Maj+Tab`, parce que `⌘Tab` change d’application. Dans les terminaux, `⌘C` et `⌘V` copient et collent, et les touches `Ctrl` vont au shell.
 - **Barre des menus.** Escouade a ses menus macOS : le sien (« À propos d’Escouade », « Masquer Escouade », « Quitter Escouade »…), « Édition », « Présentation », « Fenêtre » et « Aide », dans la langue de l’interface.
 - **Notifications.** L’icône du Dock rebondit quand un agent a besoin de toi, là où la barre des tâches clignote sous Windows. Voir [les notifications](notifications).

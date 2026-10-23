@@ -188,11 +188,11 @@ export default {
   // The current account's quota in the status bar (the percentage is in a tooltip), and the panel of every account's.
   // Each bar is a window of the quota, labelled by its length (`{n}`), or the month's credits.
   quota: {
-    hours: { label: '{n}h', name: { one: 'Quota sur {count} heure', other: 'Quota sur {count} heures' } },
-    days: { label: '{n}j', name: { one: 'Quota sur {count} jour', other: 'Quota sur {count} jours' } },
+    hours: { label: '{n} h', name: { one: 'Quota sur {count} heure', other: 'Quota sur {count} heures' } },
+    days: { label: '{n} j', name: { one: 'Quota sur {count} jour', other: 'Quota sur {count} jours' } },
     credits: { label: 'crédits', name: 'Crédits du mois' },
     /** A week's window, as its bar is labelled. */
-    week: { label: '7j' },
+    week: { label: '7 j' },
     /** `{countdown}`: the time left, as `fCountdown` writes it. */
     reset: 'reset {countdown}',
     /** The same, when it is also the account new agents go to (no other one takes them). */
@@ -222,8 +222,14 @@ export default {
     /** The button that is the quota group; `{name}`: the current account. */
     open: 'Quotas par compte (compte en cours : {name})',
     title: 'Quotas des comptes',
+    /** The status bar's gauges, a button that opens the panel. */
+    label: 'Quotas par compte',
     /** Under a harness without a quota: only what its turns cost. */
     noQuota: 'Pas de quota : seul le coût de ses tours compte.',
+    budget: 'Budget par jour',
+    budgetReset: 'Remise à zéro à minuit.',
+    projectionNote:
+      'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %. La barre d’état ne montre que celles qui passent 80 %.',
     current: 'en cours',
     over: 'au-delà du seuil de pause ou de changement de compte',
     /** What the account's turns cost today; `{amount}`: « 1,20 $ » (« ≈ 1,20 $ » while a turn is running). */

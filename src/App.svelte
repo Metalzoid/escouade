@@ -17,6 +17,7 @@
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
   import NewBranchModal from './components/branches/NewBranchModal.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
+  import Icon from './components/Icon.svelte';
   import IconSprite from './components/IconSprite.svelte';
   import Conversation from './components/Conversation.svelte';
   import ConversationOverlay from './components/ConversationOverlay.svelte';
@@ -39,6 +40,7 @@
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
   import Overview from './components/Overview.svelte';
+  import ProjectRail from './components/ProjectRail.svelte';
   import RunView from './components/RunView.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Stats from './components/Stats.svelte';
@@ -126,60 +128,65 @@
 <!-- The window hidden (to the tray, by the app's own button or the system's): the dictation stops. -->
 <svelte:document onvisibilitychange={() => document.hidden && dictation.cancel()} />
 
+<!-- The window (ESC-158): the title bar across it, the projects' rail on the left, the status bar at the bottom; the
+     sidebar on the frame and the work on its panel. -->
 <div class="root">
   <TitleBar />
+  <ProjectRail />
   <div class="body">
     {#if initError}
-      <div class="fatal">{t('shell.app.cantStart', { error: initError })}</div>
+      <div class="work"><div class="fatal">{t('shell.app.cantStart', { error: initError })}</div></div>
     {:else if !app.ready}
-      <div class="fatal"></div>
+      <div class="work"></div>
     {:else if app.ui.view === 'overview'}
-      <Overview />
+      <div class="work"><Overview /></div>
     {:else if app.ui.view === 'stats'}
-      <Stats />
+      <div class="work"><Stats /></div>
     {:else if app.project}
       {@const project = app.project}
       <Sidebar {project} />
-      {#if app.boardOn}
-        {#key project.id}
-          <Board {project} />
-        {/key}
-      {:else if app.editorOn}
-        {#key project.id}
-          <EditorView {project} />
-        {/key}
-      {:else if app.runCommand}
-        <RunView cmd={app.runCommand} {project} />
-      {:else if app.term}
-        <TerminalView term={app.term} {project} />
-      {:else if app.agent}
-        {#key app.agent.id}
-          <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
-          {#if app.subView[app.agent.id]}
-            {#key app.subView[app.agent.id]}
-              <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
-            {/key}
-          {:else if app.taskView[app.agent.id]}
-            {#key app.taskView[app.agent.id]}
-              <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
-            {/key}
-          {:else}
-            <Conversation agent={app.agent} {project} />
+      <div class="work">
+        {#if app.boardOn}
+          {#key project.id}
+            <Board {project} />
+          {/key}
+        {:else if app.editorOn}
+          {#key project.id}
+            <EditorView {project} />
+          {/key}
+        {:else if app.runCommand}
+          <RunView cmd={app.runCommand} {project} />
+        {:else if app.term}
+          <TerminalView term={app.term} {project} />
+        {:else if app.agent}
+          {#key app.agent.id}
+            <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
+            {#if app.subView[app.agent.id]}
+              {#key app.subView[app.agent.id]}
+                <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
+              {/key}
+            {:else if app.taskView[app.agent.id]}
+              {#key app.taskView[app.agent.id]}
+                <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
+              {/key}
+            {:else}
+              <Conversation agent={app.agent} {project} />
+            {/if}
+          {/key}
+          {#if app.split}
+            <SidePanel {project} agent={app.agent} docked />
+          {:else if app.filesOpen}
+            <SidePanel {project} agent={app.agent} />
           {/if}
-        {/key}
-        {#if app.split}
-          <SidePanel {project} agent={app.agent} docked />
-        {:else if app.filesOpen}
-          <SidePanel {project} agent={app.agent} />
+        {:else}
+          <div class="noagent">
+            <span>{t('shell.app.noAgent')}</span>
+            <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+          </div>
         {/if}
-      {:else}
-        <div class="noagent">
-          <span>{t('shell.app.noAgent')}</span>
-          <button class="btn primary" onclick={() => app.newAgent()}>+ {t('shell.app.newAgent')}</button>
-        </div>
-      {/if}
+      </div>
     {:else}
-      <Welcome />
+      <div class="work"><Welcome /></div>
     {/if}
   </div>
   <StatusBar />
@@ -253,8 +260,9 @@
     isolation: isolate;
     height: 100vh;
     min-width: 1000px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr) 30px;
     background: var(--frame);
     overflow: hidden;
   }
@@ -269,9 +277,26 @@
     pointer-events: none;
   }
   .body {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    padding-right: 8px;
+  }
+  /* The work, on a panel in relief: its corners rounded, a line around it and a shadow under it. */
+  .work {
+    position: relative;
     flex: 1;
     display: flex;
+    min-width: 0;
     min-height: 0;
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow:
+      0 0 0 1px var(--line),
+      0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
+    overflow: hidden;
   }
   .fatal {
     flex: 1;

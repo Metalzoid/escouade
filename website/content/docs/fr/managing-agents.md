@@ -82,7 +82,7 @@ La page sur [les comptes](accounts) explique comment en ajouter et ce que fait �
 
 ## Travailler dans un worktree ou sur une branche existante
 
-Par défaut, un agent travaille dans le dossier du projet, comme toi. Avec l’option « Un worktree par agent », chaque nouvel agent reçoit son propre worktree : un dossier à lui, sur une nouvelle branche `escouade/<nom>` créée à partir de la branche du projet, ou de la branche cible du Kanban avec « Les agents partent de la branche cible » (voir [les réglages du Kanban](settings-board)). Ses modifications restent à part, et tu les merges quand tu veux. L’option se choisit à la création du projet, dans les réglages du projet, ou par un clic droit sur l’onglet du projet puis « Activer le worktree par agent » ; elle ne concerne que les agents créés ensuite.
+Par défaut, un agent travaille dans le dossier du projet, comme toi. Avec l’option « Un worktree par agent », chaque nouvel agent reçoit son propre worktree : un dossier à lui, sur une nouvelle branche `escouade/<nom>` créée à partir de la branche du projet, ou de la branche cible du Kanban avec « Les agents partent de la branche cible » (voir [les réglages du Kanban](settings-board)). Ses modifications restent à part, et tu les merges quand tu veux. L’option se choisit à la création du projet, dans les réglages du projet, ou par un clic droit sur la tuile du projet puis « Activer le worktree par agent » ; elle ne concerne que les agents créés ensuite.
 
 - La carte de l’agent affiche sa branche après un `⎇`.
 - Si le projet a des commandes de préparation (dépendances, code généré…), elles tournent dans le nouveau worktree avant le premier message de l’agent : la carte dit « Préparation… », et ton premier message part une fois la préparation finie.

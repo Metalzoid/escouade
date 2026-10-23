@@ -22,11 +22,23 @@ export type TipContent =
   | null
   | undefined
   | false
-  | { text?: string | null | undefined; cut?: boolean; aria?: boolean; title?: string; rows?: (TipRow | string)[] };
+  | {
+      text?: string | null | undefined;
+      cut?: boolean;
+      aria?: boolean;
+      title?: string;
+      /** The shortcut of what it names, at the end of its title (a project's tile: « Ctrl 1 »). */
+      kbd?: string;
+      rows?: (TipRow | string)[];
+      /** Beside the element, on its right, rather than above it (the projects' rail). */
+      side?: 'right';
+    };
 
 /** A line of a rich tooltip: its text, after an icon of the app. */
 export interface TipRow {
   icon?: IconName;
+  /** A dot of this colour in place of an icon (an agent waiting, at work). */
+  dot?: string;
   text: string;
 }
 
@@ -38,20 +50,33 @@ export const WARM_FOR = 300;
 const MARGIN = 8;
 /** The room between the tooltip and its element. */
 const GAP = 6;
+/** The room between a tooltip beside its element and the element (a tile of the projects' rail, its active trait). */
+const BESIDE = 12;
 
 interface Options {
   text: string;
   cut: boolean;
   aria: boolean;
   title?: string;
+  kbd?: string;
   rows: TipRow[];
+  side?: 'right';
 }
 
 function options(content: TipContent): Options {
   if (content && typeof content === 'object') {
     const rows = (content.rows ?? []).map((r) => (typeof r === 'string' ? { text: r } : r));
-    const own = [content.title, ...rows.map((r) => r.text)].filter(Boolean).join('\n');
-    return { text: content.text ?? own, cut: !!content.cut, aria: content.aria !== false, title: content.title, rows };
+    const head = content.title && content.kbd ? `${content.title} (${content.kbd})` : content.title;
+    const own = [head, ...rows.map((r) => r.text)].filter(Boolean).join('\n');
+    return {
+      text: content.text ?? own,
+      cut: !!content.cut,
+      aria: content.aria !== false,
+      title: content.title,
+      kbd: content.kbd,
+      rows,
+      side: content.side,
+    };
   }
   return { text: content || '', cut: false, aria: true, rows: [] };
 }
@@ -70,12 +95,22 @@ function fill(el: HTMLElement, o: Options) {
   if (o.title) {
     const b = document.createElement('b');
     b.textContent = o.title;
+    if (o.kbd) {
+      const k = document.createElement('kbd');
+      k.textContent = o.kbd;
+      b.append(k);
+    }
     el.append(b);
   }
   for (const r of o.rows) {
     const row = document.createElement('span');
     row.className = 'tip-row';
-    if (r.icon) {
+    if (r.dot) {
+      const dot = document.createElement('i');
+      dot.className = 'tip-dot';
+      dot.style.background = r.dot;
+      row.append(dot);
+    } else if (r.icon) {
       const svg = document.createElementNS(SVG, 'svg');
       svg.setAttribute('class', 'icon');
       svg.setAttribute('width', '14');
@@ -142,10 +177,10 @@ function close(t?: Tipped) {
 
 function position() {
   if (!box || !owner) return;
-  const at = place(owner.node.getBoundingClientRect(), box.getBoundingClientRect(), {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
+  const view = { width: window.innerWidth, height: window.innerHeight };
+  const anchor = owner.node.getBoundingClientRect();
+  const at =
+    owner.options().side === 'right' ? beside(anchor, box.getBoundingClientRect(), view) : place(anchor, box.getBoundingClientRect(), view);
   box.style.left = `${at.left}px`;
   box.style.top = `${at.top}px`;
 }
@@ -225,6 +260,19 @@ function install() {
     cancel();
     close();
   });
+}
+
+/** Where a tooltip of `size` stands beside an element at `anchor`: on its right, centered on it, in the window. */
+export function beside(
+  anchor: { right: number; top: number; height: number },
+  size: { width: number; height: number },
+  view: { width: number; height: number },
+): { left: number; top: number } {
+  const top = anchor.top + anchor.height / 2 - size.height / 2;
+  return {
+    left: Math.min(anchor.right + BESIDE, view.width - MARGIN - size.width),
+    top: Math.max(MARGIN, Math.min(top, view.height - MARGIN - size.height)),
+  };
 }
 
 /** Where a tooltip of `size` stands for an element at `anchor`: above it and centered, below when there is no room above, in the window. */

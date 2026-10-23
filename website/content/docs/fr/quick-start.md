@@ -86,7 +86,7 @@ Dès l’envoi, le statut de l’agent passe à « En cours » et la conversat
 
 ## Répondre à une question ou à une autorisation
 
-Quand Claude a besoin de toi, une carte à bordure ambre apparaît dans la conversation, le statut de l’agent devient « Question », et son onglet et sa carte clignotent si tu regardes ailleurs. Il y a deux cartes.
+Quand Claude a besoin de toi, une carte à bordure ambre apparaît dans la conversation, le statut de l’agent devient « Question », et sa carte et la tuile de son projet le signalent si tu regardes ailleurs. Il y a deux cartes.
 
 **« Claude demande une autorisation »** nomme l’outil et ce qu’il va faire. Trois boutons :
 

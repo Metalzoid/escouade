@@ -10,7 +10,7 @@ The tab acts on the project chosen in the “Project” row, under the header of
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Name” | The project’s name, as its tab and the project picker show it. It can’t be left empty: “Save” is blocked until it has a name. | The name given at creation, the folder’s name if you gave none |
+| “Name” | The project’s name, as the title bar, its tile’s tooltip and the project picker show it. It can’t be left empty: “Save” is blocked until it has a name. | The name given at creation, the folder’s name if you gave none |
 | “Folder” | The project’s folder, shown but not editable. The “Open” button opens it with the system’s file manager. | — |
 | “Color” | One swatch out of 14 (13 hues and a neutral tone). The color identifies the project and tints the interface while it is shown. | The first color no project has taken, at creation |
 | “Preferred account” | The account new agents and tickets of the project start on. Only visible with several accounts. Choices: “Automatic” (the first active account under the pause threshold, in the order of the accounts) or one of the active accounts that serve this project. | “Automatic” |
@@ -31,7 +31,7 @@ When “Remote control for all agents” is on in the [“Harness”](settings-c
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Private project” | The agents of the other projects don’t see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything. A lock follows its name, on its tab and in the “Project” row. | Off, or “New projects are private” for a project added |
+| “Private project” | The agents of the other projects don’t see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything. A lock marks it, on its tile, beside its name in the title bar and in the “Project” row. | Off, or “New projects are private” for a project added |
 
 | “Accounts” (private project) | The accounts of its default harness its agents may go to: reserved to it alone, or shared with other projects (sessions, memory, history in common). “Add a reserved account…” and “Reserve Pro to this project” fix it. | — |
 | “Shared accounts at the limit” (private project) | When its reserved accounts reach the usage limit, its agents may go on on a shared account (a switch of account, a handover to another harness). Off, they wait for the reset. | Off |

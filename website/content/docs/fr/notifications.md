@@ -18,15 +18,15 @@ Ces signaux valent aussi pour un agent qui tourne dans [la vue Claude Code](clau
 
 ## Dans la fenêtre
 
-### L’onglet et la carte qui clignotent
+### La tuile et la carte qui clignotent
 
-Quand un agent pose une question, termine ou tombe en erreur alors que tu ne le regardais pas, sa carte dans la barre latérale clignote, et l’onglet de son projet aussi (s’il n’est pas celui que tu regardes). La couleur dit de quoi il s’agit : ambre pour une question, vert pour une fin, rouge pour une erreur. Quand plusieurs agents d’un projet sont à voir, l’onglet prend la couleur la plus pressante : l’erreur d’abord, puis la question, puis la fin. Survole l’onglet pour lire les noms (« À voir : refacto-auth, tests-e2e »).
+Quand un agent pose une question, termine ou tombe en erreur alors que tu ne le regardais pas, sa carte dans la barre latérale clignote, et la tuile de son projet, dans la barre des projets, prend un anneau qui respire (s’il n’est pas celui que tu regardes). La couleur dit de quoi il s’agit : ambre pour une question, vert pour une fin, rouge pour une erreur. Quand plusieurs agents d’un projet sont à voir, l’onglet prend la couleur la plus pressante : l’erreur d’abord, puis la question, puis la fin. Survole l’onglet pour lire les noms (« À voir : refacto-auth, tests-e2e »).
 
 Le clignotement dure jusqu’à ce que tu affiches l’agent, avec la fenêtre au premier plan. « Regarder » l’agent veut dire que sa conversation est à l’écran : si l’éditeur, le Kanban, un terminal, le journal d’un lancement, les statistiques ou la vue d’ensemble la cachent, l’agent reste à voir. Si ton système demande de réduire les animations, la carte garde une teinte fixe au lieu de clignoter.
 
 ### Les compteurs
 
-Les onglets des projets affichent une pastille avec le nombre d’agents qui attendent une réponse. La barre d’état, en bas, compte les agents « actifs », « en attente » et « terminés », et son bouton « N en attente » amène au prochain agent à voir. `Ctrl+J` fait la même chose (voir [suivre ses agents](overview)).
+Les tuiles des projets affichent une pastille avec le nombre d’agents qui attendent une réponse ; un projet hors de vue qui attend se signale par une pastille sous la liste. La barre d’état, en bas, compte les agents « actifs », « en attente » et « terminés », et son bouton « N en attente » amène au prochain agent à voir. `Ctrl+J` fait la même chose (voir [suivre ses agents](overview)).
 
 ## Hors de la fenêtre
 

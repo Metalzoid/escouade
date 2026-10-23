@@ -191,9 +191,12 @@ test.describe('the credits of a Copilot CLI account', () => {
     await send(page, 'bonjour');
     await expect(page.getByText('Copilot a reçu : bonjour')).toBeVisible();
     // The fake's calls say 90 % of the month's credits left: a bar « crédits », 10 % used.
-    const credits = page.locator('footer').getByRole('meter', { name: 'Crédits du mois' });
+    // Its harness's group, first (the agent shown is Copilot CLI's), then Claude Code's, whose first agent is at work too.
+    const group = page.locator('footer .grp').first();
+    await expect(group).toHaveAttribute('data-engine', 'copilot');
+    const credits = group.getByRole('meter', { name: 'Crédits du mois' });
     await expect(credits).toHaveAttribute('aria-valuenow', '10');
-    await expect(page.locator('footer').getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveCount(0);
+    await expect(group.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveCount(0);
     // Their end stops the turn, which resumes by itself once they are given again: the first of next month.
     await send(page, 'limite');
     await expect(credits).toHaveAttribute('aria-valuenow', '100');

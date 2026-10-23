@@ -219,15 +219,15 @@ test('the terminals and the editor have their own font size, set at once and fit
   expect(Math.round(gutter)).toBe(Math.round(line.height));
   expect(await overflowing(page)).toEqual([]);
 
-  // In the smallest window the interface is laid out for, nothing is cut either: the status bar keeps its buttons whole
-  // (the settings' among them), what it tells gives way, the branch's name cut short.
+  // In the smallest window the interface is laid out for, nothing is cut either: the status bar keeps its buttons whole,
+  // what it tells gives way, the branch's name cut short; the settings are on the projects' rail (ESC-158).
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1000, height: 600, deviceScaleFactor: 0, mobile: false });
   await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual([1000, 600]);
   expect(await overflowing(page)).toEqual([]);
   const bar = page.locator('footer.bar');
-  await expect(bar.locator('button', { hasText: '♪' })).toBeInViewport({ ratio: 1 });
-  await expect(bar.locator('button', { hasText: '⚙' })).toBeInViewport({ ratio: 1 });
+  await expect(bar.getByRole('button', { name: 'Son des notifications' })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('button', { name: 'Réglages (Ctrl+,)' })).toBeInViewport({ ratio: 1 });
   await expect(bar.getByRole('button', { name: new RegExp(BRANCH) })).toBeInViewport({ ratio: 1 });
   const branch = await bar
     .locator('.branch .name')

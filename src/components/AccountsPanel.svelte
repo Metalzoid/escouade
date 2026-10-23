@@ -1,24 +1,29 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { accountName, metersShown, quotaGroups } from '../lib/accounts';
+  import { accountName, metersShown, projectedDayCost, projectionLevel, quotaGroups } from '../lib/accounts';
   import { capsOf } from '../lib/engines';
   import { trapFocus } from '../lib/focus';
+  import { fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
-  import { estimateHint, fSpentUsd } from '../lib/spend';
+  import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
+  import Icon from './Icon.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
 
-  // The panel the quota group of the status bar opens, above it, when there are several accounts: a group per harness, in
-  // « Ordre des harness », each account's meters with the percentage written, the current account of the harness first.
+  // The panel the quota gauges of the status bar open, above them: a group per harness, in « Ordre des harness », each
+  // account with its windows (the percentage, the projection, the reset), its cost of the day, and what concerns it
+  // (current, past the threshold, extra usage, a daily budget); the current account of the harness first.
   // `anchor`: that button, to open over it and to give the focus back to. `id`: what the button's `aria-controls` names.
   let { anchor, id, onclose }: { anchor?: HTMLElement; id?: string; onclose: () => void } = $props();
 
   /** The width of the panel. */
-  const WIDTH = 360;
+  const WIDTH = 440;
 
   const groups = $derived(quotaGroups(app.now));
-  let place = $state({ left: 16, bottom: 38 });
+  /** Some cost is estimated (Codex): the panel says how. */
+  const estimated = $derived(groups.some((g) => estimatedBy(g.engine)));
+  let place = $state({ left: 16, bottom: 36 });
 
   onMount(() => {
     if (anchor) {
@@ -38,6 +43,23 @@
     e.preventDefault();
     e.stopPropagation();
     onclose();
+  }
+
+  /** What the account answering as extra usage does, under it (choice 22). */
+  const overage = (id: string, name: string, engine: string) =>
+    t(
+      id === app.usage.current[engine as keyof typeof app.usage.current]
+        ? 'accounts.quota.overageCurrent'
+        : (app.settings.switchAt ?? 100) < 100
+          ? 'accounts.quota.overageMoving'
+          : 'accounts.quota.overage',
+      { names: name },
+    );
+
+  /** A harness without a quota (OpenCode): its cost of the day out of its budget, and where it would end at midnight. */
+  function budgetOf(cost: number, budget: number) {
+    const end = app.settings.quotaProjection === false ? null : projectedDayCost(cost, app.now);
+    return { pct: Math.min(100, (cost / budget) * 100), end, level: end === null ? null : projectionLevel((end / budget) * 100) };
   }
 </script>
 
@@ -60,7 +82,7 @@
   {#each groups as g (g.engine)}
     {@const noQuota = capsOf(g.engine)?.quota === 'none'}
     <section class="harness" aria-label={t('accounts.tab.group', { harness: g.name })}>
-      <h3 class="title">{g.name}</h3>
+      <h3><span class="emark">{g.name.split(' ')[0]}</span>{t('accounts.tab.group', { harness: g.name })}</h3>
       {#each g.rows as r (r.account.id)}
         {@const u = r.usage}
         {@const meters = metersShown(u, g.engine)}
@@ -71,27 +93,53 @@
           aria-label={accountName(r.account)}
           aria-current={r.current ? 'true' : undefined}
         >
-          <div class="head">
-            <span class="name">{accountName(r.account)}</span>
-            {#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}
-            {#if r.over}<span class="tag over">{t('accounts.panel.over')}</span>{/if}
-            <span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
-              >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
-            >
-          </div>
+          <span class="name"
+            >{accountName(r.account)}{#if r.current}<span class="tag cur">{t('accounts.panel.current')}</span>{/if}{#if r.over}<span
+                class="tag over">{t('accounts.panel.over')}</span
+              >{/if}</span
+          >
+          <span class="today" use:tip={r.today.estimated ? estimateHint(r.today) : undefined}
+            >{t('accounts.panel.today', { amount: fSpentUsd(r.today) })}</span
+          >
           {#if r.reasons.length}<div class="why">{r.reasons.join(' · ')}</div>{/if}
           {#if noQuota}
-            <div class="why">{t('accounts.panel.noQuota')}</div>
+            {#if u?.dailyBudget}
+              {@const b = budgetOf(u.todayCost, u.dailyBudget)}
+              <div class="windows">
+                <span class="w wide">
+                  <span class="top"
+                    ><span>{t('accounts.panel.budget')}</span><span
+                      ><b>{fUsd(u.todayCost)} / {fUsd(u.dailyBudget)}</b>{#if b.end !== null}<span class="p {b.level}"
+                          ><span class="sr">{t('accounts.quota.projectedSr')}</span>{t('accounts.quota.projectedCost', {
+                            amount: fUsd(b.end),
+                          })}</span
+                        >{/if}</span
+                    ></span
+                  >
+                  <span class="gauge" class:hot={b.pct > 80}><span class="fill" style:width="{b.pct}%"></span></span>
+                  <span>{t('accounts.panel.noQuota')} {t('accounts.panel.budgetReset')}</span>
+                </span>
+              </div>
+            {:else}
+              <div class="why">{t('accounts.panel.noQuota')}</div>
+            {/if}
           {:else if !u || u.connected || u.meters.length}
             <!-- An account that is not signed in and was never read has no meters to show. -->
-            {#each meters as m (m.minutes ?? 'credits')}
-              <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} detail />
-            {/each}
+            <div class="windows">
+              {#each meters as m (m.minutes ?? 'credits')}
+                <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} detail />
+              {/each}
+            </div>
+          {/if}
+          {#if u?.overage}
+            <p class="bill"><Icon name="info" size={14} /><span>{overage(r.account.id, accountName(r.account), g.engine)}</span></p>
           {/if}
         </div>
       {/each}
     </section>
   {/each}
+  {#if estimated}<p class="note">{t('stats.cost.estimatedHint')}</p>{/if}
+  {#if app.settings.quotaProjection !== false}<p class="note">{t('accounts.panel.projectionNote')}</p>{/if}
 </div>
 
 <style>
@@ -108,76 +156,165 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
-    background: var(--elev);
-    border: 1px solid var(--line2);
-    border-radius: var(--r);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-    font-size: 12px;
-    color: var(--muted);
-    animation: ccFadeIn 0.1s ease-out;
+    padding: 6px 0 4px;
+    border-radius: 13px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
+    font-size: 12.5px;
+    color: var(--text);
+    animation: rise 0.3s var(--ease);
     outline: none;
   }
   .panel:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .panel {
       animation: none;
     }
   }
-  .acct {
+  h3 {
     display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px 14px;
-  }
-  .acct + .acct,
-  .harness + .harness {
-    border-top: 1px solid var(--line);
-  }
-  .title {
+    align-items: center;
+    gap: 8px;
     margin: 0;
-    padding: 9px 14px 0;
+    padding: 10px 16px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  /* The harness's mark, a word in a hairline (as EngineMark draws it). */
+  .emark {
+    display: inline-flex;
+    align-items: center;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px var(--line-3);
+    color: var(--soft);
     font-size: 10.5px;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--dim);
+  }
+  .acct {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 9px 16px;
+    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+  }
+  h3 + .acct {
+    border-top: 0;
   }
   .acct.off {
     opacity: 0.55;
   }
-  .head {
+  .name {
     display: flex;
     align-items: center;
-    gap: 8px;
-  }
-  .name {
-    font-weight: 600;
-    color: var(--text);
+    gap: 7px;
+    min-width: 0;
+    font-weight: 560;
   }
   .tag {
-    padding: 1px 6px;
-    border-radius: var(--r-sm);
-    background: var(--elev2);
-    font-size: 10.5px;
+    font-size: 11.5px;
+    font-weight: 500;
   }
   .cur {
-    color: var(--accent);
+    color: var(--run);
   }
   .over {
     color: var(--wait);
-    background: var(--wait-soft);
   }
   .today {
-    margin-left: auto;
-    font-size: 11.5px;
     color: var(--muted);
-    white-space: nowrap;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .why,
+  .windows,
+  .bill {
+    grid-column: 1 / -1;
   }
   .why {
     color: var(--muted);
+    font-size: 12px;
+  }
+  .windows {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .w {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .w.wide {
+    grid-column: span 2;
+  }
+  .w .top {
+    display: flex;
+    justify-content: space-between;
+  }
+  .w b {
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .w .gauge {
+    width: 100%;
+  }
+  .p {
+    margin-left: 4px;
+    font-weight: 550;
+  }
+  .p.ok {
+    color: var(--run);
+  }
+  .p.warn {
+    color: var(--wait);
+  }
+  .p.over {
+    color: var(--del);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  /* Extra usage, billed apart: its sentence under the account. */
+  .bill {
+    display: flex;
+    gap: 7px;
+    align-items: flex-start;
+    margin: 0;
+    color: var(--warn-ink);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .bill :global(.icon) {
+    margin-top: 1px;
+  }
+  .note {
+    margin: 0;
+    padding: 8px 16px 10px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
   }
 </style>

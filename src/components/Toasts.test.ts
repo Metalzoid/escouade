@@ -90,3 +90,18 @@ describe('Toasts', () => {
     expect(shown()).toEqual([]);
   });
 });
+
+describe('Toasts icons', () => {
+  beforeEach(() => resetApp());
+
+  it('draws an icon of their kind before their text: done, failed, or anything else', async () => {
+    render(Toasts);
+    app.toast('Réglages enregistrés', 'ok');
+    app.toast('« Worker » s’est arrêté en erreur (code 1).', 'error');
+    app.toast('tests-e2e passe sur le compte Pro', 'info');
+    const icons = await screen
+      .findAllByRole('status')
+      .then(() => [...document.querySelectorAll('.toast')].map((t) => t.querySelector('[data-icon]')?.getAttribute('data-icon')));
+    expect(icons).toEqual(['check', 'shield', 'info']);
+  });
+});

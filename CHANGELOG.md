@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Escouade a un thème clair : Réglages › Application › Affichage › « Thème » propose Système, Clair ou Sombre, appliqué tout de suite, barre de titre comprise. Par défaut, il suit celui de Windows, macOS ou Linux.
+- Les projets passent dans une barre à gauche, comme les espaces de travail de Slack : une tuile par projet, avec ses agents qui attendent et ceux qui travaillent, que l’on glisse ou déplace par Alt+↑ et Alt+↓. La barre de titre garde le nom du projet affiché et la recherche ; la barre d’état montre les quotas de chaque harness au travail.
 
 ### Corrections
 

@@ -86,7 +86,7 @@ As soon as you send, the agent’s status changes to “Running” and the conve
 
 ## Answer a question or a permission request
 
-When Claude needs you, a card with an amber border appears in the conversation, the agent’s status becomes “Question”, and its tab and card blink if you are looking elsewhere. There are two cards.
+When Claude needs you, a card with an amber border appears in the conversation, the agent’s status becomes “Question”, and its card and its project’s tile flag it if you are looking elsewhere. There are two cards.
 
 **“Claude is asking for permission”** names the tool and what it is about to do. Three buttons:
 

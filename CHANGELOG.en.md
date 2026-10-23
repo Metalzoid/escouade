@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
+- Projects move to a rail on the left, like Slack’s workspaces: a tile per project, with its agents waiting and at work, dragged or moved by Alt+↑ and Alt+↓. The title bar keeps the name of the project on screen and the search; the status bar shows the quotas of each harness at work.
 
 ### Fixes
 

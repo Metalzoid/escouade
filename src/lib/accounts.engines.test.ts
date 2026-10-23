@@ -114,7 +114,7 @@ describe('the quota of an account', () => {
   });
 
   it('labels each window by its length, and the month’s credits', () => {
-    expect([300, 10080, 43200, 60].map(meterLabel)).toEqual(['5h', '7j', '30j', '1h']);
+    expect([300, 10080, 43200, 60].map(meterLabel)).toEqual(['5 h', '7 j', '30 j', '1 h']);
     expect(meterLabel(null)).toBe('crédits');
     expect(meterName(300)).toBe('Quota sur 5 heures');
     expect(meterName(1440)).toBe('Quota sur 1 jour');

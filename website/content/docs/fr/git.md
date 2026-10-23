@@ -121,6 +121,6 @@ Le panneau étant toujours là, `Ctrl+Maj+B` n’a plus d’effet et « Fichier
 
 ## Les modifications du projet d’un coup d’œil
 
-- L’onglet de chaque projet affiche « Δ 7 » quand le projet a des fichiers non commités (l’info-bulle dit « Modifications git non commitées »). Le nombre compte les fichiers modifiés, ajoutés ou supprimés dans le dossier du projet et dans les worktrees de ses agents. Il disparaît à zéro.
+- Le nom du projet affiché, dans la barre de titre, et l’infobulle de la tuile de chaque projet affichent « Δ 7 » quand le projet a des fichiers non commités (l’info-bulle dit « Modifications git non commitées »). Le nombre compte les fichiers modifiés, ajoutés ou supprimés dans le dossier du projet et dans les worktrees de ses agents. Il disparaît à zéro.
 - Dans la barre latérale, chaque carte d’agent indique son nombre de fichiers (« 6 fich. »), et le pied de la barre détaille les totaux du projet (« ~2 modifiés », « +1 ajoutés », « −0 supprimés »).
 - La branche du dossier du projet, avec son avance et son retard sur le dépôt distant, est dans la barre d’état : c’est le bouton qui ouvre [le sélecteur de branches](branches).

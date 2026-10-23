@@ -2,6 +2,7 @@
   import { keyLabel } from '../lib/platform';
   import {
     accountName,
+    engineOrder,
     metersShown,
     meterName,
     newAgentAccount,
@@ -19,10 +20,16 @@
   import { api } from '../lib/ipc';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
   import { app } from '../lib/state.svelte';
+  import type { EngineId } from '../lib/types';
   import AccountsPanel from './AccountsPanel.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
+  import Icon from './Icon.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
+
+  // The status bar of the 2.0 design: the agents at work, waiting (a button, Ctrl+J) and finished, their processes; then
+  // the update, a group of quota gauges per harness at work (a click opens every account's), the day's cost, the branch
+  // and the sound of the notifications. The settings are at the bottom of the projects' rail (ESC-158).
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
   // The day's cost: an estimate while a turn runs, or once a harness that tells none (Codex) spent some of it.
@@ -33,7 +40,7 @@
   const running = $derived(agents.filter((a) => a.status === 'running').length);
   const waiting = $derived(agents.filter((a) => a.status === 'waiting').length);
   const done = $derived(agents.filter((a) => a.status === 'done').length);
-  // The Claude processes running, each with the tools and MCP servers it started.
+  // The agents' processes running, each with the tools and MCP servers it started.
   const procs = $derived(app.resources);
   const procsTitle = $derived(
     [
@@ -43,44 +50,56 @@
         .map((r) => t('shell.status.procRow', { name: app.agents[r.id]?.name ?? '?', memory: fBytes(r.memory), cpu: fPct(r.cpu) })),
     ].join('\n'),
   );
-  // The quota of the current account of the harness of the agent shown (else of the project's default harness): with several
-  // accounts, the name in front, and the whole group opens the panel of every account's. A harness without a quota has no
-  // bar. (The bar is there before the settings are: no accounts yet.)
+
   const several = $derived((app.settings.accounts?.length ?? 0) > 1);
-  const engine = $derived(statusEngine());
-  // Every account reserved to projects (Principal too): the one whose meters the bars show (`usage.current`).
-  const shown = $derived(newAgentAccount(undefined, engine) ?? app.settings.accounts?.find((a) => a.id === app.usage.current[engine]));
-  const current = $derived(several ? shown : undefined);
-  const currentName = $derived(current ? accountName(current) : '');
-  const shownUsage = $derived(app.usage.accounts.find((u) => u.id === (shown?.id ?? principalId(engine))) ?? null);
-  const meters = $derived(metersShown(shownUsage, engine));
-  // A harness without a quota (OpenCode, which goes through the providers' APIs): its account's cost of the day stands in
-  // for the bars, out of its « Budget par jour ($) » when it has one.
-  const day = $derived.by(() => {
-    if (capsOf(engine)?.quota !== 'none' || !shownUsage) return null;
-    const cost = shownUsage.todayCost;
-    const budget = shownUsage.dailyBudget || null;
+
+  /**
+   * One group of gauges per harness at work (lot 0 of the 2.0 design): the harness of the agent shown (else the project's
+   * default one), then each other harness that has agents, in « Ordre des harness ». Each shows the account new agents of
+   * that harness go to (every account reserved to projects, Principal too: `usage.current`). (The bar is there before the
+   * settings are: no accounts yet.)
+   */
+  const groups = $derived.by(() => {
+    const main = statusEngine();
+    const used = new Set(agents.map((a) => a.engine ?? 'claude'));
+    const engines = [main, ...engineOrder().filter((e) => e !== main && used.has(e))];
+    return engines.map(groupOf).filter((g) => g.meters.length || g.day);
+  });
+
+  function groupOf(engine: EngineId) {
+    const shown = newAgentAccount(undefined, engine) ?? app.settings.accounts?.find((a) => a.id === app.usage.current[engine]);
+    const usage = app.usage.accounts.find((u) => u.id === (shown?.id ?? principalId(engine))) ?? null;
+    const meters = metersShown(usage, engine);
     const harness = engineName(engine);
-    const tip = budget
-      ? t('shell.status.dayBudgetTip', { harness, cost: fUsd(cost), budget: fUsd(budget) })
-      : t('shell.status.dayCostTip', { harness, cost: fUsd(cost) });
-    // Where the day's cost would end at midnight, against the budget: none without one, which it would be measured by.
-    const end = budget && app.settings.quotaProjection !== false ? projectedDayCost(cost, app.now) : null;
-    const projection = end === null ? null : { text: fUsd(end), level: projectionLevel((end / budget!) * 100) };
-    return { cost, budget, over: !!budget && cost >= budget, tip, harness, projection };
-  });
-  let panelOpen = $state(false);
-  // Down to one account: nothing left to compare.
-  $effect(() => {
-    if (!several) panelOpen = false;
-  });
-  // The two windows as their bars say them. Under the button the bars are not reached one by one, so the button says them
-  // (to a screen reader as its description, `aria-describedby` rather than `aria-description`, which not every engine reads;
-  // in its tooltip, one line each, but while the panel that writes them is open).
-  // The accounts of the harness whose agents go on answering as extra usage: running agents stay on them, whatever the bar shows.
-  const inOverage = $derived(app.usage.accounts.filter((u) => u.overage && u.engine === engine));
-  const overageLine = $derived(
-    inOverage.length
+    // A harness without a quota (OpenCode, which goes through the providers' APIs): its account's cost of the day stands
+    // in for the bars, out of its « Budget par jour ($) » when it has one (choice 23).
+    let day: {
+      cost: number;
+      budget: number | null;
+      over: boolean;
+      tip: string;
+      projection: { text: string; level: string } | null;
+    } | null = null;
+    if (capsOf(engine)?.quota === 'none' && usage) {
+      const cost = usage.todayCost;
+      const budget = usage.dailyBudget || null;
+      const dayTip = budget
+        ? t('shell.status.dayBudgetTip', { harness, cost: fUsd(cost), budget: fUsd(budget) })
+        : t('shell.status.dayCostTip', { harness, cost: fUsd(cost) });
+      // Where the day's cost would end at midnight, against the budget: written past 80 %, as the quotas' projections.
+      const end = budget && app.settings.quotaProjection !== false ? projectedDayCost(cost, app.now) : null;
+      const level = end === null ? null : projectionLevel((end / budget!) * 100);
+      day = {
+        cost,
+        budget,
+        over: !!budget && cost >= budget,
+        tip: dayTip,
+        projection: end === null || level === 'ok' ? null : { text: fUsd(end), level: level! },
+      };
+    }
+    // The accounts of the harness whose agents go on answering as extra usage, billed apart (choice 22).
+    const inOverage = app.usage.accounts.filter((u) => u.overage && u.engine === engine);
+    const overage = inOverage.length
       ? t(
           inOverage.some((u) => u.id === app.usage.current[engine])
             ? 'accounts.quota.overageCurrent'
@@ -96,13 +115,20 @@
               .join(', '),
           },
         )
-      : '',
-  );
-  const quotaLines = $derived([
-    ...(overageLine ? [overageLine] : []),
-    ...meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })),
-    ...(day ? [day.tip] : []),
-  ]);
+      : '';
+    // With several accounts, the account shown is named where the group is said (its tooltip, a screen reader).
+    const name = several && shown ? t('shell.status.harnessAccount', { harness, account: accountName(shown) }) : harness;
+    const lines = [
+      ...(overage ? [overage] : []),
+      ...meters.map((m) => t('accounts.quota.line', { name: meterName(m.minutes), tip: quotaTip(m.usage) })),
+      ...(day ? [day.tip] : []),
+    ];
+    return { engine, short: harness.split(' ')[0], name, account: shown, meters, day, overage: !!overage, lines };
+  }
+
+  /** What the quota button says (its tooltip, and its description to a screen reader): harness by harness when they are several. */
+  const quotaLines = $derived(groups.length > 1 ? groups.flatMap((g) => [g.name, ...g.lines]) : (groups[0]?.lines ?? []));
+  let panelOpen = $state(false);
 
   function toggleSound() {
     app.settings.sound = !app.settings.sound;
@@ -149,6 +175,10 @@
   $effect(() => {
     if (!repo) pickerOpen = false;
   });
+  // No gauge left to open the panel from.
+  $effect(() => {
+    if (!groups.length) panelOpen = false;
+  });
 
   const branchTitle = $derived.by(() => {
     if (!sync) return t('branches.picker.switchTitle');
@@ -162,126 +192,129 @@
       t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
+  /** A shortcut as the bar writes it: « Ctrl J ». */
+  const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 </script>
 
-{#snippet quotas(focusable: boolean)}
-  {#if several}<span class="v acct" use:tip={{ text: currentName, cut: true }}>{currentName}</span>{#if meters.length}<span class="d"
-        >·</span
-      >{/if}{/if}
-  {#each meters as m, i (m.minutes ?? 'credits')}
-    {#if i}<span class="vsep"></span>{/if}
-    <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} {focusable} />
-  {/each}
-  {#if day}
-    {#if several}<span class="d">·</span>{/if}
-    <span class="day" class:over={day.over} use:tip={several ? undefined : day.tip}
-      >{#if !several}<span>{day.harness}</span>{/if}<span class="v"
-        >{fUsd(day.cost)}{#if day.budget}<span class="d">{` / ${fUsd(day.budget)}`}</span>{/if}</span
-      >{#if day.projection}<span class="p {day.projection.level}"
-          ><span class="sr">{t('accounts.quota.projectedSr')}</span>{t('accounts.quota.projectedCost', {
-            amount: day.projection.text,
-          })}</span
-        >{/if}</span
-    >
-  {/if}
-{/snippet}
-
-<footer class="bar mono">
-  <!-- What the bar tells, which gives way when the window is narrow; the buttons on the right always stay whole. -->
-  <div class="main">
-    <span class="it"
-      ><span class="dot" style="width:7px;height:7px;background:var(--ok)"></span>{t('shell.status.active', { count: running })}</span
-    >
-    <button
-      class="it link"
-      style:color={waiting ? 'var(--wait)' : 'var(--muted)'}
-      onclick={() => app.nextWaiting()}
-      use:tip={t('shell.status.nextWaiting', { key: keyLabel('Ctrl+J') })}
-    >
-      {#if waiting}<span class="pulse" style="width:7px;height:7px"></span>{:else}<span
-          class="dot"
-          style="width:7px;height:7px;background:var(--dim)"
-        ></span>{/if}
-      {t('shell.status.waiting', { n: waiting })}
-    </button>
-    <span class="it"><span style="color:var(--ok)">✓</span>{t('shell.status.done', { count: done })}</span>
-    {#if procs.instances}
-      <span class="vsep"></span>
-      <span class="it procs" use:tip={procsTitle}
-        ><Rich k="shell.status.procs" count={procs.instances}
-          >{#snippet memory()}<span class="v">{fBytes(procs.memory)}</span>{/snippet}{#snippet cpu()}<span class="v">{fPct(procs.cpu)}</span
-            >{/snippet}</Rich
-        ></span
-      >
-    {/if}
-    {#if several || meters.length || day}<span class="vsep"></span>{/if}
-    {#if several}
-      <!-- The panel's button: its bars are only seen here (their values are in the panel, which the keyboard opens). -->
+<footer class="bar">
+  <!-- The first start, no project yet: empty, as the rest of the shell (choice 49 of the 2.0 design). -->
+  {#if app.projects.length}
+    <!-- What the bar tells, which gives way when the window is narrow. -->
+    <div class="main">
+      <span class="it"><span class="dot run"></span><span><b>{running}</b> {t('shell.status.activeWord', { count: running })}</span></span>
       <button
-        class="it link group"
-        bind:this={quotaButton}
-        aria-haspopup="dialog"
-        aria-expanded={panelOpen}
-        aria-controls="accounts-panel"
-        aria-label={t('accounts.panel.open', { name: currentName })}
-        aria-describedby="quota-description"
-        use:tip={panelOpen ? null : { text: quotaLines.join('\n'), aria: false }}
-        onclick={() => (panelOpen = !panelOpen)}
+        class="it link wait"
+        class:none={!waiting}
+        onclick={() => app.nextWaiting()}
+        use:tip={t('shell.status.nextWaiting', { key: keyLabel('Ctrl+J') })}
       >
-        {@render quotas(false)}
+        {#if waiting}<span class="pulse"></span>{:else}<span class="dot idle"></span>{/if}
+        <span><b>{waiting}</b> {t('shell.status.waitingWord')}</span>
+        <kbd>{kbd('Ctrl+J')}</kbd>
       </button>
-      <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
-    {:else if meters.length || day}
-      <span class="it group">{@render quotas(true)}</span>
-    {/if}
-    <span class="vsep"></span>
-    <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}
-      >{t('shell.status.today')}
-      <span class="v strong">{fSpentUsd(today)}</span></span
-    >
-    {#if repo}
-      <span class="vsep"></span>
+      <span class="it"><Icon name="check" size={14} /><span><b>{done}</b> {t('shell.status.doneWord', { count: done })}</span></span>
+      {#if procs.instances}
+        <span class="vsep"></span>
+        <span class="it procs" use:tip={procsTitle}
+          ><Rich k="shell.status.procs" count={procs.instances}
+            >{#snippet memory()}<b>{fBytes(procs.memory)}</b>{/snippet}{#snippet cpu()}<b>{fPct(procs.cpu)}</b>{/snippet}</Rich
+          ></span
+        >
+      {/if}
+    </div>
+    <div class="end">
+      {#if restartIn !== null}
+        <span class="it"><b>{t('shell.status.restartIn', { seconds: restartIn })}</b></span>
+        <button class="small" onclick={postpone}>{t('common.later')}</button>
+      {:else if app.update?.ready}
+        <button class="it link upd" onclick={() => (app.modal = { kind: 'update' })}
+          ><Icon name="download" size={14} /><Rich k="shell.status.updateReady" version={app.update.version}
+            >{#snippet restart()}<b>{t('shell.status.restart')}</b>{/snippet}</Rich
+          ></button
+        >
+      {:else if app.update}
+        <span class="it">{t('shell.status.updating', { version: app.update.version })}</span>
+      {/if}
+      {#if groups.length}
+        <!-- The gauges, harness by harness, are one button: it opens every account's (the panel writes their values). -->
+        <button
+          class="it link quotas"
+          bind:this={quotaButton}
+          aria-haspopup="dialog"
+          aria-expanded={panelOpen}
+          aria-controls="accounts-panel"
+          aria-label={several && groups[0]?.account
+            ? t('accounts.panel.open', { name: accountName(groups[0].account) })
+            : t('accounts.panel.label')}
+          aria-describedby="quota-description"
+          use:tip={panelOpen ? null : { text: quotaLines.join('\n'), aria: false }}
+          onclick={() => (panelOpen = !panelOpen)}
+        >
+          {#each groups as g (g.engine)}
+            <span class="grp" data-engine={g.engine}>
+              <span class="hn">{g.short}</span>
+              {#each g.meters as m (m.minutes ?? 'credits')}
+                <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} focusable={false} />
+              {/each}
+              {#if g.day}
+                <span class="day" class:over={g.day.over}
+                  ><b>{fUsd(g.day.cost)}</b>{#if g.day.budget}<span class="of">{` / ${fUsd(g.day.budget)}`}</span
+                    >{/if}{#if g.day.projection}<span class="p {g.day.projection.level}"
+                      ><span class="sr">{t('accounts.quota.projectedSr')}</span>{t('accounts.quota.projectedCost', {
+                        amount: g.day.projection.text,
+                      })}</span
+                    >{/if}</span
+                >
+              {/if}
+              {#if g.overage}<span class="over-word">{t('shell.status.overage')}</span>{/if}
+            </span>
+          {/each}
+        </button>
+        <span id="quota-description" hidden>{quotaLines.join('. ')}</span>
+      {/if}
+      <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}>{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
+      >
+      {#if repo}
+        <span class="vsep"></span>
+        <button
+          class="it link sync branch"
+          bind:this={branchButton}
+          disabled={!!busy}
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
+          onclick={() => (pickerOpen = !pickerOpen)}
+          use:tip={branchTitle}
+        >
+          <Icon name="branch" size={14} />
+          <b class="name mono">{repo.detached ? t('branches.picker.detached') : repo.git.branch}</b>
+          {#if busy}
+            <span>{runningLabel(busy)}</span>
+          {:else if sync?.tracked}
+            <!-- The commits to push, then to pull, as in the picker: an arrow and a number, said in words to a screen reader. -->
+            <span class="ahead" class:some={sync.ahead > 0}
+              ><Icon name="up" size={12} /><span aria-hidden="true">{sync.ahead}</span><span class="sr"
+                >{t('shell.status.sync.aheadShort', { count: sync.ahead })}</span
+              ></span
+            >
+            <span class="ahead" class:some={sync.behind > 0}
+              ><Icon name="pull" size={12} /><span aria-hidden="true">{sync.behind}</span><span class="sr"
+                >{t('shell.status.sync.behindShort', { count: sync.behind })}</span
+              ></span
+            >
+          {:else if sync}
+            <span class="d">{sync.upstream ? t('shell.status.sync.goneShort') : t('shell.status.sync.unpublishedShort')}</span>
+          {/if}
+        </button>
+      {/if}
       <button
-        class="it link sync branch"
-        bind:this={branchButton}
-        disabled={!!busy}
-        aria-haspopup="dialog"
-        aria-expanded={pickerOpen}
-        onclick={() => (pickerOpen = !pickerOpen)}
-        use:tip={branchTitle}
+        class="icon"
+        aria-pressed={!!app.settings.sound}
+        aria-label={t('shell.status.sound')}
+        use:tip={t('shell.status.soundTip', { state: app.settings.sound ? t('shell.status.soundOn') : t('shell.status.soundOff') })}
+        onclick={toggleSound}><Icon name={app.settings.sound ? 'sound' : 'mute'} size={14} /></button
       >
-        <span class="v name">⎇ {repo.detached ? t('branches.picker.detached') : repo.git.branch}</span>
-        {#if busy}
-          <span>{runningLabel(busy)}</span>
-        {:else if sync?.tracked}
-          <span style:color={sync.ahead ? 'var(--text)' : 'var(--dim)'}>↑{sync.ahead}</span>
-          <span style:color={sync.behind ? 'var(--wait)' : 'var(--dim)'}>↓{sync.behind}</span>
-        {:else if sync}
-          <span class="d">{sync.upstream ? t('shell.status.sync.goneShort') : t('shell.status.sync.unpublishedShort')}</span>
-        {/if}
-      </button>
-    {/if}
-  </div>
-  {#if restartIn !== null}
-    <span class="it v">{t('shell.status.restartIn', { seconds: restartIn })}</span>
-    <button class="small" onclick={postpone}>{t('common.later')}</button>
-  {:else if app.update?.ready}
-    <button class="upd" onclick={() => (app.modal = { kind: 'update' })}
-      >{t('shell.status.updateReady', { version: app.update.version })}</button
-    >
-  {:else if app.update}
-    <span class="it">{t('shell.status.updating', { version: app.update.version })}</span>
+    </div>
   {/if}
-  <button class="small" onclick={toggleSound} use:tip={t('shell.status.sound')}
-    >♪ {app.settings.sound ? t('shell.status.soundOn') : t('shell.status.soundOff')}</button
-  >
-  <button
-    class="small"
-    onclick={() => {
-      app.modal = { kind: 'settings' };
-    }}
-    use:tip={t('shell.status.settings', { key: keyLabel('Ctrl+,') })}>⚙</button
-  >
 </footer>
 
 {#if panelOpen}
@@ -296,37 +329,36 @@
 
 <style>
   .bar {
-    height: 30px;
-    flex: none;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    min-width: 0;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 8px 0 16px;
-    background: var(--panel);
-    border-top: 1px solid var(--line);
-    font-size: 11px;
+    gap: 18px;
+    padding: 0 10px 0 14px;
+    font-size: 12px;
     color: var(--muted);
+    font-variant-numeric: tabular-nums;
     user-select: none;
     white-space: nowrap;
     overflow: hidden;
     container: status / inline-size;
   }
-  /* Past its width, what it tells is cut at its edge rather than pushing the buttons out of the window: the activity, the
-     processes, the quotas, the day's cost and the branch. Its height is the bar's, so a focus ring is not cut. */
+  /* Past its width, what it tells is cut at its edge rather than pushing the rest out of the window. Its height is the
+     bar's, so a focus ring is not cut. */
   .main {
     flex: 1;
     min-width: 0;
     align-self: stretch;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     overflow: hidden;
   }
   .main > * {
     flex: none;
   }
-  /* The processes and the branch give way first, cut short (the tooltip of the processes says them whole, the picker the
-     branch opens names it). */
+  /* The processes give way first, cut short (their tooltip says them whole). */
   .main > .procs {
     display: block;
     flex: 0 1 auto;
@@ -334,42 +366,106 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .main > .branch {
+  /* What it keeps whole; only the branch gives way, its name cut short (the picker it opens names it). */
+  .end {
+    flex: 0 1 auto;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .end > * {
+    flex: none;
+  }
+  .end > .branch {
     flex: 0 1 auto;
     min-width: 6em;
-  }
-  .branch .name {
-    min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* A narrow window (the interface is laid out for 1000 pixels): tighter, and the quotas without their countdown, which
-     their tooltips give. */
-  @container status (max-width: 1199px) {
-    .main {
-      gap: 10px;
-    }
-    .main :global(.q .d) {
-      display: none;
-    }
   }
   .it {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
   }
-  .day {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  b {
+    color: var(--soft);
+    font-weight: 550;
   }
-  /* The day's budget reached: the autopilot waits for midnight. */
-  .day.over .v {
+  .dot {
+    width: 6px;
+    height: 6px;
+  }
+  .dot.run {
+    background: var(--run);
+  }
+  .dot.idle {
+    background: var(--idle);
+  }
+  .pulse {
+    width: 6px;
+    height: 6px;
+  }
+  .link {
+    border: none;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    color: inherit;
+    height: 22px;
+    padding: 0 7px;
+    margin: 0 -7px;
+    border-radius: 6px;
+  }
+  .link:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .wait {
     color: var(--wait);
   }
-  /* The day's cost at midnight, against the budget: as the quotas' projection (`QuotaMeter`). */
-  .p.ok {
-    color: var(--ok);
+  .wait b {
+    color: var(--wait);
+  }
+  .wait.none {
+    color: var(--muted);
+  }
+  .wait.none b {
+    color: var(--soft);
+  }
+  .quotas {
+    gap: 16px;
+    margin: 0 -3px;
+    padding: 0 3px;
+  }
+  .grp {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .hn {
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .day.over b {
+    color: var(--wait);
+  }
+  /* Extra usage, billed apart: an amber word beside its harness (choice 22). */
+  .over-word {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--warn-ink);
+    font-size: 11px;
+    font-weight: 560;
+  }
+  .p {
+    margin-left: 4px;
+    font-weight: 550;
   }
   .p.warn {
     color: var(--wait);
@@ -385,76 +481,76 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
-  .link {
-    border: none;
-    background: transparent;
-    font: inherit;
-    cursor: pointer;
-    padding: 0;
+  .upd {
+    color: var(--p-ink);
   }
-  .sync:hover:not(:disabled) .v {
-    text-decoration: underline;
+  .upd b {
+    color: var(--text);
+  }
+  .branch {
+    min-width: 6em;
+  }
+  /* A long name is cut short: the picker it opens names it whole. */
+  .branch .name {
+    min-width: 0;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11.5px;
+  }
+  .ahead {
+    display: inline-flex;
+    align-items: center;
+    color: var(--dim);
+  }
+  .ahead.some {
+    color: var(--soft);
   }
   .sync:disabled {
     cursor: default;
   }
-  .vsep {
-    width: 1px;
-    height: 14px;
-    background: var(--line2);
-  }
-  .group {
-    gap: 8px;
-  }
-  button.group {
-    color: inherit;
-    height: 22px;
-    padding: 0 6px;
-    margin: 0 -6px;
-    border-radius: var(--r-sm);
-  }
-  /* Lighter than the bars' track, which would otherwise melt into it. */
-  button.group:hover {
-    background: var(--elev);
-  }
-  .v {
-    color: var(--text);
-  }
-  /* A long name is cut short (it is whole in its title), not the bars after it. */
-  .acct {
-    max-width: 160px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .strong {
-    font-weight: 600;
-  }
   .d {
     color: var(--dim);
   }
-  .small {
+  .vsep {
+    width: 1px;
+    height: 12px;
+    background: var(--line-2);
+  }
+  .small,
+  .icon {
     height: 22px;
-    padding: 0 8px;
+    padding: 0 7px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 6px;
     background: transparent;
     color: var(--muted);
     font: inherit;
     cursor: pointer;
   }
-  .small:hover {
-    background: var(--elev2);
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    padding: 0;
+  }
+  .small:hover,
+  .icon:hover {
+    background: var(--hover);
     color: var(--text);
   }
-  .upd {
-    height: 22px;
-    padding: 0 10px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
+  /* A narrow window (under 1240 pixels): the gauges keep their harness and lose their percentages, projections and the
+     word of extra usage, which the panel writes (lot 0 and lot 0 bis of the 2.0 design). */
+  @container status (max-width: 1239px) {
+    .bar,
+    .end {
+      gap: 14px;
+    }
+    .quotas :global(.q .pct),
+    .quotas :global(.q .p),
+    .quotas .p,
+    .over-word {
+      display: none;
+    }
   }
 </style>

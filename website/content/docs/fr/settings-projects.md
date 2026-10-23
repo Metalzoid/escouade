@@ -10,7 +10,7 @@ L’onglet agit sur le projet choisi dans la rangée « Projet », sous l’en
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Nom » | Le nom du projet, tel que le montrent son onglet et le sélecteur de projet. Il ne peut pas rester vide : « Enregistrer » est alors bloqué. | Le nom donné à la création, celui du dossier si tu n’en as pas donné |
+| « Nom » | Le nom du projet, tel que le montrent la barre de titre, l’infobulle de sa tuile et le sélecteur de projet. Il ne peut pas rester vide : « Enregistrer » est alors bloqué. | Le nom donné à la création, celui du dossier si tu n’en as pas donné |
 | « Dossier » | Le dossier du projet, affiché sans pouvoir être modifié. Le bouton « Ouvrir » l’ouvre avec le gestionnaire de fichiers du système. | — |
 | « Couleur » | Une pastille parmi 14 (13 teintes et un ton neutre). La couleur repère le projet et teinte l’interface quand il est affiché. | La première couleur qu’aucun projet n’a prise, à la création |
 | « Compte préféré » | Le compte sur lequel partent les nouveaux agents et les tickets du projet. Visible seulement avec plusieurs comptes. Choix : « Automatique » (le premier compte actif sous le seuil de pause, dans l’ordre des comptes) ou un des comptes actifs qui servent ce projet. | « Automatique » |
@@ -31,7 +31,7 @@ Quand « Remote control pour tous les agents » est allumé dans l’onglet [�
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Projet privé » | Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout. Un cadenas suit son nom, sur son onglet et dans la rangée « Projet ». | Désactivé, ou « Nouveaux projets privés » pour un projet ajouté |
+| « Projet privé » | Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout. Un cadenas le marque, sur sa tuile, à côté de son nom dans la barre de titre et dans la rangée « Projet ». | Désactivé, ou « Nouveaux projets privés » pour un projet ajouté |
 
 | « Comptes » (projet privé) | Les comptes de son harness par défaut où ses agents peuvent partir : réservés à lui seul, ou partagés avec d’autres projets (sessions, mémoire, historique en commun). « Ajouter un compte réservé… » et « Réserver Pro à ce projet » y remédient. | — |
 | « Comptes partagés à la limite » (projet privé) | À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé (changement de compte, passage à un autre harness). Éteint, ils attendent la remise à zéro. | Désactivé |

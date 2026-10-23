@@ -859,13 +859,12 @@
 {/if}
 
 <style>
+  /* On the frame, beside the panel of the work (the shell of the 2.0 design, ESC-72). */
   .side {
-    width: 300px;
+    width: var(--side);
     flex: none;
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border-right: 1px solid var(--line);
     min-height: 0;
   }
   .views {

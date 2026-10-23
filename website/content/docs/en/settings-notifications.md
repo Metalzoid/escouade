@@ -6,7 +6,7 @@ The “Notifications” tab sets Escouade’s alerts: which events it tells you 
 
 Three signals combine, and the tab controls the last two. The alerts themselves are described in [notifications](notifications).
 
-- Window signals: the project’s tab, the agent’s card, and the taskbar (the Dock on macOS) always flag the agent, whatever the settings. The taskbar flashes when the window is not in the foreground.
+- Window signals: the project’s tile, the agent’s card, and the taskbar (the Dock on macOS) always flag the agent, whatever the settings. The taskbar flashes when the window is not in the foreground.
 - The chime: played for a type of event that is on, when “Sound on” is on too, whether or not the window is in the foreground.
 - The system notification: shown for a type of event that is on, when the switch in the “Channels” group is on and the window is not in the foreground, meaning hidden, minimized, or without focus.
 

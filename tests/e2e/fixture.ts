@@ -427,6 +427,19 @@ export const test = base.extend<{
 });
 
 /**
+ * Opens « Nouveau projet » from « + » of the projects' rail (ESC-158), through its menu when projects were closed (it then
+ * lists them first): « Ajouter un projet… ».
+ */
+export async function openNewProject(page: Page, lang: Language = 'fr') {
+  const words = LABELS[lang];
+  await page.getByRole('button', { name: words.addProject }).first().click();
+  const item = page.getByRole('menuitem', { name: words.addProject });
+  const dialog = page.getByRole('dialog');
+  await expect(item.or(dialog).first()).toBeVisible();
+  if (await item.isVisible()) await item.click();
+}
+
+/**
  * Adds `repo` as a project through the "Nouveau projet" dialog (`lang: 'en'`: "New project"), with a first agent.
  * The dialog is read in the language of the interface the test started in, French unless it says so. With Escouade's
  * defaults: « Créer sans l'assistant », or the assistant from scratch when a worktree per agent or no first agent is
@@ -439,7 +452,7 @@ export async function addProject(
   opts: { worktrees?: boolean; atFirstMessage?: boolean; name?: string; firstAgent?: boolean; lang?: Language } = {},
 ) {
   const words = LABELS[opts.lang ?? 'fr'];
-  await page.getByRole('button', { name: words.addProject }).first().click();
+  await openNewProject(page, opts.lang);
   const dialog = page.getByRole('dialog', { name: words.newProject });
   await dialog.getByPlaceholder(words.path).fill(repo);
   await expect(dialog.getByText(words.repo)).toBeVisible();

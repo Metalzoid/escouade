@@ -86,7 +86,6 @@ export const ALLOWED: Allowed[] = [
   { file: 'src/components/Conversation.svelte', text: 'C', why: 'l’initiale de Claude dans l’avatar de ses messages : un nom propre' },
 
   // L9 — runs, shell
-  { file: 'src/components/Welcome.svelte', text: 'C', why: 'l’initiale de Claude dans la marque de l’écran d’accueil : un nom propre' },
 
   // L10 — errors, backend
 

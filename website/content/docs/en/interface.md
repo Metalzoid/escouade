@@ -1,62 +1,69 @@
 # The interface
 
-A tour of Escouade’s window, region by region: the title bar and the project tabs, the agents sidebar, the header and the conversation, the side panel, the two layouts, the status bar, the settings and what changes on macOS.
+A tour of Escouade’s window, region by region: the projects rail and the title bar, the agents sidebar, the header and the conversation, the side panel, the two layouts, the status bar, the settings and what changes on macOS.
 
 ## The window at a glance
 
 ![Escouade’s window: the project tabs at the top, the list of agents on the left, the chosen agent’s conversation in the middle and the status bar at the bottom](/images/en/agents.jpg)
 
-The window has five zones:
+The window has six zones:
 
-- **the title bar**, at the top: the project tabs and a few buttons;
-- **the sidebar**, on the left: the agents of the project on screen, the project’s launch commands and its terminals;
+- **the projects rail**, on the far left: a tile per open project, the overview, the stats and the settings;
+- **the title bar**, at the top: the name of the project on screen, the search and the editor;
+- **the sidebar**, beside the projects rail: the agents of the project on screen, the project’s launch commands and its terminals;
 - **the main area**, in the middle: the conversation of the chosen agent, or another view of the project (Kanban, editor, terminal, log of a launch command);
 - **the side panel**, on the right, when it is open: the uncommitted files and the git history;
 - **the status bar**, at the bottom: the active agents, the quotas, today’s cost and the branch.
 
 The window opens at 1440 × 900 and never goes below 1000 × 600. Escouade remembers its size and position from one launch to the next.
 
-Short messages (a confirmation, an error) appear at the bottom right, above the status bar, and go away by themselves: after 3.5 seconds, 7 seconds for an error, 12 for a message that carries a button.
+Short messages (a confirmation, an error, a change of account) appear at the bottom, in the middle, above the status bar, after an icon (a green check for a success, a red shield for an error), and go away by themselves: after 3.5 seconds, 7 seconds for an error, 12 for a message that carries a button.
 
 Closing the window does not quit Escouade and does not stop the agents: the window goes away to the notification area (the menu bar on macOS). A click on the icon, “Show” in its menu, or starting Escouade a second time brings it back. “Quit” in the icon’s menu stops the application; if files in the editor are not saved, the window comes back first and asks “Quit Escouade?” (“Quit anyway” button). The icon’s tooltip says how many agents are waiting for an answer.
 
-## The title bar and the project tabs
+## The projects rail
 
-From left to right: the logo, the “Overview” button, one tab per project followed by the `+` button (“Add a project”), then “Editor” (when a project is on screen) and “Stats”. On Windows and Linux, Escouade draws the window buttons itself (“Minimize”, “Maximize” or “Restore”, “Close”). The empty parts of the bar move the window.
+A narrow column on the left, from the title bar to the status bar, like Slack’s workspaces. From top to bottom: “Overview”, a tile per open project, the `+` button (“Add a project”), then, at the bottom, “Stats” and “Settings”. At the first start, with no project, it keeps `+` and “Settings” alone.
 
-When the tabs don’t fit in the bar, they scroll: with the wheel, the touchpad, or the thin scroll bar that shows under them on hover. The `+` button stays in view at their right, and so does the empty part that moves the window. A fade at an edge says tabs are hidden on that side; it blinks in the alert’s color when one of them blinks. The tab of the project on screen comes back into the bar by itself, however you show it (click, notification, shortcut, “Overview”).
+### A project tile
 
-### A project tab
-
-A tab shows a square in the project’s color, its name, then signs that only appear when they apply:
+A tile is a square of the project’s color with two letters: the initials of the first two words of its name (“demo-api” gives “DA”), else its first two letters. The tile of the project on screen has a mark at the edge of the rail and a ring of its color. Signs come up when there is a reason for them:
 
 | Sign | What it means |
 |---|---|
-| Green dot | An agent of the project is working and none is waiting for your answer. |
-| “Δ 7” | The number of uncommitted git changes in the project (tooltip “Uncommitted git changes”). |
-| Amber pill with a number | That many agents of the project are waiting for your answer (tooltip “Agents waiting for an answer”). |
-| Blinking tab | An agent of the project asked a question, finished or failed while you were looking elsewhere. The tooltip lists the agents (“Needs a look: …”). The blink is red for an error, amber for a question, green for a finish, the most pressing one winning. It stops when you display the agent, with the window in front. |
+| Amber pill with a number, top right | That many agents of the project are waiting for your answer. |
+| Green dot, bottom right | An agent of the project is working. |
+| Lock, bottom left | The project is private. See [Settings: Projects](settings-projects). |
+| Breathing ring | An agent of the project asked a question, finished or failed while you were looking elsewhere: red for an error, amber for a question, green for an end, the most pressing one winning. It stops when you show the agent, the window in front. |
 
-A tab’s tooltip also gives the path of the project’s folder.
+The tooltip, to the right of the tile, gives the project’s name and its shortcut (`Ctrl 1` to `Ctrl 9`), then the agents waiting and those at work, the agents to look at (“Needs a look: …”) and the uncommitted git changes (“Δ 7 · uncommitted changes”); “Nothing running, nothing changed” otherwise.
 
 - A click shows the project. `Ctrl+1` to `Ctrl+9` show project n.
-- Drag a tab to change the order of the projects; the order is kept. Near an edge of the bar, the tabs scroll, so you can drop it among the hidden ones.
-- A right click, or a middle click, opens the project’s menu:
+- Drag a tile to change the order of the projects: its place stays hollow and a line says where it lands. `Alt+↑` and `Alt+↓` move the tile that has the focus. The order is kept.
+- A right click, or a middle click, opens the project’s menu; the project’s name in the title bar opens the same one:
 
 | Entry | What it does |
 |---|---|
 | “Rename…” | Opens the “Rename the project” window. |
-| “Color” | A row of swatches: the project’s color, which tints the interface while it is on screen. |
-| “Turn on a worktree per agent” or “Turn off a worktree per agent” | Switches the option for the project’s new agents. See [worktrees](worktrees). |
-| “Project settings…” | Opens the settings, Projects tab, on this project. |
+| “Color” | A row of swatches: the project’s color, which tints the interface when it is on screen. |
+| “Turn on a worktree per agent” or “Turn off a worktree per agent” | Toggles the option for the project’s new agents. See [worktrees](worktrees). |
+| “Project settings…” | Opens the settings, Projects tab, on that project. |
 | “Open the folder” | Opens the project’s folder in the system’s file manager. |
-| “Close the project…” | Removes the project from the application after a confirmation: its agents, terminals, and launches stop. Its history (conversations, tickets, settings) is kept, and adding a project in the same folder brings it back; a box in the confirmation lets you erase it too. The files and the worktrees on disk are not touched. See [Settings: Projects](settings-projects#closed-projects). |
+| “Move up” and “Move down” | Move the tile by one place (`Alt+↑`, `Alt+↓`). |
+| “Close the project…” | Removes the project from the app after a confirmation: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept, and `+` reopens it; a box of the confirmation erases it too. The files and the worktrees on disk are not touched. See [Settings: Projects](settings-projects#closed-projects). |
 
-### The bar’s buttons
+When the projects don’t fit in the column, the list scrolls between “Overview” and `+`, its faded edges saying there are more. The tile of the project on screen comes back into view by itself, however it was shown (click, notification, shortcut, “Overview”). A project out of view with an agent waiting is signalled by an amber pill under the list (or above it): a click brings it into view.
 
-- **“Overview”** (`Ctrl+Shift+A`) shows the agents of all projects on one page; the same button, or the same shortcut, closes it. See [keeping track of agents](overview).
-- **“Editor”** opens the editor on the project’s folder (“Browse and edit the project’s files”). See [the editor](editor).
-- **“Stats”** shows the usage statistics. See [statistics](stats).
+### The rail’s buttons
+
+- **“Overview”** (`Ctrl+Shift+A`) shows the agents of every project on one page; the same button, or the same shortcut, closes it. See [following your agents](overview).
+- **`+`** opens the “New project” assistant. When projects were closed, it opens a short menu first: “Add a project…”, the latest closed projects with “Reopen”, and “All closed projects…” (Settings › Projects).
+- **“Stats”** shows the usage statistics; a second click goes back to the project. See [statistics](stats).
+- **“Settings”** (`Ctrl+,`) opens the settings window.
+
+## The title bar
+
+Above the projects rail, the logo (on Windows and Linux). Above the sidebar, the name of the project on screen: its swatch, its name, the lock of a private project, the number of uncommitted git changes (“Δ 7”) and an arrow; a click opens the project’s menu. In the middle, “Search” (`Ctrl+K`) searches the conversations of every agent. On the right, “Editor” opens the editor on the project’s folder (“Browse and edit the project’s files”, see [the editor](editor)), then, on Windows and Linux, the window buttons (“Minimize”, “Maximize” or “Restore”, “Close”). The empty parts of the bar move the window.
 
 ## The sidebar
 
@@ -184,22 +191,21 @@ From left to right:
 
 | Element | What it shows |
 |---|---|
-| `● N active` | The number of “Running” agents. |
-| `● N waiting` | The number of “Question” agents, in amber when there are some. A click goes to the next agent that is waiting or needs a look (`Ctrl+J`). |
-| `✓ N done` | The number of “Done” agents. |
-| `N Claude · memory · CPU` | The running Claude processes, with the tools and MCP servers they start; the tooltip details it agent by agent. |
-| `5h … reset 3h01` and `W … reset 4d 12h` | The current account’s quotas, the 5-hour window and the 7-day one: a bar (which turns amber above 80%) and the time before the reset. The percentage is in the tooltip. With several accounts, the current account’s name comes before the bars and a click opens the “Accounts quota” panel. |
-| `Today $3.48` | What your agents cost today, preceded by “≈” while a turn is running. |
-| `⎇ main ↑1 ↓3` | The branch of the project on screen, with the commits to push (↑) and to pull (↓). A click opens the branch picker. “not published” or “remote deleted” replaces the arrows when the branch has no tracking. |
-| Update | “Update X ready · Restart” when an update is downloaded: a click opens the update window. While it downloads, the bar says “Update X…”; when an automatic restart is planned, “Restarting in N s” and a “Later” button take its place. See [updates](updates). |
-| `♪ On` or `♪ Off` | Turns the notification sound on or off. |
-| `⚙` | Opens the settings (`Ctrl+,`). |
+| `N active` | The number of agents “Running”. |
+| `N waiting Ctrl J` | The number of agents “Question”, in amber when there are some. A click goes to the next agent waiting or to look at (`Ctrl+J`). |
+| `N done` | The number of agents “Done”. |
+| `N agents · memory · CPU` | The agents’ running processes, with the tools and MCP servers they start; the tooltip details them agent by agent. |
+| Update | “Update X ready · Restart” when an update is downloaded: a click opens the update window. While it downloads, the bar says “Update X…”; when an automatic restart is planned, “Restarting in N s” and the “Later” button take its place. See [updates](updates). |
+| `Claude 5h 22% W 36%` | A group of gauges per harness running agents (the one of the agent on screen first): the harness’s name, then each quota window of the account its new agents go to, a thin bar (amber past 80%) and its percentage. The reset is in the tooltip. A projection (“→ 86%”) only shows past 80%, in orange, in red past 100%. A harness without a quota (OpenCode) shows its cost of the day out of its budget (“$0.42 / $5”). “extra usage”, in amber, says an account of the harness answers past its quota, billed apart. A click opens the “Accounts quota” panel: each account, grouped by harness, with all its windows, their projections and their reset, its cost of the day, OpenCode’s budget and Copilot CLI’s credits. Under 1240 pixels wide, the percentages, the projections and “extra usage” make room: the panel writes them. |
+| `Today $3.48` | What your agents cost today, after “≈” when part of it is estimated. |
+| `main ↑1 ↓3` | The branch of the project on screen, with the commits to push and to pull. A click opens the branch picker. “not published” or “remote deleted” replaces the arrows when the branch has no tracking. |
+| Speaker | Turns the sound of the notifications on or off. |
 
 See [quotas and cost](usage) and [branches](branches).
 
 ## The settings
 
-`Ctrl+,` or the ⚙ button of the status bar opens the settings window: the tabs on the left, the content on the right. A modified tab is marked; “Save” saves all the tabs at once, and “Cancel” (or `Esc`) closes the window without saving. The “Accounts” tab is the exception: it saves at each change. The “Projects”, “Kanban” and “Integrations” tabs set one project at a time, chosen at the top; “Project settings…” in a project tab’s menu opens the window on that project.
+`Ctrl+,` or the “Settings” button, at the bottom of the projects rail, opens the settings window: the tabs on the left, the content on the right. A modified tab is marked; “Save” saves all the tabs at once, and “Cancel” (or `Esc`) closes the window without saving. The “Accounts” tab is the exception: it saves at each change. The “Projects”, “Kanban” and “Integrations” tabs set one project at a time, chosen at the top; “Project settings…” in a project’s menu opens the window on that project.
 
 | Tab | Page |
 |---|---|
@@ -216,7 +222,7 @@ See [quotas and cost](usage) and [branches](branches).
 
 ## On macOS
 
-- **Native title bar.** macOS draws the window buttons itself (red, yellow, green) at the left of the title bar, before the tabs; Escouade doesn’t show its own. The red button puts the window away in the menu bar, as on Windows and Linux, and `⌘Q` or “Quit Escouade” stops the application.
+- **Native title bar.** macOS draws the window buttons itself (red, yellow, green) at the left of the title bar, above the projects rail, in place of the logo; Escouade doesn’t show its own. The red button puts the window away in the menu bar, as on Windows and Linux, and `⌘Q` or “Quit Escouade” stops the application.
 - **`⌘` instead of `Ctrl`.** Every shortcut of this page uses `⌘` (`⌘N`, `⌘,`, `⌘K`, `⇧⌘L`…), except `Ctrl+Tab` and `Ctrl+Shift+Tab`, because `⌘Tab` switches applications. In terminals, `⌘C` and `⌘V` copy and paste, and the `Ctrl` keys go to the shell.
 - **Menu bar.** Escouade has its macOS menus: its own (“About Escouade”, “Hide Escouade”, “Quit Escouade”…), “Edit”, “View”, “Window” and “Help”, in the interface language.
 - **Notifications.** The Dock icon bounces when an agent needs you, where the taskbar flashes on Windows. See [notifications](notifications).

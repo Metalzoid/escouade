@@ -20,13 +20,13 @@ These signals also apply to an agent running in [the Claude Code view](claude-co
 
 ### The tab and the card that blink
 
-When an agent asks a question, finishes, or fails while you weren’t looking at it, its card in the sidebar blinks, and so does its project’s tab (if it isn’t the one you’re looking at). The color says what it is: amber for a question, green for an end, red for an error. When several agents of a project need a look, the tab takes the most pressing color: error first, then question, then end. Hover over the tab to read the names (“Needs a look: refacto-auth, tests-e2e”).
+When an agent asks a question, finishes, or fails while you weren’t looking at it, its card in the sidebar blinks, and its project’s tile, in the projects rail, takes a breathing ring (if it isn’t the one you’re looking at). The color says what it is: amber for a question, green for an end, red for an error. When several agents of a project need a look, the tab takes the most pressing color: error first, then question, then end. Hover over the tab to read the names (“Needs a look: refacto-auth, tests-e2e”).
 
 The blinking lasts until you show the agent, with the window in the foreground. “Looking at” the agent means its conversation is on screen: if the editor, the Kanban, a terminal, a launch log, the statistics, or the overview hides it, the agent still needs a look. If your system asks to reduce animations, the card keeps a steady tint instead of blinking.
 
 ### Counters
 
-The project tabs show a pill with the number of agents waiting for an answer. The status bar, at the bottom, counts the “active”, “waiting”, and “done” agents, and its “N waiting” button takes you to the next agent that needs a look. `Ctrl+J` does the same (see [keeping track of your agents](overview)).
+The project tiles show a pill with the number of agents waiting for an answer; a project out of view that waits is signalled by a pill under the list. The status bar, at the bottom, counts the “active”, “waiting”, and “done” agents, and its “N waiting” button takes you to the next agent that needs a look. `Ctrl+J` does the same (see [keeping track of your agents](overview)).
 
 ## Outside the window
 

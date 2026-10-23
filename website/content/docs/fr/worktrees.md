@@ -15,7 +15,7 @@ Les agents des tickets du [Kanban](board) travaillent toujours dans un worktree 
 L’option se règle par projet, et ne concerne que les agents créés ensuite : ceux qui existent déjà restent où ils sont. Trois endroits la proposent :
 
 - la fenêtre « Nouveau projet », avec l’interrupteur « Un worktree git par agent » (désactivé par défaut) ;
-- un clic droit sur l’onglet du projet, puis « Activer le worktree par agent » ou « Désactiver le worktree par agent » (l’entrée précise « nouveaux agents ») ;
+- un clic droit sur la tuile du projet (ou un clic sur son nom dans la barre de titre), puis « Activer le worktree par agent » ou « Désactiver le worktree par agent » (l’entrée précise « nouveaux agents ») ;
 - Réglages › Projets, groupe « Git », « Un worktree par agent ».
 
 Le dossier du projet doit être sur une branche qui a au moins un commit : un dépôt neuf, sans aucun commit, ne peut pas encore avoir de worktree. Quand un worktree ne peut pas être créé, l’agent travaille dans le dossier du projet et la conversation affiche « Worktree non créé, l’agent travaille dans le dossier du projet : … » avec la raison.

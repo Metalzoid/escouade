@@ -6,7 +6,7 @@ L’onglet « Notifications » règle les alertes d’Escouade : pour quels é
 
 Trois signaux se combinent, et l’onglet commande les deux derniers. Les alertes elles-mêmes sont décrites dans [les notifications](notifications).
 
-- Les signaux de la fenêtre : l’onglet du projet, la carte de l’agent et la barre des tâches (le Dock sous macOS) signalent toujours l’agent, quels que soient les réglages. La barre des tâches clignote quand la fenêtre n’est pas au premier plan.
+- Les signaux de la fenêtre : la tuile du projet, la carte de l’agent et la barre des tâches (le Dock sous macOS) signalent toujours l’agent, quels que soient les réglages. La barre des tâches clignote quand la fenêtre n’est pas au premier plan.
 - Le carillon : joué pour un type d’événement coché, quand « Son activé » l’est aussi, que la fenêtre soit au premier plan ou non.
 - La notification du système : affichée pour un type d’événement coché, quand l’interrupteur du groupe « Canaux » est activé et que la fenêtre n’est pas au premier plan, c’est-à-dire cachée, réduite ou sans le focus.
 

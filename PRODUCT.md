@@ -39,7 +39,7 @@ Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du m
 
 ## Capabilities and Constraints
 
-- Projets en onglets, agents en parallèle avec leur modèle (Fable, Opus, Sonnet, Haiku), leur effort et leur mode de permission ; copie d'un agent qui reprend sa conversation (1.6).
+- Projets dans une barre à gauche (2.0), agents en parallèle avec leur modèle (Fable, Opus, Sonnet, Haiku), leur effort et leur mode de permission ; copie d'un agent qui reprend sa conversation (1.6).
 - Français et anglais (1.7) : l'interface suit la langue du système ou le choix de l'utilisateur, sans redémarrer ; nombres, dates et pluriels suivent la langue. Une langue à part pour ce que Claude rédige (messages de commit, pull requests, commentaires Jira, Trello et GitHub, consignes aux agents).
 - Plusieurs comptes Claude (1.7) : chacun son dossier de configuration et sa connexion, ajoutés et connectés depuis l'app ; quotas et statistiques par compte, nouveaux agents et tickets envoyés sur le premier compte sous le seuil, agent arrêté par la limite d'usage repris sur un autre compte.
 - Serveur MCP (1.7) : Claude, depuis un terminal, un autre outil ou un agent d'Escouade, lit les projets, agents et tickets et peut créer, déplacer et lancer des tickets ou des agents, sous les garde-fous du pilote auto ; aucune permission accordée, aucune commande lancée, rien supprimé ; journal des appels.

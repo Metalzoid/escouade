@@ -102,6 +102,11 @@ export default {
     /** The lock of a private project (« Projet privé »), on its tab and in the settings. */
     private: 'Projet privé : invisible pour les agents des autres projets',
     addProject: 'Ajouter un projet',
+    /** The active project's name in the title bar opens its menu. */
+    projectMenu: 'Menu du projet {name}',
+    search: 'Rechercher',
+    /** `{key}`: the shortcut. */
+    searchLabel: 'Rechercher dans les conversations ({key})',
     openEditor: 'Ouvrir l’éditeur du projet',
     openEditorTitle: 'Parcourir et éditer les fichiers du projet',
     stats: 'Stats',
@@ -119,6 +124,49 @@ export default {
       settings: 'Réglages du projet…',
       openFolder: 'Ouvrir le dossier',
       close: 'Fermer le projet…',
+    },
+  },
+
+  // The projects' rail (ESC-158): a tile per open project, on the left.
+  rail: {
+    label: 'Projets',
+    list: 'Projets ouverts',
+    overview: 'Vue d’ensemble',
+    overviewTip: 'Tous les agents de tous les projets',
+    add: 'Ajouter un projet',
+    addTip: 'Ou rouvrir un projet fermé',
+    stats: 'Stats',
+    statsTip: 'Coût, tokens et agents de tous les projets',
+    settings: 'Réglages',
+    /** `{key}`: the shortcut. */
+    settingsLabel: 'Réglages ({key})',
+    /** The lines of a tile's tooltip. */
+    waiting: { one: '{count} agent attend ta réponse', other: '{count} agents attendent ta réponse' },
+    running: { one: '{count} agent travaille', other: '{count} agents travaillent' },
+    delta: 'Δ {count} · modifications non commitées',
+    private: 'Projet privé',
+    idle: 'Rien en cours, rien de modifié',
+    /** What a tile says to a screen reader, after the name. */
+    waitingShort: '{count} en attente',
+    runningShort: '{count} au travail',
+    privateShort: 'privé',
+    /** The pills of the projects out of view whose agents wait: `{names}`, the projects. */
+    moreUp: '{names} : {count} en attente, plus haut',
+    moreDown: '{names} : {count} en attente, plus bas',
+    up: 'Monter',
+    down: 'Descendre',
+    upKey: 'Alt ↑',
+    downKey: 'Alt ↓',
+    closeDetail: 'Son historique est gardé : « + » le rouvre',
+    // The menu of « + », with closed projects.
+    addMenu: {
+      new: 'Ajouter un projet…',
+      newDetail: 'Un dossier, un dépôt à cloner ou un projet vide, par l’assistant',
+      closed: 'Projets fermés · leur historique est gardé',
+      closedOn: 'Fermé le {date}',
+      reopen: 'Rouvrir',
+      all: 'Tous les projets fermés…',
+      allDetail: 'Réglages › Projets',
     },
   },
 

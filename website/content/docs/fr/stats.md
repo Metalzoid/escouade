@@ -4,7 +4,7 @@ Les statistiques montrent ce que tes agents ont consommé : tokens, coût et pro
 
 ## Ouvrir les statistiques
 
-Clique sur « Stats », en haut à droite de la fenêtre. La page remplace le projet affiché ; un clic sur l’onglet d’un projet te ramène à lui. Elle n’a pas de raccourci.
+Clique sur « Stats », en bas de la barre des projets. La page remplace le projet affiché ; un second clic sur « Stats », ou un clic sur la tuile d’un projet, te ramène à lui. Elle n’a pas de raccourci.
 
 ![La page Statistiques : tokens, coût global, coût moyen par prompt et prompts sur 14 jours, un graphique de tokens par jour empilés en entrée, cache et sortie, puis les répartitions par projet et par modèle.](/images/stats.jpg)
 

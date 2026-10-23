@@ -4,7 +4,7 @@ Statistics show what your agents have consumed: tokens, cost and prompts by day,
 
 ## Open the statistics
 
-Click “Stats”, at the top right of the window. The page replaces the project on screen; a click on a project’s tab takes you back to it. It has no shortcut.
+Click “Stats”, at the bottom of the projects rail. The page replaces the project on screen; a second click on “Stats”, or a click on a project’s tile, takes you back to it. It has no shortcut.
 
 ![The Statistics page: tokens, total cost, average cost per prompt and prompts over 14 days, a chart of tokens per day stacked as input, cache and output, then the breakdowns by project and by model.](/images/en/stats.jpg)
 

@@ -59,12 +59,10 @@ test.describe('two accounts, the first out of quota', () => {
     await review.getByRole('button', { name: /DEM-1/ }).click();
     await expect(page.getByText(`L’agent reprend sur le compte ${NAME} (il était sur Principal).`)).toBeVisible();
 
-    // The status bar shows the second account as the current one; its long name is cut short, whole in its tooltip.
+    // The status bar shows the second account as the current one, named by its button (the bar names the harness).
     const group = page.getByRole('button', { name: `Quotas par compte (compte en cours : ${NAME})` });
     await expect(group).toBeVisible();
-    const label = group.locator('.acct');
-    await expect(label).toHaveAttribute('data-tip', NAME);
-    expect(await label.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+    await expect(group).not.toContainText(NAME);
     // The bars are the button's to describe: both windows, said to a screen reader.
     await expect(group).toHaveAccessibleDescription(/^Quota sur 5 heures : .*\. Quota sur 7 jours : /);
 
@@ -218,7 +216,7 @@ test.describe('the accounts of two harnesses', () => {
     // The panel groups them by harness; Codex's has no quota read.
     await group.click();
     const panel = page.getByRole('dialog', { name: 'Quotas des comptes' });
-    await expect(panel.getByRole('heading')).toHaveText(['Claude Code', 'Codex']);
+    await expect(panel.getByRole('heading')).toHaveText([/Comptes Claude Code$/, /Comptes Codex$/]);
     await expect(panel.getByRole('region', { name: 'Comptes Codex' }).getByRole('group', { name: 'Travail' })).toBeVisible();
     await page.keyboard.press('Escape');
 
@@ -407,18 +405,18 @@ test.describe('two accounts whose claude does not list the same models (ESC-124)
   });
 });
 
-test('the status bar projects each window to its reset, unless « Projection des quotas » is off', async ({ app }) => {
+test('the status bar projects a window to its reset past 80 %, unless « Projection des quotas » is off', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   // From this turn on, the 5 h window is at 50 % with 3 h left, the week's at 34 % half way through. The clock goes on
   // while the test runs: the values leave room for it (→ 125 % and → 68 % at once, a few minutes later still in their tens).
   await send(page, 'bonjour [quota-rythme]');
   const bar = page.locator('footer.bar');
-  const fiveHour = bar.locator('.q', { hasText: '5h' });
+  const fiveHour = bar.locator('.q', { hasText: '5 h' });
   await expect(fiveHour.locator('.p')).toHaveText(/^projection à la remise à zéro : → 12\d %$/);
   await expect(fiveHour.locator('.p')).toHaveClass(/over/);
-  await expect(bar.locator('.q', { hasText: '7j' }).locator('.p')).toHaveText(/→ 6\d %$/);
-  await expect(bar.locator('.q', { hasText: '7j' }).locator('.p')).toHaveClass(/ok/);
+  // The week's, at 6x %, asks for nothing: only the panel writes it (choice 21 of the 2.0 design).
+  await expect(bar.locator('.q', { hasText: '7 j' }).locator('.p')).toHaveCount(0);
 
   // Off in Réglages › Comptes › « Quotas »: gone at once, and kept.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();

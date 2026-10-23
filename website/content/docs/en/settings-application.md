@@ -4,7 +4,7 @@ This page describes the settings window (its tabs, how to open it, how it saves)
 
 ## The settings window
 
-Escouade’s settings live in a single window, with one tab per topic. Open it with `Ctrl+,` (`⌘,` on macOS) or with the ⚙ button in the [status bar](interface). It opens on the “Harness” tab, unless a button opens it straight on the tab that concerns it: the ⚙ button in the header of the [Kanban](board) opens “Kanban”, and a project’s menu opens “Projects”. The shortcut does nothing while another dialog is open.
+Escouade’s settings live in a single window, with one tab per topic. Open it with `Ctrl+,` (`⌘,` on macOS) or with the “Settings” button at the bottom of the [projects rail](interface). It opens on the “Harness” tab, unless a button opens it straight on the tab that concerns it: the ⚙ button in the header of the [Kanban](board) opens “Kanban”, and a project’s menu opens “Projects”. The shortcut does nothing while another dialog is open.
 
 ### The tabs
 

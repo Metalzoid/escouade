@@ -113,7 +113,7 @@
         <button
           role="menuitem"
           class:danger={item.danger}
-          class:iconed={!!item.icon}
+          class:iconed={!!item.icon || !!item.swatch}
           disabled={item.disabled}
           use:tip={item.title}
           onclick={() => {
@@ -121,9 +121,12 @@
             item.onClick?.();
           }}
         >
-          {#if item.icon}<span class="ic"><Icon name={item.icon} /></span>{/if}
+          {#if item.swatch}<span class="ic tile" style:background={item.swatch}></span>{:else if item.icon}<span class="ic"
+              ><Icon name={item.icon} /></span
+            >{/if}
           <span class="ml"
-            ><span class="l">{item.label}</span>{#if item.disabled && item.reason}<span class="reason">{item.reason}</span>{/if}</span
+            ><span class="l">{item.label}</span>{#if item.detail}<span class="reason">{item.detail}</span
+              >{/if}{#if item.disabled && item.reason}<span class="reason">{item.reason}</span>{/if}</span
           >
           {#if item.hint}<span class="hint">{item.hint}</span>{/if}
         </button>
@@ -183,6 +186,13 @@
     display: inline-flex;
     flex: none;
     color: var(--muted);
+  }
+  /* A closed project's colour, a small tile. */
+  .ic.tile {
+    width: 14px;
+    height: 14px;
+    margin: 0 1px;
+    border-radius: 4px;
   }
   .ml {
     flex: 1;

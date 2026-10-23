@@ -6,14 +6,14 @@ On macOS, `Ctrl` becomes `⌘` for shortcuts (except `Ctrl+Tab`).
 
 ## The overview
 
-The overview takes the place of the project on screen to list all agents of all projects. Open it with the “Overview” button in the title bar, to the left of the project tabs, or with `Ctrl+Shift+A` (the shortcut also works from a terminal). The same button or shortcut closes it; so does `Esc`, and you’re back to the view it was hiding: the project or the statistics.
+The overview takes the place of the project on screen to list all agents of all projects. Open it with the “Overview” button, at the top of the projects rail, or with `Ctrl+Shift+A` (the shortcut also works from a terminal). The same button or shortcut closes it; so does `Esc`, and you’re back to the view it was hiding: the project or the statistics.
 
 ### What it shows
 
 The header gives the count: “2 projects · 7 agents · 3 running”. Below, the agents are arranged in groups:
 
 1. **“Waiting for your answer”**: the agents with the “Question” status, from all projects, the one that has waited longest first, with its project’s name.
-2. **One group per project**, in the order of the tabs, with its color; the agents are in the order of the sidebar.
+2. **One group per project**, in the order of the projects rail, with its color; the agents are in the order of the sidebar.
 
 An agent appears only once, and archived agents aren’t listed. Each line has six columns:
 
@@ -58,7 +58,7 @@ Only the first request of each agent is shown; when you answer it, the next one 
 
 `Ctrl+J` and `Ctrl+Tab` also work from a terminal. The “N waiting” button in the status bar, at the bottom, does the same as `Ctrl+J`.
 
-To keep an eye on the other projects without opening them, look at their tabs: a pill gives the number of agents waiting for an answer, a green dot shows that an agent is working, “Δ 7” counts the changed files, and a tab that blinks amber, green, or red flags an agent that needs a look (see [notifications](notifications)). The status bar counts the “active”, “waiting”, and “done” agents.
+To keep an eye on the other projects without opening them, look at their tiles, in the projects rail: a pill gives the number of agents waiting for an answer, a green dot shows that an agent is working, the tooltip counts the changed files (“Δ 7”), and a tile that blinks amber, green, or red flags an agent that needs a look (see [notifications](notifications)). The status bar counts the “active”, “waiting”, and “done” agents.
 
 ## Searching conversations
 

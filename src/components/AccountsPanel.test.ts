@@ -53,10 +53,10 @@ describe('AccountsPanel', () => {
     const week = within(pro).getByRole('meter', { name: 'Quota sur 7 jours' });
     expect(five).toHaveAttribute('aria-valuenow', '42');
     expect(week).toHaveAttribute('aria-valuenow', '12');
-    expect(pro).toHaveTextContent('5h');
+    expect(pro).toHaveTextContent('5 h');
     expect(pro).toHaveTextContent('42 %');
     expect(pro).toHaveTextContent('reset 3h01');
-    expect(pro).toHaveTextContent('7j');
+    expect(pro).toHaveTextContent('7 j');
     expect(pro).toHaveTextContent('12 %');
     expect(pro).toHaveTextContent('reset 4j 12h');
   });
@@ -125,9 +125,10 @@ describe('AccountsPanel', () => {
     expect(group('Pro')).toHaveTextContent("Aujourd'hui : 0,50 $");
     // An account switched off or that spent nothing says so too, rather than leave a hole.
     expect(group('Équipe')).toHaveTextContent("Aujourd'hui : 0,00 $");
-    const head = within(group('Pro')).getByText("Aujourd'hui : 0,50 $").parentElement!;
-    expect(head).toHaveClass('head');
-    expect(head).toHaveTextContent('Pro');
+    // On the line of its name: its cell, beside the name's.
+    const today = within(group('Pro')).getByText("Aujourd'hui : 0,50 $");
+    expect(today).toHaveClass('today');
+    expect(today.previousElementSibling).toHaveTextContent(/^Pro/);
   });
 
   it('says it for an account that was never read, and counts the turn running on an agent as an estimate', () => {
@@ -248,7 +249,44 @@ describe('AccountsPanel with the accounts of two harnesses (ESC-30)', () => {
     expect(
       within(panel())
         .getAllByRole('heading')
-        .map((h) => h.textContent),
-    ).toEqual(['Harness nu', 'Claude Code']);
+        // After the harness's mark.
+        .map((h) => h.lastChild?.textContent),
+    ).toEqual(['Comptes Harness nu', 'Comptes Claude Code']);
+  });
+});
+
+describe('AccountsPanel, what the lot 0 bis adds (choices 21 to 23)', () => {
+  const WORK: Account = { id: 'work', name: 'Travail', engine: 'codex', configDir: 'C:\codex\work', claudePath: '', active: true };
+
+  beforeEach(() => {
+    resetApp();
+    app.now = NOW;
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings.accounts = [PRO, WORK];
+    app.usage.current = { claude: 'pro', codex: 'work' };
+    app.usage.accounts = [read('pro', { fiveHour: win(20, 3) }), read('work', { engine: 'codex', todayCost: 0.42, dailyBudget: 5 })];
+  });
+
+  it('writes every projection, green ones too, with a note on their colours', () => {
+    render(AccountsPanel, { onclose: () => {} });
+    expect(within(group('Pro')).getByText('→ 50 %')).toHaveClass('ok');
+    expect(panel()).toHaveTextContent('La barre d’état ne montre que celles qui passent 80 %.');
+  });
+
+  it('says what an account answering as extra usage does, under it, with an icon', () => {
+    app.usage.accounts = app.usage.accounts.map((u) => (u.id === 'pro' ? { ...u, overage: true } : u));
+    render(AccountsPanel, { onclose: () => {} });
+    const bill = within(group('Pro')).getByText(/^Pro : usage supplémentaire en cours, facturé à part/);
+    expect(bill.parentElement).toHaveClass('bill');
+    expect(bill.parentElement!.querySelector('[data-icon="info"]')).not.toBeNull();
+  });
+
+  it('gives a harness without a quota its cost of the day out of its daily budget, on a gauge', () => {
+    render(AccountsPanel, { onclose: () => {} });
+    const work = group('Travail');
+    expect(work).toHaveTextContent('Budget par jour');
+    expect(work).toHaveTextContent('0,42 $ / 5,00 $');
+    expect(work).toHaveTextContent('Pas de quota : seul le coût de ses tours compte. Remise à zéro à minuit.');
+    expect(work.querySelector<HTMLElement>('.gauge .fill')!.style.width).toMatch(/^8\.(4|39+)\d*%$/);
   });
 });

@@ -54,6 +54,11 @@ export const ICONS = {
   sparkle: '<path d="M8 2.5l1.3 3.7 3.7 1.3-3.7 1.3L8 12.5l-1.3-3.7L3 7.5l3.7-1.3z" />',
   min: '<path d="M3 8.5h10" />',
   max: '<rect x="3.5" y="3.5" width="9" height="9" rx="0.5" />',
+  // The window maximized: the button restores it (not in the preview, which draws the window restored).
+  // The commits to pull, beside the branch (the mirror of `up`), and the sound of the notifications turned off.
+  pull: '<path d="M8 3.25v9.25M4 8.75l4 4 4-4" />',
+  mute: '<path d="M2.75 6.25h2.25L8.25 3.5v9L5 9.75H2.75z" /><path d="M10.75 6.25l3 3.5M13.75 6.25l-3 3.5" />',
+  restore: '<path d="M5.5 3.5h7v7" /><rect x="3.5" y="5.5" width="7" height="7" rx="0.5" />',
   close: '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />',
   mic: '<rect x="5.75" y="2.25" width="4.5" height="7.5" rx="2.25" /><path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25v1.5" />',
   wave: '<path d="M2.75 7v2M5.25 5v6M7.75 3v10M10.25 5.5v5M12.75 7v2" />',

@@ -15,7 +15,7 @@ The agents of [Kanban](board) tickets always work in a worktree of their own, on
 The option is set per project, and only affects agents created afterwards: the ones that already exist stay where they are. Three places offer it:
 
 - the “New project” window, with the “One git worktree per agent” switch (off by default);
-- a right-click on the project’s tab, then “Turn on a worktree per agent” or “Turn off a worktree per agent” (the entry says “new agents”);
+- a right-click on the project’s tile (or a click on its name in the title bar), then “Turn on a worktree per agent” or “Turn off a worktree per agent” (the entry says “new agents”);
 - Settings › Projects, “Git” group, “One worktree per agent”.
 
 The project folder must be on a branch that has at least one commit: a brand-new repository with no commit can’t have a worktree yet. When a worktree can’t be created, the agent works in the project folder and the conversation shows “Worktree not created, the agent works in the project’s folder: …” with the reason.

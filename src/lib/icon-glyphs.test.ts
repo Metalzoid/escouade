@@ -22,6 +22,17 @@ const REDRAWN = {
     'src/components/settings/Group.svelte',
     'src/components/settings/ApplicationTab.svelte',
   ],
+  'lot 2 (ESC-72)': [
+    'src/App.svelte',
+    'src/components/TitleBar.svelte',
+    'src/components/ProjectRail.svelte',
+    'src/components/ProjectTile.svelte',
+    'src/components/StatusBar.svelte',
+    'src/components/QuotaMeter.svelte',
+    'src/components/AccountsPanel.svelte',
+    'src/components/Toasts.svelte',
+    'src/components/Welcome.svelte',
+  ],
 };
 
 /**

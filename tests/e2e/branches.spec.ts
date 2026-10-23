@@ -9,7 +9,7 @@ test('a branch is created from the status bar, the folder switched to it, and th
   const { page } = app;
   await addProject(page, app.repo);
   const branch = page.locator('footer .sync');
-  await expect(branch).toContainText('⎇ main');
+  await expect(branch).toContainText('main');
 
   // From the branch picker: « Nouvelle branche… », a name, « et y passer » (ticked by default).
   await branch.click();
@@ -22,7 +22,7 @@ test('a branch is created from the status bar, the folder switched to it, and th
   await expect(page.getByText('Branche « feat/e2e » créée : tu es dessus.')).toBeVisible();
 
   // The status bar and the repository agree on where the folder is.
-  await expect(branch).toContainText('⎇ feat/e2e');
+  await expect(branch).toContainText('feat/e2e');
   expect(git(app.repo, 'branch', '--show-current')).toBe('feat/e2e');
   // It started where main is, and tracks nothing.
   expect(git(app.repo, 'rev-parse', 'feat/e2e')).toBe(git(app.repo, 'rev-parse', 'main'));
@@ -51,7 +51,7 @@ test('the agents start from the target branch, brought up to date from the remot
   git(app.repo, 'switch', '-q', '-c', 'work', 'main~1');
   git(app.repo, 'branch', '-qf', 'main', 'work');
   git(app.repo, 'commit', '-q', '--allow-empty', '-m', 'work');
-  await expect(page.locator('footer .sync')).toContainText('⎇ work');
+  await expect(page.locator('footer .sync')).toContainText('work');
 
   // « Branche cible » in the branch picker, then the setting.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();

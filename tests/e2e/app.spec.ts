@@ -15,7 +15,7 @@ test('a new project opens an agent that streams Claude’s reply', async ({ app 
   // Named from the first request (the fake CLI answers the naming call).
   await expect(page.locator('.card .name').first()).toHaveText('bonjour-fake');
   // The quota of the 5-hour window, as the fake CLI reports it: a meter, whose percentage is in its tooltip.
-  await expect(page.locator('footer')).toContainText('5h');
+  await expect(page.locator('footer')).toContainText('5 h');
   await expect(page.getByRole('meter', { name: 'Quota sur 5 heures' })).toHaveAttribute('aria-valuenow', '12');
 });
 
@@ -34,7 +34,7 @@ test('a question from Claude is signalled and answered in one click', async ({ a
   const card = page.getByTestId('question-pending');
   await expect(card).toContainText('Quelle base de données ?');
   await expect(page.locator('footer')).toContainText('1 en attente');
-  await expect(page.locator('.tab .pill')).toHaveText('1');
+  await expect(page.getByRole('tab', { name: /^demo-api/ }).locator('.ask')).toHaveText('1');
   await card.getByRole('button', { name: 'SQLite' }).click();
   await expect(page.getByText('Choix retenu : SQLite')).toBeVisible();
   await expect(page.locator('footer')).toContainText('0 en attente');
@@ -54,11 +54,11 @@ test('a permission can be refused with an explanation typed in the composer', as
   await expect(page.getByText('✕ Refusé · Bash rm -rf build')).toBeVisible();
 });
 
-test('uncommitted changes show up in the tab counter, the files panel and the diff', async ({ app }) => {
+test('uncommitted changes show up beside the project’s name, in the files panel and the diff', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   fs.writeFileSync(path.join(app.repo, 'src', 'app.ts'), 'const a = 2;\nconst b = 3;\n');
-  await expect(page.locator('.tab .delta')).toHaveText('Δ 1');
+  await expect(page.locator('header .delta')).toHaveText('Δ 1');
   await page.getByRole('button', { name: /Fichiers/ }).click();
   await page.getByRole('button', { name: 'Tout le projet' }).click();
   await expect(page.locator('.panel')).toContainText('app.ts');
@@ -108,8 +108,8 @@ test('the status bar shows what there is to pull from the remote, fetched and pu
   git(app.repo, 'push', '-q', '-u', 'origin', 'main');
   await addProject(page, app.repo);
   const sync = page.locator('footer .sync');
-  await expect(sync).toContainText('⎇ main');
-  await expect(sync).toContainText('↓0');
+  await expect(sync).toContainText('main');
+  await expect(sync).toContainText('0 commit à tirer');
 
   // Someone else pushes a commit.
   const other = path.join(root, 'other');
@@ -121,13 +121,13 @@ test('the status bar shows what there is to pull from the remote, fetched and pu
 
   await sync.click();
   await page.getByRole('dialog', { name: 'Branches' }).getByRole('button', { name: /Fetch/ }).click();
-  await expect(sync).toContainText('↓1');
+  await expect(sync).toContainText('1 commit à tirer');
   await sync.click();
   await page
     .getByRole('dialog', { name: 'Branches' })
     .getByRole('button', { name: /Récupérer/ })
     .click();
-  await expect(sync).toContainText('↓0');
+  await expect(sync).toContainText('0 commit à tirer');
   expect(fs.readFileSync(path.join(app.repo, 'README.md'), 'utf8')).toBe('depuis ailleurs\n');
 });
 
@@ -784,32 +784,19 @@ test('Ctrl+N creates another agent and Ctrl+J jumps to the one waiting', async (
   await expect(page.getByTestId('question-pending')).toBeVisible();
 });
 
-test('a project’s color is picked from its tab’s menu, not from the sidebar', async ({ app }) => {
+test('a project’s color is picked from its tile’s menu, not from the sidebar', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   await expect(page.locator('aside.side')).not.toContainText('Couleur');
-  const tab = page.locator('.tab', { hasText: 'demo-api' });
-  await tab.click({ button: 'right' });
+  const tile = page.getByRole('tab', { name: /^demo-api/ });
+  await tile.click({ button: 'right' });
   const third = page.getByRole('menuitemradio', { name: 'Couleur 3' });
   const color = await third.evaluate((el) => getComputedStyle(el).backgroundColor);
   await third.click();
   await expect(page.getByRole('menu')).toBeHidden();
-  await expect(tab.locator('.swatch')).toHaveCSS('background-color', color);
-  await tab.click({ button: 'right' });
+  await expect(tile).toHaveCSS('background-color', color);
+  await tile.click({ button: 'right' });
   await expect(page.getByRole('menuitemradio', { name: 'Couleur 3' })).toHaveAttribute('aria-checked', 'true');
-});
-
-test('project tabs can be reordered (drag and drop logic)', async ({ app }) => {
-  const { page } = app;
-  await addProject(page, app.repo);
-  await addProject(page, app.repo, { name: 'second', firstAgent: false });
-  const tabs = page.locator('.tabs .tab .name');
-  await expect(tabs).toHaveText(['demo-api', 'second']);
-  await page
-    .locator('.tabs .tab')
-    .nth(1)
-    .dragTo(page.locator('.tabs .tab').nth(0), { targetPosition: { x: 5, y: 10 } });
-  await expect(tabs).toHaveText(['second', 'demo-api']);
 });
 
 test('a file is browsed, edited and saved in the embedded editor', async ({ app }) => {
