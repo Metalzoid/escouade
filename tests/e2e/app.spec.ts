@@ -772,7 +772,7 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   expect(app.launches().at(-1)?.proxy).toBe('http://proxy.local:3128');
 });
 
-test('Ctrl+N creates another agent and Ctrl+J jumps to the one waiting', async ({ app }) => {
+test('Ctrl+N creates another agent, Ctrl+J gives the focus to the card of the one waiting, and Enter opens it', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
   await send(page, 'question');
@@ -781,6 +781,9 @@ test('Ctrl+N creates another agent and Ctrl+J jumps to the one waiting', async (
   await expect(page.locator('.card')).toHaveCount(2);
   await expect(page.getByText('Agent prêt')).toBeVisible();
   await page.keyboard.press('Control+j');
+  await expect(page.locator('aside.side .agent.waiting')).toBeFocused();
+  await expect(page.getByTestId('question-pending')).toBeHidden();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('question-pending')).toBeVisible();
 });
 

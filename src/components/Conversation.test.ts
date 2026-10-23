@@ -1623,12 +1623,13 @@ describe('Conversation answers from the keyboard', () => {
     expect(backend.called('send_message')[0].args).toMatchObject({ id: a.id, text: 'Lance les tests' });
   });
 
-  describe('Ctrl+J', () => {
+  // Ctrl+J gives the focus to its card in the list (ESC-75); Enter there opens it, as a click does.
+  describe('an agent waiting, opened from its card', () => {
     it('puts the focus on the message field of an agent with a request waiting, where typing then Enter refuses', async () => {
       const { a, backend } = waiting([perm('r1')]);
       await shown('permission-pending');
       field().blur();
-      app.nextWaiting();
+      app.selectAgent(app.agent!.id);
       await waitFor(() => expect(field()).toHaveFocus());
       await userEvent.keyboard('Plutôt npm run clean{Enter}');
       await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
@@ -1644,7 +1645,7 @@ describe('Conversation answers from the keyboard', () => {
       const { backend } = waiting([perm('r1')]);
       await shown('permission-pending');
       field().blur();
-      app.nextWaiting();
+      app.selectAgent(app.agent!.id);
       await waitFor(() => expect(field()).toHaveFocus());
       await userEvent.keyboard('{Control>}{Enter}{/Control}');
       await waitFor(() => expect(backend.called('answer_permission')).toHaveLength(1));
@@ -1654,7 +1655,7 @@ describe('Conversation answers from the keyboard', () => {
     it('puts the focus on the message field when no request waits', async () => {
       waiting([]);
       field().blur();
-      app.nextWaiting();
+      app.selectAgent(app.agent!.id);
       await waitFor(() => expect(field()).toHaveFocus());
     });
   });

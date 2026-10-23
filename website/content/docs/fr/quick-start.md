@@ -99,7 +99,7 @@ Pour refuser en expliquant quoi faire à la place, écris-le dans le champ de me
 **« Claude attend ta réponse »** pose une question avec des options. Clique sur une option, ou appuie sur `Alt+1` à `Alt+9`, ou réponds librement dans le champ de message. Avec une seule question à choix unique, la réponse part dès ce clic ; avec plusieurs questions ou un choix multiple, « Valider » (`Ctrl+Entrée`) envoie les réponses.
 
 > [!TIP]
-> `Ctrl+J` ouvre le prochain agent qui attend ta réponse, le curseur dans son champ de message. Une carte qui vient d’arriver ignore les touches de réponse pendant une demi-seconde, pour qu’une frappe destinée à ton message ne réponde pas à sa place.
+> `Ctrl+J` met le focus sur la carte du prochain agent qui attend ta réponse : `1`, `2`… y répondent sans quitter la conversation affichée, `Entrée` l’ouvre. Une carte qui vient d’arriver ignore les touches de réponse pendant une demi-seconde, pour qu’une frappe destinée à ton message ne réponde pas à sa place.
 
 ## Voir ce que l’agent a changé
 

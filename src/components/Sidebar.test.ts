@@ -2736,12 +2736,19 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
   };
 
   describe('a question answered from the list', () => {
-    beforeEach(() =>
+    let clock: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
       resetApp({
         projects: [project()],
         agents: [agent({ status: 'running' }), agent({ id: 'a2', name: 'tests-e2e', status: 'waiting', createdAt: 2, requests: [ask] })],
-      }),
-    );
+      });
+      // A menu left open by another test would keep the keys.
+      menu.close();
+      clock = vi.spyOn(performance, 'now').mockReturnValue(10_000);
+      onTestFinished(() => clock.mockRestore());
+    });
+    /** Past the moment the keys wait once a request is shown. */
+    const later = () => clock.mockReturnValue(20_000);
 
     it('shows the question and its choices on the card of the agent that asks, first in the list', () => {
       fakeBackend();
@@ -2770,9 +2777,21 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(backend.called('answer_question')).toHaveLength(1);
     });
 
+    it('answers again a request that comes back under the same id once the agent went on', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(screen.getByRole('button', { name: '1 Oui' }));
+      app.agents.a2 = { ...app.agents.a2, status: 'running', requests: [] };
+      await waitFor(() => expect(screen.queryByRole('button', { name: '1 Oui' })).toBeNull());
+      app.agents.a2 = { ...app.agents.a2, status: 'waiting', requests: [ask] };
+      await userEvent.click(await screen.findByRole('button', { name: '2 Seulement auth' }));
+      expect(backend.called('answer_question')).toHaveLength(2);
+    });
+
     it('answers it with its key once the card has the focus', async () => {
       const backend = fakeBackend();
       render(Sidebar, { project: project() });
+      later();
       screen.getByRole('button', { name: /tests-e2e/ }).focus();
       await userEvent.keyboard('3');
       expect(backend.called('answer_question')).toEqual([]);
@@ -2781,23 +2800,180 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(app.agent?.id).toBe('a1');
     });
 
-    it('leaves several questions, and a permission, to the conversation: only what it asks is said', () => {
+    it('answers it with 1, 2… from anywhere but a field, once it has been there a moment', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      // Pressed as the question comes: it is not read yet.
+      await userEvent.keyboard('2');
+      expect(backend.called('answer_question')).toEqual([]);
+      later();
+      // Typed in a field: its own.
+      const field = document.createElement('input');
+      document.body.append(field);
+      onTestFinished(() => field.remove());
+      field.focus();
+      await userEvent.keyboard('2');
+      expect(backend.called('answer_question')).toEqual([]);
+      field.blur();
+      await userEvent.keyboard('2');
+      expect(backend.called('answer_question')[0].args).toEqual({
+        id: 'a2',
+        requestId: 'req_q',
+        answers: { 'Lancer toute la suite e2e (38 tests) ?': 'Seulement auth' },
+      });
+      expect(app.agent?.id).toBe('a1');
+    });
+
+    it('does not take the keys over the Kanban, nor in a dialog', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      later();
+      app.openBoard('p1');
+      await userEvent.keyboard('1');
+      app.closeBoard('p1');
+      app.modal = { kind: 'settings' };
+      await userEvent.keyboard('1');
+      expect(backend.called('answer_question')).toEqual([]);
+    });
+
+    it('flashes green the card of the agent that leaves, and says what was answered', async () => {
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      await userEvent.click(screen.getByRole('button', { name: '1 Oui' }));
+      await waitFor(() => expect(document.querySelector('[data-agent="a2"]')).toHaveClass('flash'));
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'tests-e2e : « Oui »' });
+    });
+
+    it('takes several questions one after the other, the answers sent with the last one', async () => {
       app.agents.a2 = {
         ...app.agents.a2,
-        requests: [{ ...ask, questions: [ask.questions[0], { question: 'Et la CI ?', options: ['Oui'] }] }],
+        requests: [{ ...ask, questions: [ask.questions[0], { question: 'Et la CI ?', options: ['Oui', 'Non', 'Plus tard'] }] }],
+      };
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /tests-e2e/ });
+      expect(card).toHaveTextContent('Question 1 sur 2');
+      await userEvent.click(screen.getByRole('button', { name: '2 Seulement auth' }));
+      expect(backend.called('answer_question')).toEqual([]);
+      expect(card).toHaveTextContent('Question 2 sur 2');
+      expect(card).toHaveTextContent('Et la CI ?');
+      // A second click of a double-click, on the next question come in its place, answers nothing.
+      await userEvent.click(screen.getByRole('button', { name: '1 Oui' }));
+      expect(backend.called('answer_question')).toEqual([]);
+      expect(card).toHaveTextContent('Question 2 sur 2');
+      // The keys take the next question at once: 2 then 1, typed in a row.
+      card.focus();
+      later();
+      await userEvent.keyboard('3');
+      expect(backend.called('answer_question')[0].args.answers).toEqual({
+        'Lancer toute la suite e2e (38 tests) ?': 'Seulement auth',
+        'Et la CI ?': 'Plus tard',
+      });
+    });
+
+    it('takes the keys of several questions typed in a row', async () => {
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [{ ...ask, questions: [ask.questions[0], { question: 'Et la CI ?', options: ['Oui', 'Non'] }] }],
+      };
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      later();
+      await userEvent.keyboard('21');
+      expect(backend.called('answer_question')[0].args.answers).toEqual({
+        'Lancer toute la suite e2e (38 tests) ?': 'Seulement auth',
+        'Et la CI ?': 'Oui',
+      });
+    });
+
+    it('allows a permission, for good or for the session, or refuses it, with what « always » keeps', async () => {
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [
+          {
+            ...ask,
+            id: 'req_p',
+            kind: 'permission',
+            tool: 'Bash',
+            arg: 'git add src/sessions/sqlite.ts',
+            description: '« Toujours autoriser » retiendra : git add *',
+            questions: [],
+            canAlways: true,
+          },
+        ],
+      };
+      const backend = fakeBackend();
+      const { unmount } = render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /tests-e2e/ });
+      expect(card).toHaveTextContent('git add src/sessions/sqlite.ts');
+      expect(card).toHaveTextContent('« Toujours autoriser » retiendra : git add *');
+      const choices = within(screen.getByRole('group', { name: 'Réponses à tests-e2e' })).getAllByRole('button');
+      expect(choices.map((b) => b.textContent)).toEqual(['1Autoriser', '2Toujours autoriser', '3Refuser']);
+      later();
+      await userEvent.keyboard('2');
+      expect(backend.called('answer_permission')[0].args).toMatchObject({ id: 'a2', requestId: 'req_p', decision: 'always' });
+      unmount();
+      // Codex, Copilot CLI: for the rest of the session.
+      app.agents.a2 = {
+        ...app.agents.a2,
+        engine: 'codex',
+        requests: [{ ...app.agents.a2.requests[0], id: 'req_c', alwaysScope: 'session' }],
+      };
+      render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: '2 Pour cette session' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: '3 Refuser' }));
+      expect(backend.called('answer_permission')[1].args).toMatchObject({ requestId: 'req_c', decision: 'deny' });
+      expect(app.agent?.id).toBe('a1');
+    });
+
+    it('opens in the conversation what does not hold on the card: only what it asks is said', async () => {
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [{ ...ask, questions: [ask.questions[0], { question: 'Ton prénom ?', options: [] }] }],
       };
       fakeBackend();
       const { unmount } = render(Sidebar, { project: project() });
       const card = screen.getByRole('button', { name: /tests-e2e/ });
-      expect(card).toHaveTextContent('Lancer toute la suite e2e (38 tests) ? · Et la CI ?');
+      expect(card).toHaveTextContent('Lancer toute la suite e2e (38 tests) ? · Ton prénom ?');
       expect(screen.queryByRole('group', { name: 'Réponses à tests-e2e' })).toBeNull();
+      await userEvent.click(within(card).getByRole('button', { name: 'Répondre dans la conversation' }));
+      expect(app.agent?.id).toBe('a2');
       unmount();
       app.agents.a2 = {
         ...app.agents.a2,
-        requests: [{ ...ask, kind: 'permission', tool: 'Bash', arg: 'rm -rf build\nsecond', questions: [] }],
+        requests: [{ ...ask, kind: 'permission', tool: 'Bash', arg: 'rm -rf build', questions: [], defaultNo: true }],
       };
       render(Sidebar, { project: project() });
       expect(screen.getByRole('button', { name: /tests-e2e/ }).querySelector('.a-ask')).toHaveTextContent('Bash rm -rf build');
+    });
+
+    it('gives the focus to the card Ctrl+J asks for', async () => {
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      app.nextWaiting();
+      await waitFor(() => expect(document.activeElement).toBe(document.querySelector('[data-agent="a2"]')));
+      expect(app.agent?.id).toBe('a1');
+    });
+
+    it('is written in English', () => {
+      setLang('en');
+      onTestFinished(() => setLang('fr'));
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [{ ...ask, kind: 'permission', tool: 'Bash', arg: 'npm test', questions: [], canAlways: true, alwaysScope: 'session' }],
+      };
+      fakeBackend();
+      const first = render(Sidebar, { project: project() });
+      const choices = within(screen.getByRole('group', { name: 'Answers to tests-e2e' })).getAllByRole('button');
+      expect(choices.map((b) => b.textContent)).toEqual(['1Allow', '2For this session', '3Deny']);
+      first.unmount();
+      app.agents.a2 = { ...app.agents.a2, requests: [{ ...ask, questions: [ask.questions[0], { question: 'B ?', options: ['x'] }] }] };
+      const second = render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: /tests-e2e/ })).toHaveTextContent('Question 1 of 2');
+      second.unmount();
+      app.agents.a2 = { ...app.agents.a2, requests: [{ ...ask, cut: true }] };
+      render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: 'Reply in the conversation' })).toBeInTheDocument();
     });
   });
 

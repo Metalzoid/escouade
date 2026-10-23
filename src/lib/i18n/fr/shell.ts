@@ -137,7 +137,7 @@ export default {
     /** Beside a harness whose account answers as extra usage, billed apart. */
     overage: 'usage supplémentaire',
     /** `{key}`: the shortcut. */
-    nextWaiting: 'Aller au prochain agent en attente ou à voir ({key})',
+    nextWaiting: 'Aller à la carte du prochain agent en attente ou à voir ({key})',
     procsTitle: 'Processus des agents en cours (avec les outils et serveurs MCP qu’ils lancent)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
     procs: { one: '{count} agent · {memory} · {cpu} CPU', other: '{count} agents · {memory} · {cpu} CPU' },

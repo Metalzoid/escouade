@@ -56,7 +56,8 @@ Shortcuts are written the way the app writes them in English: `Ctrl+Shift+A`, `C
 | Shortcut | Action | Where |
 |---|---|---|
 | `Ctrl+N` | New agent in the project on screen. | Everywhere |
-| `Ctrl+J` | Go to the next agent that is waiting for your answer or needs a look (a question, or an end or error you haven’t seen yet), across all projects, and put the cursor in its message field. | Everywhere, terminals included |
+| `Ctrl+J` | Put the focus on the card of the next agent that is waiting for your answer or needs a look (a question, or an end or error you haven’t seen yet), across all projects, without leaving the conversation on screen; `Enter` opens it. | Everywhere, terminals included |
+| `1`, `2`… | Answer from the list of agents: the answer or decision of that number, on the card that has the focus, else on the first one waiting. | Outside a text field, a terminal and the editor |
 | `Enter` | Send the message. While Claude is working, it takes the message into account at its next step. | Message field |
 | `Shift+Enter` | New line. | Message field |
 | `Esc` | Interrupt Claude. | Message field, while the agent is working |

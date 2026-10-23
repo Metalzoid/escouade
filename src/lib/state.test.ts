@@ -360,26 +360,34 @@ describe('AppState', () => {
     expect(app.ui.view).toBe('project');
   });
 
-  it('cycles through waiting agents across projects', async () => {
+  it('cycles through the cards of the waiting agents across projects (Ctrl+J), the conversations open staying', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', lastActivity: 5 }) });
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'waiting', lastActivity: 9 }) });
     app.nextWaiting();
-    expect(app.agent?.id).toBe('a2');
+    expect(app.cardFocus.id).toBe('a2');
+    expect(app.agent?.id).toBe('a1');
     app.nextWaiting();
-    expect(app.agent?.id).toBe('b1');
+    expect(app.cardFocus.id).toBe('b1');
     expect(app.project?.id).toBe('p2');
+    expect(app.ui.selectedAgent.p2).toBeUndefined();
     app.nextWaiting();
-    expect(app.agent?.id).toBe('a2');
+    expect(app.cardFocus.id).toBe('a2');
+    expect(app.project?.id).toBe('p1');
+    expect(app.agent?.id).toBe('a1');
   });
 
-  it('sends the focus to the message field of the waiting agent Ctrl+J goes to, whatever it waits for', async () => {
+  it('gives the focus to the card of the waiting agent, not to a message field: its question is answered there', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting', pending: ['req-1'] }) });
+    app.openBoard('p1');
     const focus = app.focusComposer;
+    const n = app.cardFocus.n;
     app.nextWaiting();
-    expect(app.agent?.id).toBe('a2');
-    expect(app.focusComposer).toBe(focus + 1);
+    expect(app.cardFocus).toEqual({ id: 'a2', n: n + 1 });
+    expect(app.focusComposer).toBe(focus);
+    // The list of the agents is shown again, where the card is.
+    expect(app.boardOn).toBe(false);
   });
 
   it('flags an agent that asks, finishes or fails out of sight until it is seen', async () => {
@@ -424,7 +432,7 @@ describe('AppState', () => {
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'running' }) });
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'done' }) });
     app.nextWaiting();
-    expect(app.agent?.id).toBe('b1');
+    expect(app.cardFocus.id).toBe('b1');
   });
 
   it('turns backend errors into error toasts', async () => {
@@ -881,14 +889,14 @@ describe('editor and the agent a notification or Ctrl+J brings up', () => {
     expect(app.agent?.id).toBe('a2');
   });
 
-  it('closes the editor of the project when Ctrl+J goes to the next agent waiting', async () => {
+  it('keeps the editor when Ctrl+J gives the focus to the card of the next agent waiting, beside it', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting' }) });
     await app.openEditor({ source: 'project' });
     expect(app.editorOn).toBe(true);
     app.nextWaiting();
-    expect(app.agent?.id).toBe('a2');
-    expect(app.editorOn).toBe(false);
+    expect(app.cardFocus.id).toBe('a2');
+    expect(app.editorOn).toBe(true);
   });
 
   it('closes the editor of the project for a new agent, to show its conversation, and keeps its source', async () => {
@@ -1272,7 +1280,8 @@ describe('board', () => {
     emit({ type: 'agent', agent: agent({ id: 'a1', status: 'waiting', lastActivity: 5 }) });
     app.nextWaiting();
     expect(app.boardOn).toBe(false);
-    expect(app.agent?.id).toBe('a1');
+    expect(app.cardFocus.id).toBe('a1');
+    expect(app.agent?.id).toBe('a2');
     app.openBoard('p1');
     await app.newAgent('p1');
     expect(app.boardOn).toBe(false);

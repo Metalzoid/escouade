@@ -26,7 +26,7 @@ Le clignotement dure jusqu’à ce que tu affiches l’agent, avec la fenêtre a
 
 ### Les compteurs
 
-Les tuiles des projets affichent une pastille avec le nombre d’agents qui attendent une réponse ; un projet hors de vue qui attend se signale par une pastille sous la liste. La barre d’état, en bas, compte les agents « actifs », « en attente » et « terminés », et son bouton « N en attente » amène au prochain agent à voir. `Ctrl+J` fait la même chose (voir [suivre ses agents](overview)).
+Les tuiles des projets affichent une pastille avec le nombre d’agents qui attendent une réponse ; un projet hors de vue qui attend se signale par une pastille sous la liste. La barre d’état, en bas, compte les agents « actifs », « en attente » et « terminés », et son bouton « N en attente » met le focus sur la carte du prochain agent à voir. `Ctrl+J` fait la même chose (voir [suivre ses agents](overview)).
 
 ## Hors de la fenêtre
 

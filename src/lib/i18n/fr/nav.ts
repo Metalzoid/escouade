@@ -46,6 +46,9 @@ export default {
     noMessage: 'Aucun message',
     /** The choices of the question an agent waits on, answered from its card (2.0 design). */
     answers: 'Réponses à {name}',
+    step: 'Question {n} sur {count}',
+    inConversation: 'Répondre dans la conversation',
+    answered: '{name} : « {choice} »',
     /** The menu « Harness » beside « Nouvel agent » (choices 1, 15, 16 of the 2.0 design). */
     harness: 'Harness',
     projectHarness: 'Celui du projet',

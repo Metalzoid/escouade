@@ -99,7 +99,7 @@ To deny and explain what to do instead, write it in the message field and send i
 **“Claude is waiting for your answer”** asks a question with options. Click an option, or press `Alt+1` to `Alt+9`, or answer freely in the message field. With a single single-choice question, the answer goes out as soon as you click; with several questions or a multiple choice, “Submit” (`Ctrl+Enter`) sends the answers.
 
 > [!TIP]
-> `Ctrl+J` opens the next agent that is waiting for your answer, with the cursor in its message field. A card that has just arrived ignores the answer keys for half a second, so that a keystroke meant for your message doesn’t answer in its place.
+> `Ctrl+J` puts the focus on the card of the next agent that is waiting for your answer: `1`, `2`… answer there without leaving the conversation on screen, `Enter` opens it. A card that has just arrived ignores the answer keys for half a second, so that a keystroke meant for your message doesn’t answer in its place.
 
 ## See what the agent changed
 

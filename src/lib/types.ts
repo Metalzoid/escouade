@@ -1041,11 +1041,16 @@ export interface PendingRequest {
   description: string | null;
   /** Why Claude Code asks. */
   reason: string | null;
-  questions: { question: string; options: string[] }[];
+  /** `multi`: several options can be ticked. */
+  questions: { question: string; options: string[]; multi?: boolean }[];
   /** A text was cut: what is shown is not the whole request. */
   cut: boolean;
   /** Claude Code would refuse it by default: it is not allowed in one click. */
   defaultNo: boolean;
+  /** A permission can be allowed for good (« Toujours autoriser ») or, with `alwaysScope`, for the session. */
+  canAlways?: boolean;
+  /** What « always » stands for: the rest of the session (Codex, Copilot CLI), else the rules the harness keeps. */
+  alwaysScope?: 'session' | null;
 }
 
 /** Where an agent’s remote control comes from. */

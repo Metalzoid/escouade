@@ -2319,6 +2319,28 @@ function startSession() {
       });
       return;
     }
+    // Two questions at once (ESC-75: answered from the list one after the other).
+    if (text.includes('deux questions'))
+      return askQuestion(null, [
+        {
+          question: 'Quelle base de données ?',
+          header: 'Base',
+          multiSelect: false,
+          options: [
+            { label: 'PostgreSQL', description: '' },
+            { label: 'SQLite', description: '' },
+          ],
+        },
+        {
+          question: 'Quel ORM ?',
+          header: 'ORM',
+          multiSelect: false,
+          options: [
+            { label: 'Prisma', description: '' },
+            { label: 'Drizzle', description: '' },
+          ],
+        },
+      ]);
     if (text.includes('question')) return askQuestion();
     if (text.includes('permission')) {
       const tuid = `toolu_p${msg}`;

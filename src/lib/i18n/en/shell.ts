@@ -126,7 +126,7 @@ export default defineZone('shell', {
     harnessAccount: '{harness}, {account}',
     overage: 'extra usage',
     /** `{key}`: the shortcut. */
-    nextWaiting: 'Go to the next agent that is waiting or needs a look ({key})',
+    nextWaiting: 'Go to the card of the next agent that is waiting or needs a look ({key})',
     procsTitle: 'Running agent processes (with the tools and MCP servers they start)',
     /** `{memory}` and `{cpu}`: the amounts, in code style. */
     procs: { one: '{count} agent · {memory} · {cpu} CPU', other: '{count} agents · {memory} · {cpu} CPU' },

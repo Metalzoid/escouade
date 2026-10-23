@@ -1445,6 +1445,20 @@ pub struct PendingView {
     pub cut: bool,
     /// Claude Code would refuse it by default (`default_to_no`): it is not allowed in one click.
     pub default_no: bool,
+    /// A permission can be allowed for good (« Toujours autoriser ») or for the session.
+    pub can_always: bool,
+    /// What « always » stands for: "session" for the rest of the session (Codex, Copilot CLI),
+    /// none for the rules the harness keeps (Claude Code, OpenCode's pattern, told in `description`).
+    pub always_scope: Option<String>,
+}
+
+impl PendingView {
+    /// The view with what « always » allows, as the conversation's card `item` offers it.
+    pub fn always_as(mut self, item: &serde_json::Value) -> Self {
+        self.can_always = item["canAlways"].as_bool().unwrap_or(false);
+        self.always_scope = item["alwaysScope"].as_str().map(str::to_string);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -1452,6 +1466,8 @@ pub struct PendingView {
 pub struct PendingQuestion {
     pub question: String,
     pub options: Vec<String>,
+    /// Several options can be ticked.
+    pub multi: bool,
 }
 
 /// The most characters a field of a `PendingView` carries.

@@ -625,9 +625,9 @@ impl AgentRt {
         if let Some(sub) = parent {
             item["sub"] = sub.into();
         }
-        self.append(item, fx);
         let req = json!({ "description": description, "decision_reason": reason });
-        let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd);
+        let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
+        self.append(item, fx);
         self.add_pending(PendingReq {
             item_id: rid.clone(),
             tool_use_id: call,
@@ -671,13 +671,20 @@ impl AgentRt {
             item["sub"] = sub.into();
         }
         self.append(item, fx);
-        let view = pending_view(
+        let mut view = pending_view(
             &rid,
             "AskUserQuestion",
             &Value::Null,
             &input,
             &self.meta.cwd,
         );
+        // A form says what it is for: its message, on the list too.
+        view.description = extra["form"]["message"].as_str().map(|m| {
+            let mut cut = false;
+            let m = capped(m, &mut cut);
+            view.cut |= cut;
+            m
+        });
         self.add_pending(PendingReq {
             item_id: rid,
             tool_use_id: call,

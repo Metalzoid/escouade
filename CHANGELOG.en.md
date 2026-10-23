@@ -10,7 +10,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
 - Projects move to a rail on the left, like Slack’s workspaces: a tile per project, with its agents waiting and at work, dragged or moved by Alt+↑ and Alt+↓. The title bar keeps the name of the project on screen and the search; the status bar shows the quotas of each harness at work.
-- The list of agents is redrawn: the agent waiting goes first with its question, which you answer in a click or with 1, 2… without leaving the conversation open, and each card says what the agent is doing (“Editing src/auth.ts”), whatever its harness, what it changed, or what still runs once its turn is over. The arrow of “New agent”, or Ctrl+Shift+N, opens the menu of the harnesses, numbered.
+- The list of agents is redrawn: the agent waiting goes first with its question, which you answer in a click or with 1, 2… without leaving the conversation open (several questions and permissions too; Ctrl+J puts the focus on its card), and each card says what the agent is doing (“Editing src/auth.ts”), whatever its harness, what it changed, or what still runs once its turn is over. The arrow of “New agent”, or Ctrl+Shift+N, opens the menu of the harnesses, numbered.
 
 ## [1.8.12] — 2026-10-23
 

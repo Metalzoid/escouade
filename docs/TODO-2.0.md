@@ -264,6 +264,7 @@ Puis les écrans du lot 0 bis (ESC-150, 2026-10-23), les fonctionnalités de la 
 Ce qui suit ne se fait pas aujourd'hui :
 - [x] **Ce que fait l’agent, sur sa carte** de la barre latérale, par exemple `Edit src/auth/jwt.ts` et `184 k · 2,41 $`, ou bien le résultat (« 2 fichiers modifiés »). La donnée existe : c'est l'activité que montre déjà la vue d'ensemble.
 - [x] **Répondre à une question depuis la liste** : la question et ses options sur la carte de l'agent qui attend, cliquables ou au clavier (1, 2…) sans quitter la conversation ouverte. L'agent repart, puis reprend sa place dans la liste. Le comportement existant d'une autorisation lue en entier (Autoriser/Refuser depuis la vue d'ensemble) sert de modèle.
+  - Fait (ESC-73, puis ESC-75) : une question seule à choix (lot 3) ; puis les touches `1`, `2`… partout hors d'un champ, `Ctrl+J` qui donne le focus à la carte, l'éclair vert de la carte qui repart, plusieurs questions l'une après l'autre, et les autorisations des quatre harness (« Toujours autoriser » et son motif pour OpenCode, « Pour cette session » pour Codex et Copilot CLI), ce qui ne tient pas sur la carte ouvert dans la conversation. Tests : `sidebar.test.ts`, `Sidebar.test.ts`, `state.test.ts`, e2e `sidebar.spec.ts`.
 
 ## Le chantier
 

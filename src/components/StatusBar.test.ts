@@ -120,11 +120,13 @@ describe('StatusBar', () => {
     expect(backend.called('save_settings')[0].args.settings.sound).toBe(false);
   });
 
-  it('jumps to the waiting agent', async () => {
+  it('gives the focus to the card of the waiting agent, as Ctrl+J does, the conversation open staying', async () => {
     fakeBackend();
     render(StatusBar);
+    const open = app.agent?.id;
     await userEvent.click(screen.getByRole('button', { name: /1 en attente/ }));
-    expect(app.agent?.id).toBe('a2');
+    expect(app.cardFocus.id).toBe('a2');
+    expect(app.agent?.id).toBe(open);
   });
 });
 
@@ -374,7 +376,7 @@ describe('StatusBar in English', () => {
     expect(screen.getByText('active').closest('.it')).toHaveTextContent('1 active');
     expect(screen.getByRole('button', { name: /1 waiting/ })).toHaveAttribute(
       'data-tip',
-      'Go to the next agent that is waiting or needs a look (Ctrl+J)',
+      'Go to the card of the next agent that is waiting or needs a look (Ctrl+J)',
     );
     expect(screen.getByText('done').closest('.it')).toHaveTextContent('1 done');
     expect(screen.getByText('5h')).toBeInTheDocument();

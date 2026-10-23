@@ -7,6 +7,7 @@ import { fInt, fTok } from './format';
 import { t } from './i18n';
 import { fSpentUsd, spent } from './spend';
 import type { Pending } from './later';
+import { SUMMED_UP } from './tools';
 import type { Agent } from './types';
 
 /** The agents of the sidebar: who waits for an answer goes first, the others keep their order. */
@@ -48,22 +49,92 @@ export function cardActivity(
   return files > 0 ? { kind: 'result', files } : null;
 }
 
-/** A question to answer from the list: one question, its choices, and the request the answer names. */
-export interface ListQuestion {
+/** The most characters, and lines, of what a permission acts on that the card shows whole. */
+export const LIST_ARG_MAX = 160;
+export const LIST_ARG_LINES = 3;
+/** The most characters of what the card says besides (why the harness asks, what « always » keeps, what a form is for). */
+export const LIST_NOTE_MAX = 240;
+
+/** Questions to answer from the list, one after the other: each with its choices. `note`: what a form is for. */
+export interface ListQuestions {
+  kind: 'question';
   requestId: string;
-  question: string;
-  options: string[];
+  questions: { question: string; options: string[] }[];
+  note: string | null;
 }
 
 /**
- * The question `a` waits on, when it can be answered from its card: a single question with choices, read whole. Several
- * questions, one to write, one cut short, a permission: answered in the conversation, where they are whole.
+ * A permission to answer from the list: the tool, what it acts on, what the harness says besides (`note`), and what
+ * « always » stands for, if offered: `always` (rules kept, OpenCode's pattern told in the note) or `session`.
  */
-export function listQuestion(a: Agent): ListQuestion | null {
+export interface ListPermission {
+  kind: 'permission';
+  requestId: string;
+  tool: string;
+  arg: string;
+  note: string | null;
+  always: 'always' | 'session' | null;
+}
+
+export type ListRequest = ListQuestions | ListPermission;
+
+/** What a permission's choice does: the decision sent. */
+export type ListDecision = 'allow' | 'always' | 'session' | 'deny';
+
+/**
+ * The request `a` waits on, when it can be answered from its card: only what is read whole there (« Vue d’ensemble »'s
+ * rule for permissions). Questions with choices, one or several, one choice each; a permission of a tool whose summary
+ * says what it asks, short enough, that the harness would not refuse by default. A question to write, of several
+ * choices ticked, a plan, anything cut short or too long: answered in the conversation, which a click on the card opens.
+ */
+export function listRequest(a: Agent): ListRequest | null {
   const req = a.status === 'waiting' ? a.requests?.[0] : undefined;
-  if (!req || req.kind !== 'question' || req.cut || req.questions.length !== 1) return null;
-  const [q] = req.questions;
-  return q.options.length ? { requestId: req.id, question: q.question, options: q.options } : null;
+  if (!req || req.cut) return null;
+  const note = [req.description, req.reason].filter((x): x is string => !!x?.trim()).join('\n') || null;
+  if ((note?.length ?? 0) > LIST_NOTE_MAX) return null;
+  if (req.kind === 'question') {
+    if (!req.questions.length || req.questions.some((q) => !q.options.length || q.multi)) return null;
+    return { kind: 'question', requestId: req.id, questions: req.questions.map(({ question, options }) => ({ question, options })), note };
+  }
+  const arg = req.arg;
+  if (req.defaultNo || !SUMMED_UP.has(req.tool) || !arg.trim()) return null;
+  if (arg.length > LIST_ARG_MAX || arg.split('\n').length > LIST_ARG_LINES) return null;
+  const always = req.canAlways ? (req.alwaysScope === 'session' ? 'session' : 'always') : null;
+  return { kind: 'permission', requestId: req.id, tool: req.tool, arg, note, always };
+}
+
+/** The question of `r` to answer now, by the choices already picked (`picks`, by question): -1 once all have one. */
+export function listStep(r: ListQuestions, picks: Record<string, string[]>): number {
+  return r.questions.findIndex((q) => !picks[q.question]?.length);
+}
+
+/** The choices the card shows, numbered 1, 2…: the options of the question to answer, or a permission's decisions. */
+export function listChoices(r: ListQuestions, picks: Record<string, string[]>): string[];
+export function listChoices(r: ListRequest, picks: Record<string, string[]>): string[] | ListDecision[];
+export function listChoices(r: ListRequest, picks: Record<string, string[]>): string[] | ListDecision[] {
+  if (r.kind === 'permission') return r.always ? ['allow', r.always, 'deny'] : ['allow', 'deny'];
+  return r.questions[listStep(r, picks)]?.options ?? [];
+}
+
+/**
+ * The choice a key picks on the list: 1, 2… (0, 1… here), by the digit typed or, without Shift, by the key of the digit
+ * row (AZERTY types « & é " » there). Never with a modifier (Ctrl+1 goes to a project, Alt+1 answers in the
+ * conversation), nor a key held down.
+ */
+export function listDigit(e: KeyboardEvent): number | null {
+  if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return null;
+  const d = /^[1-9]$/.exec(e.key)?.[0] ?? (!e.shiftKey ? /^Digit([1-9])$/.exec(e.code)?.[1] : undefined);
+  return d ? Number(d) - 1 : null;
+}
+
+/**
+ * The agent the keys of the list answer: the one whose card has the focus, else the first one that can be answered there.
+ * A card with the focus that waits for what is answered in its conversation takes them: no other agent is answered.
+ */
+export function listTarget(order: Agent[], focused: string | null): Agent | null {
+  const mine = order.find((a) => a.id === focused);
+  if (mine?.status === 'waiting') return listRequest(mine) ? mine : null;
+  return order.find((a) => listRequest(a)) ?? null;
 }
 
 /**

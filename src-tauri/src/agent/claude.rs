@@ -956,8 +956,8 @@ impl AgentRt {
                     // Shown in the agent's conversation still (no `parent`), and in its subagent's.
                     item["sub"] = sub.into();
                 }
+                let view = pending_view(rid, &tool, req, &input, &self.meta.cwd).always_as(&item);
                 self.append(item, fx);
-                let view = pending_view(rid, &tool, req, &input, &self.meta.cwd);
                 self.add_pending(PendingReq {
                     item_id: rid.to_string(),
                     tool_use_id,

@@ -82,7 +82,7 @@ L’agent qui attend ta réponse passe en tête de la liste. Chaque agent est un
 - la marque de son harness (« Claude », « Codex »… dès que les agents tournent sur deux harness), son **modèle**, le temps pendant lequel il a travaillé (« Aucun message » tant que tu ne lui as rien écrit) et une mini-barre « Plan 2/7 » quand il suit un plan (voir [l’avancée d’un plan](plan)), sinon sa branche s’il a un worktree ; pour l’agent d’un ticket, la clé du ticket et sa boucle (« DEM-3 boucle 1/5 », avec une case par boucle) ou « à tester » ;
 - **ce qu’il fait** pendant un tour (« Modifie src/auth/jwt.ts », « Réfléchit »), ou après, ce qu’il a changé (« 2 fichiers modifiés »), puis ses **tokens** et son **coût** (précédé de « ≈ » tant qu’un tour tourne : c’est alors une estimation).
 
-La carte d’un agent qui pose une question montre la question et ses réponses : un clic sur une réponse, ou sa touche `1`, `2`… quand la carte a le focus, répond sans quitter la conversation affichée. Plusieurs questions d’un coup, ou une autorisation, se répondent dans sa conversation : la carte en montre le début.
+La carte d’un agent qui attend ta réponse montre sa demande et ses réponses, numérotées : un clic sur une réponse, ou sa touche `1`, `2`… n’importe où hors d’un champ de saisie, répond sans quitter la conversation affichée. Plusieurs questions viennent l’une après l’autre (« Question 1 sur 2 »). Une autorisation montre la commande ou le fichier, ce que dit le harness, et « Autoriser », « Toujours autoriser » (Claude Code, OpenCode, qui dit le motif qu’il gardera) ou « Pour cette session » (Codex, Copilot CLI), et « Refuser ». Les touches répondent à la carte qui a le focus, sinon à la première de la liste ; elles attendent une demi-seconde après l’arrivée d’une demande. L’agent repart, sa carte brille en vert un instant et reprend sa place. Ce qui ne tient pas sur la carte (une réponse à écrire, un choix multiple, un plan, une demande trop longue ou que Claude Code refuserait par défaut) en montre le début et « Répondre dans la conversation », qui ouvre l’agent.
 
 Sous la carte de l’agent affiché, la liste de ses sous-agents et celle de ses tâches de fond (voir [l’avancée d’un plan](plan)). Sous la carte d’un agent, ses PR (numéro et icône de leur état, et le bouton de la correction utile), et les agents qu’il pilote par le serveur MCP.
 
@@ -101,7 +101,7 @@ Un clic sur une carte affiche l’agent. `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à
 
 À la place du statut, la carte peut dire « Préparation… » (le worktree de l’agent se prépare) ou « Reprise » suivi d’une heure (l’agent, arrêté par la limite d’usage, reprend alors tout seul), en ambre.
 
-Une carte dont l’agent a posé une question, a terminé ou a échoué pendant qu’il n’était pas affiché s’entoure de sa couleur, en ambre, en vert ou en rouge, jusqu’à ce que tu l’ouvres. `Ctrl+J` va à l’agent suivant qui attend ta réponse ou qui est à voir. Avec « Réduire les animations » du système, rien ne bouge.
+Une carte dont l’agent a posé une question, a terminé ou a échoué pendant qu’il n’était pas affiché s’entoure de sa couleur, en ambre, en vert ou en rouge, jusqu’à ce que tu l’ouvres. `Ctrl+J` met le focus sur la carte de l’agent suivant qui attend ta réponse ou qui est à voir, sans l’ouvrir : `1`, `2`… y répondent, `Entrée` l’ouvre. Avec « Réduire les animations » du système, rien ne bouge.
 
 ### Le menu d’un agent
 
@@ -197,7 +197,7 @@ De gauche à droite :
 | Élément | Ce qu’il montre |
 |---|---|
 | `N actifs` | Le nombre d’agents « En cours ». |
-| `N en attente Ctrl J` | Le nombre d’agents « Question », en ambre quand il y en a. Un clic va à l’agent suivant qui attend ou qui est à voir (`Ctrl+J`). |
+| `N en attente Ctrl J` | Le nombre d’agents « Question », en ambre quand il y en a. Un clic met le focus sur la carte de l’agent suivant qui attend ou qui est à voir (`Ctrl+J`). |
 | `N terminés` | Le nombre d’agents « Terminé ». |
 | `N agents · mémoire · CPU` | Les processus des agents en cours, avec les outils et les serveurs MCP qu’ils lancent ; l’infobulle détaille agent par agent. |
 | Mise à jour | « Mise à jour X prête · Redémarrer » quand une mise à jour est téléchargée : un clic ouvre la fenêtre de la mise à jour. Pendant le téléchargement, la barre dit « Mise à jour X… » ; quand un redémarrage automatique est prévu, « Redémarrage dans N s » et le bouton « Plus tard » prennent la place. Voir les [mises à jour](updates). |

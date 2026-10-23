@@ -754,9 +754,9 @@ impl AgentRt {
         if let Some(sub) = parent {
             item["sub"] = sub.into();
         }
-        self.append(item, fx);
         let req = json!({ "description": description });
-        let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd);
+        let view = pending_view(&rid, &tool, &req, &input, &self.meta.cwd).always_as(&item);
+        self.append(item, fx);
         self.add_pending(PendingReq {
             item_id: rid.clone(),
             tool_use_id: call,

@@ -52,7 +52,7 @@ Only the first request of each agent is shown; when you answer it, the next one 
 
 | Keys | Effect |
 |---|---|
-| `Ctrl+J` | Goes to the next agent that is waiting for an answer or that needs a look (a question, an end, or an error you haven’t seen yet), in all projects, starting with the one that has waited longest. The cursor is in its message field. |
+| `Ctrl+J` | Puts the focus on the card of the next agent that is waiting for an answer or that needs a look (a question, an end, or an error you haven’t seen yet), in all projects, starting with the one that has waited longest. The conversation on screen stays: `1`, `2`… answer from the card, `Enter` opens the agent. |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous agent of the project on screen, in sidebar order, looping around and skipping archived agents. On macOS, it really is `Ctrl+Tab`, not `⌘Tab`. |
 | `Ctrl+1` … `Ctrl+9` | Goes to project n (see [the interface](interface)). |
 

@@ -9,7 +9,7 @@ The bar sits at the bottom of the window. From left to right:
 | Item | What it shows |
 |---|---|
 | “3 active” | The agents that are working, across all projects. Archived agents don’t count. |
-| “1 waiting” | The agents that are waiting for your answer. A click, or `Ctrl+J`, opens the next agent that is waiting or needs a look. As soon as there is one, the counter turns amber and its dot pulses. |
+| “1 waiting” | The agents that are waiting for your answer. A click, or `Ctrl+J`, puts the focus on the card of the next agent that is waiting or needs a look. As soon as there is one, the counter turns amber and its dot pulses. |
 | “✓ 2 done” | The agents whose task is done. |
 | “4 Claude · 1.2 GB · 6% CPU” | The running Claude processes, with the memory and processor they take. Missing when none runs. The tooltip lists each agent, the one using the most memory first. |
 | Quotas | The two quota windows of the current account: see the next section. |

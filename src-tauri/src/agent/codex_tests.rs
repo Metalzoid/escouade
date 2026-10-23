@@ -371,6 +371,12 @@ fn an_approval_is_a_card_with_its_reason_for_this_session_and_a_change_its_diff(
         (card["canAlways"].as_bool(), card["alwaysScope"].as_str()),
         (Some(true), Some("session"))
     );
+    // The list of the agents offers it too.
+    let view = &a.view().requests[0];
+    assert_eq!(
+        (view.can_always, view.always_scope.as_deref()),
+        (true, Some("session"))
+    );
     assert!(card["description"]
         .as_str()
         .unwrap()

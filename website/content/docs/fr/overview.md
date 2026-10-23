@@ -52,7 +52,7 @@ Seule la première demande de chaque agent est montrée ; quand tu y réponds, l
 
 | Touches | Effet |
 |---|---|
-| `Ctrl+J` | Va à l’agent suivant qui attend une réponse ou qu’il faut regarder (une question, une fin ou une erreur que tu n’as pas encore vues), dans tous les projets, en commençant par celui qui attend depuis le plus longtemps. Le curseur est dans son champ de saisie. |
+| `Ctrl+J` | Met le focus sur la carte de l’agent suivant qui attend une réponse ou qu’il faut regarder (une question, une fin ou une erreur que tu n’as pas encore vues), dans tous les projets, en commençant par celui qui attend depuis le plus longtemps. La conversation affichée ne change pas : `1`, `2`… répondent depuis la carte, `Entrée` ouvre l’agent. |
 | `Ctrl+Tab` / `Ctrl+Maj+Tab` | Agent suivant / précédent du projet affiché, dans l’ordre de la barre latérale, en bouclant et sans les agents archivés. Sous macOS, c’est bien `Ctrl+Tab`, pas `⌘Tab`. |
 | `Ctrl+1` … `Ctrl+9` | Va au projet n (voir [l’interface](interface)). |
 

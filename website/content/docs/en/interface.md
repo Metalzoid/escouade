@@ -82,7 +82,7 @@ The agent waiting for your answer goes first in the list. Each agent is a card, 
 - the mark of its harness (“Claude”, “Codex”… once agents run on two harnesses), its **model**, the time it has worked (“No message” until you write to it) and a “Plan 2/7” mini bar when it follows a plan (see [plan progress](plan)), otherwise its branch if it has a worktree; for a ticket’s agent, the ticket’s key and its loop (“DEM-3 loop 1/5”, with a box per loop) or “to review”;
 - **what it is doing** during a turn (“Editing src/auth/jwt.ts”, “Thinking”), or afterwards what it changed (“2 files changed”), then its **tokens** and its **cost** (preceded by “≈” while a turn is running: it is then an estimate).
 
-The card of an agent asking a question shows the question and its answers: a click on an answer, or its key `1`, `2`… while the card has the focus, answers without leaving the conversation on screen. Several questions at once, or a permission, are answered in its conversation: the card shows their beginning.
+The card of an agent waiting for your answer shows its request and its answers, numbered: a click on an answer, or its key `1`, `2`… anywhere outside a text field, answers without leaving the conversation on screen. Several questions come one after the other (“Question 1 of 2”). A permission shows the command or the file, what the harness says, and “Allow”, “Always allow” (Claude Code, OpenCode, which tells the pattern it will keep) or “For this session” (Codex, Copilot CLI), and “Deny”. The keys answer the card that has the focus, else the first one of the list; they wait half a second after a request arrives. The agent goes on, its card flashes green a moment and goes back to its place. What does not fit on the card (an answer to write, a multiple choice, a plan, a request too long or that Claude Code would deny by default) shows its beginning and “Reply in the conversation”, which opens the agent.
 
 Under the card of the agent on screen, the list of its subagents and that of its background tasks (see [plan progress](plan)). Under an agent’s card, its pull requests (number and the icon of their state, and the button of the useful fix), and the agents it drives through the MCP server.
 
@@ -101,7 +101,7 @@ A click on a card shows the agent. `Ctrl+Tab` and `Ctrl+Shift+Tab` go to the pro
 
 In place of the status, the card can say “Setting up…” (the agent’s worktree is being prepared) or “Resumes” followed by a time (the agent, stopped by the usage limit, then resumes by itself), in amber.
 
-A card whose agent asked a question, finished or failed while it was not on screen is circled in its color, amber, green or red, until you open it. `Ctrl+J` goes to the next agent that is waiting for your answer or needs a look. With the system’s “Reduce motion”, nothing moves.
+A card whose agent asked a question, finished or failed while it was not on screen is circled in its color, amber, green or red, until you open it. `Ctrl+J` puts the focus on the card of the next agent that is waiting for your answer or needs a look, without opening it: `1`, `2`… answer there, `Enter` opens it. With the system’s “Reduce motion”, nothing moves.
 
 ### An agent’s menu
 
@@ -197,7 +197,7 @@ From left to right:
 | Element | What it shows |
 |---|---|
 | `N active` | The number of agents “Running”. |
-| `N waiting Ctrl J` | The number of agents “Question”, in amber when there are some. A click goes to the next agent waiting or to look at (`Ctrl+J`). |
+| `N waiting Ctrl J` | The number of agents “Question”, in amber when there are some. A click puts the focus on the card of the next agent waiting or to look at (`Ctrl+J`). |
 | `N done` | The number of agents “Done”. |
 | `N agents · memory · CPU` | The agents’ running processes, with the tools and MCP servers they start; the tooltip details them agent by agent. |
 | Update | “Update X ready · Restart” when an update is downloaded: a click opens the update window. While it downloads, the bar says “Update X…”; when an automatic restart is planned, “Restarting in N s” and the “Later” button take its place. See [updates](updates). |

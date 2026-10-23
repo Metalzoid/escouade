@@ -257,6 +257,33 @@ fn the_form_of_an_mcp_server_is_a_card_of_its_fields() {
     let langue = qs.iter().find(|q| q["id"] == "langue").unwrap();
     assert_eq!(langue["options"][1]["label"], "en");
     assert_eq!(rt.meta.status, AgentStatus::Waiting);
+    // The list of the agents says what the form is for.
+    assert_eq!(
+        rt.view().requests[0].description.as_deref(),
+        Some("Qui es-tu ?")
+    );
+}
+
+#[test]
+fn a_permission_is_offered_for_the_session_on_the_list_too() {
+    let mut rt = agent("C:/p", "default");
+    start(&mut rt);
+    feed(
+        &mut rt,
+        &[ev(
+            "permission.requested",
+            json!({ "requestId": "pr-1", "permissionRequest": {
+                "kind": "shell", "toolCallId": "c1", "fullCommandText": "npm publish",
+                "intention": "Publier", "commands": [{ "identifier": "npm" }],
+            } }),
+        )],
+    );
+    let view = &rt.view().requests[0];
+    assert_eq!(view.kind, "permission");
+    assert_eq!(
+        (view.can_always, view.always_scope.as_deref()),
+        (true, Some("session"))
+    );
 }
 
 #[test]

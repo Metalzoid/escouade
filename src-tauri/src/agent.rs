@@ -1741,6 +1741,7 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
                     .iter()
                     .map(|o| text(&o["label"], &mut cut).unwrap_or_default())
                     .collect(),
+                multi: q["multiSelect"] == true,
             })
             .collect();
         return PendingView {
@@ -1753,6 +1754,8 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
             questions,
             cut,
             default_no: false,
+            can_always: false,
+            always_scope: None,
         };
     }
     let arg = capped(&tool_arg(tool, input, cwd), &mut cut);
@@ -1770,6 +1773,8 @@ fn pending_view(rid: &str, tool: &str, req: &Value, input: &Value, cwd: &str) ->
         questions: vec![],
         cut,
         default_no: req["default_to_no"].as_bool().unwrap_or(false),
+        can_always: false,
+        always_scope: None,
     }
 }
 
@@ -2291,6 +2296,8 @@ mod tests {
                 questions: vec![],
                 cut: false,
                 default_no: false,
+                can_always: false,
+                always_scope: None,
             }
         );
         // A file from the agent's folder, as the conversation's card shows it.
@@ -2301,6 +2308,7 @@ mod tests {
             vec![PendingQuestion {
                 question: "Quelle base ?".into(),
                 options: vec!["SQLite".into(), "Postgres".into()],
+                multi: false,
             }]
         );
         let sent = serde_json::to_value(&v).unwrap();
@@ -2383,6 +2391,31 @@ mod tests {
                 "input":{"project":"demo","title":"Corriger la connexion"}}),
         );
         assert_eq!(a.view().requests[0].arg, "Corriger la connexion");
+    }
+
+    #[test]
+    fn the_view_tells_what_always_allows_and_a_question_of_several_choices() {
+        let mut a = rt();
+        asks(
+            &mut a,
+            "r1",
+            json!({"tool_name":"Bash","tool_use_id":"t1","input":{"command":"npm test"},
+                "permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"npm test"}]}]}),
+        );
+        asks(
+            &mut a,
+            "r2",
+            json!({"tool_name":"AskUserQuestion","tool_use_id":"t2","input":{"questions":[
+                {"question":"Quels tests ?","multiSelect":true,"options":[{"label":"auth"},{"label":"e2e"}]}]}}),
+        );
+        let v = a.view();
+        // Claude Code keeps rules: « Toujours autoriser », with no scope of a session.
+        assert!(v.requests[0].can_always);
+        assert_eq!(v.requests[0].always_scope, None);
+        assert!(v.requests[1].questions[0].multi);
+        let sent = serde_json::to_value(&v).unwrap();
+        assert_eq!(sent["requests"][0]["canAlways"], true);
+        assert_eq!(sent["requests"][1]["questions"][0]["multi"], true);
     }
 
     #[test]

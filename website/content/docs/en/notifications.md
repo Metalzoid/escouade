@@ -26,7 +26,7 @@ The blinking lasts until you show the agent, with the window in the foreground. 
 
 ### Counters
 
-The project tiles show a pill with the number of agents waiting for an answer; a project out of view that waits is signalled by a pill under the list. The status bar, at the bottom, counts the “active”, “waiting”, and “done” agents, and its “N waiting” button takes you to the next agent that needs a look. `Ctrl+J` does the same (see [keeping track of your agents](overview)).
+The project tiles show a pill with the number of agents waiting for an answer; a project out of view that waits is signalled by a pill under the list. The status bar, at the bottom, counts the “active”, “waiting”, and “done” agents, and its “N waiting” button puts the focus on the card of the next agent that needs a look. `Ctrl+J` does the same (see [keeping track of your agents](overview)).
 
 ## Outside the window
 

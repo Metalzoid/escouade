@@ -56,7 +56,8 @@ Les raccourcis s’écrivent comme l’app les écrit en français : `Ctrl+Maj+A
 | Raccourci | Action | Où |
 |---|---|---|
 | `Ctrl+N` | Nouvel agent dans le projet affiché. | Partout |
-| `Ctrl+J` | Aller au prochain agent qui attend ta réponse ou qui est à voir (une question, une fin ou une erreur pas encore vues), tous projets confondus, et mettre le curseur dans son champ de message. | Partout, terminaux compris |
+| `Ctrl+J` | Mettre le focus sur la carte du prochain agent qui attend ta réponse ou qui est à voir (une question, une fin ou une erreur pas encore vues), tous projets confondus, sans quitter la conversation affichée ; `Entrée` l’ouvre. | Partout, terminaux compris |
+| `1`, `2`… | Répondre depuis la liste des agents : la réponse ou la décision de ce numéro, sur la carte qui a le focus, sinon sur la première qui attend. | Hors d’un champ de saisie, d’un terminal et de l’éditeur |
 | `Entrée` | Envoyer le message. Pendant que Claude travaille, il en tient compte dès sa prochaine étape. | Champ de message |
 | `Maj+Entrée` | Aller à la ligne. | Champ de message |
 | `Échap` | Interrompre Claude. | Champ de message, pendant que l’agent travaille |

@@ -311,6 +311,8 @@ class AppState {
   /** A version that did not install at the last try: told of once it is downloaded again. */
   failedUpdate = $state<string | null>(null);
   focusComposer = $state(0);
+  /** The card of the agents' list to give the focus to (Ctrl+J), `n` counting the asks: the sidebar focuses it. */
+  cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });
   /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
   newAgentMenu = $state(0);
   /** Counts the projects and agents chosen, the one on screen again included: its project's tab comes back into view. */
@@ -1210,18 +1212,22 @@ class AppState {
     }
   }
 
-  /** Next agent waiting for an answer or needing a look, across all projects (Ctrl+J). */
+  /**
+   * The card of the next agent waiting for an answer or needing a look, across all projects (Ctrl+J): it gets the focus,
+   * its question answered there by 1, 2…, and Enter opens it. The conversation open stays: its project's list is shown,
+   * not the Kanban, and the project changes when the agent is another one's.
+   */
   nextWaiting() {
     const list = Object.values(this.agents)
       .filter((a) => !a.archived && (a.status === 'waiting' || this.attention[a.id]))
       .sort((a, b) => a.lastActivity - b.lastActivity);
     if (!list.length) return;
-    const cur = this.agent?.id;
+    const cur = list.some((a) => a.id === this.cardFocus.id) ? this.cardFocus.id : this.agent?.id;
     const idx = list.findIndex((a) => a.id === cur);
     const next = list[(idx + 1) % list.length];
-    this.selectAgent(next.id);
-    // Its question or its end of turn is what Ctrl+J is for: show the conversation, not the editor.
-    this.closeEditor(next.projectId);
+    if (this.ui.view !== 'project' || this.ui.activeProject !== next.projectId) this.selectProject(next.projectId);
+    this.board[next.projectId] = false;
+    this.cardFocus = { id: next.id, n: this.cardFocus.n + 1 };
   }
 
   /** `ms` is for a toast with more to read and do than the usual time allows; without it, the time follows the toast's kind and button. */

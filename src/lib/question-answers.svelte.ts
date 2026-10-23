@@ -25,6 +25,11 @@ export function answerOf(draft: QuestionDraft | undefined, question: string): st
   return picks.length ? picks.join(', ') : (draft?.texts[question] ?? '').trim();
 }
 
+/** Forgets the answers of the request `id`, gone: a request asked again under the same id starts afresh. */
+export function dropDraft(id: string) {
+  delete drafts[id];
+}
+
 /** The tests: no answer given. */
 export function clearDrafts() {
   for (const k of Object.keys(drafts)) delete drafts[k];

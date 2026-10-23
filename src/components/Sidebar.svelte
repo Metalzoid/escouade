@@ -1,3 +1,8 @@
+<script module lang="ts">
+  /** The last ask of Ctrl+J for a card (`app.cardFocus.n`) one sidebar took: the one of a project just shown takes it too. */
+  let cardFocusTaken = 0;
+</script>
+
 <script lang="ts">
   import { tick } from 'svelte';
   import { keyLabel } from '../lib/platform';
@@ -5,7 +10,22 @@
   import { api } from '../lib/ipc';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
-  import { cardActivity, cardSpend, listQuestion, sidebarOrder, type ListQuestion } from '../lib/sidebar';
+  import {
+    cardActivity,
+    cardSpend,
+    listChoices,
+    listDigit,
+    listRequest,
+    listStep,
+    listTarget,
+    sidebarOrder,
+    type ListDecision,
+    type ListRequest,
+  } from '../lib/sidebar';
+  import { HOLD_MS } from '../lib/answer-keys.svelte';
+  import { answerOf, draftIfAny, draftOf, dropDraft } from '../lib/question-answers.svelte';
+  import { revealHidden } from '../lib/recipe';
+  import { toolLabel } from '../lib/tools';
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { can, canFork, engineName, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
@@ -84,8 +104,40 @@
   const review = $derived(app.reviewCount(project.id));
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(sidebarOrder(app.projectAgents));
-  /** The questions answered from the list, until the agent's request is gone: one click answers once. */
+  /** The requests answered from the list, until the agent's request is gone: one click answers once. */
   let answering = $state<Record<string, string>>({});
+  /** The cards that flash green a moment, their agent sent off again from the list. */
+  let flashing = $state<Record<string, boolean>>({});
+  /**
+   * When each request that can be answered from the list was first shown: its keys wait `HOLD_MS` (as the cards of the
+   * conversation do), so that a digit pressed as it comes does not answer it unread.
+   */
+  const shownAt = new Map<string, number>();
+  /** When a question of several moved on to the next one: its buttons wait `HOLD_MS`, for a double-click not to answer it too. */
+  const stepAt = new Map<string, number>();
+  $effect.pre(() => {
+    // A request answered from here and gone (the agent went on): its card answers the next one, even under the same id.
+    for (const [id, req] of Object.entries(answering)) {
+      const a = app.agents[id];
+      if (a?.status === 'waiting' && a.requests?.[0]?.id === req) continue;
+      delete answering[id];
+      dropDraft(req);
+      shownAt.delete(req);
+      stepAt.delete(req);
+    }
+    for (const a of agents) {
+      const r = listRequest(a);
+      if (r && !shownAt.has(r.requestId)) shownAt.set(r.requestId, performance.now());
+    }
+  });
+
+  // Ctrl+J (`app.nextWaiting`): the card of the agent that waits gets the focus, the conversation open staying.
+  $effect(() => {
+    const { id, n } = app.cardFocus;
+    if (n <= cardFocusTaken) return;
+    cardFocusTaken = n;
+    tick().then(() => document.querySelector<HTMLElement>(`.agent[data-agent="${CSS.escape(id)}"]`)?.focus());
+  });
 
   // Ctrl+Shift+N (lib/shortcuts.ts): the menu « Harness » opens beside « Nouvel agent ».
   let menuAsked = app.newAgentMenu;
@@ -95,23 +147,95 @@
     if (!app.boardOn) newAgentMenu();
   });
 
-  /** Answers the question `a` waits on with its choice `i`, from its card: its conversation, open or not, stays where it is. */
-  async function answer(a: Agent, q: ListQuestion, i: number) {
-    const choice = q.options[i];
-    if (choice === undefined || answering[a.id] === q.requestId) return;
-    answering[a.id] = q.requestId;
-    await app.run(api.answerQuestion(a.id, q.requestId, { [q.question]: choice }));
+  /** A permission's decisions, as its card in the conversation names them. */
+  const DECISIONS = {
+    allow: 'composer.permission.allow',
+    always: 'composer.permission.always',
+    session: 'composer.permission.forSession',
+    deny: 'composer.permission.deny',
+  } as const;
+
+  /** The question of `r` the card shows: the one to answer, the last one once all have their choice (on its way). */
+  function shownStep(r: ListRequest & { kind: 'question' }): number {
+    const step = listStep(r, draftIfAny(r.requestId)?.picks ?? {});
+    return step < 0 ? r.questions.length - 1 : step;
   }
 
-  /** On the card of an agent that asks, its keys 1, 2… pick a choice; Enter opens it, as on every card. */
-  function cardKey(e: KeyboardEvent, a: Agent, q: ListQuestion | null) {
-    if (e.target !== e.currentTarget) return;
-    if (e.key === 'Enter') app.selectAgent(a.id);
-    const n = q && !e.ctrlKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
-    if (q && n >= 0 && n < q.options.length) {
-      e.preventDefault();
-      answer(a, q, n);
+  /** The choices of the card, numbered from 1: the options of the question it shows, or the permission's decisions. */
+  function choiceLabels(r: ListRequest): string[] {
+    if (r.kind === 'question') return r.questions[shownStep(r)].options;
+    return (listChoices(r, {}) as ListDecision[]).map((d) => t(DECISIONS[d]));
+  }
+
+  /**
+   * Answers the request `a` waits on with its choice `i`, from its card: its conversation, open or not, stays where it
+   * is. A question of several is answered one after the other, the choices kept with the conversation's (its card shows
+   * them), and sent with the last one. Once sent, the card flashes green and a toast says what was answered.
+   */
+  async function pick(a: Agent, r: ListRequest, i: number, click = false) {
+    // A click just after the next question came: the second of a double-click. Keys held down never come (`listDigit`).
+    if (answering[a.id] === r.requestId || (click && performance.now() - (stepAt.get(r.requestId) ?? -Infinity) < HOLD_MS)) return;
+    if (r.kind === 'permission') {
+      const d = (listChoices(r, {}) as ListDecision[])[i];
+      if (d) await send(a, r, api.answerPermission(a.id, r.requestId, d === 'session' ? 'always' : d), t(DECISIONS[d]));
+      return;
     }
+    const step = listStep(r, draftIfAny(r.requestId)?.picks ?? {});
+    const q = r.questions[step];
+    const choice = q?.options[i];
+    if (choice === undefined) return;
+    // Read again once made: the reactive draft, which the conversation's card shows too.
+    draftOf(r.requestId);
+    const draft = draftIfAny(r.requestId)!;
+    draft.picks[q.question] = [choice];
+    delete draft.texts[q.question];
+    if (listStep(r, draft.picks) >= 0) {
+      stepAt.set(r.requestId, performance.now());
+      return;
+    }
+    const answers = Object.fromEntries(r.questions.map((x) => [x.question, answerOf(draft, x.question)]));
+    await send(a, r, api.answerQuestion(a.id, r.requestId, answers), Object.values(answers).join(' · '));
+  }
+
+  async function send(a: Agent, r: ListRequest, answer: Promise<unknown>, said: string) {
+    answering[a.id] = r.requestId;
+    if (!(await app.run(answer.then(() => true)))) {
+      delete answering[a.id];
+      return;
+    }
+    flashing[a.id] = true;
+    setTimeout(() => delete flashing[a.id], 900);
+    app.toast(t('nav.sidebar.answered', { name: a.name, choice: said }), 'ok');
+  }
+
+  /** Enter opens a card, as a click does. */
+  function cardKey(e: KeyboardEvent, a: Agent) {
+    if (e.target === e.currentTarget && e.key === 'Enter') app.selectAgent(a.id);
+  }
+
+  /**
+   * The keys 1, 2… answer from the list wherever the focus is but a field (a terminal, the editor, a menu, a dialog keep
+   * them): the agent whose card has the focus, else the first one of the list that can be answered there. Not over the
+   * Kanban, and not a request just shown (`HOLD_MS`).
+   */
+  function listKey(e: KeyboardEvent) {
+    if (e.defaultPrevented || app.modal || menu.open || app.boardOn || app.ui.view !== 'project') return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (
+      target?.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), .xterm, .cm-editor, [role="menu"], [role="dialog"]',
+      )
+    )
+      return;
+    const n = listDigit(e);
+    if (n === null) return;
+    const focused = document.activeElement?.closest('.agent[data-agent]')?.getAttribute('data-agent') ?? null;
+    const a = listTarget(agents, focused);
+    const r = a && listRequest(a);
+    if (!a || !r || n >= choiceLabels(r).length) return;
+    e.preventDefault();
+    if (performance.now() - (shownAt.get(r.requestId) ?? 0) < HOLD_MS) return;
+    pick(a, r, n);
   }
 
   function duration(a: Agent) {
@@ -493,6 +617,30 @@
   </li>
 {/snippet}
 
+<!-- The choices of the request `r` the agent `a` waits on, numbered as their keys 1, 2…: a permission's « Autoriser » first. -->
+{#snippet choices(a: Agent, r: ListRequest)}
+  {@const labels = choiceLabels(r)}
+  <!-- A permission's three decisions, too wide for one line in French, one under the other. -->
+  <div
+    class="opts"
+    class:stack={r.kind === 'permission' && labels.length > 2}
+    role="group"
+    aria-label={t('nav.sidebar.answers', { name: a.name })}
+  >
+    {#each labels as o, i (i)}
+      <button
+        class="opt"
+        class:primary={r.kind === 'permission' && i === 0}
+        disabled={answering[a.id] === r.requestId}
+        onclick={(e) => {
+          e.stopPropagation();
+          pick(a, r, i, true);
+        }}><kbd>{i + 1}</kbd>{o}</button
+      >
+    {/each}
+  </div>
+{/snippet}
+
 <!-- A background task (or a workflow) of the agent `a` under its card: a click opens its view in place of the agent's conversation (ESC-14). -->
 {#snippet bgItem(a: Agent, r: BgRow)}
   {@const on = app.taskView[a.id] === r.id && a.id === selectedAgentId && !otherView}
@@ -519,6 +667,9 @@
     </button>
   </li>
 {/snippet}
+
+<!-- The keys 1, 2… of the list, wherever the focus is but a field. -->
+<svelte:window onkeydown={listKey} />
 
 <aside class="side">
   <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
@@ -563,7 +714,7 @@
       {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
       {@const remote = remoteStateOf(a)}
       {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
-      {@const q = listQuestion(a)}
+      {@const ask = listRequest(a)}
       {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
       <div
         class="agent card"
@@ -574,13 +725,14 @@
         class:awaits={!!pending}
         class:sel
         class:alert={app.attention[a.id]}
+        class:flash={flashing[a.id]}
         style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
         role="button"
         tabindex="0"
         aria-current={sel ? 'true' : undefined}
         data-agent={a.id}
         onclick={() => app.selectAgent(a.id)}
-        onkeydown={(e) => cardKey(e, a, q)}
+        onkeydown={(e) => cardKey(e, a)}
         oncontextmenu={(e) => agentMenu(e, a)}
       >
         <div class="a-top">
@@ -694,30 +846,36 @@
             >{/if}
         </div>
         {#if a.status === 'waiting'}
-          <!-- The question it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… once the card has
-               the focus. Anything else is answered in its conversation, which a click on the card opens. -->
+          <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
+               after the other; a permission allowed, for good or for the session, or refused. What does not hold on the card
+               is answered in its conversation. -->
           {@const req = a.requests?.[0]}
           <div class="a-ask">
-            {#if q}
-              <p>{q.question}</p>
-              <div class="opts" role="group" aria-label={t('nav.sidebar.answers', { name: a.name })}>
-                {#each q.options as o, i (i)}
-                  <button
-                    class="opt"
-                    disabled={answering[a.id] === q.requestId}
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      answer(a, q, i);
-                    }}><kbd>{i + 1}</kbd>{o}</button
-                  >
-                {/each}
-              </div>
+            {#if ask?.kind === 'question'}
+              {@const step = shownStep(ask)}
+              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+              {#if ask.questions.length > 1}
+                <span class="step">{t('nav.sidebar.step', { n: step + 1, count: ask.questions.length })}</span>
+              {/if}
+              <p>{ask.questions[step].question}</p>
+              {@render choices(a, ask)}
+            {:else if ask}
+              <p class="perm"><span class="tool">{toolLabel(ask.tool)}</span> <span class="arg mono">{revealHidden(ask.arg)}</span></p>
+              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+              {@render choices(a, ask)}
             {:else if req}
               <p class="clip">
                 {req.kind === 'question'
                   ? req.questions.map((x) => x.question).join(' · ')
                   : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
               </p>
+              <button
+                class="in-conv"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  app.selectAgent(a.id);
+                }}>{t('nav.sidebar.inConversation')}<Icon name="right" size={12} /></button
+              >
             {/if}
           </div>
         {:else if act || s.tokens > 0 || s.cost > 0}
@@ -1448,6 +1606,51 @@
     font-size: 12.5px;
     line-height: 1.4;
   }
+  .a-ask .step,
+  .a-ask .note {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+  .a-ask p.note {
+    white-space: pre-line;
+  }
+  .a-ask .perm {
+    display: grid;
+    gap: 2px;
+  }
+  .a-ask .tool {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .a-ask .arg {
+    font-size: 11.5px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .in-conv {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--wait);
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .in-conv:hover {
+    text-decoration: underline;
+  }
+  .agent.flash {
+    animation: flash 0.9s var(--ease);
+  }
+  @keyframes flash {
+    from {
+      background: oklch(from var(--run) l c h / 0.16);
+    }
+  }
   .a-ask p.clip {
     display: -webkit-box;
     overflow: hidden;
@@ -1481,6 +1684,14 @@
       box-shadow 0.15s;
   }
   .opt:hover:not(:disabled) {
+    background: oklch(from var(--wait) l c h / 0.14);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .opts.stack {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .opt.primary {
     background: oklch(from var(--wait) l c h / 0.14);
     box-shadow: inset 0 0 0 1px var(--wait-line);
   }

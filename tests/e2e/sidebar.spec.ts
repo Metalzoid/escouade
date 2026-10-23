@@ -215,6 +215,71 @@ test('a question is answered from the list, the conversation open staying where 
   await expect(page.getByText('Choix retenu : SQLite')).toBeVisible();
 });
 
+test('Ctrl+J and the keys 1, 2… answer a permission and two questions from the list, the conversation open staying', async ({ app }) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  const side = page.locator('aside.side');
+  // A permission, then two questions, by two agents; a third one open.
+  await send(page, 'permission');
+  const allowing = side.locator('.agent.waiting');
+  await expect(allowing).toContainText('rm -rf build');
+  const allower = (await allowing.getAttribute('data-agent'))!;
+  await page.keyboard.press('Control+N');
+  await expect(side.locator('.agent')).toHaveCount(2);
+  await expect(page.getByText('Agent prêt')).toBeVisible();
+  await send(page, 'deux questions');
+  await expect(side.locator('.agent.waiting')).toHaveCount(2);
+  const asker = (await side.locator('.agent.waiting', { hasText: 'Question 1 sur 2' }).getAttribute('data-agent'))!;
+  await page.keyboard.press('Control+N');
+  await expect(side.locator('.agent')).toHaveCount(3);
+  const open = (await side.locator('.agent[aria-current="true"]').getAttribute('data-agent'))!;
+  const card = (id: string) => side.locator(`.agent[data-agent="${id}"]`);
+
+  // The permission: what « always » allows on its card, numbered.
+  const perm = card(allower);
+  await expect(perm.getByRole('group', { name: /^Réponses à / }).getByRole('button')).toHaveText([
+    '1Autoriser',
+    '2Toujours autoriser',
+    '3Refuser',
+  ]);
+  if (SHOTS) {
+    await theme(page, 'dark');
+    await page.screenshot({ path: path.join(SHOTS, 'list-answers.app.png') });
+    await theme(page, 'light');
+    await page.screenshot({ path: path.join(SHOTS, 'list-answers-light.app.png') });
+  }
+  // Ctrl+J gives the focus to the card of the agent waiting the longest: no conversation opens.
+  // The keys wait half a second once a request is shown, for a key meant for something else not to answer it unread.
+  await page.waitForTimeout(600);
+  await page.keyboard.press('Control+j');
+  await expect(perm).toBeFocused();
+  expect(await side.locator('.agent[aria-current="true"]').getAttribute('data-agent')).toBe(open);
+  await page.keyboard.press('2');
+  // Sent off again: a brief green flash, and it goes back to its place.
+  await expect(perm).toHaveClass(/flash/);
+  await expect(perm).not.toHaveClass(/waiting/);
+  await expect(page.getByText('« Toujours autoriser »', { exact: false }).first()).toBeVisible();
+
+  // The two questions, one after the other, from anywhere but a field.
+  await page.keyboard.press('Control+j');
+  const ask = card(asker);
+  await expect(ask).toBeFocused();
+  await page.locator('body').evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('2');
+  await expect(ask).toContainText('Question 2 sur 2');
+  await expect(ask).toContainText('Quel ORM ?');
+  await page.keyboard.press('1');
+  await expect(side.locator('.agent.waiting')).toHaveCount(0);
+  expect(await side.locator('.agent[aria-current="true"]').getAttribute('data-agent')).toBe(open);
+
+  // The answers reached the agents, which went on.
+  await card(asker).click();
+  // Its answers by question, in the order the backend keeps them.
+  await expect(page.getByText(/Choix retenu : (SQLite, Prisma|Prisma, SQLite)/)).toBeVisible();
+  await card(allower).click();
+  await expect(page.getByText('Commande exécutée (règle enregistrée).')).toBeVisible();
+});
+
 test('the ring of the agent that asks stops with prefers-reduced-motion', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);
@@ -258,6 +323,23 @@ test.describe('in English', () => {
     expect(box.x + box.width).toBeLessThanOrEqual(1028);
     expect(box.y + box.height).toBeLessThanOrEqual(779);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'new-agent-small-en.app.png') });
+  });
+
+  test('a permission answered from the list fits its card at 1028 × 779', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { lang: 'en' });
+    await page.setViewportSize({ width: 1028, height: 779 });
+    const side = page.locator('aside.side');
+    await send(page, 'permission');
+    const choices = side.locator('.agent.waiting').getByRole('group', { name: /^Answers to / });
+    await expect(choices.getByRole('button')).toHaveText(['1Allow', '2Always allow', '3Deny']);
+    const cut = await choices.evaluate((group) =>
+      [...group.querySelectorAll<HTMLElement>('button')]
+        .filter((b) => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > group.getBoundingClientRect().right + 1)
+        .map((b) => b.textContent),
+    );
+    expect(cut).toEqual([]);
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'list-answers-small-en.app.png') });
   });
 });
 

@@ -216,6 +216,10 @@ fn a_permission_shows_what_always_keeps_and_a_question_its_options() {
     assert_eq!(card["input"]["command"], "git add calc.py");
     assert_eq!(card["canAlways"], true);
     assert!(card["description"].as_str().unwrap().contains("git add *"));
+    let view = &rt.view().requests[0];
+    assert!(view.can_always);
+    assert_eq!(view.always_scope, None);
+    assert!(view.description.as_deref().unwrap().contains("git add *"));
     assert_eq!(rt.meta.status, AgentStatus::Waiting);
     // Answered in `opencode attach`: the card says so.
     feed(

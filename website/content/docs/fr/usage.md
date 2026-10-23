@@ -9,7 +9,7 @@ La barre occupe le bas de la fenêtre. De gauche à droite :
 | Élément | Ce qu’il montre |
 |---|---|
 | « 3 actifs » | Les agents qui travaillent, tous projets confondus. Les agents archivés ne comptent pas. |
-| « 1 en attente » | Les agents qui attendent ta réponse. Un clic, ou `Ctrl+J`, ouvre le prochain agent qui attend ou qui est à voir. Dès qu’il y en a, le compteur passe en ambre et son point pulse. |
+| « 1 en attente » | Les agents qui attendent ta réponse. Un clic, ou `Ctrl+J`, met le focus sur la carte du prochain agent qui attend ou qui est à voir. Dès qu’il y en a, le compteur passe en ambre et son point pulse. |
 | « ✓ 2 terminés » | Les agents dont la tâche est terminée. |
 | « 4 Claude · 1,2 Go · 6 % CPU » | Les processus Claude en cours, avec la mémoire et le processeur qu’ils prennent. Absent quand aucun ne tourne. L’infobulle liste chaque agent, le plus gourmand en mémoire d’abord. |
 | Quotas | Les deux fenêtres de quota du compte en cours : voir la section suivante. |
