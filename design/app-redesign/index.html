@@ -5807,7 +5807,9 @@
         min-width: 0;
         overflow: hidden;
       }
-      .statusbar:has(#sb-upd:not([hidden])) .sb-hide {
+      .statusbar:has(#sb-upd:not([hidden])) .sb-hide,
+      .statusbar:has(.sb-q[data-bis]:not([hidden])) .sb-hide,
+      .statusbar:has(#sb-over:not([hidden])) .sb-hide {
         display: none;
       }
 
@@ -5819,7 +5821,8 @@
       }
       @media (max-height: 820px) {
         .sidebar .sec .row-item,
-        .sidebar .sec #test-group {
+        .sidebar .sec #test-group,
+        .sidebar .sec #wt-group {
           display: none;
         }
         .sidebar .sec-bad {
@@ -5879,6 +5882,702 @@
         font-weight: 500;
       }
 
+      /*
+       * ---------- Lot 0 bis (ESC-150): what the 1.8.0 to 1.8.9 added ----------
+       * Four harnesses, accounts without a default, quota projection and extra usage, a switch of account at a threshold,
+       * voice online and live, zoom and the model of written texts, launches in a worktree, « Attend », pull requests of
+       * an agent, code hosts, private projects, .escouade.yml, worktrees cleaned. Every colour is a token.
+       */
+
+      /* A harness without an account: said in its menu entry and its settings group, with what fixes it. */
+      .mi .none {
+        color: var(--warn-ink);
+      }
+      .new-split .menu.wide4,
+      .sub-menu.wide4 {
+        width: 400px;
+      }
+      .menu.wide4 .mi:not(.no-mark) {
+        grid-template-columns: 62px minmax(0, 1fr) auto;
+      }
+      .menu.wide4 .mi .emark {
+        justify-self: start;
+      }
+      .mi.off .emark,
+      .mi.off .ml b {
+        opacity: 0.55;
+      }
+      .mi .fix {
+        justify-self: end;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .menu-h kbd {
+        margin-left: 6px;
+      }
+      .menu-h.split {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .menu-h.split .d {
+        font-weight: 450;
+      }
+
+      /* The quota's projection at its reset, after each window; the day's cost projected to midnight. */
+      .pj {
+        color: var(--run);
+        font-weight: 550;
+        font-variant-numeric: tabular-nums;
+      }
+      .pj.amber {
+        color: var(--warn-ink);
+      }
+      .pj.red {
+        color: var(--del);
+      }
+      .sb-q .pj {
+        margin-left: -3px;
+      }
+      .qa .w .pj {
+        margin-left: 4px;
+      }
+      /* Extra usage, billed apart: an amber word beside its harness, its sentence in the panel. */
+      .sb-over {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: 5px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--warn-ink);
+        font-size: 11px;
+        font-weight: 560;
+        white-space: nowrap;
+      }
+      .qa .bill {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 7px;
+        align-items: flex-start;
+        color: var(--warn-ink);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .qa .bill svg {
+        flex: none;
+        margin-top: 1px;
+      }
+      .qa .bill {
+        margin: 0;
+      }
+      .qa .budget {
+        color: var(--soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .qpanel.tall {
+        max-height: calc(100vh - 90px);
+        overflow: auto;
+      }
+
+      /* A small floating explanation: a tooltip drawn open (« Attend », a pull request, extra usage). */
+      .ptip {
+        position: fixed;
+        z-index: 40;
+        display: grid;
+        gap: 4px;
+        max-width: 330px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: var(--raise-2);
+        box-shadow:
+          inset 0 0 0 1px var(--line-2),
+          0 14px 36px -10px rgba(0, 0, 0, calc(0.7 * var(--shade)));
+        color: var(--soft);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .ptip b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .ptip .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .ptip .row svg {
+        flex: none;
+        color: var(--muted);
+      }
+
+      /* « Attend », or the time of its next wake-up: a turn over, something still going on. */
+      .pill.wait {
+        background: oklch(from var(--wait) l c h / 0.1);
+        color: var(--wait);
+      }
+      .pill.idle {
+        background: rgba(var(--fg-rgb), 0.05);
+        color: var(--muted);
+      }
+      .agent.awaits .state-dot {
+        background: none;
+        box-shadow: inset 0 0 0 1.5px var(--run);
+      }
+      .agent.awaits .a-state {
+        color: var(--soft);
+      }
+      .a-state .wk {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* The pull requests of an agent, under its card: a number per PR, its corrections on a click. */
+      .prs {
+        display: grid;
+        gap: 4px;
+        margin: -2px 6px 6px 30px;
+      }
+      .pr {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .prnum {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 5px;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--soft);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .prnum svg {
+        width: 12px;
+        height: 12px;
+      }
+      .prnum.ok svg {
+        color: var(--run);
+      }
+      .prnum.bad svg {
+        color: var(--del);
+      }
+      .prnum.wait svg {
+        color: var(--wait);
+      }
+      .prnum.draft svg {
+        color: var(--muted);
+      }
+      .prnum.merged svg {
+        color: var(--syn-k);
+      }
+      .pr .ps {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .prfix {
+        flex: none;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 5px;
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--text);
+        font-size: 11.5px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .prfix:hover {
+        background: rgba(var(--fg-rgb), 0.09);
+      }
+      .crumbs .prnum {
+        height: 18px;
+        margin-left: 4px;
+      }
+
+      /* A mark that says where a setting comes from: .escouade.yml, a local override, a guard or a barrier. */
+      .smark {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        width: fit-content;
+        height: 19px;
+        padding: 0 6px;
+        border-radius: 5px;
+        background: rgba(var(--fg-rgb), 0.05);
+        color: var(--soft);
+        font-size: 11px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .smark svg {
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .smark.file {
+        background: color-mix(in oklch, var(--brand) 12%, transparent);
+        color: var(--teal-ink);
+      }
+      .smark.file svg {
+        color: currentColor;
+      }
+      .smark.wait {
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--warn-ink);
+      }
+      .smark.wait svg {
+        color: currentColor;
+      }
+      .smark.barrier {
+        background: oklch(from var(--run) l c h / 0.1);
+        color: var(--run);
+      }
+      .smark.barrier svg {
+        color: currentColor;
+      }
+      .sr .lab .smark {
+        margin-top: 4px;
+      }
+
+      /* « Ses fichiers »: harness by harness, a guard or a barrier, and how. */
+      .fence {
+        display: grid;
+        margin: 2px 0 12px;
+        border-radius: 10px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .fence > div {
+        display: grid;
+        grid-template-columns: 110px 92px minmax(0, 1fr);
+        gap: 10px;
+        align-items: baseline;
+        padding: 9px 12px;
+        font-size: 12.5px;
+      }
+      .fence > div + div {
+        border-top: 1px solid var(--line);
+      }
+      .fence b {
+        font-weight: 560;
+      }
+      .fence span:last-child {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .acct-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 0 0 8px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: rgba(var(--fg-rgb), 0.03);
+        color: var(--soft);
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+      .acct-note svg {
+        flex: none;
+        margin-top: 2px;
+        color: var(--muted);
+      }
+      .acct-note.warn {
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .acct-note.warn svg {
+        color: var(--wait);
+      }
+      .acct-note .grow {
+        flex: 1;
+      }
+      .acct-note.warn {
+        flex-wrap: wrap;
+      }
+      .acct-note.warn .grow {
+        flex-basis: calc(100% - 30px);
+      }
+      .acct-note.warn .btn:first-of-type {
+        margin-left: 22px;
+      }
+      .acct-note .btn {
+        flex: none;
+        height: 26px;
+      }
+      .tab .lock {
+        width: 12px;
+        height: 12px;
+        margin-left: -2px;
+        color: var(--muted);
+      }
+
+      /* Pending commands of .escouade.yml: read whole before they run. */
+      .pending {
+        display: grid;
+        gap: 6px;
+        margin: 0 0 10px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .pending .pk {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .pending pre {
+        margin: 0;
+        padding: 6px 9px;
+        border-radius: 7px;
+        background: var(--well);
+        color: var(--code-fg);
+        font-family: var(--mono);
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .pending .row-btns {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 4px;
+      }
+      .kb-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 22px 10px;
+        padding: 8px 10px 8px 12px;
+        border-radius: 10px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .kb-banner svg {
+        color: var(--wait);
+      }
+      .kb-banner .grow {
+        flex: 1;
+      }
+      .kb-banner .btn {
+        height: 28px;
+      }
+
+      /* « Ses fichiers », leftovers: what a clean-up kept, and why. */
+      .leftovers {
+        display: grid;
+        gap: 4px;
+        margin: -4px 0 12px;
+        padding: 9px 12px;
+        border-radius: 9px;
+        background: rgba(var(--fg-rgb), 0.03);
+        color: var(--soft);
+        font-size: 12.5px;
+      }
+      .leftovers ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+      .leftovers .mono {
+        color: var(--soft);
+      }
+      .archived-h {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 8px 6px 4px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .agent.archived {
+        opacity: 0.85;
+      }
+      .agent .kept {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px;
+        color: var(--warn-ink);
+        font-size: 12px;
+      }
+      .agent .kept svg {
+        flex: none;
+        width: 12px;
+        height: 12px;
+      }
+
+      /* Launch commands in an agent's worktree: the menu of ▶, and the runs grouped under the agent's name. */
+      .run-menu {
+        left: 150px;
+        width: 300px;
+      }
+      .row-item .wt {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* The model menu of a long list: search, favourites, a group per family or publisher, a cost per model. */
+      .composer .menu.models {
+        bottom: calc(100% - 38px);
+        left: 0;
+        width: 360px;
+        max-height: 520px;
+        overflow: auto;
+      }
+      .models .msearch {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        height: 32px;
+        margin: 2px 2px 4px;
+        padding: 0 9px;
+        border-radius: 7px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--muted);
+      }
+      .models .mi {
+        grid-template-columns: 16px minmax(0, 1fr) auto;
+        min-height: 30px;
+      }
+      .models .star {
+        width: 14px;
+        height: 14px;
+        color: var(--dim);
+      }
+      .models .star.on {
+        color: var(--p-ink);
+        fill: currentColor;
+      }
+      .models .mult {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11.5px;
+      }
+
+      /* Live transcription: what is being heard, written as it comes, paler at its tail. */
+      .live {
+        color: var(--muted);
+      }
+      .live-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .live-tag i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--del);
+      }
+      .dict .live-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--soft);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* The questions of a voice conversation, one at a time, their choices on screen. */
+      .vo-q {
+        display: grid;
+        gap: 8px;
+        justify-items: center;
+      }
+      .vo-q .step {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .vo-q .chs {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
+      .vo-q .ch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 12px 0 6px;
+        border-radius: 8px;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--soft);
+      }
+      .vo-q .ch kbd {
+        min-width: 20px;
+      }
+      .vo-q .other {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+
+      /* The zoom of the interface: steps in segments, a step too big for the window greyed. */
+      .seg.inline.zoom button[aria-disabled='true'] {
+        opacity: 0.4;
+      }
+      .vfit {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      /* Code hosts: an instance per line, its state, the projects that find it by their remote. */
+      .forge {
+        display: grid;
+        grid-template-columns: 26px minmax(0, 1fr) auto;
+        gap: 4px 12px;
+        align-items: center;
+        padding: 11px 0;
+      }
+      .forge + .forge {
+        border-top: 1px solid var(--line);
+      }
+      .forge .fn {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+      .forge .fn b {
+        font-weight: 560;
+      }
+      .forge .fn .mono {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .forge .fn .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .forge .fs {
+        grid-column: 2 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .forge .fs .ok {
+        color: var(--run);
+      }
+      .forge .fs .bad {
+        color: var(--del);
+      }
+      .forge .fs .amber {
+        color: var(--warn-ink);
+      }
+      .forge .acts {
+        display: flex;
+        gap: 6px;
+      }
+
+      /* The window that opens a pull request: what was proposed, read before it goes. */
+      .modal .ta {
+        min-height: 150px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--code-fg);
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+      .modal .scope {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .cbline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--soft);
+      }
+      .cbline .cb {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* A switch of account at a threshold, in the conversation: a separator like a handover's. */
+      .acct-sep {
+        margin-top: 10px;
+      }
+
+      /* Version and state of a harness: tested range, too old, its update by Escouade. */
+      .sr .lab .cmdline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .sr .lab .cmdline pre {
+        margin: 0;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: var(--well);
+        color: var(--code-fg);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      .fav-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+        max-width: 420px;
+      }
+      .fav-chips .chip-t svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* A form from an MCP server (Copilot CLI): fields in the card. */
+      .req-card .ffields {
+        display: grid;
+        grid-template-columns: 140px minmax(0, 1fr);
+        gap: 8px 12px;
+        align-items: center;
+        font-size: 12.5px;
+      }
+      .req-card .ffields span {
+        color: var(--muted);
+      }
+      .req-card .ffields .inp {
+        height: 28px;
+      }
+      .req-card .row-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .req-card .glob {
+        font-family: var(--mono);
+        color: var(--soft);
+      }
+
       @container conv (max-width: 1000px) {
         .vseg .lbl {
           display: none;
@@ -5896,7 +6595,9 @@
         .kb-head .switch {
           white-space: nowrap;
         }
-        .sb-q .pct2 {
+        .sb-q .pct2,
+        .sb-q .pj,
+        .sb-over {
           display: none;
         }
         .qpanel {
@@ -5972,6 +6673,7 @@
         <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.75" cy="8" r=".9" fill="currentColor" /><circle cx="8" cy="8" r=".9" fill="currentColor" /><circle cx="12.25" cy="8" r=".9" fill="currentColor" /></symbol>
         <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.25" y="7" width="9.5" height="6.5" rx="1.5" /><path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" /></symbol>
         <symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2.75v3M10 2.75v3M4.25 5.75h7.5v2a3.75 3.75 0 0 1-7.5 0zM8 11.5v2" /></symbol>
+        <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 2.6l1.6 3.4 3.7.4-2.8 2.5.8 3.7L8 10.7l-3.3 1.9.8-3.7-2.8-2.5 3.7-.4z" /></symbol>
         <symbol id="i-gift" viewBox="0 0 16 16"><path d="M8 3.5v10M3 6.75h10v2.5H3zM4 9.25v4h8v-4M8 6.75C6.75 4.5 4.5 4 4.5 5.4 4.5 6.4 6.25 6.75 8 6.75 9.75 6.75 11.5 6.4 11.5 5.4 11.5 4 9.25 4.5 8 6.75z" /></symbol>
       </defs>
     </svg>
@@ -5992,7 +6694,7 @@
         </button>
         <nav class="tabs" role="tablist" aria-label="Projets">
           <button class="tab" role="tab" aria-selected="true" data-hue="48" style="--c: oklch(0.72 0.12 48)">
-            <span class="sw"></span>demo-api<span class="ask" id="tab-ask">1</span><span class="delta">Δ 7</span>
+            <span class="sw"></span>demo-api<svg class="i lock" id="tab-lock" role="img" aria-label="Projet privé : invisible pour les agents des autres projets" hidden><use href="#i-lock" /></svg><span class="ask" id="tab-ask">1</span><span class="delta">Δ 7</span>
           </button>
           <button class="tab" role="tab" aria-selected="false" data-hue="300" style="--c: oklch(0.72 0.12 300)">
             <span class="sw"></span>studio-web<span class="delta">Δ 3</span>
@@ -6034,13 +6736,24 @@
             <button class="new-more" id="new-more" aria-haspopup="menu" aria-expanded="false" aria-controls="new-menu" aria-label="Nouvel agent sur un autre harness">
               <svg class="i s14"><use href="#i-down" /></svg>
             </button>
-            <div class="menu" id="new-menu" role="menu" aria-label="Harness du nouvel agent" hidden>
-              <div class="menu-h">Harness</div>
+            <div class="menu wide4" id="new-menu" role="menu" aria-label="Harness du nouvel agent" hidden>
+              <div class="menu-h split"><span>Harness</span><span class="d"><kbd>Ctrl Maj N</kbd></span></div>
               <button class="mi kb" role="menuitemradio" aria-checked="true">
-                <span class="emark">Claude</span><span class="ml"><b>Claude Code</b><span class="d">Celui du projet · Opus 5.5 · Auto</span></span><kbd>Ctrl N</kbd>
+                <span class="emark">Claude</span><span class="ml"><b>Claude Code</b><span class="d">Celui du projet · Principal · Opus 5.5 · Auto</span></span><kbd>1</kbd>
               </button>
               <button class="mi" role="menuitemradio" aria-checked="false">
-                <span class="emark">Codex</span><span class="ml"><b>Codex</b><span class="d">GPT-5.5-Codex · Demander · bac à sable</span></span><kbd>Ctrl Maj N</kbd>
+                <span class="emark">Codex</span><span class="ml"><b>Codex</b><span class="d">Principal · GPT-5.5-Codex · Demander</span></span><kbd>2</kbd>
+              </button>
+              <button class="mi" role="menuitemradio" aria-checked="false">
+                <span class="emark">OpenCode</span><span class="ml"><b>OpenCode</b><span class="d">Principal · qwen3-coder:30b · Demander</span></span><kbd>3</kbd>
+              </button>
+              <button class="mi off" role="menuitem">
+                <span class="emark">Copilot</span><span class="ml"><b>Copilot CLI</b><span class="d none">Aucun compte</span></span><span class="fix">Ajouter un compte…</span>
+              </button>
+              <div class="menu-sep"></div>
+              <div class="menu-h">Worktree</div>
+              <button class="mi no-mark" role="menuitem">
+                <svg class="i s14 ic"><use href="#i-folder" /></svg><span class="ml"><b>Nouvel agent sans worktree</b><span class="d">Dans le dossier du projet, sur sa branche courante</span></span>
               </button>
               <div class="menu-sep"></div>
               <button class="mi no-mark" role="menuitem">
@@ -6081,6 +6794,9 @@
               </div>
               <div class="a-act"><b>Edit</b><span class="tgt mono">src/auth/jwt.ts</span><span class="spend">184 k · 2,41 $</span></div>
             </button>
+            <div class="prs" id="prs-refacto" role="group" aria-label="Pull requests de refacto-auth" hidden>
+              <div class="pr"><button class="prnum bad" aria-label="Ouvrir la PR #42 dans le navigateur (ouverte, CI en échec)"><svg class="i"><use href="#i-close" /></svg>#42</button><button class="prfix">L’agent corrige</button></div>
+            </div>
 
             <button class="agent" aria-current="true" id="ag-pag">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">pagination-users</span><span class="bg-chip" id="bg-chip" role="img" aria-label="1 sous-agent en cours, 1 tâche de fond en cours"><svg class="i" style="width: 12px; height: 12px"><use href="#i-sub" /></svg>1<svg class="i" style="width: 12px; height: 12px; margin-left: 4px"><use href="#i-clock" /></svg>1</span><span class="a-state">En cours</span></div>
@@ -6089,6 +6805,9 @@
               </div>
               <div class="a-act"><b>Bash</b><span class="tgt mono">npm test</span><span class="spend">12,4 k · 0,14 $</span></div>
             </button>
+            <div class="prs" id="prs-pag" role="group" aria-label="Pull requests de pagination-users" hidden>
+              <div class="pr"><button class="prnum wait" id="pr43" aria-label="Ouvrir la PR #43 dans le navigateur (ouverte, changements demandés)"><svg class="i"><use href="#i-pr" /></svg>#43</button><button class="prfix">L’agent corrige les retours</button></div>
+            </div>
             <!-- Its subagents and background tasks: folded into the chip of its card, unfolded here. -->
             <div class="subl" id="subl" hidden>
               <div class="sh">Sous-agents <span class="n">1 en cours · 2 finis</span></div>
@@ -6116,6 +6835,30 @@
               <div class="a-act"><b>Edit</b><span class="tgt mono">src/auth/limiter.ts</span><span class="spend">41 k · ≈ 0,52 $</span></div>
             </button>
 
+            <button class="agent" id="ag-oc" hidden>
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">migration-sqlite</span><span class="a-state">Question</span></div>
+              <div class="a-meta"><span class="emark">OpenCode</span><span>qwen3-coder:30b</span><span class="sep">·</span><span class="num">6m 02s</span></div>
+              <div class="a-act"><b>Bash</b><span class="tgt mono">git add src/sessions</span><span class="spend">61 k · 0,00 $</span></div>
+            </button>
+            <button class="agent" id="ag-cp" hidden>
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">revue-deps</span><span class="a-state">Question</span></div>
+              <div class="a-meta"><span class="emark">Copilot</span><span>GPT-6-Luna</span><span class="sep">·</span><span class="num">9m 30s</span></div>
+              <div class="a-act"><b>Edit</b><span class="tgt mono">package.json</span><span class="spend">50 crédits · 0,50 $</span></div>
+            </button>
+            <button class="agent idle" id="ag-noacct" hidden>
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">nouvel-agent</span><span class="a-state">Prêt</span></div>
+              <div class="a-meta"><span class="emark">Copilot</span><span style="color: var(--warn-ink)">Aucun compte</span></div>
+            </button>
+            <button class="agent awaits" id="ag-chef" hidden>
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">chef-escouade</span><span class="a-state"><span class="wk"><svg class="i" style="width: 12px; height: 12px"><use href="#i-clock" /></svg>Réveil à 15:30</span></span></div>
+              <div class="a-meta"><span class="emark">Claude</span><span>Opus 5.5</span><span class="sep">·</span><span>Tour fini</span></div>
+            </button>
+            <div class="subl" id="driven" hidden>
+              <div class="sh">Agents pilotés <span class="n">2 au travail</span></div>
+              <button class="sr2"><i></i><span class="nm">dem-5-export-csv-des-factures</span><span class="st">En cours</span></button>
+              <button class="sr2"><i></i><span class="nm">dem-6-limiter-les-tentatives</span><span class="st">En cours</span></button>
+            </div>
+
             <button class="agent done">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">docs-api</span><span class="a-state">Terminé</span></div>
               <div class="a-act"><svg class="i s14 ok"><use href="#i-check" /></svg><span class="tgt">2 fichiers modifiés</span><span class="spend">12 k · 0,02 $</span></div>
@@ -6124,6 +6867,17 @@
             <button class="agent idle">
               <div class="a-top"><i class="state-dot"></i><span class="a-name">fix-login</span><span class="a-state">Prêt</span></div>
               <div class="a-meta"><span class="emark">Claude</span><span>Fable 5.1</span><span class="sep">·</span><span>Aucun message</span></div>
+            </button>
+          </div>
+
+          <div id="archived" hidden>
+            <div class="archived-h"><svg class="i s14"><use href="#i-down" /></svg>Archivés (2)</div>
+            <button class="agent done archived">
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">dem-3-export-pdf</span><span class="a-state">0,96 $</span></div>
+              <div class="kept"><svg class="i"><use href="#i-branch" /></svg>worktree gardé : 2 commits ni mergés ni poussés</div>
+            </button>
+            <button class="agent done archived">
+              <div class="a-top"><i class="state-dot"></i><span class="a-name">dem-2-webhooks-stripe</span><span class="a-state">1,12 $</span></div>
             </button>
           </div>
 
@@ -6151,8 +6905,12 @@
             </button>
             <button class="row-item">
               <i class="d bad"></i><span class="nm">Worker</span><span class="st bad">planté (code 1)</span>
-              <span class="ra keep"><span class="icon-btn" aria-label="Lancer"><svg class="i s14"><use href="#i-play" /></svg></span></span>
+              <span class="ra keep"><span class="icon-btn" id="sec-worker-play" aria-label="Lancer"><svg class="i s14"><use href="#i-play" /></svg></span></span>
             </button>
+            <div id="wt-group" hidden>
+              <div class="group-label">refacto-auth</div>
+              <button class="row-item fresh"><i class="d on"></i><span class="nm">Front</span><span class="wt">dans son worktree</span><span class="st ok">en cours</span></button>
+            </div>
             <div id="test-group" hidden>
               <div class="group-label">dem-4-recherche-par-e-mail</div>
               <button class="row-item fresh"><i class="d"></i><span class="nm">Préparation 1</span><span class="st">terminé</span></button>
@@ -6199,7 +6957,7 @@
                   <span class="pill" id="h-pill"><i></i>En cours</span>
                 </div>
                 <div class="crumbs">
-                  <span class="emark" id="h-mark" role="img" aria-label="Harness : Claude Code">Claude Code</span><span class="proj-name">demo-api</span><span>/</span><span class="mono" id="h-branch">escouade/pagination-users</span><span class="sbx" id="h-sbx" aria-label="Bac à sable : écriture dans le dossier de l’agent, réseau coupé" hidden><svg class="i"><use href="#i-lock" /></svg>Bac à sable</span>
+                  <span class="emark" id="h-mark" role="img" aria-label="Harness : Claude Code">Claude Code</span><span class="proj-name">demo-api</span><span>/</span><span class="mono" id="h-branch">escouade/pagination-users</span><button class="prnum wait" id="h-pr-chip" aria-label="Ouvrir la PR #43 dans le navigateur" hidden><svg class="i"><use href="#i-pr" /></svg>#43</button><span class="sbx" id="h-sbx" aria-label="Bac à sable : écriture dans le dossier de l’agent, réseau coupé" hidden><svg class="i"><use href="#i-lock" /></svg>Bac à sable</span>
                 </div>
               </div>
               <dl class="figures">
@@ -6214,7 +6972,8 @@
                 <div class="fig opt-fig2"><dt>Durée</dt><dd>3m 15s</dd></div>
               </dl>
               <div class="actions">
-                <button class="btn" aria-label="Préparer le lancement"><svg class="i s14"><use href="#i-play" /></svg><span class="lbl">Préparer le lancement</span></button>
+                <button class="btn" id="h-pr" aria-label="Ouvrir une PR" hidden><svg class="i s14"><use href="#i-pr" /></svg><span class="lbl">Ouvrir une PR</span></button>
+                <button class="btn" id="h-launch" aria-label="Préparer le lancement"><svg class="i s14"><use href="#i-play" /></svg><span class="lbl">Préparer le lancement</span></button>
                 <div class="vseg" role="group" aria-label="Vue de l’agent" id="vseg">
                   <button aria-pressed="true" id="v-rich" aria-label="Vue Escouade"><svg class="i s14"><use href="#i-agents" /></svg><span class="lbl">Escouade</span></button>
                   <button aria-pressed="false" id="v-term" aria-label="Vue Claude Code : l’interface du harness dans un terminal"><svg class="i s14"><use href="#i-term" /></svg><span class="lbl" id="v-term-n">Claude Code</span></button>
@@ -6387,6 +7146,78 @@
                 <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Codex travaille…</span></div>
               </div>
 
+              <!-- Lot 0 bis: migration-sqlite on OpenCode, a permission it keeps as a pattern for its session. -->
+              <div class="thread bis" id="th-oc" hidden>
+                <div class="msg-user">Passe le stockage des sessions de fichiers JSON à SQLite, avec une migration au démarrage.</div>
+                <div class="msg-ai">
+                  <div class="ai-head"><span class="emark">OpenCode</span>qwen3-coder:30b · Demander</div>
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-read" /></svg></span><span class="verb">Read</span><span class="tgt mono">src/sessions/store.ts</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>96 lignes</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-edit" /></svg></span><span class="verb">Write</span><span class="tgt mono">src/sessions/sqlite.ts</span><span class="res"><span class="add">+88</span> <span class="del">−0</span></span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">npm test -- sessions</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>14 tests</span></button>
+                  </div>
+                  <p>Le stockage SQLite et sa migration sont écrits, les tests passent. J’ajoute les deux fichiers à l’index.</p>
+                  <div class="req-card perm">
+                    <div class="rt"><svg class="i s14" style="color: var(--wait)"><use href="#i-shield" /></svg>OpenCode demande une autorisation</div>
+                    <div class="cmdl"><span class="badge" style="color: var(--muted); font-size: 12px">Bash</span><span class="mono" style="color: var(--soft)">git add src/sessions/sqlite.ts src/sessions/migrate.ts</span></div>
+                    <span style="color: var(--muted); font-size: 12px">« Toujours autoriser » : OpenCode garde le motif <span class="glob">git add *</span> pour le reste de la session.</span>
+                    <div class="row-btns"><button class="btn primary">Autoriser</button><button class="btn">Toujours autoriser</button><button class="btn">Refuser</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Lot 0 bis: revue-deps on Copilot CLI: a form from an MCP server, then its session's ceiling of AI credits. -->
+              <div class="thread bis" id="th-cp" hidden>
+                <div class="msg-user">Mets à jour les dépendances qui ont une alerte de sécurité, et vérifie que la suite passe.</div>
+                <div class="msg-ai">
+                  <div class="ai-head"><span class="emark">Copilot</span>GPT-6-Luna ×1 · Édits auto</div>
+                  <div class="trace">
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">npm audit --json</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>3 alertes</span></button>
+                    <button class="tool"><span class="ic"><svg class="i s14"><use href="#i-edit" /></svg></span><span class="verb">Edit</span><span class="tgt mono">package.json</span><span class="res"><span class="add">+3</span> <span class="del">−3</span></span></button>
+                  </div>
+                  <div class="req-card">
+                    <div class="rt"><svg class="i s14" style="color: var(--muted)"><use href="#i-plug" /></svg>Le serveur MCP jira demande des informations</div>
+                    <div class="ffields">
+                      <span>Projet</span><input class="inp" value="DEM" aria-label="Projet" />
+                      <span>Priorité</span><button class="select" style="justify-self: start"><b>Haute</b><svg class="i s14"><use href="#i-down" /></svg></button>
+                      <span>Bloque la release</span><span class="seg inline" role="radiogroup" aria-label="Bloque la release" style="justify-self: start"><button role="radio" aria-selected="false">Oui</button><button role="radio" aria-selected="true">Non</button></span>
+                    </div>
+                    <div class="by"><svg class="i s14" style="color: var(--add)"><use href="#i-check" /></svg><span>Envoyé · 14:52</span></div>
+                  </div>
+                  <p>Le ticket DEM-9 est créé pour la mise à jour de <code>undici</code>, qui change son API. Je relance la suite.</p>
+                </div>
+                <div class="limit">
+                  <div class="lt"><svg class="i s14"><use href="#i-clock" /></svg>Plafond de crédits d’IA de la session atteint</div>
+                  <p>Le plafond de crédits d’IA de la session est atteint (50 sur 50). Que faire de l’appel en attente ?</p>
+                  <div class="row-btns"><button class="btn primary">Ajouter 50 crédits</button><button class="btn">Lever le plafond</button><button class="btn">Arrêter là</button></div>
+                </div>
+              </div>
+
+              <!-- Lot 0 bis: « Changer de compte à » 90 %: the agent goes on on another account at the end of its turn. -->
+              <div class="thread bis" id="th-switch" hidden>
+                <div class="msg-user">Ajoute une pagination par curseur sur <span class="mono">/users</span>, 50 par page par défaut, et garde la réponse rétrocompatible.</div>
+                <div class="msg-ai">
+                  <p>La route renvoie maintenant <code>{ users, next }</code> ; l’ancien format reste servi tant que le client n’envoie pas <code>cursor</code>.</p>
+                  <div class="trace"><button class="tool"><span class="ic"><svg class="i s14"><use href="#i-bash" /></svg></span><span class="verb">Bash</span><span class="tgt mono">npm test</span><span class="res"><svg class="i s14 ok"><use href="#i-check" /></svg>42 tests</span></button></div>
+                </div>
+                <div class="ho-sep acct-sep"><span><b>Suite sur le compte Pro</b> · Principal est à 90 % de sa fenêtre de 5 h</span></div>
+                <div class="msg-user">Écris aussi les tests des cas limites.</div>
+                <div class="msg-ai">
+                  <div class="ai-head"><span class="emark">Claude</span>Pro · Sonnet 5.5 · Auto</div>
+                  <p>J’écris les tests du dernier curseur et d’une limite au-delà de cent.</p>
+                </div>
+                <div class="working"><svg class="spark i"><use href="#i-spark" /></svg><span class="shimmer">Claude travaille…</span></div>
+              </div>
+
+              <!-- Lot 0 bis: a new agent on a harness without an account: nothing starts in silence. -->
+              <div class="thread bis" id="th-noacct" hidden>
+                <div class="limit">
+                  <div class="lt"><svg class="i s14"><use href="#i-user" /></svg>Aucun compte Copilot CLI : ajoute-en un dans Réglages › Comptes.</div>
+                  <p>Cet agent ne démarre pas tant qu’aucun compte Copilot CLI n’est ajouté : celui déjà connecté sur cette machine, ou un nouveau. Ton message reste dans le champ.</p>
+                  <div class="row-btns"><button class="btn primary">Ajouter un compte Copilot CLI…</button><button class="btn">Continuer sur Claude Code</button></div>
+                </div>
+              </div>
+
               <!-- pagination-users: a message with files, one said aloud; the files kept with it. -->
               <div class="thread" id="th-att" hidden>
                 <div class="msg-user with">
@@ -6418,6 +7249,8 @@
               <div class="dict" id="dict" hidden role="status">
                 <span class="lvl" role="meter" aria-label="Niveau du micro" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100"><i style="height: 6px"></i><i style="height: 12px"></i><i style="height: 17px"></i><i style="height: 10px"></i><i style="height: 14px"></i><i style="height: 7px"></i><i style="height: 4px"></i></span>
                 <b>À l’écoute</b><span style="color: var(--muted)">0:07</span>
+                <span class="live-text" id="dict-live" hidden>Garde 50 par page, mais monte à <span class="live">100 si le client le</span></span>
+                <span class="live-tag" id="dict-tag" hidden><i></i>ElevenLabs · en direct</span>
                 <span class="hint"><kbd>Ctrl Espace</kbd> pour finir · <kbd>Échap</kbd> pour annuler</span>
               </div>
               <!-- Its first use: the model, downloaded once, on this machine. -->
@@ -6441,6 +7274,32 @@
                 <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Édits auto</b><span class="d">Bac à sable : écriture dans le dossier de l’agent, réseau coupé. git add et git commit acceptés d’office dans son worktree ; le reste demande.</span></span></button>
                 <button class="mi danger" role="menuitemradio" aria-checked="false"><span class="ml"><b>Bypass</b><span class="d">Codex ne demande rien et sort du bac à sable : tout le disque et le réseau.</span></span></button>
                 <div class="foot-note">Les cinq modes de Claude Code, aux mêmes places ; sur Codex, chacun dit son bac à sable. <kbd>Maj Tab</kbd> passe au suivant.</div>
+              </div>
+              <!-- Lot 0 bis: OpenCode's modes, at the same places; the one it lacks greyed with why. -->
+              <div class="menu modes" id="mode-menu-oc" role="menu" aria-label="Mode de permission" hidden>
+                <div class="menu-h">Mode · OpenCode</div>
+                <button class="mi" role="menuitemradio" aria-checked="false" aria-disabled="true"><span class="ml"><b>Auto</b><span class="d">OpenCode n’a pas de mode Auto : rien ne décide à ta place.</span></span></button>
+                <button class="mi kb" role="menuitemradio" aria-checked="true"><span class="ml"><b>Demander</b><span class="d">Il change les fichiers du dossier de l’agent sans demander ; chaque commande demande.</span></span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Plan</b><span class="d">Passe par son agent plan, sans rien modifier, et finit sur un plan à approuver.</span></span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><span class="ml"><b>Édits auto</b><span class="d">Comme Demander, et git add et git commit passent aussi ; le reste demande.</span></span></button>
+                <button class="mi danger" role="menuitemradio" aria-checked="false"><span class="ml"><b>Bypass</b><span class="d">OpenCode ne demande rien, sur tout le disque.</span></span></button>
+                <div class="foot-note">Pas de bac à sable : ce sont ses règles de permission qui suivent le mode.</div>
+              </div>
+              <!-- Lot 0 bis: a long list of models (Copilot CLI): search, favourites first, a group per publisher, the cost of each. -->
+              <div class="menu models" id="model-menu" role="menu" aria-label="Modèle" hidden>
+                <div class="msearch"><svg class="i s14"><use href="#i-search" /></svg><span>Rechercher un modèle</span></div>
+                <div class="menu-h">Favoris</div>
+                <button class="mi kb" role="menuitemradio" aria-checked="true"><svg class="i star on"><use href="#i-star" /></svg><span class="ml"><b>GPT-6-Luna</b></span><span class="mult">×1</span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star on"><use href="#i-star" /></svg><span class="ml"><b>Claude Sonnet 5.5</b></span><span class="mult">×1</span></button>
+                <div class="menu-h">GPT</div>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star"><use href="#i-star" /></svg><span class="ml"><b>GPT-6</b></span><span class="mult">×3</span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star"><use href="#i-star" /></svg><span class="ml"><b>GPT-5 mini</b></span><span class="mult">×0</span></button>
+                <div class="menu-h">Claude</div>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star"><use href="#i-star" /></svg><span class="ml"><b>Claude Opus 5.5</b></span><span class="mult">×10</span></button>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star"><use href="#i-star" /></svg><span class="ml"><b>Claude Haiku 5.5</b></span><span class="mult">×0,33</span></button>
+                <div class="menu-h">Gemini</div>
+                <button class="mi" role="menuitemradio" aria-checked="false"><svg class="i star"><use href="#i-star" /></svg><span class="ml"><b>Gemini 3 Pro</b></span><span class="mult">×1</span></button>
+                <div class="foot-note">×N : les crédits d’IA d’un appel, comparés au modèle de base. Le modèle change tout de suite, même en plein tour.</div>
               </div>
               <div class="c-bar">
                 <button class="chip" id="chip-model"><span class="cap">Modèle</span> <b>Sonnet 5.5</b><svg class="i cv"><use href="#i-down" /></svg></button>
@@ -6577,6 +7436,7 @@
                 <button class="switch" role="switch" aria-checked="true" id="autopilot">Pilote auto <span class="knob"></span></button>
               </div>
             </div>
+            <div class="kb-banner" id="yml-banner" hidden><svg class="i s14"><use href="#i-shield" /></svg><span class="grow">Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.</span><button class="btn">Les lire</button></div>
             <div class="board">
               <div class="col" style="--tone: var(--code-dim)">
                 <div class="col-h">
@@ -6867,22 +7727,50 @@
           <section class="view" id="view-tterm" aria-label="Vue Codex">
             <div class="head">
               <div class="h-title">
-                <div class="row"><h1>search-index</h1><span class="pill" style="--tone: var(--wait)"><i></i>Question</span><span class="emark lg">Codex</span></div>
-                <div class="crumbs"><span class="proj-name">demo-api</span><span>/</span><span class="mono">escouade/search-index</span></div>
+                <div class="row"><h1 id="tt-name">search-index</h1><span class="pill" id="tt-pill" style="--tone: var(--wait)"><i></i>Question</span><span class="emark lg" id="tt-mark">Codex</span></div>
+                <div class="crumbs"><span class="proj-name">demo-api</span><span>/</span><span class="mono" id="tt-branch">escouade/search-index</span></div>
               </div>
               <div class="actions">
                 <div class="vseg" role="group" aria-label="Vue de l’agent">
                   <button aria-pressed="false" aria-label="Vue Escouade"><svg class="i s14"><use href="#i-agents" /></svg><span class="lbl">Escouade</span></button>
-                  <button aria-pressed="true" aria-label="Vue Codex : l’interface du harness dans un terminal"><svg class="i s14"><use href="#i-term" /></svg><span class="lbl">Codex</span></button>
+                  <button aria-pressed="true" aria-label="Vue Codex : l’interface du harness dans un terminal"><svg class="i s14"><use href="#i-term" /></svg><span class="lbl" id="tt-seg">Codex</span></button>
                 </div>
                 <button class="btn icon" aria-label="Actions de l’agent"><svg class="i s14"><use href="#i-more" /></svg></button>
               </div>
             </div>
-            <div class="trust" role="status">
+            <div class="trust" role="status" id="tt-band">
               <svg class="i s14"><use href="#i-shield" /></svg>
               <span class="grow"><b>Codex demande s’il peut faire confiance au dossier de l’agent.</b> Réponds dans le terminal : sans confiance, il s’arrête. Escouade a déjà approuvé ses hooks pour ce seul process.</span>
             </div>
-            <pre class="term" style="margin-top: 10px"><span class="b">&gt;_ OpenAI Codex</span> <span class="dim">(v0.163.0)</span>
+            <div class="back-hint" id="tt-keep" hidden style="width: auto; margin: 10px 0 0">
+              <svg class="i s14" style="color: var(--run)"><use href="#i-check-c" /></svg>
+              <span class="grow"><b>Escouade garde le fil</b> : la conversation, la carte, les notifications et le coût restent à jour pendant que tu travailles ici. Revenir à la vue Escouade n’arrête que l’interface.</span>
+            </div>
+            <pre class="term" id="tt-oc" hidden style="margin-top: 10px"><span class="b">opencode</span> <span class="dim">1.19.3 · session migration-sqlite</span>
+
+<span class="dim">┃</span> <span class="b">Passe le stockage des sessions de fichiers JSON à SQLite.</span>
+
+<span class="dim">┃</span> Read   src/sessions/store.ts
+<span class="dim">┃</span> Write  src/sessions/sqlite.ts  <span class="cy">+88</span>
+<span class="dim">┃</span> Bash   npm test -- sessions  <span class="cy">14 passed</span>
+
+<span class="sel">△ Permission required: git add src/sessions/sqlite.ts src/sessions/migrate.ts</span>
+  <span class="b">Allow once</span>   Allow always (git add *)   Reject
+
+<span class="dim">qwen3-coder:30b (Ollama) · build · ctrl+p commands</span></pre>
+            <pre class="term" id="tt-cp" hidden style="margin-top: 10px"><span class="b">GitHub Copilot CLI</span> <span class="dim">1.0.98 · GPT-6-Luna (×1)</span>
+
+<span class="b">Confirm folder trust</span>
+<span class="cy">C:\Users\guill\dev\demo-api\.claude\worktrees\revue-deps</span>
+
+Copilot may read files in this folder. Only trust folders you trust.
+
+<span class="sel">› 1. Yes</span>
+  2. Yes, and remember this folder for future sessions
+  3. No (Esc)
+
+<span class="dim">Use ↑↓ to choose, Enter to confirm</span></pre>
+            <pre class="term" id="tt-codex" style="margin-top: 10px"><span class="b">&gt;_ OpenAI Codex</span> <span class="dim">(v0.163.0)</span>
 
 <span class="dim">model:</span>     gpt-5.5-codex   <span class="dim">/model to change</span>
 <span class="dim">directory:</span> ~\dev\demo-api\.claude\worktrees\search-index
@@ -6902,11 +7790,17 @@ to work in this folder without asking for approval.
           <section class="view" id="view-welcome" aria-label="Bienvenue">
             <div class="welcome">
               <div class="wbox">
-                <h1>Aucun harness trouvé</h1>
+                <h1 id="wl-title">Aucun harness trouvé</h1>
                 <p>Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans <b style="color: var(--soft)">Réglages › Harness</b> s’il n’est pas dans le PATH.</p>
-                <div class="hinst">
+                <div class="hinst" id="wl-accounts" hidden>
+                  <div><b>Claude Code</b><span class="found" style="margin: 0"><svg class="i s14"><use href="#i-check" /></svg>Connecté sur cette machine · moi@exemple.dev</span><button class="btn primary">Ajouter un compte…</button></div>
+                  <div><b>Codex</b><span class="found" style="margin: 0; color: var(--muted)">Installé, pas connecté</span><button class="btn">Ajouter un compte…</button></div>
+                </div>
+                <div class="hinst" id="wl-install">
                   <div><b>Claude Code</b><pre class="cmd">npm install -g @anthropic-ai/claude-code</pre><button class="btn icon" aria-label="Copier la commande de Claude Code"><svg class="i s14"><use href="#i-import" /></svg></button></div>
                   <div><b>Codex</b><pre class="cmd">npm install -g @openai/codex</pre><button class="btn icon" aria-label="Copier la commande de Codex"><svg class="i s14"><use href="#i-import" /></svg></button></div>
+                  <div><b>OpenCode</b><pre class="cmd">npm install -g opencode-ai</pre><button class="btn icon" aria-label="Copier la commande d’OpenCode"><svg class="i s14"><use href="#i-import" /></svg></button></div>
+                  <div><b>Copilot CLI</b><pre class="cmd">npm install -g @github/copilot</pre><button class="btn icon" aria-label="Copier la commande de Copilot CLI"><svg class="i s14"><use href="#i-import" /></svg></button></div>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center">
                   <button class="btn primary"><svg class="i s14"><use href="#i-restart" /></svg>Chercher à nouveau</button>
@@ -7131,10 +8025,13 @@ to work in this folder without asking for approval.
         <button class="sb-item sb-upd" id="sb-upd" hidden><svg class="i s14"><use href="#i-download" /></svg>Mise à jour 1.8.0 prête · <b>Redémarrer</b></button>
         <!-- One group per harness that runs agents: the current account's windows; a click opens every account's. -->
         <button class="sb-q" id="sb-q" aria-haspopup="dialog" aria-expanded="false" aria-label="Quotas par compte. Claude Code, Principal : 5 heures 22 %, 7 jours 36 %. Codex, Principal : 5 heures 8 %, 7 jours 12 %.">
-          <span class="hn">Claude</span>5 h<span class="meter"><i style="width: 22%"></i></span><b class="pct2">22 %</b>7 j<span class="meter"><i style="width: 36%"></i></span><b class="pct2">36 %</b>
+          <span class="hn">Claude</span>5 h<span class="meter"><i style="width: 22%"></i></span><b class="pct2">22 %</b>7 j<span class="meter"><i style="width: 36%"></i></span><b class="pct2">36 %</b><span class="pj amber" data-bis hidden>→ 86 %</span><span class="sb-over" id="sb-over" hidden>usage supplémentaire</span>
         </button>
         <button class="sb-q" tabindex="-1" aria-hidden="true">
           <span class="hn">Codex</span>5 h<span class="meter"><i style="width: 8%"></i></span><b class="pct2">8 %</b>7 j<span class="meter"><i style="width: 12%"></i></span><b class="pct2">12 %</b>
+        </button>
+        <button class="sb-q" tabindex="-1" aria-hidden="true" data-bis hidden>
+          <span class="hn">OpenCode</span><b>0,42 $</b> / 5 $
         </button>
         <span class="sb-item">Aujourd’hui <b>≈ 4,38 $</b></span>
         <span class="sb-sep"></span>
@@ -7229,23 +8126,24 @@ to work in this folder without asking for approval.
       <div class="qa">
         <span class="qn">Principal <span class="cur">compte en cours</span></span><span class="qt">Aujourd’hui : 3,48 $</span>
         <div class="qw">
-          <span class="w"><span class="top"><span>5 h</span><b>22 %</b></span><span class="meter"><i style="width: 22%"></i></span><span>reset 2 h 14</span></span>
-          <span class="w"><span class="top"><span>7 j</span><b>36 %</b></span><span class="meter"><i style="width: 36%"></i></span><span>reset 3 j</span></span>
+          <span class="w"><span class="top"><span>5 h</span><b>22 %<span class="pj" data-bis hidden>→ 41 %</span></b></span><span class="meter"><i style="width: 22%"></i></span><span>reset 2 h 14</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>36 %<span class="pj amber" data-bis hidden>→ 86 %</span></b></span><span class="meter"><i style="width: 36%"></i></span><span>reset 3 j</span></span>
         </div>
       </div>
       <div class="qa">
         <span class="qn">Client Acme <span class="over">au-delà du seuil de pause</span></span><span class="qt">Aujourd’hui : 0,00 $</span>
         <div class="qw">
-          <span class="w"><span class="top"><span>5 h</span><b>91 %</b></span><span class="meter hot"><i style="width: 91%"></i></span><span>reset 1 h 02</span></span>
-          <span class="w"><span class="top"><span>7 j</span><b>48 %</b></span><span class="meter"><i style="width: 48%"></i></span><span>reset 5 j</span></span>
+          <span class="w"><span class="top"><span>5 h</span><b>91 %<span class="pj red" data-bis hidden>→ 118 %</span></b></span><span class="meter hot"><i style="width: 91%"></i></span><span>reset 1 h 02</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>48 %<span class="pj" data-bis hidden>→ 71 %</span></b></span><span class="meter"><i style="width: 48%"></i></span><span>reset 5 j</span></span>
         </div>
+        <p class="bill" id="q-bill" hidden><svg class="i s14"><use href="#i-info" /></svg><span>Client Acme : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, les nouveaux partent sur un autre compte.</span></p>
       </div>
       <h3><span class="emark">Codex</span>Comptes Codex</h3>
       <div class="qa">
         <span class="qn">Principal <span class="cur">compte en cours</span></span><span class="qt">Aujourd’hui : ≈ 0,90 $ <span class="est">estimé</span></span>
         <div class="qw">
-          <span class="w"><span class="top"><span>5 h</span><b>8 %</b></span><span class="meter"><i style="width: 8%"></i></span><span>reset 4 h 40</span></span>
-          <span class="w"><span class="top"><span>7 j</span><b>12 %</b></span><span class="meter"><i style="width: 12%"></i></span><span>reset 6 j</span></span>
+          <span class="w"><span class="top"><span>5 h</span><b>8 %<span class="pj" data-bis hidden>→ 19 %</span></b></span><span class="meter"><i style="width: 8%"></i></span><span>reset 4 h 40</span></span>
+          <span class="w"><span class="top"><span>7 j</span><b>12 %<span class="pj" data-bis hidden>→ 30 %</span></b></span><span class="meter"><i style="width: 12%"></i></span><span>reset 6 j</span></span>
         </div>
       </div>
       <div class="qa">
@@ -7254,21 +8152,45 @@ to work in this folder without asking for approval.
           <span class="w"><span class="top"><span>30 j</span><b>64 %</b></span><span class="meter"><i style="width: 64%"></i></span><span>reset 11 j</span></span>
         </div>
       </div>
+      <div data-bis hidden id="q-more">
+        <h3><span class="emark">OpenCode</span>Comptes OpenCode</h3>
+        <div class="qa">
+          <span class="qn">Principal <span class="cur">compte en cours</span></span><span class="qt">Aujourd’hui : 0,42 $</span>
+          <div class="qw">
+            <span class="w" style="grid-column: span 2"><span class="top"><span>Budget par jour</span><b>0,42 $ / 5,00 $<span class="pj">→ 1,10 $</span></b></span><span class="meter"><i style="width: 8%"></i></span><span>Pas de quota : seul le coût de ses tours compte. Remise à zéro à minuit.</span></span>
+          </div>
+        </div>
+        <h3><span class="emark">Copilot</span>Comptes Copilot CLI</h3>
+        <div class="qa">
+          <span class="qn">Travail <span class="mono" style="color: var(--muted); font-weight: 450; font-size: 12px">@guill-acme</span></span><span class="qt">Aujourd’hui : 1,14 $</span>
+          <div class="qw">
+            <span class="w"><span class="top"><span>crédits</span><b>38 %<span class="pj amber" data-bis hidden>→ 92 %</span></b></span><span class="meter"><i style="width: 38%"></i></span><span>reset le 01/11</span></span>
+          </div>
+        </div>
+      </div>
       <p class="qnote">Le coût de Codex est estimé d’après ses tokens et les tarifs publics d’OpenAI ; celui de Claude Code est celui que Claude Code donne à la fin de chaque tour.</p>
+      <p class="qnote" data-bis hidden>Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %. La barre d’état ne montre que celles qui passent 80 %.</p>
     </div>
 
     <!-- The agent's menu: right click on its card, or « … » in its header. -->
     <div class="menu agent-menu" id="agent-menu" role="menu" aria-label="Actions de refacto-auth" hidden>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Renommer</b></span><kbd>F2</kbd></button>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-term" /></svg><span class="ml"><b>Vue Claude Code</b><span class="d">L’interface de Claude Code elle-même, dans un terminal</span></span></button>
-      <button class="mi no-mark kb" role="menuitem" aria-haspopup="menu"><svg class="i s14 ic"><use href="#i-swap" /></svg><span class="ml"><b>Continuer sur un autre harness</b><span class="d">Codex · par un dossier de passation</span></span><svg class="i s14 ic"><use href="#i-right" /></svg></button>
+      <button class="mi no-mark kb" role="menuitem" aria-haspopup="menu"><svg class="i s14 ic"><use href="#i-swap" /></svg><span class="ml"><b>Continuer sur un autre harness</b><span class="d">Codex, OpenCode · par un dossier de passation</span></span><svg class="i s14 ic"><use href="#i-right" /></svg></button>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-remote" /></svg><span class="ml"><b>Désactiver le remote control</b><span class="d">Connecté depuis claude.ai · Claude Code seulement</span></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-play" /></svg><span class="ml"><b>Préparer le lancement</b></span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-pr" /></svg><span class="ml"><b>Ouvrir une PR…</b><span class="d">Pousse escouade/refacto-auth, titre et description proposés</span></span></button>
+      <button class="mi no-mark" role="menuitem" aria-haspopup="menu"><svg class="i s14 ic"><use href="#i-play" /></svg><span class="ml"><b>Lancer…</b><span class="d">Une commande de lancement, dans son worktree</span></span><svg class="i s14 ic"><use href="#i-right" /></svg></button>
       <div class="menu-sep"></div>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Dupliquer la conversation</b></span></button>
       <button class="mi no-mark danger" role="menuitem"><svg class="i s14 ic"><use href="#i-trash" /></svg><span class="ml"><b>Supprimer l’agent…</b></span></button>
     </div>
-    <div class="menu sub-menu" id="sub-menu" role="menu" aria-label="Continuer sur un autre harness" hidden>
+    <div class="menu sub-menu wide4" id="sub-menu" role="menu" aria-label="Continuer sur un autre harness" hidden>
+      <div class="menu-h">Dans l’ordre des harness</div>
       <button class="mi kb" role="menuitem"><span class="emark">Codex</span><span class="ml"><b>Continuer sur Codex</b><span class="d">Principal · 5 h 8 % · GPT-5.5-Codex. Le dossier de passation part en premier message.</span></span></button>
+      <button class="mi" role="menuitem"><span class="emark">OpenCode</span><span class="ml"><b>Continuer sur OpenCode</b><span class="d">Principal · pas de quota · 0,42 $ sur 5,00 $ aujourd’hui · qwen3-coder:30b</span></span></button>
+      <button class="mi off" role="menuitem" aria-disabled="true"><span class="emark">Copilot</span><span class="ml"><b>Continuer sur Copilot CLI</b><span class="d none">Aucun compte actif de Copilot CLI ne sert demo-api</span></span></button>
       <div class="foot-note">Pendant un tour : « Attends la fin du tour ». L’agent ne revient jamais seul sur Claude Code.</div>
     </div>
 
@@ -7283,8 +8205,13 @@ to work in this folder without asking for approval.
         <span class="phase" id="vo-phase" role="status"><span class="dots3" aria-hidden="true"><i></i><i></i><i></i></span>pagination-users te répond</span>
       </div>
       <div class="caps" aria-live="polite">
-        <p class="you" style="margin: 0"><b>Toi</b>Et si le client demande deux cents par page ?</p>
+        <p class="you" style="margin: 0" id="vo-you"><b>Toi</b>Et si le client demande deux cents par page ?</p>
         <p class="ag" style="margin: 0" id="vo-said"><b>pagination-users</b>La limite est plafonnée à cent : au-delà, la route renvoie cent éléments et un curseur. <span class="tail">Je peux renvoyer une erreur à la place si tu préfères.</span></p>
+        <div class="vo-q" id="vo-q" hidden>
+          <span class="step">Question 1 sur 2</span>
+          <div class="chs" role="list" aria-label="Choix de la question"><span class="ch" role="listitem"><kbd>1</kbd>Plafonner à cent</span><span class="ch" role="listitem"><kbd>2</kbd>Renvoyer une erreur</span></div>
+          <span class="other">Dis le choix, son numéro, ou ta propre réponse</span>
+        </div>
         <div class="vo-opts" id="vo-opts" hidden><span class="opt-r" style="display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2)">« Le premier » · Plafonner</span><span class="opt-r" style="display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2)">« Le deuxième » · Une erreur</span></div>
       </div>
       <div class="vo-bar">
@@ -7298,25 +8225,35 @@ to work in this folder without asking for approval.
     <div class="scrim" id="acct-modal" hidden>
       <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="acct-title">
         <div class="m-head">
-          <h2 id="acct-title">Ajouter un compte Codex</h2>
+          <h2 id="acct-title">Ajouter un compte <span id="acct-h">Codex</span></h2>
           <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
         </div>
         <div class="m-body">
           <div class="fgrid" style="grid-template-columns: 1.2fr 1fr">
             <div class="fld">
               <span class="lb">Harness</span>
-              <div class="seg inline" role="radiogroup" aria-label="Harness" style="display: inline-grid; grid-template-columns: 1fr 1fr">
-                <button role="radio" aria-selected="false">Claude Code</button><button role="radio" aria-selected="true">Codex</button>
+              <div class="seg inline" id="acct-seg" role="radiogroup" aria-label="Harness" style="display: inline-grid; grid-template-columns: repeat(4, auto)">
+                <button role="radio" aria-selected="false">Claude Code</button><button role="radio" aria-selected="true">Codex</button><button role="radio" aria-selected="false">OpenCode</button><button role="radio" aria-selected="false">Copilot CLI</button>
               </div>
             </div>
-            <div class="fld"><label for="acct-name">Nom</label><input class="inp" id="acct-name" value="Équipe" /></div>
+            <div class="fld acct-new"><label for="acct-name">Nom</label><input class="inp" id="acct-name" value="Équipe" /></div>
           </div>
           <div class="fld">
-            <span class="lb">Partager avec Principal</span>
+            <span class="lb">Compte</span>
+            <div class="radios" role="radiogroup" aria-label="Compte">
+              <button class="radio" role="radio" aria-checked="false" id="acct-r-machine" aria-disabled="true"><i class="dot"></i><span><b>Le compte de la machine</b><span id="acct-machine-d">Codex est connecté sur cette machine · ChatGPT Plus · Déjà ajouté</span></span></button>
+              <button class="radio" role="radio" aria-checked="true" id="acct-r-new"><i class="dot"></i><span><b>Un nouveau compte</b><span>Un dossier à lui sous ~/.escouade, et sa propre connexion.</span></span></button>
+            </div>
+          </div>
+          <div class="fld acct-machine" hidden>
+            <span class="help">Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations (~/.copilot). Le retirer plus tard ne déconnecte pas la machine.</span>
+          </div>
+          <div class="fld acct-new">
+            <span class="lb">Partager avec le compte de la machine</span>
             <div class="chips"><button class="chip-t" aria-pressed="true">config.toml</button><button class="chip-t" aria-pressed="true">AGENTS.md</button><button class="chip-t" aria-pressed="true">skills</button><button class="chip-t" aria-pressed="false">prompts</button><button class="chip-t" aria-pressed="false">règles</button></div>
             <span class="help">La connexion (auth.json) n’est jamais copiée : chaque compte a la sienne (son jeton change à chaque renouvellement).</span>
           </div>
-          <div class="fld">
+          <div class="fld acct-new">
             <span class="lb">Connexion</span>
             <pre class="mini-term"><span class="dim">$ codex login</span>
 Starting local login server on <span class="cy">http://localhost:1455</span>.
@@ -7328,9 +8265,10 @@ If your browser did not open, navigate to this URL to authenticate:
           </div>
         </div>
         <div class="m-foot">
-          <button class="btn" style="margin-right: auto"><svg class="i s14"><use href="#i-restart" /></svg>Relancer</button>
+          <button class="btn acct-new" style="margin-right: auto"><svg class="i s14"><use href="#i-restart" /></svg>Relancer</button>
           <button class="btn" data-close-any>Annuler</button>
-          <button class="btn primary" disabled style="opacity: 0.45">Terminé</button>
+          <button class="btn primary acct-new" disabled style="opacity: 0.45">Terminé</button>
+          <button class="btn primary acct-machine" hidden>Ajouter ce compte</button>
         </div>
       </div>
     </div>
@@ -7391,6 +8329,20 @@ If your browser did not open, navigate to this URL to authenticate:
             <li><span class="k">7</span><span>Intégrations<span class="tag">facultatif</span></span></li>
             <li id="wr-sum"><span class="k">8</span>Récapitulatif</li>
           </ol>
+          <div class="m-body" id="wiz-start" hidden>
+            <h3 style="margin: 0; font-size: 15px">Point de départ</h3>
+            <p class="wiz-lead">D’où viennent les réglages de billing-service : chaque étape suivante se revoit, et se passe.</p>
+            <div class="radios" role="radiogroup" aria-label="Point de départ">
+              <button class="radio" role="radio" aria-checked="false"><i class="dot"></i><span><b>Réglages de .escouade.yml</b><span>Réglages lus dans .escouade.yml, le fichier partagé du dépôt : 6 réglages. Ses commandes attendront ton accord une fois le projet créé.</span></span></button>
+              <button class="radio" role="radio" aria-checked="true"><i class="dot"></i><span><b>Copier la configuration d’un projet</b><span>Worktrees, lancement, Git, Kanban et compte, vérifiés dans ce dépôt. Les intégrations et les tickets ne sont pas copiés.</span></span></button>
+              <div class="sub-opts" style="display: grid; gap: 8px">
+                <div class="chips"><button class="chip-t" aria-pressed="true">demo-api</button><button class="chip-t" aria-pressed="false">studio-web</button><button class="chip-t" aria-pressed="false">mobile-app</button></div>
+                <span class="help"><svg class="i s14" style="vertical-align: -3px; margin-right: 4px"><use href="#i-lock" /></svg>Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.</span>
+              </div>
+              <button class="radio" role="radio" aria-checked="false"><i class="dot"></i><span><b>Configuration recommandée</b><span>Un worktree par agent, merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l’agent résout les conflits.</span></span></button>
+              <button class="radio" role="radio" aria-checked="false"><i class="dot"></i><span><b>Partir de zéro</b><span>Les valeurs par défaut d’Escouade, à régler dans les étapes suivantes.</span></span></button>
+            </div>
+          </div>
           <div class="m-body" id="wiz-launch">
             <h3 style="margin: 0; font-size: 15px">Lancement</h3>
             <p class="wiz-lead">Les commandes qui lancent le projet, chacune dans son terminal. Copiées de <b style="color: var(--soft)">demo-api</b> et vérifiées dans ce dépôt.</p>
@@ -7426,6 +8378,64 @@ If your browser did not open, navigate to this URL to authenticate:
           <button class="btn primary" id="wiz-next">Suivant</button>
         </div>
       </div>
+    </div>
+
+    <!-- Lot 0 bis: « Ouvrir une PR » of an agent (ESC-64): its branch pushed, a title and a description to read first. -->
+    <div class="scrim" id="pr-modal" hidden>
+      <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="pr-title">
+        <div class="m-head">
+          <svg class="i" style="color: var(--muted)"><use href="#i-pr" /></svg><h2 id="pr-title">Ouvrir une PR sur GitHub</h2>
+          <button class="icon-btn" data-close-any aria-label="Fermer"><svg class="i s14"><use href="#i-close" /></svg></button>
+        </div>
+        <div class="m-body">
+          <span class="scope">pagination-users · <span class="mono">escouade/pagination-users</span> → <span class="mono">main</span></span>
+          <div class="fld"><label for="pr-t">Titre</label><input class="inp" id="pr-t" value="feat(users): pagination par curseur de /users" /></div>
+          <div class="fld">
+            <span class="lb">Description</span>
+            <div class="ta">## Ce qui change
+- /users accepte cursor et limit (50 par défaut, 100 au plus)
+- la réponse devient { users, next } ; sans cursor, l’ancien format reste servi
+
+## Tests
+- 42 tests verts, dont le dernier curseur et une limite au-delà de cent</div>
+          </div>
+          <div class="fgrid" style="grid-template-columns: 1fr 1fr; align-items: end">
+            <div class="fld"><span class="lb">Branche cible</span><button class="select" style="justify-self: start"><b class="mono">main</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+            <button class="cbline"><span class="cb" role="checkbox" aria-checked="false"><svg class="i"><use href="#i-check" /></svg></span>En brouillon</button>
+          </div>
+          <p class="notice"><svg class="i"><use href="#i-info" /></svg><span>2 fichiers non commités du worktree ne seront pas dans la PR.</span></p>
+        </div>
+        <div class="m-foot">
+          <button class="btn" style="margin-right: auto"><svg class="i s14"><use href="#i-sparkle" /></svg>Proposer à nouveau</button>
+          <button class="btn" data-close-any>Annuler</button>
+          <button class="btn primary"><svg class="i s14"><use href="#i-push" /></svg>Pousser et ouvrir</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lot 0 bis: a launch command started where it already runs (1.8.0): the two would fight over its port. -->
+    <div class="scrim" id="run-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="run-title" style="width: min(540px, 100vw - 48px)">
+        <div class="m-head"><svg class="i" style="color: var(--wait)"><use href="#i-play" /></svg><h2 id="run-title">« Front » tourne déjà</h2></div>
+        <div class="m-body">
+          <p style="margin: 0; color: var(--soft)">Elle tourne déjà dans le worktree de refacto-auth. Les deux risquent de se disputer le même port ; dans un worktree, elle reçoit ESCOUADE_PORT_BASE et ESCOUADE_PORT_END, les ports réservés à son agent, si elle s’en sert.</p>
+        </div>
+        <div class="m-foot"><button class="btn" data-close-any>Annuler</button><button class="btn">Lancer quand même</button><button class="btn primary">Arrêter l’autre et lancer</button></div>
+      </div>
+    </div>
+
+    <!-- Lot 0 bis: where a launch command runs, from its ▶ once an agent of the project has a worktree. -->
+    <div class="menu run-menu" id="run-menu" role="menu" aria-label="Lancer « Worker »" hidden style="position: fixed">
+      <div class="menu-h">Lancer « Worker »</div>
+      <button class="mi no-mark kb" role="menuitem"><svg class="i s14 ic"><use href="#i-folder" /></svg><span class="ml"><b>Dans le projet</b><span class="d">~/dev/demo-api/api</span></span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Dans le worktree de refacto-auth</b><span class="d">Ses ports réservés, son log sous son nom</span></span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Dans le worktree de pagination-users</b><span class="d">Ses ports réservés, son log sous son nom</span></span></button>
+    </div>
+
+    <!-- Lot 0 bis: the tooltip of a pull request: its state, its CI, its reviews. -->
+    <div class="ptip" id="tip-pr" role="tooltip" hidden>
+      <b>PR #43 · Pagination par curseur de /users</b>
+      <span>ouverte · CI verte · 1 approbation · changements demandés · 2 fils ouverts</span>
     </div>
 
     <!-- The first start's question: the anonymous usage statistics. -->
@@ -7509,6 +8519,21 @@ If your browser did not open, navigate to this URL to authenticate:
                     <div class="seg inline" id="theme-pick" role="radiogroup" aria-label="Thème"><button role="radio" data-theme-choice="system" aria-selected="true">Système</button><button role="radio" data-theme-choice="light" aria-selected="false">Clair</button><button role="radio" data-theme-choice="dark" aria-selected="false">Sombre</button></div>
                   </div>
                 </div>
+                <div class="sr">
+                  <div class="lab"><b>Zoom de l’interface</b><span>Le texte, les espacements et les icônes de toute l’application grandissent ensemble, terminaux et éditeur compris. Aussi au clavier : Ctrl + pour agrandir, Ctrl − pour réduire, Ctrl 0 pour revenir à 100 %.</span></div>
+                  <div class="ctl"><div class="seg inline zoom" role="radiogroup" aria-label="Zoom de l’interface"><button role="radio" aria-selected="false">90 %</button><button role="radio" aria-selected="true">100 %</button><button role="radio" aria-selected="false">110 %</button><button role="radio" aria-selected="false">125 %</button><button role="radio" aria-selected="false" aria-disabled="true" title="Trop grand pour la taille de la fenêtre">150 %</button></div></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Taille du texte des terminaux et de l’éditeur</b><span>De 9 à 24 pixels, avant le zoom de l’interface, qui s’y ajoute.</span></div>
+                  <div class="ctl"><input class="inp w-num" value="12,5" aria-label="Taille du texte des terminaux" /><input class="inp w-num" value="13" aria-label="Taille du texte de l’éditeur" /><span class="hint">px</span></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Textes rédigés</h2>
+                <div class="sr">
+                  <div class="lab"><b>Modèle des textes rédigés</b><span>Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness installés sont proposés.</span></div>
+                  <div class="ctl"><button class="select"><b>Claude Haiku</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                </div>
               </section>
               <section class="sg">
                 <h2>Langue</h2>
@@ -7518,7 +8543,7 @@ If your browser did not open, navigate to this URL to authenticate:
                 </div>
                 <div class="sr">
                   <div class="lab">
-                    <b>Langue des textes rédigés par Claude</b>
+                    <b>Langue des textes rédigés par les agents</b>
                     <span>Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub et Linear, consignes données aux agents.</span>
                   </div>
                   <div class="ctl"><button class="select"><b>Comme l’interface (par défaut)</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
@@ -7529,43 +8554,58 @@ If your browser did not open, navigate to this URL to authenticate:
             <!-- Harness: one group per harness (state, executable, defaults, view), then what holds for them all. -->
             <div class="s-pane" data-pane="claude">
               <section class="sg">
-                <div class="hg"><h2>Claude Code</h2><span class="hstate"><i></i>Prêt · 2.1.4, testée avec Escouade</span></div>
+                <div class="hg"><h2>Claude Code</h2><span class="hstate"><i></i>Prêt · 2.1.301, testée avec Escouade (de la 2.1.283 à la 2.1.301)</span></div>
                 <div class="sr">
                   <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\.local\bin\claude.exe</span></div>
                   <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Claude Code" /></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Nouveaux agents</b><span>Modèle, effort et mode de permission par défaut</span></div>
-                  <div class="ctl">
-                    <button class="select"><b>Opus 5.5</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Élevé</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Auto</b><svg class="i s14"><use href="#i-down" /></svg></button>
-                  </div>
+                  <div class="lab"><b>Mettre à jour Claude Code automatiquement</b><span>Escouade lance claude update à son démarrage puis chaque jour, à part de ses agents : leur arrêt ne coupe plus une installation à mi-chemin.</span><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Mis à jour en 2.1.301 (depuis la 2.1.298).</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Mettre à jour Claude Code automatiquement"></button></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Remote control pour tous les agents</b><span>Chaque agent, existant ou nouveau, est joignable depuis claude.ai et l’app Claude, sous le nom « projet · agent ». Un agent à part : clic droit, « Désactiver le remote control ».</span><span class="only"><svg class="i s14"><use href="#i-info" /></svg>Claude Code seulement : Codex n’a pas de remote control.</span></div>
+                  <div class="lab"><b>Remote control pour tous les agents</b><span>Chaque agent, existant ou nouveau, est joignable depuis claude.ai et l’app Claude, sous le nom « projet · agent ». Un agent à part : clic droit, « Désactiver le remote control ».</span><span class="only"><svg class="i s14"><use href="#i-info" /></svg>Claude Code seulement : les autres harness n’ont pas de remote control.</span></div>
                   <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Remote control pour tous les agents"></button></div>
                 </div>
               </section>
               <section class="sg">
-                <div class="hg"><h2>Codex</h2><span class="hstate warn"><i></i>Version non testée · 0.165.0, testée jusqu’à la 0.163</span></div>
+                <div class="hg"><h2>Codex</h2><span class="hstate warn"><i></i>Version non testée · 0.165.0, testée jusqu’à la 0.163.0</span></div>
                 <div class="sr">
-                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd</span></div>
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd</span><span>Plus récente que celles essayées : ce qu’Escouade ne reconnaît pas de son flux est ignoré, sans couper le tour.</span></div>
                   <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Codex" /></div>
-                </div>
-                <div class="sr">
-                  <div class="lab"><b>Nouveaux agents</b><span>Demander : bac à sable, écriture dans le dossier de l’agent, réseau coupé ; ce qui en sort demande.</span></div>
-                  <div class="ctl">
-                    <button class="select"><b>GPT-5.5-Codex</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Moyen</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Demander</b><svg class="i s14"><use href="#i-down" /></svg></button>
-                  </div>
                 </div>
                 <div class="sr">
                   <div class="lab"><b>Coût</b><span>Estimé d’après les tokens et les tarifs publics d’OpenAI : Codex ne donne pas le coût de ses tours. Il est écrit « ≈ » partout.</span></div>
                   <div class="ctl"><span class="hint">Pas de PDF joint · pas de tâches de fond</span></div>
                 </div>
               </section>
+              <section class="sg" id="sg-opencode">
+                <div class="hg"><h2>OpenCode</h2><span class="hstate"><i></i>Prêt · 1.19.3, testée avec Escouade</span></div>
+                <div class="sr">
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\opencode.cmd</span></div>
+                  <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable d’OpenCode" /></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Modèles</b><span>Ceux des fournisseurs connectés à OpenCode. Les favoris (★) viennent en premier dans le menu du composer, puis les autres par fournisseur.</span></div>
+                  <div class="ctl"><div class="fav-chips"><span class="chip-t" aria-pressed="true">★ qwen3-coder:30b · Ollama</span><span class="chip-t" aria-pressed="true">★ claude-sonnet-5-5 · Anthropic</span><span class="chip-t" aria-pressed="false">gpt-6-luna · OpenAI</span><span class="chip-t" aria-pressed="false">+ 41</span></div></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Ni bac à sable ni quota</b><span>Ses règles de permission suivent le mode, sans mode Auto. Son coût est celui de ses fournisseurs (rien avec un modèle local) : un budget par jour se règle dans Comptes.</span></div>
+                  <div class="ctl"><span class="hint">Vue OpenCode : Escouade garde le fil</span></div>
+                </div>
+              </section>
+              <section class="sg" id="sg-copilot">
+                <div class="hg"><h2>Copilot CLI</h2><span class="hstate bad"><i></i>Trop ancienne · 1.0.91, il faut la 1.0.98 ou plus</span></div>
+                <div class="sr">
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\copilot.cmd</span><span class="warn">Ses agents ne démarrent pas, et leur conversation le dit. Mets-le à jour :</span><span class="cmdline"><pre>npm install -g @github/copilot</pre><button class="btn icon" aria-label="Copier la commande"><svg class="i s14"><use href="#i-import" /></svg></button></span></div>
+                  <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Copilot CLI" /></div>
+                </div>
+              </section>
               <section class="sg">
                 <h2>Tous les harness</h2>
+                <p class="note">Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes, où chaque compte se connecte.</p>
                 <div class="sr">
-                  <div class="lab"><b>Vue des nouveaux agents</b><span>Terminal du harness : l’interface de Claude Code ou de Codex elle-même. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.</span></div>
+                  <div class="lab"><b>Vue des nouveaux agents</b><span>Terminal du harness : l’interface du harness elle-même, dans un terminal. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.</span></div>
                   <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Vue des nouveaux agents"><button role="radio" aria-selected="true">Escouade</button><button role="radio" aria-selected="false">Terminal du harness</button></div></div>
                 </div>
                 <div class="sr">
@@ -7593,6 +8633,8 @@ If your browser did not open, navigate to this URL to authenticate:
                     <span class="quota">5 h <span class="meter"><i style="width: 22%"></i></span><b>22 %</b> · 7 j <span class="meter"><i style="width: 36%"></i></span><b>36 %</b></span>
                     <button class="tgl" role="switch" aria-checked="true" aria-label="Principal actif"></button>
                   </div>
+                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.claude</span><span class="smark"><svg class="i"><use href="#i-user" /></svg>Compte de la machine</span></div>
+                  <div class="l2"><span class="k">Nouveaux agents</span><button class="select"><b>Opus 5.5</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Élevé</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Auto</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
                   <div class="l2"><span class="k">Réservé à</span><div class="chips"><button class="chip-t" aria-pressed="false">Tous les projets</button><button class="chip-t" aria-pressed="true">demo-api</button><button class="chip-t" aria-pressed="true">infra</button><button class="chip-t" aria-pressed="false">mobile-app</button></div></div>
                 </div>
                 <div class="acct">
@@ -7601,6 +8643,7 @@ If your browser did not open, navigate to this URL to authenticate:
                     <span class="quota">5 h <span class="meter hot"><i style="width: 91%"></i></span><b style="color: var(--wait)">91 %</b> · 7 j <span class="meter"><i style="width: 48%"></i></span><b>48 %</b></span>
                     <button class="tgl" role="switch" aria-checked="true" aria-label="Client Acme actif"></button>
                   </div>
+                  <div class="l2"><span class="k">Nouveaux agents</span><button class="select"><b>Celui du harness (Sonnet 5.5)</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Celui du harness</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Demander</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
                   <div class="l2"><span class="k">Réservé à</span><div class="chips"><button class="chip-t" aria-pressed="true">studio-web</button><button class="chip-t" aria-pressed="false">mobile-app (fermé)</button></div></div>
                 </div>
               </section>
@@ -7612,7 +8655,8 @@ If your browser did not open, navigate to this URL to authenticate:
                     <span class="quota">5 h <span class="meter"><i style="width: 8%"></i></span><b>8 %</b> · 7 j <span class="meter"><i style="width: 12%"></i></span><b>12 %</b></span>
                     <button class="tgl" role="switch" aria-checked="true" aria-label="Principal Codex actif"></button>
                   </div>
-                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.codex</span></div>
+                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.codex</span><span class="smark"><svg class="i"><use href="#i-user" /></svg>Compte de la machine</span></div>
+                  <div class="l2"><span class="k">Nouveaux agents</span><button class="select"><b>GPT-5.5-Codex</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Moyen</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Demander</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
                 </div>
                 <div class="acct">
                   <div class="l1">
@@ -7620,14 +8664,37 @@ If your browser did not open, navigate to this URL to authenticate:
                     <span class="quota">30 j <span class="meter"><i style="width: 64%"></i></span><b>64 %</b></span>
                     <button class="tgl" role="switch" aria-checked="false" aria-label="Perso actif"></button>
                   </div>
-                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.escouade/accounts/codex-perso</span><button class="btn" style="margin-left: auto">Se reconnecter…</button></div>
+                  <div class="l2"><span class="k">Dossier</span><span class="mono">~/.escouade/codex/perso</span><button class="btn" style="margin-left: auto">Se reconnecter…</button></div>
                 </div>
               </section>
-              <section class="sg">
+              <section class="sg" id="sg-acct-opencode">
+                <div class="hg"><h2>Comptes OpenCode</h2><button class="btn"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter un compte…</button></div>
+                <div class="acct">
+                  <div class="l1">
+                    <span class="nm">Principal</span><span class="stt"><i></i>Ollama, Anthropic, OpenAI</span>
+                    <span class="quota">Aujourd’hui <b>0,42 $</b></span>
+                    <button class="tgl" role="switch" aria-checked="true" aria-label="Principal OpenCode actif"></button>
+                  </div>
+                  <div class="l2"><span class="k">Nouveaux agents</span><button class="select"><b>qwen3-coder:30b</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Celui du harness</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>Demander</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                  <div class="l2"><span class="k">Budget par jour ($)</span><input class="inp w-num" value="5" aria-label="Budget par jour ($)" /><span class="hint" style="color: var(--muted); font-size: 12px">Atteint, le pilote auto se met en pause jusqu’à minuit. Un modèle local ne coûte rien.</span></div>
+                </div>
+              </section>
+              <section class="sg" id="sg-acct-copilot">
+                <div class="hg"><h2>Comptes Copilot CLI</h2><button class="btn primary"><svg class="i s14"><use href="#i-plus" /></svg>Ajouter un compte Copilot CLI…</button></div>
+                <div class="acct none-acct">
+                  <div class="l1"><span class="nm" style="color: var(--muted)">Aucun compte</span></div>
+                  <div class="l2"><span style="color: var(--muted); font-size: 12.5px">Aucun agent ni ticket ne démarre sur Copilot CLI avant qu’un compte soit ajouté : celui déjà connecté sur cette machine, ou un nouveau.</span></div>
+                </div>
+              </section>
+              <section class="sg" id="sg-quotas">
                 <h2>Quand un quota est épuisé</h2>
-                <p class="note">Les nouveaux agents partent sur le premier compte actif de leur harness sous le seuil de pause. Ce qui suit dit où va un agent arrêté par la limite.</p>
+                <p class="note">Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à ». Ce qui suit dit où va un agent qui les atteint.</p>
                 <div class="sr">
-                  <div class="lab"><b>Reprendre sur un autre compte du même harness</b><span>Agents de ticket ; la session suit. Sinon il attend la remise à zéro.</span></div>
+                  <div class="lab"><b>Changer de compte à</b><span>Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, jamais en plein travail. « À la limite » : rien ne bouge avant.</span></div>
+                  <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Changer de compte à"><button role="radio" aria-selected="false">80 %</button><button role="radio" aria-selected="true">90 %</button><button role="radio" aria-selected="false">95 %</button><button role="radio" aria-selected="false">À la limite</button></div></div>
+                </div>
+                <div class="sr">
+                  <div class="lab"><b>Reprendre sur un autre compte du même harness</b><span>À la limite, pour les agents de ticket ; la session suit. Sinon il attend la remise à zéro.</span></div>
                   <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Reprendre sur un autre compte"></button></div>
                 </div>
                 <div class="sr">
@@ -7635,12 +8702,19 @@ If your browser did not open, navigate to this URL to authenticate:
                   <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Continuer sur le harness suivant"></button></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Ordre des harness</b><span>Après son harness par défaut, un projet passe aux suivants dans cet ordre.</span></div>
-                  <div class="ctl"><span class="chips"><span class="chip-t" aria-pressed="true">1 · Claude Code</span><span class="chip-t" aria-pressed="false">2 · Codex</span></span><button class="icon-btn" aria-label="Monter Codex"><svg class="i s14"><use href="#i-up" /></svg></button></div>
+                  <div class="lab"><b>Ordre des harness</b><span>Après son harness par défaut, un projet passe aux suivants dans cet ordre, s’ils ont un compte actif qui le sert.</span></div>
+                  <div class="ctl"><span class="chips"><span class="chip-t" aria-pressed="true">1 · Claude Code</span><span class="chip-t" aria-pressed="false">2 · Codex</span><span class="chip-t" aria-pressed="false">3 · OpenCode</span><span class="chip-t" aria-pressed="false">4 · Copilot CLI</span></span></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Modèle de passation · Codex</b><span>Le modèle d’un agent qui passe sur Codex.</span></div>
-                  <div class="ctl"><button class="select"><b>Le meilleur (GPT-5.5-Codex)</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                  <div class="lab"><b>Modèle de passation</b><span>Le modèle d’un agent qui passe sur ce harness ; par défaut, son meilleur.</span></div>
+                  <div class="ctl"><button class="select"><b>Codex · GPT-5.5-Codex</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="select"><b>OpenCode · claude-sonnet-5-5</b><svg class="i s14"><use href="#i-down" /></svg></button></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Quotas</h2>
+                <div class="sr">
+                  <div class="lab"><b>Projection des quotas</b><span>Dans la barre d’état, où chaque quota en sera à sa remise à zéro au rythme actuel (« → 86 % ») : orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Projection des quotas"></button></div>
                 </div>
               </section>
             </div>
@@ -7648,25 +8722,42 @@ If your browser did not open, navigate to this URL to authenticate:
             <!-- Voix: dictation, then the conversation; everything on this machine. -->
             <div class="s-pane" data-pane="voice" hidden>
               <section class="sg">
-                <h2>Dictée</h2>
-                <p class="note">Whisper transcrit sur ta machine : rien de ce que tu dis n’est envoyé. Seul le modèle est téléchargé, par le proxy des réglages réseau, et sa somme de contrôle vérifiée.</p>
+                <h2>Transcription</h2>
+                <div class="sr">
+                  <div class="lab"><b>Transcrite par</b><span>Éteint par défaut, « En ligne » envoie le son de chaque dictée au service choisi, avec ta clé : pour une machine trop lente pour Whisper, ou une meilleure qualité.</span></div>
+                  <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Transcrite par"><button role="radio" class="v-local-on" aria-selected="true">Local (Whisper)</button><button role="radio" class="v-online-on" aria-selected="false">En ligne</button></div></div>
+                </div>
+                <p class="note v-local">Whisper transcrit sur ta machine : rien de ce que tu dis n’est envoyé. Seul le modèle est téléchargé, par le proxy des réglages réseau, et sa somme de contrôle vérifiée.</p>
+                <div class="sr v-online" hidden><div class="lab"><b>Service</b><span>Payé à l’usage sur ton compte ElevenLabs.</span></div><div class="ctl"><button class="select"><b>ElevenLabs</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Modèle</b><span>Celui d’ElevenLabs qui transcrit ; par défaut « scribe_v1 ». Liste lue chez ElevenLabs le 22/10.</span></div><div class="ctl"><button class="select"><b>scribe_v2</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Clé d’ElevenLabs</b><span>Une clé par service, la même pour la dictée et pour la voix de la conversation. Gardée dans le trousseau du système, jamais dans les fichiers d’Escouade.</span><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Enregistrée dans le trousseau</span></div><div class="ctl"><button class="btn">Remplacer</button><button class="btn">Effacer la clé</button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Transcription en temps réel</b><span>Le texte s’écrit pendant que tu parles, et la phrase est prête un instant après ton dernier mot. Décochée, chaque phrase part entière, une fois finie.</span><span class="warn">En temps réel, ElevenLabs facture la minute plus cher.</span></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Transcription en temps réel"></button></div></div>
+                <p class="note v-online" hidden>Ce qui part, et où : le son de ce que tu dis, au fil de ta parole, vers ElevenLabs (api.elevenlabs.io), par un flux chiffré, avec ta clé. En conversation vocale, seulement pendant que tu parles. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent.</p>
                 <div class="sr"><div class="lab"><b>Micro utilisé</b></div><div class="ctl"><button class="select"><b>Celui du système (Jabra Evolve2 65)</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
                 <div class="sr"><div class="lab"><b>Raccourci</b><span>Un appui bref commence et un second finit ; maintenu, il dicte tant qu’il est enfoncé. Dans le champ qui a le focus : message, ticket, vue terminal.</span></div><div class="ctl"><kbd style="height: 26px; padding: 0 8px; font-size: 12px">Ctrl Espace</kbd><button class="btn">Changer</button></div></div>
-                <div class="sr"><div class="lab"><b>Langue parlée</b></div><div class="ctl"><button class="select"><b>Celle de l’interface</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
-                <div class="model-list" role="radiogroup" aria-label="Modèle de transcription">
+                <div class="sr v-local"><div class="lab"><b>Langue parlée</b></div><div class="ctl"><button class="select"><b>Celle de l’interface</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="model-list v-local" role="radiogroup" aria-label="Modèle de transcription">
                   <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>base · 142 Mo</b><span>Vitesse 5/5 · qualité 2/5</span></span><span></span><button class="btn">Télécharger</button></div>
                   <div class="mrow"><span class="rd" role="radio" aria-checked="true" tabindex="0"></span><span class="mn"><b>small · 466 Mo</b><span>Vitesse 4/5 · qualité 3/5</span></span><span class="ok"><svg class="i s14"><use href="#i-check" /></svg>Téléchargé</span><button class="btn">Effacer</button></div>
                   <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>large-v3-turbo · 1,6 Go</b><span>Vitesse 2/5 · qualité 5/5</span></span><span class="dl" style="min-width: 150px"><span class="meter"><i style="width: 38%"></i></span>610 Mo sur 1,6 Go</span><button class="btn">Annuler</button></div>
                 </div>
               </section>
-              <section class="sg">
+              <section class="sg" id="sg-voice-conv">
                 <h2>Conversation</h2>
-                <p class="note">Les réponses sont lues sur ta machine par Piper. Voix libres seulement (modèle et jeu de données), sauf une exception signalée.</p>
-                <div class="model-list" role="radiogroup" aria-label="Voix en français">
+                <div class="sr">
+                  <div class="lab"><b>Voix générée par</b><span>Local par défaut : Piper lit sur ta machine. « En ligne » fait lire les passages par le service choisi, avec la clé de sa dictée.</span></div>
+                  <div class="ctl"><div class="seg inline" role="radiogroup" aria-label="Voix générée par"><button role="radio" class="v-local-on" aria-selected="true">Local (Piper)</button><button role="radio" class="v-online-on" aria-selected="false">En ligne</button></div></div>
+                </div>
+                <p class="note v-local">Les réponses sont lues sur ta machine par Piper. Voix libres seulement (modèle et jeu de données), sauf une exception signalée.</p>
+                <div class="model-list v-local" role="radiogroup" aria-label="Voix en français">
                   <div class="mrow"><span class="rd" role="radio" aria-checked="true" tabindex="0"></span><span class="mn"><b>Siwis · qualité moyenne · 63 Mo</b><span>Français · licence du modèle MIT · jeu de données CC BY 4.0</span></span><span class="ok"><svg class="i s14"><use href="#i-check" /></svg>Téléchargée</span><button class="btn"><svg class="i s14"><use href="#i-play" /></svg>Écouter</button></div>
                   <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>Fuze · qualité haute · 114 Mo</b><span class="exc">Exception à la règle des licences : modèle sans licence déclarée, jeu de données de synthèse (CC BY 4.0)</span></span><span></span><button class="btn">Télécharger</button></div>
                   <div class="mrow"><span class="rd" role="radio" aria-checked="false" tabindex="-1"></span><span class="mn"><b>Lessac · qualité haute · 109 Mo</b><span>English · MIT · Blizzard 2013</span></span><span></span><button class="btn">Télécharger</button></div>
                 </div>
+                <div class="sr v-online" hidden><div class="lab"><b>Service de la voix</b><span>Avec la clé de sa dictée, déjà enregistrée.</span></div><div class="ctl"><button class="select"><b>ElevenLabs</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Modèle de la voix</b><span>Celui d’ElevenLabs qui lit ; par défaut « eleven_flash_v2_5 ».</span></div><div class="ctl"><button class="select"><b>eleven_flash_v2_5</b><svg class="i s14"><use href="#i-down" /></svg></button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Voix</b><span>Tape pour chercher parmi ses voix, celles de ton compte comprises.</span></div><div class="ctl"><button class="select"><b>Charlotte · de ton compte</b><svg class="i s14"><use href="#i-down" /></svg></button><button class="btn"><svg class="i s14"><use href="#i-play" /></svg>Écouter</button></div></div>
+                <div class="sr v-online" hidden><div class="lab"><b>Si ElevenLabs ne répond pas</b><span>La conversation continue avec la voix locale (Piper) : Siwis. Pour la changer, repasse sur « Local (Piper) ».</span></div><div class="ctl"></div></div>
                 <div class="sr"><div class="lab"><b>Vitesse</b><span>1 : le rythme de la voix</span></div><div class="ctl"><input class="inp w-num" value="1,1" aria-label="Vitesse" /></div></div>
                 <div class="sr"><div class="lab"><b>Délai avant l’envoi</b><span>Le silence après lequel ce que tu as dit part à l’agent.</span></div><div class="ctl"><input class="inp w-num" value="1,2" aria-label="Délai avant l’envoi (secondes)" /><span class="hint">s</span></div></div>
               </section>
@@ -7676,11 +8767,11 @@ If your browser did not open, navigate to this URL to authenticate:
             <div class="s-pane" data-pane="mcp" hidden>
               <section class="sg">
                 <div class="sr">
-                  <div class="lab"><b>Claude et les agents peuvent piloter Escouade</b><span>Claude Code hors d’Escouade et chaque agent d’Escouade lisent tes projets, agents et tickets, et peuvent créer des tickets, lancer des agents (ce qui dépense du quota), valider ou supprimer des tickets.</span></div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Claude et les agents peuvent piloter Escouade"></button></div>
+                  <div class="lab"><b>Les agents peuvent piloter Escouade</b><span>Chaque agent d’Escouade, et chaque harness lancé hors d’Escouade, lisent tes projets, agents et tickets, et peuvent créer des tickets, lancer des agents (ce qui dépense du quota), valider ou supprimer des tickets. Un projet privé n’existe que pour ses propres agents.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Les agents peuvent piloter Escouade"></button></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Déclaré</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Claude Code · compte Principal, compte Client Acme · Codex · compte Principal</span><span class="warn">2 agents déjà lancés auront les outils au prochain démarrage de leur process : « Relancer » sur leur conversation.</span></div>
+                  <div class="lab"><b>Déclaré</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Claude Code · Principal, Client Acme · Codex · Principal · OpenCode · Principal</span><span class="warn">Copilot CLI · Pas déclaré : aucun compte ajouté</span><span class="warn">2 agents déjà lancés auront les outils au prochain démarrage de leur process : « Relancer » sur leur conversation.</span></div>
                   <div class="ctl"><button class="btn">Copier la commande</button></div>
                 </div>
               </section>
@@ -7760,14 +8851,38 @@ If your browser did not open, navigate to this URL to authenticate:
                   </div>
                 </div>
               </section>
-              <section class="sg">
+              <section class="sg" id="sg-private">
+                <h2>Confidentialité</h2>
+                <div class="sr">
+                  <div class="lab"><b>Projet privé</b><span>Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Projet privé" id="tgl-private"></button></div>
+                </div>
+                <div class="priv-on" hidden>
+                  <div class="sub-h"><b>Ses fichiers</b><span>Son dossier, ses worktrees, ses données et ses sessions, fermés aux agents des autres projets</span></div>
+                  <div class="fence">
+                    <div><b>Claude Code</b><span class="smark"><svg class="i"><use href="#i-shield" /></svg>Garde-fou</span><span>Refusés à ses outils de fichiers et aux commandes qu’il reconnaît (cat, sed…), pas à un script qui ouvre un fichier lui-même.</span></div>
+                    <div><b>Codex</b><span class="smark barrier"><svg class="i"><use href="#i-lock" /></svg>Barrière</span><span>Son bac à sable les refuse à toutes ses commandes, sauf en mode Bypass, qui n’en a pas.</span></div>
+                    <div><b>OpenCode</b><span class="smark"><svg class="i"><use href="#i-shield" /></svg>Garde-fou</span><span>Refusés à ses outils et aux commandes qui les nomment. Il n’a pas de bac à sable.</span></div>
+                    <div><b>Copilot CLI</b><span class="smark"><svg class="i"><use href="#i-shield" /></svg>Garde-fou</span><span>Escouade refuse d’office ce qu’il demande sur ces chemins ; rien n’est garanti en Bypass ni en vue Copilot CLI.</span></div>
+                  </div>
+                  <p class="note">Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Un agent déjà lancé prend ce réglage avant son prochain tour.</p>
+                  <div class="sub-h" id="sh-private-accounts"><b>Ses comptes</b><span>Sessions, mémoire et historique du harness partagés avec aucun autre projet</span></div>
+                  <div class="acct-note"><svg class="i s14"><use href="#i-check-c" /></svg><span class="grow">Compte réservé à ce projet : « Client Acme ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.</span></div>
+                  <div class="acct-note warn"><svg class="i s14"><use href="#i-shield" /></svg><span class="grow">Ses agents peuvent partir sur « Principal » de Codex, un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de Codex y sont communs.</span><button class="btn">Réserver Principal à ce projet</button><button class="btn">Ajouter un compte réservé…</button></div>
+                  <div class="sr">
+                    <div class="lab"><b>Comptes partagés à la limite</b><span>À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé. Éteint, ils attendent la remise à zéro.</span></div>
+                    <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Comptes partagés à la limite"></button></div>
+                  </div>
+                </div>
+              </section>
+              <section class="sg" id="sg-worktrees">
                 <h2>Worktrees</h2>
                 <div class="sr">
-                  <div class="lab"><b>Un worktree par agent</b><span>Isole les modifications de chaque nouvel agent dans sa propre branche.</span></div>
+                  <div class="lab"><b>Un worktree par agent</b><span>Isole les modifications de chaque nouvel agent dans sa propre branche.</span><span class="smark file" data-yml hidden><svg class="i"><use href="#i-file" /></svg>Défini par .escouade.yml</span></div>
                   <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Un worktree par agent"></button></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Fichiers copiés dans les worktrees</b><span>Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout.</span></div>
+                  <div class="lab"><b>Fichiers copiés dans les worktrees</b><span>Seuls ceux que git ignore, jamais commités ; un motif par ligne : .env* à la racine, **/.env* partout.</span><span class="smark " data-yml hidden><svg class="i"><use href="#i-user" /></svg>Réglage local de cette machine : il passe devant .escouade.yml</span><span data-yml hidden style="display: flex; gap: 10px"><button class="link" style="color: var(--p-ink); font-size: 12px">Écrire dans .escouade.yml</button><button class="link" style="color: var(--p-ink); font-size: 12px">Reprendre la valeur du fichier</button></span></div>
                   <div class="ctl"><textarea class="inp mono w-m" rows="2" aria-label="Fichiers copiés dans les worktrees">.env*
 api/.env.local</textarea></div>
                 </div>
@@ -7777,7 +8892,7 @@ api/.env.local</textarea></div>
                     <div class="seg inline" role="radiogroup" aria-label="Commit"><button role="radio" aria-selected="true">Rédigé par l’agent</button><button role="radio" aria-selected="false">Direct, avec un message proposé</button></div>
                   </div>
                 </div>
-                <div class="sub-h"><b>À l’ouverture d’un worktree</b><span>Dans l’ordre, avant le premier message de son agent</span></div>
+                <div class="sub-h"><b>À l’ouverture d’un worktree</b><span>Dans l’ordre, avant le premier message de son agent</span><span class="smark wait" data-yml hidden><svg class="i"><use href="#i-shield" /></svg>Défini par .escouade.yml, en attente de ton accord</span></div>
                 <div class="cmds">
                   <div class="cmd-row steps-row">
                     <span class="no">1</span><input class="inp mono" value="npm ci" aria-label="Commande de préparation 1" /><input class="inp mono" placeholder="sous-dossier" aria-label="Sous-dossier" />
@@ -7795,6 +8910,17 @@ api/.env.local</textarea></div>
                 <div class="sr" style="margin-top: 6px">
                   <div class="lab"><span>Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d’enregistrer.</span></div>
                   <div class="ctl"><button class="btn fill-btn"><svg class="i s14"><use href="#i-sparkle" /></svg>Remplir automatiquement</button></div>
+                </div>
+                <div class="sr" id="sr-leftovers">
+                  <div class="lab"><b>Worktrees restés</b><span>Supprime ceux des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés.</span></div>
+                  <div class="ctl"><button class="btn">Nettoyer</button></div>
+                </div>
+                <div class="leftovers" id="leftovers" role="status" hidden>
+                  <span>3 worktrees supprimés. 2 gardés :</span>
+                  <ul>
+                    <li><span class="mono">fix-login</span> : 3 fichiers non commités</li>
+                    <li><span class="mono">dem-3-export-pdf</span> : 2 commits ni mergés ni poussés</li>
+                  </ul>
                 </div>
               </section>
               <section class="sg">
@@ -7820,11 +8946,32 @@ api/.env.local</textarea></div>
                   <button class="btn fill-btn" style="margin-left: auto"><svg class="i s14"><use href="#i-sparkle" /></svg>Remplir automatiquement</button>
                 </div>
               </section>
+              <section class="sg" id="sg-yml">
+                <div class="hg"><h2>.escouade.yml</h2><button class="btn"><svg class="i s14"><use href="#i-file" /></svg>Exporter vers .escouade.yml</button></div>
+                <p class="note">Réglages lus dans .escouade.yml (version 1) : 6 réglages définis par le fichier. Ceux qui en viennent portent sa marque ; un réglage local passe devant.</p>
+                <div class="pending" id="yml-pending">
+                  <b>Commandes en attente de ton accord</b>
+                  <span style="color: var(--soft); font-size: 12.5px">Ces commandes viennent de .escouade.yml. Escouade ne les lance pas tant que tu ne leur as pas fait confiance : lis-les en entier. Si le fichier les change, il te le redemandera.</span>
+                  <span class="pk">Préparation des worktrees</span>
+                  <pre>npm ci
+npx prisma generate --schema api/prisma/schema.prisma</pre>
+                  <span class="pk">Lancement · Front</span>
+                  <pre>npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}</pre>
+                  <div class="row-btns"><button class="btn primary"><svg class="i s14"><use href="#i-check" /></svg>Faire confiance à ces commandes</button></div>
+                </div>
+              </section>
               <section class="sg">
                 <h2>Zone sensible</h2>
                 <div class="sr danger-row">
                   <div class="lab"><b>Fermer le projet</b><span>Le projet quitte les onglets ; son historique (agents, conversations, tickets) est gardé ci-dessous, et revient si tu rouvres son dossier. Les fichiers et les worktrees ne sont pas touchés.</span></div>
                   <div class="ctl"><button class="btn">Fermer le projet…</button></div>
+                </div>
+              </section>
+              <section class="sg">
+                <h2>Nouveaux projets</h2>
+                <div class="sr">
+                  <div class="lab"><b>Nouveaux projets privés</b><span>Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="false" aria-label="Nouveaux projets privés"></button></div>
                 </div>
               </section>
               <section class="sg">
@@ -7844,6 +8991,7 @@ api/.env.local</textarea></div>
                   <div class="sub-opts">
                     <label>Branche cible <button class="select"><b class="mono">main</b><svg class="i s14"><use href="#i-down" /></svg></button></label>
                     <label>Stratégie <span class="seg inline" role="radiogroup" aria-label="Stratégie"><button role="radio" aria-selected="false">Merge commit</button><button role="radio" aria-selected="true">Squash</button><button role="radio" aria-selected="false">Rebase</button></span></label>
+                    <button class="check-row" style="grid-column: 1 / -1; align-items: start"><span class="cb" role="checkbox" aria-checked="true"><svg class="i"><use href="#i-check" /></svg></span><span style="display: grid; gap: 2px; text-align: left"><span>Les agents partent de la branche cible</span><span style="color: var(--muted); font-size: 12px">Chaque nouvel agent à worktree part de main, mise à jour depuis le distant, et y merge, quelle que soit la branche du dossier.</span></span></button>
                   </div>
                   <button class="radio" role="radio" aria-checked="false"><i class="dot"></i><span><b>Ouvrir une pull request</b><span>Pousse ticket/&lt;clé&gt; et ouvre une PR vers la branche cible pour relecture.</span></span></button>
                   <button class="radio" role="radio" aria-checked="false"><i class="dot"></i><span><b>Pousser la branche du ticket</b><span>Commit et push sur ticket/&lt;clé&gt;, sans merge ni PR.</span></span></button>
@@ -7861,8 +9009,8 @@ api/.env.local</textarea></div>
                   <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Relancer les tests avant"></button></div>
                 </div>
                 <div class="sr">
-                  <div class="lab"><b>Supprimer le worktree une fois validé</b><span>Libère l’espace disque, après ses commandes de démontage.</span></div>
-                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Supprimer le worktree une fois validé"></button></div>
+                  <div class="lab"><b>Supprimer le worktree d’un ticket terminé ou supprimé</b><span>Après ses commandes de démontage, quelle que soit la validation. Un worktree avec des changements non commités ou des commits ni mergés ni poussés est gardé, et c’est dit.</span></div>
+                  <div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Supprimer le worktree d’un ticket terminé ou supprimé"></button></div>
                 </div>
                 <div class="sr">
                   <div class="lab"><b>Message de commit généré</b></div>
@@ -7900,6 +9048,19 @@ api/.env.local</textarea></div>
 
             <!-- Intégrations -->
             <div class="s-pane" data-pane="integrations" hidden>
+              <section class="sg" id="sg-forges">
+                <div class="hg"><h2>Hébergeurs de code</h2><button class="btn"><svg class="i s14"><use href="#i-plus" /></svg>Connecter un hébergeur…</button></div>
+                <p class="note">Un compte par instance (github.com, celle de l’entreprise…) : chaque projet trouve le sien par son remote. Le compte de github.com sert aussi à GitHub Issues.</p>
+                <div class="forge"><span class="logo-t">G</span><span class="fn"><b>GitHub</b><span class="mono">github.com</span></span><span class="acts"><button class="btn">Vérifier</button><button class="btn">Déconnecter</button></span>
+                  <span class="fs"><span class="ok">Connecté · @demo-team</span><span>Sert aussi à GitHub Issues</span><span>Projets : demo-api, studio-web</span></span></div>
+                <div class="forge"><span class="logo-t">G</span><span class="fn"><b>GitHub Enterprise</b><span class="mono">github.acme.example</span></span><span class="acts"><button class="btn">Vérifier</button><button class="btn">Déconnecter</button></span>
+                  <span class="fs"><span class="amber">Droits manquants : workflow, read:org</span><span>Projet : infra</span></span></div>
+                <div class="forge"><span class="logo-t">L</span><span class="fn"><b>GitLab</b><span class="mono">gitlab.com</span></span><span class="acts"><button class="btn primary">Reconnecter…</button></span>
+                  <span class="fs"><span class="bad">Jeton expiré ou révoqué · @guill</span><span>Projet : mobile-app</span></span></div>
+                <div class="forge"><span class="logo-t">F</span><span class="fn"><b>Gitea / Forgejo</b><span class="mono">git.gagnaire.dev</span></span><span class="acts"><button class="btn">Vérifier</button><button class="btn">Déconnecter</button></span>
+                  <span class="fs"><span class="ok">Connecté · @guill</span><span>Jeton de tea</span></span></div>
+                <div class="forge"><span class="logo-t">B</span><span class="fn"><b>Bitbucket</b><span class="sub">Aucun compte, pour le projet landing</span></span><span class="acts"><button class="btn">Connecter bitbucket.org</button></span></div>
+              </section>
               <section class="sg">
                 <h2>Comptes connectés</h2>
                 <p class="note">Les jetons restent sur cette machine, dans le trousseau du système, et ne servent qu’aux appels de ces services.</p>
@@ -7959,13 +9120,15 @@ api/.env.local</textarea></div>
                   <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
                   <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round"><path d="M0 -12V12M-12 0H12" stroke-width="5.4" /><path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" /></g>
                 </svg>
-                <div><b>Escouade 1.7.10</b><span>Harness détectés : Claude Code, Codex · gratuit et open source (MIT)</span></div>
+                <div><b>Escouade 1.7.10</b><span>Harness détectés : Claude Code, Codex, OpenCode, Copilot CLI · gratuit et open source (MIT)</span></div>
                 <button class="btn" style="margin-left: auto">Rechercher une mise à jour</button>
               </div>
               <section class="sg">
                 <div class="sr"><div class="lab"><b>Installer les mises à jour automatiquement</b><span>Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.</span></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Installer les mises à jour automatiquement"></button></div></div>
                 <div class="sr"><div class="lab"><b>Mise à jour 1.8.0</b><span class="warn">Téléchargement impossible : le proxy a refusé le fichier (403). Le navigateur passe souvent là où l’app est bloquée.</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-ext" /></svg>Télécharger dans le navigateur</button></div></div>
                 <div class="sr"><div class="lab"><b>Statistiques d’usage</b><span>Les fonctionnalités utilisées, la version et le système, sous un identifiant tiré au hasard : ni tes projets ni ton code.</span><button class="link" style="justify-self: start; color: var(--p-ink); font-size: 12px">En détail</button></div><div class="ctl"><button class="tgl" role="switch" aria-checked="true" aria-label="Statistiques d’usage"></button></div></div>
+                <div class="sr" id="about-site"><div class="lab"><b>Site web</b><span>escouade.dev : la documentation, les nouveautés et la feuille de route</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-ext" /></svg>Ouvrir</button></div></div>
+                <div class="sr"><div class="lab"><b>Discord</b><span>Poser une question, signaler un problème, suivre ce qui arrive</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-ext" /></svg>Rejoindre</button></div></div>
                 <div class="sr"><div class="lab"><b>Crédits et licences</b><span>Piper, eSpeak NG, ONNX Runtime, whisper.cpp, et la licence de chaque voix</span></div><div class="ctl"><button class="btn">Ouvrir</button></div></div>
                 <div class="sr"><div class="lab"><b>Données locales</b><span class="mono" style="color: var(--soft)">~/.escouade</span></div><div class="ctl"><button class="btn"><svg class="i s14"><use href="#i-folder" /></svg>Ouvrir le dossier</button></div></div>
               </section>
@@ -7981,20 +9144,25 @@ api/.env.local</textarea></div>
       </div>
     </div>
 
+    <div class="ptip" id="tip-wait" role="tooltip" hidden>
+      <b>Son tour est fini, mais il attend :</b>
+      <span class="row"><svg class="i s14"><use href="#i-agents" /></svg>2 agents pilotés au travail : dem-5-export-csv-des-factures, dem-6-limiter-les-tentatives</span>
+      <span class="row"><svg class="i s14"><use href="#i-clock" /></svg>Claude Code le relance à 15:30</span>
+    </div>
     <div class="toast" id="toast" role="status"><svg class="i s14" id="toast-ic"><use href="#i-check" /></svg><span id="toast-text"></span></div>
 
     <script>
       // The English labels (index.html?lang=en#…), taken from the app's catalog (src/lib/i18n/en) where it has them:
       // enough to check what is tight. What agents write stays as they wrote it, as in the app.
       window.EN_TABS = {
-        app: ['Application', 'Theme, zoom, text size, and languages'],
-        claude: ['Harness', 'Each harness’s executables, versions and agent defaults'],
-        accounts: ['Accounts', 'Each harness’s accounts, and what happens when a quota runs out'],
-        voice: ['Voice', 'Dictation and voice conversation, on your machine'],
+        app: ['Application', 'Theme, zoom, languages and written texts'],
+        claude: ['Harness', 'Each harness’s executables and versions, and what holds for them all'],
+        accounts: ['Accounts', 'Each harness’s accounts, their new agents’ settings, and what happens at the limit'],
+        voice: ['Voice', 'Dictation and voice conversation, on your machine or online'],
         notifications: ['Notifications', 'Visual and sound alerts'],
         projects: ['Projects', 'Settings specific to each project'],
         board: ['Kanban', 'Autopilot and approved tickets'],
-        integrations: ['Integrations', 'Jira, Trello, GitHub Issues, and Linear'],
+        integrations: ['Integrations', 'Code hosts, Jira, Trello, GitHub Issues, and Linear'],
         mcp: ['MCP server', 'What Claude and the agents can do in Escouade, and what they did'],
         terminals: ['Terminals', 'Shells available in the built-in terminals'],
         network: ['Network', 'HTTP(S) proxy and TLS certificates'],
@@ -8094,6 +9262,302 @@ api/.env.local</textarea></div>
         ['2 commandes proposées par Claude : relis-les avant de créer.', '2 commands proposed by Claude: read them before creating.'],
         ['Aucun harness trouvé', 'No harness found'], ['Chercher à nouveau', 'Search again'],
       ];
+      // Lot 0 bis (ESC-150): the labels of what the 1.8.0 to 1.8.9 added (src/lib/i18n/en where it has them).
+      window.EN_LABELS.push(
+        ["Celui du projet · Principal · Opus 5.5 · Auto", "The project’s · Main · Opus 5.5 · Auto"],
+        ["Principal · GPT-5.5-Codex · Demander", "Main · GPT-5.5-Codex · Ask"],
+        ["Principal · qwen3-coder:30b · Demander", "Main · qwen3-coder:30b · Ask"],
+        ["Aucun compte", "No account"],
+        ["Worktree", "Worktree"],
+        ["Nouvel agent sans worktree", "New agent without a worktree"],
+        ["Dans le dossier du projet, sur sa branche courante", "In the project’s folder, on its current branch"],
+        ["Codex, OpenCode · par un dossier de passation", "Codex, OpenCode · through a handover file"],
+        ["Ouvrir une PR…", "Open a PR…"],
+        ["Pousse escouade/refacto-auth, titre et description proposés", "Pushes escouade/refacto-auth, with a proposed title and description"],
+        ["Lancer…", "Run…"],
+        ["Une commande de lancement, dans son worktree", "A launch command, in its worktree"],
+        ["Dans l’ordre des harness", "In the harness order"],
+        ["Continuer sur OpenCode", "Continue on OpenCode"],
+        ["Principal · pas de quota · 0,42 $ sur 5,00 $ aujourd’hui · qwen3-coder:30b", "Main · no quota · $0.42 of $5.00 today · qwen3-coder:30b"],
+        ["Continuer sur Copilot CLI", "Continue on Copilot CLI"],
+        ["Aucun compte actif de Copilot CLI ne sert demo-api", "No active Copilot CLI account serves demo-api"],
+        ["Comptes OpenCode", "OpenCode accounts"],
+        ["Comptes Copilot CLI", "Copilot CLI accounts"],
+        ["Budget par jour", "Daily budget"],
+        ["Pas de quota : seul le coût de ses tours compte. Remise à zéro à minuit.", "No quota: only what its turns cost counts. Reset at midnight."],
+        ["Aujourd’hui : 0,42 $", "Today: $0.42"],
+        ["Aujourd’hui : 1,14 $", "Today: $1.14"],
+        ["Travail", "Work"],
+        ["crédits", "credits"],
+        ["reset le 01/11", "resets on 11/01"],
+        ["Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %. La barre d’état ne montre que celles qui passent 80 %.", "After each quota, where it will stand at its reset at the current pace: green, amber past 80%, red past 100%. The status bar only shows those past 80%."],
+        ["usage supplémentaire", "extra usage"],
+        ["Client Acme : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, les nouveaux partent sur un autre compte.", "Client Acme: extra usage in progress, billed separately. Agents already running stay on it, new ones go to another account."],
+        ["Prêt · 2.1.301, testée avec Escouade (de la 2.1.283 à la 2.1.301)", "Ready · 2.1.301, tested with Escouade (from 2.1.283 to 2.1.301)"],
+        ["Mettre à jour Claude Code automatiquement", "Update Claude Code automatically"],
+        ["Escouade lance claude update à son démarrage puis chaque jour, à part de ses agents : leur arrêt ne coupe plus une installation à mi-chemin.", "Escouade runs claude update when it starts, then every day, apart from its agents: stopping them no longer cuts an install halfway."],
+        ["Mis à jour en 2.1.301 (depuis la 2.1.298).", "Updated to 2.1.301 (from 2.1.298)."],
+        ["Claude Code seulement : les autres harness n’ont pas de remote control.", "Claude Code only: the other harnesses have no remote control."],
+        ["Version non testée · 0.165.0, testée jusqu’à la 0.163.0", "Untested version · 0.165.0, tested up to 0.163.0"],
+        ["Plus récente que celles essayées : ce qu’Escouade ne reconnaît pas de son flux est ignoré, sans couper le tour.", "Newer than the ones tried: what Escouade doesn’t recognize in its stream is ignored, without cutting the turn."],
+        ["Prêt · 1.19.3, testée avec Escouade", "Ready · 1.19.3, tested with Escouade"],
+        ["Trouvé : C:\\Users\\guill\\AppData\\Roaming\\npm\\opencode.cmd", "Found: C:\\Users\\guill\\AppData\\Roaming\\npm\\opencode.cmd"],
+        ["Trouvé : C:\\Users\\guill\\AppData\\Roaming\\npm\\copilot.cmd", "Found: C:\\Users\\guill\\AppData\\Roaming\\npm\\copilot.cmd"],
+        ["Modèles", "Models"],
+        ["Ceux des fournisseurs connectés à OpenCode. Les favoris (★) viennent en premier dans le menu du composer, puis les autres par fournisseur.", "Those of the providers connected to OpenCode. Favorites (★) come first in the composer’s menu, then the others by provider."],
+        ["Ni bac à sable ni quota", "No sandbox, no quota"],
+        ["Ses règles de permission suivent le mode, sans mode Auto. Son coût est celui de ses fournisseurs (rien avec un modèle local) : un budget par jour se règle dans Comptes.", "Its permission rules follow the mode, with no Auto mode. Its cost is its providers’ (nothing with a local model): a daily budget is set in Accounts."],
+        ["Vue OpenCode : Escouade garde le fil", "OpenCode view: Escouade keeps the thread"],
+        ["Trop ancienne · 1.0.91, il faut la 1.0.98 ou plus", "Too old · 1.0.91, 1.0.98 or later needed"],
+        ["Ses agents ne démarrent pas, et leur conversation le dit. Mets-le à jour :", "Its agents don’t start, and their conversation says so. Update it:"],
+        ["Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes, où chaque compte se connecte.", "New agents’ model, effort and mode are set account by account, in Settings › Accounts, where each account signs in."],
+        ["Terminal du harness : l’interface du harness elle-même, dans un terminal. Chaque agent change de vue depuis son en-tête ; les agents de ticket restent dans la vue d’Escouade.", "Harness terminal: the harness’s own interface, in a terminal. Each agent switches view from its header; ticket agents stay in Escouade’s view."],
+        ["Escouade", "Escouade"],
+        ["Terminal du harness", "Harness terminal"],
+        ["Pas de PDF joint · pas de tâches de fond", "No attached PDF · no background tasks"],
+        ["Copier la commande", "Copy the command"],
+        ["Compte de la machine", "This machine’s account"],
+        ["Celui du harness (Sonnet 5.5)", "The harness’s (Sonnet 5.5)"],
+        ["Celui du harness", "The harness’s"],
+        ["Par défaut", "Default"],
+        ["Budget par jour ($)", "Daily budget ($)"],
+        ["Ollama, Anthropic, OpenAI", "Ollama, Anthropic, OpenAI"],
+        ["Atteint, le pilote auto se met en pause jusqu’à minuit. Un modèle local ne coûte rien.", "Once reached, the autopilot pauses until midnight. A local model costs nothing."],
+        ["Ajouter un compte Copilot CLI…", "Add a Copilot CLI account…"],
+        ["Aucun agent ni ticket ne démarre sur Copilot CLI avant qu’un compte soit ajouté : celui déjà connecté sur cette machine, ou un nouveau.", "No agent or ticket starts on Copilot CLI until an account is added: the one already signed in on this machine, or a new one."],
+        ["Les nouveaux agents partent sur le premier compte actif de leur harness sous les seuils « Pause au-delà du quota » et « Changer de compte à ». Ce qui suit dit où va un agent qui les atteint.", "New agents start on the first active account of their harness under the “Pause above quota” and “Switch accounts at” thresholds. What follows says where an agent goes once it reaches them."],
+        ["Changer de compte à", "Switch accounts at"],
+        ["Quand la fenêtre de 5 h ou la fenêtre hebdomadaire de son compte atteint ce seuil, un agent passe sur un autre compte de son harness à la fin de son tour, jamais en plein travail. « À la limite » : rien ne bouge avant.", "When the 5-hour or weekly window of its account reaches this threshold, an agent goes on on another account of its harness at the end of its turn, never mid-work. “At the limit”: nothing moves before it."],
+        ["À la limite", "At the limit"],
+        ["À la limite, pour les agents de ticket ; la session suit. Sinon il attend la remise à zéro.", "At the limit, for ticket agents; the session goes along. Otherwise it waits for the reset."],
+        ["Après son harness par défaut, un projet passe aux suivants dans cet ordre, s’ils ont un compte actif qui le sert.", "After its default harness, a project goes on to the next ones in this order, if they have an active account that serves it."],
+        ["Modèle de passation", "Handover model"],
+        ["Le modèle d’un agent qui passe sur ce harness ; par défaut, son meilleur.", "The model of an agent that moves to this harness; by default, its best."],
+        ["Codex · GPT-5.5-Codex", "Codex · GPT-5.5-Codex"],
+        ["Quotas", "Quotas"],
+        ["Projection des quotas", "Quota projection"],
+        ["Dans la barre d’état, où chaque quota en sera à sa remise à zéro au rythme actuel (« → 86 % ») : orange au-delà de 80 %, rouge au-delà de 100 %. Pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget.", "In the status bar, where each quota will stand at its reset at the current pace (“→ 86%”): amber past 80%, red past 100%. For a harness without a quota, the day’s cost projected to midnight, against its budget."],
+        ["Compte", "Account"],
+        ["Le compte de la machine", "This machine’s account"],
+        ["Codex est connecté sur cette machine · ChatGPT Plus · Déjà ajouté", "Codex is signed in on this machine · ChatGPT Plus · Added already"],
+        ["Copilot CLI est connecté sur cette machine · @guill", "Copilot CLI is signed in on this machine · @guill"],
+        ["Un nouveau compte", "A new account"],
+        ["Un dossier à lui sous ~/.escouade, et sa propre connexion.", "A folder of its own under ~/.escouade, and its own sign-in."],
+        ["Son dossier habituel, tel quel : ses réglages, sa connexion et ses conversations (~/.copilot). Le retirer plus tard ne déconnecte pas la machine.", "Its usual folder, as it is: its settings, its sign-in and its conversations (~/.copilot). Removing it later signs nothing out."],
+        ["Partager avec le compte de la machine", "Share with this machine’s account"],
+        ["Ajouter ce compte", "Add this account"],
+        ["Ajouter un compte", "Add an account"],
+        ["règles", "rules"],
+        ["OpenCode demande une autorisation", "OpenCode asks for permission"],
+        ["« Toujours autoriser » : OpenCode garde le motif", "“Always allow”: OpenCode keeps the pattern"],
+        ["pour le reste de la session.", "for the rest of the session."],
+        ["Autoriser", "Allow"],
+        ["Toujours autoriser", "Always allow"],
+        ["Refuser", "Deny"],
+        ["qwen3-coder:30b · Demander", "qwen3-coder:30b · Ask"],
+        ["GPT-6-Luna ×1 · Édits auto", "GPT-6-Luna ×1 · Auto edits"],
+        ["Le serveur MCP jira demande des informations", "The jira MCP server asks for information"],
+        ["Projet", "Project"],
+        ["Priorité", "Priority"],
+        ["Haute", "High"],
+        ["Bloque la release", "Blocks the release"],
+        ["Envoyé · 14:52", "Sent · 14:52"],
+        ["Plafond de crédits d’IA de la session atteint", "The session’s AI credit ceiling is reached"],
+        ["Le plafond de crédits d’IA de la session est atteint (50 sur 50). Que faire de l’appel en attente ?", "The session’s AI credit ceiling is reached (50 of 50). What to do with the pending call?"],
+        ["Ajouter 50 crédits", "Add 50 credits"],
+        ["Lever le plafond", "Lift the ceiling"],
+        ["Arrêter là", "Stop here"],
+        ["50 crédits · 0,50 $", "50 credits · $0.50"],
+        ["Suite sur le compte Pro", "Continued on the Pro account"],
+        ["· Principal est à 90 % de sa fenêtre de 5 h", "· Main is at 90% of its 5-hour window"],
+        ["Pro · Sonnet 5.5 · Auto", "Pro · Sonnet 5.5 · Auto"],
+        ["pagination-users passe sur Pro : Principal à 90 % de sa fenêtre de 5 h.", "pagination-users moves to Pro: Main at 90% of its 5-hour window."],
+        ["Aucun compte Copilot CLI : ajoute-en un dans Réglages › Comptes.", "No Copilot CLI account: add one in Settings › Accounts."],
+        ["Cet agent ne démarre pas tant qu’aucun compte Copilot CLI n’est ajouté : celui déjà connecté sur cette machine, ou un nouveau. Ton message reste dans le champ.", "This agent doesn’t start until a Copilot CLI account is added: the one already signed in on this machine, or a new one. Your message stays in the field."],
+        ["Continuer sur Claude Code", "Continue on Claude Code"],
+        ["Attend", "Awaiting"],
+        ["Réveil à 15:30", "Wakes at 15:30"],
+        ["Tour fini", "Turn over"],
+        ["Tour fini · 1 sous-agent, 1 tâche de fond", "Turn over · 1 subagent, 1 background task"],
+        ["Agents pilotés", "Driven agents"],
+        ["2 au travail", "2 at work"],
+        ["Son tour est fini, mais il attend :", "Its turn is over, but it is waiting on:"],
+        ["2 agents pilotés au travail : dem-5-export-csv-des-factures, dem-6-limiter-les-tentatives", "2 driven agents at work: dem-5-export-csv-des-factures, dem-6-limiter-les-tentatives"],
+        ["Claude Code le relance à 15:30", "Claude Code wakes it at 15:30"],
+        ["Mode · OpenCode", "Mode · OpenCode"],
+        ["OpenCode n’a pas de mode Auto : rien ne décide à ta place.", "OpenCode has no Auto mode: nothing decides for you."],
+        ["Il change les fichiers du dossier de l’agent sans demander ; chaque commande demande.", "It changes the files of the agent’s folder without asking; each command asks."],
+        ["Passe par son agent plan, sans rien modifier, et finit sur un plan à approuver.", "Goes through its plan agent, changing nothing, and ends on a plan to approve."],
+        ["Comme Demander, et git add et git commit passent aussi ; le reste demande.", "Like Ask, and git add and git commit go through too; the rest asks."],
+        ["OpenCode ne demande rien, sur tout le disque.", "OpenCode asks nothing, on the whole disk."],
+        ["Pas de bac à sable : ce sont ses règles de permission qui suivent le mode.", "No sandbox: its permission rules follow the mode."],
+        ["Rechercher un modèle", "Search a model"],
+        ["Favoris", "Favorites"],
+        ["×N : les crédits d’IA d’un appel, comparés au modèle de base. Le modèle change tout de suite, même en plein tour.", "×N: a call’s AI credits, against the base model. The model changes at once, even mid-turn."],
+        ["Question 1 sur 2", "Question 1 of 2"],
+        ["Plafonner à cent", "Cap at a hundred"],
+        ["Renvoyer une erreur", "Return an error"],
+        ["Dis le choix, son numéro, ou ta propre réponse", "Say the choice, its number, or your own answer"],
+        ["Je t’écoute…", "Listening to you…"],
+        ["Et si le client demande deux cents", "What if the client asks for two hundred"],
+        ["par page, on", "per page, do we"],
+        ["ElevenLabs · en direct", "ElevenLabs · live"],
+        ["Garde 50 par page, mais monte à", "Keep 50 per page, but go up to"],
+        ["100 si le client le", "100 if the client"],
+        ["Transcription", "Transcription"],
+        ["Transcrite par", "Transcribed by"],
+        ["Éteint par défaut, « En ligne » envoie le son de chaque dictée au service choisi, avec ta clé : pour une machine trop lente pour Whisper, ou une meilleure qualité.", "Off by default, “Online” sends the sound of each dictation to the service chosen, with your key: for a machine too slow for Whisper, or a better quality."],
+        ["En ligne", "Online"],
+        ["Service", "Service"],
+        ["Payé à l’usage sur ton compte ElevenLabs.", "Paid by use on your ElevenLabs account."],
+        ["Celui d’ElevenLabs qui transcrit ; par défaut « scribe_v1 ». Liste lue chez ElevenLabs le 22/10.", "ElevenLabs’ transcription model; by default “scribe_v1”. List read from ElevenLabs on 10/22."],
+        ["Clé d’ElevenLabs", "ElevenLabs key"],
+        ["Une clé par service, la même pour la dictée et pour la voix de la conversation. Gardée dans le trousseau du système, jamais dans les fichiers d’Escouade.", "One key per service, the same for dictation and for the conversation’s voice. Kept in the system keychain, never in Escouade’s files."],
+        ["Enregistrée dans le trousseau", "Saved in the keychain"],
+        ["Remplacer", "Replace"],
+        ["Effacer la clé", "Delete the key"],
+        ["Transcription en temps réel", "Real-time transcription"],
+        ["Le texte s’écrit pendant que tu parles, et la phrase est prête un instant après ton dernier mot. Décochée, chaque phrase part entière, une fois finie.", "The text is written as you speak, and the sentence is ready a moment after your last word. Unchecked, each sentence goes whole, once finished."],
+        ["En temps réel, ElevenLabs facture la minute plus cher.", "In real time, ElevenLabs bills the minute higher."],
+        ["Ce qui part, et où : le son de ce que tu dis, au fil de ta parole, vers ElevenLabs (api.elevenlabs.io), par un flux chiffré, avec ta clé. En conversation vocale, seulement pendant que tu parles. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent.", "What leaves, and where: the sound of what you say, as you say it, to ElevenLabs (api.elevenlabs.io), through an encrypted stream, with your key. In a voice conversation, only while you speak. Nothing else: neither the project, nor the code, nor the conversation with the agent."],
+        ["Voix générée par", "Voice made by"],
+        ["Local par défaut : Piper lit sur ta machine. « En ligne » fait lire les passages par le service choisi, avec la clé de sa dictée.", "Local by default: Piper reads on your machine. “Online” has the passages read by the service chosen, with its dictation key."],
+        ["Service de la voix", "Voice service"],
+        ["Avec la clé de sa dictée, déjà enregistrée.", "With its dictation key, already saved."],
+        ["Modèle de la voix", "Voice model"],
+        ["Celui d’ElevenLabs qui lit ; par défaut « eleven_flash_v2_5 ».", "ElevenLabs’ reading model; by default “eleven_flash_v2_5”."],
+        ["Tape pour chercher parmi ses voix, celles de ton compte comprises.", "Type to search its voices, your account’s included."],
+        ["Charlotte · de ton compte", "Charlotte · from your account"],
+        ["Si ElevenLabs ne répond pas", "If ElevenLabs doesn’t answer"],
+        ["La conversation continue avec la voix locale (Piper) : Siwis. Pour la changer, repasse sur « Local (Piper) ».", "The conversation goes on with the local voice (Piper): Siwis. To change it, switch back to “Local (Piper)”."],
+        ["Celle de l’interface", "The interface’s"],
+        ["Zoom de l’interface", "Interface zoom"],
+        ["Le texte, les espacements et les icônes de toute l’application grandissent ensemble, terminaux et éditeur compris. Aussi au clavier : Ctrl + pour agrandir, Ctrl − pour réduire, Ctrl 0 pour revenir à 100 %.", "Text, spacing, and icons across the whole app grow together, terminals and editor included. Also from the keyboard: Ctrl + to zoom in, Ctrl − to zoom out, Ctrl 0 to go back to 100%."],
+        ["Taille du texte des terminaux et de l’éditeur", "Text size of the terminals and the editor"],
+        ["De 9 à 24 pixels, avant le zoom de l’interface, qui s’y ajoute.", "From 9 to 24 pixels, before the interface zoom, which adds to it."],
+        ["Textes rédigés", "Written texts"],
+        ["Modèle des textes rédigés", "Model for written texts"],
+        ["Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness installés sont proposés.", "A new agent’s name, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only installed harnesses are offered."],
+        ["Langue des textes rédigés par les agents", "Language of texts written by agents"],
+        ["Site web", "Website"],
+        ["escouade.dev : la documentation, les nouveautés et la feuille de route", "escouade.dev: the documentation, what’s new and the roadmap"],
+        ["Discord", "Discord"],
+        ["Poser une question, signaler un problème, suivre ce qui arrive", "Ask a question, report a problem, follow what’s coming"],
+        ["Rejoindre", "Join"],
+        ["Harness détectés : Claude Code, Codex, OpenCode, Copilot CLI · gratuit et open source (MIT)", "Harnesses found: Claude Code, Codex, OpenCode, Copilot CLI · free and open source (MIT)"],
+        ["Les agents partent de la branche cible", "Agents start from the target branch"],
+        ["Chaque nouvel agent à worktree part de main, mise à jour depuis le distant, et y merge, quelle que soit la branche du dossier.", "Each new agent with a worktree starts from main, updated from the remote, and merges into it, whatever the folder’s branch."],
+        ["Supprimer le worktree d’un ticket terminé ou supprimé", "Delete the worktree of a finished or deleted ticket"],
+        ["Après ses commandes de démontage, quelle que soit la validation. Un worktree avec des changements non commités ou des commits ni mergés ni poussés est gardé, et c’est dit.", "After its teardown commands, whatever the approval. A worktree with uncommitted changes or commits neither merged nor pushed is kept, and that is said."],
+        ["Les agents peuvent piloter Escouade", "Agents can drive Escouade"],
+        ["Chaque agent d’Escouade, et chaque harness lancé hors d’Escouade, lisent tes projets, agents et tickets, et peuvent créer des tickets, lancer des agents (ce qui dépense du quota), valider ou supprimer des tickets. Un projet privé n’existe que pour ses propres agents.", "Each Escouade agent, and each harness run outside Escouade, read your projects, agents and tickets, and can create tickets, start agents (which spends quota), approve or delete tickets. A private project exists for its own agents only."],
+        ["Claude Code · Principal, Client Acme · Codex · Principal · OpenCode · Principal", "Claude Code · Main, Client Acme · Codex · Main · OpenCode · Main"],
+        ["Copilot CLI · Pas déclaré : aucun compte ajouté", "Copilot CLI · Not declared: no account added"],
+        ["Hébergeurs de code", "Code hosts"],
+        ["Connecter un hébergeur…", "Connect a code host…"],
+        ["Un compte par instance (github.com, celle de l’entreprise…) : chaque projet trouve le sien par son remote. Le compte de github.com sert aussi à GitHub Issues.", "One account per instance (github.com, your company’s…): each project finds its own through its remote. The github.com account is GitHub Issues’ too."],
+        ["Vérifier", "Check"],
+        ["Connecté · @demo-team", "Connected · @demo-team"],
+        ["Connecté · @guill", "Connected · @guill"],
+        ["Sert aussi à GitHub Issues", "Also used for GitHub Issues"],
+        ["Projets : demo-api, studio-web", "Projects: demo-api, studio-web"],
+        ["Droits manquants : workflow, read:org", "Missing permissions: workflow, read:org"],
+        ["Projet : infra", "Project: infra"],
+        ["Projet : mobile-app", "Project: mobile-app"],
+        ["Reconnecter…", "Reconnect…"],
+        ["Jeton expiré ou révoqué · @guill", "Token expired or revoked · @guill"],
+        ["Jeton de tea", "tea token"],
+        ["Aucun compte, pour le projet landing", "No account, for the project landing"],
+        ["Connecter bitbucket.org", "Connect bitbucket.org"],
+        ["Confidentialité", "Privacy"],
+        ["Projet privé", "Private project"],
+        ["Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.", "Other projects’ agents don’t see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own see only it. You, Claude outside Escouade and the app’s views see everything."],
+        ["Ses fichiers", "Its files"],
+        ["Son dossier, ses worktrees, ses données et ses sessions, fermés aux agents des autres projets", "Its folder, worktrees, data and sessions, closed to other projects’ agents"],
+        ["Garde-fou", "Guard"],
+        ["Barrière", "Barrier"],
+        ["Refusés à ses outils de fichiers et aux commandes qu’il reconnaît (cat, sed…), pas à un script qui ouvre un fichier lui-même.", "Refused to its file tools and to the commands it recognizes (cat, sed…), not to a script that opens a file itself."],
+        ["Son bac à sable les refuse à toutes ses commandes, sauf en mode Bypass, qui n’en a pas.", "Its sandbox refuses them to all its commands, except in Bypass mode, which has none."],
+        ["Refusés à ses outils et aux commandes qui les nomment. Il n’a pas de bac à sable.", "Refused to its tools and to the commands that name them. It has no sandbox."],
+        ["Escouade refuse d’office ce qu’il demande sur ces chemins ; rien n’est garanti en Bypass ni en vue Copilot CLI.", "Escouade refuses what it asks on these paths; nothing is guaranteed in Bypass nor in the Copilot CLI view."],
+        ["Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Un agent déjà lancé prend ce réglage avant son prochain tour.", "A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands. An agent already running takes this setting before its next turn."],
+        ["Ses comptes", "Its accounts"],
+        ["Sessions, mémoire et historique du harness partagés avec aucun autre projet", "The harness’s sessions, memory and history shared with no other project"],
+        ["Compte réservé à ce projet : « Client Acme ». Sessions, mémoire et historique de Claude Code n’y sont partagés avec aucun autre projet.", "Account reserved to this project: “Client Acme”. Claude Code’s sessions, memory and history there are shared with no other project."],
+        ["Ses agents peuvent partir sur « Principal » de Codex, un compte partagé avec d’autres projets : sessions, mémoire, historique et réglages globaux de Codex y sont communs.", "Its agents may go to Codex’s “Main”, an account shared with other projects: Codex’s sessions, memory, history and global settings are common there."],
+        ["Réserver Principal à ce projet", "Reserve Main to this project"],
+        ["Ajouter un compte réservé…", "Add a reserved account…"],
+        ["Comptes partagés à la limite", "Shared accounts at the limit"],
+        ["À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé. Éteint, ils attendent la remise à zéro.", "When its reserved accounts reach the usage limit, its agents may go on on a shared account. Off, they wait for the reset."],
+        ["Nouveaux projets", "New projects"],
+        ["Nouveaux projets privés", "New projects are private"],
+        ["Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.", "Each project added is private from the start. Existing ones keep their setting."],
+        ["Défini par .escouade.yml", "Defined by .escouade.yml"],
+        ["Réglage local de cette machine : il passe devant .escouade.yml", "Local setting of this machine: it goes before .escouade.yml"],
+        ["Écrire dans .escouade.yml", "Write to .escouade.yml"],
+        ["Reprendre la valeur du fichier", "Use the file’s value"],
+        ["Défini par .escouade.yml, en attente de ton accord", "Defined by .escouade.yml, waiting for your approval"],
+        ["Exporter vers .escouade.yml", "Export to .escouade.yml"],
+        ["Réglages lus dans .escouade.yml (version 1) : 6 réglages définis par le fichier. Ceux qui en viennent portent sa marque ; un réglage local passe devant.", "Settings read from .escouade.yml (version 1): 6 settings defined by the file. Those that come from it carry its mark; a local setting goes before it."],
+        ["Commandes en attente de ton accord", "Commands waiting for your approval"],
+        ["Ces commandes viennent de .escouade.yml. Escouade ne les lance pas tant que tu ne leur as pas fait confiance : lis-les en entier. Si le fichier les change, il te le redemandera.", "These commands come from .escouade.yml. Escouade won’t run them until you trust them: read them whole. If the file changes them, it will ask you again."],
+        ["Préparation des worktrees", "Worktree setup"],
+        ["Lancement · Front", "Launch · Front"],
+        ["Faire confiance à ces commandes", "Trust these commands"],
+        ["Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.", "The commands of .escouade.yml wait for your approval: they don’t run yet."],
+        ["Les lire", "Read them"],
+        ["Worktrees restés", "Leftover worktrees"],
+        ["Supprime ceux des agents archivés, après leurs commandes de démontage, sauf ceux qui gardent des changements non commités ou des commits ni mergés ni poussés.", "Deletes those of archived agents, after their teardown commands, except those that keep uncommitted changes or commits neither merged nor pushed."],
+        ["Nettoyer", "Clean up"],
+        ["3 worktrees supprimés. 2 gardés :", "3 worktrees deleted. 2 kept:"],
+        [": 3 fichiers non commités", ": 3 uncommitted files"],
+        [": 2 commits ni mergés ni poussés", ": 2 commits neither merged nor pushed"],
+        ["Archivés (2)", "Archived (2)"],
+        ["worktree gardé : 2 commits ni mergés ni poussés", "worktree kept: 2 commits neither merged nor pushed"],
+        ["DEM-3 mergé dans main · worktree gardé : 2 commits ni mergés ni poussés", "DEM-3 merged into main · worktree kept: 2 commits neither merged nor pushed"],
+        ["dans son worktree", "in its worktree"],
+        ["Lancer « Worker »", "Run “Worker”"],
+        ["Dans le projet", "In the project"],
+        ["Dans le worktree de refacto-auth", "In refacto-auth’s worktree"],
+        ["Dans le worktree de pagination-users", "In pagination-users’s worktree"],
+        ["Ses ports réservés, son log sous son nom", "Its reserved ports, its log under its name"],
+        ["« Front » tourne déjà", "“Front” is already running"],
+        ["Elle tourne déjà dans le worktree de refacto-auth. Les deux risquent de se disputer le même port ; dans un worktree, elle reçoit ESCOUADE_PORT_BASE et ESCOUADE_PORT_END, les ports réservés à son agent, si elle s’en sert.", "It is already running in refacto-auth’s worktree. The two may fight over the same port; in a worktree, it gets ESCOUADE_PORT_BASE and ESCOUADE_PORT_END, the ports reserved for its agent, if it uses them."],
+        ["Lancer quand même", "Run anyway"],
+        ["Arrêter l’autre et lancer", "Stop the other one and run"],
+        ["Ouvrir une PR", "Open a PR"],
+        ["Ouvrir une PR sur GitHub", "Open a PR on GitHub"],
+        ["Titre", "Title"],
+        ["Branche cible", "Target branch"],
+        ["En brouillon", "As a draft"],
+        ["2 fichiers non commités du worktree ne seront pas dans la PR.", "2 uncommitted files of the worktree won’t be in the PR."],
+        ["Proposer à nouveau", "Propose again"],
+        ["Pousser et ouvrir", "Push and open"],
+        ["L’agent corrige", "Agent fixes it"],
+        ["L’agent corrige les retours", "Agent addresses the feedback"],
+        ["PR #43 · Pagination par curseur de /users", "PR #43 · Pagination par curseur de /users"],
+        ["ouverte · CI verte · 1 approbation · changements demandés · 2 fils ouverts", "open · CI passed · 1 approval · changes requested · 2 open threads"],
+        ["Étape 1 sur 8", "Step 1 of 8"],
+        ["Point de départ", "Starting point"],
+        ["D’où viennent les réglages de billing-service : chaque étape suivante se revoit, et se passe.", "Where billing-service’s settings come from: each next step can be reviewed, or skipped."],
+        ["Réglages de .escouade.yml", "Settings from .escouade.yml"],
+        ["Réglages lus dans .escouade.yml, le fichier partagé du dépôt : 6 réglages. Ses commandes attendront ton accord une fois le projet créé.", "Settings read from .escouade.yml, the repository’s shared file: 6 settings. Its commands will wait for your approval once the project is created."],
+        ["Copier la configuration d’un projet", "Copy a project’s setup"],
+        ["Worktrees, lancement, Git, Kanban et compte, vérifiés dans ce dépôt. Les intégrations et les tickets ne sont pas copiés.", "Worktrees, launch, Git, Kanban and account, checked in this repository. Integrations and tickets aren’t copied."],
+        ["Un projet privé n’est pas proposé : rien d’un projet privé ne passe à un autre.", "A private project isn’t offered: nothing of a private project goes to another."],
+        ["Configuration recommandée", "Recommended setup"],
+        ["Un worktree par agent, merge squash dans la branche courante, worktree supprimé une fois validé, commits conventionnels, l’agent résout les conflits.", "One worktree per agent, squash merge into the current branch, worktree deleted once approved, conventional commits, the agent resolves conflicts."],
+        ["Partir de zéro", "Start from scratch"],
+        ["Les valeurs par défaut d’Escouade, à régler dans les étapes suivantes.", "Escouade’s defaults, to set in the next steps."],
+        ["Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.", "Add an account: the one already signed in on this machine, or a new one. Only added accounts start agents."],
+        ["Connecté sur cette machine · moi@exemple.dev", "Signed in on this machine · moi@exemple.dev"],
+        ["Installé, pas connecté", "Installed, not signed in"],
+        ["Escouade garde le fil", "Escouade keeps the thread"],
+        [": la conversation, la carte, les notifications et le coût restent à jour pendant que tu travailles ici. Revenir à la vue Escouade n’arrête que l’interface.", ": the conversation, the card, the notifications and the cost stay up to date while you work here. Going back to Escouade’s view only stops the interface."],
+        ["Copilot CLI demande s’il peut faire confiance au dossier de l’agent.", "Copilot CLI asks whether it can trust the agent’s folder."],
+        ["Réponds dans le terminal : Escouade ne répond pas à ta place et ne tape rien tant que la question est posée.", "Answer in the terminal: Escouade doesn’t answer for you and types nothing while the question is asked."],
+        ["Confiance du dossier : réponds dans son terminal", "Folder trust: answer in its terminal"],
+      );
     </script>
     <script>
       // Données fictives : just enough behaviour to feel the window. The address (#run, #git…) opens a screen directly.
@@ -8363,15 +9827,15 @@ api/.env.local</textarea></div>
       // Settings: ten tabs; a change marks its tab until it is saved.
       const settings = $('#settings');
       const TABS = {
-        app: ['Application', 'Thème, langue de l’interface et des textes rédigés par Claude'],
-        claude: ['Harness', 'Exécutables, versions et réglages des agents de chaque harness'],
-        accounts: ['Comptes', 'Les comptes de chaque harness, et ce qui se passe quand un quota est épuisé'],
-        voice: ['Voix', 'Dictée et conversation vocale, sur ta machine'],
+        app: ['Application', 'Thème, zoom, langue de l’interface et textes rédigés'],
+        claude: ['Harness', 'Exécutables et versions de chaque harness, et ce qui vaut pour tous'],
+        accounts: ['Comptes', 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite'],
+        voice: ['Voix', 'Dictée et conversation vocale, sur ta machine ou en ligne'],
         mcp: ['Serveur MCP', 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait'],
         notifications: ['Notifications', 'Alertes visuelles et sonores'],
         projects: ['Projets', 'Réglages propres à chaque projet'],
         board: ['Kanban', 'Pilote auto et tickets validés'],
-        integrations: ['Intégrations', 'Jira, Trello, GitHub Issues et Linear'],
+        integrations: ['Intégrations', 'Hébergeurs de code, Jira, Trello, GitHub Issues et Linear'],
         terminals: ['Terminaux', 'Shells disponibles dans les terminaux intégrés'],
         network: ['Réseau', 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour'],
         about: ['À propos', 'Version et données locales'],
@@ -8560,9 +10024,9 @@ api/.env.local</textarea></div>
       function voicePhase(question) {
         $('#vo-phase').lastChild.textContent = question ? 'pagination-users te pose une question' : 'pagination-users te répond';
         $('#vo-said').innerHTML = question
-          ? '<b>pagination-users</b>Au-delà de cent par page : je plafonne, ou je renvoie une erreur ? Les choix sont : plafonner, ou une erreur.'
+          ? '<b>pagination-users</b>Première question : au-delà de cent par page, je plafonne, ou je renvoie une erreur ?'
           : $('#vo-said').innerHTML;
-        $('#vo-opts').hidden = !question;
+        $('#vo-q').hidden = !question;
       }
 
       // The windows of the lot.
@@ -8626,6 +10090,220 @@ api/.env.local</textarea></div>
         toast('Téléchargement de la mise à jour impossible : le proxy a refusé le fichier (403).', { bad: true, sticky: true, link: 'Télécharger dans le navigateur' });
       }
       if (route === 'hosts') (split(true), sideTab('hosts'));
+
+      // ---------- Lot 0 bis (ESC-150): what the 1.8.0 to 1.8.9 added ----------
+
+      /** What the 1.8.x added to a shared surface (the status bar, the quota panel…): shown on the lot's addresses only. */
+      const bis = () => $$('[data-bis]').forEach((e) => (e.hidden = false));
+      /** A settings tab, scrolled to one of its groups. */
+      function settingsAt(tab, id) {
+        openSettings(tab);
+        const body = $('.s-body');
+        body.scrollTop = $('#' + id).offsetTop - body.offsetTop - 8;
+      }
+      /** A small tooltip drawn open beside an element. */
+      function tipAt(id, el, dx = 0, dy = 0) {
+        const r = $(el).getBoundingClientRect();
+        const t = $('#' + id);
+        t.hidden = false;
+        t.style.left = `${r.left + dx}px`;
+        t.style.top = `${r.bottom + 6 + dy}px`;
+      }
+      /** One of the new agents of the lot, its conversation in the panel. */
+      function agentBis(card, thread, head, wait = false) {
+        show('agents');
+        if (head['h-name']) $('#c-text').placeholder = `Envoyer un message à ${head['h-name']}…`;
+        if (wait && card) {
+          // Qui attend passe devant: amber, at the top of the list.
+          $(card).classList.add('waiting');
+          $('#agents').insertBefore($(card), $('#agents').firstChild);
+          $('#h-pill').innerHTML = '<i></i>Question';
+          $('#h-pill').classList.add('wait');
+        }
+        for (const k of Object.values(VARIANTS)) $('#' + k.th).hidden = true;
+        $$('.thread.bis').forEach((t) => (t.hidden = t.id !== thread));
+        $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current'));
+        if (card) ($(card).hidden = false), $(card).setAttribute('aria-current', 'true');
+        $('#plan').hidden = true;
+        for (const [id, v] of Object.entries(head)) {
+          const el = $('#' + id);
+          if (id === 'h-mark') el.setAttribute('aria-label', `Harness : ${v}`);
+          if (id.startsWith('chip-')) el.querySelector('b').textContent = v;
+          else el.innerHTML = v;
+        }
+      }
+
+      // Accounts and quotas (1.8.1, 1.8.9): the projection, OpenCode's budget, Copilot's credits, extra usage.
+      if (route === 'quota' || route === 'overage') (bis(), $('#qpanel').classList.add('tall'), pop('#qpanel', true));
+      // Harness (1.8.0, 1.8.2, 1.8.5): four groups, the tested versions, Claude Code updated by Escouade.
+      if (route === 'harness-opencode') settingsAt('claude', 'sg-opencode');
+      // Accounts (1.8.1, 1.8.9): no default account, new agents set per account, a switch at a threshold.
+      if (route === 'accounts-quotas') settingsAt('accounts', 'sg-quotas');
+      if (route === 'accounts-copilot') settingsAt('accounts', 'sg-acct-opencode');
+      if (route === 'account-machine') {
+        openSettings('accounts');
+        openModal('#acct-modal');
+        $('#acct-h').textContent = 'Copilot CLI';
+        $$('#acct-seg [role="radio"]').forEach((r, i) => r.setAttribute('aria-selected', String(i === 3)));
+        $$('#acct-modal .acct-new').forEach((e) => (e.hidden = true));
+        $$('#acct-modal .acct-machine').forEach((e) => (e.hidden = false));
+        $('#acct-r-machine').setAttribute('aria-checked', 'true');
+        $('#acct-r-machine').removeAttribute('aria-disabled');
+        $('#acct-r-new').setAttribute('aria-checked', 'false');
+        $('#acct-machine-d').textContent = 'Copilot CLI est connecté sur cette machine · @guill';
+      }
+      // The two new harnesses in the conversation (1.8.0), a switch of account (1.8.9), a harness without an account (1.8.1).
+      const OC = { 'h-name': 'migration-sqlite', 'h-mark': 'OpenCode', 'h-branch': 'escouade/migration-sqlite', 'fig-cost': '0,00 $', 'v-term-n': 'OpenCode', 'chip-model': 'qwen3-coder:30b', 'chip-effort': 'Par défaut', 'chip-mode': 'Demander' };
+      const CP = { 'h-name': 'revue-deps', 'h-mark': 'Copilot CLI', 'h-branch': 'escouade/revue-deps', 'fig-cost': '0,50 $', 'v-term-n': 'Copilot CLI', 'chip-model': 'GPT-6-Luna', 'chip-effort': 'Moyen', 'chip-mode': 'Édits auto' };
+      if (route === 'opencode') agentBis('#ag-oc', 'th-oc', OC, true);
+      if (route === 'modes-opencode') (agentBis('#ag-oc', 'th-oc', OC, true), ($('#mode-menu-oc').hidden = false));
+      if (route === 'copilot') agentBis('#ag-cp', 'th-cp', CP, true);
+      if (route === 'models') (agentBis('#ag-cp', 'th-cp', CP, true), ($('#model-menu').hidden = false));
+      if (route === 'switch-account') {
+        agentBis('#ag-pag', 'th-switch', {});
+        toast('pagination-users passe sur Pro : Principal à 90 % de sa fenêtre de 5 h.');
+      }
+      if (route === 'no-account') {
+        agentBis('#ag-noacct', 'th-noacct', { 'h-name': 'nouvel-agent', 'h-mark': 'Copilot CLI', 'h-branch': 'escouade/nouvel-agent', 'fig-cost': '—', 'v-term-n': 'Copilot CLI', 'chip-model': 'Auto', 'chip-effort': 'Moyen', 'chip-mode': 'Demander' });
+        $('#h-pill').innerHTML = '<i></i>Prêt';
+        $('#h-pill').classList.add('idle');
+        $('#c-text').value = 'Relis le module de facturation et liste ce qui manque de tests.';
+        $('#agents').insertBefore($('#ag-noacct'), $('#ag-refacto'));
+      }
+      // « Attend » and the time of its wake-up (1.8.9), the agents it drives listed under its card.
+      if (route === 'waiting') {
+        $('#ag-chef').hidden = false;
+        $('#driven').hidden = false;
+        $('#agents').insertBefore($('#driven'), $('#ag-refacto'));
+        $('#agents').insertBefore($('#ag-chef'), $('#driven'));
+        const a = $('#ag-refacto');
+        a.classList.add('awaits');
+        a.querySelector('.a-state').textContent = 'Attend';
+        a.querySelector('.a-act').innerHTML = '<svg class="i s14 ok"><use href="#i-check" /></svg><span class="tgt">Tour fini · 1 sous-agent, 1 tâche de fond</span><span class="spend">184 k · 2,41 $</span>';
+        const r = $('#ag-chef').getBoundingClientRect();
+        Object.assign($('#tip-wait').style, { left: `${r.right + 10}px`, top: `${r.top}px` });
+        $('#tip-wait').hidden = false;
+      }
+      // Voice (1.8.2 to 1.8.8): online services, a model and a voice per service, live transcription.
+      if (route === 'settings-voice-online') {
+        $$('[data-pane="voice"] .v-local').forEach((e) => (e.hidden = true));
+        $$('[data-pane="voice"] .v-online').forEach((e) => (e.hidden = false));
+        $$('[data-pane="voice"] .v-local-on').forEach((e) => e.setAttribute('aria-selected', 'false'));
+        $$('[data-pane="voice"] .v-online-on').forEach((e) => e.setAttribute('aria-selected', 'true'));
+      }
+      if (route === 'voice-live') {
+        variant('main');
+        $('#vo').hidden = false;
+        $('#vo-phase').lastChild.textContent = 'Je t’écoute…';
+        $('#vo-you').innerHTML = '<b>Toi</b>Et si le client demande deux cents <span class="live">par page, on</span> <span class="live-tag"><i></i>ElevenLabs · en direct</span>';
+        $('#vo-said').hidden = true;
+      }
+      if (route === 'dictation-live') {
+        variant('main');
+        $('#chip-mic').click();
+        $('#dict-live').hidden = false;
+        $('#dict-tag').hidden = false;
+        $('#dict .hint').hidden = true;
+      }
+      if (route === 'voice-online-voice') {
+        $$('[data-pane="voice"] .v-local').forEach((e) => (e.hidden = true));
+        $$('[data-pane="voice"] .v-online').forEach((e) => (e.hidden = false));
+        $$('[data-pane="voice"] .v-online-on').forEach((e) => e.setAttribute('aria-selected', 'true'));
+        $$('[data-pane="voice"] .v-local-on').forEach((e) => e.setAttribute('aria-selected', 'false'));
+        settingsAt('voice', 'sg-voice-conv');
+      }
+      // Code hosts (1.8.9).
+      if (route === 'code-hosts') settingsAt('integrations', 'sg-forges');
+      // Private projects (ESC-139 to 142).
+      if (route === 'private' || route === 'private-accounts') {
+        $('#tab-lock').removeAttribute('hidden');
+        $('#tgl-private').setAttribute('aria-checked', 'true');
+        $$('.priv-on').forEach((e) => (e.hidden = false));
+        settingsAt('projects', route === 'private' ? 'sg-private' : 'sh-private-accounts');
+      }
+      // .escouade.yml (ESC-146): its marks, its commands waiting, the Kanban's banner.
+      if (route === 'escouade-yml') ($$('[data-yml]').forEach((e) => (e.hidden = false)), settingsAt('projects', 'sg-worktrees'));
+      if (route === 'escouade-yml-pending') ($$('[data-yml]').forEach((e) => (e.hidden = false)), settingsAt('projects', 'sg-yml'));
+      if (route === 'escouade-yml-board') (show('board'), ($('#yml-banner').hidden = false));
+      // Worktrees cleaned (ESC-143): the leftovers, and what was kept.
+      if (route === 'worktree-cleanup') (($('#leftovers').hidden = false), settingsAt('projects', 'sr-leftovers'));
+      // Launch commands in an agent's worktree (1.8.0).
+      if (route === 'run-worktree') {
+        $('#wt-group').hidden = false;
+        const r = $('#sec-worker-play').getBoundingClientRect();
+        Object.assign($('#run-menu').style, { left: `${r.right + 8}px`, top: `${r.top - 40}px` });
+        $('#run-menu').hidden = false;
+      }
+      if (route === 'run-conflict') (($('#wt-group').hidden = false), openModal('#run-modal'));
+      // Pull requests of an agent (ESC-64).
+      if (route === 'pr-open') (($('#h-pr').hidden = false), ($('#h-launch').hidden = true), openModal('#pr-modal'));
+      if (route === 'pr') {
+        $('#prs-refacto').hidden = false;
+        $('#prs-pag').hidden = false;
+        $('#h-pr-chip').hidden = false;
+        tipAt('tip-pr', '#pr43', 0, 0);
+      }
+      // A ticket's worktree kept (ESC-143).
+      if (route === 'worktree-kept') {
+        $('#archived').hidden = false;
+        $$('#agents .agent:not(#ask-agent):not(#ag-refacto):not(#ag-pag)').forEach((a) => (a.hidden = true));
+        toast('DEM-3 mergé dans main · worktree gardé : 2 commits ni mergés ni poussés');
+      }
+      // The new project's start: a private project is not offered (ESC-142).
+      if (route === 'wizard-private') {
+        openModal('#wiz-modal');
+        $('#wiz-launch').hidden = true;
+        $('#wiz-start').hidden = false;
+        $$('.rail li').forEach((li, i) => {
+          li.classList.remove('ok');
+          li.removeAttribute('aria-current');
+          li.querySelector('.k').textContent = String(i + 1);
+        });
+        $('.rail li').setAttribute('aria-current', 'step');
+        $('#wiz-step').textContent = 'Étape 1 sur 8';
+      }
+      // The harness's own interface: OpenCode keeps the thread, Copilot CLI asks for the folder's trust (1.8.0).
+      function ttermBis(name, mark, seg, band) {
+        show('tterm');
+        $$('.agents .agent').forEach((a) => a.removeAttribute('aria-current'));
+        $('#tt-name').textContent = name;
+        $('#tt-mark').textContent = mark;
+        $('#tt-seg').textContent = seg;
+        $('#tt-branch').textContent = `escouade/${name}`;
+        $('#tt-codex').hidden = true;
+        $('#view-tterm').setAttribute('aria-label', `Vue ${seg}`);
+        if (band) $('#tt-band .grow').innerHTML = band;
+      }
+      if (route === 'opencode-view') {
+        ttermBis('migration-sqlite', 'OpenCode', 'OpenCode');
+        $('#tt-band').hidden = true;
+        $('#tt-keep').hidden = false;
+        $('#tt-oc').hidden = false;
+        $('#ag-oc').hidden = false;
+        $('#ag-oc').classList.add('waiting');
+        $('#ag-oc').setAttribute('aria-current', 'true');
+        $('#agents').insertBefore($('#ag-oc'), $('#agents').firstChild);
+      }
+      if (route === 'copilot-view') {
+        ttermBis('revue-deps', 'Copilot', 'Copilot CLI', '<b>Copilot CLI demande s’il peut faire confiance au dossier de l’agent.</b> Réponds dans le terminal : Escouade ne répond pas à ta place et ne tape rien tant que la question est posée.');
+        $('#tt-cp').hidden = false;
+        $('#ag-cp').hidden = false;
+        $('#ag-cp').classList.add('waiting');
+        $('#ag-cp').setAttribute('aria-current', 'true');
+        $('#ag-cp .a-state').textContent = 'Question';
+        $('#ag-cp .a-act').innerHTML = '<svg class="i s14" style="color: var(--wait)"><use href="#i-term" /></svg><span class="tgt">Confiance du dossier : réponds dans son terminal</span>';
+        $('#agents').insertBefore($('#ag-cp'), $('#agents').firstChild);
+      }
+      if (route === 'welcome-account') {
+        show('welcome');
+        app.classList.add('first');
+        $('#wl-title').textContent = 'Aucun compte';
+        $('#wl-install').hidden = true;
+        $('#view-welcome .wbox > div:last-child .btn.primary').classList.remove('primary');
+        $('#wl-accounts').hidden = false;
+        $('#view-welcome .wbox > p').textContent = 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.';
+      }
+      if (route === 'overage') (($('#sb-over').hidden = false), ($('#q-bill').hidden = false), ($('#q-more').hidden = true));
 
       // The English labels, to check what is tight (the agents' own words stay as they came).
       if (new URLSearchParams(location.search).get('lang') === 'en') english();

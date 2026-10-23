@@ -1,6 +1,6 @@
 # Lot 0 du redesign 2.0 (ESC-116) : l'UX des fonctionnalités venues après l'aperçu
 
-L'aperçu (`index.html`) a été validé le 2026-10-12 ; depuis, Escouade a gagné un deuxième harness, les comptes par harness, la passation, la voix, les pièces jointes, les sous-agents et tâches de fond, l'assistant « Nouveau projet », le serveur MCP, le remote control, les statistiques anonymes. Ce lot les dessine dans le même monde visuel, chacun à son adresse, avant tout code. Les harness sont Claude Code et Codex, eux seuls (décidé le 2026-10-17 : l’app n’en connaît pas d’autre) ; aucun autre n’apparaît dans l’aperçu.
+L'aperçu (`index.html`) a été validé le 2026-10-12 ; depuis, Escouade a gagné un deuxième harness, les comptes par harness, la passation, la voix, les pièces jointes, les sous-agents et tâches de fond, l'assistant « Nouveau projet », le serveur MCP, le remote control, les statistiques anonymes. Ce lot les dessine dans le même monde visuel, chacun à son adresse, avant tout code. Les harness étaient alors Claude Code et Codex, eux seuls (décidé le 2026-10-17 : l’app n’en connaissait pas d’autre) ; depuis le lot 0 bis (plus bas), ce sont les quatre que l’app connaît.
 
 D'où vient l'état actuel décrit ici : les composants (`src/components`, `git diff 26b4d6c..main`), les catalogues `src/lib/i18n/{fr,en}`, et ce que Codex déclare (`src-tauri/src/engine/codex/mod.rs`, `caps()`). L'app réelle n'a pas été relancée pour ce lot.
 
@@ -104,3 +104,64 @@ Tous les choix ci-dessous ont été validés sur les captures : c'est le design 
 11. **Pièces jointes du ticket** en une seule rangée (images et fichiers ensemble), et le trombone avec le nombre sur la carte du Kanban.
 12. **Accueil sans harness** : « Chercher à nouveau » relance la détection sans redémarrer l'app.
 13. **Échec de mise à jour** gardé dans Réglages › À propos tant qu'il dure, en plus de la notification.
+
+# Lot 0 bis (ESC-150, 2026-10-23) : les fonctionnalités de la 1.8.0 à la 1.8.9
+
+Ce lot étend l'aperçu à ce que la 1.8.0 à la 1.8.9 ont ajouté et qu'il ne dessinait pas, dans les deux thèmes (ESC-129), chaque surface à son adresse. Il part de `CHANGELOG.md` (1.8.0 à 1.8.9), puis des composants de `src/` et des catalogues `src/lib/i18n/{fr,en}` pour les vrais libellés et états ; rien n'a changé dans `src/`. Les vues « Pull requests » et « Environnements » du projet (ESC-65, ESC-67) n'y sont pas : elles se dessinent dans leurs tickets.
+
+**La règle des harness change.** Celle du lot 0 (« Claude Code et Codex, eux seuls », 2026-10-17) devient : **les quatre harness que l'app connaît, Claude Code, Codex, OpenCode et Copilot CLI ; Cursor CLI reporté**, absent de l'aperçu. Leurs marques sont des mots dans un filet : « Claude », « Codex », « OpenCode », « Copilot ».
+
+**Ce qui partage une surface avec le lot 0** (barre d'état, panneau des quotas, liste des agents) n'apparaît qu'aux adresses de ce lot : les captures des autres écrans restent celles validées, octet pour octet. Le design à suivre est celui des adresses ci-dessous.
+
+## Adresses
+
+Nouvelles (`index.html#…`, avec `?lang=en` ou `?theme=light` avant le `#`) :
+- harness et comptes : `#harness-opencode`, `#accounts-copilot`, `#accounts-quotas`, `#account-machine`, `#no-account`, `#welcome-account` ;
+- quotas : `#overage` (et `#quota`, changé) ;
+- les nouveaux harness dans la conversation : `#opencode`, `#modes-opencode`, `#copilot`, `#models`, `#opencode-view`, `#copilot-view` ;
+- agents : `#switch-account`, `#waiting`, `#run-worktree`, `#run-conflict`, `#worktree-kept` ;
+- PR d'un agent : `#pr-open`, `#pr` ;
+- voix : `#voice-live`, `#dictation-live`, `#settings-voice-online`, `#voice-online-voice` ;
+- réglages : `#code-hosts`, `#private`, `#private-accounts`, `#escouade-yml`, `#escouade-yml-pending`, `#escouade-yml-board`, `#worktree-cleanup` ;
+- assistant : `#wizard-private`.
+
+Changées (écrans du lot 0 mis à jour à leur adresse) : `#new-agent`, `#agent-menu`, `#quota`, `#account-codex`, `#voice-question`, `#welcome`, `#settings-claude` (Harness), `#settings-accounts`, `#settings-app`, `#settings-voice`, `#settings-board`, `#settings-projects`, `#settings-integrations`, `#settings-mcp`, `#settings-about`.
+
+Déjà dessiné, rien à changer : le modèle réel d'un sous-agent (1.8.9) est la ligne « Modèle » de `#subagent`.
+
+## Libellés anglais vérifiés (1028×779, captures `-small-en`)
+
+- Le menu « Harness » tient avec « The project’s · Main · Opus 5.5 · Auto » et « Add an account… » sur la ligne de Copilot CLI.
+- Sous une carte, « Agent addresses the feedback » tient à côté du numéro de PR seulement si l'état passe dans l'infobulle : c'est le choix 26.
+- « Wakes at 15:30 » tient à la place de l'état ; « Driven agents · 2 at work » comme le titre des sous-agents.
+- Réglages › Comptes : « The harness’s (Sonnet 5.5) » tient dans le menu du modèle d'un compte.
+- Sous 1240 px de large, la barre d'état perd aussi les projections et « extra usage », comme les pourcentages au lot 0 : ils restent dans le panneau.
+- À 820 px de haut et moins, les lancements dans un worktree se replient avec Lancement (choix 9 du lot 0).
+
+## Choix validés par l’utilisateur le 2026-10-23 (à la suite des 13 du lot 0)
+
+14. **Quatre harness, mêmes règles** que le lot 0 : mêmes places, mêmes mots, la différence dite là où elle compte. Raison : l'app les fait tourner depuis la 1.8.0 ; le lot 0 n'en connaissait que deux. Adresses : `#new-agent`, `#opencode`, `#copilot`.
+15. **Le menu « Harness » numérote ses harness** (`1` à `4` une fois ouvert par `Ctrl Maj N`) au lieu d'un raccourci global par harness, et garde un harness sans compte à sa place, avec « Aucun compte » et « Ajouter un compte… ». Raison : quatre raccourcis ne se retiennent pas ; l'absence de compte se voit avant de créer l'agent, pas à son démarrage. `#new-agent`.
+16. **Le même menu porte l'agent sans worktree** (ou dans un worktree, l'inverse du réglage du projet), sous un titre « Worktree ». Raison : un seul menu à côté de « Nouvel agent », comme dans l'app 1.8.9. `#new-agent`.
+17. **Ce qu'un harness n'a pas reste à sa place, grisé avec sa raison** (le mode Auto d'OpenCode : « OpenCode n'a pas de mode Auto »), alors que l'app 1.8.0 le masque. Raison : la règle du lot 0 « les cinq modes aux mêmes places » ; un mode qui disparaît fait chercher. `#modes-opencode`.
+18. **Les réglages des nouveaux agents sont une ligne de la fiche de chaque compte** (modèle, effort, mode, toujours visibles), et « Compte de la machine » une marque sur la ligne du dossier. Réglages › Harness ne garde que l'exécutable, la version et ce qui vaut pour tous, sans « Se connecter… ». Raison : la 1.8.1 les a passés au compte ; les voir d'un coup d'œil évite d'ouvrir chaque compte. `#settings-accounts`, `#settings-claude`.
+19. **Un harness sans compte reste visible partout où il compte** : son groupe dans Comptes avec un bouton principal « Ajouter un compte Copilot CLI… », l'accueil « Aucun compte » avec le compte trouvé sur la machine, et la carte ambre d'un agent créé sans compte, qui propose aussi « Continuer sur Claude Code » (le harness du projet). Raison : rien ne démarre en silence (1.8.1), et la sortie est à un clic. `#accounts-copilot`, `#welcome-account`, `#no-account`.
+20. **« Changer de compte à » en segments** (80 %, 90 %, 95 %, « À la limite ») en tête de « Quand un quota est épuisé », et la projection dans un groupe « Quotas ». Raison : les deux seuils (pause, changement) se lisent ensemble. `#accounts-quotas`.
+21. **La barre d'état ne montre une projection que quand elle passe 80 %** (orange, rouge au-delà de 100 %) ; le panneau les montre toutes. L'app 1.8.9 les montre toujours. Raison : avec quatre harness, la barre n'a pas la place, et une projection verte ne demande rien. `#quota`.
+22. **L'usage supplémentaire facturé est un mot ambre dans le groupe du harness** (« usage supplémentaire »), sa phrase sous le compte dans le panneau. Raison : il coûte de l'argent, il doit se voir sans ouvrir le panneau. `#overage`.
+23. **OpenCode montre son coût du jour sur son budget** (« 0,42 $ / 5 $ ») à la place des jauges, et Copilot CLI une jauge « crédits » remise à zéro le 1er du mois. Raison : ce sont leurs vraies limites. `#quota`.
+24. **Un changement de compte au seuil se lit comme une passation** : un séparateur « Suite sur le compte Pro · Principal est à 90 % de sa fenêtre de 5 h », les tours suivants marqués de leur compte, et une notification. Raison : même geste que le changement de harness du lot 0. `#switch-account`.
+25. **« Attend » et l'heure de relance** remplacent « Terminé », avec un anneau vide (le tour est fini, pas le travail), et l'infobulle dit quoi ; les agents pilotés se replient sous la carte comme les sous-agents. Raison : « Terminé » mentait (1.8.9). `#waiting`.
+26. **Les PR d'un agent sous sa carte : un numéro avec le glyphe de son état et le seul bouton de correction utile** (« L'agent corrige », « L'agent corrige les retours »), l'état en mots dans l'infobulle ; la PR de l'agent ouvert à côté de sa branche dans l'en-tête. « Ouvrir une PR » prend la place de « Préparer le lancement » dans l'en-tête tant que la branche a des commits sans PR ; le lancement reste dans « … ». Raison : la colonne fait 250 px, et l'en-tête n'a qu'une place de bouton (choix 5). `#pr`, `#pr-open`.
+27. **Les hébergeurs de code en tête de Réglages › Intégrations**, une ligne par instance : vert connecté, ambre droits manquants, rouge jeton expiré avec « Reconnecter… » en bouton principal ; un hébergeur sans compte est nommé avec le projet qui en a besoin. Raison : ils servent les PR de chaque agent, Jira et Trello seulement les tickets importés. `#code-hosts`.
+28. **Un projet privé porte un cadenas sur son onglet** ; dans ses réglages, « Ses fichiers » est un tableau harness par harness (« Garde-fou » neutre, « Barrière » verte) et « Ses comptes » dit le compte réservé et, en ambre, le compte partagé avec de quoi y remédier. Ces deux parties n'apparaissent que pour un projet privé. Raison : dire honnêtement ce qui protège (ESC-140), sans charger les projets ordinaires. `#private`, `#private-accounts`.
+29. **Trois marques pour l'origine d'un réglage** : teal « Défini par .escouade.yml », neutre « Réglage local de cette machine » (avec « Écrire dans .escouade.yml » et « Reprendre la valeur du fichier »), ambre « en attente de ton accord » ; les commandes à approuver se lisent en entier dans un bloc ambre, et le Kanban le rappelle par une bande « Les lire ». Raison : une commande venue du dépôt ne tourne jamais sans avoir été lue. `#escouade-yml`, `#escouade-yml-pending`, `#escouade-yml-board`.
+30. **Le ▶ d'une commande ouvre « Dans le projet / Dans le worktree de … »** dès qu'un agent a un worktree, et le lancement tourne sous le nom de l'agent dans Lancement ; relancer ce qui tourne ailleurs demande, « Arrêter l'autre et lancer » en premier. Raison : le choix du dossier se fait au moment de lancer, sans réglage. `#run-worktree`, `#run-conflict`.
+31. **Un worktree gardé se dit en ambre sous la carte archivée** (« worktree gardé : 2 commits ni mergés ni poussés ») et dans la notification de la validation ; « Nettoyer » liste ce qu'il garde et pourquoi. Raison : rien ne se perd sans qu'on le sache (ESC-143). `#worktree-kept`, `#worktree-cleanup`.
+32. **En conversation vocale, une question à la fois** : « Question 1 sur 2 », les choix en touches numérotées sous les sous-titres, et « Dis le choix, son numéro, ou ta propre réponse ». Raison : les choix s'affichent sans être lus (1.8.2). `#voice-question`.
+33. **La transcription en direct s'écrit en plus pâle**, suivie de « ElevenLabs · en direct » (point rouge), dans la dictée comme dans la conversation. Raison : on voit que le texte n'est pas fini et qu'il part en ligne. `#dictation-live`, `#voice-live`.
+34. **Réglages › Voix : « Transcription » puis « Conversation », chacun avec « Local | En ligne » en segments** ; en ligne, service, modèle, clé, temps réel et ce qui part, écrit sous le choix ; la voix locale de secours dite en une ligne. Raison : la même question (sur ma machine ou en ligne ?) pour les deux sens de la voix. `#settings-voice`, `#settings-voice-online`, `#voice-online-voice`.
+35. **Le zoom en segments** (90 à 150 %), le palier trop grand pour la fenêtre grisé, et « Modèle des textes rédigés » dans un groupe « Textes rédigés ». Raison : les paliers usuels d'un clic. `#settings-app`.
+36. **Un long menu de modèles** : recherche, « Favoris » (étoile pleine à la couleur du projet), un groupe par famille ou éditeur, le coût ×N à droite. Raison : celui de l'app 1.8.1, dans le monde visuel de l'aperçu. `#models`.
+37. **La vue OpenCode porte une bande verte « Escouade garde le fil »** au lieu de la bande ambre de confiance des vues Codex et Copilot CLI. Raison : c'est la seule vue terminal où la conversation reste à jour. `#opencode-view`, `#copilot-view`.
+38. **Les nouvelles demandes de la conversation reprennent les cartes du lot 0** : « Toujours autoriser » d'OpenCode dit le motif gardé avant le clic ; le plafond de crédits de Copilot CLI est une carte ambre comme la limite d'usage (« Ajouter 50 crédits », « Lever le plafond », « Arrêter là ») ; le formulaire d'un serveur MCP, une carte à champs. Raison : une demande, une carte, quel que soit le harness. `#opencode`, `#copilot`.
