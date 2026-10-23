@@ -1,6 +1,7 @@
 // Captures the preview beside it: `node design/app-redesign/render.mjs [name…]` writes each screen at the app's
 // default size (1440×900), a few at the CI window's size (1028×779), another project's tint, and the screens of lot 0
-// (ESC-116) in French and, where labels are tight, in English (`-en`, index.html?lang=en).
+// (ESC-116) in French and, where labels are tight, in English (`-en`, index.html?lang=en). Each one is dark; every screen
+// at the default size has its light twin (`-light`, index.html?theme=light, ESC-129), and so do a few small and English ones.
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -83,7 +84,15 @@ const shots = [
   { name: 'wizard-small-en', ...SMALL, ...EN, hash: 'wizard' },
   { name: 'settings-harness-small-en', ...SMALL, ...EN, hash: 'settings-claude' },
   { name: 'settings-accounts-small-en', ...SMALL, ...EN, hash: 'settings-accounts' },
+  // The theme selector, on Système (its default): the window follows the emulated system theme.
+  { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
+const LIGHT_SMALL = ['agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en'];
+shots.push(
+  ...shots
+    .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))
+    .map((s) => ({ ...s, name: s.name.replace(/(-en)?$/, '-light$1'), theme: 'light' })),
+);
 const only = process.argv.slice(2);
 
 const errors = [];
@@ -92,8 +101,10 @@ for (const s of shots.filter((x) => !only.length || only.includes(x.name))) {
   const page = await browser.newPage({ viewport: { width: s.width, height: s.height } });
   // A script error would leave a screen half drawn: the capture fails instead.
   page.on('pageerror', (e) => errors.push(`${s.name}: ${e.message}`));
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto(`${url}${s.lang ? `?lang=${s.lang}` : ''}${s.hash ? `#${s.hash}` : ''}`);
+  const theme = s.theme ?? 'dark';
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme });
+  const query = new URLSearchParams({ theme: s.system ? 'system' : theme, ...(s.lang ? { lang: s.lang } : {}) });
+  await page.goto(`${url}?${query}${s.hash ? `#${s.hash}` : ''}`);
   await page.evaluate(() => document.fonts.ready);
   if (s.click) await page.click(s.click);
   await page.waitForTimeout(300);

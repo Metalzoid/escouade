@@ -46,9 +46,10 @@ L'implémentation a ensuite été repoussée à la 2.0, avec ce fichier et les a
   - Éditeur, Vue d'ensemble, Stats, réglages (Ctrl+,) ;
   - depuis le lot 0 : la flèche de « Nouvel agent », le mode du champ, les jauges de la barre d'état, « … » de l'en-tête (ou clic droit sur une carte), le micro (ou Ctrl+Espace), la conversation, « + » d'une colonne du Kanban, Réglages › Comptes › Ajouter un compte (Codex), Réglages › Projets › Ouvrir l'assistant.
 - **Chaque écran par son adresse** : `index.html#board`, `#plan-closed`, `#git`, `#history`, `#terminal`, `#run`, `#test`, `#test-run`, `#editor`, `#overview`, `#stats`, `#settings`, `#settings-<onglet>` (`app`, `claude` pour Harness, `accounts`, `voice`, `notifications`, `projects`, `board`, `integrations`, `mcp`, `terminals`, `network`, `about`).
-- **Les écrans du lot 0** (ESC-116, les fonctionnalités venues après l'aperçu) : `#new-agent`, `#codex`, `#modes`, `#handover`, `#agent-menu`, `#quota`, `#account-codex`, `#terminal-view`, `#welcome`, `#dictation`, `#dictation-offer`, `#voice`, `#voice-question`, `#attachments`, `#drop`, `#ticket`, `#subagent`, `#task`, `#wizard`, `#wizard-summary`, `#telemetry`, `#update`, `#update-failed`, `#hosts`. Avec `?lang=en` avant le `#`, les libellés anglais (ceux du catalogue `src/lib/i18n/en` quand il les a), par exemple `index.html?lang=en#modes`.
+- **Les écrans du lot 0** (ESC-116, les fonctionnalités venues après l'aperçu) : `#new-agent`, `#codex`, `#modes`, `#handover`, `#agent-menu`, `#quota`, `#account-codex`, `#terminal-view`, `#welcome`, `#dictation`, `#dictation-offer`, `#voice`, `#voice-question`, `#attachments`, `#drop`, `#ticket`, `#subagent`, `#task`, `#wizard`, `#wizard-summary`, `#telemetry`, `#update`, `#update-failed`, `#hosts`. Avec `?theme=light` (ou `dark`, `system`) avant le `#`, le thème ; avec `?lang=en`, les libellés anglais (ceux du catalogue `src/lib/i18n/en` quand il les a), par exemple `index.html?lang=en#modes`.
 - **Les notes d'UX du lot 0** : `design/app-redesign/UX-NOTES.md`. Pour chaque fonctionnalité, ce qui est mal pensé aujourd'hui et ce que l'aperçu propose ; les libellés anglais vérifiés ; les choix qui engagent le produit, tous validés par l'utilisateur le 2026-10-17.
-- **Les captures** : `design/app-redesign/*.png`, refaites par `node design/app-redesign/render.mjs [nom…]` (le rendu échoue si un écran lève une erreur). Elles sont prises à 1440×900, la taille par défaut de l'app ; celles en `-small` à 1028×779, la fenêtre de la CI ; celles en `-en` en anglais.
+- **Les captures** : `design/app-redesign/*.png`, refaites par `node design/app-redesign/render.mjs [nom…]` (le rendu échoue si un écran lève une erreur). Elles sont prises à 1440×900, la taille par défaut de l'app ; celles en `-small` à 1028×779, la fenêtre de la CI ; celles en `-en` en anglais. Chaque capture est sombre, et chacune à 1440×900 a sa jumelle claire `<nom>-light.png` (`?theme=light`), comme quelques-unes à 1028×779 et en anglais (`agents-small-light-en.png`…). `settings-app.png` montre le sélecteur « Thème ».
+- **Le contrôle de contraste** : `node design/app-redesign/contrast.mjs [--verbose]`, dans les deux thèmes, pour chaque couleur de projet (voir « Le thème clair »).
 - **Le contrat de direction** : `.impeccable/surfaces/src-app-svelte.md`. La commande `impeccable surface-brief read src/App.svelte` le relit.
 - **Le produit** : `PRODUCT.md`.
 
@@ -87,7 +88,84 @@ Les couleurs de projet échouent au contrôle : ce sont celles du produit, donc 
 - Icônes SVG tracées en 1,5px sur une grille de 16, une seule famille. Elles remplacent les caractères Unicode qui servent d'icônes : 92 dans les gabarits (× ✓ ↑ ↓ ▾ ▶ ▸ ■ ⌕ ⟳ ⚙…), plus ceux des textes (« ▶ Tester », « ✦ Remplir automatiquement ») et des onglets de réglages (`SETTINGS_TABS`) ; les tracés sont dans l'aperçu (`<symbol id="i-…">`).
 - Mouvement : courbe `cubic-bezier(0.16, 1, 0.3, 1)`. Trois moments seulement : le teint qui glisse, l'anneau de l'agent qui attend, le reflet de « Claude travaille… ». Tout s'arrête avec `prefers-reduced-motion`.
 
-**Mode clair** (demandé par l'utilisateur le 2026-10-19). Le design ci-dessus est le thème sombre ; l'app aura aussi un thème clair, choisi dans Réglages › Application › Affichage › « Thème » (Système, Clair, Sombre), appliqué à chaud, la fenêtre native suivant (`color-scheme`, barre de titre). Comme pour le sombre, il se décide sur l'aperçu avant d'être codé (ESC-129) : jetons du clair à côté de ceux du sombre (surfaces claires teintées par `--p`, filets et survol en noir translucide, textes foncés, états réajustés, bouton principal inversé), contraste AA vérifié pour chaque texte, chaque surface et chaque couleur de projet, versions claires du terminal (xterm), de l'éditeur (CodeMirror) et des graphiques. Thème par défaut proposé : Système, à confirmer par l'utilisateur sur l'aperçu. La table des jetons clairs viendra ici avec ESC-129.
+## Le thème clair (ESC-129)
+
+Demandé par l'utilisateur le 2026-10-19. Le design ci-dessus est le thème sombre ; l'app a aussi un thème clair, fait sur l'aperçu avant d'être codé (ESC-129, captures `-light`). La direction claire est validée par l'utilisateur sur ces captures, le 2026-10-23.
+
+**Le réglage.**
+- Réglages › Application › Affichage › « Thème » : Système, Clair, Sombre, en segments.
+- **Par défaut : Système** (décidé par l'utilisateur le 2026-10-23). Il suit le thème de Windows, macOS ou Linux (`prefers-color-scheme`) et ses changements, à chaud.
+- Appliqué tout de suite, sans attendre « Enregistrer » : l'onglet n'est pas marqué modifié.
+- Le choix est lu avant le premier rendu (pas d'éclair sombre au lancement d'une app claire). Dans l'app, à faire au lot 1 : le réglage lu côté Rust avant de créer la fenêtre, pour qu'elle naisse dans le bon thème.
+- **La fenêtre native suit** : `color-scheme: light | dark` sur la racine (barres de défilement, champs natifs, menus), et le thème de la fenêtre Tauri (`Window::set_theme(Some(Theme::Light | Dark))`, `None` pour Système) pour la barre de titre native de macOS, les coins et l'ombre de Windows 11 et le fond affiché avant la WebView. Sous Linux, le thème GTK de la fenêtre.
+- Dans l'aperçu : `data-theme="light"` sur `<html>`, posé par le petit script de `<head>` ; `?theme=light`, `?theme=dark` ou `?theme=system` dans l'adresse l'emporte (pour les captures) ; le choix fait dans le sélecteur est gardé (`localStorage`).
+
+**Les jetons.** Ce sont les mêmes noms dans les deux thèmes ; le clair redéfinit leurs valeurs (`:root[data-theme='light']` dans l'aperçu). Toute couleur écrite en dur dans l'aperçu est devenue un jeton (ESC-129), sans changer un pixel du sombre : les 66 captures sombres sont identiques, octet pour octet, avant et après.
+
+| Rôle | Jeton | Sombre | Clair |
+|---|---|---|---|
+| Cadre (barres, latérale) | `--frame` | `--p` 8 % sur #08090a | `--p` 7 % sur #f0f1f3 |
+| Panneau du travail | `--panel` | `--p` 4,5 % sur #0e0f11 | `--p` 2,5 % sur #fdfdfd |
+| Reliefs | `--raise`, `--raise-2` | `--p` 6 % sur #15161a, #1b1c20 | `--p` 4 % sur #f4f5f7, 5 % sur #eceef1 |
+| Puits (code, terminal) | `--well` | `--p` 2 % sur #0a0b0d | `--p` 2,5 % sur #f6f7f9 |
+| Encre des filets, survols, reliefs translucides | `--fg-rgb` | 255, 255, 255 | 15, 17, 22 |
+| Filets | `--line`, `--line-2`, `--line-3` | blanc 7,5 %, 12 %, 20 % | encre 9 %, 14 %, 24 % |
+| Survol | `--hover` | blanc 4,5 % | encre 4,5 % |
+| Ombres et assombrissements | `--shade` (multiplie l'alpha) | 1 | 0,3 |
+| Voile des fenêtres | `--scrim` | rgba(3, 4, 5, 0.62) | rgba(24, 26, 32, 0.3) |
+| Textes | `--text`, `--soft`, `--muted`, `--dim` | #F7F8F8, #D0D3D8, #8A8F98, #7B8089 | #15171C, #363A42, #555A63, #5C616A |
+| Réponse de l'agent | `--text-ai` | #E9EBEE | #1D2026 |
+| Couleur du projet en texte (liens, focus) | `--p-ink` | `--p` 70 % avec blanc | `--p` 50 % avec #15171c |
+| Lumière du projet | `--glow` | 20 % | 10 % |
+| Sélection | `--sel` | `--p` à 40 % | `--p` à 26 % |
+| Teal d'Escouade (icônes) | `--brand` | #35C1BD | oklch(0.52 0.09 190) |
+| En cours | `--run` | oklch(0.79 0.15 155) | oklch(0.48 0.13 155) |
+| Attente | `--wait` (fond 7 %/9 %, filet 32 %/40 %) | oklch(0.84 0.14 82) | oklch(0.5 0.11 70) |
+| Erreur, suppression | `--del` | oklch(0.74 0.14 22) | oklch(0.5 0.18 25) |
+| Ajout | `--add` | oklch(0.8 0.13 155) | oklch(0.47 0.12 155) |
+| Git modifié | `--git-m` | oklch(0.82 0.11 75) | oklch(0.5 0.11 65) |
+| Avertissement en texte | `--warn-ink` | oklch(0.8 0.1 60) | oklch(0.49 0.11 55) |
+| Teal en texte | `--teal-ink`, `--teal-ink-2` | oklch(0.86 0.08 190), oklch(0.82 0.09 190) | oklch(0.47 0.08 190) |
+| Points inactifs, cases vides | `--idle`, `--ring` | #5D626B, #4D5259 | #7A7F88 |
+| Séparateurs « · » | `--sep` | #4A4E55 | #B0B4BB |
+| Bouton principal | `--primary`, survol `--primary-hover`, texte `--on-primary` | #F2F3F4, #FFF, #08090A | #1B1D22, #30333A, #F7F8F8 |
+| Pastille qui attend (chiffre) | `--on-wait` | #1A1405 | #FFF |
+| Voix (fond, orbe) | `--vo-base`, `--orb-base` | #070809, #0B0C0E | #F3F4F6, #DFE2E7 |
+
+Les puces d'état prennent leur fond et leur filet de leur couleur (`oklch(from var(--run) l c h / 0.1)`), donc suivent le thème. Le focus et la sélection restent à la couleur du projet. Les interrupteurs allumés gardent `--p` 75 % avec noir et leur bouton blanc.
+
+**Code, terminal, éditeur.**
+
+| Rôle | Jeton | Sombre | Clair |
+|---|---|---|---|
+| Texte du code et du terminal | `--code-fg` | #D5D8DD | #24272E |
+| Commentaires, `dim` du terminal | `--code-dim` | #6C717A | #62676F |
+| Numéros de ligne (diff, éditeur) | `--code-ln`, `--code-nb` | #555A62, #565B63 | #8F949C |
+| Mots-clés | `--syn-k` | oklch(0.78 0.11 300) | oklch(0.5 0.16 300) |
+| Fonctions | `--syn-f` | oklch(0.83 0.09 235) | oklch(0.5 0.13 250) |
+| Chaînes | `--syn-s` | oklch(0.82 0.11 150) | oklch(0.5 0.12 150) |
+| Types | `--syn-t` | oklch(0.84 0.08 190) | oklch(0.5 0.09 200) |
+| Nombres | `--syn-n` | oklch(0.84 0.11 65) | oklch(0.53 0.13 55) |
+| ANSI vert, rouge | `--add`, `--del` | ci-dessus | ci-dessus |
+| ANSI jaune | `--ansi-y` | oklch(0.85 0.12 85) | oklch(0.54 0.12 80) |
+| ANSI cyan, liens | `--ansi-cy`, `--ansi-cy-2` | oklch(0.82 0.09 205), oklch(0.8 0.1 210) | oklch(0.5 0.1 215) |
+| Sélection d'un TUI (vidéo inverse) | `--term-sel-bg`, `--term-sel-fg` | #C8CCD2 sur #08090A | #2A2E35 sous #F7F8F8 |
+| Occurrence courante (recherche de l'éditeur) | `--on-hit` | #FFF | #15171C |
+
+Pour le lot 8, le thème clair d'xterm reprend ces valeurs : `foreground` `--code-fg`, `background` `--well`, `cursor` `--text`, `selectionBackground` `--p` à 26 %, et les 16 couleurs ANSI foncées comme ci-dessus ; proposé pour celles que l'aperçu ne montre pas : blanc #4A4E55, blanc vif #15171C, noir #F6F7F9, noir vif #8F949C, à passer au contrôle de contraste au lot 8. Le lot 9 fait de même pour CodeMirror (`src/lib/editor/theme.ts`, un `HighlightStyle` par thème, choisi par un `Compartment` qui change à chaud).
+
+**Graphiques.** Les deux palettes gardent leurs couleurs dans les deux thèmes : revalidées par le script de dataviz sur le vrai panneau des stats (#f9fcfb en clair, #101616 en sombre), toutes les vérifications passent (bande de luminosité, chroma, daltonismes ≥ 9,4, vision normale ≥ 15,2, contraste ≥ 3:1). Grilles et axes passent par `--fg-rgb`. Les couleurs de projet restent celles du produit : en clair aussi, chaque barre et chaque pastille porte le nom du projet.
+
+**Contraste.** `node design/app-redesign/contrast.mjs` lit chaque jeton dans le navigateur, pour chaque couleur de `PROJECT_COLORS` (et le teal des vues globales), sur chaque surface où il se pose : cadre, cadre sous la lumière du projet, cadre et panneau survolés, panneau, reliefs, puits, carte qui attend, puce du projet ; et les textes posés sur une couleur (bouton principal, pastille d'attente, sélection du terminal, occurrence courante, texte sélectionné). Seuil AA : 4,5:1 pour un texte, 3:1 pour un point ou un anneau.
+- **Clair : 183 paires × 15 couleurs, toutes au-dessus du seuil.** Les plus justes : le jaune ANSI sur relief (4,54), l'attente sur la carte qui attend (4,57), `--dim` sur cette carte (4,63) ; les anneaux à 3,08 sur le cadre survolé.
+- **Sombre : 28 paires sous le seuil, déjà là avant ESC-129** et laissées telles quelles (l'aperçu sombre ne change pas) : `--muted`, `--dim` et `--done` sous la lumière du projet (jusqu'à 3,06 avec la couleur grise), `--dim` sur les reliefs et les survols (3,9 à 4,2), `--code-dim` (3,4 à 3,95), `--idle` et `--ring` (1,5 à 3). Le lot 1 les remonte jusqu'à ce que `contrast.mjs` passe aussi en sombre ; l'écart visuel est faible (quelques points de luminosité sur des gris).
+
+**Ce que chaque lot vérifie dans les deux thèmes.**
+- Aucune couleur en dur dans un composant : tout passe par un jeton (`src/app.css`), qui a ses deux valeurs.
+- Les captures de l'app réelle (banc e2e, 1440×900 et 1028×779) dans les deux thèmes, comparées à celles de l'aperçu (`<écran>.png` et `<écran>-light.png`).
+- Le contrôle de contraste repris pour les jetons de l'app (un test Vitest qui lit les deux tables, chaque couleur de projet).
+- Le changement de thème à chaud : rien ne garde l'ancien (xterm, CodeMirror, graphiques redessinés, `color-scheme`, fenêtre native).
+- Lot 1 : le réglage, son défaut Système, la lecture avant le premier rendu, la fenêtre native. Lot 8 : thèmes d'xterm. Lot 9 : thèmes de CodeMirror. Lot 10 : graphiques. Lot 11 : le sélecteur dans Réglages › Application.
 
 ## Écran par écran
 
@@ -179,7 +257,7 @@ Organisation prévue :
 - la revue de fin d'Impeccable, puis son documenteur.
 
 Lots, dans l'ordre :
-0. **Mode clair dans l'aperçu** (ESC-129) : le thème clair de chaque écran de `design/app-redesign/`, un sélecteur « Thème », les captures `-light` ; validé par l'utilisateur avant le lot 1.
+0. **Mode clair dans l'aperçu** (ESC-129, fait le 2026-10-23) : le thème clair de chaque écran de `design/app-redesign/`, le sélecteur « Thème » (`#settings-app`), les captures `-light`, le contrôle `contrast.mjs` ; voir « Le thème clair ». Direction claire validée par l'utilisateur le 2026-10-23.
 1. **Fondations** : Inter (`@fontsource-variable/inter`), jetons de `src/app.css` dans les deux thèmes et le réglage « Thème », teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
    - Nouveau : `EngineMark`, la marque du harness, partout.
 2. **Coque** : `App.svelte`, `TitleBar`, `StatusBar`, `QuotaMeter`, `AccountsPanel`, `Toasts`, `Welcome`.

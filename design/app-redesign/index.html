@@ -4,6 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Escouade — aperçu du nouveau design</title>
+    <script>
+      // The theme, before the first paint: ?theme=light|dark|system, else the choice of Réglages › Application ›
+      // Affichage, else Système, which follows Windows, macOS or Linux (prefers-color-scheme) and its changes.
+      (() => {
+        const KEY = 'escouade-preview-theme';
+        const os = matchMedia('(prefers-color-scheme: light)');
+        const q = new URLSearchParams(location.search).get('theme');
+        let choice = ['system', 'light', 'dark'].includes(q) ? q : localStorage.getItem(KEY) || 'system';
+        const apply = () => (document.documentElement.dataset.theme = choice === 'system' ? (os.matches ? 'light' : 'dark') : choice);
+        os.addEventListener('change', apply);
+        apply();
+        window.themeChoice = () => choice;
+        window.setTheme = (c) => {
+          choice = c;
+          localStorage.setItem(KEY, c);
+          apply();
+        };
+      })();
+    </script>
     <link rel="stylesheet" href="../../website/node_modules/@fontsource-variable/inter/opsz.css" />
     <link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
     <link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
@@ -39,16 +58,127 @@
         --p-soft: color-mix(in oklch, var(--p) 16%, transparent);
         --run: oklch(0.79 0.15 155);
         --wait: oklch(0.84 0.14 82);
-        --wait-bg: oklch(0.84 0.14 82 / 0.07);
-        --wait-line: oklch(0.84 0.14 82 / 0.32);
+        --wait-bg: oklch(from var(--wait) l c h / 0.07);
+        --wait-line: oklch(from var(--wait) l c h / 0.32);
         --done: #8a8f98;
         --add: oklch(0.8 0.13 155);
         --del: oklch(0.74 0.14 22);
+        --git-m: oklch(0.82 0.11 75);
+        --warn-ink: oklch(0.8 0.1 60);
+        --teal-ink: oklch(0.86 0.08 190);
+        --teal-ink-2: oklch(0.82 0.09 190);
+        /* Hairlines, hovers and reliefs are the ink at low alpha: white here, near black in the light theme. */
+        --fg-rgb: 255, 255, 255;
+        --shade: 1;
+        --glow: 20%;
+        --sel: 40%;
+        --scrim: rgba(3, 4, 5, 0.62);
+        --drop-base: rgba(10, 11, 13, 0.86);
+        --text-ai: #e9ebee;
+        --idle: #5d626b;
+        --sep: #4a4e55;
+        --ring: #4d5259;
+        --lane-main: #c8ccd2;
+        --primary: #f2f3f4;
+        --primary-hover: #fff;
+        --on-primary: #08090a;
+        --on-primary-line: rgba(0, 0, 0, 0.12);
+        --on-primary-kbd: rgba(0, 0, 0, 0.18);
+        --on-primary-dim: #4a4e55;
+        --on-wait: #1a1405;
+        --on-hit: #fff;
+        --vo-base: #070809;
+        --orb-base: #0b0c0e;
+        /* Code, diffs and the terminal (xterm's theme, CodeMirror's highlight). */
+        --code-fg: #d5d8dd;
+        --code-ln: #555a62;
+        --code-nb: #565b63;
+        --code-dim: #6c717a;
+        --syn-k: oklch(0.78 0.11 300);
+        --syn-f: oklch(0.83 0.09 235);
+        --syn-s: oklch(0.82 0.11 150);
+        --syn-t: oklch(0.84 0.08 190);
+        --syn-n: oklch(0.84 0.11 65);
+        --ansi-y: oklch(0.85 0.12 85);
+        --ansi-cy: oklch(0.82 0.09 205);
+        --ansi-cy-2: oklch(0.8 0.1 210);
+        --term-sel-bg: #c8ccd2;
+        --term-sel-fg: #08090a;
         --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
         --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
         --ease: cubic-bezier(0.16, 1, 0.3, 1);
         color-scheme: dark;
         transition: --p 0.7s var(--ease);
+      }
+      /*
+       * The light theme: the same tokens, read the other way round. Pale surfaces tinted by the project, the ink at low
+       * alpha for hairlines and hovers, dark texts, the states and the code darkened to keep AA, the primary button
+       * inverted. Chosen by Réglages › Application › Affichage › Thème, or ?theme=light.
+       */
+      :root[data-theme='light'] {
+        --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+        --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+        --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+        --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+        --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+        --fg-rgb: 15, 17, 22;
+        --line: rgba(15, 17, 22, 0.09);
+        --line-2: rgba(15, 17, 22, 0.14);
+        --line-3: rgba(15, 17, 22, 0.24);
+        --hover: rgba(15, 17, 22, 0.045);
+        --text: #15171c;
+        --soft: #363a42;
+        --muted: #555a63;
+        --dim: #5c616a;
+        --brand: oklch(0.52 0.09 190);
+        --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+        --p-soft: color-mix(in oklch, var(--p) 14%, transparent);
+        --run: oklch(0.48 0.13 155);
+        --wait: oklch(0.5 0.11 70);
+        --wait-bg: oklch(from var(--wait) l c h / 0.09);
+        --wait-line: oklch(from var(--wait) l c h / 0.4);
+        --done: #555a63;
+        --add: oklch(0.47 0.12 155);
+        --del: oklch(0.5 0.18 25);
+        --git-m: oklch(0.5 0.11 65);
+        --warn-ink: oklch(0.49 0.11 55);
+        --teal-ink: oklch(0.47 0.08 190);
+        --teal-ink-2: oklch(0.47 0.08 190);
+        --shade: 0.3;
+        --glow: 10%;
+        --sel: 26%;
+        --scrim: rgba(24, 26, 32, 0.3);
+        --drop-base: rgba(250, 250, 251, 0.9);
+        --text-ai: #1d2026;
+        --idle: #7a7f88;
+        --sep: #b0b4bb;
+        --ring: #7a7f88;
+        --lane-main: #595e68;
+        --primary: #1b1d22;
+        --primary-hover: #30333a;
+        --on-primary: #f7f8f8;
+        --on-primary-line: rgba(0, 0, 0, 0.3);
+        --on-primary-kbd: rgba(255, 255, 255, 0.22);
+        --on-primary-dim: #a3a8b0;
+        --on-wait: #ffffff;
+        --on-hit: #15171c;
+        --vo-base: #f3f4f6;
+        --orb-base: #dfe2e7;
+        --code-fg: #24272e;
+        --code-ln: #8f949c;
+        --code-nb: #8f949c;
+        --code-dim: #62676f;
+        --syn-k: oklch(0.5 0.16 300);
+        --syn-f: oklch(0.5 0.13 250);
+        --syn-s: oklch(0.5 0.12 150);
+        --syn-t: oklch(0.5 0.09 200);
+        --syn-n: oklch(0.53 0.13 55);
+        --ansi-y: oklch(0.54 0.12 80);
+        --ansi-cy: oklch(0.5 0.1 215);
+        --ansi-cy-2: oklch(0.5 0.1 215);
+        --term-sel-bg: #2a2e35;
+        --term-sel-fg: #f7f8f8;
+        color-scheme: light;
       }
 
       * {
@@ -86,7 +216,7 @@
         outline-offset: 2px;
       }
       ::selection {
-        background: color-mix(in oklch, var(--p) 40%, transparent);
+        background: color-mix(in oklch, var(--p) var(--sel), transparent);
         color: var(--text);
       }
       ::-webkit-scrollbar {
@@ -94,13 +224,13 @@
         height: 10px;
       }
       ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.09);
+        background: rgba(var(--fg-rgb), 0.09);
         border: 3px solid transparent;
         border-radius: 10px;
         background-clip: padding-box;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(255, 255, 255, 0.16);
+        background-color: rgba(var(--fg-rgb), 0.16);
       }
       .num {
         font-variant-numeric: tabular-nums;
@@ -153,7 +283,7 @@
         inset: 0 0 auto;
         height: 520px;
         z-index: -1;
-        background: radial-gradient(80% 100% at 18% 0%, color-mix(in oklch, var(--p) 20%, transparent), transparent 75%);
+        background: radial-gradient(80% 100% at 18% 0%, color-mix(in oklch, var(--p) var(--glow), transparent), transparent 75%);
         pointer-events: none;
       }
 
@@ -217,7 +347,7 @@
       }
       .tab[aria-selected='true'] {
         color: var(--text);
-        background: color-mix(in oklch, var(--p) 18%, rgba(255, 255, 255, 0.05));
+        background: color-mix(in oklch, var(--p) 18%, rgba(var(--fg-rgb), 0.05));
         box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent);
       }
       .tab .sw {
@@ -239,7 +369,7 @@
         padding: 0 5px;
         border-radius: 9px;
         background: var(--wait);
-        color: #1a1405;
+        color: var(--on-wait);
         font-size: 11px;
         font-weight: 650;
         font-variant-numeric: tabular-nums;
@@ -271,7 +401,7 @@
         padding: 0 6px 0 10px;
         border: 1px solid var(--line);
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.025);
+        background: rgba(var(--fg-rgb), 0.025);
         color: var(--muted);
         transition: border-color 0.15s;
       }
@@ -327,7 +457,7 @@
         grid-template-columns: 1fr 1fr;
         padding: 3px;
         border-radius: 9px;
-        background: rgba(255, 255, 255, 0.035);
+        background: rgba(var(--fg-rgb), 0.035);
         box-shadow: inset 0 0 0 1px var(--line);
       }
       .seg button {
@@ -350,7 +480,7 @@
         background: var(--raise-2);
         color: var(--text);
         box-shadow:
-          0 1px 2px rgba(0, 0, 0, 0.4),
+          0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade))),
           inset 0 0 0 1px var(--line-2);
       }
       .seg .count {
@@ -380,7 +510,7 @@
         width: 20px;
         height: 20px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         box-shadow: inset 0 0 0 1px var(--line);
       }
       .new-agent span:nth-child(2) {
@@ -414,7 +544,7 @@
         background: var(--hover);
       }
       .agent[aria-current='true'] {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         box-shadow: inset 0 0 0 1px var(--line-2);
       }
       .agent.waiting {
@@ -426,7 +556,7 @@
         --tone: var(--done);
       }
       .agent.idle {
-        --tone: #5d626b;
+        --tone: var(--idle);
       }
       .a-top {
         display: flex;
@@ -503,7 +633,7 @@
         white-space: nowrap;
       }
       .a-meta .sep {
-        color: #4a4e55;
+        color: var(--sep);
       }
       .a-meta .branch {
         margin-left: -2px;
@@ -549,7 +679,7 @@
         width: 8px;
         height: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(var(--fg-rgb), 0.12);
       }
       .loops i.on {
         background: var(--p-ink);
@@ -563,7 +693,7 @@
         width: 46px;
         height: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(var(--fg-rgb), 0.1);
         overflow: hidden;
       }
       .plan-mini .bar i {
@@ -597,7 +727,7 @@
         height: 26px;
         padding: 0 9px 0 6px;
         border-radius: 7px;
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         box-shadow: inset 0 0 0 1px var(--line-2);
         color: var(--text);
         font-size: 12px;
@@ -607,7 +737,7 @@
           box-shadow 0.15s;
       }
       .opt:hover {
-        background: oklch(0.84 0.14 82 / 0.14);
+        background: oklch(from var(--wait) l c h / 0.14);
         box-shadow: inset 0 0 0 1px var(--wait-line);
       }
       .opt kbd {
@@ -673,7 +803,7 @@
         background: var(--panel);
         box-shadow:
           0 0 0 1px var(--line),
-          0 8px 24px -6px rgba(0, 0, 0, 0.5);
+          0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
         overflow: hidden;
       }
       .view {
@@ -722,7 +852,7 @@
         height: 20px;
         padding: 0 8px 0 7px;
         border-radius: 10px;
-        background: oklch(0.79 0.15 155 / 0.1);
+        background: oklch(from var(--run) l c h / 0.1);
         color: var(--run);
         font-size: 11.5px;
         font-weight: 550;
@@ -776,7 +906,7 @@
         height: 2px;
         margin-top: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(var(--fg-rgb), 0.1);
       }
       .ctx-meter i {
         display: block;
@@ -797,7 +927,7 @@
         height: 30px;
         padding: 0 11px;
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(var(--fg-rgb), 0.04);
         box-shadow: inset 0 0 0 1px var(--line-2);
         color: var(--text);
         font-weight: 550;
@@ -807,22 +937,22 @@
           box-shadow 0.15s;
       }
       .btn:hover {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(var(--fg-rgb), 0.08);
         box-shadow: inset 0 0 0 1px var(--line-3);
       }
       .btn svg {
         color: var(--muted);
       }
       .btn.primary {
-        background: #f2f3f4;
-        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
-        color: #08090a;
+        background: var(--primary);
+        box-shadow: inset 0 -1px 0 var(--on-primary-line);
+        color: var(--on-primary);
       }
       .btn.primary svg {
-        color: #08090a;
+        color: var(--on-primary);
       }
       .btn.primary:hover {
-        background: #fff;
+        background: var(--primary-hover);
       }
       .btn.icon {
         width: 30px;
@@ -844,7 +974,7 @@
         color: var(--muted);
       }
       .layout-seg button[aria-pressed='true'] {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(var(--fg-rgb), 0.08);
         color: var(--text);
       }
 
@@ -860,7 +990,7 @@
         height: 40px;
         padding: 0 16px 0 22px;
         border-bottom: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.012);
+        background: rgba(var(--fg-rgb), 0.012);
         font-size: 12.5px;
       }
       .plan .tag {
@@ -878,13 +1008,13 @@
         width: 22px;
         height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(var(--fg-rgb), 0.1);
       }
       .segs i.done {
         background: var(--soft);
       }
       .segs i.now {
-        background: linear-gradient(90deg, var(--p-ink) 0 50%, rgba(255, 255, 255, 0.1) 50%);
+        background: linear-gradient(90deg, var(--p-ink) 0 50%, rgba(var(--fg-rgb), 0.1) 50%);
         background-size: 200% 100%;
         animation: fill 2.4s var(--ease) infinite alternate;
       }
@@ -915,7 +1045,7 @@
         height: 22px;
         padding: 0 8px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(var(--fg-rgb), 0.05);
         color: var(--muted);
         font-size: 12px;
       }
@@ -957,7 +1087,7 @@
         gap: 10px;
         font-size: 13.5px;
         line-height: 1.62;
-        color: #e9ebee;
+        color: var(--text-ai);
       }
       .msg-ai p {
         margin: 0;
@@ -969,7 +1099,7 @@
       .msg-ai code {
         padding: 1px 5px;
         border-radius: 5px;
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         font-family: var(--mono);
         font-size: 12px;
       }
@@ -1013,7 +1143,7 @@
         width: 22px;
         height: 22px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(var(--fg-rgb), 0.05);
         box-shadow: inset 0 0 0 1px var(--line);
         color: var(--muted);
       }
@@ -1094,7 +1224,7 @@
         font-family: var(--mono);
         font-size: 12px;
         line-height: 1.7;
-        color: #d5d8dd;
+        color: var(--code-fg);
       }
       .code pre .ln {
         display: block;
@@ -1106,39 +1236,39 @@
         padding: 0 14px 0 0;
       }
       .diff .ln .lno {
-        color: #555a62;
+        color: var(--code-ln);
         text-align: right;
         padding-right: 10px;
       }
       .diff .ln.a {
-        background: oklch(0.8 0.13 155 / 0.08);
+        background: oklch(from var(--add) l c h / 0.08);
       }
       .diff .ln.a .sig {
         color: var(--add);
       }
       .diff .ln.d {
-        background: oklch(0.74 0.14 22 / 0.09);
+        background: oklch(from var(--del) l c h / 0.09);
       }
       .diff .ln.d .sig {
         color: var(--del);
       }
       .k {
-        color: oklch(0.78 0.11 300);
+        color: var(--syn-k);
       }
       .f {
-        color: oklch(0.83 0.09 235);
+        color: var(--syn-f);
       }
       .s {
-        color: oklch(0.82 0.11 150);
+        color: var(--syn-s);
       }
       .t {
-        color: oklch(0.84 0.08 190);
+        color: var(--syn-t);
       }
       .n {
-        color: oklch(0.84 0.11 65);
+        color: var(--syn-n);
       }
       .c {
-        color: #6c717a;
+        color: var(--code-dim);
       }
 
       .working {
@@ -1184,14 +1314,14 @@
         background: var(--raise);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 12px 32px -12px rgba(0, 0, 0, 0.6);
+          0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
         transition: box-shadow 0.2s;
       }
       .composer:focus-within {
         box-shadow:
           inset 0 0 0 1px color-mix(in oklch, var(--p) 55%, transparent),
           0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent),
-          0 12px 32px -12px rgba(0, 0, 0, 0.6);
+          0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)));
       }
       .composer textarea {
         display: block;
@@ -1259,8 +1389,8 @@
         border-radius: 9px;
       }
       .btn.send kbd {
-        border-color: rgba(0, 0, 0, 0.18);
-        color: #4a4e55;
+        border-color: var(--on-primary-kbd);
+        color: var(--on-primary-dim);
       }
       .btn.stop kbd {
         height: 16px;
@@ -1302,11 +1432,11 @@
         height: 14px;
         border-radius: 50%;
         background: #fff;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade)));
         transition: left 0.25s var(--ease);
       }
       .switch[aria-checked='false'] .knob {
-        background: rgba(255, 255, 255, 0.14);
+        background: rgba(var(--fg-rgb), 0.14);
       }
       .switch[aria-checked='false'] .knob::after {
         left: 2px;
@@ -1390,14 +1520,14 @@
         background: var(--raise);
         box-shadow:
           inset 0 0 0 1px var(--line),
-          0 1px 2px rgba(0, 0, 0, 0.3);
+          0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shade)));
         text-align: left;
         transition: box-shadow 0.15s;
       }
       .card:hover {
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 4px 12px -4px rgba(0, 0, 0, 0.5);
+          0 4px 12px -4px rgba(0, 0, 0, calc(0.5 * var(--shade)));
       }
       .card.attn {
         background: color-mix(in oklch, var(--wait) 5%, var(--raise));
@@ -1456,7 +1586,7 @@
         width: 14px;
         height: 14px;
         margin-top: 1px;
-        color: #5d626b;
+        color: var(--idle);
       }
       .crit .met svg {
         color: var(--add);
@@ -1580,13 +1710,13 @@
         color: var(--soft);
       }
       .sb-item.wait.none .d {
-        background: #5d626b !important;
+        background: var(--idle) !important;
       }
       .meter {
         width: 44px;
         height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(var(--fg-rgb), 0.1);
         overflow: hidden;
       }
       .meter i {
@@ -1630,7 +1760,7 @@
         background: var(--raise-2);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 12px 32px -8px rgba(0, 0, 0, 0.7);
+          0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
         font-size: 12.5px;
         opacity: 0;
         pointer-events: none;
@@ -1651,7 +1781,7 @@
       }
       @keyframes flash {
         from {
-          background: oklch(0.79 0.15 155 / 0.16);
+          background: oklch(from var(--run) l c h / 0.16);
         }
       }
 
@@ -1719,7 +1849,7 @@
         background: var(--hover);
       }
       .row-item[aria-current='true'] {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         box-shadow: inset 0 0 0 1px var(--line-2);
       }
       .row-item .d {
@@ -1727,7 +1857,7 @@
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: #5d626b;
+        background: var(--idle);
       }
       .row-item .d.on {
         background: var(--run);
@@ -1807,7 +1937,7 @@
       .plan-box {
         flex: none;
         border-bottom: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.012);
+        background: rgba(var(--fg-rgb), 0.012);
       }
       .plan-inner {
         display: grid;
@@ -1894,7 +2024,7 @@
         flex: 1;
         height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.09);
+        background: rgba(var(--fg-rgb), 0.09);
         overflow: hidden;
       }
       .bar7 i.done {
@@ -1931,7 +2061,7 @@
         font-size: 12.5px;
       }
       .plan-list li.focus {
-        background: rgba(255, 255, 255, 0.045);
+        background: rgba(var(--fg-rgb), 0.045);
       }
       .plan-list .no {
         color: var(--dim);
@@ -1974,7 +2104,7 @@
         height: 20px;
         padding: 0 7px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(var(--fg-rgb), 0.05);
         color: var(--soft);
         font-size: 11.5px;
       }
@@ -1998,7 +2128,7 @@
         width: 11px;
         height: 11px;
         border-radius: 50%;
-        box-shadow: inset 0 0 0 1.5px #4d5259;
+        box-shadow: inset 0 0 0 1.5px var(--ring);
       }
       .st-ic.run i {
         width: 12px;
@@ -2011,7 +2141,7 @@
       .rbar {
         height: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(var(--fg-rgb), 0.08);
         overflow: hidden;
       }
       .rbar i {
@@ -2047,10 +2177,10 @@
         width: 28px;
         height: 3px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(var(--fg-rgb), 0.12);
       }
       .grip:hover i {
-        background: rgba(255, 255, 255, 0.28);
+        background: rgba(var(--fg-rgb), 0.28);
       }
 
       /* ---------- The files beside the conversation ---------- */
@@ -2138,14 +2268,14 @@
         background: var(--hover);
       }
       .file[aria-current='true'] {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
       }
       .file .letter {
         font: 600 11.5px var(--mono);
         text-align: center;
       }
       .file .letter.m {
-        color: oklch(0.82 0.11 75);
+        color: var(--git-m);
       }
       .file .letter.a {
         color: var(--add);
@@ -2272,21 +2402,21 @@
         padding: 16px 22px;
         overflow: auto;
         background: var(--well);
-        color: #d5d8dd;
+        color: var(--code-fg);
         font: 12.5px/1.6 var(--mono);
         white-space: pre;
       }
       .term .dim {
-        color: #6c717a;
+        color: var(--code-dim);
       }
       .term .g {
-        color: oklch(0.8 0.13 155);
+        color: var(--add);
       }
       .term .y {
-        color: oklch(0.85 0.12 85);
+        color: var(--ansi-y);
       }
       .term .cy {
-        color: oklch(0.82 0.09 205);
+        color: var(--ansi-cy);
       }
       .term .r {
         color: var(--del);
@@ -2296,9 +2426,9 @@
         font-weight: 600;
       }
       .term a {
-        color: oklch(0.82 0.09 205);
+        color: var(--ansi-cy);
         text-decoration: underline;
-        text-decoration-color: rgba(255, 255, 255, 0.25);
+        text-decoration-color: rgba(var(--fg-rgb), 0.25);
         text-underline-offset: 3px;
       }
       .term .caret {
@@ -2320,7 +2450,7 @@
         height: 20px;
         padding: 0 7px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         color: var(--soft);
         font-size: 11.5px;
         font-weight: 550;
@@ -2336,8 +2466,8 @@
         color: var(--del);
       }
       .btn.danger:hover {
-        background: oklch(0.74 0.14 22 / 0.1);
-        box-shadow: inset 0 0 0 1px oklch(0.74 0.14 22 / 0.4);
+        background: oklch(from var(--del) l c h / 0.1);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.4);
       }
       .toast.bad svg {
         color: var(--del);
@@ -2361,7 +2491,7 @@
         z-index: 20;
         display: grid;
         place-items: center;
-        background: rgba(3, 4, 5, 0.62);
+        background: var(--scrim);
         animation: fade 0.2s ease-out;
       }
       @keyframes fade {
@@ -2378,7 +2508,7 @@
         background: var(--raise);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 24px 64px -12px rgba(0, 0, 0, 0.75);
+          0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
         animation: rise 0.35s var(--ease);
       }
       @keyframes rise {
@@ -2419,7 +2549,7 @@
         margin: 0;
         padding: 11px 13px;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.035);
+        background: rgba(var(--fg-rgb), 0.035);
         box-shadow: inset 0 0 0 1px var(--line);
         color: var(--soft);
         font-size: 12.5px;
@@ -2530,7 +2660,7 @@
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        border: 1.75px solid rgba(255, 255, 255, 0.15);
+        border: 1.75px solid rgba(var(--fg-rgb), 0.15);
         border-top-color: var(--soft);
         animation: spin 0.9s linear infinite;
       }
@@ -2631,7 +2761,7 @@
         background: var(--hover);
       }
       .node[aria-current='true'] {
-        background: color-mix(in oklch, var(--p) 14%, rgba(255, 255, 255, 0.03));
+        background: color-mix(in oklch, var(--p) 14%, rgba(var(--fg-rgb), 0.03));
         color: var(--text);
       }
       .node svg {
@@ -2644,14 +2774,14 @@
         width: 5px;
         height: 5px;
         border-radius: 50%;
-        background: oklch(0.82 0.11 75);
+        background: var(--git-m);
       }
       .node .letter {
         margin-left: auto;
         font: 600 11px var(--mono);
       }
       .node .letter.m {
-        color: oklch(0.82 0.11 75);
+        color: var(--git-m);
       }
       .node .letter.a {
         color: var(--add);
@@ -2678,7 +2808,7 @@
         font-size: 12.5px;
       }
       .ed-tab[aria-selected='true'] {
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(var(--fg-rgb), 0.03);
         box-shadow: inset 0 -2px 0 var(--p-ink);
         color: var(--text);
       }
@@ -2719,7 +2849,7 @@
         padding: 6px 0 24px;
         overflow: auto;
         font: 12.5px/1.75 var(--mono);
-        color: #d5d8dd;
+        color: var(--code-fg);
       }
       .code-ed .l {
         display: grid;
@@ -2727,11 +2857,11 @@
         gap: 0 14px;
       }
       .code-ed .l .nb {
-        color: #565b63;
+        color: var(--code-nb);
         text-align: right;
       }
       .code-ed .l.cur {
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(var(--fg-rgb), 0.03);
       }
       .code-ed .l.cur .nb {
         color: var(--soft);
@@ -2743,7 +2873,7 @@
         background: var(--add);
       }
       .code-ed .l.md .gm {
-        background: oklch(0.82 0.11 75);
+        background: var(--git-m);
       }
       .hit {
         border-radius: 3px;
@@ -2752,7 +2882,7 @@
       }
       .hit.cur-hit {
         background: color-mix(in oklch, var(--p) 55%, transparent);
-        color: #fff;
+        color: var(--on-hit);
       }
       .ed-caret {
         display: inline-block;
@@ -2776,7 +2906,7 @@
         background: var(--raise-2);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 12px 32px -10px rgba(0, 0, 0, 0.7);
+          0 12px 32px -10px rgba(0, 0, 0, calc(0.7 * var(--shade)));
       }
       .find .fr {
         display: flex;
@@ -2855,7 +2985,7 @@
         background: var(--panel);
         box-shadow:
           0 0 0 1px var(--line),
-          0 8px 24px -6px rgba(0, 0, 0, 0.5);
+          0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
         overflow: hidden;
       }
       .app.global .body {
@@ -2865,7 +2995,7 @@
         display: flex;
       }
       .tb-btn[aria-pressed='true'] {
-        background: color-mix(in oklch, var(--p) 18%, rgba(255, 255, 255, 0.05));
+        background: color-mix(in oklch, var(--p) 18%, rgba(var(--fg-rgb), 0.05));
         box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent);
         color: var(--text);
       }
@@ -2989,7 +3119,7 @@
         background: var(--hover);
       }
       .ov-row.cur {
-        background: rgba(255, 255, 255, 0.055);
+        background: rgba(var(--fg-rgb), 0.055);
         box-shadow: inset 0 0 0 1px var(--line-2);
       }
       .ov-row.waiting {
@@ -3103,7 +3233,7 @@
         margin: 0 10px 10px 27px;
         padding: 10px 10px 10px 12px;
         border-radius: 8px;
-        background: rgba(0, 0, 0, 0.2);
+        background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
       }
       .req .what {
         display: grid;
@@ -3122,7 +3252,7 @@
         height: 20px;
         padding: 0 6px;
         border-radius: 5px;
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(var(--fg-rgb), 0.08);
         font: 600 11.5px/20px var(--mono);
       }
       .req .arg {
@@ -3238,7 +3368,7 @@
         overflow: visible;
       }
       .chart .gl {
-        stroke: rgba(255, 255, 255, 0.07);
+        stroke: rgba(var(--fg-rgb), 0.07);
         stroke-width: 1;
       }
       .chart .ax {
@@ -3251,7 +3381,7 @@
       }
       .chart .col:hover .col-hit,
       .chart .col.on .col-hit {
-        fill: rgba(255, 255, 255, 0.04);
+        fill: rgba(var(--fg-rgb), 0.04);
       }
       .tip {
         position: absolute;
@@ -3264,7 +3394,7 @@
         background: var(--raise-2);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 12px 32px -8px rgba(0, 0, 0, 0.7);
+          0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
         font-size: 12px;
         font-variant-numeric: tabular-nums;
         pointer-events: none;
@@ -3376,7 +3506,7 @@
         background: var(--raise);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 24px 64px -12px rgba(0, 0, 0, 0.75);
+          0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
         animation: rise 0.35s var(--ease);
       }
       .s-nav {
@@ -3385,7 +3515,7 @@
         min-height: 0;
         padding: 16px 10px 14px;
         border-right: 1px solid var(--line);
-        background: rgba(0, 0, 0, 0.2);
+        background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
         overflow: auto;
       }
       .s-nav-h {
@@ -3427,7 +3557,7 @@
         color: var(--text);
       }
       .s-tab[aria-selected='true'] {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         box-shadow: inset 0 0 0 1px var(--line-2);
         color: var(--text);
       }
@@ -3511,7 +3641,7 @@
         color: var(--text);
       }
       .proj-pill[aria-pressed='true'] {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         box-shadow: inset 0 0 0 1px var(--line-2);
         color: var(--text);
       }
@@ -3558,7 +3688,7 @@
         margin-top: 6px;
       }
       .sr + .sr {
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .sr .lab {
         display: grid;
@@ -3575,7 +3705,7 @@
         line-height: 1.5;
       }
       .sr .lab span.warn {
-        color: oklch(0.8 0.1 60);
+        color: var(--warn-ink);
       }
       .ctl {
         display: flex;
@@ -3594,7 +3724,7 @@
         width: 34px;
         height: 20px;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.14);
+        background: rgba(var(--fg-rgb), 0.14);
         transition: background-color 0.2s;
       }
       .tgl::after {
@@ -3606,7 +3736,7 @@
         height: 16px;
         border-radius: 50%;
         background: #fff;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade)));
         transition: left 0.25s var(--ease);
       }
       .tgl[aria-checked='true'] {
@@ -3676,7 +3806,7 @@
         width: 16px;
         height: 16px;
         border-radius: 4px;
-        box-shadow: inset 0 0 0 1.5px #4d5259;
+        box-shadow: inset 0 0 0 1.5px var(--ring);
         color: transparent;
       }
       .cb[aria-checked='true'] {
@@ -3755,14 +3885,14 @@
         background: var(--hover);
       }
       .radio[aria-checked='true'] {
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(var(--fg-rgb), 0.04);
       }
       .radio .dot {
         width: 16px;
         height: 16px;
         margin-top: 1px;
         border-radius: 50%;
-        box-shadow: inset 0 0 0 1.5px #4d5259;
+        box-shadow: inset 0 0 0 1.5px var(--ring);
       }
       .radio[aria-checked='true'] .dot {
         box-shadow: inset 0 0 0 5px color-mix(in oklch, var(--p) 75%, white);
@@ -3873,7 +4003,7 @@
         padding: 16px 0;
       }
       .acct + .acct {
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .acct .l1,
       .acct .l2 {
@@ -3948,7 +4078,7 @@
         border-radius: 2px;
       }
       .chip-t[aria-pressed='true'] {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         color: var(--text);
       }
       .svc {
@@ -3959,7 +4089,7 @@
         padding: 11px 0;
       }
       .svc + .svc {
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .svc .logo-t {
         display: grid;
@@ -3967,7 +4097,7 @@
         width: 24px;
         height: 24px;
         border-radius: 6px;
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(var(--fg-rgb), 0.07);
         font-size: 11px;
         font-weight: 700;
       }
@@ -4168,7 +4298,7 @@
         background: var(--raise-2);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 18px 48px -10px rgba(0, 0, 0, 0.8);
+          0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
         animation: rise 0.25s var(--ease);
       }
       .menu-h {
@@ -4197,7 +4327,7 @@
       }
       .mi:hover,
       .mi.kb {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
       }
       .mi .ml {
         display: grid;
@@ -4259,7 +4389,7 @@
         height: 20px;
         padding: 0 7px;
         border-radius: 5px;
-        background: rgba(255, 255, 255, 0.045);
+        background: rgba(var(--fg-rgb), 0.045);
         color: var(--soft);
         font-size: 11.5px;
         font-weight: 500;
@@ -4433,7 +4563,7 @@
         margin: 0 auto 8px;
         padding: 8px 10px 8px 12px;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.035);
+        background: rgba(var(--fg-rgb), 0.035);
         box-shadow: inset 0 0 0 1px var(--line);
         color: var(--soft);
         font-size: 12.5px;
@@ -4455,7 +4585,7 @@
         padding: 0 6px;
         border-radius: 5px;
         background: color-mix(in oklch, var(--brand) 12%, transparent);
-        color: oklch(0.86 0.08 190);
+        color: var(--teal-ink);
         font-size: 11px;
         font-weight: 560;
         white-space: nowrap;
@@ -4559,7 +4689,7 @@
         background: var(--raise);
         box-shadow:
           inset 0 0 0 1px var(--line-2),
-          0 24px 64px -12px rgba(0, 0, 0, 0.75);
+          0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
         animation: rise 0.3s var(--ease);
       }
       .qpanel h3 {
@@ -4580,7 +4710,7 @@
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 6px 12px;
         padding: 9px 16px;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .qa .qn {
         display: flex;
@@ -4644,7 +4774,7 @@
         display: inline-flex;
         padding: 2px;
         border-radius: 8px;
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(var(--fg-rgb), 0.04);
         box-shadow: inset 0 0 0 1px var(--line);
       }
       .vseg button {
@@ -4660,7 +4790,7 @@
         white-space: nowrap;
       }
       .vseg button[aria-pressed='true'] {
-        background: rgba(255, 255, 255, 0.09);
+        background: rgba(var(--fg-rgb), 0.09);
         color: var(--text);
         box-shadow: inset 0 0 0 1px var(--line-2);
       }
@@ -4684,8 +4814,8 @@
         min-width: 0;
       }
       .term .sel {
-        color: #08090a;
-        background: #c8ccd2;
+        color: var(--term-sel-fg);
+        background: var(--term-sel-bg);
       }
 
       /* Dictation, inside the composer. */
@@ -4724,7 +4854,7 @@
         display: grid;
         grid-template-columns: 16px minmax(0, 1fr) auto;
         align-items: start;
-        background: rgba(255, 255, 255, 0.035);
+        background: rgba(var(--fg-rgb), 0.035);
         box-shadow: inset 0 0 0 1px var(--line-2);
       }
       .dict.offer p {
@@ -4760,7 +4890,7 @@
         grid-template-rows: auto 1fr auto auto;
         background:
           radial-gradient(700px 520px at 50% 40%, color-mix(in oklch, var(--p) 16%, transparent), transparent 70%),
-          color-mix(in oklch, var(--p) 6%, #070809);
+          color-mix(in oklch, var(--p) 6%, var(--vo-base));
         animation: fade 0.3s ease-out;
       }
       .vo-top {
@@ -4795,9 +4925,9 @@
         background:
           radial-gradient(circle at 38% 32%, color-mix(in oklch, var(--p) 55%, white) 0, transparent 46%),
           radial-gradient(circle at 60% 70%, color-mix(in oklch, var(--p) 80%, black), transparent 60%),
-          color-mix(in oklch, var(--p) 70%, #0b0c0e);
+          color-mix(in oklch, var(--p) 70%, var(--orb-base));
         box-shadow:
-          0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 0 1px rgba(var(--fg-rgb), 0.08),
           0 0 80px 10px color-mix(in oklch, var(--p) 30%, transparent);
         animation: breathe 3.2s var(--ease) infinite;
       }
@@ -4880,7 +5010,7 @@
         height: 40px;
         padding: 0 6px 0 6px;
         border-radius: 9px;
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(var(--fg-rgb), 0.04);
         box-shadow: inset 0 0 0 1px var(--line-2);
         font-size: 12px;
       }
@@ -4894,7 +5024,7 @@
       .att .th.f {
         display: grid;
         place-items: center;
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         color: var(--soft);
       }
       .att .nm2 {
@@ -4934,7 +5064,7 @@
         color: var(--wait);
       }
       .att.bad {
-        box-shadow: inset 0 0 0 1px oklch(0.74 0.14 22 / 0.45);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45);
       }
       .att.bad .nm2 span {
         color: var(--del);
@@ -4970,7 +5100,7 @@
         display: grid;
         place-items: center;
         border-radius: 14px;
-        background: color-mix(in oklch, var(--p) 14%, rgba(10, 11, 13, 0.86));
+        background: color-mix(in oklch, var(--p) 14%, var(--drop-base));
         color: var(--text);
         font-weight: 550;
       }
@@ -4994,7 +5124,7 @@
         padding: 0;
       }
       .msg-user .att {
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(var(--fg-rgb), 0.04);
       }
       .aloud {
         display: inline-flex;
@@ -5046,7 +5176,7 @@
         background: var(--hover);
       }
       .subl .sr2[aria-current='true'] {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         box-shadow: inset 0 0 0 1px var(--line-2);
         color: var(--text);
       }
@@ -5161,7 +5291,7 @@
         margin: 14px auto 0;
         padding: 11px 14px;
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(var(--fg-rgb), 0.03);
         box-shadow: inset 0 0 0 1px var(--line);
         color: var(--soft);
         font-size: 12.5px;
@@ -5331,7 +5461,7 @@
         color: var(--add);
       }
       .mini-term .cy {
-        color: oklch(0.8 0.1 210);
+        color: var(--ansi-cy-2);
       }
       .waitline {
         display: flex;
@@ -5411,7 +5541,7 @@
         color: var(--text);
       }
       .rail li[aria-current='step'] {
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(var(--fg-rgb), 0.06);
         color: var(--text);
         font-weight: 550;
       }
@@ -5446,8 +5576,8 @@
         box-shadow: inset 0 0 0 1px var(--line);
       }
       .ck.bad {
-        background: oklch(0.74 0.14 22 / 0.06);
-        box-shadow: inset 0 0 0 1px oklch(0.74 0.14 22 / 0.35);
+        background: oklch(from var(--del) l c h / 0.06);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
       }
       .ck.bad > svg {
         color: var(--del);
@@ -5473,7 +5603,7 @@
       .sum dd {
         margin: 0;
         padding: 8px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
         font-size: 12.5px;
       }
       .sum dt {
@@ -5523,7 +5653,7 @@
       .model-list {
         display: grid;
         margin-top: 6px;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .mrow {
         display: grid;
@@ -5531,13 +5661,13 @@
         align-items: center;
         gap: 12px;
         padding: 10px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .mrow .rd {
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        box-shadow: inset 0 0 0 1.5px #4d5259;
+        box-shadow: inset 0 0 0 1.5px var(--ring);
       }
       .mrow .rd[aria-checked='true'] {
         box-shadow: inset 0 0 0 5px color-mix(in oklch, var(--p) 75%, white);
@@ -5569,7 +5699,7 @@
         margin: 8px 0 0;
         padding: 0;
         list-style: none;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .log li {
         display: grid;
@@ -5577,7 +5707,7 @@
         align-items: center;
         gap: 12px;
         padding: 8px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
         font-size: 12px;
       }
       .log .tm {
@@ -5616,7 +5746,7 @@
         align-items: center;
         gap: 12px;
         padding: 10px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
       }
       .closed i {
         width: 8px;
@@ -5650,7 +5780,7 @@
         height: 13px;
       }
       .rc.on {
-        color: oklch(0.82 0.09 190);
+        color: var(--teal-ink-2);
       }
       .agent-menu {
         top: 300px;
@@ -6377,7 +6507,7 @@
                 <div class="graph">
                   <svg class="lanes" width="56" height="238" viewBox="0 0 56 238" aria-hidden="true">
                     <g fill="none" stroke-width="2" stroke-linecap="round">
-                      <path d="M14 119V238" stroke="#c8ccd2" />
+                      <path d="M14 119V238" style="stroke: var(--lane-main)" />
                       <path d="M30 17V78C30 100 14 98 14 119" stroke="oklch(0.72 0.12 250)" />
                       <path d="M46 85V96C46 110 14 104 14 119" stroke="oklch(0.72 0.13 340)" />
                     </g>
@@ -6385,10 +6515,10 @@
                       <circle cx="30" cy="17" r="4.5" fill="oklch(0.72 0.12 250)" />
                       <circle cx="30" cy="51" r="4.5" fill="oklch(0.72 0.12 250)" />
                       <circle cx="46" cy="85" r="4.5" fill="oklch(0.72 0.13 340)" />
-                      <circle cx="14" cy="119" r="4.5" fill="#c8ccd2" />
-                      <circle cx="14" cy="153" r="4.5" fill="#c8ccd2" />
-                      <circle cx="14" cy="187" r="4.5" fill="#c8ccd2" />
-                      <circle cx="14" cy="221" r="4.5" fill="#c8ccd2" />
+                      <circle cx="14" cy="119" r="4.5" style="fill: var(--lane-main)" />
+                      <circle cx="14" cy="153" r="4.5" style="fill: var(--lane-main)" />
+                      <circle cx="14" cy="187" r="4.5" style="fill: var(--lane-main)" />
+                      <circle cx="14" cy="221" r="4.5" style="fill: var(--lane-main)" />
                     </g>
                   </svg>
                   <div class="commit">
@@ -6403,7 +6533,7 @@
                     ><span class="who">dem-5-export-csv… · 14 min</span>
                   </div>
                   <div class="commit">
-                    <span></span><span class="msg"><span>Webhooks Stripe (#41)</span><span class="ref" style="--lane: #c8ccd2">main</span><span class="ref" style="--lane: #8a8f98">origin/main</span></span
+                    <span></span><span class="msg"><span>Webhooks Stripe (#41)</span><span class="ref" style="--lane: var(--lane-main)">main</span><span class="ref" style="--lane: var(--muted)">origin/main</span></span
                     ><span class="who">Guillaume · 1 h</span>
                   </div>
                   <div class="commit">
@@ -6448,7 +6578,7 @@
               </div>
             </div>
             <div class="board">
-              <div class="col" style="--tone: #6c717a">
+              <div class="col" style="--tone: var(--code-dim)">
                 <div class="col-h">
                   <i class="ring"></i>À faire <span class="n">1</span>
                   <button class="add-t" id="add-ticket" aria-label="Nouveau ticket"><svg class="i s14"><use href="#i-plus" /></svg></button>
@@ -6862,7 +6992,7 @@ to work in this folder without asking for approval.
                   <span class="mdl">Haiku 4.5</span><span class="num-c">0,02 $</span><span class="num-c">9 %</span><span class="num-c">1 h</span>
                 </div></li>
                 <li class="ov-row"><div class="ov-line">
-                  <span class="ov-agent"><i class="state-dot" style="--tone: transparent; box-shadow: inset 0 0 0 1.5px #5d626b"></i><span class="name">fix-login</span></span>
+                  <span class="ov-agent"><i class="state-dot" style="--tone: transparent; box-shadow: inset 0 0 0 1.5px var(--idle)"></i><span class="name">fix-login</span></span>
                   <span class="ov-act" style="color: var(--muted)">Prêt</span>
                   <span class="mdl">Fable 5.1</span><span class="num-c">0,00 $</span><span class="num-c">—</span><span class="num-c">2 h</span>
                 </div></li>
@@ -7372,6 +7502,15 @@ If your browser did not open, navigate to this URL to authenticate:
             <!-- Application -->
             <div class="s-pane" data-pane="app" hidden>
               <section class="sg">
+                <h2>Affichage</h2>
+                <div class="sr">
+                  <div class="lab"><b>Thème</b><span>Système suit le thème de Windows, macOS ou Linux, et ses changements. Appliqué tout de suite, barre de titre comprise.</span></div>
+                  <div class="ctl">
+                    <div class="seg inline" id="theme-pick" role="radiogroup" aria-label="Thème"><button role="radio" data-theme-choice="system" aria-selected="true">Système</button><button role="radio" data-theme-choice="light" aria-selected="false">Clair</button><button role="radio" data-theme-choice="dark" aria-selected="false">Sombre</button></div>
+                  </div>
+                </div>
+              </section>
+              <section class="sg">
                 <h2>Langue</h2>
                 <div class="sr">
                   <div class="lab"><b>Langue de l’interface</b></div>
@@ -7848,7 +7987,7 @@ api/.env.local</textarea></div>
       // The English labels (index.html?lang=en#…), taken from the app's catalog (src/lib/i18n/en) where it has them:
       // enough to check what is tight. What agents write stays as they wrote it, as in the app.
       window.EN_TABS = {
-        app: ['Application', 'Zoom, text size, and languages'],
+        app: ['Application', 'Theme, zoom, text size, and languages'],
         claude: ['Harness', 'Each harness’s executables, versions and agent defaults'],
         accounts: ['Accounts', 'Each harness’s accounts, and what happens when a quota runs out'],
         voice: ['Voice', 'Dictation and voice conversation, on your machine'],
@@ -7863,6 +8002,8 @@ api/.env.local</textarea></div>
       };
       window.EN_LABELS = [
         // The shell.
+        ['Affichage', 'Display'], ['Thème', 'Theme'], ['Clair', 'Light'], ['Sombre', 'Dark'],
+        ['Système suit le thème de Windows, macOS ou Linux, et ses changements. Appliqué tout de suite, barre de titre comprise.', 'System follows the Windows, macOS or Linux theme, and its changes. Applied at once, title bar included.'],
         ['Vue d’ensemble', 'Overview'], ['Rechercher', 'Search'], ['Éditeur', 'Editor'], ['Stats', 'Stats'],
         ['Agents', 'Agents'], ['Nouvel agent', 'New agent'], ['Question', 'Question'], ['En cours', 'Running'], ['Terminé', 'Done'], ['Prêt', 'Ready'],
         ['Oui', 'Yes'], ['Seulement auth', 'Auth only'], ['Lancer toute la suite e2e (38 tests) ?', 'Run the whole e2e suite (38 tests)?'],
@@ -8222,7 +8363,7 @@ api/.env.local</textarea></div>
       // Settings: ten tabs; a change marks its tab until it is saved.
       const settings = $('#settings');
       const TABS = {
-        app: ['Application', 'Langue de l’interface et des textes rédigés par Claude'],
+        app: ['Application', 'Thème, langue de l’interface et des textes rédigés par Claude'],
         claude: ['Harness', 'Exécutables, versions et réglages des agents de chaque harness'],
         accounts: ['Comptes', 'Les comptes de chaque harness, et ce qui se passe quand un quota est épuisé'],
         voice: ['Voix', 'Dictée et conversation vocale, sur ta machine'],
@@ -8277,7 +8418,7 @@ api/.env.local</textarea></div>
           changed(r);
         }),
       );
-      $$('#settings .seg.inline, #settings .radios').forEach((g) =>
+      $$('#settings .seg.inline:not(#theme-pick), #settings .radios').forEach((g) =>
         g.querySelectorAll('[role="radio"]').forEach((r) =>
           r.addEventListener('click', () => {
             const attr = r.classList.contains('radio') ? 'aria-checked' : 'aria-selected';
@@ -8286,6 +8427,16 @@ api/.env.local</textarea></div>
           }),
         ),
       );
+      // The theme applies at once, like the app will: nothing waits for « Enregistrer ».
+      const themeRadios = $$('#theme-pick [role="radio"]');
+      const showTheme = () => themeRadios.forEach((x) => x.setAttribute('aria-selected', String(x.dataset.themeChoice === window.themeChoice())));
+      themeRadios.forEach((r) =>
+        r.addEventListener('click', () => {
+          window.setTheme(r.dataset.themeChoice);
+          showTheme();
+        }),
+      );
+      showTheme();
       $$('#settings .swatches button').forEach((s) =>
         s.addEventListener('click', () => {
           $$('#settings .swatches button').forEach((x) => x.setAttribute('aria-pressed', String(x === s)));
