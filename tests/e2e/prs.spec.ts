@@ -63,7 +63,7 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
   git(app.repo, 'config', `url.${bare.replace(/\\/g, '/')}.insteadOf`, url);
   git(app.repo, 'push', '-q', 'origin', 'main');
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const cards = page.locator('.side .card');
   await expect(cards).toHaveCount(1, { timeout: 60_000 });
   // Shown before github.com's account was there: no « Ouvrir une PR » yet.
@@ -121,7 +121,10 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
   });
   await showAgain(page);
   const prs = page.getByRole('group', { name: /^Pull requests de / });
-  await expect(prs.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' })).toHaveText('✗#101');
+  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' });
+  await expect(num).toHaveText('#101');
+  // Its CI failed: the icon of a failure (the 2.0 design draws it).
+  await expect(num.locator('[data-icon="close"]')).toHaveCount(1);
   // Nothing sent by itself: the corrections wait for the click.
   await expect(prs.getByRole('button', { name: 'L’agent corrige', exact: true })).toBeVisible();
   await expect(prs.getByRole('button', { name: 'L’agent corrige les retours' })).toBeVisible();
@@ -169,7 +172,7 @@ test('no « Ouvrir une PR » in a project whose remote is on no code host Escoua
   const { page } = app;
   // No remote at all.
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const cards = page.locator('.side .card');
   await expect(cards).toHaveCount(1, { timeout: 60_000 });
   // Its pull requests were asked for when it was shown: none, and nothing to offer.
@@ -183,7 +186,7 @@ test('no « Ouvrir une PR » in a project whose remote is on no code host Escoua
 
   // A GitLab remote: GitLab has no client yet, nothing either.
   git(app.repo, 'remote', 'add', 'origin', 'git@gitlab.com:acme/demo.git');
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(cards).toHaveCount(2);
   await page.waitForTimeout(2_000);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
@@ -192,7 +195,7 @@ test('no « Ouvrir une PR » in a project whose remote is on no code host Escoua
   // On github.com with its account: offered (the next agent shown reads it).
   git(app.repo, 'remote', 'set-url', 'origin', 'https://github.com/acme/demo.git');
   await connectGithub(page);
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(cards).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toBeVisible();
 });
@@ -211,11 +214,11 @@ test('each agent follows the pull requests of the worktree it went into by itsel
   await addProject(page, app.repo, { firstAgent: false });
   await connectGithub(page);
   const cards = page.locator('.side .card');
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(cards).toHaveCount(1, { timeout: 60_000 });
   await send(page, '[worktree feat/a] au travail');
   await expect(page.locator('.conv').getByText('Bonjour, tu as dit : [worktree feat/a] au travail')).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(cards).toHaveCount(2);
   await send(page, '[worktree feat/b] au travail');
   await expect(page.locator('.conv').getByText('Bonjour, tu as dit : [worktree feat/b] au travail')).toBeVisible({ timeout: 30_000 });

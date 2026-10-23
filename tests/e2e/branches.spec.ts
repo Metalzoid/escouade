@@ -71,7 +71,7 @@ test('the agents start from the target branch, brought up to date from the remot
   await expect(settings).toHaveCount(0);
 
   // A new agent: from origin's main, the local main moved to it, the folder left on work.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/*')).toContain('escouade/agent-1');
   expect(git(app.repo, 'rev-parse', 'escouade/agent-1')).toBe(ahead);
   expect(git(app.repo, 'rev-parse', 'main')).toBe(ahead);
@@ -162,7 +162,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
   await expect(settings).toHaveCount(0);
 
   // A new agent: its worktree starts from release, the folder left on main.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/agent-1')).toContain('escouade/agent-1');
   expect(git(app.repo, 'rev-parse', 'escouade/agent-1')).toBe(release);
   expect(git(app.repo, 'branch', '--show-current')).toBe('main');
@@ -193,7 +193,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
   await expect.poll(() => git(app.repo, 'branch', '--list', 'fix/urgent')).toContain('fix/urgent');
   expect(git(app.repo, 'rev-parse', 'fix/urgent')).toBe(hotfix);
   // The project's own start did not move.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => git(app.repo, 'branch', '--list', 'escouade/agent-4')).toContain('escouade/agent-4');
   expect(git(app.repo, 'rev-parse', 'escouade/agent-4')).toBe(release);
 });

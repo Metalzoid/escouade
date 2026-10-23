@@ -41,8 +41,8 @@ The sidebar’s “Launch” section lists the project’s commands. Next to its
 The row’s buttons:
 
 - “Run” (▶) starts the command. The next two replace it as long as it runs.
-- “Restart” (⟳) stops it, then starts it again. Escouade waits up to 10 seconds for the process to stop; if it is still running, the command stays as it is.
-- “Stop” (■) stops the command and the processes it started. Until the stop is done, the row says “stopping…”.
+- “Restart” stops it, then starts it again. Escouade waits up to 10 seconds for the process to stop; if it is still running, the command stays as it is.
+- “Stop” stops the command and the processes it started. Until the stop is done, the row says “stopping…”.
 
 At the top of the section, “Run all” starts all the commands at the same time. As soon as one is running, the button becomes “Stop all”.
 
@@ -76,7 +76,7 @@ A command also runs in an agent’s worktree, to see its work running without me
 
 Rather than writing the commands, you can ask Claude to suggest them.
 
-1. In the “Launch” section of a project with no command, click “✦ Suggest commands”: the settings open on the “Launch” group and the reading starts. You can also click “✦ Fill in automatically” in that group, in the project’s settings.
+1. In the “Launch” section of a project with no command, click “Suggest commands”: the settings open on the “Launch” group and the reading starts. You can also click “✦ Fill in automatically” in that group, in the project’s settings.
 2. The button says “Claude is reading the project…”. Claude reads the manifests and scripts (`package.json`, `Makefile`, `Procfile`, `justfile`, `pyproject.toml`…), the `docker-compose` files, the README and the CONTRIBUTING, at the root and in the subfolders. It only has reading tools: it changes nothing and runs nothing. It has 4 minutes at most.
 3. A message says how many commands are suggested (“3 commands suggested: review them before saving.”), and a “Suggested launch commands” box shows them, each with its name, its command line in full, its shell and its folder (“the project folder” when blank).
 4. “Replace the commands” puts the suggestion in place of the draft’s list, and “Ignore” drops it. Nothing is kept until you click “Save”.

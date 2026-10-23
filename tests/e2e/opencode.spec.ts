@@ -35,7 +35,7 @@ const requests = (app: App, method: string, re: RegExp) =>
 /** A new agent on OpenCode, from the menu beside « Nouvel agent ». */
 async function newOpencodeAgent(page: Page) {
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
-  await page.getByRole('menuitem', { name: 'Nouvel agent sur OpenCode' }).click();
+  await page.getByRole('menuitemradio', { name: 'OpenCode' }).click();
   // Shown before anything is typed: a message typed sooner would go to the agent shown before it.
   await expect(page.locator('main.conv header.head')).toContainText('OpenCode');
   await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à OpenCode…' })).toBeVisible();
@@ -202,7 +202,7 @@ test.describe('« Vue OpenCode » (ESC-46)', () => {
     await page.keyboard.press('Enter');
     await expect.poll(() => shown(app), { timeout: 20_000 }).toContain('permission bash: rm -rf build (Enter: allow once)');
     // Escouade sees it waiting on the agent’s card (« Question »: it waits for an answer).
-    await expect.poll(() => page.locator('.card').allTextContents()).toContainEqual(expect.stringMatching(/OpenCode.*Question/s));
+    await expect.poll(() => page.locator('.card').allTextContents()).toContainEqual(expect.stringMatching(/Question.*OpenCode/s));
     await page.keyboard.press('Enter');
     await expect.poll(() => shown(app), { timeout: 20_000 }).toContain('text: La commande est passée.');
 

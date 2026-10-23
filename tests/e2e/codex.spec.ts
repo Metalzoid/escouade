@@ -30,7 +30,7 @@ const requests = (app: App, method: string) =>
 /** A new agent on Codex, from the menu beside « Nouvel agent ». */
 async function newCodexAgent(page: Page) {
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
-  await page.getByRole('menuitem', { name: 'Nouvel agent sur Codex' }).click();
+  await page.getByRole('menuitemradio', { name: 'Codex' }).click();
   // Shown before anything is typed: a message typed sooner would go to the agent shown before it.
   await expect(page.locator('main.conv header.head')).toContainText('Codex');
   await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Codex…' })).toBeVisible();

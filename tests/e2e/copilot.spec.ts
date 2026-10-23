@@ -35,7 +35,7 @@ const replies = (app: App) =>
 /** A new agent on Copilot CLI, from the menu beside « Nouvel agent ». */
 async function newCopilotAgent(page: Page) {
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
-  await page.getByRole('menuitem', { name: 'Nouvel agent sur Copilot CLI' }).click();
+  await page.getByRole('menuitemradio', { name: 'Copilot CLI' }).click();
   await expect(page.locator('main.conv header.head')).toContainText('Copilot');
   await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Copilot…' })).toBeVisible();
 }
@@ -262,11 +262,11 @@ test.describe('« Vue Copilot CLI » (ESC-48)', () => {
     await page.keyboard.press('Enter');
     await expect
       .poll(() => page.locator('.card').allTextContents(), { timeout: 20_000 })
-      .toContainEqual(expect.stringMatching(/Copilot.*Question/s));
+      .toContainEqual(expect.stringMatching(/Question.*Copilot/s));
     await page.keyboard.press('Enter');
     await expect
       .poll(() => page.locator('.card').allTextContents(), { timeout: 20_000 })
-      .toContainEqual(expect.stringMatching(/Copilot.*Terminé/s));
+      .toContainEqual(expect.stringMatching(/Terminé.*Copilot/s));
     expect(tuiLog(app, 'fake-tui-hooks.jsonl').map((h) => h.event)).toContain('agentStop');
 
     // Back in Escouade's view: the turn of the interface in the conversation, its message once; the same session resumed.
@@ -301,7 +301,7 @@ test.describe('« Continuer sur Copilot CLI » from a terminal view (ESC-120)', 
   /** A new agent on Claude Code, from the menu beside « Nouvel agent ». */
   async function newClaudeAgent(page: Page) {
     await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
-    await page.getByRole('menuitem', { name: 'Nouvel agent sur Claude Code' }).click();
+    await page.getByRole('menuitemradio', { name: 'Claude Code' }).click();
     await expect(page.getByRole('textbox', { name: 'Décris la tâche à confier à Claude…' })).toBeVisible();
   }
 

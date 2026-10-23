@@ -4,29 +4,31 @@
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
   import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
+  import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
+  import { cardActivity, listQuestion, sidebarOrder, type ListQuestion } from '../lib/sidebar';
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
-  import { can, canFork, choosesEngine, engineName, engineOptions, showsCost, speakerOf } from '../lib/engines';
+  import { can, canFork, engineName, showsCost, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
-  import { canFixChecks, canFixReviews, cardPrs, fixPr, openPr, prGlyph, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
+  import { canFixChecks, canFixReviews, cardPrs, fixPr, openPr, prIcon, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
-  import { ticketTag } from '../lib/board';
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
-  import { modelLabel } from '../lib/models';
+  import { modelLabel, MODES } from '../lib/models';
   import { planView } from '../lib/plan';
   import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
   import { estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app } from '../lib/state.svelte';
-  import { closeTerminal, newTerminal, SHELL_GLYPH, terminalIn } from '../lib/term-actions';
+  import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
   import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
+  import Icon from './Icon.svelte';
   import BranchPicker from './branches/BranchPicker.svelte';
   import { tip } from '../lib/tip';
 
@@ -34,13 +36,8 @@
 
   /** What an agent is doing, read when shown (the language of the interface can change). */
   const statusLabel = (status: AgentStatus) => t(`nav.sidebar.status.${status}`);
-  const SC: Record<string, string> = {
-    running: 'var(--ok)',
-    waiting: 'var(--wait)',
-    idle: 'var(--dim)',
-    done: 'var(--ok)',
-    error: 'var(--del)',
-  };
+  /** A shortcut as the keys of the preview write it: « Ctrl N », « Ctrl Maj N ». */
+  const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 
   let termMenuBtn = $state<HTMLButtonElement>();
   let moreBtn = $state<HTMLButtonElement>();
@@ -85,6 +82,37 @@
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
   const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn);
   const review = $derived(app.reviewCount(project.id));
+  /** Who waits for an answer goes first (2.0 design). */
+  const agents = $derived(sidebarOrder(app.projectAgents));
+  /** The questions answered from the list, until the agent's request is gone: one click answers once. */
+  let answering = $state<Record<string, string>>({});
+
+  // Ctrl+Shift+N (lib/shortcuts.ts): the menu « Harness » opens beside « Nouvel agent ».
+  let menuAsked = app.newAgentMenu;
+  $effect(() => {
+    if (app.newAgentMenu === menuAsked) return;
+    menuAsked = app.newAgentMenu;
+    if (!app.boardOn) newAgentMenu();
+  });
+
+  /** Answers the question `a` waits on with its choice `i`, from its card: its conversation, open or not, stays where it is. */
+  async function answer(a: Agent, q: ListQuestion, i: number) {
+    const choice = q.options[i];
+    if (choice === undefined || answering[a.id] === q.requestId) return;
+    answering[a.id] = q.requestId;
+    await app.run(api.answerQuestion(a.id, q.requestId, { [q.question]: choice }));
+  }
+
+  /** On the card of an agent that asks, its keys 1, 2… pick a choice; Enter opens it, as on every card. */
+  function cardKey(e: KeyboardEvent, a: Agent, q: ListQuestion | null) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter') app.selectAgent(a.id);
+    const n = q && !e.ctrlKey && !e.altKey && !e.metaKey && /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
+    if (q && n >= 0 && n < q.options.length) {
+      e.preventDefault();
+      answer(a, q, n);
+    }
+  }
 
   function duration(a: Agent) {
     return fDur(a.activeMs + (a.activeSince ? app.now - a.activeSince : 0));
@@ -307,37 +335,84 @@
     };
   }
 
+  /**
+   * The menu « Harness » beside « Nouvel agent » (choices 1, 15 and 16 of the 2.0 design): each harness Escouade knows, in
+   * its order, numbered, with the account, model and mode its new agent would take; one without an account in its place,
+   * with « Ajouter un compte… »; one not found greyed, with where to set it. Then the agent the other way round from « Un
+   * worktree par agent », the one on a branch, and the project's default harness.
+   */
   function newAgentMenu() {
     if (!moreBtn) return;
-    // From two harnesses found on, one entry each, the project's first: « Nouvel agent » alone goes on the project's.
-    const own = project.engine ?? 'claude';
-    const engines = choosesEngine() ? engineOptions().sort((a, b) => Number(b.value === own) - Number(a.value === own)) : [];
+    const own = project.engine ?? defaultEngine();
+    const harnesses: MenuItem[] = app.engines.map((e, i) => {
+      if (!app.enginesFound.includes(e.id)) return { label: e.name, engine: e.id, disabled: true, reason: t('nav.sidebar.harnessMissing') };
+      if (!hasAccount(e.id))
+        return {
+          label: e.name,
+          engine: e.id,
+          detail: t('nav.sidebar.noAccount'),
+          fix: t('nav.sidebar.addAccount'),
+          onClick: () => addAccount(e.id),
+        };
+      const account = newAgentAccount(project, e.id);
+      const d = newAgentDefaults(project, e.id);
+      const detail = [
+        e.id === own ? t('nav.sidebar.projectHarness') : '',
+        account ? accountName(account) : '',
+        d.model ? modelLabel(d.model, app.models) : '',
+        MODES.find((m) => m.value === d.mode)?.label ?? '',
+      ];
+      return {
+        label: e.name,
+        engine: e.id,
+        detail: detail.filter(Boolean).join(' · '),
+        key: String(i + 1),
+        checked: e.id === own,
+        onClick: () => app.newAgent(project.id, e.id),
+      };
+    });
     menu.showAt(moreBtn, [
-      ...engines.map((e) => ({
-        label: t('nav.sidebar.newAgentOn', { engine: e.label }),
-        onClick: () => app.newAgent(project.id, e.value),
-      })),
-      ...(engines.length ? [{ label: '', separator: true }] : []),
+      { label: t('nav.sidebar.harness'), heading: true, hint: kbd('Ctrl+Shift+N') },
+      ...harnesses,
+      { label: '', separator: true },
+      { label: t('nav.sidebar.worktree'), heading: true },
+      // The other way round from « Un worktree par agent »: without one in a project that gives one, in one otherwise.
+      project.worktreePerAgent
+        ? {
+            label: t('nav.sidebar.newAgentNoWorktree'),
+            icon: 'folder',
+            detail: t('nav.sidebar.newAgentNoWorktreeDetail'),
+            onClick: () => app.newAgent(project.id, null, false),
+          }
+        : {
+            label: t('nav.sidebar.newAgentInWorktree'),
+            icon: 'branch',
+            detail: t('nav.sidebar.newAgentInWorktreeDetail'),
+            onClick: () => app.newAgent(project.id, null, true),
+          },
       {
         label: t('branches.agent.onBranch'),
+        icon: 'branch',
         // Once the menu is gone and has given the focus back to its button: the picker gives it back there in turn.
         onClick: async () => {
           await tick();
           pickingBranch = true;
         },
       },
-      // The other way round from « Un worktree par agent »: without one in a project that gives one, in one otherwise.
-      {
-        label: project.worktreePerAgent ? t('nav.sidebar.newAgentNoWorktree') : t('nav.sidebar.newAgentInWorktree'),
-        onClick: () => app.newAgent(project.id, null, !project.worktreePerAgent),
-      },
       // In a worktree that starts from a branch chosen next, whatever the project's starting branch (ESC-160).
       {
         label: t('nav.sidebar.newAgentFrom'),
+        icon: 'merge',
         onClick: async () => {
           await tick();
           pickBase(null);
         },
+      },
+      { label: '', separator: true },
+      {
+        label: t('nav.sidebar.defaultHarness'),
+        icon: 'sliders',
+        onClick: () => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id }),
       },
     ]);
   }
@@ -361,7 +436,7 @@
       return;
     }
     menu.showAt(termMenuBtn, [
-      ...app.shells.map((s) => ({ label: s.label, hint: SHELL_GLYPH[s.id]?.glyph, onClick: () => newTerminal(project.id, s.id) })),
+      ...app.shells.map((s) => ({ label: s.label, icon: 'term' as const, onClick: () => newTerminal(project.id, s.id) })),
       ...(worktreeAgents().length
         ? [
             { label: '', separator: true },
@@ -395,7 +470,7 @@
       <span class="stext">
         <span class="sline">
           <span class="stitle">{s.title}</span>
-          {#if s.model}<span class="smodel mono">{modelLabel(s.model, app.models)}</span>{/if}
+          {#if s.model}<span class="smodel">{modelLabel(s.model, app.models)}</span>{/if}
           {#if s.status !== 'running'}<span class="sstate">{t(`subagents.status.${s.status}`)}</span>{/if}
         </span>
         {#if s.status === 'running' && s.doing}<span class="sdoing">{s.doing}</span>{/if}
@@ -404,11 +479,16 @@
   </li>
 {/snippet}
 
+<!-- The chevron of a list that folds: down when open. -->
+{#snippet chev(open: boolean)}
+  <span class="chev" aria-hidden="true"><Icon name={open ? 'down' : 'right'} size={12} /></span>
+{/snippet}
+
 <!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
 {#snippet moreRows(all: boolean, label: string, onclick: () => void, less: string = t('subagents.lessList'))}
   <li>
     <button class="more-toggle" aria-expanded={all} {onclick}>
-      <span class="chev" aria-hidden="true">{all ? '▾' : '▸'}</span>{all ? less : label}
+      {@render chev(all)}{all ? less : label}
     </button>
   </li>
 {/snippet}
@@ -431,8 +511,8 @@
       <span class="sdot {r.status}" aria-hidden="true"></span>
       <span class="stext">
         <span class="sline">
-          <span class="stitle">{rowTitle(r)}</span>
-          {#if ms !== null}<span class="sdur mono">{fDur(ms)}</span>{/if}
+          <span class="stitle mono">{rowTitle(r)}</span>
+          {#if ms !== null}<span class="sdur">{fDur(ms)}</span>{/if}
         </span>
         <span class="sdoing">{rowLine(r)}</span>
       </span>
@@ -440,66 +520,71 @@
   </li>
 {/snippet}
 
-{#snippet browse()}
-  <button class="browse" onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}>{t('common.browse')}</button>
-{/snippet}
-
 <aside class="side">
-  <div class="views">
-    <div class="switcher" role="group" aria-label={t('nav.sidebar.viewLabel')}>
-      <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}>{t('common.agents')}</button>
-      <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-        >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
-      >
-    </div>
+  <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
+    <button class:on={!app.boardOn} aria-pressed={!app.boardOn} onclick={() => app.closeBoard(project.id)}
+      ><Icon name="agents" size={14} />{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
+    >
+    <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
+      ><Icon name="kanban" size={14} />Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}
+          >{review}</span
+        >{/if}</button
+    >
   </div>
 
-  <div class="head">
-    <span class="section-label">{t('common.agents')}</span>
-    <span class="count">{app.projectAgents.length}</span>
-    <div style="flex:1"></div>
-    <div class="newgrp">
-      <button
-        class="new"
-        onclick={() => app.newAgent(project.id)}
-        use:tip={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}
-      >
-        <span class="plus">+</span>
-        {t('nav.sidebar.newAgent')}
-      </button>
-      <button
-        class="more"
-        bind:this={moreBtn}
-        aria-haspopup="menu"
-        aria-label={t('branches.agent.moreWays')}
-        use:tip={t('branches.agent.moreWays')}
-        onclick={newAgentMenu}>▾</button
-      >
-    </div>
+  <!-- « Nouvel agent »: Ctrl+N on the project's harness; the arrow opens the menu « Harness » (Ctrl+Shift+N). -->
+  <div class="new-split">
+    <button
+      class="new-agent"
+      aria-label={t('nav.sidebar.newAgent')}
+      aria-keyshortcuts="Control+N"
+      onclick={() => app.newAgent(project.id)}
+      use:tip={t('nav.sidebar.newAgentTitle', { shortcut: keyLabel('Ctrl+N') })}
+    >
+      <span class="plus"><Icon name="plus" size={14} /></span><span class="nl">{t('nav.sidebar.newAgent')}</span><kbd>{kbd('Ctrl+N')}</kbd>
+    </button>
+    <button
+      class="new-more"
+      bind:this={moreBtn}
+      aria-haspopup="menu"
+      aria-label={t('branches.agent.moreWays')}
+      use:tip={t('branches.agent.moreWays')}
+      onclick={newAgentMenu}><Icon name="down" size={14} /></button
+    >
   </div>
 
-  <div class="list">
-    {#each app.projectAgents as a (a.id)}
+  <div class="agents">
+    {#each agents as a (a.id)}
       {@const sel = a.id === selectedAgentId && !otherView}
       {@const s = spent(a)}
-      {@const tag = ticketTag(app.ticketOf(a.id))}
+      {@const ticket = app.ticketOf(a.id)}
       {@const plan = planView(a)?.mini}
       {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
+      {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
       {@const remote = remoteStateOf(a)}
       {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
+      {@const q = listQuestion(a)}
+      {@const act = cardActivity(a, git?.agents[a.id] ?? 0)}
       <div
-        class="card"
+        class="agent card"
+        class:waiting={a.status === 'waiting'}
+        class:done={a.status === 'done' && !pending}
+        class:idle={a.status === 'idle' && !pending}
+        class:error={a.status === 'error'}
+        class:awaits={!!pending}
         class:sel
         class:alert={app.attention[a.id]}
-        style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--ok)'}
+        style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
         role="button"
         tabindex="0"
+        aria-current={sel ? 'true' : undefined}
+        data-agent={a.id}
         onclick={() => app.selectAgent(a.id)}
-        onkeydown={(e) => e.key === 'Enter' && app.selectAgent(a.id)}
+        onkeydown={(e) => cardKey(e, a, q)}
         oncontextmenu={(e) => agentMenu(e, a)}
       >
-        <div class="row1">
-          <StatusDot status={a.status} size={8} />
+        <div class="a-top">
+          <StatusDot status={a.status} awaits={!!pending} />
           {#if renaming === a.id}
             <!-- svelte-ignore a11y_autofocus -->
             <input
@@ -517,55 +602,48 @@
           {:else}
             <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
           {/if}
-          <EngineMark engine={a.engine} />
-          {#if inBg > 0}
-            <!-- What runs in the background for the agent: the list is under the card. -->
-            <span
-              class="bgchip"
-              role="img"
-              aria-label={t('bgtasks.chipLabel', { count: inBg })}
-              use:tip={{ text: t('bgtasks.chipLabel', { count: inBg }), aria: false }}
-              data-bg-chip
-              data-count={inBg}>{t('bgtasks.chip', { count: inBg })}</span
-            >
+          {#if subsRunning + inBg > 0}
+            <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
+            <span class="bg-chip">
+              {#if subsRunning}
+                {@const label = t('subagents.chipLabel', { count: subsRunning })}
+                <span
+                  class="part"
+                  role="img"
+                  aria-label={label}
+                  use:tip={{ text: label, aria: false }}
+                  data-sub-chip
+                  data-count={subsRunning}><Icon name="sub" size={12} />{subsRunning}</span
+                >
+              {/if}
+              {#if inBg}
+                {@const label = t('bgtasks.chipLabel', { count: inBg })}
+                <span class="part" role="img" aria-label={label} use:tip={{ text: label, aria: false }} data-bg-chip data-count={inBg}
+                  ><Icon name="clock" size={12} />{inBg}</span
+                >
+              {/if}
+            </span>
           {/if}
           {#if remote}
             <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-                aria-hidden="true"
-                ><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" /><circle
-                  cx="12"
-                  cy="19.5"
-                  r="1"
-                  fill="currentColor"
-                />{#if remote === 'stillOn'}<path class="bar" d="M4 4l16 16" />{/if}</svg
-              >
+              <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
             </span>
           {/if}
           {#if a.status === 'waiting'}
-            <span class="pill">{statusLabel('waiting')}</span>
+            <span class="a-state status">{statusLabel('waiting')}</span>
           {:else if a.resumeAt}
-            <span class="status" style:color="var(--wait)" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
-              >{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
+            <span class="a-state status wk" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
+              ><Icon name="clock" size={12} />{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
             >
           {:else if a.setup}
-            <span class="status" style:color="var(--wait)" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}
-              >{t('nav.sidebar.settingUp')}</span
-            >
+            <span class="a-state status wk" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}>{t('nav.sidebar.settingUp')}</span>
           {:else if pending}
             <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
-            <span class="status" style:color={SC.running} use:tip={pendingText(pending, app.now)} data-pending
-              >{pendingLabel(pending, app.now)}</span
+            <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
+              >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
             >
           {:else}
-            <span class="status" style:color={SC[a.status]}>{statusLabel(a.status)}</span>
+            <span class="a-state status">{statusLabel(a.status)}</span>
           {/if}
         </div>
         {#if a.progressLine}
@@ -574,32 +652,89 @@
             <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
           </div>
         {/if}
-        <div class="meta">
-          <span>{modelLabel(a.model, app.models)}</span><span class="sep">·</span><span>{duration(a)}</span>
-          {#if a.worktree}<span class="sep">·</span><span class="wt" use:tip={a.worktree.branch}
-              >⎇ {shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
-            >{:else if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
+        <div class="a-meta">
+          <EngineMark engine={a.engine} />
+          {#if ticket?.column === 'doing' || ticket?.column === 'review'}
+            <span class="ticket-chip">{ticket.key}</span>
+            {#if ticket.column === 'doing'}
+              <span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
+              <span class="loops" aria-hidden="true"
+                >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+              >
+            {:else}
+              <span>{t('nav.sidebar.toTest')}</span>
+            {/if}
+          {:else}
+            <span class="model">{modelLabel(a.model, app.models)}</span>
+            {#if a.prompts || a.activeMs || a.activeSince}
+              <span class="sep">·</span><span class="num">{duration(a)}</span>
+            {:else}
+              <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
+            {/if}
+            {#if plan}
+              <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
+              <span class="sep">·</span><span class="plan-mini"
+                ><span class="plan-text"
+                  >{plan.subs
+                    ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
+                    : t('plan.mini', { done: plan.done, total: plan.total })}</span
+                ><span class="plan-bar" aria-hidden="true"><i style:--pct={plan.percent}></i></span></span
+              >
+            {:else if a.worktree}
+              <!-- Its own branch, when the line has room for it (no plan): whole in the tooltip. -->
+              <span class="sep">·</span><span class="branch" use:tip={a.worktree.branch}
+                ><Icon name="branch" size={12} /><span class="bn"
+                  >{shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
+                ></span
+              >
+            {/if}
+          {/if}
+          {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
               >{t('nav.sidebar.worktreeLater')}</span
             >{/if}
         </div>
-        <div class="meta dim" use:tip={s.estimated ? estimateHint(s) : undefined}>
-          <span>{t('nav.sidebar.tokens', { tokens: fTok(s.tokens) })}</span>{#if showsCost(a)}<span>{fSpentUsd(s)}</span>{/if}<span
-            >{t('nav.sidebar.files', { count: git?.agents[a.id] ?? 0 })}</span
-          >
-        </div>
-        {#if plan}
-          <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
-          <div class="plan-mini">
-            <span class="plan-bar" aria-hidden="true"><span style:width="{plan.percent}%"></span></span>
-            <span class="plan-text mono"
-              >{plan.subs
-                ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
-                : t('plan.mini', { done: plan.done, total: plan.total })}</span
+        {#if a.status === 'waiting'}
+          <!-- The question it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… once the card has
+               the focus. Anything else is answered in its conversation, which a click on the card opens. -->
+          {@const req = a.requests?.[0]}
+          <div class="a-ask">
+            {#if q}
+              <p>{q.question}</p>
+              <div class="opts" role="group" aria-label={t('nav.sidebar.answers', { name: a.name })}>
+                {#each q.options as o, i (i)}
+                  <button
+                    class="opt"
+                    disabled={answering[a.id] === q.requestId}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      answer(a, q, i);
+                    }}><kbd>{i + 1}</kbd>{o}</button
+                  >
+                {/each}
+              </div>
+            {:else if req}
+              <p class="clip">
+                {req.kind === 'question'
+                  ? req.questions.map((x) => x.question).join(' · ')
+                  : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
+              </p>
+            {/if}
+          </div>
+        {:else if act || s.tokens > 0 || s.cost > 0}
+          <div class="a-act" use:tip={s.estimated ? estimateHint(s) : undefined}>
+            {#if act?.kind === 'doing'}
+              <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
+            {:else if act?.kind === 'thinking'}
+              <span class="tgt">{t('stats.overview.thinking')}</span>
+            {:else if act?.kind === 'result'}
+              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
+                >{t('nav.sidebar.changed', { count: act.files })}</span
+              >
+            {/if}
+            <span class="spend"
+              >{fTok(s.tokens)}{#if showsCost(a)}{' · '}{fSpentUsd(s)}{/if}</span
             >
           </div>
-        {/if}
-        {#if tag}
-          <div class="ticket-tag mono">▸ {tag}</div>
         {/if}
       </div>
       {@const prs = cardPrs(a)}
@@ -611,10 +746,10 @@
           {#each prs as p (p.number)}
             <div class="pr" data-pr={p.number}>
               <button
-                class="prnum mono {prTone(p)}"
+                class="prnum {prTone(p)}"
                 aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
                 use:tip={{ text: prTip(word, p), aria: false }}
-                onclick={() => openPr(p)}><span class="prglyph" aria-hidden="true">{prGlyph(p)}</span>#{p.number}</button
+                onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />#{p.number}</button
               >
               {#if !a.archived && canFixChecks(p)}
                 <button
@@ -634,14 +769,14 @@
           {/each}
         </div>
       {/if}
-      {@const subs = sidebarSubs(a)}
+      {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
       {#if subs}
-        <!-- Under the card, not in it (the card is a button): its subagents, unfolded while one runs. -->
+        <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
         {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
         {@const doneOpen = finishedOpen[a.id] ?? false}
-        <div class="subs" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
-          <button class="subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
-            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <div class="subl" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
+            {@render chev(open)}
             <span class="lbl">{t('subagents.title')}</span>
             {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
             {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
@@ -663,9 +798,7 @@
               {#if subs.finished.length}
                 <li class="finished">
                   <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
-                    <span class="chev" aria-hidden="true">{doneOpen ? '▾' : '▸'}</span>{t('subagents.finishedToggle', {
-                      count: subs.finished.length,
-                    })}
+                    {@render chev(doneOpen)}{t('subagents.finishedToggle', { count: subs.finished.length })}
                   </button>
                   {#if doneOpen}
                     <!-- svelte-ignore a11y_no_redundant_roles -->
@@ -688,14 +821,17 @@
           {/if}
         </div>
       {/if}
-      {@const bg = can(a, 'backgroundTasks') ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] }) : null}
+      {@const bg =
+        a.id === selectedAgentId && can(a, 'backgroundTasks')
+          ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
+          : null}
       {#if bg}
-        <!-- Under the card too, after the subagents: the tasks Claude Code runs in the background, unfolded while one runs. -->
+        <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
         {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
         {@const doneOpen = bgFinishedOpen[a.id] ?? false}
-        <div class="subs bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
-          <button class="subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
-            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <div class="subl bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
+            {@render chev(open)}
             <span class="lbl">{t('bgtasks.title')}</span>
             {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
             {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
@@ -717,9 +853,7 @@
               {#if bg.finishedTotal}
                 <li class="finished">
                   <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
-                    <span class="chev" aria-hidden="true">{doneOpen ? '▾' : '▸'}</span>{t('bgtasks.finishedToggle', {
-                      count: bg.finishedTotal,
-                    })}
+                    {@render chev(doneOpen)}{t('bgtasks.finishedToggle', { count: bg.finishedTotal })}
                   </button>
                   {#if doneOpen}
                     <!-- svelte-ignore a11y_no_redundant_roles -->
@@ -747,9 +881,9 @@
       {#if driven.length}
         <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
         {@const open = drivenOpen[a.id] ?? true}
-        <div class="subs" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
-          <button class="subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
-            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <div class="subl" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
+          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
+            {@render chev(open)}
             <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
             <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
           </button>
@@ -773,34 +907,35 @@
       {/if}
     {:else}
       <div class="empty">
-        {t('nav.sidebar.empty')}<br />
-        <button class="btn" style="margin-top:10px" onclick={() => app.newAgent(project.id)}>{t('nav.sidebar.createAgent')}</button>
+        <p>{t('nav.sidebar.empty')}</p>
+        <button class="btn" onclick={() => app.newAgent(project.id)}><Icon name="plus" size={14} />{t('nav.sidebar.createAgent')}</button>
       </div>
     {/each}
 
     {#if app.archivedAgents.length}
-      <button class="archived-toggle" onclick={() => (app.showArchived = !app.showArchived)}>
-        {app.showArchived ? '▾' : '▸'}
-        {t('nav.sidebar.archived', { n: app.archivedAgents.length })}
+      <button class="archived-h" aria-expanded={app.showArchived} onclick={() => (app.showArchived = !app.showArchived)}>
+        {@render chev(app.showArchived)}{t('nav.sidebar.archived', { n: app.archivedAgents.length })}
       </button>
       {#if app.showArchived}
         {#each app.archivedAgents as a (a.id)}
           <div
-            class="card archived"
+            class="agent card done archived"
             class:sel={a.id === selectedAgentId && !otherView}
             role="button"
             tabindex="0"
+            aria-current={a.id === selectedAgentId && !otherView ? 'true' : undefined}
             onclick={() => app.selectAgent(a.id)}
             onkeydown={(e) => e.key === 'Enter' && app.selectAgent(a.id)}
             oncontextmenu={(e) => agentMenu(e, a)}
           >
-            <div class="row1">
+            <div class="a-top">
+              <StatusDot status="done" />
               <span class="name">{a.name}</span>
-              <span class="status">{fUsd(a.cost)}</span>
+              <span class="a-state status">{fUsd(a.cost)}</span>
             </div>
             {#if a.worktreeKept}
               <!-- Its ticket over, its worktree stayed: what it holds would be lost (ESC-143). -->
-              <div class="kept">{a.worktreeKept}</div>
+              <div class="kept"><Icon name="branch" size={12} />{a.worktreeKept}</div>
             {/if}
           </div>
         {/each}
@@ -810,63 +945,77 @@
 
   <RunsSection {project} />
 
-  <div class="terms">
-    <div class="head small">
-      <span class="section-label">{t('nav.sidebar.terminals')}</span>
-      <span class="count">{terms.length}</span>
-      <div style="flex:1"></div>
-      <button class="plus-btn" bind:this={termMenuBtn} use:tip={t('nav.sidebar.newTerminal')} onclick={shellMenu}>+</button>
+  <section class="sec terms" aria-label={t('nav.sidebar.terminals')}>
+    <div class="sec-h">
+      {t('nav.sidebar.terminals')} <span class="n">{terms.length}</span>
+      <span class="acts">
+        <button
+          class="icon-btn"
+          bind:this={termMenuBtn}
+          aria-label={t('nav.sidebar.newTerminal')}
+          use:tip={{ text: t('nav.sidebar.newTerminal'), aria: false }}
+          onclick={shellMenu}><Icon name="plus" size={14} /></button
+        >
+      </span>
     </div>
-    <div class="term-list">
+    <div class="rows">
       {#each terms as term (term.id)}
-        {@const g = SHELL_GLYPH[term.shell] ?? { glyph: '>_', c: 'var(--muted)' }}
         <div
-          class="term"
+          class="row-item term"
           class:sel={termSelected === term.id}
           role="button"
           tabindex="0"
+          aria-current={termSelected === term.id ? 'true' : undefined}
+          data-shell={term.shell}
           onclick={() => app.selectTerm(term.id)}
-          onkeydown={(e) => e.key === 'Enter' && app.selectTerm(term.id)}
+          onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectTerm(term.id)}
         >
-          <span class="glyph" style:color={g.c}>{g.glyph}</span>
-          <span class="tname">{term.name}</span>
-          {#if app.exitedTerms[term.id] !== undefined}<span class="shell">{t('nav.sidebar.exited')}</span>{/if}
-          <button
-            class="x"
-            use:tip={t('common.close')}
-            onclick={(e) => {
-              e.stopPropagation();
-              closeTerminal(term.id);
-            }}>×</button
-          >
+          <span class="ti"><Icon name="term" size={14} /></span>
+          <span class="nm">{term.name}</span>
+          {#if app.exitedTerms[term.id] !== undefined}<span class="st">{t('nav.sidebar.exited')}</span>{/if}
+          <span class="ra">
+            <button
+              class="icon-btn x"
+              aria-label={t('common.close')}
+              use:tip={{ text: t('common.close'), aria: false }}
+              onclick={(e) => {
+                e.stopPropagation();
+                closeTerminal(term.id);
+              }}><Icon name="close" size={12} /></button
+            >
+          </span>
         </div>
       {:else}
         <span class="none">{t('nav.sidebar.noTerminals')}</span>
       {/each}
     </div>
-  </div>
+  </section>
 
-  <div class="foot">
-    <div class="path mono" use:tip={project.path}>{tildify(project.path)}</div>
-    {#if git?.isRepo}
-      <div class="branch mono">
-        <span class="ring"></span>{git.branch || '—'}
-        <div style="flex:1"></div>
-        {@render browse()}
-      </div>
-      <div class="gitc mono">
-        <span style="color:var(--wait)">{t('nav.sidebar.modified', { n: git.modified })}</span>
-        <span style="color:var(--add)">{t('nav.sidebar.added', { n: git.added })}</span>
-        <span style="color:var(--del)">{t('nav.sidebar.deleted', { n: git.deleted })}</span>
-      </div>
-    {:else}
-      <!-- No git information yet, or no repository: the project's folder can be browsed all the same. -->
-      <div class="branch mono">
-        {#if git}<span style="color:var(--dim)">{t('nav.sidebar.noRepo')}</span>{/if}
-        <div style="flex:1"></div>
-        {@render browse()}
-      </div>
-    {/if}
+  <div class="side-foot">
+    <button
+      class="foot-row"
+      aria-label={t('nav.sidebar.browseFolder', { path: tildify(project.path) })}
+      use:tip={{ text: project.path, aria: false }}
+      onclick={() => app.openEditor({ projectId: project.id, source: 'project' })}
+    >
+      <Icon name="folder" size={14} /><span class="grow mono path">{tildify(project.path)}</span><span class="browse" aria-hidden="true"
+        >{t('common.browse')}</span
+      >
+    </button>
+    <div class="foot-row">
+      <Icon name="branch" size={14} />
+      {#if git?.isRepo}
+        <span class="grow mono branch">{git.branch || '—'}</span>
+        <span class="changes mono" use:tip={t('nav.sidebar.changesTitle', { m: git.modified, a: git.added, d: git.deleted })}>
+          <span class="mod" aria-label={t('nav.sidebar.modified', { n: git.modified })}>~{git.modified}</span>
+          <span class="add" aria-label={t('nav.sidebar.added', { n: git.added })}>+{git.added}</span>
+          <span class="del" aria-label={t('nav.sidebar.deleted', { n: git.deleted })}>−{git.deleted}</span>
+        </span>
+      {:else}
+        <!-- No git information yet, or no repository. -->
+        <span class="grow norepo">{git ? t('nav.sidebar.noRepo') : ''}</span>
+      {/if}
+    </div>
   </div>
 </aside>
 
@@ -894,44 +1043,55 @@
 {/if}
 
 <style>
-  /* On the frame, beside the panel of the work (the shell of the 2.0 design, ESC-72). */
+  /* The buttons of the sidebar draw only what their class says (the preview's reset). */
+  .new-agent,
+  .new-more,
+  .sh,
+  .done-toggle,
+  .more-toggle,
+  .sub,
+  .archived-h,
+  .opt,
+  .prnum,
+  .prfix,
+  .foot-row {
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  /* On the frame, beside the panel of the work (design/app-redesign/index.html, .sidebar). */
   .side {
     width: var(--side);
     flex: none;
     display: flex;
     flex-direction: column;
     min-height: 0;
+    padding: 6px 10px 10px;
   }
-  .views {
-    padding: 12px 10px 0;
+  /* The rail sits beside the sidebar in a narrow window: its left margin shrinks, its width stays (ESC-158). */
+  @media (max-width: 1240px) {
+    .side {
+      padding-left: 6px;
+    }
   }
-  .switcher {
-    display: flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: var(--r);
-    background: var(--bg);
-    border: 1px solid var(--line);
+
+  /* Agents | Kanban. */
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
   }
-  .switcher button {
-    flex: 1;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .seg button {
     gap: 7px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
+    padding: 0;
+    font-size: 13px;
   }
-  .switcher button.on {
-    background: var(--elev2);
-    color: var(--text);
+  .seg .count {
+    color: var(--dim);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
   }
   .badge {
     min-width: 17px;
@@ -939,200 +1099,258 @@
     padding: 0 5px;
     border-radius: 9px;
     background: var(--wait);
-    color: #2a1f05;
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 700;
+    color: var(--on-wait);
+    font-size: 10.5px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-  .head {
+
+  /* « Nouvel agent » and its menu « Harness ». */
+  .new-split {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 12px 0 8px;
+  }
+  .new-agent {
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 16px 14px 10px 18px;
+    height: 32px;
+    padding: 0 8px 0 9px;
+    border-radius: 8px;
+    color: var(--soft);
+    font-weight: 550;
+    transition: background-color 0.15s;
   }
-  .head.small {
-    padding: 12px 14px 8px 18px;
-  }
-  .count {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .new {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 10px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .new:hover,
-  .more:hover,
-  .plus-btn:hover {
-    border-color: var(--accent);
-  }
-  /* « Nouvel agent » and the menu of the other ways to make one: one control in two parts. */
-  .newgrp {
-    display: flex;
-  }
-  .newgrp .new {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-  .more {
-    width: 24px;
-    height: 28px;
-    margin-left: -1px;
-    padding: 0;
-    border: 1px solid var(--line2);
-    border-radius: 0 var(--r-sm) var(--r-sm) 0;
-    background: var(--elev);
-    color: var(--muted);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .more:hover {
+  .new-agent:hover,
+  .new-more:hover {
+    background: var(--hover);
     color: var(--text);
   }
-  .plus {
-    font-size: 15px;
-    line-height: 1;
-    color: var(--accent);
+  .new-agent .plus {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
-  .list {
-    flex: 1;
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 4px 10px 12px;
-    min-height: 80px;
-  }
-  .card {
-    text-align: left;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    padding: 11px 12px;
-    border-radius: var(--r);
-    border: 1px solid transparent;
-    cursor: pointer;
-    outline: none;
-  }
-  .card:hover:not(.sel) {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
-  }
-  .card.sel {
-    background: var(--elev);
-    border-color: var(--line2);
-  }
-  /* Asked, finished or failed out of sight: blinks until seen. */
-  .card.alert {
-    border-color: var(--alert);
-    animation: cardAlert 1.1s ease-in-out infinite alternate;
-  }
-  @keyframes cardAlert {
-    from {
-      background: transparent;
-    }
-    to {
-      background: color-mix(in oklch, var(--alert) 18%, transparent);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .card.alert {
-      animation: none;
-      background: color-mix(in oklch, var(--alert) 14%, transparent);
-    }
-    .plan-bar span {
-      transition: none;
-    }
-  }
-  .card:focus-visible {
-    border-color: var(--accent);
-  }
-  .card.archived .kept {
-    margin-top: 3px;
-    font-size: 11px;
-    line-height: 1.35;
-    color: var(--wait);
-  }
-  .card.archived {
-    padding: 8px 12px;
-    opacity: 0.7;
-  }
-  .row1 {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    width: 100%;
-  }
-  .name {
-    font-weight: 600;
-    font-size: 13.5px;
+  .new-agent .nl {
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .new-more {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 26px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--muted);
+  }
+  .new-agent:focus-visible,
+  .new-more:focus-visible,
+  .agent:focus-visible,
+  .row-item:focus-visible,
+  .foot-row:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
+  }
+
+  /* The agents: cards without a frame, the one open in relief, the one asking in amber. */
+  .agents {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 80px;
+    overflow: auto;
+    margin: 0 -4px;
+    padding: 0 4px 12px;
+    mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
+  }
+  .agent {
+    --tone: var(--run);
+    flex: none;
+    display: grid;
+    gap: 3px;
+    padding: 8px 10px 9px;
+    border-radius: 9px;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+    transition:
+      background-color 0.2s,
+      box-shadow 0.2s;
+  }
+  .agent:hover {
+    background: var(--hover);
+  }
+  .agent.sel {
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .agent.waiting {
+    --tone: var(--wait);
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .agent.done,
+  .agent.idle {
+    --tone: var(--muted);
+  }
+  .agent.error {
+    --tone: var(--del);
+  }
+  .agent.awaits {
+    --tone: var(--soft);
+  }
+  /* Asked, finished or failed out of sight: its colour breathes until seen. */
+  .agent.alert {
+    box-shadow: inset 0 0 0 1px var(--alert);
+    animation: card-alert 1.1s var(--ease) infinite alternate;
+  }
+  @keyframes card-alert {
+    to {
+      background: color-mix(in oklch, var(--alert) 14%, transparent);
+    }
+  }
+  .a-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 590;
+    letter-spacing: -0.01em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .rename {
     flex: 1;
     min-width: 0;
-    height: 24px;
+    height: 22px;
     padding: 0 6px;
-    border: 1px solid var(--accent);
-    border-radius: 4px;
-    background: var(--bg);
-    font-size: 13px;
-    font-weight: 600;
+    border: none;
+    border-radius: 5px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--p-ink);
+    color: var(--text);
+    font: inherit;
+    font-weight: 590;
     outline: none;
   }
-  .status {
-    font-size: 11px;
-    color: var(--muted);
+  .a-state {
     flex: none;
+    color: var(--tone);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .agent.done .a-state,
+  .agent.idle .a-state {
+    font-weight: 500;
+  }
+  .a-state.wk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .agent:not(.awaits) .a-state.wk {
+    color: var(--wait);
+  }
+  .bg-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bg-chip {
+    gap: 7px;
+  }
+  .bg-chip .part {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
   }
   .rc {
+    position: relative;
     flex: none;
     display: inline-flex;
     color: var(--dim);
   }
   .rc.on {
-    color: var(--info);
+    color: var(--teal-ink-2);
   }
   /* Off for Escouade, still linked in the interface left open: barred, in the colour of the other warnings. */
   .rc.warn {
     color: var(--wait);
   }
-  .meta {
+  .rc .bar {
+    position: absolute;
+    left: 50%;
+    top: -1px;
+    width: 1.5px;
+    height: 15px;
+    background: currentColor;
+    transform: rotate(-45deg);
+  }
+  .a-meta,
+  .a-act,
+  .said {
     display: flex;
-    gap: 10px;
-    padding-left: 17px;
-    font-family: var(--mono);
-    font-size: 11px;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-left: 16px;
     color: var(--muted);
+    font-size: 12px;
     white-space: nowrap;
+  }
+  .a-meta {
     overflow: hidden;
   }
-  .meta.dim {
-    color: var(--dim);
+  .a-meta .sep {
+    color: var(--sep);
+  }
+  .a-meta .branch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .a-meta .branch :global(.icon) {
+    flex: none;
+  }
+  .a-meta .model,
+  .a-meta .bn,
+  .a-meta .wt {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .said {
-    padding-left: 17px;
-    font-size: 11.5px;
-    color: var(--muted);
-    white-space: nowrap;
+    display: block;
     overflow: hidden;
+    color: var(--soft);
     text-overflow: ellipsis;
   }
   .sr {
@@ -1142,134 +1360,240 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
-  .plan-mini {
-    margin-left: 17px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .a-act {
+    color: var(--soft);
   }
-  .plan-bar {
-    flex: 1;
+  .a-act b {
+    flex: none;
+    font-weight: 550;
+  }
+  .a-act .tgt {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+  }
+  .a-act .mono {
+    font-size: 11.5px;
+  }
+  .a-act .ok {
+    display: inline-flex;
+    color: var(--add);
+  }
+  .a-act .spend {
+    flex: none;
+    margin-left: auto;
+    padding-left: 8px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ticket-chip {
+    flex: none;
+    color: var(--p-ink);
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+  }
+  .loops {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .loops i {
+    width: 8px;
     height: 3px;
     border-radius: 2px;
-    background: var(--elev2);
-    overflow: hidden;
+    background: rgba(var(--fg-rgb), 0.12);
   }
-  .plan-bar span {
-    display: block;
-    height: 100%;
-    background: var(--accent);
-    transition: width 1s linear;
+  .loops i.on {
+    background: var(--p-ink);
+  }
+  .plan-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
   }
   .plan-text {
-    font-size: 10.5px;
-    color: var(--muted);
-    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  /* The pull requests under a card (ESC-64): their numbers, colored by what to look at first, and the corrections. */
-  .prs {
-    margin: -2px 0 4px 29px;
+  .plan-bar {
+    flex: none;
+    width: 46px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(var(--fg-rgb), 0.1);
+    overflow: hidden;
+  }
+  .plan-bar i {
+    display: block;
+    height: 100%;
+    background: var(--soft);
+    transform: scaleX(calc(var(--pct) / 100));
+    transform-origin: left;
+    transition: transform 1s var(--ease);
+  }
+
+  /* The question, answered from the list. */
+  .a-ask {
+    display: grid;
+    gap: 8px;
+    padding: 4px 0 2px 16px;
+  }
+  .a-ask p {
+    margin: 0;
+    color: var(--text);
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .a-ask p.clip {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .opts {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    height: 26px;
+    padding: 0 9px 0 6px;
+    border-radius: 7px;
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 550;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition:
+      background-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .opt:hover:not(:disabled) {
+    background: oklch(from var(--wait) l c h / 0.14);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .opt:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .opt kbd {
+    height: 16px;
+    min-width: 16px;
+    justify-content: center;
+    padding: 0 3px;
+    font-size: 10.5px;
+  }
+
+  /* The pull requests under a card (ESC-64): a number with its state, the one correction that helps. */
+  .prs {
+    display: grid;
+    gap: 4px;
+    margin: -2px 6px 6px 30px;
   }
   .pr {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
   }
   .prnum,
   .prfix {
-    height: 22px;
-    padding: 0 7px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: transparent;
-    font: inherit;
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .prnum {
     display: inline-flex;
     align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 5px;
+    color: var(--soft);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .prnum {
     gap: 5px;
+    padding: 0 6px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     font-family: var(--mono);
-    color: var(--muted);
   }
-  .prnum.ok .prglyph {
-    color: var(--ok);
+  .prnum.ok :global(.icon) {
+    color: var(--run);
   }
-  .prnum.fail .prglyph {
+  .prnum.fail :global(.icon) {
     color: var(--del);
   }
-  .prnum.wait .prglyph {
+  .prnum.wait :global(.icon) {
     color: var(--wait);
   }
-  .prnum.merged .prglyph {
-    color: var(--info);
+  .prnum.merged :global(.icon) {
+    color: var(--syn-k);
   }
   .prnum.dim {
-    color: var(--dim);
+    color: var(--muted);
   }
   .prfix {
+    background: rgba(var(--fg-rgb), 0.05);
+    box-shadow: inset 0 0 0 1px var(--line);
     color: var(--text);
+    font-weight: 550;
   }
   .prnum:hover,
   .prfix:hover {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
+    background: var(--hover);
     color: var(--text);
   }
-  /* The subagents under a card: a line that folds them, then their rows, indented like the card's lines. A list shows its
-     first rows and a button unrolls the others: it never scrolls inside the list of the agents, which scrolls already. */
-  .subs {
-    margin: -2px 0 4px 29px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+
+  /* Subagents, background tasks and driven agents: a thread under their agent's card. A list shows its first rows and a
+     button unrolls the others: it never scrolls inside the list of the agents, which scrolls already. */
+  .subl {
+    display: grid;
+    gap: 1px;
+    margin: -1px 0 4px 18px;
+    padding-left: 8px;
+    border-left: 1px solid var(--line-2);
   }
-  .subs-toggle,
+  .sh,
   .done-toggle,
   .more-toggle {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
+    min-width: 0;
     height: 24px;
     padding: 0 6px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: transparent;
+    border-radius: 6px;
     color: var(--muted);
-    font: inherit;
     font-size: 11.5px;
     text-align: left;
-    cursor: pointer;
-    min-width: 0;
   }
-  .subs-toggle:hover,
-  .done-toggle:hover,
-  .more-toggle:hover {
-    color: var(--text);
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
-  }
-  .subs-toggle .lbl {
+  .sh .lbl {
     font-weight: 600;
   }
+  .sh:hover,
+  .done-toggle:hover,
+  .more-toggle:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
   .chev {
-    width: 9px;
-    font-size: 10px;
+    display: inline-flex;
+    flex: none;
     color: var(--dim);
   }
   .cnt {
-    font-family: var(--mono);
-    font-size: 10.5px;
     color: var(--dim);
+    font-variant-numeric: tabular-nums;
   }
   .cnt.run {
-    color: var(--ok);
+    color: var(--run);
   }
   .sub-list {
     list-style: none;
@@ -1291,27 +1615,27 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 5px 6px 5px calc(6px + var(--depth, 0) * 12px);
-    border: 1px solid transparent;
-    border-radius: var(--r-sm);
-    background: transparent;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
     min-width: 0;
+    padding: 5px 6px 5px calc(6px + var(--depth, 0) * 12px);
+    border-radius: 6px;
+    color: var(--soft);
+    font-size: 12px;
+    text-align: left;
   }
   .sub:hover:not(.on) {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
+    background: var(--hover);
   }
   .sub.on {
-    background: var(--elev);
-    border-color: var(--line2);
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
   }
   .sub:focus-visible,
-  .subs-toggle:focus-visible,
+  .sh:focus-visible,
   .done-toggle:focus-visible,
-  .more-toggle:focus-visible {
-    outline: 2px solid var(--accent);
+  .more-toggle:focus-visible,
+  .archived-h:focus-visible {
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
   }
   .sdot {
@@ -1320,24 +1644,27 @@
     height: 6px;
     margin-top: 5px;
     border-radius: 50%;
-    background: var(--dim);
+    background: none;
+    box-shadow: inset 0 0 0 1.5px var(--done);
   }
   .sdot.running {
-    background: var(--ok);
+    background: var(--run);
+    box-shadow: none;
   }
   .sdot.failed {
     background: var(--del);
+    box-shadow: none;
   }
   .sdot.stopped,
   .sdot.interrupted {
-    background: var(--wait);
+    box-shadow: inset 0 0 0 1.5px var(--wait);
   }
   .stext {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    min-width: 0;
     flex: 1;
+    min-width: 0;
   }
   .sline {
     display: flex;
@@ -1348,210 +1675,245 @@
   .stitle {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .stitle.mono {
+    font-size: 11.5px;
   }
   .smodel,
-  .sstate {
-    flex: none;
-    font-size: 10.5px;
-    color: var(--dim);
-  }
-  .sdoing {
-    font-size: 11px;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  /* A background task's time, live while it runs: beside its title. */
+  .sstate,
   .sdur {
     flex: none;
-    font-size: 10.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
-  /* What runs in the background for an agent, on its card: it gives way to the name when the room is short. */
-  .bgchip {
-    flex: none;
-    height: 16px;
-    padding: 0 6px;
-    border-radius: 8px;
-    background: color-mix(in oklch, var(--ok) 14%, transparent);
-    color: var(--ok);
-    font-family: var(--mono);
-    font-size: 10.5px;
-    line-height: 16px;
+  .sdoing {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .ticket-tag {
-    margin-left: 17px;
-    align-self: flex-start;
-    font-size: 10.5px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--accent);
-  }
-  .sep {
-    color: var(--dim);
-  }
-  .wt {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+
   .empty {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
     padding: 24px 8px;
-    text-align: center;
-    color: var(--dim);
+    color: var(--muted);
     font-size: 12.5px;
   }
-  .archived-toggle {
-    margin-top: 8px;
-    padding: 6px 8px;
-    border: none;
-    background: transparent;
-    color: var(--dim);
-    font-size: 12px;
-    text-align: left;
-    cursor: pointer;
+  .empty p {
+    margin: 0;
   }
-  .archived-toggle:hover {
-    color: var(--text);
-  }
-  .terms {
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 10px;
-    max-height: 40%;
-    min-height: 0;
-  }
-  .plus-btn {
-    width: 26px;
-    height: 26px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--accent);
-    font-size: 15px;
-    line-height: 1;
-    cursor: pointer;
-  }
-  .term-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0 10px;
-    overflow: auto;
-  }
-  .term {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 34px;
-    padding: 0 6px 0 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
-    cursor: pointer;
-    flex: none;
-  }
-  .term:hover:not(.sel) {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
-  }
-  .term.sel {
-    background: var(--elev);
-    border-color: var(--line2);
-  }
-  .glyph {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    font-weight: 700;
-    padding: 2px 5px;
-    border-radius: 3px;
-    background: var(--bg);
-    min-width: 24px;
-    text-align: center;
-  }
-  .tname {
-    flex: 1;
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .shell {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--dim);
-  }
-  .x {
-    width: 22px;
-    height: 22px;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: var(--dim);
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .x:hover {
-    background: var(--elev2);
-    color: var(--text);
-  }
-  .none {
-    padding: 4px 8px 6px;
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .foot {
-    border-top: 1px solid var(--line);
-    padding: 14px 18px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .browse {
-    height: 22px;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
-    font-family: var(--ui);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .browse:hover {
-    color: var(--text);
-    border-color: var(--accent);
-  }
-  .path {
-    font-size: 11.5px;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .branch {
+  .archived-h {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11.5px;
+    margin: 8px 6px 4px;
+    padding: 2px 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
   }
-  .ring {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    border: 1.5px solid var(--muted);
+  .archived-h:hover {
+    color: var(--text);
   }
-  .gitc {
+  .agent.archived {
+    opacity: 0.85;
+  }
+  .kept {
     display: flex;
-    gap: 12px;
-    font-size: 11px;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 3px;
+    color: var(--warn-ink);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .kept :global(.icon) {
+    margin-top: 2px;
+  }
+
+  /* Terminaux, as Lancement (RunsSection): a section under a hairline, its rows. */
+  .sec {
+    display: grid;
+    gap: 1px;
+    min-height: 0;
+    margin: 6px -2px 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .sec-h {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 2px 0 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .sec-h .n {
+    color: var(--dim);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .sec-h .acts {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+  .rows {
+    display: grid;
+    gap: 1px;
+    max-height: 30vh;
+    overflow: auto;
+  }
+  .row-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 28px;
+    padding: 0 4px 0 9px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+    outline: none;
+  }
+  .row-item:hover {
+    background: var(--hover);
+  }
+  .row-item.sel {
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .row-item .ti {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .row-item .nm {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .row-item .st {
+    flex: none;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  /* Shown on hover or focus; out of sight otherwise, but still there for the keyboard and a screen reader. */
+  .row-item .ra {
+    display: inline-flex;
+    width: 0;
+    margin-left: auto;
+    overflow: hidden;
+  }
+  .row-item .st + .ra {
+    margin-left: 2px;
+  }
+  .row-item:hover .ra,
+  .row-item.sel .ra,
+  .row-item:focus-within .ra {
+    width: auto;
+  }
+  .row-item .ra .icon-btn {
+    width: 22px;
+    height: 22px;
+  }
+  .none {
+    padding: 2px 9px 6px;
+    color: var(--dim);
+    font-size: 12px;
+  }
+
+  /* The project's folder and branch. */
+  .side-foot {
+    display: grid;
+    gap: 2px;
+    margin: 8px -2px 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .foot-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  button.foot-row:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .foot-row .grow {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .foot-row .branch {
+    color: var(--soft);
+  }
+  .browse {
+    display: none;
+    font-size: 11.5px;
+    font-weight: 550;
+  }
+  button.foot-row:hover .browse,
+  button.foot-row:focus-visible .browse {
+    display: inline;
+  }
+  .changes {
+    display: inline-flex;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .mod {
+    color: var(--wait);
+  }
+  .add {
+    color: var(--add);
+  }
+  .del {
+    color: var(--del);
+  }
+
+  /* A short window (820 px and less): Terminaux folds to its header, the agents get the room (choice 9). */
+  @media (max-height: 820px) {
+    .terms .rows {
+      display: none;
+    }
+    .sec {
+      padding-bottom: 2px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .agent.alert {
+      animation: none;
+      background: color-mix(in oklch, var(--alert) 12%, transparent);
+    }
+    .plan-bar i {
+      transition: none;
+    }
   }
 </style>

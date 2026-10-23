@@ -2,6 +2,7 @@
   import { t } from '../lib/i18n';
   import { menu } from '../lib/menu.svelte';
   import { tip } from '../lib/tip';
+  import EngineMark from './EngineMark.svelte';
   import Icon from './Icon.svelte';
 
   let el = $state<HTMLDivElement>();
@@ -62,8 +63,15 @@
       case 'End':
         to = last;
         break;
-      default:
+      default: {
+        // A numbered entry (the menu « Harness »): its key picks it.
+        const hit = /^[0-9]$/.test(e.key) ? el?.querySelector<HTMLButtonElement>(`[data-key="${e.key}"]:not(:disabled)`) : null;
+        if (hit) {
+          e.preventDefault();
+          hit.click();
+        }
         return;
+      }
     }
     e.preventDefault();
     list[to]?.focus();
@@ -88,6 +96,10 @@
     {#each menu.open.items as item, i (i)}
       {#if item.separator}
         <div class="sep"></div>
+      {:else if item.heading}
+        <div class="heading" role="presentation">
+          <span>{item.label}</span>{#if item.hint}<kbd class="kbd">{item.hint}</kbd>{/if}
+        </div>
       {:else if item.colors}
         {@const colors = item.colors}
         <div class="colors" role="group" aria-label={item.label}>
@@ -111,24 +123,32 @@
         </div>
       {:else}
         <button
-          role="menuitem"
+          role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+          aria-checked={item.checked}
+          aria-label={item.engine ? item.label : undefined}
           class:danger={item.danger}
           class:iconed={!!item.icon || !!item.swatch}
+          class:off={!!item.fix}
+          class:marked={!!item.engine}
           disabled={item.disabled}
+          data-key={item.key}
           use:tip={item.title}
           onclick={() => {
             menu.close();
             item.onClick?.();
           }}
         >
-          {#if item.swatch}<span class="ic tile" style:background={item.swatch}></span>{:else if item.icon}<span class="ic"
-              ><Icon name={item.icon} /></span
-            >{/if}
+          {#if item.engine}<span class="mk"><EngineMark engine={item.engine} always /></span>{:else if item.swatch}<span
+              class="ic tile"
+              style:background={item.swatch}
+            ></span>{:else if item.icon}<span class="ic"><Icon name={item.icon} /></span>{/if}
           <span class="ml"
             ><span class="l">{item.label}</span>{#if item.detail}<span class="reason">{item.detail}</span
               >{/if}{#if item.disabled && item.reason}<span class="reason">{item.reason}</span>{/if}</span
           >
-          {#if item.hint}<span class="hint">{item.hint}</span>{/if}
+          {#if item.fix}<span class="fix">{item.fix}</span>{:else if item.key}<kbd class="kbd">{item.key}</kbd>{:else if item.hint}<span
+              class="hint">{item.hint}</span
+            >{/if}
         </button>
       {/if}
     {/each}
@@ -217,6 +237,47 @@
     flex: none;
     font-size: 12px;
     color: var(--muted);
+  }
+  /* A title over the entries that follow (« Harness », « Worktree »), its shortcut in a key. */
+  .heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 9px 5px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  /* A harness's brand, in a column of its own: the names line up. */
+  .mk {
+    display: inline-flex;
+    flex: none;
+    width: 62px;
+  }
+  button[aria-checked='true'] .l::after {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 7px;
+    border-radius: 50%;
+    background: var(--p-ink);
+    vertical-align: 2px;
+  }
+  .marked .l {
+    font-weight: 550;
+  }
+  .off .l,
+  .off .mk {
+    opacity: 0.55;
+  }
+  .fix {
+    flex: none;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 550;
+    white-space: nowrap;
   }
   .sep {
     height: 1px;

@@ -41,8 +41,8 @@ La section « Lancement » de la barre latérale liste les commandes du projet
 Les boutons de la ligne :
 
 - « Lancer » (▶) démarre la commande. Il est remplacé par les deux suivants tant qu’elle tourne.
-- « Relancer » (⟳) l’arrête puis la relance. Escouade attend jusqu’à 10 secondes que le processus s’arrête ; s’il tourne encore, la commande reste comme elle est.
-- « Stopper » (■) arrête la commande et les processus qu’elle a lancés. Tant que l’arrêt n’est pas fini, la ligne dit « arrêt… ».
+- « Relancer » l’arrête puis la relance. Escouade attend jusqu’à 10 secondes que le processus s’arrête ; s’il tourne encore, la commande reste comme elle est.
+- « Stopper » arrête la commande et les processus qu’elle a lancés. Tant que l’arrêt n’est pas fini, la ligne dit « arrêt… ».
 
 En haut de la section, « Tout lancer » démarre toutes les commandes en même temps. Dès qu’une tourne, le bouton devient « Tout arrêter ».
 
@@ -76,7 +76,7 @@ Une commande se lance aussi dans le worktree d’un agent, pour voir son travail
 
 Plutôt que d’écrire les commandes, tu peux demander à Claude de les proposer.
 
-1. Dans la section « Lancement » d’un projet sans commande, clique « ✦ Proposer des commandes » : les réglages s’ouvrent sur le groupe « Lancement » et la lecture démarre. Tu peux aussi cliquer « ✦ Remplir automatiquement » dans ce groupe, dans les réglages du projet.
+1. Dans la section « Lancement » d’un projet sans commande, clique « Proposer des commandes » : les réglages s’ouvrent sur le groupe « Lancement » et la lecture démarre. Tu peux aussi cliquer « ✦ Remplir automatiquement » dans ce groupe, dans les réglages du projet.
 2. Le bouton dit « Claude lit le projet… ». Claude lit les manifestes et les scripts (`package.json`, `Makefile`, `Procfile`, `justfile`, `pyproject.toml`…), les fichiers `docker-compose`, le README et le CONTRIBUTING, à la racine et dans les sous-dossiers. Il n’a que des outils de lecture : il ne modifie rien et n’exécute rien. Il a 4 minutes au plus.
 3. Un message dit combien de commandes sont proposées (« 3 commandes proposées : relis-les avant d’enregistrer. »), et un encadré « Commandes de lancement proposées » les montre, chacune avec son nom, sa ligne de commande en entier, son shell et son dossier (« le dossier du projet » quand il est vide).
 4. « Remplacer les commandes » met la proposition à la place de la liste du brouillon, et « Ignorer » l’abandonne. Rien n’est gardé tant que tu n’as pas cliqué « Enregistrer ».

@@ -500,7 +500,7 @@ describe('App layout', () => {
     let answer!: (v: unknown) => void;
     const reading = new Promise((r) => (answer = r));
     start('', { handlers: { suggest_run_commands: () => reading } });
-    await userEvent.click(await screen.findByRole('button', { name: '✦ Proposer des commandes' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Proposer des commandes' }));
     const dialog = await screen.findByRole('dialog', { name: 'Réglages' });
     expect(within(dialog).getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
     expect(await within(dialog).findByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();

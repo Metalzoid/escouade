@@ -73,16 +73,18 @@ En haut, un sélecteur à deux boutons : « Agents » affiche la conversation 
 
 ### La liste des agents
 
-L’en-tête « Agents » porte le nombre d’agents du projet et le bouton « + Nouvel agent » (`Ctrl+N`). La flèche ▾ à sa droite ouvre « Nouvel agent sur une branche… » et « Nouvel agent sans worktree » (ou « dans un worktree », selon le réglage du projet). Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
+Sous le sélecteur, « Nouvel agent » (`Ctrl+N`) crée un agent sur le harness du projet. La flèche à sa droite, ou `Ctrl+Maj+N`, ouvre le menu « Harness » : chaque harness qu’Escouade connaît, numéroté (`1` à `4` le choisissent tant que le menu est ouvert), avec le compte, le modèle et le mode que prendrait son nouvel agent ; celui du projet est marqué « Celui du projet ». Un harness sans compte reste à sa place avec « Aucun compte » et « Ajouter un compte… » ; un harness introuvable est grisé avec l’endroit où régler son exécutable. Sous « Worktree », « Nouvel agent sans worktree » (ou « dans un worktree », selon le réglage du projet) et « Nouvel agent sur une branche… », puis « Harness par défaut du projet… ». Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
 
-Chaque agent est une carte :
+L’agent qui attend ta réponse passe en tête de la liste. Chaque agent est une carte, sans cadre ; celle de l’agent affiché est en relief :
 
-- son **nom** (double-clic pour le renommer sur place : `Entrée` valide, `Échap` annule), une icône d’ondes quand le [remote control](remote-control) est activé (bleue une fois connecté ; son infobulle dit d’où il vient : de toi, du réglage du projet ou du réglage de tous les agents ; en [vue Claude Code](claude-code-view), elle dit l’état de l’interface), et son **statut** ;
+- son **nom** (double-clic pour le renommer sur place : `Entrée` valide, `Échap` annule), le nombre de ses sous-agents et de ses tâches de fond au travail, une icône d’ondes quand le [remote control](remote-control) est activé (teal une fois connecté ; son infobulle dit d’où il vient : de toi, du réglage du projet ou du réglage de tous les agents ; en [vue Claude Code](claude-code-view), elle dit l’état de l’interface), et son **statut** ;
 - ce que l’agent annonce faire, quand il l’a dit par le [serveur MCP](mcp) ;
-- son **modèle**, le temps pendant lequel il a travaillé et, s’il a un worktree, sa branche (`⎇ …`) ;
-- ses **tokens**, son **coût** (précédé de « ≈ » tant qu’un tour tourne : c’est alors une estimation) et le nombre de ses fichiers modifiés (« N fich. ») ;
-- une mini-barre « Plan 2/7 » quand l’agent suit un plan (voir [l’avancée d’un plan](plan)) ;
-- pour l’agent d’un ticket, une étiquette `▸ DEM-3 · boucle 1/5`, ou `▸ DEM-3 · à tester`.
+- la marque de son harness (« Claude », « Codex »… dès que les agents tournent sur deux harness), son **modèle**, le temps pendant lequel il a travaillé (« Aucun message » tant que tu ne lui as rien écrit) et une mini-barre « Plan 2/7 » quand il suit un plan (voir [l’avancée d’un plan](plan)), sinon sa branche s’il a un worktree ; pour l’agent d’un ticket, la clé du ticket et sa boucle (« DEM-3 boucle 1/5 », avec une case par boucle) ou « à tester » ;
+- **ce qu’il fait** pendant un tour (« Modifie src/auth/jwt.ts », « Réfléchit »), ou après, ce qu’il a changé (« 2 fichiers modifiés »), puis ses **tokens** et son **coût** (précédé de « ≈ » tant qu’un tour tourne : c’est alors une estimation).
+
+La carte d’un agent qui pose une question montre la question et ses réponses : un clic sur une réponse, ou sa touche `1`, `2`… quand la carte a le focus, répond sans quitter la conversation affichée. Plusieurs questions d’un coup, ou une autorisation, se répondent dans sa conversation : la carte en montre le début.
+
+Sous la carte de l’agent affiché, la liste de ses sous-agents et celle de ses tâches de fond (voir [l’avancée d’un plan](plan)). Sous la carte d’un agent, ses PR (numéro et icône de leur état, et le bouton de la correction utile), et les agents qu’il pilote par le serveur MCP.
 
 Un clic sur une carte affiche l’agent. `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à l’agent suivant ou précédent du projet, sans les agents archivés.
 
@@ -90,15 +92,16 @@ Un clic sur une carte affiche l’agent. `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à
 
 | Statut | Point | Texte |
 |---|---|---|
-| « Prêt » | Gris | Gris |
-| « En cours » | Vert, avec un halo qui pulse | Vert |
-| « Question » | Ambre, qui pulse | Pastille ambre « Question » |
-| « Terminé » | Coche verte | Vert |
+| « Prêt » | Anneau gris | Gris |
+| « En cours » | Vert | Vert |
+| « Question » | Ambre, entouré d’un anneau qui respire | Ambre, la carte en ambre |
+| « Attend » ou « Réveil à 15:30 » | Anneau vert vide : le tour est fini, pas le travail | Clair ; l’infobulle dit ce qui continue |
+| « Terminé » | Anneau gris | Gris |
 | « Erreur » | Rouge | Rouge |
 
 À la place du statut, la carte peut dire « Préparation… » (le worktree de l’agent se prépare) ou « Reprise » suivi d’une heure (l’agent, arrêté par la limite d’usage, reprend alors tout seul), en ambre.
 
-Une carte dont l’agent a posé une question, a terminé ou a échoué pendant qu’il n’était pas affiché clignote, en ambre, en vert ou en rouge, jusqu’à ce que tu l’ouvres. `Ctrl+J` va à l’agent suivant qui attend ta réponse ou qui est à voir.
+Une carte dont l’agent a posé une question, a terminé ou a échoué pendant qu’il n’était pas affiché s’entoure de sa couleur, en ambre, en vert ou en rouge, jusqu’à ce que tu l’ouvres. `Ctrl+J` va à l’agent suivant qui attend ta réponse ou qui est à voir. Avec « Réduire les animations » du système, rien ne bouge.
 
 ### Le menu d’un agent
 
@@ -117,19 +120,21 @@ Un clic droit sur une carte ouvre son menu :
 | « Activer le remote control » ou « Désactiver le remote control » | Rend la session accessible depuis claude.ai et l’app Claude (« claude.ai, mobile »). Quand le lien est disponible, « Ouvrir sur claude.ai » et « Copier le lien claude.ai » apparaissent. « Désactiver » met toujours l’agent à part : un réglage allumé ensuite ne lui rend pas le remote control. En [vue Claude Code](claude-code-view), « Ouvrir sur claude.ai » et « Copier le lien claude.ai » n’apparaissent qu’une fois l’interface connectée, et le changement vaut au prochain lancement de l’interface. |
 | « Supprimer… » | Arrête le processus Claude et retire la conversation de l’application ; la session Claude Code reste sur le disque. Pour un agent avec un worktree, une case propose de supprimer aussi le worktree, et sa branche si elle a été créée pour l’agent. |
 
-Les agents archivés sont sous « Archivés (N) », un titre que tu déplies d’un clic ; leur carte ne montre que le nom et le coût.
+Les agents archivés sont sous « Archivés (N) », un titre que tu déplies d’un clic ; leur carte montre le nom et le coût, et en ambre ce que garde un worktree resté (« worktree gardé : 2 commits ni mergés ni poussés »).
 
 ### Lancement
 
-La section « Lancement » liste les commandes de lancement du projet (serveur de développement, watchers…) avec leur état. ▶ lance une commande, ⟳ la relance, ■ la stoppe ; « Tout lancer » et « Tout arrêter » agissent sur toutes. Un clic sur une commande affiche son journal dans la zone principale. L’engrenage ouvre « Commandes de lancement… » ; sans commande, « Configurer » ouvre leurs réglages et « ✦ Proposer des commandes » laisse Claude en proposer. Voir [lancer le projet](launch).
+La section « Lancement » liste les commandes de lancement du projet (serveur de développement, watchers…) avec leur état (« en cours » en vert, « planté (code 1) » en rouge). Au survol d’une commande, « Relancer » et « Stopper » si elle tourne, sinon « Lancer », qui demande « Dans le projet » ou « Dans le worktree de … » dès qu’un agent a un worktree ; « Tout lancer » et « Tout arrêter » agissent sur toutes. Les lancements d’un agent (dans son worktree, ou ceux d’un test) sont groupés sous son nom. Un clic sur une commande affiche son journal dans la zone principale. Le bouton des réglages ouvre « Commandes de lancement… » ; sans commande, « Configurer » ouvre leurs réglages et « Proposer des commandes » laisse Claude en proposer. Voir [lancer le projet](launch).
 
 ### Terminaux
 
-La section « Terminaux » liste les terminaux ouverts du projet. Le bouton `+` (« Nouveau terminal ») propose les shells détectés sur la machine, puis « Dans le worktree de… », qui liste les agents du projet ayant un worktree (pas les archivés) pour y ouvrir un terminal ; l’entrée n’existe pas quand aucun agent n’en a. `Ctrl+T` en ouvre un tout de suite. Un clic sur un terminal l’affiche dans la zone principale, le × le ferme, et un terminal dont le shell s’est arrêté est marqué « terminé ». Voir [les terminaux](terminals).
+La section « Terminaux » liste les terminaux ouverts du projet. Le bouton `+` (« Nouveau terminal ») propose les shells détectés sur la machine, puis « Dans le worktree de… », qui liste les agents du projet ayant un worktree (pas les archivés) pour y ouvrir un terminal ; l’entrée n’existe pas quand aucun agent n’en a. `Ctrl+T` en ouvre un tout de suite. Un clic sur un terminal l’affiche dans la zone principale, « Fermer » au survol le ferme, et un terminal dont le shell s’est arrêté est marqué « terminé ». Voir [les terminaux](terminals).
+
+Dans une fenêtre de 820 pixels de haut ou moins, « Lancement » et « Terminaux » se replient sur leur titre pour laisser la place aux agents ; une commande plantée y reste dite (« 1 planté »).
 
 ### Le pied de la barre
 
-Le pied rappelle le dossier du projet, sa branche git et le décompte de ses fichiers modifiés : `~N modifiés`, `+N ajoutés`, `−N supprimés` (ou « Pas de dépôt git »). Le bouton « Parcourir » ouvre l’éditeur sur le dossier du projet.
+Le pied rappelle le dossier du projet, sa branche git et le décompte de ses fichiers modifiés (`~2`, `+1`, `−0` ; leur détail en infobulle), ou « Pas de dépôt git ». Un clic sur le dossier (« Parcourir ») ouvre l’éditeur sur le dossier du projet.
 
 ## L’en-tête et la conversation
 

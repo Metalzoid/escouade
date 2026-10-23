@@ -2,6 +2,7 @@
 // two corrections handed to the agent on a click (never by themselves).
 
 import { t } from './i18n';
+import type { IconName } from './icons';
 import { api } from './ipc';
 import { openOutside } from './links';
 import type { MenuItem } from './menu.svelte';
@@ -64,6 +65,12 @@ export function prTone(p: PullRequest): 'fail' | 'wait' | 'ok' | 'merged' | 'dim
 export function prGlyph(p: PullRequest): string {
   if (p.state === 'merged') return '⇡';
   return { failure: '✗', success: '✓', pending: '●', skipped: '○' }[p.checks ?? 'skipped'];
+}
+
+/** The icon of its state in the 2.0 design (the sidebar): merged, its CI failed, passed or running, else a pull request. */
+export function prIcon(p: PullRequest): IconName {
+  if (p.state === 'merged') return 'merge';
+  return ({ failure: 'close', success: 'check', pending: 'clock', skipped: 'pr' } as const)[p.checks ?? 'skipped'];
 }
 
 /** Its tooltip: number and title, then its state, its CI and its reviews in words. */

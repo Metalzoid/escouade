@@ -46,9 +46,9 @@ If the folder is the one of a project you closed, the history comes before the a
 
 ## Create an agent
 
-An agent is a conversation with Claude Code in this project. To create one, press `Ctrl+N` or click “+ New agent” at the top of the sidebar: the agent is created without asking you anything, and its conversation appears. It is called `agent-1`, `agent-2`… until its first request; Escouade then gives it a short name taken from what you wrote. To rename it yourself, double-click its name.
+An agent is a conversation with Claude Code in this project. To create one, press `Ctrl+N` or click “New agent” at the top of the sidebar: the agent is created without asking you anything, and its conversation appears. It is called `agent-1`, `agent-2`… until its first request; Escouade then gives it a short name taken from what you wrote. To rename it yourself, double-click its name.
 
-Its status is “Ready”, and the empty conversation says “Agent ready”, with the folder it works in. The ▾ arrow to the right of “+ New agent” offers “New agent on a branch…” (see [branches](branches)).
+Its status is “Ready”, and the empty conversation says “Agent ready”, with the folder it works in. The arrow to the right of “New agent” offers “New agent on a branch…” (see [branches](branches)).
 
 ## Choose the model, the effort and the permission mode
 

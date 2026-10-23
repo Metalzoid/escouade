@@ -46,9 +46,9 @@ Si le dossier est celui d’un projet que tu as fermé, l’historique passe ava
 
 ## Créer un agent
 
-Un agent est une conversation avec Claude Code dans ce projet. Pour en créer un, appuie sur `Ctrl+N` ou clique sur « + Nouvel agent » en haut de la barre latérale : l’agent est créé sans rien te demander, et sa conversation s’affiche. Il s’appelle `agent-1`, `agent-2`… jusqu’à sa première demande ; Escouade lui donne alors un nom court tiré de ce que tu as écrit. Pour le renommer toi-même, double-clique sur son nom.
+Un agent est une conversation avec Claude Code dans ce projet. Pour en créer un, appuie sur `Ctrl+N` ou clique sur « Nouvel agent » en haut de la barre latérale : l’agent est créé sans rien te demander, et sa conversation s’affiche. Il s’appelle `agent-1`, `agent-2`… jusqu’à sa première demande ; Escouade lui donne alors un nom court tiré de ce que tu as écrit. Pour le renommer toi-même, double-clique sur son nom.
 
-Son statut est « Prêt », et la conversation vide dit « Agent prêt », avec le dossier où il travaille. La flèche ▾ à droite de « + Nouvel agent » propose « Nouvel agent sur une branche… » (voir les [branches](branches)).
+Son statut est « Prêt », et la conversation vide dit « Agent prêt », avec le dossier où il travaille. La flèche à droite de « Nouvel agent » propose « Nouvel agent sur une branche… » (voir les [branches](branches)).
 
 ## Choisir le modèle, l’effort et le mode de permission
 

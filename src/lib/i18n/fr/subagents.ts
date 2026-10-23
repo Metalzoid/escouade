@@ -6,6 +6,8 @@ import type { Tree } from '../types';
 export default {
   /** The fold under an agent's card. */
   title: 'Sous-agents',
+  /** The count on the card of an agent, in full for a screen reader and its tooltip (2.0 design). */
+  chipLabel: { one: '{count} sous-agent en cours', other: '{count} sous-agents en cours' },
   /** Its button, for a screen reader. */
   toggle: 'Sous-agents de {name}',
   runningCount: { one: '{count} en cours', other: '{count} en cours' },

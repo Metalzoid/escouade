@@ -12,10 +12,10 @@ Each agent is a Claude Code session: a conversation, a model, an effort, a permi
 
 | To… | Do this |
 |---|---|
-| Create an agent in the project on screen | `Ctrl+N`, or the “+ New agent” button at the top of the list |
+| Create an agent in the project on screen | `Ctrl+N`, or the “New agent” button at the top of the list |
 | Create the first agent of a project that has none | “Create an agent” in the empty list, or “New agent” in the middle of the window (“No agents in this project.”) |
-| Make an agent without a worktree, or in one, once | The ▾ button to the right of “New agent”, then “New agent without a worktree” (project with “One worktree per agent”) or “New agent in a worktree” (the others) |
-| Work on a branch that already exists, or on a new branch you name | The ▾ button to the right of “New agent” (“Other ways to create an agent”), then “New agent on a branch…”: pick the branch in the picker, or type a new one’s name there |
+| Make an agent without a worktree, or in one, once | The arrow to the right of “New agent”, then “New agent without a worktree” (project with “One worktree per agent”) or “New agent in a worktree” (the others) |
+| Work on a branch that already exists, or on a new branch you name | The arrow to the right of “New agent” (“Other ways to create an agent”), then “New agent on a branch…”: pick the branch in the picker, or type a new one’s name there |
 | Start from a branch in the branch picker | Right-click a branch, then “Start an agent on this branch” |
 | Create an agent along with a project | In the “New project” window, the “Create a first agent” switch (on by default) also offers the model for that agent |
 

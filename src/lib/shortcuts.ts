@@ -156,6 +156,11 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
     app.newAgent();
     return true;
   }
+  // The menu « Harness » beside « Nouvel agent », its harnesses numbered (choice 15 of the 2.0 design).
+  if (k === 'n' && e.shiftKey && app.project && !app.boardOn) {
+    app.newAgentMenu++;
+    return true;
+  }
   if (k === 'j') {
     app.nextWaiting();
     return true;

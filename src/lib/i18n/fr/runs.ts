@@ -51,6 +51,10 @@ export default {
     none: 'Aucune commande.',
     set: 'Configurer',
     suggest: 'Proposer des commandes',
+    /** Said in the header, even folded in a short window. */
+    crashed: { one: '{count} planté', other: '{count} plantés' },
+    /** A launch command run in the worktree of the agent it is listed under. */
+    inItsWorktree: 'dans son worktree',
   },
   /** The head and the empty state of the log of a command. */
   log: {

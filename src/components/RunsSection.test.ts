@@ -88,14 +88,14 @@ describe('RunsSection', () => {
     fakeBackend();
     render(RunsSection, { project: project() });
     expect(screen.getByText('Aucune commande.')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '✦ Proposer des commandes' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Proposer des commandes' }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
   });
 
   it('does not offer it once there are commands', () => {
     fakeBackend();
     render(RunsSection, { project: P });
-    expect(screen.queryByRole('button', { name: '✦ Proposer des commandes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Proposer des commandes' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Configurer' })).not.toBeInTheDocument();
   });
 
@@ -142,9 +142,7 @@ describe('RunsSection', () => {
     expect(screen.getByText('dem-1-ajouter')).toBeInTheDocument();
     expect(screen.queryByText('dem-2-sans-lancement')).not.toBeInTheDocument();
     expect(screen.queryByText('dem-3-ailleurs')).not.toBeInTheDocument();
-    const names = screen
-      .getAllByRole('button', { name: /^(Front|API|Préparation 1|web)/ })
-      .map((b) => b.querySelector('.name')?.textContent);
+    const names = screen.getAllByRole('button', { name: /^(Front|API|Préparation 1|web)/ }).map((b) => b.querySelector('.nm')?.textContent);
     expect(names).toEqual(['Front', 'API', 'Préparation 1', 'web']);
     expect(within(row('Préparation 1')).getByText('terminé')).toBeInTheDocument();
     expect(within(row('web')).getByText('en cours')).toBeInTheDocument();
@@ -335,7 +333,7 @@ describe('RunsSection in English', () => {
     render(RunsSection, { project: project() });
     expect(screen.getByText('No commands.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Configure' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '✦ Suggest commands' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suggest commands' })).toBeInTheDocument();
   });
 
   it('names the steps of a recipe in English', () => {

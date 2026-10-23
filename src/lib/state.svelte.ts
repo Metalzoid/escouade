@@ -311,6 +311,8 @@ class AppState {
   /** A version that did not install at the last try: told of once it is downloaded again. */
   failedUpdate = $state<string | null>(null);
   focusComposer = $state(0);
+  /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
+  newAgentMenu = $state(0);
   /** Counts the projects and agents chosen, the one on screen again included: its project's tab comes back into view. */
   chosen = $state(0);
   /**

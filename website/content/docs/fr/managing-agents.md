@@ -12,10 +12,10 @@ Chaque agent est une session Claude Code : une conversation, un modèle, un effo
 
 | Pour… | Fais ceci |
 |---|---|
-| Créer un agent dans le projet affiché | `Ctrl+N`, ou le bouton « + Nouvel agent » en haut de la liste |
+| Créer un agent dans le projet affiché | `Ctrl+N`, ou le bouton « Nouvel agent » en haut de la liste |
 | Créer le premier agent d’un projet qui n’en a pas | « Créer un agent » dans la liste vide, ou « Nouvel agent » au milieu de la fenêtre (« Aucun agent dans ce projet. ») |
-| Travailler sur une branche qui existe déjà, ou sur une nouvelle branche que tu nommes | Le bouton ▾ à droite de « Nouvel agent » (« Autres façons de créer un agent »), puis « Nouvel agent sur une branche… » : choisis la branche dans le sélecteur, ou tapes-y le nom d’une nouvelle |
-| Créer un agent sans worktree, ou dans un worktree, une fois | Le bouton ▾ à droite de « Nouvel agent », puis « Nouvel agent sans worktree » (projet à « Un worktree par agent ») ou « Nouvel agent dans un worktree » (les autres) |
+| Travailler sur une branche qui existe déjà, ou sur une nouvelle branche que tu nommes | La flèche à droite de « Nouvel agent » (« Autres façons de créer un agent »), puis « Nouvel agent sur une branche… » : choisis la branche dans le sélecteur, ou tapes-y le nom d’une nouvelle |
+| Créer un agent sans worktree, ou dans un worktree, une fois | La flèche à droite de « Nouvel agent », puis « Nouvel agent sans worktree » (projet à « Un worktree par agent ») ou « Nouvel agent dans un worktree » (les autres) |
 | Partir d’une branche depuis le sélecteur de branches | Clic droit sur une branche, puis « Lancer un agent sur cette branche » |
 | Créer un agent en même temps qu’un projet | Dans la fenêtre « Nouveau projet », l’interrupteur « Créer un premier agent » (activé par défaut) propose aussi le modèle de cet agent |
 

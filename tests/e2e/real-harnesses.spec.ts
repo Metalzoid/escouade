@@ -126,7 +126,7 @@ function realSettings(h: Harness | 'handover', root: string): Record<string, unk
 /** A new agent on `h`, from the menu beside « Nouvel agent » (Claude Code: the button itself, when it is alone). */
 async function newAgent(page: Page, h: Harness) {
   const menu = page.getByRole('button', { name: 'Autres façons de créer un agent' });
-  const item = page.getByRole('menuitem', { name: `Nouvel agent sur ${NAMES[h]}` });
+  const item = page.getByRole('menuitemradio', { name: NAMES[h] });
   if (await menu.isVisible()) {
     await menu.click();
     await expect(page.getByRole('menuitem').first()).toBeVisible();
@@ -134,7 +134,7 @@ async function newAgent(page: Page, h: Harness) {
   if (await item.isVisible()) await item.click();
   else {
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+    await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   }
   await expect(page.locator('main.conv header.head')).toContainText(NAMES[h]);
 }

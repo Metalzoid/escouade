@@ -5,6 +5,7 @@ import { defineZone } from '../types';
 // are the agent’s own words: shown as they come, never translated.
 export default defineZone('subagents', {
   title: 'Subagents',
+  chipLabel: { one: '{count} subagent running', other: '{count} subagents running' },
   toggle: 'Subagents of {name}',
   runningCount: { one: '{count} running', other: '{count} running' },
   finishedCount: { one: '{count} finished', other: '{count} finished' },

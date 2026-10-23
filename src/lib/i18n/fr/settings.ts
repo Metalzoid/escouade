@@ -316,7 +316,7 @@ export default {
     /** « Branche de départ des nouveaux worktrees » (ESC-160): where a new agent’s worktree starts, its base. */
     worktreeBase: 'Branche de départ des nouveaux worktrees',
     worktreeBaseDesc:
-      'Le worktree d’un nouvel agent part de cette branche, qui est aussi sa base : « Intégrer », son merge et sa PR vont vers elle. « + Nouvel agent » peut en choisir une autre pour un agent.',
+      'Le worktree d’un nouvel agent part de cette branche, qui est aussi sa base : « Intégrer », son merge et sa PR vont vers elle. « Nouvel agent » peut en choisir une autre pour un agent.',
     worktreeBases: {
       head: 'Branche actuelle du dossier',
       target: 'Branche cible du Kanban',

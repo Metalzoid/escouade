@@ -307,7 +307,7 @@ test.describe('a first installation, without an account', () => {
     await expect(empty).toContainText('Aucun compte');
     await page.keyboard.press('Escape');
     // A new agent is refused, with the button that adds one on its harness.
-    await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+    await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
     const toast = page.locator('.toast').filter({ hasText: 'Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes.' }).last();
     await expect(toast).toBeVisible();
     await expect(toast).not.toContainText('no-account');
@@ -330,7 +330,7 @@ test.describe('a first installation, without an account', () => {
     await expect.poll(() => settings().accounts.map((a: { id: string }) => a.id)).toEqual(['principal']);
     await page.keyboard.press('Escape');
     // Now an agent starts on it.
-    await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+    await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
     await send(page, 'Bonjour');
     await expect(page.getByText('Tâche terminée')).toBeVisible();
     expect(processes(app.launches())).toEqual([principalDir(app.root)]);

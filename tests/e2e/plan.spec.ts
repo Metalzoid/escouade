@@ -56,7 +56,7 @@ test('a superpowers plan run shows the “Plan” banner between the header and 
   // The card of the agent says as much, in a line of its own with a bar.
   const mini = page.locator('.card .plan-mini').first();
   await expect(mini.locator('.plan-text')).toHaveText('Plan 2/3 · 1 sous-agent');
-  await expect(mini.locator('.plan-bar span')).toHaveAttribute('style', /width: 66\.\d+%|width: 67%/);
+  await expect(mini.locator('.plan-bar i')).toHaveAttribute('style', /--pct: (66\.\d+|67)/);
 
   // Closed, then open, with the keyboard.
   const head = plan.head;
@@ -103,7 +103,7 @@ test('a superpowers plan run shows the “Plan” banner between the header and 
   await expect(plan.row(3)).not.toContainText('En attente de ta réponse');
   await expect(plan.root).not.toContainText('sous-agent actif');
   await expect(mini.locator('.plan-text')).toHaveText('Plan 3/3');
-  await expect(mini.locator('.plan-bar span')).toHaveAttribute('style', /width: 100%/);
+  await expect(mini.locator('.plan-bar i')).toHaveAttribute('style', /--pct: 100/);
   // It stays as it was left.
   await expect(head).toHaveAttribute('aria-expanded', 'true');
 

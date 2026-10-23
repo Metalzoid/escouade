@@ -14,7 +14,7 @@ Puis ajoute-lui un compte dans Réglages › Comptes : aucun harness n’en a au
 Dès que deux harness sont installés :
 
 - chaque projet a son « Harness par défaut » (Réglages › Projets), Claude Code sans réglage ;
-- le bouton « ▾ » de « Nouvel agent » propose « Nouvel agent sur … » pour chacun ;
+- la flèche de « Nouvel agent », ou `Ctrl+Maj+N`, ouvre le menu « Harness », qui les numérote (voir [l’interface](interface#la-liste-des-agents)) ;
 - la fenêtre d’un ticket a son champ « Harness », celui du projet par défaut, que le pilote auto suit ;
 - la carte de chaque agent porte la marque de son harness, dès que des agents tournent sur deux harness.
 

@@ -33,6 +33,7 @@ const REDRAWN = {
     'src/components/Toasts.svelte',
     'src/components/Welcome.svelte',
   ],
+  'lot 3 (ESC-73)': ['src/components/Sidebar.svelte', 'src/components/RunsSection.svelte', 'src/components/StatusDot.svelte'],
 };
 
 /**

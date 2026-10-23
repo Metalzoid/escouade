@@ -1498,7 +1498,7 @@ test('latency of a keystroke and of a paste in a terminal, idle and under load',
     const first = SHELL === 'claude' ? 1 : 0;
     const cards = page.locator('.card');
     for (let n = await cards.count(); n < first + AGENTS; n++) {
-      await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+      await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
       await expect(cards).toHaveCount(n + 1);
     }
     for (let i = first; i < first + AGENTS; i++) {

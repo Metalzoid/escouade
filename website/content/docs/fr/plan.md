@@ -58,11 +58,11 @@ Ce qu’un sous-agent dit et fait se lit dans sa propre conversation (voir plus 
 
 ## La ligne de la carte
 
-Dans la barre latérale, la carte d’un agent qui a des tâches affiche une barre fine et « Plan 2/7 » (ou « Plan 2/7 · 3 sous-agents » quand des sous-agents tournent). Elle permet de suivre plusieurs agents d’un coup d’œil, sans ouvrir leur conversation. Un agent qui n’a que des sous-agents, sans tâches, n’a pas cette ligne, mais ses sous-agents ont leur groupe sous la carte (voir plus bas). Tant que des tâches de fond tournent, une puce « N en fond » s’ajoute à côté de son nom (voir [les tâches de fond](#les-taches-de-fond)).
+Dans la barre latérale, la carte d’un agent qui a des tâches affiche une barre fine et « Plan 2/7 » (ou « Plan 2/7 · 3 sous-agents » quand des sous-agents tournent). Elle permet de suivre plusieurs agents d’un coup d’œil, sans ouvrir leur conversation. Un agent qui n’a que des sous-agents, sans tâches, n’a pas cette ligne, mais ses sous-agents ont leur groupe sous la carte (voir plus bas). Tant que des sous-agents ou des tâches de fond tournent, leur nombre s’ajoute à côté de son nom, chacun avec son icône (voir [les tâches de fond](#les-taches-de-fond)).
 
 ## Les sous-agents dans la barre latérale
 
-Sous la carte d’un agent qui a des sous-agents, un groupe « Sous-agents » les liste, même quand l’agent n’a aucune tâche. Un clic sur son titre le déplie ou le replie. Par défaut il est déplié tant qu’un sous-agent tourne et replié sinon ; ton choix est gardé jusqu’à ce que tu fermes Escouade.
+Sous la carte de l’agent affiché, s’il a des sous-agents, un groupe « Sous-agents » les liste, même quand l’agent n’a aucune tâche ; les autres cartes n’en montrent que le nombre au travail. Un clic sur son titre le déplie ou le replie. Par défaut il est déplié tant qu’un sous-agent tourne et replié sinon ; ton choix est gardé jusqu’à ce que tu fermes Escouade.
 
 Déplié, le groupe montre d’abord les sous-agents qui tournent, chacun avec son titre, son modèle et ce qu’il fait en ce moment (« Édite src/a.ts »). Il en montre cinq ; « N autres en cours » déroule les suivants. Dessous, une ligne « N sous-agents finis » déplie ceux qui ont fini, du dernier fini au premier, chacun avec son état (Terminé, Échoué, Arrêté ou Interrompu) : dix au plus, puis « N de plus » pour le reste. Un sous-agent lancé par un autre est décalé d’un cran. Le groupe ne défile pas : la barre défile déjà.
 
@@ -126,7 +126,7 @@ Sous la carte d’un agent qui a des tâches de fond, après le groupe des sous-
 
 Déplié, le groupe montre d’abord les tâches qui tournent, dans l’ordre où elles ont été lancées : cinq, puis « N autres en cours » déroule les suivantes. Chaque ligne donne un point d’état, le titre de la tâche, sa durée (qui court tant qu’elle tourne), son type (« Commande en fond », « Surveillance », « Workflow », « Agent distant » ou « Coéquipier ») et, tant qu’elle tourne, sa ligne de commande ou la phase du workflow. Dessous, « N tâches finies » déplie celles qui ont fini, de la dernière finie à la première, chacune avec son état (Terminée, En échec, Arrêtée ou Interrompue) et, pour une commande, son code de sortie (« En échec (code 3) ») : dix au plus, puis « N de plus ».
 
-Sur la carte de l’agent, à côté de son nom, une puce « 2 en fond » compte les tâches qui tournent : commandes, surveillances, workflows, agents distants et coéquipiers, pas les sous-agents. Elle disparaît quand plus rien ne tourne.
+Sur la carte de l’agent, à côté de son nom, un nombre à l’icône d’horloge compte les tâches qui tournent : commandes, surveillances, workflows, agents distants et coéquipiers, pas les sous-agents. Elle disparaît quand plus rien ne tourne.
 
 Une commande lancée au premier plan, que l’agent attend, ne figure pas dans la liste : elle y entre au moment où Claude Code l’envoie en arrière-plan, avec l’heure de son départ.
 

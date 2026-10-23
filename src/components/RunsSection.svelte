@@ -2,10 +2,15 @@
   import { t } from '../lib/i18n';
   import { launchStatus, restartLaunch, runHere, runIn, startAll, stopAll, stopLaunch } from '../lib/launch-actions';
   import { menu } from '../lib/menu.svelte';
-  import { inWorktree, isolaCommand, recipeCommands } from '../lib/recipe';
+  import { inWorktree, isolaCommand, parseWorktreeRunId, recipeCommands } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
   import type { Project, RunCommand } from '../lib/types';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
+
+  // « Lancement » in the sidebar (2.0 design): a row per launch command with its state, relaunch and stop on hover, ▶ for
+  // one at rest (a menu « Dans le projet / Dans le worktree de … » once an agent has a worktree, choice 30), then each
+  // agent's launches under its name. In a short window it folds to its header, a crash still said (choice 9).
 
   let { project }: { project: Project } = $props();
 
@@ -26,6 +31,15 @@
       })
       .filter((g) => g.cmds.length > 0),
   );
+  /** The commands of the section that crashed: said in its header, even folded. */
+  const crashed = $derived([...cmds, ...groups.flatMap((g) => g.cmds)].filter((c) => app.launches[c.id]?.status === 'crashed').length);
+
+  /** The state of a row in a word: running (or stopping), crashed, or at rest. */
+  function tone(c: RunCommand): 'on' | 'stopping' | 'bad' | '' {
+    const l = app.launches[c.id];
+    if (l?.status === 'running') return l.stopping ? 'stopping' : 'on';
+    return l?.status === 'crashed' ? 'bad' : '';
+  }
 
   function act(e: Event, f: () => unknown) {
     // The row itself opens the log: its buttons only act.
@@ -54,219 +68,287 @@
       return;
     }
     menu.showAt(e.currentTarget as HTMLElement, [
-      { label: t('runs.where.project'), onClick: () => runIn(project, c, null) },
+      { label: t('runs.where.project'), icon: 'folder', onClick: () => runIn(project, c, null) },
       { label: '', separator: true },
-      ...worktreeAgents.map((a) => ({ label: t('runs.where.worktree', { name: a.name }), onClick: () => runIn(project, c, a.id) })),
+      ...worktreeAgents.map((a) => ({
+        label: t('runs.where.worktree', { name: a.name }),
+        icon: 'branch' as const,
+        onClick: () => runIn(project, c, a.id),
+      })),
     ]);
   }
 </script>
 
 {#snippet runRow(c: RunCommand)}
   {@const st = launchStatus(app.launches[c.id])}
+  {@const tn = tone(c)}
   <div
-    class="run"
+    class="row-item run"
     class:sel={selected === c.id}
     role="button"
     tabindex="0"
+    aria-current={selected === c.id ? 'true' : undefined}
+    data-run={c.id}
     use:tip={c.command}
     onclick={() => app.selectLaunch(c.id)}
     onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
   >
-    <span class="dot" class:live={isRunning(c)} style:background={st.color}></span>
-    <span class="name">{c.name}</span>
-    <span class="status" style:color={st.color}>{st.label}</span>
-    {#if isRunning(c)}
-      <button
-        class="ctl"
-        use:tip={t('runs.action.restart')}
-        aria-label={t('runs.action.restart')}
-        onclick={(e) => act(e, () => restartLaunch(project, c))}>⟳</button
-      >
-      <button class="ctl" use:tip={t('common.stop')} aria-label={t('common.stop')} onclick={(e) => act(e, () => stopLaunch(c.id))}>■</button
-      >
-    {:else}
-      <button
-        class="ctl go"
-        use:tip={t('runs.action.run')}
-        aria-label={t('runs.action.run')}
-        aria-haspopup={project.runCommands.some((x) => x.id === c.id) && worktreeAgents.length ? 'menu' : undefined}
-        onclick={(e) => run(e, c)}>▶</button
-      >
-    {/if}
+    <i class="d {tn}" aria-hidden="true"></i>
+    <span class="nm name">{c.name}</span>
+    {#if parseWorktreeRunId(c.id)}<span class="wt">{t('runs.section.inItsWorktree')}</span>{/if}
+    <span class="st {tn}">{st.label}</span>
+    <span class="ra" class:keep={tn === 'bad'}>
+      {#if isRunning(c)}
+        <button
+          class="icon-btn"
+          use:tip={{ text: t('runs.action.restart'), aria: false }}
+          aria-label={t('runs.action.restart')}
+          onclick={(e) => act(e, () => restartLaunch(project, c))}><Icon name="restart" size={14} /></button
+        >
+        <button
+          class="icon-btn"
+          use:tip={{ text: t('common.stop'), aria: false }}
+          aria-label={t('common.stop')}
+          onclick={(e) => act(e, () => stopLaunch(c.id))}><Icon name="stop" size={14} /></button
+        >
+      {:else}
+        <button
+          class="icon-btn"
+          use:tip={{ text: t('runs.action.run'), aria: false }}
+          aria-label={t('runs.action.run')}
+          aria-haspopup={project.runCommands.some((x) => x.id === c.id) && worktreeAgents.length ? 'menu' : undefined}
+          onclick={(e) => run(e, c)}><Icon name="play" size={14} /></button
+        >
+      {/if}
+    </span>
   </div>
 {/snippet}
 
-<div class="runs">
-  <div class="head">
-    <span class="section-label">{t('runs.section.title')}</span>
-    {#if cmds.length}<span class="count">{running}/{cmds.length}</span>{/if}
-    <div style="flex:1"></div>
-    {#if cmds.length}
-      {#if running}
-        <button class="all" onclick={() => stopAll(project)}>{t('common.stopAll')}</button>
-      {:else}
-        <button class="all" onclick={() => startAll(project)}>{t('runs.action.runAll')}</button>
+<section class="sec runs" aria-label={t('runs.section.title')}>
+  <div class="sec-h">
+    {t('runs.section.title')}
+    {#if cmds.length}<span class="n">{running}/{cmds.length}</span>{/if}
+    {#if crashed}<span class="sec-bad">{t('runs.section.crashed', { count: crashed })}</span>{/if}
+    <span class="acts">
+      {#if cmds.length}
+        {#if running}
+          <button class="mini-btn" onclick={() => stopAll(project)}>{t('common.stopAll')}</button>
+        {:else}
+          <button class="mini-btn" onclick={() => startAll(project)}>{t('runs.action.runAll')}</button>
+        {/if}
       {/if}
-    {/if}
-    <button class="gear" use:tip={t('runs.section.configure')} aria-label={t('runs.section.configure')} onclick={configure}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-        ><circle cx="12" cy="12" r="3" /><path
-          d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
-        /></svg
+      <button
+        class="icon-btn"
+        use:tip={{ text: t('runs.section.configure'), aria: false }}
+        aria-label={t('runs.section.configure')}
+        onclick={configure}><Icon name="sliders" size={14} /></button
       >
-    </button>
+    </span>
   </div>
-  <div class="list">
+  <div class="rows">
     {#each cmds as c (c.id)}
       {@render runRow(c)}
     {:else}
       <div class="none">
         <span>{t('runs.section.none')}</span>
         <button class="link" onclick={configure}>{t('runs.section.set')}</button>
-        <button class="link" onclick={propose}>✦ {t('runs.section.suggest')}</button>
+        <button class="link" onclick={propose}><Icon name="sparkle" size={12} />{t('runs.section.suggest')}</button>
       </div>
     {/each}
     {#each groups as g (g.agent.id)}
-      <div class="group mono">{g.agent.name}</div>
+      <div class="group-label group">{g.agent.name}</div>
       {#each g.cmds as c (c.id)}
         {@render runRow(c)}
       {/each}
     {/each}
   </div>
-</div>
+</section>
 
 <style>
-  .runs {
-    border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 8px;
-    max-height: 30%;
-    min-height: 0;
+  .mini-btn,
+  .link {
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
   }
-  .head {
+  .sec {
+    display: grid;
+    gap: 1px;
+    min-height: 0;
+    margin: 6px -2px 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .sec-h {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 2px 0 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .sec-h .n {
+    color: var(--dim);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .sec-h .acts {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+  /* A crash, said in the header: always, the rows may be folded. */
+  .sec-bad {
+    overflow: hidden;
+    color: var(--del);
+    font-weight: 500;
+    text-overflow: ellipsis;
+  }
+  .mini-btn {
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .mini-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .rows {
+    display: grid;
+    gap: 1px;
+    max-height: 30vh;
+    overflow: auto;
+  }
+  .row-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 14px 8px 18px;
-  }
-  .count {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .all {
-    height: 24px;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    font-size: 11.5px;
-    font-weight: 600;
+    width: 100%;
+    height: 28px;
+    padding: 0 4px 0 9px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    text-align: left;
     cursor: pointer;
+    outline: none;
   }
-  .gear {
-    width: 26px;
-    height: 26px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--muted);
-    cursor: pointer;
+  .row-item:hover {
+    background: var(--hover);
   }
-  .all:hover,
-  .gear:hover {
-    border-color: var(--accent);
-    color: var(--text);
+  .row-item.sel {
+    background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0 10px;
-    overflow: auto;
+  .row-item:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
-  .run {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    height: 32px;
-    padding: 0 4px 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid transparent;
-    cursor: pointer;
+  .d {
     flex: none;
-  }
-  .run:hover:not(.sel) {
-    background: color-mix(in oklch, var(--elev) 55%, transparent);
-  }
-  .run.sel {
-    background: var(--elev);
-    border-color: var(--line2);
-  }
-  .dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
-    flex: none;
+    background: var(--idle);
   }
-  .dot.live {
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ok) 25%, transparent);
+  .d.on {
+    background: var(--run);
   }
-  .name {
-    flex: 1;
+  .d.stopping {
+    background: var(--wait);
+  }
+  .d.bad {
+    background: var(--del);
+  }
+  .nm {
     min-width: 0;
-    font-size: 13px;
-    font-weight: 600;
     overflow: hidden;
+    color: var(--soft);
+    font-weight: 550;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .status {
-    font-family: var(--mono);
-    font-size: 10.5px;
+  .wt {
+    flex: none;
+    color: var(--muted);
+    font-size: 11.5px;
     white-space: nowrap;
   }
-  .ctl {
+  .st {
+    flex: none;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .st.on {
+    color: var(--run);
+  }
+  .st.stopping {
+    color: var(--wait);
+  }
+  .st.bad {
+    color: var(--del);
+  }
+  /* Shown on hover or focus; out of sight otherwise, but still there for the keyboard and a screen reader. */
+  .ra {
+    display: inline-flex;
+    width: 0;
+    overflow: hidden;
+  }
+  .row-item:hover .ra,
+  .row-item.sel .ra,
+  .row-item:focus-within .ra,
+  .ra.keep {
+    width: auto;
+    margin-left: 2px;
+  }
+  .ra .icon-btn {
     width: 22px;
     height: 22px;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    cursor: pointer;
-    flex: none;
   }
-  .ctl.go {
-    color: var(--ok);
-  }
-  .ctl:hover {
-    background: var(--elev2);
-    color: var(--text);
-  }
-  .group {
-    padding: 8px 8px 2px;
-    font-size: 10.5px;
+  .group-label {
+    padding: 6px 9px 2px;
+    overflow: hidden;
     color: var(--dim);
+    font: 11.5px/1.4 var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .none {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 2px 10px;
-    padding: 2px 8px 4px;
-    font-size: 12px;
+    padding: 2px 9px 6px;
     color: var(--dim);
+    font-size: 12px;
   }
   .link {
-    border: none;
-    background: none;
-    padding: 0;
-    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--p-ink);
     font-size: 12px;
-    cursor: pointer;
+  }
+  .link:hover {
+    text-decoration: underline;
+  }
+
+  /* A short window (820 px and less): the section folds to its header, a crash still said (choice 9). */
+  @media (max-height: 820px) {
+    .rows,
+    .mini-btn {
+      display: none;
+    }
+    .sec {
+      padding-bottom: 2px;
+    }
   }
 </style>

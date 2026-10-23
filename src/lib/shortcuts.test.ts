@@ -36,6 +36,14 @@ describe('handleShortcut', () => {
     ]);
   });
 
+  it('opens the menu « Harness » of « Nouvel agent » with Ctrl+Shift+N, without creating an agent', () => {
+    const backend = fakeBackend();
+    const before = app.newAgentMenu;
+    expect(handleShortcut(key('N', { shiftKey: true }))).toBe(true);
+    expect(app.newAgentMenu).toBe(before + 1);
+    expect(backend.called('create_agent')).toEqual([]);
+  });
+
   it('cycles agents with Ctrl+Tab and Ctrl+Shift+Tab', () => {
     fakeBackend();
     handleShortcut(key('Tab'));

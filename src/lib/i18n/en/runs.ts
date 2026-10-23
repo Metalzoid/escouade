@@ -51,6 +51,8 @@ export default defineZone('runs', {
     none: 'No commands.',
     set: 'Configure',
     suggest: 'Suggest commands',
+    crashed: { one: '{count} crashed', other: '{count} crashed' },
+    inItsWorktree: 'in its worktree',
   },
   /** The head and the empty state of the log of a command. */
   log: {

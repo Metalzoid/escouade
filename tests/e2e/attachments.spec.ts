@@ -498,7 +498,7 @@ test('a deleted agent takes the files joined to it away, and the originals stay'
   expect(copiesOf(app, id).map((c) => c.name)).toEqual(['journal.zip']);
 
   // Another agent first: the project keeps one when this one is deleted.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).click();
   await expect(page.locator('.card')).toHaveCount(2);
   await page.locator('.card').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Supprimer…' }).click();

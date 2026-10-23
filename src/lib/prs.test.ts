@@ -11,6 +11,7 @@ import {
   openPrOf,
   ownBranch,
   prGlyph,
+  prIcon,
   prMenuItem,
   prTip,
   prTone,
@@ -67,6 +68,10 @@ describe('the pull requests of an agent', () => {
     expect(
       [pr(), pr({ checks: 'failure' }), pr({ checks: 'pending' }), pr({ checks: null }), pr({ state: 'merged' })].map(prGlyph),
     ).toEqual(['✓', '✗', '●', '○', '⇡']);
+    // The same states in the icons of the 2.0 design (the sidebar).
+    expect([pr(), pr({ checks: 'failure' }), pr({ checks: 'pending' }), pr({ checks: null }), pr({ state: 'merged' })].map(prIcon)).toEqual(
+      ['check', 'close', 'clock', 'pr', 'merge'],
+    );
   });
 
   it('says its state, its CI and its reviews in words, in French and in English', () => {

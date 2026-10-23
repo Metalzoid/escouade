@@ -27,10 +27,26 @@ export default {
     settingUp: 'Préparation…',
     settingUpTitle: 'Préparation du worktree : {step}',
     /** An agent whose worktree waits for its first message (ESC-156): its card, and what waits for it in its menu. */
-    worktreeLater: '⎇ au premier message',
+    worktreeLater: 'worktree au premier message',
     worktreeLaterTitle: 'Le worktree sera créé au premier message, au nom de l’agent',
-    tokens: '{tokens} tok',
-    files: { one: '{count} fich.', other: '{count} fich.' },
+    /** The line of a card after a turn: what it changed (2.0 design). */
+    changed: { one: '{count} fichier modifié', other: '{count} fichiers modifiés' },
+    /** The meta line of a card: a ticket's loop, a ticket to test, an agent never written to. */
+    loop: 'boucle {iteration}/{max}',
+    toTest: 'à tester',
+    noMessage: 'Aucun message',
+    /** The choices of the question an agent waits on, answered from its card (2.0 design). */
+    answers: 'Réponses à {name}',
+    /** The menu « Harness » beside « Nouvel agent » (choices 1, 15, 16 of the 2.0 design). */
+    harness: 'Harness',
+    projectHarness: 'Celui du projet',
+    noAccount: 'Aucun compte',
+    addAccount: 'Ajouter un compte…',
+    harnessMissing: 'Introuvable : voir Réglages › Harness',
+    worktree: 'Worktree',
+    newAgentNoWorktreeDetail: 'Dans le dossier du projet, sur sa branche courante',
+    newAgentInWorktreeDetail: 'Sur une branche à lui, dans un dossier à part',
+    defaultHarness: 'Harness par défaut du projet…',
     /** The remote control link of an agent, told whole in each state. */
     remote: {
       connected: 'Remote control : connecté (accessible depuis claude.ai et l’app Claude)',
@@ -64,7 +80,11 @@ export default {
     modified: '~{n} modifiés',
     added: '+{n} ajoutés',
     deleted: '−{n} supprimés',
+    /** The tooltip of the footer's changes. */
+    changesTitle: '{m} modifiés, {a} ajoutés, {d} supprimés (non commités)',
     noRepo: 'Pas de dépôt git',
+    /** The project's folder in the footer: it opens the editor on it. */
+    browseFolder: 'Parcourir {path}',
     // The menu of an agent's card.
     menu: {
       duplicate: 'Dupliquer la conversation',

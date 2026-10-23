@@ -384,7 +384,7 @@ test('a deleted agent leaves the list for good', async ({ app }) => {
   await addProject(page, app.repo);
   await send(page, 'Bonjour');
   await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
-  await page.getByRole('button', { name: '+ Nouvel agent' }).click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).click();
   await expect(page.locator('.card')).toHaveCount(2);
   await page.locator('.card').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Supprimer…' }).click();
@@ -414,7 +414,7 @@ test('a new worktree is set up before its agent takes a message, and torn down b
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Préparation du worktree' })).toContainText(
     'Préparation du worktree · 1/1 · Start-Sleep 3',
   );
@@ -452,9 +452,9 @@ test('a new agent’s worktree is made at its first message, under the name the 
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const card = page.locator('.card').first();
-  await expect(card).toContainText('⎇ au premier message');
+  await expect(card).toContainText('worktree au premier message');
   await expect(page.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeVisible();
   const worktrees = path.join(app.repo, '.claude', 'worktrees');
   const made = () => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees) : []);
@@ -468,7 +468,7 @@ test('a new agent’s worktree is made at its first message, under the name the 
   const wt = path.join(worktrees, 'ajoute-un-fake');
   expect(fs.readFileSync(path.join(wt, 'prepare.txt'), 'utf8').trim()).toBe('ajoute-un-fake escouade/ajoute-un-fake');
   await expect(card.locator('.name')).toHaveText('ajoute-un-fake');
-  await expect(card).toContainText('⎇ ajoute-un-fake');
+  await expect(card.locator('.branch')).toHaveText('ajoute-un-fake');
   await expect(page.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeHidden();
 });
 
@@ -490,7 +490,7 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toBeHidden();
 
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => (fs.existsSync(beside) ? fs.readdirSync(beside) : [])).toEqual(['agent-1']);
   const wt = path.join(beside, 'agent-1');
   const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -499,7 +499,7 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   expect(fs.existsSync(path.join(app.repo, '.claude'))).toBe(false);
   expect(git(app.repo, 'status', '--porcelain')).toBe('');
   // The sidebar shows its branch without the project's prefix, the editor its folder from the project's.
-  await expect(page.locator('.card').first()).toContainText('⎇ agent-1');
+  await expect(page.locator('.card').first().locator('.branch')).toHaveText('agent-1');
   await page.locator('.card').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Ouvrir dans l’éditeur' }).click();
   await expect(page.getByText('../demo-api-worktrees/agent-1', { exact: true })).toBeVisible();
@@ -549,12 +549,12 @@ test('a keystroke whose echo comes late is noted in the log, with where the time
 test('a terminal opens in the worktree of an agent from the + of the terminals and from its conversation’s header', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const worktrees = path.join(app.repo, '.claude', 'worktrees');
   await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees) : [])).toEqual(['agent-1']);
   const wt = path.join(worktrees, 'agent-1');
   // The + builds its menu when clicked: the app must know of the worktree by then, not only the disk.
-  await expect(page.locator('.card').first()).toContainText('⎇ agent-1');
+  await expect(page.locator('.card').first().locator('.branch')).toHaveText('agent-1');
   /** Writes a file from the terminal shown, which must be in the worktree. */
   const write = async (file: string) => {
     const term = page.locator('.xterm:visible');
@@ -701,8 +701,9 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(dialog).toBeHidden();
 
-  // ▶ asks where.
+  // ▶ asks where (on hover).
   const serveur = page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Serveur$/ }) });
+  await serveur.hover();
   await serveur.getByRole('button', { name: 'Lancer' }).click();
   await expect(page.getByRole('menuitem', { name: 'Dans le projet' })).toBeVisible();
   await page.getByRole('menuitem', { name: `Dans le worktree de ${agentName}` }).click();
@@ -718,6 +719,7 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await expect(page.locator('main.rv')).toContainText(`Serveur · ${agentName}`);
 
   // The same command in the project: the user is told first, and runs both.
+  await serveur.hover();
   await serveur.getByRole('button', { name: 'Lancer' }).click();
   await page.getByRole('menuitem', { name: 'Dans le projet' }).click();
   const confirm = page.getByRole('dialog', { name: '« Serveur » tourne déjà' });
@@ -728,11 +730,9 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await expect.poll(() => fs.existsSync(path.join(app.repo, 'src', 'serveur.txt')), { timeout: 30_000 }).toBe(true);
 
   // A folder the worktree lacks: refused, with why.
-  await page
-    .locator('.run')
-    .filter({ has: page.locator('.name', { hasText: /^Docs$/ }) })
-    .getByRole('button', { name: 'Lancer' })
-    .click();
+  const docs = page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Docs$/ }) });
+  await docs.hover();
+  await docs.getByRole('button', { name: 'Lancer' }).click();
   await page.getByRole('menuitem', { name: `Dans le worktree de ${agentName}` }).click();
   await expect(page.getByText(`Le dossier « docs » de « Docs » n'existe pas dans le worktree de « ${agentName} »`)).toBeVisible();
   await expect(page.locator('.run', { hasText: `Docs · ${agentName}` })).toHaveCount(0);

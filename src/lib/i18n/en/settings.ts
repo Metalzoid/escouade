@@ -278,7 +278,7 @@ export default defineZone('settings', {
       'The first message names the agent, then its branch and its folder take that name before the setup. Off, the worktree is created at once, as agent-N.',
     worktreeBase: 'Starting branch of new worktrees',
     worktreeBaseDesc:
-      'A new agent’s worktree starts from this branch, which is also its base: “Integrate”, its merge and its PR go to it. “+ New agent” can choose another one for an agent.',
+      'A new agent’s worktree starts from this branch, which is also its base: “Integrate”, its merge and its PR go to it. “New agent” can choose another one for an agent.',
     worktreeBases: {
       head: 'Current branch of the folder',
       target: 'Board’s target branch',

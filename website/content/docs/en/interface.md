@@ -73,16 +73,18 @@ At the top, a two-button switch: “Agents” shows an agent’s conversation, �
 
 ### The list of agents
 
-The “Agents” header carries the number of agents in the project and the “+ New agent” button (`Ctrl+N`). The ▾ arrow to its right opens “New agent on a branch…” and “New agent without a worktree” (or “in a worktree”, depending on the project’s setting). With no agent, the list says “No agents.” with a “Create an agent” button.
+Under the selector, “New agent” (`Ctrl+N`) creates an agent on the project’s harness. The arrow to its right, or `Ctrl+Shift+N`, opens the “Harness” menu: each harness Escouade knows, numbered (`1` to `4` pick one while the menu is open), with the account, model and mode its new agent would take; the project’s is marked “The project’s”. A harness with no account stays in its place with “No account” and “Add an account…”; a harness not found is grayed out with where to set its executable. Under “Worktree”, “New agent without a worktree” (or “in a worktree”, depending on the project’s setting) and “New agent on a branch…”, then “Project’s default harness…”. With no agent, the list says “No agents.” with a “Create an agent” button.
 
-Each agent is a card:
+The agent waiting for your answer goes first in the list. Each agent is a card, without a frame; the card of the agent on screen is raised:
 
-- its **name** (double-click to rename it in place: `Enter` confirms, `Esc` cancels), a waves icon when [remote control](remote-control) is on (blue once connected; its tooltip says where it comes from: you, the project’s setting, or the setting for all agents; in the [Claude Code view](claude-code-view), it says the state of the interface), and its **status**;
+- its **name** (double-click to rename it in place: `Enter` confirms, `Esc` cancels), the number of its subagents and background tasks at work, a waves icon when [remote control](remote-control) is on (teal once connected; its tooltip says where it comes from: you, the project’s setting, or the setting for all agents; in the [Claude Code view](claude-code-view), it says the state of the interface), and its **status**;
 - what the agent says it is doing, when it said so through the [MCP server](mcp);
-- its **model**, the time it has worked and, if it has a worktree, its branch (`⎇ …`);
-- its **tokens**, its **cost** (preceded by “≈” while a turn is running: it is then an estimate) and the number of its changed files (“N files”);
-- a “Plan 2/7” mini bar when the agent follows a plan (see [plan progress](plan));
-- for a ticket’s agent, a tag `▸ DEM-3 · loop 1/5`, or `▸ DEM-3 · to review`.
+- the mark of its harness (“Claude”, “Codex”… once agents run on two harnesses), its **model**, the time it has worked (“No message” until you write to it) and a “Plan 2/7” mini bar when it follows a plan (see [plan progress](plan)), otherwise its branch if it has a worktree; for a ticket’s agent, the ticket’s key and its loop (“DEM-3 loop 1/5”, with a box per loop) or “to review”;
+- **what it is doing** during a turn (“Editing src/auth/jwt.ts”, “Thinking”), or afterwards what it changed (“2 files changed”), then its **tokens** and its **cost** (preceded by “≈” while a turn is running: it is then an estimate).
+
+The card of an agent asking a question shows the question and its answers: a click on an answer, or its key `1`, `2`… while the card has the focus, answers without leaving the conversation on screen. Several questions at once, or a permission, are answered in its conversation: the card shows their beginning.
+
+Under the card of the agent on screen, the list of its subagents and that of its background tasks (see [plan progress](plan)). Under an agent’s card, its pull requests (number and the icon of their state, and the button of the useful fix), and the agents it drives through the MCP server.
 
 A click on a card shows the agent. `Ctrl+Tab` and `Ctrl+Shift+Tab` go to the project’s next or previous agent, skipping archived ones.
 
@@ -90,15 +92,16 @@ A click on a card shows the agent. `Ctrl+Tab` and `Ctrl+Shift+Tab` go to the pro
 
 | Status | Dot | Text |
 |---|---|---|
-| “Ready” | Gray | Gray |
-| “Running” | Green, with a pulsing halo | Green |
-| “Question” | Amber, pulsing | Amber “Question” pill |
-| “Done” | Green check mark | Green |
+| “Ready” | Gray ring | Gray |
+| “Running” | Green | Green |
+| “Question” | Amber, circled by a breathing ring | Amber, the card in amber |
+| “Awaiting” or “Wakes at 3:30 PM” | Empty green ring: the turn is over, not the work | Light; the tooltip says what goes on |
+| “Done” | Gray ring | Gray |
 | “Error” | Red | Red |
 
 In place of the status, the card can say “Setting up…” (the agent’s worktree is being prepared) or “Resumes” followed by a time (the agent, stopped by the usage limit, then resumes by itself), in amber.
 
-A card whose agent asked a question, finished or failed while it was not on screen blinks, in amber, green or red, until you open it. `Ctrl+J` goes to the next agent that is waiting for your answer or needs a look.
+A card whose agent asked a question, finished or failed while it was not on screen is circled in its color, amber, green or red, until you open it. `Ctrl+J` goes to the next agent that is waiting for your answer or needs a look. With the system’s “Reduce motion”, nothing moves.
 
 ### An agent’s menu
 
@@ -117,19 +120,21 @@ A right click on a card opens its menu:
 | “Turn on remote control” or “Turn off remote control” | Makes the session reachable from claude.ai and the Claude app (“claude.ai, mobile”). When the link is available, “Open on claude.ai” and “Copy the claude.ai link” appear. “Turn off” always sets the agent apart: a setting turned on afterwards doesn’t give it remote control back. In the [Claude Code view](claude-code-view), “Open on claude.ai” and “Copy the claude.ai link” only appear once the interface is connected, and the change takes effect the next time the interface starts. |
 | “Delete…” | Stops the Claude process and removes the conversation from the application; the Claude Code session stays on disk. For an agent with a worktree, a checkbox offers to delete the worktree too, and its branch if it was created for the agent. |
 
-Archived agents are under “Archived (N)”, a title you unfold with a click; their card only shows the name and the cost.
+Archived agents are under “Archived (N)”, a title you unfold with a click; their card shows the name and the cost, and in amber what a worktree left behind keeps (“worktree kept: 2 commits neither merged nor pushed”).
 
 ### Launch
 
-The “Launch” section lists the project’s launch commands (development server, watchers…) with their state. ▶ runs a command, ⟳ restarts it, ■ stops it; “Run all” and “Stop all” act on all of them. A click on a command shows its log in the main area. The gear opens “Launch commands…”; with no command, “Configure” opens their settings and “✦ Suggest commands” lets Claude suggest some. See [running the project](launch).
+The “Launch” section lists the project’s launch commands (development server, watchers…) with their state (“running” in green, “crashed (code 1)” in red). On hovering a command, “Restart” and “Stop” if it runs, otherwise “Run”, which asks “In the project” or “In the worktree of …” as soon as an agent has a worktree; “Run all” and “Stop all” act on all of them. An agent’s launches (in its worktree, or those of a test) are grouped under its name. A click on a command shows its log in the main area. The settings button opens “Launch commands…”; with no command, “Configure” opens their settings and “Suggest commands” lets Claude suggest some. See [running the project](launch).
 
 ### Terminals
 
-The “Terminals” section lists the project’s open terminals. The `+` button (“New terminal”) offers the shells detected on the machine, then “In the worktree of…”, which lists the project’s agents that have a worktree (not the archived ones) to open a terminal in it; the entry isn’t there when no agent has one. `Ctrl+T` opens one right away. A click on a terminal shows it in the main area, the × closes it, and a terminal whose shell stopped is marked “exited”. See [terminals](terminals).
+The “Terminals” section lists the project’s open terminals. The `+` button (“New terminal”) offers the shells detected on the machine, then “In the worktree of…”, which lists the project’s agents that have a worktree (not the archived ones) to open a terminal in it; the entry isn’t there when no agent has one. `Ctrl+T` opens one right away. A click on a terminal shows it in the main area, “Close” on hover closes it, and a terminal whose shell stopped is marked “exited”. See [terminals](terminals).
+
+In a window 820 pixels high or less, “Launch” and “Terminals” fold to their title to leave the room to the agents; a crashed command is still said there (“1 crashed”).
 
 ### The foot of the sidebar
 
-The foot recalls the project’s folder, its git branch and the count of its changed files: `~N modified`, `+N added`, `−N deleted` (or “No git repository”). The “Browse” button opens the editor on the project’s folder.
+The foot recalls the project’s folder, its git branch and the count of its changed files (`~2`, `+1`, `−0`; their detail in a tooltip), or “No git repository”. A click on the folder (“Browse”) opens the editor on the project’s folder.
 
 ## The header and the conversation
 

@@ -7,14 +7,15 @@
   // The brand of an agent's harness, a word in a hairline (« Claude », « Codex », « OpenCode », « Copilot »), never a
   // colour: the same on its card, in the overview, its header, its ticket and the menus. Only once agents run on two
   // harnesses: with one, it would say nothing. `large`: in a header, or beside a title.
-  let { engine, large = false }: { engine: EngineId | null | undefined; large?: boolean } = $props();
+  // `always`: shown whatever the agents run on (the menu « Harness », where it names each harness).
+  let { engine, large = false, always = false }: { engine: EngineId | null | undefined; large?: boolean; always?: boolean } = $props();
 
   const name = $derived(engineName(engine ?? 'claude'));
   /** Its first word: « Claude » for Claude Code, « Copilot » for Copilot CLI. */
   const short = $derived(name.split(' ')[0]);
 </script>
 
-{#if showsMark()}
+{#if always || showsMark()}
   <span
     class="mark"
     class:large

@@ -132,7 +132,7 @@ Ces commandes tournent quand un agent est supprimé avec son worktree, quand le 
 
 Un agent peut aussi travailler dans un worktree sur une branche que tu choisis, qui existe déjà ou que tu crées pour lui :
 
-- « Nouvel agent sur une branche… » dans le menu du bouton ▾, à droite de « Nouvel agent », ouvre le sélecteur de branches (« Choisir une branche ») ; un nom tapé qu’aucune branche ne porte y propose « Créer la branche « feat/signup » et y lancer un agent » ;
+- « Nouvel agent sur une branche… » dans le menu de la flèche à droite de « Nouvel agent », ouvre le sélecteur de branches (« Choisir une branche ») ; un nom tapé qu’aucune branche ne porte y propose « Créer la branche « feat/signup » et y lancer un agent » ;
 - dans le sélecteur de branches de la barre d’état, un clic droit sur une branche propose « Lancer un agent sur cette branche » ;
 - dans le formulaire d’un ticket, le champ « Branche » propose « Reprendre une branche existante… ».
 

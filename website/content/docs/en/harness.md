@@ -14,7 +14,7 @@ Then add it an account in Settings › Accounts: no harness has one to begin wit
 As soon as two harnesses are installed:
 
 - each project has its “Default harness” (Settings › Projects), Claude Code when unset;
-- the “▾” button next to “New agent” offers “New agent on …” for each one;
+- the arrow of “New agent”, or `Ctrl+Shift+N`, opens the “Harness” menu, which numbers them (see [the interface](interface#the-list-of-agents));
 - a ticket’s window has its “Harness” field, the project’s by default, which the autopilot follows;
 - each agent’s card bears the mark of its harness, as soon as agents run on two harnesses.
 

@@ -132,7 +132,7 @@ These commands run when an agent is deleted with its worktree, when the Kanban c
 
 An agent can also work in a worktree on a branch you choose, one that already exists or one you create for it:
 
-- “New agent on a branch…” in the menu of the ▾ button, to the right of “New agent”, opens the branch picker (“Choose a branch”); a name typed that no branch has offers “Create the branch “feat/signup” and start an agent on it”;
+- “New agent on a branch…” in the menu of the arrow to the right of “New agent”, opens the branch picker (“Choose a branch”); a name typed that no branch has offers “Create the branch “feat/signup” and start an agent on it”;
 - in the status bar’s branch picker, a right-click on a branch offers “Start an agent on this branch”;
 - in a ticket’s form, the “Branch” field offers “Take up an existing branch…”.
 

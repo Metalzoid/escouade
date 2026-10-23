@@ -122,5 +122,5 @@ Since the panel is always there, `Ctrl+Shift+B` no longer has any effect and “
 ## Project changes at a glance
 
 - The name of the project on screen, in the title bar, and the tooltip of each project’s tile show “Δ 7” when the project has uncommitted files (the tooltip says “Uncommitted git changes”). The number counts the files modified, added or deleted in the project folder and in its agents’ worktrees. It disappears at zero.
-- In the sidebar, each agent card shows its number of files (“6 files”), and the foot of the sidebar details the project’s totals (“~2 modified”, “+1 added”, “−0 deleted”).
+- In the sidebar, the card of an agent whose turn is over shows the files it changed (“6 files changed”), and the foot of the sidebar details the project’s totals (`~2`, `+1`, `−0`, their detail in a tooltip).
 - The branch of the project folder, with how far ahead of or behind the remote it is, is in the status bar: it is the button that opens [the branch picker](branches).

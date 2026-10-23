@@ -39,8 +39,10 @@ describe('Sidebar', () => {
     render(Sidebar, { project: project() });
     const cards = screen.getAllByRole('button', { name: /refacto-auth|tests-e2e/ });
     expect(cards).toHaveLength(2);
-    expect(within(cards[0]).getByText('En cours')).toBeInTheDocument();
-    expect(within(cards[1]).getByText('Question')).toBeInTheDocument();
+    // Who waits for an answer goes first (2.0 design).
+    expect(within(cards[0]).getByText('tests-e2e')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('Question')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('En cours')).toBeInTheDocument();
     expect(screen.getByText(/Archivés \(1\)/)).toBeInTheDocument();
   });
 
@@ -93,7 +95,7 @@ describe('Sidebar', () => {
     fakeBackend();
     app.agents.a1 = { ...app.agents.a1, status: 'idle', worktree: null, worktreePending: true };
     render(Sidebar, { project: project() });
-    const mark = within(screen.getByRole('button', { name: /refacto-auth/ })).getByText('⎇ au premier message');
+    const mark = within(screen.getByRole('button', { name: /refacto-auth/ })).getByText('worktree au premier message');
     expect(mark).toHaveAttribute('data-tip', 'Le worktree sera créé au premier message, au nom de l’agent');
   });
 
@@ -174,19 +176,25 @@ describe('Sidebar', () => {
       expect(more()).toHaveAttribute('aria-haspopup', 'menu');
       await userEvent.click(more());
       expect(menu.open!.items.map((i) => i.label)).toEqual([
-        'Nouvel agent sur une branche…',
+        'Harness',
+        'Claude Code',
+        '',
+        'Worktree',
         'Nouvel agent dans un worktree',
+        'Nouvel agent sur une branche…',
         'Nouvel agent depuis une autre branche…',
+        '',
+        'Harness par défaut du projet…',
       ]);
       // The button itself still makes an agent at once.
-      expect(screen.getByRole('button', { name: /^\+?\s*Nouvel agent$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Nouvel agent' })).toBeInTheDocument();
     });
 
     it('opens the branch picker, which gives the agent its branch', async () => {
       const backend = fakeBackend(handlers());
       render(Sidebar, { project: project() });
       await userEvent.click(more());
-      menu.open!.items[0].onClick!();
+      menu.open!.items.find((i) => /branche…|branch…/.test(i.label))!.onClick!();
       menu.close();
       const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
       expect(within(picker).queryByRole('button', { name: /Nouvelle branche/ })).toBeNull();
@@ -205,7 +213,7 @@ describe('Sidebar', () => {
       const backend = fakeBackend({ ...handlers(), branch_check: () => null });
       render(Sidebar, { project: project() });
       await userEvent.click(more());
-      menu.open!.items[0].onClick!();
+      menu.open!.items.find((i) => /branche…|branch…/.test(i.label))!.onClick!();
       menu.close();
       const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
       await within(picker).findByText('feat/login');
@@ -226,7 +234,7 @@ describe('Sidebar', () => {
       const backend = fakeBackend(handlers());
       render(Sidebar, { project: project() });
       await userEvent.click(more());
-      menu.open!.items[0].onClick!();
+      menu.open!.items.find((i) => /branche…|branch…/.test(i.label))!.onClick!();
       menu.close();
       const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
       const main = (await within(picker).findByText('main')).closest('[role="option"]')!;
@@ -241,7 +249,10 @@ describe('Sidebar', () => {
       render(ContextMenu);
       more().focus();
       await userEvent.keyboard('{Enter}');
-      const entry = await screen.findByRole('menuitem', { name: 'Nouvel agent sur une branche…' });
+      // The focus on the first harness, then down to the entry.
+      expect(await screen.findByRole('menuitemradio', { name: /Claude Code/ })).toHaveFocus();
+      await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+      const entry = screen.getByRole('menuitem', { name: 'Nouvel agent sur une branche…' });
       expect(entry).toHaveFocus();
       await userEvent.keyboard('{Enter}');
       await screen.findByRole('dialog', { name: 'Choisir une branche' });
@@ -257,11 +268,17 @@ describe('Sidebar', () => {
       render(Sidebar, { project: project() });
       await userEvent.click(screen.getByRole('button', { name: 'Other ways to create an agent' }));
       expect(menu.open!.items.map((i) => i.label)).toEqual([
-        'New agent on a branch…',
+        'Harness',
+        'Claude Code',
+        '',
+        'Worktree',
         'New agent in a worktree',
+        'New agent on a branch…',
         'New agent from another branch…',
+        '',
+        'Project’s default harness…',
       ]);
-      menu.open!.items[0].onClick!();
+      menu.open!.items.find((i) => /branche…|branch…/.test(i.label))!.onClick!();
       menu.close();
       expect(await screen.findByRole('dialog', { name: 'Choose a branch' })).toBeInTheDocument();
     });
@@ -454,8 +471,7 @@ describe('Sidebar agent card', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
-    expect(within(card).getByText('1,5 k tok')).toBeInTheDocument();
-    expect(within(card).getByText('≈ 0,30 $')).toBeInTheDocument();
+    expect(card.querySelector('.spend')).toHaveTextContent('1,5 k · ≈ 0,30 $');
   });
 });
 
@@ -480,23 +496,25 @@ describe('Sidebar agent card plan line', () => {
   ];
   const mini = (name: RegExp) => screen.getByRole('button', { name }).querySelector<HTMLElement>('.plan-mini');
 
-  it('tells the tasks done and how far the plan is, between the figures and the ticket tag', () => {
-    resetApp({ agents: [agent({ plan: planOf(seven()) })], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 1 })] });
+  it('tells the tasks done and how far the plan is, on the line of its model, a ticket’s loop in its place', () => {
+    resetApp({ agents: [agent({ plan: planOf(seven()) })] });
     fakeBackend();
-    render(Sidebar, { project: project() });
+    const { unmount } = render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
     const line = mini(/refacto-auth/)!;
     expect(line).not.toBeNull();
     expect(line).toHaveTextContent('Plan 2/7');
     expect(line).not.toHaveTextContent('sous-agent');
-    // After the line of tokens, cost and files; before the ticket.
-    const parts = [...card.children];
-    expect(parts.indexOf(line)).toBe(parts.indexOf(card.querySelector('.meta.dim')!) + 1);
-    expect(parts.indexOf(card.querySelector('.ticket-tag')!)).toBe(parts.indexOf(line) + 1);
+    expect(line.closest('.a-meta')).toBe(card.querySelector('.a-meta'));
     // (100 + 100 + 50) / 7 = 36 %: the bar is that wide, and says nothing to a screen reader the text does not.
     const bar = line.querySelector<HTMLElement>('.plan-bar')!;
     expect(bar).toHaveAttribute('aria-hidden', 'true');
-    expect(bar.querySelector<HTMLElement>('span')!.style.width).toBe('36%');
+    expect(bar.querySelector<HTMLElement>('i')!.style.getPropertyValue('--pct')).toBe('36');
+    unmount();
+    // The agent of a ticket says its loop there instead.
+    resetApp({ agents: [agent({ plan: planOf(seven()) })], tickets: [ticket({ column: 'doing', agentId: 'a1', iteration: 1 })] });
+    render(Sidebar, { project: project() });
+    expect(mini(/refacto-auth/)).toBeNull();
   });
 
   it('counts the subagents running, in the plural and in the singular', () => {
@@ -534,7 +552,11 @@ describe('Sidebar agent card plan line', () => {
     app.agents.a1 = agent({ plan: planOf([task('1', 'done'), task('2', 'inProgress')]) });
     await Promise.resolve();
     expect(mini(/refacto-auth/)).toHaveTextContent('Plan 1/2');
-    expect(mini(/refacto-auth/)!.querySelector<HTMLElement>('.plan-bar span')!.style.width).toBe('50%');
+    expect(
+      mini(/refacto-auth/)!
+        .querySelector<HTMLElement>('.plan-bar i')!
+        .style.getPropertyValue('--pct'),
+    ).toBe('50');
     app.agents.a1 = agent();
     await Promise.resolve();
     expect(mini(/refacto-auth/)).toBeNull();
@@ -1290,7 +1312,7 @@ describe('Sidebar editor entries', () => {
     app.git.p1 = gitInfo();
     fakeBackend();
     render(Sidebar, { project: project() });
-    await userEvent.click(screen.getByRole('button', { name: 'Parcourir' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Parcourir / }));
     expect(app.editor.p1).toMatchObject({ on: true, source: 'project' });
     app.closeEditor();
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
@@ -1298,17 +1320,18 @@ describe('Sidebar editor entries', () => {
     expect(app.editorOn).toBe(true);
   });
 
-  it('puts the browse button by the branch, full width for the path, and keeps it without a repository', async () => {
+  it('puts the folder, which opens the editor, over the branch, and keeps it without a repository', async () => {
     resetApp({ agents: [agent()] });
     app.git.p1 = gitInfo({ branch: 'feat/x' });
     fakeBackend();
     const { unmount } = render(Sidebar, { project: project() });
-    expect(screen.getByRole('button', { name: 'Parcourir' }).closest('.branch')).toHaveTextContent('feat/x');
-    expect(getByTip(document.body, project().path).parentElement).toHaveClass('foot');
+    const folder = screen.getByRole('button', { name: /^Parcourir / });
+    expect(folder).toHaveAttribute('data-tip', project().path);
+    expect(folder.nextElementSibling).toHaveTextContent('feat/x');
     unmount();
     app.git.p1 = gitInfo({ isRepo: false });
     render(Sidebar, { project: project() });
-    expect(screen.getByRole('button', { name: 'Parcourir' }).closest('.branch')).toHaveTextContent('Pas de dépôt git');
+    expect(screen.getByRole('button', { name: /^Parcourir / }).nextElementSibling).toHaveTextContent('Pas de dépôt git');
   });
 
   it('warns that the unsaved files of an agent’s worktree are lost when it is deleted', async () => {
@@ -1365,7 +1388,10 @@ describe('Sidebar editor entries', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     const card = screen.getByRole('button', { name: /refacto-auth/ });
-    expect(within(card).getByText('▸ DEM-1 · boucle 2/5')).toBeInTheDocument();
+    expect(card.querySelector('.ticket-chip')).toHaveTextContent('DEM-1');
+    expect(within(card).getByText('boucle 2/5')).toBeInTheDocument();
+    expect(card.querySelectorAll('.loops i')).toHaveLength(5);
+    expect(card.querySelectorAll('.loops i.on')).toHaveLength(2);
   });
 
   it('tags the agent of a ticket to test, follows the ticket, and leaves the others untagged', async () => {
@@ -1376,12 +1402,13 @@ describe('Sidebar editor entries', () => {
     fakeBackend();
     render(Sidebar, { project: project() });
     const card = (name: RegExp) => screen.getByRole('button', { name });
-    expect(within(card(/refacto-auth/)).getByText('▸ DEM-1 · à tester')).toBeInTheDocument();
+    expect(card(/refacto-auth/).querySelector('.ticket-chip')).toHaveTextContent('DEM-1');
+    expect(within(card(/refacto-auth/)).getByText('à tester')).toBeInTheDocument();
     // No ticket, or one that is done: nothing to tag.
-    expect(card(/tests-e2e/).querySelector('.ticket-tag')).toBeNull();
-    expect(card(/vieux/).querySelector('.ticket-tag')).toBeNull();
+    expect(card(/tests-e2e/).querySelector('.ticket-chip')).toBeNull();
+    expect(card(/vieux/).querySelector('.ticket-chip')).toBeNull();
     app.tickets.t1 = ticket({ column: 'doing', agentId: 'a1', iteration: 3, maxLoops: 8 });
-    expect(await within(card(/refacto-auth/)).findByText('▸ DEM-1 · boucle 3/8')).toBeInTheDocument();
+    expect(await within(card(/refacto-auth/)).findByText('boucle 3/8')).toBeInTheDocument();
   });
 
   it('switches to the board, with the count of tickets to test, and back to the agents', async () => {
@@ -1625,26 +1652,27 @@ describe('Sidebar in English', () => {
   });
   const items = () => menu.open?.items.map((i) => i.label) ?? [];
 
-  it('names the statuses, the counts and the footer in English', () => {
+  it('names the statuses, the counts and the footer in English', async () => {
     fakeBackend();
     app.git.p1 = gitInfo({ modified: 2, added: 1, deleted: 3 });
     app.git.p1.agents = { a1: 1, a2: 4 };
     render(Sidebar, { project: project() });
     const cards = screen.getAllByRole('button', { name: /refacto-auth|tests-e2e/ });
-    expect(within(cards[0]).getByText('Running')).toBeInTheDocument();
-    expect(within(cards[0]).getByText('1.5k tok')).toBeInTheDocument();
-    expect(within(cards[0]).getByText('1 file')).toBeInTheDocument();
-    expect(within(cards[1]).getByText('Question')).toBeInTheDocument();
-    expect(within(cards[1]).getByText('4 files')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('Question')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Running')).toBeInTheDocument();
+    expect(cards[1].querySelector('.spend')).toHaveTextContent('1.5k');
+    expect(within(cards[1]).getByText('Thinking')).toBeInTheDocument();
+    app.agents.a1 = { ...app.agents.a1, status: 'done' };
+    expect(await within(cards[1]).findByText('1 file changed')).toBeInTheDocument();
     expect(screen.getByText(/Archived \(1\)/)).toBeInTheDocument();
     expect(screen.getByText('Terminals')).toBeInTheDocument();
     expect(screen.getByText('No open terminals')).toBeInTheDocument();
-    expect(screen.getByText('~2 modified')).toBeInTheDocument();
-    expect(screen.getByText('+1 added')).toBeInTheDocument();
-    expect(screen.getByText('−3 deleted')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Browse' })).toBeInTheDocument();
+    expect(screen.getByLabelText('~2 modified')).toHaveTextContent('~2');
+    expect(screen.getByLabelText('+1 added')).toHaveTextContent('+1');
+    expect(screen.getByLabelText('−3 deleted')).toHaveTextContent('−3');
+    expect(screen.getByRole('button', { name: /^Browse / })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Project view' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /New agent/ })).toHaveAttribute('data-tip', 'New agent (Ctrl+N)');
+    expect(screen.getByRole('button', { name: /^New agent/ })).toHaveAttribute('data-tip', 'New agent (Ctrl+N)');
     expect(getByTip(document.body, '1 to review')).toBeInTheDocument();
   });
 
@@ -1898,6 +1926,9 @@ describe('Sidebar subagents of an agent', () => {
     app.ui.selectedAgent = { p1: 'a2' };
     fakeBackend();
     render(Sidebar, { project: project() });
+    // Listed under the card of the agent open only (choice 10 of the 2.0 design).
+    expect(screen.queryByRole('button', { name: /Chercher/ })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
     const row = screen.getByRole('button', { name: /Chercher/ });
     expect(row).not.toHaveAttribute('aria-current');
     await userEvent.click(row);
@@ -2021,6 +2052,9 @@ describe('Sidebar subagents of an agent', () => {
       render(Sidebar, { project: project() });
       await userEvent.click(within(group()).getByRole('button', { name: '3 autres en cours' }));
       expect(subRows()).toHaveLength(8);
+      // The other agent's list shows once it is open, folded.
+      expect(screen.queryByRole('group', { name: 'Sous-agents de tests-e2e' })).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: /tests-e2e/ }));
       const other = screen.getByRole('group', { name: 'Sous-agents de tests-e2e' });
       expect(other.querySelectorAll('.sub')).toHaveLength(5);
       expect(within(other).getByRole('button', { name: '3 autres en cours' })).toHaveAttribute('aria-expanded', 'false');
@@ -2186,6 +2220,8 @@ describe('Sidebar background tasks of an agent', () => {
     app.ui.selectedAgent = { p1: 'a2' };
     fakeBackend();
     render(Sidebar, { project: project() });
+    expect(screen.queryByRole('button', { name: /Ticker/ })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /refacto-auth/ }));
     const row = screen.getByRole('button', { name: /Ticker/ });
     expect(row).not.toHaveAttribute('aria-current');
     await userEvent.click(row);
@@ -2259,7 +2295,7 @@ describe('Sidebar background tasks of an agent', () => {
       const card = cardOf(/refacto-auth/);
       const c = within(card).getByRole('img', { name: '2 tâches de fond en cours' });
       expect(c).toBe(chip(card));
-      expect(c).toHaveTextContent('2 en fond');
+      expect(c).toHaveTextContent('2');
       expect(c).toHaveAttribute('data-count', '2');
       // The card is the same button, and says it.
       expect(card).toHaveAccessibleName(/2 tâches de fond en cours/);
@@ -2272,7 +2308,7 @@ describe('Sidebar background tasks of an agent', () => {
       fakeBackend();
       render(Sidebar, { project: project() });
       const card = cardOf(/refacto-auth/);
-      expect(within(card).getByRole('img', { name: '1 tâche de fond en cours' })).toHaveTextContent('1 en fond');
+      expect(within(card).getByRole('img', { name: '1 tâche de fond en cours' })).toHaveTextContent('1');
       app.agents.a1.plan = withBg([bg('b1', { status: 'done', endedAt: 5 })]);
       await waitFor(() => expect(chip(card)).toBeNull());
     });
@@ -2291,14 +2327,17 @@ describe('Sidebar background tasks of an agent', () => {
       });
       fakeBackend();
       render(Sidebar, { project: project() });
-      expect(chip(cardOf(/refacto-auth/))).toHaveTextContent('2 en fond');
+      expect(chip(cardOf(/refacto-auth/))).toHaveTextContent('2');
+      // The subagents running, beside them.
+      expect(within(cardOf(/refacto-auth/)).getByRole('img', { name: '2 sous-agents en cours' })).toHaveTextContent('2');
     });
 
-    it('is not there for an agent with subagents only', () => {
+    it('is not there for an agent with subagents only, which counts them', () => {
       resetApp({ agents: [agent({ plan: withBg([], [], [sub('s1')]) })] });
       fakeBackend();
       render(Sidebar, { project: project() });
       expect(chip(cardOf(/refacto-auth/))).toBeNull();
+      expect(within(cardOf(/refacto-auth/)).getByRole('img', { name: '1 sous-agent en cours' })).toHaveTextContent('1');
       expect(screen.queryByRole('group', { name: 'Tâches de fond de refacto-auth' })).not.toBeInTheDocument();
     });
 
@@ -2308,7 +2347,7 @@ describe('Sidebar background tasks of an agent', () => {
       fakeBackend();
       render(Sidebar, { project: project() });
       const c = chip(cardOf(/refacto-auth/))!;
-      expect(c).toHaveTextContent('2 in background');
+      expect(c).toHaveTextContent('2');
       expect(c).toHaveAccessibleName('2 background tasks running');
       expect(c).toHaveAttribute('data-tip', '2 background tasks running');
     });
@@ -2387,6 +2426,8 @@ describe('Sidebar background tasks of an agent', () => {
       expect(within(group()).getByRole('button', { name: '2 de plus' })).toBeInTheDocument();
       await userEvent.click(within(group()).getByRole('button', { name: '2 de plus' }));
       expect(bgRows()).toHaveLength(17);
+      expect(screen.queryByRole('group', { name: 'Tâches de fond de tests-e2e' })).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: /tests-e2e/ }));
       const other = screen.getByRole('group', { name: 'Tâches de fond de tests-e2e' });
       expect(other.querySelectorAll('[data-bg-row]')).toHaveLength(5);
       expect(within(other).getByRole('button', { name: '3 autres en cours' })).toHaveAttribute('aria-expanded', 'false');
@@ -2447,33 +2488,64 @@ describe('Sidebar of agents on harnesses that do not all do the same', () => {
 describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
   const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
 
-  it('offers « Nouvel agent sur … » for each harness found, from two on, the project’s first', async () => {
+  it('lists every harness in the menu « Harness », numbered, the project’s marked, one not found greyed with where to set it', async () => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings.accounts = [
+      ...app.settings.accounts!,
+      { id: 'cx', name: 'Pro', configDir: '', claudePath: '', active: true, engine: 'codex' },
+    ];
     const backend = fakeBackend({ create_agent: (a: any) => agent({ id: 'a7', engine: a.engine, createdAt: 7 }) });
     render(Sidebar, { project: project({ engine: 'codex' }) });
-    // One harness found: as before.
     await userEvent.click(more());
-    expect(menu.open!.items.map((i) => i.label)).toEqual([
-      'Nouvel agent sur une branche…',
-      'Nouvel agent dans un worktree',
-      'Nouvel agent depuis une autre branche…',
-    ]);
+    const harness = (label: string) => menu.open!.items.find((i) => i.label === label)!;
+    // Codex not found: in its place, greyed, with where to set it (choice 1).
+    expect(harness('Harness nu')).toMatchObject({ engine: 'codex', disabled: true, reason: expect.stringContaining('Réglages › Harness') });
     menu.close();
     app.enginesFound = ['claude', 'codex'];
     await userEvent.click(more());
-    expect(menu.open!.items.map((i) => i.label)).toEqual([
-      'Nouvel agent sur Harness nu',
-      'Nouvel agent sur Claude Code',
-      '',
-      'Nouvel agent sur une branche…',
-      'Nouvel agent dans un worktree',
-      'Nouvel agent depuis une autre branche…',
-    ]);
-    menu.open!.items[1].onClick!();
+    expect(menu.open!.items.slice(0, 3).map((i) => i.label)).toEqual(['Harness', 'Claude Code', 'Harness nu']);
+    expect(harness('Harness')).toMatchObject({ heading: true, hint: 'Ctrl Maj N' });
+    expect(harness('Claude Code')).toMatchObject({ key: '1', checked: false, detail: 'Principal · Sonnet · Auto' });
+    expect(harness('Harness nu')).toMatchObject({ key: '2', checked: true, detail: expect.stringMatching(/^Celui du projet · Pro/) });
+    harness('Claude Code').onClick!();
     menu.close();
     await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
     expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null, base: null });
+  });
+
+  it('keeps a harness without an account in its place, with « Ajouter un compte… » (choice 15)', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    await userEvent.click(more());
+    const codex = menu.open!.items.find((i) => i.label === 'Harness nu')!;
+    expect(codex).toMatchObject({ detail: 'Aucun compte', fix: 'Ajouter un compte…' });
+    expect(codex.key).toBeUndefined();
+    codex.onClick!();
+    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+  });
+
+  it('opens the menu « Harness » on Ctrl+Shift+N, and takes a harness by its number', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    app.settings.accounts = [
+      ...app.settings.accounts!,
+      { id: 'cx', name: 'Pro', configDir: '', claudePath: '', active: true, engine: 'codex' },
+    ];
+    const backend = fakeBackend({ create_agent: (a: any) => agent({ id: 'a7', engine: a.engine, createdAt: 7 }) });
+    render(Sidebar, { project: project() });
+    render(ContextMenu);
+    app.newAgentMenu++;
+    const item = await screen.findByRole('menuitemradio', { name: /Harness nu/ });
+    expect(item).toHaveTextContent('2');
+    await userEvent.keyboard('2');
+    await waitFor(() => expect(backend.called('create_agent')).toHaveLength(1));
+    expect(backend.called('create_agent')[0].args).toMatchObject({ engine: 'codex' });
+    expect(menu.open).toBeNull();
   });
 
   it('shows the brand of each agent’s harness only once agents run on two', () => {
@@ -2647,5 +2719,144 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
     expect(group.getByRole('button', { name: 'Open MR #12 in the browser (open)' })).toBeInTheDocument();
     expect(group.getByRole('button', { name: 'Agent fixes it' })).toBeInTheDocument();
     expect(group.getByRole('button', { name: 'Agent addresses the feedback' })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar of the 2.0 design (ESC-73)', () => {
+  const ask = {
+    id: 'req_q',
+    kind: 'question' as const,
+    tool: 'AskUserQuestion',
+    arg: '',
+    description: null,
+    reason: null,
+    questions: [{ question: 'Lancer toute la suite e2e (38 tests) ?', options: ['Oui', 'Seulement auth'] }],
+    cut: false,
+    defaultNo: false,
+  };
+
+  describe('a question answered from the list', () => {
+    beforeEach(() =>
+      resetApp({
+        projects: [project()],
+        agents: [agent({ status: 'running' }), agent({ id: 'a2', name: 'tests-e2e', status: 'waiting', createdAt: 2, requests: [ask] })],
+      }),
+    );
+
+    it('shows the question and its choices on the card of the agent that asks, first in the list', () => {
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const cards = screen.getAllByRole('button', { name: /refacto-auth|tests-e2e/ });
+      expect(cards[0]).toHaveTextContent('tests-e2e');
+      expect(within(cards[0]).getByText('Lancer toute la suite e2e (38 tests) ?')).toBeInTheDocument();
+      const choices = within(screen.getByRole('group', { name: 'Réponses à tests-e2e' })).getAllByRole('button');
+      expect(choices.map((b) => b.textContent)).toEqual(['1Oui', '2Seulement auth']);
+    });
+
+    it('answers it with a click, the conversation open staying where it is', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(app.agent?.id).toBe('a1');
+      await userEvent.click(screen.getByRole('button', { name: '2 Seulement auth' }));
+      expect(backend.called('answer_question')).toEqual([
+        {
+          cmd: 'answer_question',
+          args: { id: 'a2', requestId: 'req_q', answers: { 'Lancer toute la suite e2e (38 tests) ?': 'Seulement auth' } },
+        },
+      ]);
+      expect(app.agent?.id).toBe('a1');
+      // Once: a second click while the request is still there sends nothing.
+      await userEvent.click(screen.getByRole('button', { name: '1 Oui' }));
+      expect(backend.called('answer_question')).toHaveLength(1);
+    });
+
+    it('answers it with its key once the card has the focus', async () => {
+      const backend = fakeBackend();
+      render(Sidebar, { project: project() });
+      screen.getByRole('button', { name: /tests-e2e/ }).focus();
+      await userEvent.keyboard('3');
+      expect(backend.called('answer_question')).toEqual([]);
+      await userEvent.keyboard('1');
+      expect(backend.called('answer_question')[0].args.answers).toEqual({ 'Lancer toute la suite e2e (38 tests) ?': 'Oui' });
+      expect(app.agent?.id).toBe('a1');
+    });
+
+    it('leaves several questions, and a permission, to the conversation: only what it asks is said', () => {
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [{ ...ask, questions: [ask.questions[0], { question: 'Et la CI ?', options: ['Oui'] }] }],
+      };
+      fakeBackend();
+      const { unmount } = render(Sidebar, { project: project() });
+      const card = screen.getByRole('button', { name: /tests-e2e/ });
+      expect(card).toHaveTextContent('Lancer toute la suite e2e (38 tests) ? · Et la CI ?');
+      expect(screen.queryByRole('group', { name: 'Réponses à tests-e2e' })).toBeNull();
+      unmount();
+      app.agents.a2 = {
+        ...app.agents.a2,
+        requests: [{ ...ask, kind: 'permission', tool: 'Bash', arg: 'rm -rf build\nsecond', questions: [] }],
+      };
+      render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: /tests-e2e/ }).querySelector('.a-ask')).toHaveTextContent('Bash rm -rf build');
+    });
+  });
+
+  describe('what the agent does, on its card', () => {
+    it('says its tool and its target during a turn, with its tokens and its cost', () => {
+      resetApp({ agents: [agent({ status: 'running', activity: 'Modifie src/auth/jwt.ts', tokens: 184_300, cost: 2.41 })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const act = screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-act')!;
+      expect(act.querySelector('b')).toHaveTextContent('Modifie');
+      expect(act.querySelector('.tgt')).toHaveTextContent('src/auth/jwt.ts');
+      expect(act.querySelector('.spend')).toHaveTextContent('184,3 k · 2,41 $');
+    });
+
+    it('gives the result of a turn over: the files it changed', () => {
+      resetApp({ agents: [agent({ status: 'done' })] });
+      app.git.p1 = gitInfo();
+      app.git.p1.agents = { a1: 2 };
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const act = screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-act')!;
+      expect(act).toHaveTextContent('2 fichiers modifiés');
+      expect(act.querySelector('[data-icon="check"]')).not.toBeNull();
+    });
+
+    it('says an agent never written to has no message yet', () => {
+      resetApp({ agents: [agent({ status: 'idle', prompts: 0, activeMs: 0 })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      expect(screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-meta')).toHaveTextContent('Aucun message');
+    });
+  });
+
+  it('says « Attend » with an empty ring while what the agent left goes on', () => {
+    const plan = {
+      source: null,
+      tasks: [],
+      agents: [],
+      launched: 0,
+      workflows: [],
+      bgTasks: [{ id: 'b1', kind: 'command', title: 'Attendre la CI', status: 'running', startedAt: 1 }],
+    };
+    resetApp({ agents: [agent({ status: 'done', plan: plan as never })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const card = screen.getByRole('button', { name: /refacto-auth/ });
+    expect(card).toHaveClass('awaits');
+    expect(card.querySelector('.state-dot')).toHaveClass('awaits');
+    expect(card.querySelector('[data-pending]')).toHaveTextContent('Attend');
+  });
+
+  it('draws its icons, no character in their place', () => {
+    resetApp({ agents: [agent({ worktree: { path: 'C:\w', branch: 'escouade/x', baseBranch: 'main' } })] });
+    app.git.p1 = gitInfo();
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    for (const name of ['plus', 'down', 'agents', 'kanban', 'folder', 'branch', 'sliders']) {
+      expect(document.querySelector(`[data-icon="${name}"]`), name).not.toBeNull();
+    }
+    expect(document.body.textContent).not.toMatch(/[▾▸⎇✦⟳■▶×]/);
   });
 });

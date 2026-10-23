@@ -108,7 +108,7 @@ test('a command in the background is listed under its agent and its output is fo
   const side = sidebar(page, `Tâches de fond de ${name}`);
 
   // The chip on the card counts what runs in the background.
-  await expect(chip).toHaveText('1 en fond');
+  await expect(chip).toHaveText('1');
   await expect(chip).toHaveAttribute('data-count', '1');
   await expect(chip).toHaveAttribute('aria-label', '1 tâche de fond en cours');
 
@@ -322,7 +322,7 @@ test('a monitor is listed as a monitor and its output is followed', async ({ app
   const task = brief(view);
 
   // A monitor counts among what runs in the background.
-  await expect(chip).toHaveText('1 en fond');
+  await expect(chip).toHaveText('1');
   await expect(chip).toHaveAttribute('data-count', '1');
   await expect(side.toggle).toContainText('1 en cours');
   const row = side.row('Watch loop output');
@@ -368,7 +368,7 @@ test('two tasks at once are counted together, each with its own output, and a vi
 
   // The chip says two, the section lists both: the oldest first.
   await expect(chip).toHaveAttribute('data-count', '2');
-  await expect(chip).toHaveText('2 en fond');
+  await expect(chip).toHaveText('2');
   await expect(chip).toHaveAttribute('aria-label', '2 tâches de fond en cours');
   await expect(side.toggle).toContainText('2 en cours');
   await expect(side.rows).toHaveCount(2);
@@ -410,7 +410,7 @@ test('two tasks at once are counted together, each with its own output, and a vi
   await expect(task.state).toHaveText('Arrêtée');
   await expect(task.log).toContainText('[killed]');
   await expect(chip).toHaveAttribute('data-count', '1');
-  await expect(chip).toHaveText('1 en fond');
+  await expect(chip).toHaveText('1');
   await expect(side.toggle).toContainText('1 en cours');
   await expect(side.toggle).toContainText('1 finie');
   await expect(ticker).toHaveAttribute('data-status', 'running');
@@ -426,13 +426,15 @@ test('two tasks at once are counted together, each with its own output, and a vi
 
   // Leaving the agent for another one leaves no view behind: a new agent has the conversation of its own, and coming back to
   // the first shows its conversation, not the task it was reading.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(page.locator('aside.side .card')).toHaveCount(2);
   await expect(conv).toBeVisible();
   await expect(view).toHaveCount(0);
-  await expect(page.locator('[data-bg-group]')).toHaveCount(1);
+  // Its tasks are listed under the card of the agent open only (choice 10 of the 2.0 design); its card keeps their count.
+  await expect(page.locator('[data-bg-group]')).toHaveCount(0);
   await expect(page.locator('[data-bg-chip]')).toHaveCount(1);
   await page.locator('aside.side .card', { hasText: name }).click();
+  await expect(page.locator('[data-bg-group]')).toHaveCount(1);
   await expect(conv).toBeVisible();
   await expect(conv.locator('.bubble', { hasText: `commande de fond ${FOREVER}s` })).toBeVisible();
   await expect(view).toHaveCount(0);
@@ -557,7 +559,7 @@ test.describe('in English', () => {
     const { task: view } = views(page);
     const task = brief(view);
 
-    await expect(chip).toHaveText('1 in background');
+    await expect(chip).toHaveText('1');
     await expect(chip).toHaveAttribute('data-count', '1');
     await expect(chip).toHaveAttribute('aria-label', '1 background task running');
     await expect(side.group).toBeVisible();

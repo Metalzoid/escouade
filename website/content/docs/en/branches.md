@@ -102,7 +102,7 @@ The confirmation “Delete the remote branch “origin/feat/login”?” warns t
 
 An agent or a ticket can work on a branch that already exists instead of a new one:
 
-- “New agent on a branch…”, in the menu of the ▾ button to the right of “New agent”, opens the picker in “Choose a branch” mode: it has neither the foot’s actions nor the row menus, and the branches that can’t be picked are greyed out with the reason. A name typed that no branch has also offers “Create the branch “…” and start an agent on it”, from where a new agent starts (see [worktrees](worktrees));
+- “New agent on a branch…”, in the menu of the arrow to the right of “New agent”, opens the picker in “Choose a branch” mode: it has neither the foot’s actions nor the row menus, and the branches that can’t be picked are greyed out with the reason. A name typed that no branch has also offers “Create the branch “…” and start an agent on it”, from where a new agent starts (see [worktrees](worktrees));
 - in the status bar’s picker, “Start an agent on this branch” is in a row’s menu, except for the project folder’s branch and those a worktree holds;
 - the “Branch” field of a ticket’s form offers “Take up an existing branch…”.
 

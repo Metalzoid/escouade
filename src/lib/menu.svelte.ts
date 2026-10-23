@@ -1,6 +1,7 @@
 // Global context menu.
 
 import type { IconName } from './icons';
+import type { EngineId } from './types';
 
 export interface MenuItem {
   label: string;
@@ -19,6 +20,16 @@ export interface MenuItem {
   swatch?: string;
   /** An icon of the app before its label. */
   icon?: IconName;
+  /** The brand of a harness before its label, shown whatever the agents run on (the menu « Harness »). */
+  engine?: EngineId;
+  /** A title over the entries that follow, not an entry (its `hint`: a shortcut, in a key). */
+  heading?: boolean;
+  /** The key that picks it while the menu is open (« 1 » to « 4 » in the menu « Harness »), shown at its end. */
+  key?: string;
+  /** The one chosen among its siblings: a dot after its label (`menuitemradio`). */
+  checked?: boolean;
+  /** What it does instead, written at its end, its label greyed (« Ajouter un compte… » for a harness without one). */
+  fix?: string;
   /** A row of colors to pick from, named by the label. */
   colors?: { values: string[]; selected: string; onPick: (color: string) => void };
 }

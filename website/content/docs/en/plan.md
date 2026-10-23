@@ -58,11 +58,11 @@ What a subagent says and does is read in its own conversation (see below), and i
 
 ## The card’s line
 
-In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line, but its subagents have their group under the card (see below). While background tasks run, a “N in background” chip is added next to its name (see [background tasks](#background-tasks)).
+In the sidebar, the card of an agent that has tasks shows a thin bar and “Plan 2/7” (or “Plan 2/7 · 3 subagents” when subagents are running). It lets you follow several agents at a glance, without opening their conversations. An agent that only has subagents, with no tasks, doesn’t have this line, but its subagents have their group under the card (see below). While subagents or background tasks run, their number is added next to its name, each with its icon (see [background tasks](#background-tasks)).
 
 ## Subagents in the sidebar
 
-Under the card of an agent that has subagents, a “Subagents” group lists them, even when the agent has no tasks. A click on its title unfolds or folds it. By default it’s unfolded while a subagent runs and folded otherwise; your choice is kept until you close Escouade.
+Under the card of the agent on screen, if it has subagents, a “Subagents” group lists them, even when the agent has no tasks; the other cards only show how many are at work. A click on its title unfolds or folds it. By default it’s unfolded while a subagent runs and folded otherwise; your choice is kept until you close Escouade.
 
 Unfolded, the group first shows the subagents that are running, each with its title, its model, and what it’s doing right now (“Editing src/a.ts”). It shows five; “N more running” unrolls the rest. Below, an “N finished subagents” line unfolds the ones that have finished, from the last to finish to the first, each with its state (Done, Failed, Stopped, or Interrupted): ten at most, then “N more” for the rest. A subagent started by another is indented one step. The group doesn’t scroll: the sidebar already does.
 
@@ -126,7 +126,7 @@ Under the card of an agent that has background tasks, after the subagents group,
 
 Unfolded, the group first shows the tasks that are running, in the order they were started: five, then “N more running” unrolls the rest. Each line gives a state dot, the task’s title, its duration (which runs while it does), its type (“Background command”, “Monitor”, “Workflow”, “Remote agent”, or “Teammate”) and, while it runs, its command line or the workflow’s phase. Below, “N finished tasks” unfolds the ones that have finished, from the last to finish to the first, each with its state (Done, Failed, Stopped, or Interrupted) and, for a command, its exit code (“Failed (code 3)”): ten at most, then “N more”.
 
-On the agent’s card, next to its name, a “2 in background” chip counts the tasks that are running: commands, monitors, workflows, remote agents, and teammates, not subagents. It goes away when nothing runs any more.
+On the agent’s card, next to its name, a number with a clock icon counts the tasks that are running: commands, monitors, workflows, remote agents, and teammates, not subagents. It goes away when nothing runs any more.
 
 A command started in the foreground, which the agent waits for, isn’t in the list: it joins it the moment Claude Code sends it to the background, with its start time.
 

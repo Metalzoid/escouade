@@ -70,7 +70,7 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   // An agent before the trust: the file's branch prefix, and nothing of its setup ran.
   // The project on screen first: a click before it is lost.
   await expect(page.getByText('Aucun agent.')).toBeVisible();
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   // The first agent waits for the `claude update` the app runs a few seconds after it starts.
   await expect(page.locator('.card')).toHaveCount(1, { timeout: 45_000 });
   await expect.poll(() => worktreesOf(repo).length).toBe(1);
@@ -105,7 +105,7 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   await expect(page.getByText(/attendent ton accord : elles ne tournent pas encore/)).toBeHidden();
 
   // Trusted: the next agent's worktree is set up by it.
-  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => worktreesOf(repo).length).toBe(2);
   const second = worktreesOf(repo).find((w) => w !== first)!;
   await expect.poll(() => fs.existsSync(path.join(second, 'setup-ran.txt')), { timeout: 30_000 }).toBe(true);
