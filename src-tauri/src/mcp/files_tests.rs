@@ -5,8 +5,8 @@
 //! limits and the refusals are the window's (`ticketfiles::check`, the size of the settings), and a
 //! refused call leaves nothing behind: no ticket, no key used up, no file, no copy in the drafts.
 
-#[cfg(windows)]
 use super::private_tests::make_private;
+#[cfg(windows)]
 use super::tools_tests::junction;
 use super::tools_tests::{
     as_agent, call, external, link, other_project, project, put_agent, read, refused, Client,
