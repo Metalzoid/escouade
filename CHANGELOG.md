@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - Réglages › Harness ne parle plus des versions testées : une version plus récente d’un harness s’affiche comme les autres, sans avertissement. Seul ce qui l’empêche de démarrer est dit, comme une version trop ancienne et la commande qui la met à jour.
+- Un agent sans worktree d’Escouade qui travaille dans un worktree à lui (créé par Claude Code, ou où il est allé par un `cd`) suit maintenant les PR de cette branche : son en-tête dit sa branche et « Ouvrir une PR » part de là, jamais de la branche du dossier du projet ni de celle d’un autre agent. Merci à Metalzoid sur Discord.
 
 ## [1.8.11] — 2026-10-23
 
