@@ -1531,3 +1531,65 @@ async fn the_principal_of_opencode_takes_a_budget_though_claude_codes_is_named_p
     assert!(h.core.update_claude_account(principal).is_ok());
     h.core.stop_for_good();
 }
+
+/// Whether a session of the fake `opencode` under `dir` has the title `title`.
+fn titled(dir: &std::path::Path, title: &str) -> bool {
+    let wanted = format!("\"title\":{}", serde_json::to_string(title).unwrap());
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.filter_map(|e| e.ok()).any(|e| {
+        let path = e.path();
+        if path.is_dir() {
+            titled(&path, title)
+        } else {
+            std::fs::read_to_string(&path).is_ok_and(|t| t.contains(&wanted))
+        }
+    })
+}
+
+/// ESC-156 with OpenCode: an agent of OpenCode, named by OpenCode (« Modèle des textes rédigés »),
+/// gets its worktree at its first message under that name, and its session takes it.
+#[tokio::test]
+async fn an_opencode_agent_gets_its_worktree_at_its_first_message_under_the_name_opencode_gives() {
+    let h = harness("esc156-opencode");
+    let (p, _) = h.project_as_new(true).await;
+    let dir = account_with(&h, "oc", paid(), None);
+    h.set_settings(|s| {
+        s.writer_engine = Some(EngineId::Opencode);
+        for a in &mut s.accounts {
+            if a.engine == EngineId::Opencode && a.id != "oc" {
+                a.active = false;
+            }
+        }
+    });
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Opencode),
+                account: Some("oc".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert!(h.agent(&id).worktree_pending);
+    h.turn(&id, "Ajoute un bouton").await;
+    let m = h.agent(&id);
+    assert_eq!(m.name, "ajoute-un-opencode");
+    let wt = m.worktree.unwrap();
+    assert_eq!(
+        std::path::PathBuf::from(&wt.path),
+        p.worktrees_root().join("ajoute-un-opencode")
+    );
+    assert_eq!(wt.branch, "escouade/ajoute-un-opencode");
+    h.wait("its session renamed", |_| {
+        titled(&dir, "ajoute-un-opencode")
+    })
+    .await;
+    h.core.stop_for_good();
+}

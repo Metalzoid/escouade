@@ -15,6 +15,7 @@ agents:
   engine: claude
 worktrees:
   per_agent: true
+  at_first_message: true
   dir: ../app-worktrees
   copy:
     - '.env*'
@@ -120,12 +121,14 @@ Le harness des nouveaux agents et des tickets du projet qui n’en choisissent p
 | Clé | Type | Valeurs | Absente | Exemple |
 |---|---|---|---|---|
 | `worktrees.per_agent` | Booléen | `true`, `false` | `false` | `per_agent: true` |
+| `worktrees.at_first_message` | Booléen | `true`, `false` | `true` | `at_first_message: false` |
 | `worktrees.dir` | Chemin relatif | Un dossier relatif au dépôt | vide : `.claude/worktrees` | `dir: .worktrees` |
 | `worktrees.copy` | Liste de textes | Des motifs de fichiers (`*`, `**`) | `['.env*']` | `copy: ['.env*', config/local.json]` |
 | `worktrees.setup` | Liste d’étapes | Voir [les étapes de worktree](#les-etapes-de-worktree) | aucune | `setup: npm ci` |
 | `worktrees.teardown` | Liste d’étapes | Voir [les étapes de worktree](#les-etapes-de-worktree) | aucune | `teardown: [docker compose down]` |
 
 - `per_agent` : « Un worktree par agent », chaque nouvel agent dans un worktree à lui (voir [les worktrees](worktrees)).
+- `at_first_message` : « Créer le worktree au premier message, au nom de l’agent ». Le worktree d’un nouvel agent attend son premier message, qui le nomme : sa branche et son dossier prennent ce nom (voir [au premier message](worktrees#au-premier-message)). `false` le crée tout de suite, en `agent-N`.
 - `dir` : « Dossier des worktrees ». Il ne peut pas être le dossier du projet, un dossier qui le contient, ni un dossier dans `.git` : un tel chemin est signalé et ignoré.
 - `copy` : « Fichiers copiés dans les worktrees », les fichiers non suivis par git copiés dans chaque nouveau worktree.
 - `setup` : « À l’ouverture d’un worktree », lancées l’une après l’autre dans chaque nouveau worktree, avant le premier message de son agent. Des commandes : elles attendent ton accord.

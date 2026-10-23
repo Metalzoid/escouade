@@ -458,3 +458,49 @@ async fn new_codex_agents_go_to_the_next_codex_account_once_one_is_over_the_thre
     );
     h.core.stop_for_good();
 }
+
+/// ESC-156 with Codex: an agent of Codex, named by Codex (« Modèle des textes rédigés »), gets its
+/// worktree at its first message under that name, and its thread takes it.
+#[tokio::test]
+async fn a_codex_agent_gets_its_worktree_at_its_first_message_under_the_name_codex_gives() {
+    let h = harness("esc156-codex");
+    let (p, _) = h.project_as_new(true).await;
+    codex_accounts(&h);
+    h.set_settings(|s| s.writer_engine = Some(EngineId::Codex));
+    let id = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::Codex),
+                account: Some("work".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert!(h.agent(&id).worktree_pending);
+    h.turn(&id, "Ajoute un bouton").await;
+    let m = h.agent(&id);
+    assert_eq!(m.name, "ajoute-un-codex");
+    let wt = m.worktree.unwrap();
+    assert_eq!(
+        std::path::PathBuf::from(&wt.path),
+        p.worktrees_root().join("ajoute-un-codex")
+    );
+    assert_eq!(wt.branch, "escouade/ajoute-un-codex");
+    let renamed = |h: &Harness| {
+        std::fs::read_to_string(h.dir.join("work").join("requests.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .any(|r| {
+                r["in"]["method"] == "thread/name/set"
+                    && r["in"]["params"]["name"] == "ajoute-un-codex"
+            })
+    };
+    h.wait("its thread renamed", renamed).await;
+    h.core.stop_for_good();
+}

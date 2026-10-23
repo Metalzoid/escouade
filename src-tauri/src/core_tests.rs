@@ -134,7 +134,21 @@ pub(crate) fn harness(name: &str) -> Harness {
 }
 
 impl Harness {
+    /// A project of a new repository, its worktrees (`worktrees`) made with the agent, as before
+    /// ESC-156: its own tests take `project_as_new`, as a new project is.
     pub(crate) async fn project(&self, worktrees: bool) -> (Project, PathBuf) {
+        let (p, r) = self.project_as_new(worktrees).await;
+        let p = {
+            let mut projects = self.core.projects.write();
+            let p = projects.iter_mut().find(|x| x.id == p.id).unwrap();
+            p.worktree_at_first_message = false;
+            p.clone()
+        };
+        (p, r)
+    }
+
+    /// A project of a new repository with the settings of a new one.
+    pub(crate) async fn project_as_new(&self, worktrees: bool) -> (Project, PathBuf) {
         let r = repo(&self.dir);
         let p = self
             .core
@@ -6970,6 +6984,12 @@ async fn the_editor_keeps_the_folders_and_worktrees_of_every_project_of_the_repo
             )
             .await
             .unwrap();
+        // Its worktree at once, not at its first message (ESC-156).
+        let p = Project {
+            worktree_at_first_message: false,
+            ..p
+        };
+        h.core.update_project(p.clone()).unwrap();
         h.core.create_agent(&p.id, None).await.unwrap();
         subs.push(p);
     }

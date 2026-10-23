@@ -96,6 +96,11 @@ pub const KEYS: &[Key] = &[
         "Each new agent works in a worktree of its own.",
     ),
     key(
+        "worktrees.at_first_message",
+        Kind::Bool,
+        "A new agent's worktree is made at its first message, its branch and its folder under the name it is given then (true when absent).",
+    ),
+    key(
         "worktrees.dir",
         Kind::Dir,
         "Where the worktrees go, relative to the repository (empty: .claude/worktrees).",
@@ -690,6 +695,7 @@ pub fn get(p: &Project, key: &str) -> Value {
     match key {
         "agents.engine" => json!(p.engine().as_str()),
         "worktrees.per_agent" => json!(p.worktree_per_agent),
+        "worktrees.at_first_message" => json!(p.worktree_at_first_message),
         "worktrees.dir" => json!(p.worktree_dir),
         "worktrees.copy" => json!(p.worktree_copy),
         "worktrees.setup" => steps_value(&p.worktree_setup),
@@ -772,6 +778,7 @@ pub fn set(p: &mut Project, key: &str, v: &Value) {
                 .filter(|e| *e != EngineId::Claude)
         }
         "worktrees.per_agent" => p.worktree_per_agent = flag,
+        "worktrees.at_first_message" => p.worktree_at_first_message = flag,
         "worktrees.dir" => p.worktree_dir = str_of(v),
         "worktrees.copy" => {
             p.worktree_copy = serde_json::from_value(v.clone()).unwrap_or_default();

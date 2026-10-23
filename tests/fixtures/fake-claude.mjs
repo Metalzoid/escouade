@@ -77,7 +77,8 @@
 // " (en)" in English) and the commits it read as the description.
 // Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
 // question and its role both), a name ends with "-en", a direct commit's message with " (en)"; with
-// a question and a role that disagree, "mixed" says so in the same places.
+// a question and a role that disagree, "mixed" says so in the same places. A task that says [muet] gets
+// no name (it fails), one that says [lent] gets it 3 s late.
 
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -352,7 +353,14 @@ if (argv[0] === 'mcp') {
     const words = task.toLowerCase().match(/[a-z]+/g) ?? ['tache'];
     const asked = tongue(frame === 'task');
     const named = `${words.slice(0, 2).join('-')}-fake${asked === 'fr' ? '' : `-${asked}`}`;
-    process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
+    const answer = () => process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: named }));
+    // A task that says [muet] gets no name (the model fails), one that says [lent] gets it 3 s late.
+    if (task.includes('[muet]')) {
+      process.stderr.write('model unavailable\n');
+      process.exit(1);
+    }
+    if (task.includes('[lent]')) setTimeout(answer, 3000);
+    else answer();
   });
 } else if (argv.includes('--settings') && !argv.includes('stream-json')) {
   // A stream has settings too when Escouade's server is kept out of it (`deniedMcpServers`).

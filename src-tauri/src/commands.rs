@@ -631,7 +631,8 @@ pub async fn create_agent(
         .await
         .map_err(err)?;
     core.telemetry.track(Event::AgentCreated {
-        worktree: agent.meta.worktree.is_some(),
+        // Made at its first message (ESC-156), it is one all the same.
+        worktree: agent.meta.worktree.is_some() || agent.meta.worktree_pending,
     });
     Ok(agent)
 }

@@ -89,6 +89,26 @@ describe('Conversation', () => {
     expect(screen.queryByText('Claude travaille…')).toBeNull();
   });
 
+  it('says before the first message that the worktree will be made then, under the agent’s name (ESC-156)', () => {
+    setup({ status: 'idle', worktree: null, worktreePending: true });
+    expect(screen.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeInTheDocument();
+    // Not on the project's branch: on none yet.
+    expect(screen.getByText('demo-api / —')).toBeInTheDocument();
+  });
+
+  it('shows the steps of the first message: the name, the worktree, then its setup (ESC-156)', async () => {
+    const { a, rerender } = setup({ status: 'idle', worktree: null, worktreePending: true, setup: 'Nom de l’agent' });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Préparation du worktree · Nom de l’agent — tes messages partiront une fois terminée.',
+    );
+    // Said once: the line of the steps says it now.
+    expect(screen.queryByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeNull();
+    await rerender({ agent: { ...a, setup: 'Création du worktree ajoute-un-bouton' }, project: project() });
+    expect(screen.getByRole('status')).toHaveTextContent('Préparation du worktree · Création du worktree ajoute-un-bouton');
+    await rerender({ agent: { ...a, worktreePending: false, worktree: WT, setup: '1/1 · npm ci' }, project: project() });
+    expect(screen.getByRole('status')).toHaveTextContent('Préparation du worktree · 1/1 · npm ci');
+  });
+
   describe('the output of the worktree’s setup', () => {
     it('unfolds on the live output of the step running, named with its rank', async () => {
       const { a, rerender } = setup({ status: 'idle', setup: '2/3 · npm ci' });
@@ -162,6 +182,17 @@ describe('Conversation', () => {
       const bubble = (await screen.findByText('Ajoute des tests')).closest('.bubble') as HTMLElement;
       expect(within(bubble).getByText('En attente de la préparation…')).toBeInTheDocument();
       expect(textarea).toHaveValue('');
+    });
+
+    it('waits the same way for the worktree made at the first message (ESC-156)', async () => {
+      const a = agent({ id: `s${Math.random()}`, status: 'idle', setup: null, worktree: null, worktreePending: true });
+      resetApp({ projects: [project()], agents: [a] });
+      const backend = fakeBackend({ get_conversation: () => [], send_message: () => new Promise(() => {}) });
+      render(Conversation, { agent: a, project: project() });
+      await userEvent.type(screen.getByRole('textbox'), 'Ajoute un bouton{Enter}');
+      await waitFor(() => expect(backend.called('send_message')).toHaveLength(1));
+      const bubble = (await screen.findByText('Ajoute un bouton')).closest('.bubble') as HTMLElement;
+      expect(within(bubble).getByText('En attente de la préparation…')).toBeInTheDocument();
     });
 
     it('does not say the agent is ready for a task while the message waits', async () => {

@@ -705,3 +705,31 @@ async fn a_session_copilot_does_not_open_says_why_in_the_conversation() {
     .await;
     h.core.stop_for_good();
 }
+
+/// ESC-156 with Copilot CLI: an agent of Copilot, named by Copilot (« Modèle des textes rédigés »),
+/// gets its worktree at its first message under that name, and its session takes it.
+#[tokio::test]
+async fn a_copilot_agent_gets_its_worktree_at_its_first_message_under_the_name_copilot_gives() {
+    let h = harness("esc156-copilot");
+    let (p, _) = h.project_as_new(true).await;
+    let work = copilot_accounts(&h, json!({}));
+    h.set_settings(|s| s.writer_engine = Some(EngineId::Copilot));
+    let id = copilot_agent(&h, &p).await;
+    assert!(h.agent(&id).worktree_pending);
+    h.turn(&id, "Ajoute un bouton").await;
+    let m = h.agent(&id);
+    assert_eq!(m.name, "ajoute-un-copilot");
+    let wt = m.worktree.unwrap();
+    assert_eq!(
+        PathBuf::from(&wt.path),
+        p.worktrees_root().join("ajoute-un-copilot")
+    );
+    assert_eq!(wt.branch, "escouade/ajoute-un-copilot");
+    h.wait("its session renamed", |_| {
+        noted(&work, "calls.jsonl").iter().any(|c| {
+            c["method"] == "session.name.set" && c["params"]["name"] == "ajoute-un-copilot"
+        })
+    })
+    .await;
+    h.core.stop_for_good();
+}

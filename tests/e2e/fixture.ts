@@ -173,6 +173,7 @@ const LABELS = {
     repo: /Dépôt git détecté · branche main · propre/,
     firstAgent: 'Créer un premier agent',
     worktrees: 'Un worktree par agent',
+    atFirstMessage: 'Créer le worktree au premier message, au nom de l’agent',
     create: 'Créer le projet',
     without: /^Créer sans l.assistant$/,
     blank: /^Partir de zéro/,
@@ -186,6 +187,7 @@ const LABELS = {
     repo: /Git repository detected · branch main · clean/,
     firstAgent: 'Create a first agent',
     worktrees: 'One worktree per agent',
+    atFirstMessage: 'Create the worktree at the first message, under the agent’s name',
     create: 'Create project',
     without: 'Create without the assistant',
     blank: /^Start from scratch/,
@@ -428,12 +430,13 @@ export const test = base.extend<{
  * Adds `repo` as a project through the "Nouveau projet" dialog (`lang: 'en'`: "New project"), with a first agent.
  * The dialog is read in the language of the interface the test started in, French unless it says so. With Escouade's
  * defaults: « Créer sans l'assistant », or the assistant from scratch when a worktree per agent or no first agent is
- * asked for.
+ * asked for. A worktree per agent is made with the agent, as `agent-N`, unless `atFirstMessage` keeps Escouade's
+ * default (ESC-156: made at its first message, under its name).
  */
 export async function addProject(
   page: Page,
   repo: string,
-  opts: { worktrees?: boolean; name?: string; firstAgent?: boolean; lang?: Language } = {},
+  opts: { worktrees?: boolean; atFirstMessage?: boolean; name?: string; firstAgent?: boolean; lang?: Language } = {},
 ) {
   const words = LABELS[opts.lang ?? 'fr'];
   await page.getByRole('button', { name: words.addProject }).first().click();
@@ -448,6 +451,7 @@ export async function addProject(
     if (opts.worktrees) {
       await dialog.getByRole('button', { name: words.next, exact: true }).click();
       await dialog.getByRole('switch', { name: words.worktrees }).click();
+      if (!opts.atFirstMessage) await dialog.getByRole('switch', { name: words.atFirstMessage }).click();
     }
     await dialog.getByRole('button', { name: words.summary }).click();
     if (opts.firstAgent === false) await dialog.getByRole('switch', { name: words.firstAgent }).click();

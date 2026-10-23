@@ -171,6 +171,8 @@ export default {
     showOutput: 'Voir la sortie',
     outputLabel: 'Sortie de {step}',
     noOutput: 'Pas encore de sortie.',
+    /** Before the first message of an agent whose worktree waits for it (ESC-156). */
+    later: 'Le worktree sera créé au premier message, au nom de l’agent.',
   },
 
   /** The code blocks of a reply (`lib/markdown.ts`): the language they have none of, and the copy button once pressed. */

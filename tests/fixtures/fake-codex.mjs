@@ -38,6 +38,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 
+// Asked to name a task (<tache>, <task>, ESC-156): its first two words and "-codex".
+const nameOf = (asked) => {
+  const task = asked.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2];
+  return task === undefined ? null : `${(task.toLowerCase().match(/[a-z]+/g) ?? ['tache']).slice(0, 2).join('-')}-codex`;
+};
+
 const VERSION = '0.163.0';
 const argv = process.argv.slice(2);
 if (argv.includes('--version')) {
@@ -70,7 +76,7 @@ if (argv[0] === 'exec') {
     }
     say({ type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'Je réfléchis.' } });
     const last = question.trim().split('\n').at(-1);
-    say({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: `Réponse de Codex : ${last}` } });
+    say({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: nameOf(question) ?? `Réponse de Codex : ${last}` } });
     say({ type: 'turn.completed', usage: { input_tokens: 100, cached_input_tokens: 0, output_tokens: 5 } });
     process.exit(0);
   });

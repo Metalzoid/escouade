@@ -39,6 +39,12 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+// Asked to name a task (<tache>, <task>, ESC-156): its first two words and "-opencode".
+const nameOf = (asked) => {
+  const task = asked.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2];
+  return task === undefined ? null : `${(task.toLowerCase().match(/[a-z]+/g) ?? ['tache']).slice(0, 2).join('-')}-opencode`;
+};
+
 const VERSION = '1.19.3';
 const argv = process.argv.slice(2);
 if (argv.includes('--version') || argv[0] === '-v') {
@@ -294,7 +300,7 @@ if (argv[0] === 'run') {
   }
   const part = { id: 'prt_run', messageID: 'msg_run', sessionID: sid };
   out({ type: 'step_start', part: { ...part, id: 'prt_start', type: 'step-start' } });
-  out({ type: 'text', part: { ...part, type: 'text', text: `Réponse d’OpenCode (${model}) : ${prompt.trim()}` } });
+  out({ type: 'text', part: { ...part, type: 'text', text: nameOf(prompt) ?? `Réponse d’OpenCode (${model}) : ${prompt.trim()}` } });
   out({ type: 'step_finish', part: { ...part, id: 'prt_end', type: 'step-finish', reason: 'stop', cost: 0 } });
   process.exit(0);
 }

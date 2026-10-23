@@ -1215,6 +1215,12 @@ impl<R: Runtime> Core<R> {
         size: (u16, u16),
         forward: Option<Forward>,
     ) -> Result<TermInfo> {
+        // Never in the project's folder: its worktree, which waited for its first message, is made
+        // under the name it has (ESC-156), and set up.
+        if h.lock().meta.worktree_pending {
+            self.make_pending_worktree(id, None).await;
+            self.wait_setup(id).await;
+        }
         // Never two processes on one session.
         self.after_quit(id).await;
         let stopped = h.lock().detach();

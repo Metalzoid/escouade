@@ -570,6 +570,12 @@ pub(crate) const RESUME_MARGIN_MS: i64 = 30_000;
 /// Windows, what still runs keeps the folder, and a tree can take long to go on a loaded machine.
 const AGENT_GONE: Duration = Duration::from_secs(15);
 
+/// How long the name of a new agent whose worktree waits for its first message (ESC-156) is
+/// waited for before its worktree is made under the name it has (`agent-N`): the writer’s model
+/// answers in a few seconds, a cold start of its harness included. Past it, the name, come later,
+/// renames the branch as for any agent.
+const NAMING_LIMIT: Duration = Duration::from_secs(15);
+
 /// How long a deleted agent's worktree waits for the project's running git refresh, which has
 /// `git` commands in the folder.
 const GIT_IDLE: Duration = Duration::from_secs(10);
@@ -885,6 +891,10 @@ pub struct Core<R: Runtime = Wry> {
     /// is `AGENT_GONE`).
     #[cfg(test)]
     pub(crate) agent_gone_ms: AtomicU64,
+    /// How long a new agent’s name is waited for before its worktree is made, in milliseconds
+    /// (tests only: the wait is `NAMING_LIMIT`).
+    #[cfg(test)]
+    pub(crate) naming_ms: AtomicU64,
     /// Notifications sent, as "<title> | <text>" (tests only).
     #[cfg(test)]
     pub alerts: Mutex<Vec<String>>,
@@ -1414,6 +1424,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         commit_mode: CommitMode::default(),
         account: String::new(),
         worktree_dir: String::new(),
+        worktree_at_first_message: true,
         agent_branch_prefix: crate::model::default_agent_branch_prefix(),
         ticket_branch_prefix: crate::model::default_ticket_branch_prefix(),
         remote_control: false,
@@ -1718,6 +1729,8 @@ impl<R: Runtime> Core<R> {
             plan_scan_ms: AtomicU64::new(PLAN_SCAN_EVERY.as_millis() as u64),
             #[cfg(test)]
             agent_gone_ms: AtomicU64::new(AGENT_GONE.as_millis() as u64),
+            #[cfg(test)]
+            naming_ms: AtomicU64::new(NAMING_LIMIT.as_millis() as u64),
             #[cfg(test)]
             alerts: Mutex::default(),
             #[cfg(test)]
@@ -2346,6 +2359,14 @@ impl<R: Runtime> Core<R> {
         self.apply(&id, &pid, &name, fx, view);
     }
 
+    /// How long a new agent’s name is waited for before its worktree is made (`NAMING_LIMIT`).
+    fn naming_limit(&self) -> Duration {
+        #[cfg(test)]
+        return Duration::from_millis(self.naming_ms.load(Ordering::Acquire));
+        #[cfg(not(test))]
+        NAMING_LIMIT
+    }
+
     /// How long the processes of a deleted agent are waited for before its worktree goes.
     pub(crate) fn agent_gone(&self) -> Duration {
         #[cfg(test)]
@@ -2622,6 +2643,12 @@ impl<R: Runtime> Core<R> {
         id: &str,
         warming: bool,
     ) -> Result<Process> {
+        // Never in the project's folder: its worktree, which waited for its first message, is made
+        // under the name it has (ESC-156), and set up.
+        if !warming && self.agent(id)?.lock().meta.worktree_pending {
+            self.make_pending_worktree(id, None).await;
+            self.wait_setup(id).await;
+        }
         // What a start resumes: its session, or a copy's original's, from where it was copied.
         let resumes = |m: &AgentMeta| (m.session_id.clone(), m.fork_of.clone(), m.fork_at.clone());
         let before = resumes(&self.agent(id)?.lock().meta);
@@ -3301,7 +3328,12 @@ impl<R: Runtime> Core<R> {
                 }
                 true
             } else {
-                if rt.proc.is_some() || rt.meta.archived || rt.meta.status == AgentStatus::Error {
+                // Its worktree, which waits for its first message, is where it is to start.
+                if rt.proc.is_some()
+                    || rt.meta.archived
+                    || rt.meta.status == AgentStatus::Error
+                    || rt.meta.worktree_pending
+                {
                     return;
                 }
                 false
@@ -3676,10 +3708,13 @@ impl<R: Runtime> Core<R> {
                 self.emit_agent(&h);
                 let (terminal, setting_up) = {
                     let rt = h.lock();
-                    (rt.meta.terminal, rt.setup.is_some())
+                    (
+                        rt.meta.terminal,
+                        rt.setup.is_some() || rt.meta.worktree_pending,
+                    )
                 };
                 // A new worktree is set up before the process starts (which links it, once it is
-                // over).
+                // over), or waits for the first message (ESC-156), which starts it.
                 if setting_up {
                     return;
                 }
@@ -4182,6 +4217,11 @@ impl<R: Runtime> Core<R> {
         let content = engine::of(&h.lock().meta).message(&delivered, &attachments)?;
         // Before its turn: its first question about one of them finds the right to ask it.
         self.grant_files(id, &files);
+        // Its worktree, when it waited for this message (ESC-156): the agent named first, then its
+        // branch and its folder under that name, and its setup started.
+        let lazy = self
+            .make_pending_worktree(id, names.then_some(text.as_str()))
+            .await;
         // Its new worktree is set up first: Claude would work in it meanwhile (an install running
         // twice, files half written).
         self.wait_setup(id).await;
@@ -4191,6 +4231,10 @@ impl<R: Runtime> Core<R> {
         for attempt in 0..2 {
             let proc = self.ensure_process(id).await?;
             if self.deliver(id, &proc, &delivered, naming, &content, &attachments, kind)? {
+                // Named before it ran: its session takes the name.
+                if lazy && h.lock().meta.named {
+                    self.retitle_soon(id, proc);
+                }
                 return Ok(());
             }
             log::warn!("message not delivered (attempt {attempt}): the process exited");
@@ -5168,6 +5212,17 @@ impl<R: Runtime> Core<R> {
                 }
                 None => None,
             },
+            // Its worktree waits for its first message, which names it (ESC-156): unless the user
+            // named it, or its harness's interface runs from the start (the Claude Code view).
+            (None, None, None)
+                if o.isolated.unwrap_or(project.worktree_per_agent)
+                    && project.worktree_at_first_message
+                    && o.name.is_none()
+                    && !meta.terminal =>
+            {
+                meta.worktree_pending = true;
+                None
+            }
             (None, None, None) if o.isolated.unwrap_or(project.worktree_per_agent) => Some(
                 self.agent_worktree(&project, &held, &name, &mut start_notice)
                     .await,
@@ -5556,6 +5611,169 @@ impl<R: Runtime> Core<R> {
             // An error: stopped, which is over too.
             let _ = done.wait_for(|over| *over).await;
         }
+    }
+
+    /// The worktree of an agent that waits for its first message (`worktree_pending`, ESC-156),
+    /// made now. When `naming` gives something to name it by, the agent is named first, within
+    /// `naming_limit` (a name come later renames its branch, as any agent's); then its branch
+    /// `<prefix><name>` and its folder `<name>` (`-2`… when taken, as for every agent's) from
+    /// where a new agent starts, its files copied, its setup started. The conversation shows each
+    /// step. A worktree that cannot be made leaves the agent in the project's folder, as at its
+    /// making. True when it waited.
+    pub(crate) async fn make_pending_worktree(
+        self: &Arc<Self>,
+        id: &str,
+        naming: Option<&str>,
+    ) -> bool {
+        // Once: a message and a start at the same time find it made by the first.
+        let lock = self.spawn_lock(&format!("worktree-{id}"));
+        let _once = lock.lock().await;
+        let Ok(h) = self.agent(id) else { return false };
+        if !h.lock().meta.worktree_pending {
+            return false;
+        }
+        let ask = naming.and_then(|text| h.lock().name_from(text));
+        if let Some(text) = ask {
+            self.show_step(id, tr!("Nom de l’agent", "Naming the agent"));
+            let (c, agent) = (self.clone(), id.to_string());
+            let named =
+                tauri::async_runtime::spawn(async move { c.auto_name(&agent, &text).await });
+            // Not waited for longer: it goes on, and renames the branch once it comes.
+            if tokio::time::timeout(self.naming_limit(), named)
+                .await
+                .is_err()
+            {
+                log::info!("agent {id}: no name yet, its worktree is made under the one it has");
+            }
+        }
+        // As at an agent's making: the folders taken are read, and one taken, in turn.
+        let creating = self.create_lock.lock().await;
+        let project_id = h.lock().meta.project_id.clone();
+        // A name come meanwhile waits for the branch, then renames it (`apply_generated_name`).
+        let naming_lock = self.spawn_lock(&format!("naming-{project_id}"));
+        let naming_guard = naming_lock.lock().await;
+        let made = match self.project(&project_id) {
+            Ok(project) => {
+                let name = h.lock().meta.name.clone();
+                let slug = match slugify(&name) {
+                    s if s.is_empty() => "agent".to_string(),
+                    s => s,
+                };
+                self.show_step(
+                    id,
+                    tr!(
+                        "Création du worktree {slug}",
+                        "Creating the worktree {slug}"
+                    ),
+                );
+                let held = self.held_worktrees();
+                let mut notice = None;
+                let made = self
+                    .agent_worktree(&project, &held, &slug, &mut notice)
+                    .await;
+                Some((project, made, notice))
+            }
+            Err(e) => {
+                log::warn!("agent {id}: its worktree not made: {e:#}");
+                None
+            }
+        };
+        drop(creating);
+        let mut warnings = Vec::new();
+        let mut setup = None;
+        if let Some((project, made, notice)) = made {
+            match made {
+                Ok((path, branch, base)) => {
+                    if let Err(e) = testlaunch::copy_worktree_files(
+                        &project.path,
+                        &path,
+                        &project.worktree_copy,
+                    )
+                    .await
+                    {
+                        warnings.push(files_not_copied(&e));
+                    }
+                    // Out of the project's folder (its « Dossier des worktrees » beside it): watched too.
+                    if !self.git_watches(&project, &path) {
+                        self.watch_project(&project);
+                    }
+                    setup = Some((
+                        project,
+                        Worktree {
+                            path,
+                            branch,
+                            base_branch: base,
+                            existing: false,
+                            named_branch: false,
+                        },
+                    ));
+                }
+                Err(e) => warnings.push(tr!(
+                    "Worktree non créé, l'agent travaille dans le dossier du projet : {e}",
+                    "Worktree not created, the agent works in the project’s folder: {e}"
+                )),
+            }
+            warnings.extend(notice);
+        }
+        let kept = self.with_agent(id, |rt, fx| {
+            rt.meta.worktree_pending = false;
+            rt.setup = None;
+            if let Some((_, wt)) = &setup {
+                rt.meta.cwd = wt.path.clone();
+                rt.meta.worktree = Some(wt.clone());
+            }
+            for text in warnings {
+                rt.notice("warn", text, fx);
+            }
+            Ok(())
+        });
+        drop(naming_guard);
+        // Deleted meanwhile: what was made for it goes too.
+        if kept.is_err() {
+            if let Some((project, wt)) = setup {
+                let _ = git::worktree_remove_dir(&project.path, &wt.path).await;
+                let _ = git::branch_delete(&project.path, &wt.branch, true).await;
+            }
+            return true;
+        }
+        if let Some((project, wt)) = &setup {
+            self.start_setup(&h, project, wt);
+            self.emit_agent(&h);
+        }
+        self.request_save();
+        self.git.refresh(&project_id);
+        true
+    }
+
+    /// The agent shows `step` of the making of its worktree (`setup`, as its setup's steps).
+    fn show_step(self: &Arc<Self>, id: &str, step: String) {
+        let _ = self.with_agent(id, |rt, _| {
+            rt.setup = Some(step);
+            Ok(())
+        });
+    }
+
+    /// The session of `proc`, the agent's, takes the agent's name once its harness has one to
+    /// rename (Codex's thread, OpenCode's and Copilot's sessions come with the first message).
+    fn retitle_soon(self: &Arc<Self>, id: &str, proc: Process) {
+        let (c, id) = (self.clone(), id.to_string());
+        tauri::async_runtime::spawn(async move {
+            for _ in 0..50 {
+                let title = {
+                    let Ok(h) = c.agent(&id) else { return };
+                    let rt = h.lock();
+                    if !rt.proc.as_ref().is_some_and(|p| Arc::ptr_eq(p, &proc)) {
+                        return;
+                    }
+                    c.session_title(&rt)
+                };
+                match proc.rename(&title).await {
+                    Ok(()) => return,
+                    Err(e) => log::debug!("agent {id}: session not renamed yet: {e:#}"),
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        });
     }
 
     /// Stops the setup of the agent's worktree, if one is under way, with all it started (its
@@ -6871,6 +7089,7 @@ impl<R: Runtime> Core<R> {
         cur.name = p.name;
         cur.color = p.color;
         cur.worktree_per_agent = p.worktree_per_agent;
+        cur.worktree_at_first_message = p.worktree_at_first_message;
         cur.run_commands = p.run_commands;
         cur.worktree_copy = p.worktree_copy;
         cur.worktree_setup = p.worktree_setup;

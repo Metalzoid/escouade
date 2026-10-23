@@ -123,12 +123,20 @@
       ...(a.archived
         ? []
         : [
+            // Its worktree waits for its first message (ESC-156): neither opens in the project's folder meanwhile.
             {
               label: t('common.openInEditor'),
+              disabled: !!a.worktreePending,
+              title: a.worktreePending ? t('nav.sidebar.worktreeLaterTitle') : undefined,
               onClick: () => app.openEditor({ projectId: a.projectId, source: a.worktree ? a.id : 'project' }),
             },
             // In its worktree, else in the project's folder (the backend knows which).
-            { label: t('nav.sidebar.menu.openTerminal'), onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name) },
+            {
+              label: t('nav.sidebar.menu.openTerminal'),
+              disabled: !!a.worktreePending,
+              title: a.worktreePending ? t('nav.sidebar.worktreeLaterTitle') : undefined,
+              onClick: () => terminalIn(a.projectId, { agentId: a.id }, a.name),
+            },
           ]),
       // As the button of its conversation's header.
       ...(canSwitchView(a)
@@ -547,6 +555,8 @@
           <span>{modelLabel(a.model, app.models)}</span><span class="sep">·</span><span>{duration(a)}</span>
           {#if a.worktree}<span class="sep">·</span><span class="wt" use:tip={a.worktree.branch}
               >⎇ {shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
+            >{:else if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
+              >{t('nav.sidebar.worktreeLater')}</span
             >{/if}
         </div>
         <div class="meta dim" use:tip={s.estimated ? estimateHint(s) : undefined}>

@@ -40,6 +40,11 @@
   <Row label={t('settings.project.worktreePerAgent')} desc={t('wizard.worktrees.note')}>
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={form.config.worktreePerAgent} />
   </Row>
+  {#if form.config.worktreePerAgent}
+    <Row label={t('settings.project.worktreeAtFirstMessage')} desc={t('settings.project.worktreeAtFirstMessageDesc')}>
+      <Switch label={t('settings.project.worktreeAtFirstMessage')} bind:on={form.config.worktreeAtFirstMessage} />
+    </Row>
+  {/if}
   <Row label={t('settings.project.worktreeDir')} desc={t('settings.project.worktreeDirDesc')} wide>
     <input
       class="field mono input"

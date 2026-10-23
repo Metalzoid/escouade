@@ -96,6 +96,7 @@ type ProjectFields = Pick<
   | 'name'
   | 'color'
   | 'worktreePerAgent'
+  | 'worktreeAtFirstMessage'
   | 'runCommands'
   | 'worktreeCopy'
   | 'worktreeSetup'
@@ -118,6 +119,8 @@ export interface ProjectDraft {
   name: string;
   color: string;
   worktreePerAgent: boolean;
+  /** « Créer le worktree au premier message, au nom de l’agent ». */
+  worktreeAtFirstMessage: boolean;
   runCommands: RunCommand[];
   /** The patterns of the files copied into new worktrees, one per line. */
   copy: string;
@@ -151,6 +154,7 @@ function draftOf(p: Project): ProjectDraft {
     name,
     color,
     worktreePerAgent,
+    worktreeAtFirstMessage,
     runCommands,
     worktreeCopy,
     worktreeSetup,
@@ -171,6 +175,8 @@ function draftOf(p: Project): ProjectDraft {
     name,
     color,
     worktreePerAgent,
+    // Absent from a project of the window's tests made before ESC-156: on, as the backend has it.
+    worktreeAtFirstMessage: worktreeAtFirstMessage ?? true,
     runCommands,
     copy: worktreeCopy.join('\n'),
     worktreeSetup,
@@ -221,6 +227,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     name: d.name.trim(),
     color: d.color,
     worktreePerAgent: d.worktreePerAgent,
+    worktreeAtFirstMessage: d.worktreeAtFirstMessage,
     runCommands: d.runCommands.map((c) => ({ ...c, name: c.name.trim(), command: c.command.trim(), cwd: c.cwd.trim() })),
     worktreeCopy: d.copy
       .split('\n')

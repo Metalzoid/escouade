@@ -89,6 +89,14 @@ describe('Sidebar', () => {
     expect(status).toHaveAttribute('data-tip', 'Préparation du worktree : 2/3 · npm run gen (web)');
   });
 
+  it('says on the card of an agent whose worktree waits for its first message that it will be made then (ESC-156)', () => {
+    fakeBackend();
+    app.agents.a1 = { ...app.agents.a1, status: 'idle', worktree: null, worktreePending: true };
+    render(Sidebar, { project: project() });
+    const mark = within(screen.getByRole('button', { name: /refacto-auth/ })).getByText('⎇ au premier message');
+    expect(mark).toHaveAttribute('data-tip', 'Le worktree sera créé au premier message, au nom de l’agent');
+  });
+
   it('names an agent’s model with the version Claude Code runs for it', () => {
     fakeBackend();
     app.models = [{ value: 'opus', resolvedModel: 'claude-opus-5-5' }];
@@ -1006,6 +1014,15 @@ describe('Sidebar terminal entry', () => {
     await menuOf(/refacto-auth/);
     click('Ouvrir un terminal');
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'a1' });
+  });
+
+  it('waits for the first message of an agent whose worktree waits for it: no terminal nor editor in the project’s folder (ESC-156)', async () => {
+    app.agents.a1 = { ...app.agents.a1, worktreePending: true };
+    render(Sidebar, { project: project() });
+    await menuOf(/refacto-auth/);
+    const why = 'Le worktree sera créé au premier message, au nom de l’agent';
+    for (const label of ['Ouvrir un terminal', 'Ouvrir dans l’éditeur'])
+      expect(menu.open!.items.find((i) => i.label === label)).toMatchObject({ disabled: true, title: why });
   });
 
   it('keeps it by the editor entry, and offers none for an archived agent', async () => {

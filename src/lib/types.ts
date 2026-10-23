@@ -662,6 +662,8 @@ export interface Project {
   path: string;
   color: string;
   worktreePerAgent: boolean;
+  /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156): on unless switched off. Absent from a project of the window’s tests made before it. */
+  worktreeAtFirstMessage?: boolean;
   createdAt: number;
   /** Commands that launch the project, each in its own read-only terminal. */
   runCommands: RunCommand[];
@@ -1056,6 +1058,8 @@ export interface Agent {
   forkAt: string | null;
   cwd: string;
   worktree: Worktree | null;
+  /** Its worktree waits for its first message (ESC-156): named first, it gets its branch and its folder under that name. Absent once made, or never waited for. */
+  worktreePending?: boolean;
   createdAt: number;
   archived: boolean;
   /** Why its worktree, its ticket over, was kept: work nothing else keeps (ESC-143). */

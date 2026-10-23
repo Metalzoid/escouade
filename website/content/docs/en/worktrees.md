@@ -31,7 +31,20 @@ Four project settings decide the location and the names (Settings › Projects, 
 | “Tickets’ branch prefix” | `ticket/` | A ticket’s branch, the one its pull request comes from, is called `<prefix><key>`. Empty, it is its key alone. |
 | “Files copied into worktrees” | `.env*` | The files that git ignores and that a new worktree takes from the project (see [below](#copied-files)). |
 
-The worktree’s folder is `<worktrees folder>/<agent name>`, on a new branch `<prefix><agent name>`. If either already exists, Escouade adds `-2`, `-3`… An agent is first called `agent-1`, `agent-2`…; when Escouade names it from its first message (for example `refacto-auth`), its branch becomes `escouade/refacto-auth` if that name is free, while the folder keeps its first name. A name you give it yourself changes its branch too, on the same terms, unless the branch is pushed already (it has an upstream, or the remote has a branch of that name): the branch then keeps its name, and a notification says so. The folder never follows the name: for a folder named after the branch, create the agent with “New agent on a branch…” (below). The agent’s card shows the branch without its prefix (`⎇ refacto-auth`), and its full name on hover.
+The worktree’s folder is `<worktrees folder>/<agent name>`, on a new branch `<prefix><agent name>`. If either already exists, Escouade adds `-2`, `-3`… By default, a new agent’s worktree waits for its first message, which gives it its name: the branch and the folder take that name (see [below](#at-the-first-message)). With that setting off, an agent is first called `agent-1`, `agent-2`… and gets its worktree at once; when Escouade names it from its first message (for example `refacto-auth`), its branch becomes `escouade/refacto-auth` if that name is free, while the folder keeps its first name. A name you give it yourself changes its branch too, on the same terms, unless the branch is pushed already (it has an upstream, or the remote has a branch of that name): the branch then keeps its name, and a notification says so. The folder never follows the name: for a folder named after the branch, create the agent with “New agent on a branch…” (below). The agent’s card shows the branch without its prefix (`⎇ refacto-auth`), and its full name on hover.
+
+### At the first message
+
+The setting “Create the worktree at the first message, under the agent’s name” (Settings › Projects, “Git” group, and the “Worktrees” step of the assistant) is on by default, for existing projects too. With it, “New agent” creates the agent at once, but with no worktree or branch: its card shows “⎇ at the first message” and its conversation “The worktree will be created at the first message, under the agent’s name.” At the first message:
+
+1. The model of written texts names the agent from that message (for example `refacto-auth`). It has 15 seconds: past that, or if it fails, the agent keeps `agent-N` and nothing waits. A name that comes later renames the branch, as with the setting off.
+2. The worktree is created: the branch `<prefix><name>` and the folder `<name>`, with `-2`, `-3`… if either is taken.
+3. The files are copied and the setup commands run in that folder.
+4. The message goes once the setup is done.
+
+Meanwhile, the conversation shows the current step: “Naming the agent”, “Creating the worktree refacto-auth”, then the setup commands. Before the first message, the agent’s terminal and “Open in editor” wait: there is no folder to open yet.
+
+These are not concerned, and get their worktree at once as before: tickets’ agents, an agent you give a name when you create it, an agent created with “New agent on a branch…”, a copy of an agent, and an agent in the Claude Code view (its interface runs from its creation). Turn the setting off for a project whose setup is long, if you’d rather have it run while you write the first message.
 
 The worktree starts from the commit the project folder is on at that moment. That folder’s branch becomes the agent’s **base branch**: it is the one that the merge and “Integrate” aim at.
 
@@ -70,6 +83,8 @@ The proxy of the “HTTP(S) proxy” setting is passed to the commands when “A
 - A message you send during the setup waits: it goes out once the setup is finished.
 - At the end, the conversation notes “Worktree set up (3 commands, 12 s).”
 - The full output of the last setup, command after command, is written to `~/.escouade/logs/`, one file per agent named `<agent identifier>-setup.log`. It is replaced at each setup and deleted with the agent.
+
+A setup command can use the name of the worktree’s folder, for example for a local address (`<folder>.localhost`) or a database name: with the setting [“Create the worktree at the first message, under the agent’s name”](#at-the-first-message), that name is the agent’s, not `agent-N`. The folder no longer changes afterwards, even if the agent is renamed.
 
 Archiving or deleting the agent during its setup stops it.
 

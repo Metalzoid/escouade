@@ -573,6 +573,12 @@ pub struct Project {
     /// `Account`'s id); empty is « Automatique » (`accounts::pick`).
     #[serde(default)]
     pub account: String,
+    /// « Créer le worktree au premier message, au nom de l’agent » (ESC-156): an ordinary new
+    /// agent gets its worktree once its first message named it, its branch and its folder under
+    /// that name. Off: at once, as `agent-N`, as before. On by default, for the projects saved
+    /// before it too.
+    #[serde(default = "crate::model::yes")]
+    pub worktree_at_first_message: bool,
     /// « Dossier des worktrees »: where its new worktrees go, from its folder when relative
     /// (`../app-worktrees`, `.worktrees`) or absolute; empty is `.claude/worktrees`
     /// (`paths::worktrees_root`). Those made already stay where they are.
@@ -777,6 +783,11 @@ pub struct WorktreeStep {
 }
 
 /// What a new worktree gets from the project when nothing was set: its `.env` files.
+/// `true`, for a setting on by default.
+pub fn yes() -> bool {
+    true
+}
+
 pub fn default_worktree_copy() -> Vec<String> {
     vec![".env*".into()]
 }
@@ -1177,6 +1188,11 @@ pub struct AgentMeta {
     pub fork_at: Option<String>,
     pub cwd: String,
     pub worktree: Option<Worktree>,
+    /// Its worktree waits for its first message (ESC-156, « Créer le worktree au premier message,
+    /// au nom de l’agent »): named first, it gets its branch and its folder under that name, then
+    /// its setup, and its first turn goes. It works nowhere until then (`cwd` is the project’s).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub worktree_pending: bool,
     pub created_at: i64,
     pub archived: bool,
     /// Why its worktree, its ticket over, was kept (`leftovers`): work nothing else keeps. None once

@@ -26,6 +26,8 @@ export function stepsFor(start: Start): StepId[] {
 /** The settings the assistant sets: a project's, but its name, color, folder, integrations and tickets' key. */
 export interface WizardConfig {
   worktreePerAgent: boolean;
+  /** « Créer le worktree au premier message, au nom de l’agent » (ESC-156). */
+  worktreeAtFirstMessage: boolean;
   worktreeDir: string;
   agentBranchPrefix: string;
   ticketBranchPrefix: string;
@@ -66,6 +68,7 @@ const DEFAULT_BOARD: WizardConfig['board'] = {
 export function blankConfig(): WizardConfig {
   return {
     worktreePerAgent: false,
+    worktreeAtFirstMessage: true,
     worktreeDir: '',
     agentBranchPrefix: DEFAULT_AGENT_PREFIX,
     ticketBranchPrefix: DEFAULT_TICKET_PREFIX,
@@ -101,6 +104,8 @@ export function configOf(p: Project): WizardConfig {
   const { prefix: _prefix, nextNumber: _next, ...board } = p.board;
   return structuredClone({
     worktreePerAgent: p.worktreePerAgent,
+    // Absent from a project of the window's tests made before ESC-156: on, as the backend reads it.
+    worktreeAtFirstMessage: p.worktreeAtFirstMessage ?? true,
     worktreeDir: p.worktreeDir,
     agentBranchPrefix: p.agentBranchPrefix,
     ticketBranchPrefix: p.ticketBranchPrefix,
@@ -124,6 +129,7 @@ export function withConfig(p: Project, c: WizardConfig): Project {
   return {
     ...p,
     worktreePerAgent: c.worktreePerAgent,
+    worktreeAtFirstMessage: c.worktreeAtFirstMessage,
     worktreeDir: c.worktreeDir.trim(),
     agentBranchPrefix: c.agentBranchPrefix.trim(),
     ticketBranchPrefix: c.ticketBranchPrefix.trim(),
@@ -343,7 +349,11 @@ const fresh = <T extends { id: string }>(x: T): T => ({ ...structuredClone(x), i
 export function applyCopy(base: WizardConfig, src: Project, checked: Set<string>, info: SetupInfo | null): WizardConfig {
   const c = structuredClone(base);
   const on = (id: string) => checked.has(id);
-  if (on('worktreePerAgent')) c.worktreePerAgent = src.worktreePerAgent;
+  // When its worktree is made goes with it (ESC-156).
+  if (on('worktreePerAgent')) {
+    c.worktreePerAgent = src.worktreePerAgent;
+    c.worktreeAtFirstMessage = src.worktreeAtFirstMessage ?? true;
+  }
   if (on('worktreeDir')) c.worktreeDir = src.worktreeDir;
   if (on('prefixes')) {
     c.agentBranchPrefix = src.agentBranchPrefix;

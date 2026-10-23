@@ -40,6 +40,8 @@ mod fence_tests;
 mod fileorigin;
 #[cfg(test)]
 mod fileorigin_tests;
+#[cfg(test)]
+mod first_message_tests;
 mod forge;
 mod fsedit;
 mod git;

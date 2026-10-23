@@ -435,6 +435,42 @@ test('a new worktree is set up before its agent takes a message, and torn down b
   expect(fs.readFileSync(path.join(app.repo, 'teardown.txt'), 'utf8').trim()).toBe('True');
 });
 
+test('a new agent’s worktree is made at its first message, under the name the fake claude gives it, and set up there (ESC-156)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo, { worktrees: true, atFirstMessage: true, firstAgent: false });
+  await page.getByRole('button', { name: 'Configurer', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(dialog.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
+  await dialog
+    .getByRole('group', { name: 'Commande de préparation 1' })
+    .getByLabel('Commande', { exact: true })
+    .fill("Set-Content prepare.txt ((Split-Path -Leaf (Get-Location)) + ' ' + $env:ESCOUADE_BRANCH)");
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: '+ Nouvel agent' }).first().click();
+  const card = page.locator('.card').first();
+  await expect(card).toContainText('⎇ au premier message');
+  await expect(page.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeVisible();
+  const worktrees = path.join(app.repo, '.claude', 'worktrees');
+  const made = () => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees) : []);
+  expect(made()).toEqual([]);
+
+  await send(page, 'Ajoute un bouton');
+  // Named first, then its worktree under that name, set up there, then its turn.
+  await expect(page.getByText(/^Worktree préparé \(1 commande, \d+ s\)\.$/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Bonjour, tu as dit : Ajoute un bouton')).toBeVisible();
+  expect(made()).toEqual(['ajoute-un-fake']);
+  const wt = path.join(worktrees, 'ajoute-un-fake');
+  expect(fs.readFileSync(path.join(wt, 'prepare.txt'), 'utf8').trim()).toBe('ajoute-un-fake escouade/ajoute-un-fake');
+  await expect(card.locator('.name')).toHaveText('ajoute-un-fake');
+  await expect(card).toContainText('⎇ ajoute-un-fake');
+  await expect(page.getByText('Le worktree sera créé au premier message, au nom de l’agent.')).toBeHidden();
+});
+
 test('a project’s worktrees go to the folder and on the branch prefix its settings name', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { worktrees: true, firstAgent: false });

@@ -31,7 +31,20 @@ Quatre réglages du projet décident de l’emplacement et des noms (Réglages �
 | « Préfixe des branches des tickets » | `ticket/` | La branche d’un ticket, celle de sa pull request, s’appelle `<préfixe><clé>`. Vide, c’est sa clé seule. |
 | « Fichiers copiés dans les worktrees » | `.env*` | Les fichiers que git ignore et qu’un nouveau worktree reprend du projet (voir [plus bas](#les-fichiers-copies)). |
 
-Le dossier du worktree est `<dossier des worktrees>/<nom de l’agent>`, sur une branche nouvelle `<préfixe><nom de l’agent>`. Si l’un des deux existe déjà, Escouade ajoute `-2`, `-3`… Un agent s’appelle d’abord `agent-1`, `agent-2`… ; quand Escouade le nomme d’après son premier message (par exemple `refacto-auth`), sa branche devient `escouade/refacto-auth` si ce nom est libre, alors que le dossier garde son premier nom. Un nom que tu lui donnes toi-même change aussi sa branche, aux mêmes conditions, sauf si elle est déjà poussée (elle a une branche amont, ou le dépôt distant en a une du même nom) : la branche garde alors son nom, et une notification le dit. Le dossier ne suit jamais le nom : pour un dossier nommé d’après la branche, crée l’agent avec « Nouvel agent sur une branche… » (plus bas). La carte de l’agent montre la branche sans son préfixe (`⎇ refacto-auth`), et son nom entier s’affiche au survol.
+Le dossier du worktree est `<dossier des worktrees>/<nom de l’agent>`, sur une branche nouvelle `<préfixe><nom de l’agent>`. Si l’un des deux existe déjà, Escouade ajoute `-2`, `-3`… Par défaut, le worktree d’un nouvel agent attend son premier message, qui lui donne son nom : branche et dossier prennent ce nom (voir [plus bas](#au-premier-message)). Avec ce réglage éteint, un agent s’appelle d’abord `agent-1`, `agent-2`… et reçoit son worktree tout de suite ; quand Escouade le nomme d’après son premier message (par exemple `refacto-auth`), sa branche devient `escouade/refacto-auth` si ce nom est libre, alors que le dossier garde son premier nom. Un nom que tu lui donnes toi-même change aussi sa branche, aux mêmes conditions, sauf si elle est déjà poussée (elle a une branche amont, ou le dépôt distant en a une du même nom) : la branche garde alors son nom, et une notification le dit. Le dossier ne suit jamais le nom : pour un dossier nommé d’après la branche, crée l’agent avec « Nouvel agent sur une branche… » (plus bas). La carte de l’agent montre la branche sans son préfixe (`⎇ refacto-auth`), et son nom entier s’affiche au survol.
+
+### Au premier message
+
+Le réglage « Créer le worktree au premier message, au nom de l’agent » (Réglages › Projets, groupe « Git », et l’étape « Worktrees » de l’assistant) est activé par défaut, pour les projets existants aussi. Avec lui, « Nouvel agent » crée l’agent tout de suite, mais sans worktree ni branche : sa carte affiche « ⎇ au premier message » et sa conversation « Le worktree sera créé au premier message, au nom de l’agent. » Au premier message :
+
+1. Le modèle des textes rédigés nomme l’agent, d’après ce message (par exemple `refacto-auth`). Il a 15 secondes : passé ce délai, ou s’il échoue, l’agent garde `agent-N` et rien n’attend. Un nom qui arrive plus tard renomme la branche, comme quand le réglage est éteint.
+2. Le worktree est créé : la branche `<préfixe><nom>` et le dossier `<nom>`, avec `-2`, `-3`… si l’un des deux est pris.
+3. Les fichiers sont copiés et les commandes de préparation tournent dans ce dossier.
+4. Le message part une fois la préparation finie.
+
+Pendant ce temps, la conversation montre l’étape en cours : « Nom de l’agent », « Création du worktree refacto-auth », puis les commandes de préparation. Avant le premier message, le terminal de l’agent et « Ouvrir dans l’éditeur » attendent : il n’y a pas encore de dossier à ouvrir.
+
+Ne sont pas concernés, et reçoivent leur worktree tout de suite comme avant : les agents des tickets, un agent auquel tu donnes un nom à sa création, un agent créé avec « Nouvel agent sur une branche… », une copie d’agent, et un agent en vue Claude Code (son interface tourne dès sa création). Éteins le réglage pour un projet dont la préparation est longue, si tu préfères qu’elle tourne pendant que tu écris le premier message.
 
 Le worktree part du commit où se trouve le dossier du projet à ce moment-là. La branche de ce dossier devient la **branche de base** de l’agent : c’est elle que le merge et « Intégrer » visent.
 
@@ -70,6 +83,8 @@ Le proxy du réglage « Proxy HTTP(S) » est transmis aux commandes quand « 
 - Un message que tu envoies pendant la préparation attend : il part une fois la préparation finie.
 - À la fin, la conversation note « Worktree préparé (3 commandes, 12 s). »
 - La sortie complète de la dernière préparation, commande après commande, est écrite dans `~/.escouade/logs/`, un fichier par agent nommé `<identifiant de l’agent>-setup.log`. Il est remplacé à chaque préparation et supprimé avec l’agent.
+
+Une commande de préparation peut se servir du nom du dossier du worktree, par exemple pour une adresse locale (`<dossier>.localhost`) ou le nom d’une base de données : avec le réglage [« Créer le worktree au premier message, au nom de l’agent »](#au-premier-message), ce nom est celui de l’agent, et non `agent-N`. Le dossier ne change plus ensuite, même si l’agent est renommé.
 
 Archiver ou supprimer l’agent pendant sa préparation l’arrête.
 

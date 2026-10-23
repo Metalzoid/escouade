@@ -132,7 +132,8 @@
   const labels = $derived(subagentLabels(conv.items));
   // The local commands conversations saved before kept with their tags (ESC-154).
   const commands = $derived(localCommandViews(conv.items));
-  const branch = $derived(agent.worktree?.branch ?? app.git[project.id]?.branch ?? '');
+  // Its worktree waits for its first message (ESC-156): on no branch yet, not on the project's folder's.
+  const branch = $derived(agent.worktree?.branch ?? (agent.worktreePending ? '' : (app.git[project.id]?.branch ?? '')));
   const files = $derived(app.git[project.id]?.agents[agent.id] ?? 0);
   // Its pull requests (ESC-64): read when it is shown, then every minute while it is (the backend asks its host at most
   // every 20 s, and no more once they are merged).
@@ -841,6 +842,8 @@
         {/if}
         {#if agent.setup}
           <SetupProgress {agent} />
+        {:else if agent.worktreePending}
+          <p class="later">{t('conv.setup.later')}</p>
         {/if}
       </div>
     </div>
@@ -1185,6 +1188,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .later {
+    margin: 0 0 0 34px;
     font-size: 12.5px;
     color: var(--muted);
   }

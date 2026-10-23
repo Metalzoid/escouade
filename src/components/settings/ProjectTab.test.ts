@@ -28,6 +28,22 @@ describe('ProjectTab', () => {
     expect(backend.called('update_project')[0].args.project).not.toHaveProperty('agentsUseEscouade');
   });
 
+  it('makes a new agent’s worktree at its first message, under its name, until switched off (ESC-156)', async () => {
+    const backend = fakeBackend();
+    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    const toggle = screen.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' });
+    // On for a project that does not say (saved before it).
+    expect(toggle).toBeChecked();
+    expect(
+      screen.getByText(
+        'Le premier message nomme l’agent, puis sa branche et son dossier prennent ce nom avant la préparation. Éteint, le worktree est créé tout de suite, en agent-N.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(toggle);
+    await save();
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', worktreeAtFirstMessage: false });
+  });
+
   it('opens the setup assistant again on the project (ESC-94)', async () => {
     fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p2' });

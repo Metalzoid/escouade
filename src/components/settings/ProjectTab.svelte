@@ -328,6 +328,13 @@
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
   <Row
+    label={t('settings.project.worktreeAtFirstMessage')}
+    desc={t('settings.project.worktreeAtFirstMessageDesc')}
+    shared="worktrees.at_first_message"
+  >
+    <Switch label={t('settings.project.worktreeAtFirstMessage')} bind:on={draft.worktreeAtFirstMessage} />
+  </Row>
+  <Row
     label={t('settings.project.worktreeDir')}
     desc={t('settings.project.worktreeDirDesc')}
     descId="worktree-dir-desc"

@@ -446,9 +446,10 @@
     const owner = draftFor;
     const prevText = text;
     const prevFiles = files;
-    // A new worktree is prepared first: the backend holds the message until then, and it shows meanwhile.
+    // A new worktree is prepared first (made first, when it waits for the first message: ESC-156): the backend holds the
+    // message until then, and it shows meanwhile.
     const unhold =
-      !answering && agent.setup
+      !answering && (agent.setup || agent.worktreePending)
         ? conv.holdMessage({
             text: body,
             images: prevFiles.filter((f) => f.kind === 'image').length,

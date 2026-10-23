@@ -5,6 +5,7 @@ agents:
   engine: codex
 worktrees:
   per_agent: true
+  at_first_message: false
   dir: ../app-worktrees
   copy:
     - .env*

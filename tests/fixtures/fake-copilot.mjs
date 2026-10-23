@@ -33,6 +33,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+// Asked to name a task (<tache>, <task>, ESC-156): its first two words and "-copilot".
+const nameOf = (asked) => {
+  const task = asked.match(/<(tache|task)>\s*([\s\S]*?)\s*<\/\1>/)?.[2];
+  return task === undefined ? null : `${(task.toLowerCase().match(/[a-z]+/g) ?? ['tache']).slice(0, 2).join('-')}-copilot`;
+};
+
 if (process.argv.includes('--version')) {
   console.log(`GitHub Copilot CLI ${process.env.FAKE_COPILOT_VERSION || '1.0.98'}.`);
   process.exit(0);
@@ -103,7 +109,11 @@ if (argv[0] === 'login') {
     const line = (type, data) => process.stdout.write(JSON.stringify({ type, data }) + '\n');
     line('user.message', { content: question });
     const asked = question.split('</instructions>').pop().trim();
-    line('assistant.message', { messageId: 'm1', content: `Copilot (${model}) a rédigé : ${asked}`, phase: 'final_answer' });
+    line('assistant.message', {
+      messageId: 'm1',
+      content: nameOf(question) ?? `Copilot (${model}) a rédigé : ${asked}`,
+      phase: 'final_answer',
+    });
     line('session.usage_checkpoint', { totalNanoAiu: 37767500 });
     process.stdout.write(JSON.stringify({ type: 'result', sessionId: session, exitCode: 0 }) + '\n');
     process.exit(0);

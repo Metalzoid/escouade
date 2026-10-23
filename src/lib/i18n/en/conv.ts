@@ -148,6 +148,7 @@ export default defineZone('conv', {
     showOutput: 'Show output',
     outputLabel: 'Output of {step}',
     noOutput: 'No output yet.',
+    later: 'The worktree will be created at the first message, under the agent’s name.',
   },
 
   markdown: { plainText: 'text', copied: 'Copied ✓' },

@@ -19,6 +19,8 @@ export default defineZone('nav', {
     resumes: 'Resumes {when}',
     settingUp: 'Setting up…',
     settingUpTitle: 'Setting up the worktree: {step}',
+    worktreeLater: '⎇ at the first message',
+    worktreeLaterTitle: 'The worktree will be created at the first message, under the agent’s name',
     tokens: '{tokens} tok',
     files: { one: '{count} file', other: '{count} files' },
     remote: {

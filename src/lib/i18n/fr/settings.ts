@@ -306,6 +306,9 @@ export default {
       'Une barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Un agent déjà lancé prend ce réglage avant son prochain tour (son process repart, sa conversation reste) ; une vue terminal, à son prochain lancement.',
     worktreePerAgent: 'Un worktree par agent',
     worktreePerAgentDesc: 'Isole les modifications de chaque nouvel agent dans sa propre branche.',
+    worktreeAtFirstMessage: 'Créer le worktree au premier message, au nom de l’agent',
+    worktreeAtFirstMessageDesc:
+      'Le premier message nomme l’agent, puis sa branche et son dossier prennent ce nom avant la préparation. Éteint, le worktree est créé tout de suite, en agent-N.',
     worktreeDir: 'Dossier des worktrees',
     worktreeDirDesc:
       'Relatif au dossier du projet (../app-worktrees, .worktrees), à ton dossier personnel (~/worktrees/app) ou complet. Vide : .claude/worktrees, comme claude --worktree. Les worktrees déjà créés restent où ils sont ; hors du projet, la vue Claude Code demande d’abord ta confiance pour chacun.',

@@ -10,6 +10,7 @@ const FILE = `# yaml-language-server: $schema=https://escouade.dev/schemas/escou
 version: 1
 worktrees:
   per_agent: true
+  at_first_message: false
   setup:
     - node -e "require('fs').writeFileSync('setup-ran.txt', 'yes')"
 git:
@@ -84,10 +85,14 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await expect(settings.getByText(/Réglages lus dans \.escouade\.yml \(version 1\)/)).toBeVisible();
   // What was left out is said with its line.
-  await expect(settings.getByText(/Ligne 12 : clé inconnue : board\.unknown_thing/)).toBeVisible();
+  await expect(settings.getByText(/Ligne 13 : clé inconnue : board\.unknown_thing/)).toBeVisible();
   // The settings it set are marked, those of the Kanban too.
   const perAgent = settings.locator('.row', { hasText: 'Un worktree par agent' });
   await expect(perAgent.getByText('Défini par .escouade.yml')).toBeVisible();
+  // Its worktrees at once (ESC-156), as the file says.
+  const atFirst = settings.locator('.row', { hasText: 'Créer le worktree au premier message' });
+  await expect(atFirst.getByText('Défini par .escouade.yml')).toBeVisible();
+  await expect(atFirst.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   const pending = settings.getByRole('region', { name: 'Commandes en attente de ton accord' });
   await expect(pending.getByText(`node -e "require('fs').writeFileSync('setup-ran.txt', 'yes')"`)).toBeVisible();
   await pending.getByRole('button', { name: 'Faire confiance à ces commandes' }).click();

@@ -143,6 +143,10 @@
     "worktrees": {
       "additionalProperties": false,
       "properties": {
+        "at_first_message": {
+          "description": "A new agent's worktree is made at its first message, its branch and its folder under the name it is given then (true when absent).",
+          "type": "boolean"
+        },
         "copy": {
           "description": "Untracked files copied into every new worktree (glob patterns).",
           "oneOf": [

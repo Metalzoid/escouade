@@ -21,6 +21,7 @@ agents:
   engine: codex
 worktrees:
   per_agent: true
+  at_first_message: false
   dir: ../app-worktrees # next to the repository
   copy: [.env*, config/local.json]
   setup:
@@ -72,6 +73,7 @@ fn every_key_of_version_1_is_read() {
     let v = |k: &str| r.values[k].clone();
     assert_eq!(v("agents.engine"), json!("codex"));
     assert_eq!(v("worktrees.per_agent"), json!(true));
+    assert_eq!(v("worktrees.at_first_message"), json!(false));
     assert_eq!(v("worktrees.dir"), json!("../app-worktrees"));
     assert_eq!(v("worktrees.copy"), json!([".env*", "config/local.json"]));
     assert_eq!(
@@ -102,6 +104,31 @@ fn every_key_of_version_1_is_read() {
     assert_eq!(v("board.tests_before_approve"), json!(true));
     assert_eq!(v("board.on_conflict"), json!("agent"));
     assert_eq!(v("board.remove_worktree"), json!(false));
+}
+
+/// « Créer le worktree au premier message, au nom de l’agent » (ESC-156): shared as the other
+/// settings of the worktrees, on when the file does not say.
+#[test]
+fn the_worktree_at_the_first_message_is_a_key_of_the_file() {
+    let k = pf::key_of("worktrees.at_first_message").unwrap();
+    assert_eq!(k.kind, pf::Kind::Bool);
+    assert!(!k.command);
+    let mut p = project();
+    assert!(p.worktree_at_first_message);
+    assert_eq!(pf::get(&p, "worktrees.at_first_message"), json!(true));
+    pf::set(&mut p, "worktrees.at_first_message", &json!(false));
+    assert!(!p.worktree_at_first_message);
+    assert_eq!(pf::get(&p, "worktrees.at_first_message"), json!(false));
+    let schema = pf::schema();
+    let key = &schema["properties"]["worktrees"]["properties"]["at_first_message"];
+    assert_eq!(key["type"], "boolean");
+    // Written right after « Un worktree par agent ».
+    let paths: Vec<&str> = pf::KEYS.iter().map(|k| k.path).collect();
+    let at = paths
+        .iter()
+        .position(|p| *p == "worktrees.per_agent")
+        .unwrap();
+    assert_eq!(paths[at + 1], "worktrees.at_first_message");
 }
 
 #[test]
@@ -684,10 +711,11 @@ async fn shared_project(h: &Harness, text: &str) -> (Project, std::path::PathBuf
 
 /// The agent's worktree, once its agent runs (its setup over, if it had one).
 async fn agent_worktree(h: &Harness, project_id: &str) -> std::path::PathBuf {
-    let a = h.core.create_agent(project_id, None).await.unwrap();
-    let id = a.meta.id.clone();
+    let id = h.core.create_agent(project_id, None).await.unwrap().meta.id;
+    // Started, its worktree made (at the start, when it waits for a first message: ESC-156).
+    h.core.ensure_process(&id).await.unwrap();
     h.wait("agent started", |h| h.alive(&id)).await;
-    std::path::PathBuf::from(a.meta.worktree.unwrap().path)
+    std::path::PathBuf::from(h.agent(&id).worktree.unwrap().path)
 }
 
 #[tokio::test]

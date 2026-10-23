@@ -269,6 +269,9 @@ export default defineZone('settings', {
       'A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. An agent already running takes this setting before its next turn (its process starts again, its conversation stays); a terminal view, at its next launch.',
     worktreePerAgent: 'One worktree per agent',
     worktreePerAgentDesc: 'Keeps each new agent’s changes in its own branch.',
+    worktreeAtFirstMessage: 'Create the worktree at the first message, under the agent’s name',
+    worktreeAtFirstMessageDesc:
+      'The first message names the agent, then its branch and its folder take that name before the setup. Off, the worktree is created at once, as agent-N.',
     worktreeDir: 'Worktrees folder',
     worktreeDirDesc:
       'Relative to the project’s folder (../app-worktrees, .worktrees), to your home folder (~/worktrees/app), or full. Empty: .claude/worktrees, as claude --worktree does. Worktrees made already stay where they are; out of the project, the Claude Code view first asks you to trust each of them.',

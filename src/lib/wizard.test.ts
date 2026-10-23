@@ -87,6 +87,18 @@ describe('the assistant’s steps and starting points', () => {
     expect(c.commitMode).toBe('agent');
   });
 
+  it('makes the worktree at the first message by default, keeps a project’s choice, and copies it with a worktree per agent (ESC-156)', () => {
+    expect(blankConfig().worktreeAtFirstMessage).toBe(true);
+    expect(recommendedConfig().worktreeAtFirstMessage).toBe(true);
+    const off = project({ worktreeAtFirstMessage: false });
+    expect(configOf(off).worktreeAtFirstMessage).toBe(false);
+    // A project of before ESC-156 says nothing: on, as the backend reads it.
+    expect(configOf(project()).worktreeAtFirstMessage).toBe(true);
+    expect(withConfig(project(), { ...blankConfig(), worktreeAtFirstMessage: false }).worktreeAtFirstMessage).toBe(false);
+    expect(applyCopy(blankConfig(), off, new Set(['worktreePerAgent']), null).worktreeAtFirstMessage).toBe(false);
+    expect(applyCopy(blankConfig(), off, new Set(), null).worktreeAtFirstMessage).toBe(true);
+  });
+
   it('recommends a worktree per agent, a squash merge into the current branch, cleanup, conventional commits, the agent on conflicts', () => {
     const c = recommendedConfig();
     expect(c.worktreePerAgent).toBe(true);

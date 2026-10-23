@@ -24,6 +24,9 @@ export default {
     resumes: 'Reprise {when}',
     settingUp: 'Préparation…',
     settingUpTitle: 'Préparation du worktree : {step}',
+    /** An agent whose worktree waits for its first message (ESC-156): its card, and what waits for it in its menu. */
+    worktreeLater: '⎇ au premier message',
+    worktreeLaterTitle: 'Le worktree sera créé au premier message, au nom de l’agent',
     tokens: '{tokens} tok',
     files: { one: '{count} fich.', other: '{count} fich.' },
     /** The remote control link of an agent, told whole in each state. */
