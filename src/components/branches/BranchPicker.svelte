@@ -17,12 +17,15 @@
   // when there is more room there). In `pick` mode it only chooses a branch for an agent or a ticket, `onpick` being
   // given it: the branch of the project's folder and those a worktree has can't be chosen, and nothing else is offered.
   // In `target` mode it chooses the Kanban's target branch: any local one, but those of the agents and the tickets.
+  // With `oncreate` (« Nouvel agent sur une branche… », ESC-155), a name typed that no branch has is offered last, to be
+  // created where a new agent starts: the name is checked as git does, and where it starts is said.
   let {
     projectId,
     anchor,
     onclose,
     mode = 'switch',
     onpick,
+    oncreate,
     over = false,
     chosen,
   }: {
@@ -31,6 +34,8 @@
     onclose: () => void;
     mode?: 'switch' | 'pick' | 'target';
     onpick?: (b: BranchInfo) => void;
+    /** In `pick` mode, the new branch typed, once the picker is gone. */
+    oncreate?: (name: string) => void;
     /** Opened from a dialog: over it, not under its overlay. */
     over?: boolean;
     /** In `target` mode, the target as it is now (the settings' draft), checked in the list. */
@@ -166,16 +171,55 @@
     ];
   });
   const rows = $derived(groups.flatMap((g) => g.rows));
-  const cursor = $derived(
-    Math.max(
+
+  /** The cursor's `active` when it is on the row that creates the branch typed (no branch name has a NUL). */
+  const CREATE = '\u0000create';
+  const wanted = $derived(text.trim());
+  /** The branch typed can be created: `oncreate` is given, and no branch, local or remote, has that name. */
+  const creatable = $derived(picking && !targeting && !!oncreate && !!branches && !!wanted && !all.some((b) => b.name === wanted));
+  /** Where a new branch starts, as a new agent does: the board's target when the agents start from it and it is here, else the folder's branch. */
+  const fromTarget = $derived(!!project?.board.agentsFromTarget && !!target && locals.some((b) => b.name === target));
+  const startsFrom = $derived(fromTarget ? target : (locals.find((b) => b.current)?.name ?? ''));
+  /** Why git refuses the name typed, once checked. */
+  let problem = $state<string | null>(null);
+  let checks = 0;
+  $effect(() => {
+    const name = wanted;
+    problem = null;
+    if (!creatable) return;
+    const mine = ++checks;
+    // Once the typing paused: the check asks git.
+    const timer = setTimeout(async () => {
+      try {
+        await api.branchCheck(projectId, name);
+      } catch (e) {
+        if (mine === checks) problem = String(e);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  });
+
+  /** The rows, the one that creates the branch typed being last. */
+  const count = $derived(rows.length + (creatable ? 1 : 0));
+  const cursor = $derived.by(() => {
+    if (active === CREATE && creatable) return rows.length;
+    return Math.max(
       0,
       rows.findIndex((r) => r.b.name === active),
-    ),
-  );
+    );
+  });
+  const onCreate = $derived(creatable && cursor === rows.length);
   const optionId = (index: number) => `branch-option-${index}`;
 
   /** What the row under the cursor says about itself: why it can't be picked, or what it tracks. */
   const description = $derived.by(() => {
+    if (onCreate) {
+      if (problem) return problem;
+      if (!startsFrom) return '';
+      return fromTarget
+        ? t('branches.agent.createFromTarget', { base: startsFrom })
+        : t('branches.agent.createFromFolder', { base: startsFrom });
+    }
     const r = rows[cursor];
     if (!r) return '';
     if (r.why) return r.why;
@@ -192,8 +236,18 @@
   });
 
   function move(by: number) {
-    const n = rows.length;
-    if (n) active = rows[(cursor + by + n) % n].b.name;
+    const n = count;
+    if (!n) return;
+    const next = (cursor + by + n) % n;
+    active = next < rows.length ? rows[next].b.name : CREATE;
+  }
+
+  /** Creates the branch typed for a new agent, once the picker is gone; a name git refuses is not. */
+  async function create() {
+    if (!creatable || problem) return;
+    const name = wanted;
+    await release();
+    oncreate?.(name);
   }
 
   /** Closes the picker and waits for it to be gone. */
@@ -270,7 +324,8 @@
       move(e.key === 'ArrowDown' ? 1 : -1);
     } else if (e.key === 'Enter' && !e.isComposing) {
       e.preventDefault();
-      void pick(rows[cursor]);
+      if (onCreate) void create();
+      else void pick(rows[cursor]);
     } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault();
       const row = rows[cursor];
@@ -332,10 +387,10 @@
       placeholder={t('branches.picker.searchPlaceholder')}
       role="combobox"
       aria-label={t('branches.picker.searchLabel')}
-      aria-expanded={rows.length > 0}
+      aria-expanded={count > 0}
       aria-controls="branch-list"
       aria-autocomplete="list"
-      aria-activedescendant={rows.length ? optionId(cursor) : undefined}
+      aria-activedescendant={count ? optionId(cursor) : undefined}
       oninput={() => (active = null)}
       onkeydown={onKeydown}
     />
@@ -393,11 +448,35 @@
         </div>
       {/if}
     {/each}
+    {#if creatable}
+      <div role="group" aria-labelledby="branch-group-create">
+        <div class="grp" id="branch-group-create">{t('branches.agent.createGroup')}</div>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div
+          class="row"
+          class:on={onCreate}
+          class:blocked={!!problem}
+          id={optionId(rows.length)}
+          role="option"
+          tabindex="-1"
+          aria-selected={onCreate}
+          aria-disabled={problem ? 'true' : undefined}
+          aria-describedby={onCreate ? 'branch-description' : undefined}
+          use:tip={problem ?? undefined}
+          onclick={create}
+          onmousemove={() => (active = CREATE)}
+        >
+          <span class="chk" aria-hidden="true">+</span>
+          <span class="label">{t('branches.agent.create', { branch: wanted })}</span>
+          {#if startsFrom}<span class="tag">{t('branches.agent.createFrom', { base: startsFrom })}</span>{/if}
+        </div>
+      </div>
+    {/if}
     {#if failure}
       <p class="none error" role="alert">{failure}</p>
     {:else if !branches}
       <p class="none">{t('common.loading')}</p>
-    {:else if !rows.length}
+    {:else if !rows.length && !creatable}
       <p class="none">{text.trim() ? t('branches.picker.noMatch') : t('branches.picker.empty')}</p>
     {/if}
     {#if hidden}<p class="none">{t('branches.picker.more', { count: hidden })}</p>{/if}
@@ -529,6 +608,11 @@
     text-overflow: ellipsis;
     font-family: var(--mono);
     font-size: 12px;
+  }
+  .label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .tag {
     flex: none;

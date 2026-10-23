@@ -131,6 +131,15 @@ export default {
     isTargetBranch: 'C’est la branche cible du Kanban : un agent n’y travaille pas directement.',
     /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
     deleteWorktree: 'Supprimer aussi le worktree (la branche {branch} est conservée)',
+    /** The group of the picker’s row that creates the branch typed (ESC-155). */
+    createGroup: 'Nouvelle branche',
+    /** `{branch}`: the name typed, which no branch has. */
+    create: 'Créer la branche « {branch} » et y lancer un agent',
+    /** After it: where the branch starts. */
+    createFrom: 'depuis {base}',
+    /** Under the list, the cursor on it: « Les agents partent de la branche cible » is on. */
+    createFromTarget: 'Elle part de {base}, la branche cible du Kanban (« Les agents partent de la branche cible »).',
+    createFromFolder: 'Elle part de {base}, la branche du dossier du projet.',
   },
   /** « Intégrer <base> » : the base branch goes into the agent’s branch. */
   integrate: {

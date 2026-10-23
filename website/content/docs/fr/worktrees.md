@@ -31,7 +31,7 @@ Quatre réglages du projet décident de l’emplacement et des noms (Réglages �
 | « Préfixe des branches des tickets » | `ticket/` | La branche d’un ticket, celle de sa pull request, s’appelle `<préfixe><clé>`. Vide, c’est sa clé seule. |
 | « Fichiers copiés dans les worktrees » | `.env*` | Les fichiers que git ignore et qu’un nouveau worktree reprend du projet (voir [plus bas](#les-fichiers-copies)). |
 
-Le dossier du worktree est `<dossier des worktrees>/<nom de l’agent>`, sur une branche nouvelle `<préfixe><nom de l’agent>`. Si l’un des deux existe déjà, Escouade ajoute `-2`, `-3`… Un agent s’appelle d’abord `agent-1`, `agent-2`… ; quand Escouade le nomme d’après son premier message (par exemple `refacto-auth`), sa branche devient `escouade/refacto-auth` si ce nom est libre, alors que le dossier garde son premier nom. Un nom que tu donnes toi-même ne change jamais la branche. La carte de l’agent montre la branche sans son préfixe (`⎇ refacto-auth`), et son nom entier s’affiche au survol.
+Le dossier du worktree est `<dossier des worktrees>/<nom de l’agent>`, sur une branche nouvelle `<préfixe><nom de l’agent>`. Si l’un des deux existe déjà, Escouade ajoute `-2`, `-3`… Un agent s’appelle d’abord `agent-1`, `agent-2`… ; quand Escouade le nomme d’après son premier message (par exemple `refacto-auth`), sa branche devient `escouade/refacto-auth` si ce nom est libre, alors que le dossier garde son premier nom. Un nom que tu lui donnes toi-même change aussi sa branche, aux mêmes conditions, sauf si elle est déjà poussée (elle a une branche amont, ou le dépôt distant en a une du même nom) : la branche garde alors son nom, et une notification le dit. Le dossier ne suit jamais le nom : pour un dossier nommé d’après la branche, crée l’agent avec « Nouvel agent sur une branche… » (plus bas). La carte de l’agent montre la branche sans son préfixe (`⎇ refacto-auth`), et son nom entier s’affiche au survol.
 
 Le worktree part du commit où se trouve le dossier du projet à ce moment-là. La branche de ce dossier devient la **branche de base** de l’agent : c’est elle que le merge et « Intégrer » visent.
 
@@ -97,17 +97,29 @@ La liste « Avant sa suppression » contient ce qu’il faut défaire hors du 
 
 Ces commandes tournent quand un agent est supprimé avec son worktree, quand le Kanban nettoie le worktree d’un ticket terminé ou supprimé, et avec « Nettoyer ». Chacune tourne même si la précédente a échoué, avec 5 minutes au plus, et leur sortie n’est pas affichée. Si le projet utilise isola (un fichier `.isola.toml`), `isola destroy` passe ensuite. Un problème est signalé une fois l’agent supprimé : « Agent supprimé, mais le démontage du worktree a échoué sur … ».
 
-## Travailler sur une branche qui existe déjà
+## Travailler sur une branche choisie
 
-Un agent peut aussi travailler dans un worktree sur une branche qui existe déjà, au lieu d’en créer une nouvelle :
+Un agent peut aussi travailler dans un worktree sur une branche que tu choisis, qui existe déjà ou que tu crées pour lui :
 
-- « Nouvel agent sur une branche… » dans le menu du bouton ▾, à droite de « Nouvel agent », ouvre le sélecteur de branches (« Choisir une branche ») ;
+- « Nouvel agent sur une branche… » dans le menu du bouton ▾, à droite de « Nouvel agent », ouvre le sélecteur de branches (« Choisir une branche ») ; un nom tapé qu’aucune branche ne porte y propose « Créer la branche « feat/signup » et y lancer un agent » ;
 - dans le sélecteur de branches de la barre d’état, un clic droit sur une branche propose « Lancer un agent sur cette branche » ;
 - dans le formulaire d’un ticket, le champ « Branche » propose « Reprendre une branche existante… ».
 
 Une branche distante est reprise par la branche locale qui la suit, créée si elle n’existe pas. Le dossier du projet n’est pas touché. Trois branches sont refusées, avec la raison : celle du dossier du projet, la branche cible du Kanban (les tickets y sont mergés) et celle qu’un autre worktree occupe déjà.
 
-Cette branche est celle de l’agent, mais elle n’est jamais créée ni supprimée par Escouade : en supprimant l’agent, la case propose « Supprimer aussi le worktree (la branche … est conservée) ». Sa branche de base est la branche cible du Kanban si elle existe, sinon la branche du dossier du projet. Pour un ticket, l’infobulle de l’entrée dit « Escouade ne supprime jamais cette branche, même une fois le ticket validé. » Les branches sont détaillées dans [la page des branches](branches).
+Le dossier du worktree porte le nom de la branche, sa dernière partie : `feat/login` donne `.claude/worktrees/login`, puis `login-2` si ce dossier est déjà pris. Un script de préparation peut s’en servir pour une adresse locale (`login.localhost`) ou un nom de base de données, et savoir ainsi quelle instance tourne sur quelle branche. Ce nom reprend la branche telle quelle, majuscules, `_` et points compris ; `ESCOUADE_BRANCH` donne la branche entière.
+
+### Créer la branche depuis le sélecteur
+
+Tape le nom de la nouvelle branche dans le sélecteur de « Nouvel agent sur une branche… ». Si aucune branche, locale ou distante, ne porte ce nom, la dernière ligne propose « Créer la branche « feat/signup » et y lancer un agent », suivie de son point de départ (« depuis main »). La branche part du même endroit qu’un nouvel agent : la branche cible du Kanban si « Les agents partent de la branche cible » est coché (voir [les réglages du Kanban](settings-board)), sinon la branche du dossier du projet. La ligne sous la liste le dit quand le curseur est sur l’entrée.
+
+Le nom est vérifié comme git le fait. Un nom refusé grise l’entrée, avec la raison, et rien n’est créé. Un nom qui commence comme une branche d’un dépôt distant (`origin/…`) est refusé aussi.
+
+Une branche créée ainsi appartient à l’agent, comme celle d’un nouvel agent : supprimer l’agent avec son worktree la supprime aussi. Elle garde toujours le nom que tu lui as donné, même quand l’agent est nommé ou renommé.
+
+### Une branche qui existait déjà
+
+Une branche qui existait avant l’agent n’est jamais créée ni supprimée par Escouade : en supprimant l’agent, la case propose « Supprimer aussi le worktree (la branche … est conservée) ». Sa branche de base est la branche cible du Kanban si elle existe, sinon la branche du dossier du projet. Pour un ticket, l’infobulle de l’entrée dit « Escouade ne supprime jamais cette branche, même une fois le ticket validé. » Les branches sont détaillées dans [la page des branches](branches).
 
 ## Fusionner dans la branche de base
 

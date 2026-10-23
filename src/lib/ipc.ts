@@ -229,6 +229,9 @@ export const api = {
     invoke<Agent>('create_agent', { projectId, model, engine, isolated }),
   createAgentOnBranch: (projectId: string, branch: string, model: string | null = null, engine: EngineId | null = null) =>
     invoke<Agent>('create_agent_on_branch', { projectId, branch, model, engine }),
+  /** An agent on the new branch `branch`, made first from where a new agent starts; refused for a name git refuses (ESC-155). */
+  createAgentOnNewBranch: (projectId: string, branch: string) =>
+    invoke<Agent>('create_agent_on_branch', { projectId, branch, model: null, engine: null, create: true }),
   warmAgent: (id: string) => invoke<void>('warm_agent', { id }),
   /** « Relancer »: the agent's process, at rest, started again on the same session (« Outils d'Escouade au prochain démarrage »). */
   restartAgentProcess: (id: string) => invoke<void>('restart_agent_process', { id }),
@@ -286,7 +289,8 @@ export const api = {
   continueOnEngine: (agentId: string, engine: EngineId) => invoke<void>('continue_on_engine', { agentId, engine }),
   /** « Revenir sur <compte> »: a resume on another account failed; the agent goes back to the account it came from. */
   backToPreviousAccount: (agentId: string) => invoke<void>('back_to_previous_account', { agentId }),
-  renameAgent: (id: string, name: string) => invoke<void>('rename_agent', { id, name }),
+  /** Renames the agent, and its own branch after it: why the branch kept its name, when it did. */
+  renameAgent: (id: string, name: string) => invoke<string | null>('rename_agent', { id, name }),
   /** A copy of the agent, « <nom> (copie) », whose Claude Code session forks the original’s (refused during its turn). */
   duplicateAgent: (id: string) => invoke<Agent>('duplicate_agent', { id }),
   archiveAgent: (id: string, archived: boolean) => invoke<void>('archive_agent', { id, archived }),

@@ -1087,6 +1087,10 @@ pub struct Worktree {
     /// renames it after the agent.
     #[serde(default)]
     pub existing: bool,
+    /// The branch was made for the agent under the name the user typed (« Nouvel agent sur une
+    /// branche… », ESC-155): the agent's, it goes with its worktree, but Haiku never renames it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub named_branch: bool,
 }
 
 /// A harness that runs agents (`engine::Engine`), as the data keeps it: an agent's

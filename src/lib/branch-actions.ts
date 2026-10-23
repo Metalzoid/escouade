@@ -100,11 +100,12 @@ export function askStash(title: string, again: () => unknown, onCancel?: () => v
 /**
  * Starts an agent in a worktree on `branch`, which exists (a remote one: on the local branch that tracks it), and shows
  * it at once like a new agent. The branch of the project's folder and a branch another worktree has are refused by the
- * backend, and told in a toast.
+ * backend, and told in a toast. With `create`, the branch is made first, from where a new agent starts (ESC-155): a
+ * name git refuses, or that a branch has, is told the same way.
  */
-export async function startAgentOn(projectId: string, branch: string): Promise<boolean> {
+export async function startAgentOn(projectId: string, branch: string, create = false): Promise<boolean> {
   try {
-    const a = await api.createAgentOnBranch(projectId, branch);
+    const a = create ? await api.createAgentOnNewBranch(projectId, branch) : await api.createAgentOnBranch(projectId, branch);
     app.agents[a.id] = a;
     // Its composer is what a new agent is for: closed first, the editor keeps the source it was on.
     app.closeEditor(projectId);

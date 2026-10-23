@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - A ticket has “Account”, “Model” and “Effort” next to “Harness”: its agent always starts on what you choose, and a ticket set on an account stays there, waiting for its reset rather than switching accounts. By default, “Auto” says what it will give: the current account, the Kanban’s model and effort.
+- “New agent on a branch…” also creates the branch you type, from where a new agent starts, and the worktree’s folder is named after the branch (`feat/signup` gives `signup`): a setup script can use it for its local address or its database. Renaming an agent renames its branch too, unless it is pushed already, has a pull request or was there before the agent. Thanks to MrKayJayDee on Discord.
 
 ### Fixes
 

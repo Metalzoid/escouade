@@ -1171,6 +1171,7 @@ mod tests {
                 branch: "ticket/x".into(),
                 base_branch: "main".into(),
                 existing: false,
+                named_branch: false,
             }),
             port_base: Some(4100),
             recipe: Some(recipe.clone()),
@@ -1266,6 +1267,7 @@ mod worktree_run_tests {
                 branch: "refacto-auth".into(),
                 base_branch: "main".into(),
                 existing: false,
+                named_branch: false,
             }),
             port_base: Some(4120),
             ..Default::default()

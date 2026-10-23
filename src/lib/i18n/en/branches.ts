@@ -131,6 +131,11 @@ export default defineZone('branches', {
     isTargetBranch: 'It’s the board’s target branch: an agent doesn’t work on it directly.',
     /** `{branch}`: the branch the agent works on, which stays whatever its worktree becomes. */
     deleteWorktree: 'Also delete the worktree (the branch {branch} is kept)',
+    createGroup: 'New branch',
+    create: 'Create the branch “{branch}” and start an agent on it',
+    createFrom: 'from {base}',
+    createFromTarget: 'It starts from {base}, the board’s target branch (“Agents start from the target branch”).',
+    createFromFolder: 'It starts from {base}, the branch of the project’s folder.',
   },
   /** “Integrate <base>”: the base branch goes into the agent’s branch. */
   integrate: {

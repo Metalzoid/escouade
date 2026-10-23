@@ -2622,6 +2622,20 @@ pub async fn merge(repo: &str, branch: &str, squash: bool, message: &str) -> Res
     }
 }
 
+/// The local branch `branch` was pushed: it has an upstream, or a remote has a branch of its name
+/// (as the last fetch saw it).
+pub async fn is_pushed(repo: &str, branch: &str) -> bool {
+    if upstream_of(repo, branch).await.is_some() {
+        return true;
+    }
+    for remote in remotes(repo).await {
+        if ref_exists(repo, &format!("refs/remotes/{remote}/{branch}")).await {
+            return true;
+        }
+    }
+    false
+}
+
 pub async fn rename_current_branch(worktree: &str, new_name: &str) -> Result<()> {
     run(worktree, &["branch", "-m", new_name]).await.map(|_| ())
 }

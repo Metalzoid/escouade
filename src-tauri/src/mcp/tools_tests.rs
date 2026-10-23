@@ -660,6 +660,7 @@ async fn a_ticket_tells_its_agent_branch_block_step_and_outcome_to_follow_the_fl
         branch: "ticket/dem-1".into(),
         base_branch: "main".into(),
         existing: false,
+        named_branch: false,
     });
     link(&h, &rest.id, &conflict.id);
     // In progress, its agent asking for two permissions: how many wait is told.

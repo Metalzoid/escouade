@@ -872,8 +872,9 @@ pub async fn back_to_previous_account(core: CoreState<'_>, agent_id: String) -> 
     core.back_to_previous_account(&agent_id).await.map_err(err)
 }
 
+/// Renames the agent, and its own branch after it: why the branch kept its name, when it did.
 #[tauri::command]
-pub async fn rename_agent(core: CoreState<'_>, id: String, name: String) -> Res<()> {
+pub async fn rename_agent(core: CoreState<'_>, id: String, name: String) -> Res<Option<String>> {
     core.rename_agent(&id, &name).await.map_err(err)
 }
 
@@ -1077,7 +1078,8 @@ pub async fn git_diff_refs(
 }
 
 /// A new agent in a worktree on an existing branch (a local one, or `origin/feat`). Refused for
-/// the folder's branch and for one a worktree has: `IN_WORKTREE:…` when an agent's.
+/// the folder's branch and for one a worktree has: `IN_WORKTREE:…` when an agent's. With
+/// `create`, on a new branch of that name, made from where a new agent starts (ESC-155).
 #[tauri::command]
 pub async fn create_agent_on_branch(
     core: CoreState<'_>,
@@ -1085,6 +1087,7 @@ pub async fn create_agent_on_branch(
     branch: String,
     model: Option<String>,
     engine: Option<crate::model::EngineId>,
+    create: Option<bool>,
 ) -> Res<AgentView> {
     let agent = core
         .create_agent_with(
@@ -1094,6 +1097,7 @@ pub async fn create_agent_on_branch(
                 engine,
                 select: true,
                 branch: Some(branch),
+                new_branch: create.unwrap_or(false),
                 ..Default::default()
             },
         )

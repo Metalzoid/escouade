@@ -505,7 +505,11 @@
       kind: 'rename',
       title: t('conv.header.renameTitle'),
       value: agent.name,
-      onSubmit: (name) => app.run(api.renameAgent(agent.id, name)),
+      onSubmit: async (name) => {
+        // Its branch follows the name, unless it must keep its own: said, the agent renamed all the same.
+        const kept = await app.run(api.renameAgent(agent.id, name));
+        if (kept) app.toast(kept, 'info');
+      },
     };
   }
 

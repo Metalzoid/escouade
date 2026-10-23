@@ -329,6 +329,59 @@ pub(crate) fn folder_branch_refusal(lang: i18n::Lang) -> String {
     )
 }
 
+/// Why an agent's branch keeps its name as the agent is named (`rename_agent_branch`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum BranchKept {
+    /// It was there before the agent: the user's.
+    Existing,
+    /// Made for the agent under the name the user typed (ESC-155).
+    Typed,
+    /// Its pull request goes by its name (ESC-64).
+    PullRequest,
+    /// It has an upstream, or a remote has it: renamed, it would part from it.
+    Pushed,
+    /// The name it would take: another branch has it.
+    Taken(String),
+    /// Git refused the rename.
+    Failed(String),
+}
+
+/// What the user is told when the branch `branch` of an agent they renamed keeps its name.
+pub fn branch_kept(lang: i18n::Lang, branch: &str, why: &BranchKept) -> String {
+    match why {
+        BranchKept::Existing => tr_in!(
+            lang,
+            "La branche « {branch} » garde son nom : elle existait avant l’agent.",
+            "The branch “{branch}” keeps its name: it was there before the agent."
+        ),
+        BranchKept::Typed => tr_in!(
+            lang,
+            "La branche « {branch} » garde le nom que tu lui as donné.",
+            "The branch “{branch}” keeps the name you gave it."
+        ),
+        BranchKept::PullRequest => tr_in!(
+            lang,
+            "La branche « {branch} » garde son nom : elle a une pull request.",
+            "The branch “{branch}” keeps its name: it has a pull request."
+        ),
+        BranchKept::Pushed => tr_in!(
+            lang,
+            "La branche « {branch} » garde son nom : elle est déjà poussée.",
+            "The branch “{branch}” keeps its name: it’s pushed already."
+        ),
+        BranchKept::Taken(other) => tr_in!(
+            lang,
+            "La branche « {branch} » garde son nom : « {other} » existe déjà.",
+            "The branch “{branch}” keeps its name: “{other}” already exists."
+        ),
+        BranchKept::Failed(e) => tr_in!(
+            lang,
+            "La branche « {branch} » garde son nom : {e}",
+            "The branch “{branch}” keeps its name: {e}"
+        ),
+    }
+}
+
 /// Where a new agent starts when « Les agents partent de la branche cible » is on: the local
 /// `target`, moved first to its upstream as fetched last (no fetch: the agent is made at once)
 /// when it is only behind it, so that what it starts from is its base too. When it can't be moved
@@ -621,6 +674,9 @@ pub struct AgentOptions {
     /// With `branch`: the branch it is merged into. None: the project's (the board's target while
     /// it exists, else the branch the folder is on).
     pub base: Option<String>,
+    /// With `branch`: a new branch of that name, made first (checked as git does, refused when it
+    /// exists) from where a new agent starts (`agent_worktree`), and the agent's own.
+    pub new_branch: bool,
     /// Set apart from Remote Control from the start (`AgentMeta::remote_off`): a ticket's next
     /// agent, when the user set the ticket's previous one apart.
     pub remote_off: bool,
@@ -4969,6 +5025,27 @@ impl<R: Runtime> Core<R> {
         .await
     }
 
+    /// A new agent in a worktree on a new branch `branch`, made from where a new agent starts.
+    #[cfg(test)]
+    pub async fn create_agent_on_new_branch(
+        self: &Arc<Self>,
+        project_id: &str,
+        branch: &str,
+        model: Option<String>,
+    ) -> Result<AgentView> {
+        self.create_agent_with(
+            project_id,
+            AgentOptions {
+                model,
+                select: true,
+                branch: Some(branch.to_string()),
+                new_branch: true,
+                ..Default::default()
+            },
+        )
+        .await
+    }
+
     /// A new agent of the project, as `o` says (see `AgentOptions`).
     pub async fn create_agent_with(
         self: &Arc<Self>,
@@ -5062,6 +5139,11 @@ impl<R: Runtime> Core<R> {
         // Why it does not start from the board's target, when it was to (`agent_start`).
         let mut start_notice = None;
         let made = match (&o.branch, &o.worktree, &o.copy_of) {
+            // A new branch, named by the user, then the agent on it as on one that exists.
+            (Some(branch), _, _) if o.new_branch => Some(
+                self.worktree_on_new_branch(&project, &held, branch, &mut start_notice)
+                    .await,
+            ),
             // A branch that exists: the agent works on it, whatever else is asked.
             (Some(branch), _, _) => Some(
                 self.worktree_on_branch(&project, &held, branch, o.base.as_deref())
@@ -5126,7 +5208,8 @@ impl<R: Runtime> Core<R> {
                     path,
                     branch,
                     base_branch: base,
-                    existing: o.branch.is_some(),
+                    existing: o.branch.is_some() && !o.new_branch,
+                    named_branch: o.new_branch,
                 });
             }
             // Refused as it is (a code the window reads, or a sentence): nothing was made.
@@ -5942,29 +6025,17 @@ impl<R: Runtime> Core<R> {
             name = format!("{slug}-{n}");
             n += 1;
         }
-        let worktree = {
-            let rt = h.lock();
-            if rt.meta.named {
-                return Ok(());
-            }
-            // A branch with a pull request (ESC-64) keeps its name: the pull request is its.
-            rt.meta.worktree.clone().filter(|_| rt.meta.prs.is_empty())
-        };
+        if h.lock().meta.named {
+            return Ok(());
+        }
         // The branch first, as well as it can be: the agent is said named only once the worktree
         // is on its last branch (renamed or not), so that whoever sees it named (a commit
         // proposed meanwhile) does not find git in the middle of the rename.
-        // (A branch that was there before the agent is the user's: it keeps its name.)
-        let mut renamed = None;
-        if let Some(wt) = worktree.filter(|wt| !wt.existing) {
-            if let Ok(project) = self.project(&project_id) {
-                let branch = format!("{}{name}", project.agent_branch_prefix);
-                if !git::branch_exists(&project.path, &branch).await
-                    && git::rename_current_branch(&wt.path, &branch).await.is_ok()
-                {
-                    renamed = Some(branch);
-                }
-            }
-        }
+        let renamed = self
+            .rename_agent_branch(&h, &project_id, &name)
+            .await
+            .ok()
+            .flatten();
         let (named_now, proc, title) = {
             let mut rt = h.lock();
             if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
@@ -5991,24 +6062,84 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
-    pub async fn rename_agent(self: &Arc<Self>, id: &str, name: &str) -> Result<()> {
+    pub async fn rename_agent(self: &Arc<Self>, id: &str, name: &str) -> Result<Option<String>> {
         let name = name.trim();
         if name.is_empty() {
             bail!(tr!("nom vide", "empty name"));
         }
         let h = self.agent(id)?;
+        let project_id = h.lock().meta.project_id.clone();
+        // Never across Haiku naming it (`apply_generated_name`): the branch first, as it does.
+        let naming = self.spawn_lock(&format!("naming-{project_id}"));
+        let naming_guard = naming.lock().await;
+        let (renamed, kept) = match self
+            .rename_agent_branch(&h, &project_id, &slugify(name))
+            .await
+        {
+            Ok(branch) => (branch, None),
+            Err((branch, why)) => (None, Some(branch_kept(i18n::ui(), &branch, &why))),
+        };
         let (proc, title) = {
             let mut rt = h.lock();
+            if let (Some(branch), Some(w)) = (renamed, rt.meta.worktree.as_mut()) {
+                w.branch = branch;
+            }
             rt.meta.name = name.to_string();
             rt.meta.named = true;
             (rt.proc.clone(), self.session_title(&rt))
         };
+        drop(naming_guard);
         self.emit_agent(&h);
         self.request_save();
         if let Some(p) = proc {
             let _ = p.rename(&title).await;
         }
-        Ok(())
+        Ok(kept)
+    }
+
+    /// The branch of the agent `h`, named `slug`, renamed `<agent_branch_prefix><slug>` (under the
+    /// project's `naming-` lock): Some(the new branch) once renamed, None when there is nothing to
+    /// do (no worktree, no slug, the same name). Kept, with the branch and why: one that was there
+    /// before the agent or that the user named, one with a pull request (ESC-64), one pushed
+    /// (renamed, it would part from its remote), one whose new name a branch has. The worktree's
+    /// folder stays where it is.
+    async fn rename_agent_branch(
+        &self,
+        h: &AgentHandle,
+        project_id: &str,
+        slug: &str,
+    ) -> std::result::Result<Option<String>, (String, BranchKept)> {
+        let (wt, with_pr) = {
+            let rt = h.lock();
+            (rt.meta.worktree.clone(), !rt.meta.prs.is_empty())
+        };
+        let (Some(wt), Ok(project)) = (wt, self.project(project_id)) else {
+            return Ok(None);
+        };
+        let branch = format!("{}{slug}", project.agent_branch_prefix);
+        if slug.is_empty() || branch == wt.branch {
+            return Ok(None);
+        }
+        let kept = |why| Err((wt.branch.clone(), why));
+        if wt.existing {
+            return kept(BranchKept::Existing);
+        }
+        if wt.named_branch {
+            return kept(BranchKept::Typed);
+        }
+        if with_pr {
+            return kept(BranchKept::PullRequest);
+        }
+        if git::is_pushed(&project.path, &wt.branch).await {
+            return kept(BranchKept::Pushed);
+        }
+        if git::branch_exists(&project.path, &branch).await {
+            return kept(BranchKept::Taken(branch));
+        }
+        match git::rename_current_branch(&wt.path, &branch).await {
+            Ok(()) => Ok(Some(branch)),
+            Err(e) => kept(BranchKept::Failed(format!("{e:#}"))),
+        }
     }
 
     pub async fn archive_agent(self: &Arc<Self>, id: &str, archived: bool) -> Result<()> {
@@ -6404,6 +6535,53 @@ impl<R: Runtime> Core<R> {
             git::worktree_add_existing(&project.path, &project.worktrees_root(), held, name)
                 .await?;
         Ok((path, branch, base))
+    }
+
+    /// The worktree of an agent on the new branch `name` (ESC-155): made from where a new agent
+    /// starts (`agent_worktree`: the board's target when « Les agents partent de la branche cible »
+    /// is on, else HEAD of the project's folder), its folder named as for a branch that exists
+    /// (`worktree_add_existing`). A name git refuses, or that a branch has, makes nothing; nor does
+    /// a worktree that fails (the branch made for it is deleted). (path, branch, base).
+    async fn worktree_on_new_branch(
+        &self,
+        project: &Project,
+        held: &[PathBuf],
+        name: &str,
+        notice: &mut Option<String>,
+    ) -> Result<(String, String, String)> {
+        let root = self.toplevel(&project.path).await.ok_or_else(not_a_repo)?;
+        git::check_new_branch(&root, name).await?;
+        // Not while a switch or a pull moves the branches.
+        let lock = self.sync_lock(&root);
+        let _guard = lock.lock().await;
+        let target = project.board.target.trim();
+        let from = if project.board.agents_from_target && !target.is_empty() {
+            let (from, why) = agent_start(&root, target).await;
+            *notice = why;
+            from
+        } else {
+            None
+        };
+        let base = match &from {
+            Some(b) => b.clone(),
+            None => git::head_branch(&root).await,
+        };
+        if base.is_empty() || base == "HEAD" {
+            bail!(tr!(
+                "le dépôt n'a pas encore de commit : impossible de créer un worktree",
+                "the repository has no commit yet: a worktree can’t be created"
+            ));
+        }
+        let start = from.map_or_else(|| "HEAD".to_string(), |b| format!("refs/heads/{b}"));
+        git::branch_create(&root, name, &start).await?;
+        match git::worktree_add_existing(&project.path, &project.worktrees_root(), held, name).await
+        {
+            Ok((path, branch)) => Ok((path, branch, base)),
+            Err(e) => {
+                let _ = git::branch_delete(&root, name, true).await;
+                Err(e)
+            }
+        }
     }
 
     /// Merges the agent's branch into its base branch, in the project's folder. When the folder is

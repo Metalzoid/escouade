@@ -31,7 +31,7 @@ Four project settings decide the location and the names (Settings › Projects, 
 | “Tickets’ branch prefix” | `ticket/` | A ticket’s branch, the one its pull request comes from, is called `<prefix><key>`. Empty, it is its key alone. |
 | “Files copied into worktrees” | `.env*` | The files that git ignores and that a new worktree takes from the project (see [below](#copied-files)). |
 
-The worktree’s folder is `<worktrees folder>/<agent name>`, on a new branch `<prefix><agent name>`. If either already exists, Escouade adds `-2`, `-3`… An agent is first called `agent-1`, `agent-2`…; when Escouade names it from its first message (for example `refacto-auth`), its branch becomes `escouade/refacto-auth` if that name is free, while the folder keeps its first name. A name you give yourself never changes the branch. The agent’s card shows the branch without its prefix (`⎇ refacto-auth`), and its full name on hover.
+The worktree’s folder is `<worktrees folder>/<agent name>`, on a new branch `<prefix><agent name>`. If either already exists, Escouade adds `-2`, `-3`… An agent is first called `agent-1`, `agent-2`…; when Escouade names it from its first message (for example `refacto-auth`), its branch becomes `escouade/refacto-auth` if that name is free, while the folder keeps its first name. A name you give it yourself changes its branch too, on the same terms, unless the branch is pushed already (it has an upstream, or the remote has a branch of that name): the branch then keeps its name, and a notification says so. The folder never follows the name: for a folder named after the branch, create the agent with “New agent on a branch…” (below). The agent’s card shows the branch without its prefix (`⎇ refacto-auth`), and its full name on hover.
 
 The worktree starts from the commit the project folder is on at that moment. That folder’s branch becomes the agent’s **base branch**: it is the one that the merge and “Integrate” aim at.
 
@@ -97,17 +97,29 @@ The “Before a worktree is removed” list holds what must be undone outside th
 
 These commands run when an agent is deleted with its worktree, when the Kanban cleans up the worktree of a done or deleted ticket, and with “Clean up”. Each one runs even if the previous one failed, with 5 minutes at most, and their output isn’t shown. If the project uses isola (an `.isola.toml` file), `isola destroy` runs afterwards. A problem is reported once the agent is deleted: “Agent deleted, but the worktree teardown failed on …”.
 
-## Working on a branch that already exists
+## Working on a branch you choose
 
-An agent can also work in a worktree on a branch that already exists, instead of creating a new one:
+An agent can also work in a worktree on a branch you choose, one that already exists or one you create for it:
 
-- “New agent on a branch…” in the menu of the ▾ button, to the right of “New agent”, opens the branch picker (“Choose a branch”);
+- “New agent on a branch…” in the menu of the ▾ button, to the right of “New agent”, opens the branch picker (“Choose a branch”); a name typed that no branch has offers “Create the branch “feat/signup” and start an agent on it”;
 - in the status bar’s branch picker, a right-click on a branch offers “Start an agent on this branch”;
 - in a ticket’s form, the “Branch” field offers “Take up an existing branch…”.
 
 A remote branch is taken up through the local branch that tracks it, created if there is none. The project folder isn’t touched. Three branches are refused, with the reason: the project folder’s branch, the Kanban’s target branch (tickets are merged into it), and one that another worktree already holds.
 
-That branch is the agent’s, but Escouade never creates or deletes it: when you delete the agent, the box offers “Also delete the worktree (the branch … is kept)”. Its base branch is the Kanban’s target branch if it exists, otherwise the project folder’s branch. For a ticket, the entry’s tooltip says “Escouade never deletes this branch, even once the ticket is approved.” Branches are covered in [the branches page](branches).
+The worktree’s folder is named after the branch, its last part: `feat/login` gives `.claude/worktrees/login`, then `login-2` if that folder is taken. A setup script can use it for a local address (`login.localhost`) or a database name, and so tell which instance runs on which branch. The name keeps the branch as it is, capitals, `_` and dots included; `ESCOUADE_BRANCH` gives the whole branch.
+
+### Creating the branch from the picker
+
+Type the new branch’s name in the picker of “New agent on a branch…”. If no branch, local or remote, has that name, the last row offers “Create the branch “feat/signup” and start an agent on it”, followed by where it starts (“from main”). The branch starts where a new agent does: from the Kanban’s target branch if “Agents start from the target branch” is on (see [the Kanban settings](settings-board)), otherwise from the project folder’s branch. The line under the list says so when the cursor is on the entry.
+
+The name is checked the way git does. A name git refuses greys the entry out, with the reason, and nothing is created. A name that starts like a branch of a remote (`origin/…`) is refused too.
+
+A branch created this way belongs to the agent, like a new agent’s: deleting the agent with its worktree deletes it too. It always keeps the name you gave it, even when the agent is named or renamed.
+
+### A branch that was already there
+
+A branch that was there before the agent is never created or deleted by Escouade: when you delete the agent, the box offers “Also delete the worktree (the branch … is kept)”. Its base branch is the Kanban’s target branch if it exists, otherwise the project folder’s branch. For a ticket, the entry’s tooltip says “Escouade never deletes this branch, even once the ticket is approved.” Branches are covered in [the branches page](branches).
 
 ## Merging into the base branch
 

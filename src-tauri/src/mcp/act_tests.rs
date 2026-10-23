@@ -3291,6 +3291,7 @@ async fn a_conflict_is_not_handed_over_while_its_agents_account_is_held_back_and
             branch: "ticket/dem-3".into(),
             base_branch: "main".into(),
             existing: false,
+            named_branch: false,
         });
     }
     let why = turned_down(&h, &c, "resolve_conflict", ask(&busy), "refused", &busy).await;

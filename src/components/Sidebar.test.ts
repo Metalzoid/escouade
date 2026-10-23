@@ -118,6 +118,22 @@ describe('Sidebar', () => {
     expect(backend.called('rename_agent')).toEqual([{ cmd: 'rename_agent', args: { id: 'a1', name: 'auth-jwt' } }]);
   });
 
+  it('says why the agent’s branch kept its name, the agent renamed all the same, and nothing when it followed', async () => {
+    const kept = 'La branche « escouade/refacto-auth » garde son nom : elle est déjà poussée.';
+    fakeBackend({ rename_agent: (a: any) => (a.name === 'auth-jwt' ? kept : null) });
+    render(Sidebar, { project: project() });
+    await userEvent.dblClick(screen.getByText('refacto-auth'));
+    await userEvent.clear(screen.getByDisplayValue('refacto-auth'));
+    await userEvent.type(screen.getByDisplayValue(''), 'auth-jwt{Enter}');
+    await vi.waitFor(() => expect(app.toasts).toEqual([expect.objectContaining({ text: kept, kind: 'info' })]));
+    app.toasts = [];
+    await userEvent.dblClick(screen.getByText('refacto-auth'));
+    await userEvent.clear(screen.getByDisplayValue('refacto-auth'));
+    await userEvent.type(screen.getByDisplayValue(''), 'autre{Enter}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(app.toasts).toEqual([]);
+  });
+
   it('cancels a rename with Escape', async () => {
     const backend = fakeBackend();
     render(Sidebar, { project: project() });
@@ -171,6 +187,26 @@ describe('Sidebar', () => {
       });
       await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
       expect(screen.queryByRole('dialog', { name: 'Choisir une branche' })).toBeNull();
+    });
+
+    it('creates the branch typed in the picker, and starts the agent on it (ESC-155)', async () => {
+      const backend = fakeBackend({ ...handlers(), branch_check: () => null });
+      render(Sidebar, { project: project() });
+      await userEvent.click(more());
+      menu.open!.items[0].onClick!();
+      menu.close();
+      const picker = await screen.findByRole('dialog', { name: 'Choisir une branche' });
+      await within(picker).findByText('feat/login');
+      await userEvent.keyboard('feat/signup');
+      await userEvent.click(await within(picker).findByRole('option', { name: /Créer la branche « feat\/signup »/ }));
+      expect(backend.called('create_agent_on_branch')[0].args).toEqual({
+        projectId: 'p1',
+        branch: 'feat/signup',
+        model: null,
+        engine: null,
+        create: true,
+      });
+      await vi.waitFor(() => expect(app.agent?.id).toBe('a9'));
     });
 
     it('cannot give it the branch of the project’s folder', async () => {

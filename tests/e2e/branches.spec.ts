@@ -78,3 +78,48 @@ test('the agents start from the target branch, brought up to date from the remot
   await expect(page.getByRole('button', { name: /agent-2/ }).first()).toBeVisible();
   expect(git(app.repo, 'worktree', 'list').split('\n')).toHaveLength(2);
 });
+
+test('« Nouvel agent sur une branche… » creates the branch typed, and the agent’s worktree is named after it (ESC-155)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo, { firstAgent: false });
+  const newOn = async (name: string) => {
+    await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+    await page.getByRole('menuitem', { name: 'Nouvel agent sur une branche…' }).click();
+    const picker = page.getByRole('dialog', { name: 'Choisir une branche' });
+    await picker.getByRole('combobox').fill(name);
+    const create = picker.getByRole('option', { name: new RegExp(`Créer la branche « ${name.replace('/', '\/')} » et y lancer un agent`) });
+    // Where it starts is said: the folder's branch here.
+    await expect(create).toContainText('depuis main');
+    await create.click();
+    await expect(picker).toBeHidden();
+  };
+  /** The folder of the worktree that has `branch`, as git lists it. */
+  const folderOf = (branch: string) => {
+    const blocks = git(app.repo, 'worktree', 'list', '--porcelain').split(/\r?\n\r?\n/);
+    const block = blocks.find((b) => b.includes(`branch refs/heads/${branch}`));
+    return block?.split(/\r?\n/)[0].replace(/^worktree /, '') ?? '';
+  };
+
+  await newOn('feat/signup');
+  await expect.poll(() => folderOf('feat/signup')).toMatch(/\.claude\/worktrees\/signup$/);
+  expect(git(app.repo, 'rev-parse', 'feat/signup')).toBe(git(app.repo, 'rev-parse', 'main'));
+  expect(git(folderOf('feat/signup'), 'branch', '--show-current')).toBe('feat/signup');
+  // The folder stays on main, and the agent is shown.
+  expect(git(app.repo, 'branch', '--show-current')).toBe('main');
+  await expect(page.getByRole('button', { name: /agent-1/ }).first()).toBeVisible();
+
+  // Another branch ending the same way: the next folder.
+  await newOn('fix/signup');
+  await expect.poll(() => folderOf('fix/signup')).toMatch(/\.claude\/worktrees\/signup-2$/);
+
+  // A name git refuses is said, and nothing is made.
+  await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
+  await page.getByRole('menuitem', { name: 'Nouvel agent sur une branche…' }).click();
+  const picker = page.getByRole('dialog', { name: 'Choisir une branche' });
+  await picker.getByRole('combobox').fill('bad name');
+  await expect(picker.getByRole('option', { name: /Créer la branche « bad name »/ })).toHaveAttribute('aria-disabled', 'true');
+  await expect(picker.getByText('« bad name » n’est pas un nom de branche valide', { exact: false })).toBeVisible();
+  expect(git(app.repo, 'worktree', 'list').split('\n')).toHaveLength(3);
+});

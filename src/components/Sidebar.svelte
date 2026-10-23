@@ -85,7 +85,10 @@
     if (renaming !== a.id) return;
     const v = renameValue.trim();
     renaming = null;
-    if (v && v !== a.name) await app.run(api.renameAgent(a.id, v));
+    if (!v || v === a.name) return;
+    // Its branch follows the name, unless it must keep its own: said, the agent renamed all the same.
+    const kept = await app.run(api.renameAgent(a.id, v));
+    if (kept) app.toast(kept, 'info');
   }
 
   function agentMenu(e: MouseEvent, a: Agent) {
@@ -841,6 +844,7 @@
     mode="pick"
     onclose={() => (pickingBranch = false)}
     onpick={(b) => startAgentOn(project.id, b.name)}
+    oncreate={(name) => startAgentOn(project.id, name, true)}
   />
 {/if}
 

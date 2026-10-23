@@ -379,6 +379,27 @@ describe('startAgentOn', () => {
     expect(app.toasts).toEqual([]);
   });
 
+  it('creates the branch first when asked, and says in a toast a name git refuses', async () => {
+    const backend = fakeBackend({ create_agent_on_branch: (a: any) => agent({ id: 'a9', projectId: a.projectId }) });
+    expect(await startAgentOn('p1', 'feat/signup', true)).toBe(true);
+    expect(backend.called('create_agent_on_branch')[0].args).toEqual({
+      projectId: 'p1',
+      branch: 'feat/signup',
+      model: null,
+      engine: null,
+      create: true,
+    });
+    resetApp({ agents: [] });
+    const refused = '« bad name » n’est pas un nom de branche valide.';
+    fakeBackend({
+      create_agent_on_branch: () => {
+        throw refused;
+      },
+    });
+    expect(await startAgentOn('p1', 'bad name', true)).toBe(false);
+    expect(app.toasts).toEqual([expect.objectContaining({ text: refused, kind: 'error' })]);
+  });
+
   it('tells in a toast why the branch was refused, in words or by its code, and starts nothing', async () => {
     const refusals = [
       ['C’est la branche du dossier du projet : un agent sans worktree y travaille déjà, ou change de branche d’abord.'],

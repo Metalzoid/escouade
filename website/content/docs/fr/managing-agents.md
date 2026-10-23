@@ -14,7 +14,7 @@ Chaque agent est une session Claude Code : une conversation, un modèle, un effo
 |---|---|
 | Créer un agent dans le projet affiché | `Ctrl+N`, ou le bouton « + Nouvel agent » en haut de la liste |
 | Créer le premier agent d’un projet qui n’en a pas | « Créer un agent » dans la liste vide, ou « Nouvel agent » au milieu de la fenêtre (« Aucun agent dans ce projet. ») |
-| Travailler sur une branche qui existe déjà | Le bouton ▾ à droite de « Nouvel agent » (« Autres façons de créer un agent »), puis « Nouvel agent sur une branche… » : choisis la branche dans le sélecteur |
+| Travailler sur une branche qui existe déjà, ou sur une nouvelle branche que tu nommes | Le bouton ▾ à droite de « Nouvel agent » (« Autres façons de créer un agent »), puis « Nouvel agent sur une branche… » : choisis la branche dans le sélecteur, ou tapes-y le nom d’une nouvelle |
 | Créer un agent sans worktree, ou dans un worktree, une fois | Le bouton ▾ à droite de « Nouvel agent », puis « Nouvel agent sans worktree » (projet à « Un worktree par agent ») ou « Nouvel agent dans un worktree » (les autres) |
 | Partir d’une branche depuis le sélecteur de branches | Clic droit sur une branche, puis « Lancer un agent sur cette branche » |
 | Créer un agent en même temps qu’un projet | Dans la fenêtre « Nouveau projet », l’interrupteur « Créer un premier agent » (activé par défaut) propose aussi le modèle de cet agent |
@@ -30,7 +30,7 @@ Les agents de ticket sont créés par le Kanban (voir [le Kanban](board)), et un
 Un nouvel agent s’appelle `agent-1`, `agent-2`… Dès que tu lui envoies son premier message, Escouade demande à Haiku un nom court pour la tâche, en minuscules et sans accents, par exemple `refacto-auth`. Ce nom remplace `agent-N` dans la liste après quelques secondes ; s’il est déjà pris dans le projet, Escouade ajoute `-2`, `-3`…
 
 - Un message qui est une commande de Claude Code sans rien à en tirer (`/clear`, `/model sonnet`, un skill sans argument) ne nomme pas l’agent : c’est le message suivant qui le fait. Pour un skill ou une commande personnalisée avec des arguments, le texte de la commande, sans la barre oblique, sert de base au nom.
-- Si l’agent travaille dans un worktree que ce même agent a créé, sa branche prend le nom trouvé (`escouade/refacto-auth` avec le préfixe par défaut), tant que ce nom de branche est libre. Une branche qui existait avant l’agent garde son nom.
+- Si l’agent travaille dans un worktree que ce même agent a créé, sa branche prend le nom trouvé (`escouade/refacto-auth` avec le préfixe par défaut), tant que ce nom de branche est libre. Une branche qui existait avant l’agent, une branche que tu as nommée, une branche avec une PR ou une branche déjà poussée garde son nom.
 - Si la réponse de Haiku n’est pas un nom utilisable, l’agent garde `agent-N`.
 - Un agent que tu as renommé, ou qui est la copie d’un autre, n’est jamais renommé automatiquement.
 
@@ -87,7 +87,7 @@ Par défaut, un agent travaille dans le dossier du projet, comme toi. Avec l’o
 - La carte de l’agent affiche sa branche après un `⎇`.
 - Si le projet a des commandes de préparation (dépendances, code généré…), elles tournent dans le nouveau worktree avant le premier message de l’agent : la carte dit « Préparation… », et ton premier message part une fois la préparation finie.
 - Si le worktree ne peut pas être créé (un dépôt sans commit, par exemple), l’agent travaille dans le dossier du projet et la conversation te le dit.
-- Avec « Nouvel agent sur une branche… », l’agent travaille dans un worktree sur une branche **qui existe déjà**. Ce ne peut pas être la branche du dossier du projet, ni la branche cible du Kanban, ni une branche qu’un autre worktree occupe. Supprimer cet agent ne supprime jamais cette branche.
+- Avec « Nouvel agent sur une branche… », l’agent travaille dans un worktree sur une branche **qui existe déjà**, ou sur une branche que le sélecteur crée sous le nom que tu tapes. Ce ne peut pas être la branche du dossier du projet, ni la branche cible du Kanban, ni une branche qu’un autre worktree occupe. Supprimer cet agent ne supprime jamais une branche qui existait déjà ; celle créée pour lui part avec son worktree. Dans les deux cas, le dossier du worktree porte le nom de la branche (`feat/login` donne `login`).
 
 Tout le détail est dans [les worktrees](worktrees) et [les branches](branches).
 
@@ -123,7 +123,7 @@ Un clic droit sur la carte d’un agent ouvre son menu.
 
 | Entrée | Ce qu’elle fait |
 |---|---|
-| Renommer | Le nom devient un champ : `Entrée` valide, `Échap` annule. Un double-clic sur le nom de la carte fait la même chose ; un double-clic sur le nom dans l’en-tête de la conversation ouvre une fenêtre « Renommer l’agent ». Renommer ne change pas la branche du worktree. |
+| Renommer | Le nom devient un champ : `Entrée` valide, `Échap` annule. Un double-clic sur le nom de la carte fait la même chose ; un double-clic sur le nom dans l’en-tête de la conversation ouvre une fenêtre « Renommer l’agent ». La branche du worktree prend le nouveau nom (`escouade/<nom>`), sauf une branche qui existait avant l’agent, une branche que tu as nommée, une branche avec une PR, une branche déjà poussée ou un nom de branche déjà pris : une notification le dit, et l’agent est renommé quand même. Le dossier du worktree ne change pas. |
 | Dupliquer la conversation | Crée une copie : « nom (copie) », puis « (copie 2) »… Voir plus bas. Grisée pendant un tour (« Attends la fin de son tour. »). Absente pour un agent archivé. |
 | Archiver | Range l’agent (« garde la conversation »). Voir plus bas. |
 | Restaurer | Remet un agent archivé dans la liste. |

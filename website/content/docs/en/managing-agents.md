@@ -15,7 +15,7 @@ Each agent is a Claude Code session: a conversation, a model, an effort, a permi
 | Create an agent in the project on screen | `Ctrl+N`, or the “+ New agent” button at the top of the list |
 | Create the first agent of a project that has none | “Create an agent” in the empty list, or “New agent” in the middle of the window (“No agents in this project.”) |
 | Make an agent without a worktree, or in one, once | The ▾ button to the right of “New agent”, then “New agent without a worktree” (project with “One worktree per agent”) or “New agent in a worktree” (the others) |
-| Work on a branch that already exists | The ▾ button to the right of “New agent” (“Other ways to create an agent”), then “New agent on a branch…”: pick the branch in the picker |
+| Work on a branch that already exists, or on a new branch you name | The ▾ button to the right of “New agent” (“Other ways to create an agent”), then “New agent on a branch…”: pick the branch in the picker, or type a new one’s name there |
 | Start from a branch in the branch picker | Right-click a branch, then “Start an agent on this branch” |
 | Create an agent along with a project | In the “New project” window, the “Create a first agent” switch (on by default) also offers the model for that agent |
 
@@ -30,7 +30,7 @@ Ticket agents are created by the Kanban (see [the Kanban](board)), and an agent 
 A new agent is called `agent-1`, `agent-2`… As soon as you send it its first message, Escouade asks Haiku for a short name for the task, in lowercase and without accents, for example `refacto-auth`. That name replaces `agent-N` in the list after a few seconds; if it’s already taken in the project, Escouade adds `-2`, `-3`…
 
 - A message that is a Claude Code command with nothing to draw a name from (`/clear`, `/model sonnet`, a skill with no argument) doesn’t name the agent: the next message does. For a skill or custom command with arguments, the text of the command, without the slash, is the basis of the name.
-- If the agent works in a worktree that this same agent created, its branch takes the name that was found (`escouade/refacto-auth` with the default prefix), as long as that branch name is free. A branch that existed before the agent keeps its name.
+- If the agent works in a worktree that this same agent created, its branch takes the name that was found (`escouade/refacto-auth` with the default prefix), as long as that branch name is free. A branch that existed before the agent, a branch you named, a branch with a PR or a branch pushed already keeps its name.
 - If Haiku’s answer isn’t a usable name, the agent keeps `agent-N`.
 - An agent you renamed, or that is a copy of another, is never renamed automatically.
 
@@ -87,7 +87,7 @@ By default, an agent works in the project’s folder, like you. With the “One 
 - The agent’s card shows its branch after a `⎇`.
 - If the project has setup commands (dependencies, generated code…), they run in the new worktree before the agent’s first message: the card says “Setting up…”, and your first message goes out once the setup is done.
 - If the worktree can’t be created (a repository with no commit, for example), the agent works in the project’s folder and the conversation tells you so.
-- With “New agent on a branch…”, the agent works in a worktree on a branch that **already exists**. It can’t be the branch of the project’s folder, nor the Kanban’s target branch, nor a branch another worktree holds. Deleting this agent never deletes that branch.
+- With “New agent on a branch…”, the agent works in a worktree on a branch that **already exists**, or on a branch the picker creates under the name you type. It can’t be the branch of the project’s folder, nor the Kanban’s target branch, nor a branch another worktree holds. Deleting this agent never deletes a branch that was already there; the one created for it goes with its worktree. Either way, the worktree’s folder is named after the branch (`feat/login` gives `login`).
 
 The full details are in [worktrees](worktrees) and [branches](branches).
 
@@ -123,7 +123,7 @@ A right-click on an agent’s card opens its menu.
 
 | Entry | What it does |
 |---|---|
-| Rename | The name becomes a field: `Enter` confirms, `Esc` cancels. A double-click on the card’s name does the same; a double-click on the name in the conversation header opens a “Rename the agent” window. Renaming doesn’t change the worktree’s branch. |
+| Rename | The name becomes a field: `Enter` confirms, `Esc` cancels. A double-click on the card’s name does the same; a double-click on the name in the conversation header opens a “Rename the agent” window. The worktree’s branch takes the new name (`escouade/<name>`), except a branch that was there before the agent, a branch you named, a branch with a PR, a branch pushed already, or a branch name already taken: a notification says so, and the agent is renamed all the same. The worktree’s folder doesn’t change. |
 | Duplicate the conversation | Creates a copy: “name (copy)”, then “(copy 2)”… See below. Grayed out during a turn (“Wait for its turn to end.”). Absent for an archived agent. |
 | Archive | Puts the agent away (“keeps the conversation”). See below. |
 | Restore | Puts an archived agent back in the list. |

@@ -1141,6 +1141,322 @@ async fn an_agent_is_refused_the_branch_of_the_folder_or_of_another_worktree_and
     );
 }
 
+#[tokio::test]
+async fn an_agent_on_a_new_branch_starts_where_a_new_agent_does_in_a_folder_named_after_it() {
+    let h = harness("esc155-new-branch");
+    let (p, r) = h.project(false).await;
+    // The folder is on a branch of its own: a new agent starts from it, and so does this one.
+    git(&r, &["switch", "-qc", "work"]);
+    commit_file(&r, "work.txt", "work\n");
+    let a = h
+        .core
+        .create_agent_on_new_branch(&p.id, "feat/signup", None)
+        .await
+        .unwrap();
+    let wt = a.meta.worktree.clone().unwrap();
+    // Its own branch (`existing` false), named as asked, toward the folder's branch.
+    assert_eq!(
+        (wt.branch.as_str(), wt.base_branch.as_str(), wt.existing),
+        ("feat/signup", "work", false)
+    );
+    assert!(Path::new(&wt.path).ends_with(".claude/worktrees/signup"));
+    assert_eq!(a.meta.cwd, wt.path);
+    assert_eq!(
+        git(&r, &["rev-parse", "feat/signup"]),
+        git(&r, &["rev-parse", "work"])
+    );
+    assert!(Path::new(&wt.path).join("work.txt").exists());
+    assert_eq!(current(&r), "work");
+    assert_eq!(h.core.ui.read().selected_agent.get(&p.id), Some(&a.meta.id));
+    // The same folder rule as for an existing branch, collisions included: `signup` is taken.
+    let b = h
+        .core
+        .create_agent_on_new_branch(&p.id, "fix/signup", None)
+        .await
+        .unwrap();
+    assert!(Path::new(&b.meta.worktree.unwrap().path).ends_with(".claude/worktrees/signup-2"));
+    branch_adding(&r, "old/signup", "old.txt");
+    git(&r, &["switch", "-q", "work"]);
+    let c = h
+        .core
+        .create_agent_on_branch(&p.id, "old/signup", None)
+        .await
+        .unwrap();
+    assert!(Path::new(&c.meta.worktree.unwrap().path).ends_with(".claude/worktrees/signup-3"));
+    // « Les agents partent de la branche cible »: from the board's target, its base.
+    h.core
+        .board_set(
+            &p.id,
+            BoardSettings {
+                target: "main".into(),
+                agents_from_target: true,
+                ..p.board.clone()
+            },
+        )
+        .unwrap();
+    let d = h
+        .core
+        .create_agent_on_new_branch(&p.id, "feat/from-target", None)
+        .await
+        .unwrap();
+    let wt = d.meta.worktree.unwrap();
+    assert_eq!(wt.base_branch, "main");
+    assert_eq!(
+        git(&r, &["rev-parse", "feat/from-target"]),
+        git(&r, &["rev-parse", "main"])
+    );
+    assert!(!Path::new(&wt.path).join("work.txt").exists());
+}
+
+#[tokio::test]
+async fn an_agent_is_refused_a_new_branch_git_would_refuse_and_nothing_is_made() {
+    let h = harness("esc155-new-branch-refused");
+    let (p, r) = h.project(false).await;
+    remote(&h, &r);
+    branch_adding(&r, "feat/taken", "taken.txt");
+    let (agents, worktrees, branches) = (
+        h.core.agents.read().len(),
+        worktrees_of(&r),
+        git(&r, &["branch", "--format=%(refname:short)"]),
+    );
+    let refused = |name: &'static str| {
+        let (core, id) = (h.core.clone(), p.id.clone());
+        async move {
+            core.create_agent_on_new_branch(&id, name, None)
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+    };
+    assert_eq!(
+        refused("feat/taken").await,
+        "La branche « feat/taken » existe déjà."
+    );
+    for name in ["bad name", "a..b", "-x", "feat/", "x.lock", "@"] {
+        assert!(
+            refused(name)
+                .await
+                .contains("n’est pas un nom de branche valide"),
+            "{name:?}"
+        );
+    }
+    assert_eq!(refused("").await, "Donne un nom à la branche.");
+    assert!(refused("origin/new")
+        .await
+        .contains("dépôt distant « origin »"));
+    assert_eq!(
+        (
+            h.core.agents.read().len(),
+            worktrees_of(&r),
+            git(&r, &["branch", "--format=%(refname:short)"])
+        ),
+        (agents, worktrees, branches)
+    );
+}
+
+#[tokio::test]
+async fn the_new_branch_of_an_agent_keeps_its_name_and_goes_with_its_worktree() {
+    let h = harness("esc155-new-branch-delete");
+    let (p, r) = h.project(false).await;
+    let a = h
+        .core
+        .create_agent_on_new_branch(&p.id, "feat/mine", None)
+        .await
+        .unwrap()
+        .meta
+        .id;
+    // Named after its first message, it keeps the branch's name: the user chose it.
+    h.turn(&a, "Create the hello file").await;
+    h.wait("named", |h| h.agent(&a).named).await;
+    let wt = h.agent(&a).worktree.unwrap();
+    assert_eq!(wt.branch, "feat/mine");
+    assert!(exists(&r, "feat/mine"));
+    // The agent's, like an ordinary agent's: it goes with the worktree.
+    h.core.delete_agent(&a, true).await.unwrap();
+    assert!(!Path::new(&wt.path).exists());
+    assert!(!exists(&r, "feat/mine"));
+}
+
+#[tokio::test]
+async fn renaming_an_agent_by_hand_renames_its_own_branch_after_it() {
+    let h = harness("esc155-rename-branch");
+    let (p, r) = h.project(true).await;
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let old = h.agent(&a).worktree.unwrap().branch;
+    // The branch first, under the name's slug; the agent keeps the name as typed; nothing to say.
+    let said = h.core.rename_agent(&a, "Refonte de l'auth").await.unwrap();
+    assert_eq!(said, None);
+    let wt = h.agent(&a).worktree.unwrap();
+    assert_eq!(wt.branch, "escouade/refonte-de-l-auth");
+    assert_eq!(
+        git(Path::new(&wt.path), &["branch", "--show-current"]),
+        "escouade/refonte-de-l-auth"
+    );
+    assert!(!exists(&r, &old));
+    assert_eq!(h.agent(&a).name, "Refonte de l'auth");
+    // Its folder stays where it is.
+    assert!(Path::new(&wt.path).exists());
+    // The same name again: nothing moves, nothing to say.
+    assert_eq!(
+        h.core.rename_agent(&a, "refonte de l'auth").await.unwrap(),
+        None
+    );
+    assert_eq!(
+        h.agent(&a).worktree.unwrap().branch,
+        "escouade/refonte-de-l-auth"
+    );
+}
+
+/// An agent of its own in a worktree, and what renaming an agent by hand says.
+async fn kept_harness(name: &str) -> (Harness, Project, PathBuf, String) {
+    let h = harness(name);
+    let (p, r) = h.project(true).await;
+    remote(&h, &r);
+    let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    (h, p, r, a)
+}
+
+async fn rename_by_hand(h: &Harness, id: &str, name: &str) -> Option<String> {
+    let said = h.core.rename_agent(id, name).await.unwrap();
+    // Whatever becomes of the branch, the agent is renamed.
+    assert_eq!(h.agent(id).name, name);
+    said
+}
+
+#[tokio::test]
+async fn renaming_an_agent_by_hand_keeps_its_branch_when_the_name_is_taken() {
+    let (h, _, r, a) = kept_harness("esc155-kept-taken").await;
+    let before = h.agent(&a).worktree.unwrap().branch;
+    git(&r, &["branch", "escouade/pris"]);
+    assert_eq!(
+        rename_by_hand(&h, &a, "pris").await,
+        Some(format!(
+            "La branche « {before} » garde son nom : « escouade/pris » existe déjà."
+        ))
+    );
+    assert_eq!(h.agent(&a).worktree.unwrap().branch, before);
+}
+
+#[tokio::test]
+async fn renaming_an_agent_by_hand_keeps_its_branch_once_pushed() {
+    let (h, p, r, a) = kept_harness("esc155-kept-pushed").await;
+    // With its upstream.
+    let wt = h.agent(&a).worktree.unwrap();
+    git(Path::new(&wt.path), &["push", "-q", "-u", "origin", "HEAD"]);
+    assert_eq!(
+        rename_by_hand(&h, &a, "poussee").await,
+        Some(format!(
+            "La branche « {} » garde son nom : elle est déjà poussée.",
+            wt.branch
+        ))
+    );
+    assert_eq!(h.agent(&a).worktree.unwrap().branch, wt.branch);
+    // Without an upstream: the remote has it.
+    let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+    let branch = h.agent(&b).worktree.unwrap().branch;
+    git(&r, &["push", "-q", "origin", &branch]);
+    assert!(rename_by_hand(&h, &b, "sur-le-remote")
+        .await
+        .unwrap()
+        .ends_with("elle est déjà poussée."));
+    assert_eq!(h.agent(&b).worktree.unwrap().branch, branch);
+}
+
+#[tokio::test]
+async fn renaming_an_agent_by_hand_keeps_its_branch_with_a_pull_request() {
+    let (h, _, _, a) = kept_harness("esc155-kept-pr").await;
+    let before = h.agent(&a).worktree.unwrap().branch;
+    h.core.agent(&a).unwrap().lock().meta.prs = vec![crate::forge::PullRequest {
+        number: 7,
+        ..Default::default()
+    }];
+    assert_eq!(
+        rename_by_hand(&h, &a, "avec-pr").await,
+        Some(format!(
+            "La branche « {before} » garde son nom : elle a une pull request."
+        ))
+    );
+    assert_eq!(h.agent(&a).worktree.unwrap().branch, before);
+}
+
+#[tokio::test]
+async fn renaming_an_agent_by_hand_keeps_a_branch_the_user_had_or_named() {
+    let (h, p, r, _) = kept_harness("esc155-kept-existing").await;
+    // A branch that was there before the agent.
+    branch_adding(&r, "feat/mine", "mine.txt");
+    let d = h
+        .core
+        .create_agent_on_branch(&p.id, "feat/mine", None)
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert_eq!(
+        rename_by_hand(&h, &d, "existante").await.as_deref(),
+        Some("La branche « feat/mine » garde son nom : elle existait avant l’agent.")
+    );
+    assert_eq!(h.agent(&d).worktree.unwrap().branch, "feat/mine");
+    // One made under the name the user typed.
+    let e = h
+        .core
+        .create_agent_on_new_branch(&p.id, "feat/typed", None)
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert_eq!(
+        rename_by_hand(&h, &e, "tapee").await.as_deref(),
+        Some("La branche « feat/typed » garde le nom que tu lui as donné.")
+    );
+    assert_eq!(h.agent(&e).worktree.unwrap().branch, "feat/typed");
+    // An agent without a worktree: nothing to say.
+    let f = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                isolated: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    assert_eq!(rename_by_hand(&h, &f, "sans-worktree").await, None);
+}
+
+#[test]
+fn why_a_branch_keeps_its_name_reads_in_both_languages() {
+    use crate::core::{branch_kept, BranchKept};
+    use crate::i18n::Lang::{En, Fr};
+    let said = |lang, why| branch_kept(lang, "escouade/a", &why);
+    assert_eq!(
+        said(En, BranchKept::Existing),
+        "The branch “escouade/a” keeps its name: it was there before the agent."
+    );
+    assert_eq!(
+        said(En, BranchKept::Typed),
+        "The branch “escouade/a” keeps the name you gave it."
+    );
+    assert_eq!(
+        said(En, BranchKept::PullRequest),
+        "The branch “escouade/a” keeps its name: it has a pull request."
+    );
+    assert_eq!(
+        said(En, BranchKept::Pushed),
+        "The branch “escouade/a” keeps its name: it’s pushed already."
+    );
+    assert_eq!(
+        said(En, BranchKept::Taken("escouade/b".into())),
+        "The branch “escouade/a” keeps its name: “escouade/b” already exists."
+    );
+    assert_eq!(
+        said(Fr, BranchKept::Failed("x".into())),
+        "La branche « escouade/a » garde son nom : x"
+    );
+}
+
 /// The board's target branch of the project, set as its Kanban settings do.
 fn target_is(h: &Harness, project_id: &str, branch: &str) {
     let mut board = h.core.project(project_id).unwrap().board;

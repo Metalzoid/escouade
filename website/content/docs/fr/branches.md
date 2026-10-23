@@ -102,7 +102,7 @@ La confirmation « Supprimer la branche distante « origin/feat/login » ? �
 
 Un agent ou un ticket peut travailler sur une branche qui existe déjà plutôt que sur une nouvelle :
 
-- « Nouvel agent sur une branche… », dans le menu du bouton ▾ à droite de « Nouvel agent », ouvre le sélecteur en mode « Choisir une branche » : il n’a ni les actions du pied ni les menus de ligne, et les branches impossibles à choisir sont grisées avec la raison ;
+- « Nouvel agent sur une branche… », dans le menu du bouton ▾ à droite de « Nouvel agent », ouvre le sélecteur en mode « Choisir une branche » : il n’a ni les actions du pied ni les menus de ligne, et les branches impossibles à choisir sont grisées avec la raison. Un nom tapé qu’aucune branche ne porte y propose aussi « Créer la branche « … » et y lancer un agent », depuis le point de départ d’un nouvel agent (voir [les worktrees](worktrees)) ;
 - dans le sélecteur de la barre d’état, « Lancer un agent sur cette branche » est dans le menu d’une ligne, sauf pour la branche du dossier du projet et celles qu’un worktree occupe ;
 - le champ « Branche » du formulaire d’un ticket propose « Reprendre une branche existante… ».
 

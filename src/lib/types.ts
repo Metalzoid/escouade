@@ -1008,6 +1008,8 @@ export interface Worktree {
   baseBranch: string;
   /** The branch was there before the agent (« Nouvel agent sur une branche… »): deleting the worktree leaves it. */
   existing?: boolean;
+  /** The branch was made for the agent under the name the user typed (ESC-155): the agent's, never renamed. */
+  namedBranch?: boolean;
 }
 
 /** What « Intégrer <base> » did: the base was in the agent's branch already, went in, or stopped on conflicts the agent was asked to resolve (a rebase is undone). */
