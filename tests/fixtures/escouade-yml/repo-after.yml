@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://escouade.dev/schemas/escouade.schema.json
+# Réglages d'Escouade partagés par l'équipe du projet : https://escouade.dev/docs/escouade-yml
+version: 1
+agents:
+  engine: claude
+worktrees:
+  per_agent: false
+  dir: ''
+  copy:
+    - .env*
+    - .vscode/settings.local.json
+  setup:
+    - command: npm ci
+      shell: pwsh
+    - command: npm ci
+      shell: pwsh
+      cwd: website
+    - command: npm ci
+      shell: pwsh
+      cwd: video
+    - command: cargo fetch --locked
+      shell: pwsh
+      cwd: src-tauri
+  teardown: []
+launch:
+  - name: Application
+    command: npm run tauri dev
+    shell: pwsh
+  - name: Site
+    command: npm run dev -- --host
+    shell: pwsh
+    cwd: website
+  - name: Vidéo
+    command: npm run studio
+    shell: pwsh
+    cwd: video
+git:
+  agent_branch_prefix: escouade/
+  ticket_branch_prefix: ticket/
+  commit_mode: agent
+  conventional_commits: true
+board:
+  on_approve: merge
+  target_branch: main
+  agents_from_target: false
+  merge_strategy: squash
+  draft_pr: false
+  test_command: ''
+  tests_before_approve: false
+  on_conflict: agent
+  remove_worktree: true

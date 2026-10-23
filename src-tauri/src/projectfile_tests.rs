@@ -455,6 +455,114 @@ fn values_that_need_quotes_come_back_as_they_were() {
     assert_eq!(r.values["board.target_branch"], json!("1.0"), "{text}");
 }
 
+/// The files of `tests/fixtures/escouade-yml/`, what `write` makes of them byte for byte. Prettier
+/// reads them too (`npm run format:check`): they are the proof its layout is the one it keeps.
+const EXPORT: &str = include_str!("../../tests/fixtures/escouade-yml/export.yml");
+const REPO_BEFORE: &str = include_str!("../../tests/fixtures/escouade-yml/repo-before.yml");
+const REPO_AFTER: &str = include_str!("../../tests/fixtures/escouade-yml/repo-after.yml");
+
+#[test]
+fn a_new_file_is_written_as_the_fixture_says() {
+    let mut p = full_project();
+    p.worktree_teardown.clear();
+    p.board.test_command = "npm test -- --grep 'a b' # all".into();
+    let text = pf::write(None, &pf::export_values(&p)).unwrap();
+    assert_eq!(text, EXPORT);
+}
+
+#[test]
+fn a_file_written_over_is_written_as_the_fixture_says_and_read_the_same() {
+    let copy = json!([".env*", ".vscode/settings.local.json"]);
+    let launch = json!([
+        { "name": "Application", "command": "npm run tauri dev", "shell": "pwsh" },
+        { "name": "Site", "command": "npm run dev -- --host", "shell": "pwsh", "cwd": "website" },
+        { "name": "Vidéo", "command": "npm run studio", "shell": "pwsh", "cwd": "video" },
+    ]);
+    let text = pf::write(
+        Some(REPO_BEFORE),
+        &[("worktrees.copy", copy.clone()), ("launch", launch)],
+    )
+    .unwrap();
+    assert_eq!(text, REPO_AFTER);
+    // Read as it was read before, the two changes apart.
+    let (before, after) = (read(REPO_BEFORE), read(&text));
+    assert!(after.warnings.is_empty(), "{:?}", after.warnings);
+    for k in before.values.keys() {
+        if !["launch", "worktrees.copy"].contains(&k.as_str()) {
+            assert_eq!(after.values[k], before.values[k], "{k}");
+        }
+    }
+    assert_eq!(after.values["worktrees.copy"], copy);
+    assert_eq!(
+        after.values["launch"][1]["command"],
+        json!("npm run dev -- --host")
+    );
+}
+
+#[test]
+fn a_list_the_author_put_at_the_margin_is_written_indented_too() {
+    let text = pf::write(
+        Some("version: 1\nlaunch:\n- name: a\n  command: b\nworktrees:\n  copy:\n  - x\n"),
+        &[
+            ("launch", json!([{ "name": "c", "command": "d" }])),
+            ("worktrees.copy", json!(["y"])),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        text,
+        "version: 1\nlaunch:\n  - name: c\n    command: d\nworktrees:\n  copy:\n    - y\n"
+    );
+}
+
+#[test]
+fn a_list_under_a_key_the_file_lacks_is_indented_as_one_it_replaces() {
+    let text = pf::write(
+        Some("version: 1\n"),
+        &[
+            ("launch", json!([{ "name": "c", "command": "d" }])),
+            ("worktrees.copy", json!(["y"])),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        text,
+        "version: 1\nlaunch:\n  - name: c\n    command: d\nworktrees:\n  copy:\n    - y\n"
+    );
+}
+
+#[test]
+fn a_text_is_quoted_only_where_yaml_needs_it() {
+    let copy = [
+        ".env*", "", "*.local", "a: b", "a #b", "true", "l'app", "- x", "[x]", "x:",
+    ];
+    let text = pf::write(None, &[("worktrees.copy", json!(copy))]).unwrap();
+    assert!(
+        text.contains(
+            "  copy:\n    - .env*\n    - ''\n    - '*.local'\n    - 'a: b'\n    - 'a #b'\n    - 'true'\n    - l'app\n    - '- x'\n    - '[x]'\n    - 'x:'\n"
+        ),
+        "{text}"
+    );
+    // An empty item is written (`''`) but read as no item at all, as the reader always did.
+    let back: Vec<&str> = copy.into_iter().filter(|s| !s.is_empty()).collect();
+    assert_eq!(read(&text).values["worktrees.copy"], json!(back));
+}
+
+/// The repository's own `.escouade.yml` is what Escouade writes: writing its values back over it
+/// changes nothing, and they read as they did.
+#[test]
+fn the_repository_s_file_is_what_escouade_writes_back() {
+    let text = include_str!("../../.escouade.yml");
+    let r = read(text);
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let values: Vec<(&str, Value)> = pf::KEYS
+        .iter()
+        .filter_map(|k| r.values.get(k.path).map(|v| (k.path, v.clone())))
+        .collect();
+    assert!(values.len() > 10);
+    assert_eq!(pf::write(Some(text), &values).unwrap(), text);
+}
+
 #[test]
 fn writing_over_a_file_keeps_its_comments_and_the_keys_it_does_not_know() {
     let existing = "# Our team's settings\nversion: 1\nworktrees:\n  # always isolated\n  per_agent: true\n  shiny_new: 3\nboard:\n  merge_strategy: squash # we like it flat\n";

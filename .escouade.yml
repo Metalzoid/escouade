@@ -7,7 +7,7 @@ worktrees:
   per_agent: false
   dir: ''
   copy:
-    - '.env*'
+    - .env*
   setup:
     - command: npm ci
       shell: pwsh

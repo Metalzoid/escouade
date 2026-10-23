@@ -20,7 +20,9 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
-use yaml_edit::{Document, Mapping, Sequence, YamlNode};
+use yaml_edit::{
+    CoreScalarType, Document, Mapping, ScalarStyle, ScalarType, ScalarValue, Sequence, YamlNode,
+};
 
 use crate::model::{CommitMode, EngineId, Project, RunCommand, WorktreeStep};
 
@@ -946,6 +948,67 @@ fn scalar_yaml(v: &Value) -> String {
     }
 }
 
+/// The text `s` as a plain scalar of the file, when YAML reads it back as `s` unquoted. yaml-edit
+/// quotes more than YAML needs (a `*` anywhere, for one) and takes `a: b` for plain, so the text
+/// is checked here, then read back by the parser, which keeps the node as it is written.
+fn plain_node(s: &str) -> Option<YamlNode> {
+    if !plain_safe(s) {
+        return None;
+    }
+    let doc = Document::from_str(&format!("k: {s}\n")).ok()?;
+    let node = doc.as_mapping()?.get("k")?;
+    let YamlNode::Scalar(sc) = &node else {
+        return None;
+    };
+    let value = ScalarValue::from_scalar(sc);
+    (value.style() == ScalarStyle::Plain
+        && value.scalar_type() == ScalarType::String
+        && value.value() == s)
+        .then_some(node)
+}
+
+/// Whether `s` may be written plain: no indicator where a plain scalar starts, no `: ` nor ` #`, no
+/// flow indicator, no control character, no word another type reads as (`yes`, a number…).
+fn plain_safe(s: &str) -> bool {
+    const INDICATORS: &[char] = &[
+        '-', '?', ':', ',', '[', ']', '{', '}', '#', '&', '*', '!', '|', '>', '\'', '"', '%', '@',
+        '`',
+    ];
+    const WORDS: &[&str] = &["true", "false", "yes", "no", "on", "off", "null", "~"];
+    !s.is_empty()
+        && !s.starts_with(INDICATORS)
+        && !s.starts_with("---")
+        && !s.starts_with("...")
+        && !s.starts_with([' ', '\t'])
+        && !s.ends_with([' ', '\t', ':'])
+        && !s.contains(": ")
+        && !s.contains(" #")
+        && !s.contains(['[', ']', '{', '}', ','])
+        && !s
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}' | '\u{FEFF}'))
+        && !WORDS.iter().any(|w| s.eq_ignore_ascii_case(w))
+        && s.parse::<f64>().is_err()
+        && matches!(ScalarValue::classify_plain(s), CoreScalarType::String)
+}
+
+/// `s` as the value of `name`: plain where `plain_node` allows it, quoted as yaml-edit quotes it
+/// otherwise.
+fn put_text(m: &Mapping, name: &str, s: &str) {
+    match plain_node(s) {
+        Some(node) => m.set(name, node),
+        None => m.set(name, ScalarValue::string(s)),
+    }
+}
+
+/// `s` as an item of a list, as `put_text` writes it.
+fn push_text(list: &Sequence, s: &str) {
+    match plain_node(s) {
+        Some(node) => list.push(node),
+        None => list.push(ScalarValue::string(s)),
+    }
+}
+
 /// An item of a list of steps or commands, without what is empty.
 fn item_mapping(v: &Value) -> Mapping {
     let m = Mapping::new();
@@ -953,11 +1016,21 @@ fn item_mapping(v: &Value) -> Mapping {
         for f in ["name", "command", "shell", "cwd"] {
             let s = o.get(f).map(str_of).unwrap_or_default();
             if !s.is_empty() {
-                m.set(f, s);
+                put_text(&m, f, &s);
             }
         }
     }
     m
+}
+
+/// A list set under a key the mapping does not have yet comes out with its items at the key's
+/// column; set in place of a value the key already holds, it is indented two spaces, as Prettier
+/// writes it. So a new key takes a placeholder first, which the list then replaces in place.
+fn put_list(m: &Mapping, name: &str, list: Sequence) {
+    if !m.contains_key(name) {
+        m.set(name, "");
+    }
+    m.set(name, list);
 }
 
 fn set_value(m: &Mapping, name: &str, k: &Key, v: &Value) {
@@ -966,18 +1039,18 @@ fn set_value(m: &Mapping, name: &str, k: &Key, v: &Value) {
         Kind::List => {
             let s = Sequence::new();
             for item in v.as_array().into_iter().flatten() {
-                s.push(scalar_yaml(item));
+                push_text(&s, &scalar_yaml(item));
             }
-            m.set(name, s);
+            put_list(m, name, s);
         }
         Kind::Steps | Kind::Launch => {
             let s = Sequence::new();
             for item in v.as_array().into_iter().flatten() {
                 s.push(item_mapping(item));
             }
-            m.set(name, s);
+            put_list(m, name, s);
         }
-        _ => m.set(name, scalar_yaml(v)),
+        _ => put_text(m, name, &scalar_yaml(v)),
     }
 }
 
@@ -1015,14 +1088,15 @@ pub fn write(existing: Option<&str>, values: &[(&str, Value)]) -> Result<String>
         match path.split_once('.') {
             None => set_value(&root, path, k, v),
             Some((group, name)) => {
-                let live = root.get_mapping(group);
-                match live {
-                    Some(g) => set_value(&g, name, k, v),
-                    None => {
-                        let g = Mapping::new();
-                        set_value(&g, name, k, v);
-                        root.set(group, g);
-                    }
+                if root.get_mapping(group).is_none() {
+                    // A group new to the file starts with a placeholder for its first key (see
+                    // `put_list`), so that its values are set in place, as in a group the file has.
+                    let g = Mapping::new();
+                    g.set(name, "");
+                    root.set(group, g);
+                }
+                if let Some(g) = root.get_mapping(group) {
+                    set_value(&g, name, k, v);
                 }
             }
         }

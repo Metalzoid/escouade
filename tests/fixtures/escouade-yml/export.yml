@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://escouade.dev/schemas/escouade.schema.json
+# Réglages d'Escouade partagés par l'équipe du projet : https://escouade.dev/docs/escouade-yml
+version: 1
+agents:
+  engine: codex
+worktrees:
+  per_agent: true
+  dir: ../app-worktrees
+  copy:
+    - .env*
+    - config/local.json
+  setup:
+    - command: npm ci
+    - command: cargo fetch
+      shell: bash
+      cwd: src-tauri
+  teardown: []
+launch:
+  - name: web
+    command: npm run dev
+    cwd: web
+git:
+  agent_branch_prefix: agent/
+  ticket_branch_prefix: tickets/
+  commit_mode: direct
+  conventional_commits: false
+board:
+  on_approve: pr
+  target_branch: develop
+  agents_from_target: true
+  merge_strategy: rebase
+  draft_pr: true
+  test_command: "npm test -- --grep 'a b' # all"
+  tests_before_approve: true
+  on_conflict: agent
+  remove_worktree: false
