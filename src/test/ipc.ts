@@ -246,7 +246,6 @@ export function board(over: Partial<BoardSettings> = {}): BoardSettings {
   return {
     action: 'merge',
     target: '',
-    agentsFromTarget: false,
     strategy: 'squash',
     draft: false,
     testsFirst: false,

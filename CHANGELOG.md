@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Escouade a un thème clair : Réglages › Application › Affichage › « Thème » propose Système, Clair ou Sombre, appliqué tout de suite, barre de titre comprise. Par défaut, il suit celui de Windows, macOS ou Linux.
 - Les projets passent dans une barre à gauche, comme les espaces de travail de Slack : une tuile par projet, avec ses agents qui attendent et ceux qui travaillent, que l’on glisse ou déplace par Alt+↑ et Alt+↓. La barre de titre garde le nom du projet affiché et la recherche ; la barre d’état montre les quotas de chaque harness au travail.
+- Chaque projet choisit la branche d’où partent les worktrees de ses nouveaux agents : celle du dossier, la branche cible du Kanban ou une branche de ton choix, qui devient leur base et celle de leur PR. « + Nouvel agent » peut en choisir une autre pour un agent, y compris pour une branche que tu crées. Merci à Metalzoid sur Discord.
 
 ### Corrections
 
