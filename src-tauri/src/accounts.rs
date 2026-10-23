@@ -1269,6 +1269,49 @@ fn reserved(account: &Account) -> anyhow::Error {
     ))
 }
 
+/// Why the account `id` may not be the one a ticket of `project` on `engine` is set to (« Compte »
+/// in its form, ESC-153): one the settings do not know, of another harness, switched off, reserved
+/// to other projects, or shared while the private project goes to its own accounts alone. None
+/// when it may.
+pub(crate) fn ticket_refusal(
+    settings: &Settings,
+    project: &Project,
+    engine: EngineId,
+    id: &str,
+) -> Option<anyhow::Error> {
+    let Some(account) = find(settings, id) else {
+        return Some(unknown(id));
+    };
+    let lang = crate::i18n::ui();
+    let name = name_in(lang, account);
+    if account.engine != engine {
+        let (theirs, ours) = (engine::by_name(account.engine), engine::by_name(engine));
+        return Some(anyhow::anyhow!(tr_in!(
+            lang,
+            "Le compte « {name} » est un compte {theirs}, et ce ticket tourne sur {ours}.",
+            "The account “{name}” is a {theirs} account, and this ticket runs on {ours}."
+        )));
+    }
+    if !account.active {
+        return Some(switched_off(account));
+    }
+    if !account.serves(Some(&project.id)) {
+        return Some(reserved(account));
+    }
+    let usable = for_project_of(settings, engine, project)
+        .accounts
+        .iter()
+        .any(|a| a.active && a.id == id);
+    (!usable).then(|| {
+        anyhow::anyhow!(tr_in!(
+            lang,
+            "Le projet privé « {project} » n’utilise que ses propres comptes : « {name} » est partagé avec d’autres projets.",
+            "The private project “{project}” uses its own accounts alone: “{name}” is shared with other projects.",
+            project = project.name
+        ))
+    })
+}
+
 /// Refused: the harness `engine` has no account (ESC-128): nothing starts on it before one is
 /// added. The window offers « Ajouter un compte… » on that harness with it (`commands::err`).
 #[derive(Debug)]

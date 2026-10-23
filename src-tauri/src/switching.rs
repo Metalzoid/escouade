@@ -21,6 +21,8 @@ pub(crate) enum NoOther {
     Nobody,
     /// Its project is private and confined (ESC-141): the usable ones are accounts it shares.
     Private,
+    /// Its ticket is set on its account (« Compte », ESC-153): it stays there.
+    Pinned,
 }
 
 /// The meter of the account that went the furthest past `threshold` at `now`, if one did.
@@ -94,6 +96,11 @@ pub(crate) fn stays_line(
             lang,
             "{from} est à {pct} % de {what}, mais ce projet privé ne passe pas tout seul sur un compte qu’il partage : l’agent y reste.",
             "{from} is at {pct}% of {what}, but this private project doesn’t go on its own to an account it shares: the agent stays there."
+        ),
+        NoOther::Pinned => tr_in!(
+            lang,
+            "{from} est à {pct} % de {what}, mais le ticket de l’agent est fixé sur ce compte : il y reste.",
+            "{from} is at {pct}% of {what}, but the agent’s ticket is set on this account: it stays there."
         ),
     };
     if !overage {

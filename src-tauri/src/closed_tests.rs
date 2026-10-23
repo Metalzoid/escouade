@@ -28,6 +28,7 @@ fn draft(title: &str) -> TicketDraft {
         images: None,
         files: None,
         engine: None,
+        ..Default::default()
     }
 }
 

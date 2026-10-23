@@ -36,6 +36,7 @@ pub(crate) fn draft(title: &str, criteria: &[&str], max_loops: u32) -> TicketDra
         images: None,
         files: None,
         engine: None,
+        ..Default::default()
     }
 }
 
@@ -8931,4 +8932,284 @@ async fn an_agent_whose_worktree_was_cleaned_is_restored_from_its_branch_else_to
             .as_str()
             .unwrap()
             .starts_with("Son worktree a été supprimé avec sa branche")));
+}
+
+// ---------- the account, the model and the effort of a ticket (ESC-153) ----------
+
+/// `draft` whose « Compte » is `account`.
+fn draft_on(title: &str, account: &str) -> TicketDraft {
+    TicketDraft {
+        account: Some(account.into()),
+        ..draft(title, &[], 5)
+    }
+}
+
+#[tokio::test]
+async fn a_ticket_starts_on_the_account_it_is_set_to_and_on_auto_on_the_current_one() {
+    let h = harness("tk153-start");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    h.set_board(&p.id, |s| s.max_parallel = 2);
+    let fixed = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap();
+    let auto = h
+        .core
+        .ticket_create(&p.id, draft("Auto [ok]", &[], 5))
+        .await
+        .unwrap();
+    assert_eq!((fixed.account.as_str(), auto.account.as_str()), ("pro", ""));
+    // Principal is the current account: « Auto » goes there, the one set on Pro to Pro.
+    assert_eq!(account_of_ticket(&h, &fixed.id).await, "pro");
+    assert_eq!(account_of_ticket(&h, &auto.id).await, "principal");
+    h.wait_ticket(&fixed.id, "to test", |t| t.column == Column::Review)
+        .await;
+    assert_eq!(
+        config_dirs(&h, &h.worktree_of(&fixed.id)),
+        [json!(pro.config_dir)]
+    );
+    // A draft that says nothing of it (the tools, the imports) leaves it as it is; an empty one
+    // sets it back to « Auto ».
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let edited = h
+        .core
+        .ticket_create(&p.id, draft_on("Encore [ok]", "pro"))
+        .await
+        .unwrap();
+    let kept = h
+        .core
+        .ticket_update(&edited.id, draft("Encore [ok]", &[], 5))
+        .unwrap();
+    assert_eq!(kept.account, "pro");
+    let auto = h
+        .core
+        .ticket_update(&edited.id, draft_on("Encore [ok]", ""))
+        .unwrap();
+    assert_eq!(auto.account, "");
+}
+
+#[tokio::test]
+async fn a_ticket_set_on_an_account_waits_for_it_at_the_limit_rather_than_go_elsewhere() {
+    let h = harness("tk153-limit");
+    let (p, _) = h.project(false).await;
+    // Another account would take it (Équipe), as « Auto » does: it stays.
+    pro_then_team_then_principal(&h);
+    h.set_settings(|s| s.handover_on_limit = true);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft_on("Un [ok]", "pro"))
+        .await
+        .unwrap();
+    h.wait_resume_planned(&t.id).await;
+    let agent = h.ticket(&t.id).agent_id.unwrap();
+    h.core.turn_ended(&agent, TurnEnd::Limited).await;
+    let a = h.agent(&agent);
+    assert_eq!((a.account.as_str(), a.moved_from.as_deref()), ("pro", None));
+    assert!(a.resume_at.is_some());
+    assert_eq!(h.ticket(&t.id).column, Column::Doing);
+    assert_eq!(h.ticket(&t.id).blocked, None);
+    assert_eq!(config_dirs(&h, &h.worktree_of(&t.id)).len(), 1);
+}
+
+#[tokio::test]
+async fn a_ticket_set_on_an_account_held_by_its_quota_waits_while_the_others_start() {
+    let h = harness("tk153-held");
+    let (p, _) = h.project(false).await;
+    let pro = second_account(&h);
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    h.set_board(&p.id, |s| s.max_parallel = 2);
+    used_for_an_hour(&h, "pro", 100.0).await;
+    let fixed = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap();
+    let auto = h
+        .core
+        .ticket_create(&p.id, draft("Auto [ok]", &[], 5))
+        .await
+        .unwrap();
+    assert_eq!(account_of_ticket(&h, &auto.id).await, "principal");
+    h.wait_board_idle().await;
+    assert_eq!(h.ticket(&fixed.id).column, Column::Todo);
+    // Pro free again: it starts there.
+    used_for_an_hour(&h, "pro", 10.0).await;
+    h.core.pause_tick();
+    h.core.schedule();
+    assert_eq!(account_of_ticket(&h, &fixed.id).await, "pro");
+}
+
+#[tokio::test]
+async fn a_ticket_whose_account_is_removed_goes_back_to_auto_and_says_so() {
+    let h = harness("tk153-removed");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap();
+    h.set_settings(|s| s.accounts.retain(|a| a.id != "pro"));
+    let back = h.ticket(&t.id);
+    assert_eq!(back.account, "");
+    assert_eq!(
+        back.account_lost.as_deref(),
+        Some("Le compte Pro n’existe plus : repassé en « Auto ».")
+    );
+    assert!(
+        h.alerts()
+            .iter()
+            .any(|a| a.ends_with("DEM-1 : le compte Pro n’existe plus, repassé en « Auto »")),
+        "{:?}",
+        h.alerts()
+    );
+    // It is not stuck: it starts, on the current account.
+    h.core.ticket_start(&t.id).unwrap();
+    assert_eq!(account_of_ticket(&h, &t.id).await, "principal");
+    // Saved again from its form, what its card said goes.
+    let other = h
+        .core
+        .ticket_create(&p.id, draft("Deux [ok]", &[], 5))
+        .await
+        .unwrap();
+    h.core
+        .edit_ticket(&other.id, |t| {
+            t.account_lost = Some("…".into());
+            Ok(())
+        })
+        .unwrap();
+    let saved = h
+        .core
+        .ticket_update(&other.id, draft("Deux [ok]", &[], 5))
+        .unwrap();
+    assert_eq!(saved.account_lost, None);
+}
+
+#[tokio::test]
+async fn a_ticket_whose_account_is_signed_out_starts_on_auto_and_says_so() {
+    let h = harness("tk153-signed-out");
+    let (p, _) = h.project(false).await;
+    second_account(&h);
+    h.record_usage("pro", Reading::NotSignedIn).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap();
+    assert_eq!(account_of_ticket(&h, &t.id).await, "principal");
+    let t = h.ticket(&t.id);
+    assert_eq!(t.account, "");
+    assert_eq!(
+        t.account_lost.as_deref(),
+        Some("Le compte Pro n’est pas connecté : repassé en « Auto ».")
+    );
+}
+
+#[tokio::test]
+async fn a_ticket_is_refused_an_account_its_project_may_not_use() {
+    let h = harness("tk153-refused");
+    let (p, _) = h.project(false).await;
+    let q = h.second_project().await;
+    second_account(&h);
+    // Pro is reserved to the other project.
+    h.set_settings(|s| {
+        for a in s.accounts.iter_mut().filter(|a| a.id == "pro") {
+            a.projects = vec![q.id.clone()];
+        }
+    });
+    let e = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(e, "Le compte « Pro » est réservé à d’autres projets.");
+    let unknown = h
+        .core
+        .ticket_create(&p.id, draft_on("Sur rien [ok]", "nope"))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(unknown, "compte « nope » introuvable");
+    // Its own project takes it; an edit here does not.
+    h.set_board(&q.id, |s| s.autopilot = false);
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let ok = h
+        .core
+        .ticket_create(&q.id, draft_on("Sur Pro [ok]", "pro"))
+        .await
+        .unwrap();
+    assert_eq!(ok.account, "pro");
+    let mine = h
+        .core
+        .ticket_create(&p.id, draft("Auto [ok]", &[], 5))
+        .await
+        .unwrap();
+    let e = h
+        .core
+        .ticket_update(&mine.id, draft_on("Auto [ok]", "pro"))
+        .unwrap_err()
+        .to_string();
+    assert_eq!(e, "Le compte « Pro » est réservé à d’autres projets.");
+    // A private project with an account of its own does not take a shared one.
+    let team = extra_account(&h, "equipe", "Équipe");
+    let mut project = h.core.project(&p.id).unwrap();
+    project.private = true;
+    h.core.update_project(project).unwrap();
+    h.set_settings(|s| {
+        for a in s.accounts.iter_mut().filter(|a| a.id == team.id) {
+            a.projects = vec![p.id.clone()];
+        }
+    });
+    let e = h
+        .core
+        .ticket_update(&mine.id, draft_on("Auto [ok]", "principal"))
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        e,
+        "Le projet privé « demo » n’utilise que ses propres comptes : « Principal » est partagé avec d’autres projets."
+    );
+    let set = h
+        .core
+        .ticket_update(&mine.id, draft_on("Auto [ok]", "equipe"))
+        .unwrap();
+    assert_eq!(set.account, "equipe");
+}
+
+#[tokio::test]
+async fn a_ticket_agent_goes_with_the_model_and_the_effort_of_its_form_over_the_boards() {
+    let h = harness("tk153-model");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| {
+        s.model = "sonnet".into();
+        s.effort = "low".into();
+    });
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            TicketDraft {
+                model: Some("opus".into()),
+                effort: Some("max".into()),
+                ..draft("Architecture [ok]", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!((t.model.as_str(), t.effort.as_str()), ("opus", "max"));
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let a = h.agent_of(&t.id);
+    assert_eq!((a.model.as_str(), a.effort.as_str()), ("opus", "max"));
+    let argv = h.launches(&h.worktree_of(&t.id)).pop().unwrap();
+    let after = |flag: &str| argv[argv.iter().position(|x| x == flag).unwrap() + 1].clone();
+    assert_eq!(
+        (after("--model"), after("--effort")),
+        ("opus".to_string(), "max".to_string())
+    );
 }

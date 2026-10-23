@@ -307,8 +307,11 @@ pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> Tick
         branch: String::new(),
         images: None,
         files: None,
-        // Imported: on its project's harness.
+        // Imported: on its project's harness, « Auto » for the rest.
         engine: None,
+        account: None,
+        model: None,
+        effort: None,
     }
 }
 

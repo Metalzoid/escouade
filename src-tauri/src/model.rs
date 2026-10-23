@@ -872,10 +872,17 @@ pub struct Ticket {
     /// local one or a remote one (`origin/feat`); empty: its own branch, `ticket/<key>`, made at
     /// its start.
     pub branch: String,
-    /// The model and the effort of this ticket's agent alone, given by `start_ticket` (the MCP
-    /// tool); empty: the board's.
+    /// The model and the effort of this ticket's agent alone (« Modèle » and « Effort » in its
+    /// form, or `start_ticket`); empty: « Auto », the board's, else the account's.
     pub model: String,
     pub effort: String,
+    /// The account its agents start on (« Compte » in its form, ESC-153), by id: they stay on it,
+    /// at its limit as past « Changer de compte à ». Empty: « Auto », the current account of its
+    /// harness; so for a ticket saved before.
+    pub account: String,
+    /// Why it went back to « Auto » (its account removed, switched off or signed out), as its card
+    /// says it until the ticket is saved again.
+    pub account_lost: Option<String>,
     /// The harness of its agents (« Harness » in its form), which the autopilot starts them on;
     /// None: the project's (`Project::engine`), and for a ticket saved before 1.8.
     pub engine: Option<EngineId>,

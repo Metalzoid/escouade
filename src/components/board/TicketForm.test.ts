@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { setLang } from '../../lib/i18n';
 import { app, type TicketFormDraft } from '../../lib/state.svelte';
 import { menu } from '../../lib/menu.svelte';
-import type { AttachedFile, Ticket, TicketDraft } from '../../lib/types';
-import { BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, resetApp, ticket } from '../../test/ipc';
+import type { Account, AttachedFile, Ticket, TicketDraft, ToldModel } from '../../lib/types';
+import { BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
 
 interface Props {
@@ -94,6 +94,9 @@ describe('TicketForm', () => {
         after: [],
         branch: 'feat/login',
         engine: null,
+        account: '',
+        model: '',
+        effort: '',
       });
     });
 
@@ -204,14 +207,14 @@ describe('TicketForm', () => {
       expect(title().tagName).toBe('INPUT');
     });
 
-    it('takes two rows less from each big field in a short window, so that loops, branch and dependencies show at once', () => {
+    it('takes rows from each big field (four from the description, one from the criteria) in a short window, so that loops, branch and dependencies show at once', () => {
       heightOf(700);
       show();
       const [description, criteria] = [
         screen.getByRole('textbox', { name: 'Description' }),
         screen.getByRole('textbox', { name: "Critères d'acceptation" }),
       ];
-      expect(description).toHaveAttribute('rows', '10');
+      expect(description).toHaveAttribute('rows', '8');
       expect(criteria).toHaveAttribute('rows', '5');
       // Taller again with the window.
       heightOf(900);
@@ -429,6 +432,9 @@ describe('TicketForm', () => {
       maxLoops: 5,
       after: [],
       engine: null,
+      account: '',
+      model: '',
+      effort: '',
     });
   });
 
@@ -670,12 +676,12 @@ describe('TicketForm, its images', () => {
     window.dispatchEvent(new Event('resize'));
     try {
       show();
-      expect(description()).toHaveAttribute('rows', '10');
+      expect(description()).toHaveAttribute('rows', '8');
       paste(description(), { files: [capture()], types: ['Files'] });
       await screen.findByAltText('capture.png');
-      expect(description()).toHaveAttribute('rows', '7');
+      expect(description()).toHaveAttribute('rows', '5');
       await userEvent.click(screen.getByRole('button', { name: 'Retirer capture.png' }));
-      expect(description()).toHaveAttribute('rows', '10');
+      expect(description()).toHaveAttribute('rows', '8');
     } finally {
       window.innerHeight = 768;
       window.dispatchEvent(new Event('resize'));
@@ -907,6 +913,9 @@ describe('TicketForm, its files', () => {
         after: [],
         files: [{ name: 'sources.zip', file: '', path: copyOf('sources.zip').path }],
         engine: null,
+        account: '',
+        model: '',
+        effort: '',
       });
     });
 
@@ -1142,12 +1151,12 @@ describe('TicketForm, its files', () => {
       window.dispatchEvent(new Event('resize'));
       try {
         show();
-        expect(description()).toHaveAttribute('rows', '10');
+        expect(description()).toHaveAttribute('rows', '8');
         drop([zip()]);
         await screen.findByText('sources.zip');
-        expect(description()).toHaveAttribute('rows', '8');
+        expect(description()).toHaveAttribute('rows', '6');
         await userEvent.click(screen.getByRole('button', { name: 'Retirer sources.zip' }));
-        expect(description()).toHaveAttribute('rows', '10');
+        expect(description()).toHaveAttribute('rows', '8');
       } finally {
         window.innerHeight = 768;
         window.dispatchEvent(new Event('resize'));
@@ -1541,5 +1550,150 @@ describe('TicketForm: its harness (ESC-29)', () => {
     menu.close();
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
     expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({ engine: null }));
+  });
+});
+
+describe('TicketForm: its account, model and effort (ESC-153)', () => {
+  const account = (over: Partial<Account>): Account => ({
+    id: 'principal',
+    name: 'Principal',
+    engine: 'claude',
+    configDir: '',
+    claudePath: '',
+    active: true,
+    projects: [],
+    ...over,
+  });
+  const told = (id: string, label: string, efforts: string[]): ToldModel => ({
+    id,
+    label,
+    efforts,
+    defaultEffort: null,
+    images: true,
+    default: false,
+  });
+  const ALL = ['low', 'medium', 'high', 'xhigh', 'max'];
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings = {
+      ...app.settings,
+      accounts: [
+        account({}),
+        account({ id: 'pro', name: 'Pro', configDir: 'C:\\pro' }),
+        // Reserved to another project, and another harness's: never offered here.
+        account({ id: 'team', name: 'Équipe', configDir: 'C:\\team', projects: ['p2'] }),
+        account({ id: 'cx', name: 'Codex perso', engine: 'codex', configDir: 'C:\\cx' }),
+      ],
+    };
+    app.usage = { ...app.usage, current: { claude: 'principal', codex: 'cx' } };
+    app.accountModels = {
+      principal: {
+        version: '2.1.302',
+        models: [],
+        catalog: [told('opus', 'Opus', ALL), told('sonnet', 'Sonnet', ALL), told('haiku', 'Haiku', [])],
+      },
+      pro: { version: '2.1.302', models: [], catalog: [told('sonnet', 'Sonnet', ALL), told('haiku', 'Haiku', [])] },
+    };
+    app.projects = [project({ board: { ...project().board, model: 'opus', effort: 'medium' } })];
+  });
+  const field = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name} `) });
+  /** Picks `label` in the menu of the field `name`. */
+  async function pick(name: string, label: string) {
+    await userEvent.click(field(name));
+    const item = menu.open!.items.find((i) => i.label === label);
+    expect(item, `${label} in ${menu.open!.items.map((i) => i.label).join(', ')}`).toBeDefined();
+    item!.onClick!();
+    menu.close();
+  }
+  async function labels(name: string) {
+    await userEvent.click(field(name));
+    const all = menu.open!.items.map((i) => i.label);
+    menu.close();
+    return all;
+  }
+
+  it('is on « Auto » for each, saying what it gives: the current account, the Kanban’s model and effort', () => {
+    fakeBackend();
+    show();
+    expect(field('Compte')).toHaveAccessibleName('Compte Auto · Principal');
+    expect(field('Modèle')).toHaveAccessibleName('Modèle Auto · Opus (Kanban)');
+    expect(field('Effort')).toHaveAccessibleName('Effort Auto · Moyen (Kanban)');
+  });
+
+  it('says the account’s defaults when the Kanban has none', () => {
+    fakeBackend();
+    app.projects = [project()];
+    app.settings.accounts![0] = account({ defaultModel: 'sonnet', defaultEffort: 'high' });
+    show();
+    expect(field('Modèle')).toHaveAccessibleName('Modèle Auto · Sonnet (compte)');
+    expect(field('Effort')).toHaveAccessibleName('Effort Auto · Élevé (compte)');
+  });
+
+  it('lists the accounts of its harness its project may use', async () => {
+    fakeBackend();
+    show();
+    expect(await labels('Compte')).toEqual(['Auto · Principal', 'Principal', 'Pro']);
+  });
+
+  it('lists the models of the account chosen, and of the current one on « Auto »', async () => {
+    fakeBackend();
+    show();
+    expect(await labels('Modèle')).toEqual(['Auto · Opus (Kanban)', 'Opus', 'Sonnet', 'Haiku']);
+    await pick('Compte', 'Pro');
+    expect(field('Compte')).toHaveAccessibleName('Compte Pro');
+    expect(await labels('Modèle')).toEqual(['Auto · Opus (Kanban)', 'Sonnet', 'Haiku']);
+  });
+
+  it('sets back to « Auto » a model the account chosen has not, and says so', async () => {
+    fakeBackend();
+    show();
+    await pick('Modèle', 'Opus');
+    expect(field('Modèle')).toHaveAccessibleName('Modèle Opus');
+    await pick('Compte', 'Pro');
+    expect(field('Modèle')).toHaveAccessibleName('Modèle Auto · Opus (Kanban)');
+    expect(screen.getByRole('status')).toHaveTextContent('« Modèle » remis sur « Auto » : Pro n’a pas Opus.');
+  });
+
+  it('lists the efforts of the model, greys « Effort » out with why for one that takes none, and sets back what it had', async () => {
+    fakeBackend();
+    show();
+    expect(await labels('Effort')).toEqual(['Auto · Moyen (Kanban)', 'Bas', 'Moyen', 'Élevé', 'Très élevé', 'Max']);
+    await pick('Effort', 'Élevé');
+    await pick('Modèle', 'Haiku');
+    expect(field('Effort')).toBeDisabled();
+    expect(field('Effort')).toHaveAccessibleDescription('Haiku ne prend pas d’effort');
+    expect(screen.getByRole('status')).toHaveTextContent('« Effort » remis sur « Auto » : Haiku ne prend pas l’effort Élevé.');
+  });
+
+  it('sets the account back to « Auto » when the harness changes, and says so', async () => {
+    fakeBackend();
+    app.enginesFound = ['claude', 'codex'];
+    show();
+    await pick('Compte', 'Pro');
+    await userEvent.click(screen.getByRole('button', { name: /^Harness/ }));
+    menu.open!.items.find((i) => i.label === 'Harness nu')!.onClick!();
+    menu.close();
+    await waitFor(() => expect(field('Compte')).toHaveAccessibleName('Compte Auto · Codex perso'));
+    expect(screen.getByRole('status')).toHaveTextContent('« Compte » remis sur « Auto » : Pro ne sert pas ce ticket sur ce harness.');
+    expect(await labels('Compte')).toEqual(['Auto · Codex perso', 'Codex perso']);
+  });
+
+  it('sends them with the ticket, empty for « Auto », and shows those of an edited ticket', async () => {
+    fakeBackend();
+    const { onsubmit } = show();
+    await pick('Compte', 'Pro');
+    await pick('Modèle', 'Sonnet');
+    await pick('Effort', 'Max');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Sur Pro{Enter}');
+    expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({ account: 'pro', model: 'sonnet', effort: 'max' }));
+    cleanup();
+    const edited = show({ ticket: ticket({ account: 'pro', model: 'sonnet', effort: 'low' }) });
+    expect(field('Compte')).toHaveAccessibleName('Compte Pro');
+    expect(field('Modèle')).toHaveAccessibleName('Modèle Sonnet');
+    expect(field('Effort')).toHaveAccessibleName('Effort Bas');
+    await pick('Compte', 'Auto · Principal');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
+    expect(edited.onsubmit).toHaveBeenCalledWith(expect.objectContaining({ account: '', model: 'sonnet', effort: 'low' }));
   });
 });

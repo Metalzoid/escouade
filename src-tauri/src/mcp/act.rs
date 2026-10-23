@@ -503,6 +503,9 @@ pub(super) async fn create_ticket<R: Runtime>(
         },
         // The tools do not name a harness: the project's.
         engine: None,
+        account: account_setting(core, a.account.as_deref()),
+        model: model_setting(core, auto_off(a.model.as_deref()))?,
+        effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -537,10 +540,13 @@ pub(super) async fn update_ticket<R: Runtime>(
         && remove.is_empty()
         && add_files.is_empty()
         && remove_files.is_empty()
+        && a.account.is_none()
+        && a.model.is_none()
+        && a.effort.is_none()
     {
         return Err(ToolError::Failed(tr!(
-            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles ou removeFiles.",
-            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles or removeFiles."
+            "Rien à modifier : donne au moins un des champs title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model ou effort.",
+            "Nothing to change: give at least one of the fields title, description, criteria, after, addImages, removeImages, addFiles, removeFiles, account, model or effort."
         )));
     }
     let project = project_of(core, &t.project_id)?;
@@ -581,6 +587,9 @@ pub(super) async fn update_ticket<R: Runtime>(
         files: None,
         // Not the tools' to change either: the ticket keeps its harness.
         engine: None,
+        account: account_setting(core, a.account.as_deref()),
+        model: model_setting(core, auto_off(a.model.as_deref()))?,
+        effort: effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?,
     };
     let (images_given, files_given) = (
         !add.is_empty() || !remove.is_empty(),
@@ -654,12 +663,26 @@ pub(super) fn start_ticket<R: Runtime>(
     let t = resolve::ticket(core, caller, &a.ticket)?;
     own_project_only(core, caller, &t.project_id)?;
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
-    let model = model_setting(core, a.model.as_deref())?;
-    let effort = effort_setting(i18n::ui(), a.effort.as_deref())?;
+    let model = model_setting(core, auto_off(a.model.as_deref()))?;
+    let effort = effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?;
+    let account = account_setting(core, a.account.as_deref());
     // A ticket that left « À faire » is told so by the core.
     if t.column == Column::Todo {
-        not_held(core, &t.project_id, core.ticket_engine(&t))?;
         let project = project_of(core, &t.project_id)?;
+        let engine = core.ticket_engine(&t);
+        // Set on an account (by this call or before), it waits for that one alone (ESC-153).
+        let pinned = Ticket {
+            account: account.clone().unwrap_or_else(|| t.account.clone()),
+            ..t.clone()
+        };
+        match core.pinned(&project, &pinned, engine) {
+            Some(id) => {
+                if let Some(held) = core.account_hold(&id) {
+                    return Err(ToolError::Refused(why(core, &held)));
+                }
+            }
+            None => not_held(core, &t.project_id, engine)?,
+        }
         let issue = core.board_issues.lock().get(&project.id).cloned();
         if let Some(issue) = issue {
             return Err(ToolError::Refused(tr!(
@@ -699,7 +722,7 @@ pub(super) fn start_ticket<R: Runtime>(
             )));
         }
     }
-    core.ticket_start_with(&t.id, model, effort)
+    core.ticket_start_on(&t.id, account, model, effort)
         .map_err(refusal)?;
     // What its agent goes with: its ticket's own, else its Kanban's, else its account's.
     let started = core.ticket(&t.id).unwrap_or(t);
@@ -737,6 +760,37 @@ fn model_setting<R: Runtime>(
     asked
         .map(|m| model(core, Some(m)).map(Option::unwrap_or_default))
         .transpose()
+}
+
+/// `auto` (in any case) as a ticket's account, model or effort has it: empty, its default.
+fn auto_off(asked: Option<&str>) -> Option<&str> {
+    asked.map(|v| {
+        if v.trim().eq_ignore_ascii_case("auto") {
+            ""
+        } else {
+            v
+        }
+    })
+}
+
+/// The account a tool names for a ticket (ESC-153): `None` when left out, an empty one for
+/// `auto`, else the id of the account of that name (in any case) or of that id; one there is no
+/// account of is given as it is, for the core to refuse it, saying so.
+fn account_setting<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Option<String> {
+    let asked = auto_off(asked)?.trim();
+    let settings = core.settings.read();
+    let named = |a: &&crate::model::Account| {
+        a.id == asked
+            || a.name.trim().eq_ignore_ascii_case(asked)
+            || accounts::name_in(i18n::ui(), a).eq_ignore_ascii_case(asked)
+    };
+    Some(
+        settings
+            .accounts
+            .iter()
+            .find(named)
+            .map_or_else(|| asked.to_string(), |a| a.id.clone()),
+    )
 }
 
 /// An effort given for a Kanban's agents or a ticket's: `None` when left out, an empty one when it
@@ -1856,8 +1910,11 @@ fn sub_draft<R: Runtime>(
         branch: String::new(),
         images: None,
         files: None,
-        // The harness of the tickets of the list: their project's.
+        // The harness of the tickets of the list: their project's, and « Auto » for the rest.
         engine: None,
+        account: None,
+        model: None,
+        effort: None,
     })
 }
 

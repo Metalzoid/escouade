@@ -302,6 +302,8 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
     branch: '',
     model: '',
     effort: '',
+    account: '',
+    accountLost: null,
     engine: null,
     images: [],
     files: [],

@@ -6,6 +6,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+### New
+
+- A ticket has “Account”, “Model” and “Effort” next to “Harness”: its agent always starts on what you choose, and a ticket set on an account stays there, waiting for its reset rather than switching accounts. By default, “Auto” says what it will give: the current account, the Kanban’s model and effort.
+
 ### Fixes
 
 - The `.escouade.yml` Escouade writes passes Prettier: its lists are indented the same way at the root as in a group, and its values take quotes only where YAML requires them.

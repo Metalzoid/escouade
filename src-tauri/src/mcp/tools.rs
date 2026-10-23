@@ -544,6 +544,18 @@ pub struct CreateTicketArgs {
         description = "Other files to attach, of any format (a spreadsheet, an archive, a log, a PDF…; 20 at most, each no bigger than the size the settings allow, Settings › Harness › Attachments), whose paths the ticket's agent gets with its first message. Leave them out for none."
     )]
     pub files: Option<Vec<FileArg>>,
+    #[schemars(
+        description = "The account its agents start on, every time: its name (in any case) or its id, or auto (the default), the current account of the ticket's harness. Set on an account, its agents stay there: at its usage limit or past the threshold to change accounts, they wait for its reset. An account its project may not use is refused, with why."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The model of its agents, as the window's model menu offers it (sonnet, opus, haiku…), or auto (the default): the Kanban's, else its account's."
+    )]
+    pub model: Option<String>,
+    #[schemars(
+        description = "The effort of its agents (low, medium, high, xhigh or max), or auto (the default): the Kanban's, else its account's (a model that takes none, Haiku, goes without)."
+    )]
+    pub effort: Option<String>,
 }
 
 /// A file to attach to a ticket, as `create_ticket` and `update_ticket` take it.
@@ -650,6 +662,18 @@ pub struct UpdateTicketArgs {
         description = "Files of the ticket to take away, each named by its file or its rank in the list get_ticket gives (files). The files you do not name stay. Leave it out to take none away."
     )]
     pub remove_files: Option<Vec<FileRef>>,
+    #[schemars(
+        description = "The account its agents start on, every time: its name (in any case) or its id, or auto, the current account of the ticket's harness. Set on an account, its agents stay there: at its usage limit or past the threshold to change accounts, they wait for its reset. An account its project may not use is refused, with why. Leave it out to keep it."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The model of its agents, as the window's model menu offers it (sonnet, opus, haiku…), or auto: the Kanban's, else its account's. Leave it out to keep it."
+    )]
+    pub model: Option<String>,
+    #[schemars(
+        description = "The effort of its agents (low, medium, high, xhigh or max), or auto: the Kanban's, else its account's (a model that takes none, Haiku, goes without). Leave it out to keep it."
+    )]
+    pub effort: Option<String>,
 }
 
 /// Where `move_ticket` puts a ticket.
@@ -683,11 +707,15 @@ pub struct StartTicketArgs {
     )]
     pub ticket: String,
     #[schemars(
-        description = "The model of this ticket's agent, as Claude Code names it (sonnet, opus, haiku…), for this ticket alone: it takes precedence over the Kanban's, e.g. keep opus on an architecture ticket while the Kanban is on sonnet. An empty string goes back to the Kanban's. Leave it out to leave it as it is."
+        description = "The account this ticket's agent starts on: its name (in any case) or its id, or auto for the current account of its harness. It is the ticket's from then on, as its model and effort are, and takes precedence over the one it had. Leave it out to leave it as it is."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The model of this ticket's agent, as Claude Code names it (sonnet, opus, haiku…), for this ticket alone: it takes precedence over the Kanban's, e.g. keep opus on an architecture ticket while the Kanban is on sonnet. An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub model: Option<String>,
     #[schemars(
-        description = "The effort of this ticket's agent (low, medium, high, xhigh or max), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string goes back to the Kanban's. Leave it out to leave it as it is."
+        description = "The effort of this ticket's agent (low, medium, high, xhigh or max), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub effort: Option<String>,
 }
@@ -984,7 +1012,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List the tickets of a project's Kanban board in the board's order (todo by priority, doing and review by arrival, done newest first), of every column or of one: their id, key, title, column, the keys of the tickets they come after, their agent's name, and why they are blocked when they are.",
+        description = "List the tickets of a project's Kanban board in the board's order (todo by priority, doing and review by arrival, done newest first), of every column or of one: their id, key, title, column, the keys of the tickets they come after, their agent's name, why they are blocked when they are, and the account (its name), the model and the effort their agents start with when they are set to one (left out when auto).",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_tickets(
@@ -1006,7 +1034,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, its images (images: for each its index, from 0, its file, name, mediaType and size in bytes, null when its file is gone; get_ticket_image reads one), its other files, of any format (files: for each its index, from 0, its file, name and size in bytes, null when its file is gone; its agent is given their paths, and get_ticket_file reads one), the model and the effort of its agent when start_ticket gave it its own (left out otherwise), the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none), and where it stands in the board's flow: its agent (id, name, status, and how many requests wait for an answer; null before it starts), its branch and its worktree, those of its agent (null before it starts; kept once the ticket is done, when the worktree may be gone), why it is blocked (blocked) and whether that is a merge conflict (conflict), the validation step running (step: Validation… or Approving…, Tests…, Commit…, Merge…, Push…) and, once it is approved, its outcome (text, the pull request's url, and the commit it made on the target branch). An agent of Escouade may leave out the ticket to read its own.",
+        description = "Read a ticket whole: its title, description, acceptance criteria (each with whether it is met and its agent's note), loops (the current one and the most it may run), column, the keys of the tickets it comes after, the features in place so far as its agent listed them, its images (images: for each its index, from 0, its file, name, mediaType and size in bytes, null when its file is gone; get_ticket_image reads one), its other files, of any format (files: for each its index, from 0, its file, name and size in bytes, null when its file is gone; its agent is given their paths, and get_ticket_file reads one), the account, the model and the effort its agents start with (account: the account's name, with accountId, or auto for the current account of its harness; model and effort: auto for the Kanban's, else the account's; accountLost: why it went back to auto, its account removed, switched off or signed out, left out otherwise), the external ticket it was imported from (Jira, Trello, GitHub or Linear; null when none), and where it stands in the board's flow: its agent (id, name, status, and how many requests wait for an answer; null before it starts), its branch and its worktree, those of its agent (null before it starts; kept once the ticket is done, when the worktree may be gone), why it is blocked (blocked) and whether that is a merge conflict (conflict), the validation step running (step: Validation… or Approving…, Tests…, Commit…, Merge…, Push…) and, once it is approved, its outcome (text, the pull request's url, and the commit it made on the target branch). An agent of Escouade may leave out the ticket to read its own.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn get_ticket(
@@ -1183,7 +1211,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. You may attach images (screenshots, mock-ups) with images, each given by its content in base64 (data, with a name) or by the full path of a file on this computer (path; an agent of Escouade can only give a file of its working folder): PNG, JPEG, GIF or WebP, read from their content, 5 MB each, 18 MB in all, 20 at most. The ticket's agent gets them with its first message. You may also attach other files of any format (a spreadsheet, an archive, a log, a PDF…) with files, given the same two ways (by content in base64 for a small one, a request weighing 32 MiB at most; by path otherwise, the file then copied): 20 at most, each no bigger than the size the settings allow (Settings › Harness › Attachments, as in the window); the ticket's agent gets their paths with its first message. An image or a file that is refused refuses the whole call, and nothing is created. Answers the ticket as get_ticket does.",
+        description = "Create a ticket in the To do column of a project's Kanban board, at the end of the column. When the project's autopilot is on, it starts by itself as soon as a place is free and the tickets it comes after are done. The description ends with a line saying who created the ticket. You may attach images (screenshots, mock-ups) with images, each given by its content in base64 (data, with a name) or by the full path of a file on this computer (path; an agent of Escouade can only give a file of its working folder): PNG, JPEG, GIF or WebP, read from their content, 5 MB each, 18 MB in all, 20 at most. The ticket's agent gets them with its first message. You may also attach other files of any format (a spreadsheet, an archive, a log, a PDF…) with files, given the same two ways (by content in base64 for a small one, a request weighing 32 MiB at most; by path otherwise, the file then copied): 20 at most, each no bigger than the size the settings allow (Settings › Harness › Attachments, as in the window); the ticket's agent gets their paths with its first message. An image or a file that is refused refuses the whole call, and nothing is created. You may set the account, the model and the effort of its agents (account, model, effort; auto, the default, is the current account of its harness and the Kanban's model and effort, else the account's): a ticket set on an account starts there every time and stays there, waiting for its reset at its usage limit rather than going on another account or harness; an account its project may not use is refused, with why (reserved to other projects, or shared while the private project uses its own). Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1205,13 +1233,16 @@ impl<R: Runtime> Tools<R> {
             ("after", after.as_deref()),
             ("images", images.as_deref()),
             ("files", files.as_deref()),
+            ("account", args.account.as_deref()),
+            ("model", args.model.as_deref()),
+            ("effort", args.effort.as_deref()),
         ]);
         let result = act::create_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("create_ticket", &asked, result)
     }
 
     #[tool(
-        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. When you change the title, the description or the criteria, the description ends with a line saying who edited the ticket, in the place of the one that said who created it. You can attach images with addImages (same form and limits as create_ticket's images, counting the ones the ticket keeps) and take some away with removeImages (each named by its file or its index, from 0, as get_ticket lists them): the images you do not name stay, and images alone leave the title, the description and the criteria as they are (no line saying who edited the ticket). The other files go the same way, with addFiles (same form and limits as create_ticket's files, counting the ones the ticket keeps) and removeFiles (each named by its file or its index, from 0, as get_ticket lists them in files): the files you do not name stay. Nothing changes when an image or a file is refused. Answers the ticket as get_ticket does.",
+        description = "Edit a ticket of the To do column: the fields you leave out stay as they are. A ticket that has started cannot be edited, and a dependency that would make two tickets wait for each other is refused. When you change the title, the description or the criteria, the description ends with a line saying who edited the ticket, in the place of the one that said who created it. You can attach images with addImages (same form and limits as create_ticket's images, counting the ones the ticket keeps) and take some away with removeImages (each named by its file or its index, from 0, as get_ticket lists them): the images you do not name stay, and images alone leave the title, the description and the criteria as they are (no line saying who edited the ticket). The other files go the same way, with addFiles (same form and limits as create_ticket's files, counting the ones the ticket keeps) and removeFiles (each named by its file or its index, from 0, as get_ticket lists them in files): the files you do not name stay. Nothing changes when an image or a file is refused. account, model and effort are create_ticket's (auto goes back to the default); a ticket moved to another harness goes back to auto for its account. Answers the ticket as get_ticket does.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1236,6 +1267,9 @@ impl<R: Runtime> Tools<R> {
             ("removeImages", removed.as_deref()),
             ("addFiles", added_files.as_deref()),
             ("removeFiles", removed_files.as_deref()),
+            ("account", args.account.as_deref()),
+            ("model", args.model.as_deref()),
+            ("effort", args.effort.as_deref()),
         ]);
         let result = act::update_ticket(&ctx.core, &ctx.caller, args).await;
         ctx.reply("update_ticket", &asked, result)
@@ -1264,7 +1298,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. You may give the ticket's agent its own model and effort (they take precedence over the Kanban's, which get_board gives, for this ticket alone; an empty string goes back to the Kanban's): they are checked before anything starts. A model that has no auto mode (Haiku) starts its agent in the default mode where the Kanban's is auto. Answers once it is queued, with the model and the effort its agent starts with (the ticket's, else the Kanban's, else the app's default; no effort for a model that takes none, Haiku); follow it with get_ticket. It uses the quota.",
+        description = "Launch a To do ticket now, as the Launch button does: its agent starts as soon as a place is free. Refused while the autopilot is paused for the project (every Claude account it may use is past its quota threshold or at its usage limit: the answer says until when), when the project already has its most tickets in progress in parallel, when the ticket comes after tickets that are not done, and when the board cannot start anything. You may give the ticket's agent its own account, model and effort (they take precedence over the ticket's and the Kanban's, which get_board gives, and are the ticket's from then on; auto, or an empty string, goes back to the default): they are checked before anything starts. A model that has no auto mode (Haiku) starts its agent in the default mode where the Kanban's is auto. Answers once it is queued, with the model and the effort its agent starts with (the ticket's, else the Kanban's, else the app's default; no effort for a model that takes none, Haiku); follow it with get_ticket. It uses the quota.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1278,6 +1312,7 @@ impl<R: Runtime> Tools<R> {
     ) -> CallToolResult {
         let asked = summary(&[
             ("ticket", Some(&args.ticket)),
+            ("account", args.account.as_deref()),
             ("model", args.model.as_deref()),
             ("effort", args.effort.as_deref()),
         ]);

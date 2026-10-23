@@ -12,6 +12,20 @@
   import { app, type TicketFormDraft } from '../../lib/state.svelte';
   import type { EngineId, Ticket, TicketDraft } from '../../lib/types';
   import { choosesEngine, engineName, engineOptions } from '../../lib/engines';
+  import { EFFORTS, modelLabel } from '../../lib/models';
+  import {
+    accountChoices,
+    autoAccountLabel,
+    autoEffortLabel,
+    autoModelLabel,
+    effortChoices,
+    effortRefusal,
+    fitOptions,
+    labelOf,
+    modelChoices,
+    type TicketOptions,
+  } from '../../lib/ticket-options';
+  import { accountName } from '../../lib/accounts';
   import { insertAt } from '../../lib/dictation';
   import type { DictationTarget } from '../../lib/dictation.svelte';
   import AttachmentChip from '../AttachmentChip.svelte';
@@ -45,6 +59,7 @@
     after: ticket?.after ?? [],
     branch: ticket?.branch ?? '',
     engine: ticket?.engine ?? null,
+    options: { account: ticket?.account ?? '', model: ticket?.model ?? '', effort: ticket?.effort ?? '' },
     images: ticket?.images.map((i) => i.file) ?? [],
     files: ticket?.files.map((f) => f.file) ?? [],
   }));
@@ -61,6 +76,13 @@
   /** The harness of its agents (« Harness », from two harnesses found on); null: the project's. */
   let engine = $state<EngineId | null>(untrack(() => (resume?.engine !== undefined ? resume.engine : start.engine)));
   let engineButton = $state<HTMLButtonElement>();
+  /** Its account, model and effort (« Compte », « Modèle », « Effort », ESC-153): empty, « Auto ». */
+  let options = $state<TicketOptions>(untrack(() => ({ ...(resume?.options ?? start.options) })));
+  /** What the last change set back to « Auto », said under the fields until the next one. */
+  let notices = $state<string[]>([]);
+  let accountButton = $state<HTMLButtonElement>();
+  let modelButton = $state<HTMLButtonElement>();
+  let effortButton = $state<HTMLButtonElement>();
   let branchButton = $state<HTMLButtonElement>();
   let choosing = $state(false);
   let query = $state('');
@@ -123,6 +145,9 @@
       maxLoops !== start.maxLoops ||
       branch !== start.branch ||
       engine !== start.engine ||
+      options.account !== start.options.account ||
+      options.model !== start.options.model ||
+      options.effort !== start.options.effort ||
       after.length !== start.after.length ||
       after.some((id) => !start.after.includes(id)) ||
       imagesChanged(images, held) ||
@@ -156,6 +181,7 @@
         after: [...after],
         branch,
         engine,
+        options: { ...options },
         images: images.map((i) => ({ ...i })),
         held: [...held],
         // Not a copy: the one of a file being written is still this list's, which it takes the chip out of if it fails.
@@ -357,8 +383,73 @@
   function engineMenu() {
     if (!engineButton) return;
     menu.showAt(engineButton, [
-      { label: t('board.form.engineProject', { engine: engineName(projectEngine) }), onClick: () => (engine = null) },
-      ...engineOptions(engine).map((e) => ({ label: e.label, onClick: () => (engine = e.value) })),
+      { label: t('board.form.engineProject', { engine: engineName(projectEngine) }), onClick: () => setEngine(null) },
+      ...engineOptions(engine).map((e) => ({ label: e.label, onClick: () => setEngine(e.value) })),
+    ]);
+  }
+
+  /** Another harness: its accounts, models and efforts are others, what it has not goes back to « Auto ». */
+  function setEngine(e: EngineId | null) {
+    engine = e;
+    choose({});
+  }
+
+  /** The ticket's harness and project, as the menus of its account, model and effort read them. */
+  const optionsOf = $derived({
+    project: app.projects.find((p) => p.id === projectId) ?? app.projects[0],
+    engine: engine ?? projectEngine,
+  });
+  const accounts = $derived(accountChoices(optionsOf));
+  const models = $derived(modelChoices(optionsOf, options.account));
+  const efforts = $derived(effortChoices(optionsOf, options));
+  /** Why « Effort » is greyed out: the model its agent would run takes none. */
+  const noEffort = $derived(effortRefusal(optionsOf, options));
+  const accountShown = $derived.by(() => {
+    if (!options.account) return autoAccountLabel(optionsOf);
+    const a = (app.settings.accounts ?? []).find((x) => x.id === options.account);
+    return a ? accountName(a) : options.account;
+  });
+  const modelShown = $derived(
+    options.model ? labelOf(models, options.model, modelLabel(options.model, app.models)) : autoModelLabel(optionsOf, options.account),
+  );
+  const effortShown = $derived(
+    options.effort
+      ? (EFFORTS.find((e) => e.value === options.effort)?.label ?? options.effort)
+      : autoEffortLabel(optionsOf, options.account),
+  );
+
+  /** One of the three changed: what the others can no longer be goes back to « Auto », which the form says. */
+  function choose(patch: Partial<TicketOptions>) {
+    const fitted = fitOptions(optionsOf, { ...options, ...patch });
+    options = fitted.options;
+    notices = fitted.notices;
+  }
+
+  function accountMenu() {
+    if (!accountButton) return;
+    menu.showAt(accountButton, [
+      { label: autoAccountLabel(optionsOf), title: t('board.form.options.autoAccountDetail'), onClick: () => choose({ account: '' }) },
+      ...accounts.map((a) => ({
+        label: a.label,
+        title: t('board.form.options.pinnedDetail'),
+        onClick: () => choose({ account: a.value }),
+      })),
+    ]);
+  }
+
+  function modelMenu() {
+    if (!modelButton) return;
+    menu.showAt(modelButton, [
+      { label: autoModelLabel(optionsOf, options.account), onClick: () => choose({ model: '' }) },
+      ...models.map((m) => ({ label: m.label, onClick: () => choose({ model: m.value }) })),
+    ]);
+  }
+
+  function effortMenu() {
+    if (!effortButton) return;
+    menu.showAt(effortButton, [
+      { label: autoEffortLabel(optionsOf, options.account), onClick: () => choose({ effort: '' }) },
+      ...efforts.map((e) => ({ label: e.label, onClick: () => choose({ effort: e.value }) })),
     ]);
   }
 
@@ -435,8 +526,11 @@
         after: [...after],
         // Said only when it matters: a branch taken up, or the one of an edited ticket given up (empty).
         ...(branch || start.branch ? { branch } : {}),
-        // Its harness, null for the project's.
+        // Its harness, null for the project's; its account, model and effort, empty for « Auto ».
         engine,
+        account: options.account,
+        model: options.model,
+        effort: options.effort,
         // Only when they changed from what the ticket had (not `held`: one gone from its folder is taken off at any save);
         // those of an edited ticket may not be read yet.
         ...(imagesChanged(images, start.images) ? { images: draftImages(images) } : {}),
@@ -462,7 +556,7 @@
   }
 
   /**
-   * The height of the window of the app: a short one gets two rows less in each big field, for the rest of the form to show.
+   * The height of the window of the app: a short one gets four rows less in the description and one in the criteria, for the rest of the form (its account, model and effort included) to show.
    * The images take three rows of the description (their height) for the same reason, the chips of the files two.
    */
   let viewHeight = $state(window.innerHeight);
@@ -528,7 +622,7 @@
         bind:this={descriptionField}
         id="{uid}-description"
         class="description"
-        rows={(short ? 10 : 12) - (images.length ? 3 : 0) - (files.length ? 2 : 0)}
+        rows={(short ? 8 : 12) - (images.length ? 3 : 0) - (files.length ? 2 : 0)}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
         use:grow={description}
@@ -632,6 +726,58 @@
           {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
         </div>
       {/if}
+      <!-- The account, the model and the effort of its agents (ESC-153): one row across the form, short windows included. -->
+      <div class="opts-row">
+        <div class="opts">
+          <div class="branch" role="group" aria-label={t('board.form.options.account')}>
+            <span class="k" id="{uid}-account">{t('board.form.options.account')}</span>
+            <button
+              class="pick"
+              bind:this={accountButton}
+              aria-haspopup="menu"
+              aria-labelledby="{uid}-account {uid}-account-value"
+              use:tip={accountShown}
+              onclick={accountMenu}
+            >
+              <span id="{uid}-account-value">{accountShown}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+          </div>
+          <div class="branch" role="group" aria-label={t('board.form.options.model')}>
+            <span class="k" id="{uid}-model">{t('board.form.options.model')}</span>
+            <button
+              class="pick"
+              bind:this={modelButton}
+              aria-haspopup="menu"
+              aria-labelledby="{uid}-model {uid}-model-value"
+              use:tip={modelShown}
+              onclick={modelMenu}
+            >
+              <span id="{uid}-model-value">{modelShown}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+          </div>
+          <div class="branch" role="group" aria-label={t('board.form.options.effort')}>
+            <span class="k" id="{uid}-effort">{t('board.form.options.effort')}</span>
+            <!-- Greyed out with its reason when the model its agent would run takes no effort. -->
+            <button
+              class="pick"
+              bind:this={effortButton}
+              aria-haspopup="menu"
+              aria-labelledby="{uid}-effort {uid}-effort-value"
+              aria-describedby={noEffort ? `${uid}-effort-why` : undefined}
+              disabled={!!noEffort}
+              use:tip={noEffort ?? effortShown}
+              onclick={effortMenu}
+            >
+              <span id="{uid}-effort-value">{noEffort ? t('board.form.options.auto') : effortShown}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            {#if noEffort}<span class="sr" id="{uid}-effort-why">{noEffort}</span>{/if}
+          </div>
+        </div>
+        {#each notices as n (n)}<span class="notice" role="status">{n}</span>{/each}
+      </div>
     </div>
   </div>
   {#snippet footer()}
@@ -870,9 +1016,41 @@
     font-size: 11.5px;
     cursor: pointer;
   }
-  .pick:hover {
+  .pick:hover:not(:disabled) {
     color: var(--text);
     border-color: var(--accent);
+  }
+  .pick:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  /* The account, the model and the effort, side by side under the rest, across both columns; a long name is cut. */
+  .opts-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .opts {
+    display: flex;
+    gap: 14px;
+    min-width: 0;
+  }
+  .opts .branch {
+    flex: 0 1 auto;
+  }
+  /* What a change set back to « Auto ». */
+  .notice {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
   .pick span:first-child {
     overflow: hidden;

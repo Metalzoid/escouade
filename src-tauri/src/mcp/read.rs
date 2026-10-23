@@ -306,6 +306,22 @@ struct TicketRow {
     agent: Option<String>,
     /// Why it no longer moves on by itself.
     blocked: Option<String>,
+    /// The account (its name), the model and the effort it is set to (ESC-153): left out when
+    /// « Auto ».
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effort: Option<String>,
+}
+
+/// The name of the account `id` a ticket is set to, as the tools say it (by its id when gone).
+fn account_name<R: Runtime>(core: &Core<R>, id: &str) -> String {
+    accounts::find(&core.settings.read(), id).map_or_else(
+        || id.to_string(),
+        |a| accounts::name_in(crate::i18n::ui(), a),
+    )
 }
 
 /// `list_tickets`: the tickets of `project`, of every column or of `column`, in the board's order.
@@ -345,6 +361,9 @@ pub(super) fn tickets<R: Runtime>(
             after: after_keys(t, &keys),
             agent: t.agent_id.as_ref().and_then(|a| names.get(a).cloned()),
             blocked: t.blocked.clone(),
+            account: (!t.account.is_empty()).then(|| account_name(core, &t.account)),
+            model: (!t.model.is_empty()).then(|| t.model.clone()),
+            effort: (!t.effort.is_empty()).then(|| t.effort.clone()),
         })
         .collect();
     json(&rows)
@@ -383,6 +402,14 @@ fn after_keys(t: &Ticket, keys: &HashMap<&str, &str>) -> Vec<String> {
         .collect()
 }
 
+/// What the tools say of a ticket's account, model or effort left to its default (ESC-153).
+const AUTO: &str = "auto";
+
+/// `v`, else `auto`.
+fn or_auto(v: &str) -> String {
+    if v.is_empty() { AUTO } else { v }.to_string()
+}
+
 /// A ticket whole, as `get_ticket` answers it (and the tools that make or change one, M4).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -403,12 +430,16 @@ pub(crate) struct TicketView {
     /// Its other files, of any format, in its order: joined in its window or attached by the tools;
     /// its agent is given their paths with its first message, and `get_ticket_file` reads one.
     files: Vec<FileView>,
-    /// The model and effort of its agent alone (`start_ticket` gave them); left out when it has
-    /// none of its own, the board's being its agent's.
-    #[serde(skip_serializing_if = "String::is_empty")]
+    /// The account its agents start on (its name, `auto`: the current account of its harness),
+    /// and its id; the model and the effort (`auto`: the Kanban's, else the account's) (ESC-153).
+    account: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_id: Option<String>,
     model: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
     effort: String,
+    /// Why it went back to « Auto » (its account removed, switched off or signed out).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_lost: Option<String>,
     external: Option<External>,
     /// Its agent: None before it starts, and still named once the ticket is done (archived).
     agent: Option<TicketAgent>,
@@ -510,8 +541,14 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
         progress: t.progress.clone(),
         images: images::listed(&core.data.ticket_dir(&t.id), &t.images),
         files: files::listed(&core.data.ticket_dir(&t.id), &t.files),
-        model: t.model.clone(),
-        effort: t.effort.clone(),
+        account: match t.account.as_str() {
+            "" => AUTO.into(),
+            id => account_name(core, id),
+        },
+        account_id: (!t.account.is_empty()).then(|| t.account.clone()),
+        model: or_auto(&t.model),
+        effort: or_auto(&t.effort),
+        account_lost: t.account_lost.clone(),
         external: t.external.as_ref().map(|e| External {
             service: e.service,
             key: e.key.clone(),

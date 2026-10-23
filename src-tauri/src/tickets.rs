@@ -232,6 +232,67 @@ pub(crate) fn only_todo_is_edited() -> anyhow::Error {
     ))
 }
 
+/// Why a ticket set on an account went back to « Auto » (ESC-153).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Lost {
+    /// Removed from the settings.
+    Gone,
+    /// Switched off.
+    Off,
+    /// Not signed in any more.
+    SignedOut,
+    /// No longer one its project may use (`accounts::ticket_refusal`, said).
+    Refused(String),
+}
+
+/// What the card of a ticket says of the account `name` it went back to « Auto » from.
+pub(crate) fn lost_line(lang: Lang, name: &str, why: &Lost) -> String {
+    match why {
+        Lost::Gone => tr_in!(
+            lang,
+            "Le compte {name} n’existe plus : repassé en « Auto ».",
+            "The account {name} no longer exists: back to “Auto”."
+        ),
+        Lost::Off => tr_in!(
+            lang,
+            "Le compte {name} est désactivé : repassé en « Auto ».",
+            "The account {name} is switched off: back to “Auto”."
+        ),
+        Lost::SignedOut => tr_in!(
+            lang,
+            "Le compte {name} n’est pas connecté : repassé en « Auto ».",
+            "The account {name} isn’t signed in: back to “Auto”."
+        ),
+        Lost::Refused(why) => tr_in!(lang, "{why} Repassé en « Auto ».", "{why} Back to “Auto”."),
+    }
+}
+
+/// The notification of the same, for the ticket `key`.
+pub(crate) fn lost_alert(lang: Lang, key: &str, name: &str, why: &Lost) -> String {
+    match why {
+        Lost::Gone => tr_in!(
+            lang,
+            "{key} : le compte {name} n’existe plus, repassé en « Auto »",
+            "{key}: the account {name} no longer exists, back to “Auto”"
+        ),
+        Lost::Off => tr_in!(
+            lang,
+            "{key} : le compte {name} est désactivé, repassé en « Auto »",
+            "{key}: the account {name} is switched off, back to “Auto”"
+        ),
+        Lost::SignedOut => tr_in!(
+            lang,
+            "{key} : le compte {name} n’est pas connecté, repassé en « Auto »",
+            "{key}: the account {name} isn’t signed in, back to “Auto”"
+        ),
+        Lost::Refused(_) => tr_in!(
+            lang,
+            "{key} : le compte {name} ne sert plus ce projet, repassé en « Auto »",
+            "{key}: the account {name} no longer serves this project, back to “Auto”"
+        ),
+    }
+}
+
 /// The notification of a ticket that reached « À tester », or got blocked (`blocked`, why).
 pub(crate) fn ticket_alert(lang: Lang, key: &str, ready: bool, blocked: &str) -> String {
     if ready {
@@ -301,6 +362,11 @@ pub struct TicketDraft {
     /// as it is (the tools of the MCP server, the imports).
     #[serde(deserialize_with = "given")]
     pub engine: Option<Option<EngineId>>,
+    /// Its account, model and effort (« Compte », « Modèle », « Effort » in its form, ESC-153):
+    /// empty, « Auto »; None, absent, they stay as they are.
+    pub account: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
@@ -311,6 +377,11 @@ where
     T: Deserialize<'de>,
 {
     Option::<T>::deserialize(d).map(Some)
+}
+
+/// A field of a form trimmed, empty when it is not given.
+fn trimmed(v: Option<&str>) -> String {
+    v.unwrap_or_default().trim().to_string()
 }
 
 /// An image of a ticket's form: one the ticket has (`file`, in its folder), or one pasted or
@@ -416,6 +487,8 @@ impl<R: Runtime> Core<R> {
         }
         let project = self.project(project_id)?;
         // Refused before a key is used up.
+        let engine = d.engine.flatten().unwrap_or(project.engine());
+        let account = self.ticket_account(&project, engine, d.account.as_deref())?;
         let branch = self.ticket_branch(&project, &d.branch).await?;
         let id = new_id();
         let dir = self.data.ticket_dir(&id);
@@ -500,6 +573,9 @@ impl<R: Runtime> Core<R> {
             images,
             files,
             engine: d.engine.flatten(),
+            account,
+            model: trimmed(d.model.as_deref()),
+            effort: trimmed(d.effort.as_deref()),
             ..Default::default()
         };
         let pushed = {
@@ -538,6 +614,25 @@ impl<R: Runtime> Core<R> {
         Ok(ticket)
     }
 
+    /// The account a ticket's form or a tool names (« Compte », ESC-153), trimmed: empty for
+    /// « Auto » (and when none is named), else one its project may use on `engine`
+    /// (`accounts::ticket_refusal` says why not).
+    fn ticket_account(
+        &self,
+        project: &Project,
+        engine: EngineId,
+        asked: Option<&str>,
+    ) -> Result<String> {
+        let id = trimmed(asked);
+        if id.is_empty() {
+            return Ok(id);
+        }
+        match accounts::ticket_refusal(&self.settings.read(), project, engine, &id) {
+            Some(refusal) => Err(refusal),
+            None => Ok(id),
+        }
+    }
+
     /// The branch a ticket's form names, trimmed: empty for the ticket's own, else one the
     /// repository has (a local branch, or a remote one), and not the board's target. It may be
     /// taken by then, or be the folder's: the start refuses it, as an agent made on it is.
@@ -572,6 +667,23 @@ impl<R: Runtime> Core<R> {
         if !branch.is_empty() && branch == target.trim() {
             bail!(target_branch_refusal(i18n::ui()));
         }
+        // Its account, on the harness it will have: one named is checked; a harness changed that
+        // the account it had does not run sets it back to « Auto », as the form does.
+        let account = {
+            let had = self.ticket(id)?;
+            let project = self.project(&had.project_id)?;
+            let engine = d.engine.unwrap_or(had.engine).unwrap_or(project.engine());
+            match d.account.as_deref() {
+                Some(asked) => Some(self.ticket_account(&project, engine, Some(asked))?),
+                None if !had.account.is_empty()
+                    && accounts::find(&self.settings.read(), &had.account)
+                        .is_some_and(|a| a.engine != engine) =>
+                {
+                    Some(String::new())
+                }
+                None => None,
+            }
+        };
         // The images pasted are written first, out of the lock, and the files joined moved out of
         // the drafts. Then only this save's files go: those it wrote when it is refused, those it
         // took away once it is done. Everything is checked before anything is written.
@@ -657,6 +769,17 @@ impl<R: Runtime> Core<R> {
                 if let Some(engine) = d.engine {
                     t.engine = engine;
                 }
+                if let Some(account) = account {
+                    t.account = account;
+                }
+                if let Some(model) = &d.model {
+                    t.model = model.trim().to_string();
+                }
+                if let Some(effort) = &d.effort {
+                    t.effort = effort.trim().to_string();
+                }
+                // Saved again: what its card said of an account it lost is old news.
+                t.account_lost = None;
                 let before = images.map(|i| std::mem::replace(&mut t.images, i));
                 let files_before = files.map(|f| std::mem::replace(&mut t.files, f));
                 Ok((t.clone(), before, files_before))
@@ -818,10 +941,29 @@ impl<R: Runtime> Core<R> {
         model: Option<String>,
         effort: Option<String>,
     ) -> Result<()> {
+        self.ticket_start_on(id, None, model, effort)
+    }
+
+    /// `ticket_start_with` on `account` too (`start_ticket`): given, it is the ticket's from now
+    /// on, as its model and its effort are; empty, « Auto ».
+    pub(crate) fn ticket_start_on(
+        self: &Arc<Self>,
+        id: &str,
+        account: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> Result<()> {
         // A project no account serves starts nothing, nor later on its own once one does.
         let ticket = self.ticket(id)?;
         let project = ticket.project_id.clone();
         let engine = self.ticket_engine(&ticket);
+        let account = match account {
+            Some(asked) => {
+                let p = self.project(&project)?;
+                Some(self.ticket_account(&p, engine, Some(&asked))?)
+            }
+            None => None,
+        };
         // No account of its harness at all (ESC-128): one is to be added first.
         if !accounts::has_any(&self.settings.read(), engine) {
             return Err(accounts::no_account_of(engine));
@@ -838,6 +980,10 @@ impl<R: Runtime> Core<R> {
                 ));
             }
             t.forced = true;
+            if let Some(account) = account {
+                t.account = account;
+                t.account_lost = None;
+            }
             if let Some(model) = model {
                 t.model = model;
             }
@@ -1312,6 +1458,10 @@ impl<R: Runtime> Core<R> {
                 let mut held: HashMap<EngineId, bool> = HashMap::new();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
                     let e = engine_of(t);
+                    // One set on an account waits for that account alone (ESC-153).
+                    if !t.account.is_empty() {
+                        return self.ticket_held(&p, t, e);
+                    }
                     *held.entry(e).or_insert_with(|| self.held(&p.id, e))
                 })
             };
@@ -1345,10 +1495,8 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             for id in ids {
-                let engine = self
-                    .ticket(&id)
-                    .map_or_else(|_| p.engine(), |t| engine_of(&t));
-                if self.held(&p.id, engine) {
+                let Ok(t) = self.ticket(&id) else { continue };
+                if self.ticket_held(&p, &t, engine_of(&t)) {
                     continue;
                 }
                 self.start_ticket(&p, &id).await;
@@ -1513,6 +1661,134 @@ impl<R: Runtime> Core<R> {
         Ok(())
     }
 
+    /// The account a ticket's agent starts on (ESC-153): the one the ticket is set to while it may
+    /// still take it (`lost_account`); one that may not sends the ticket back to « Auto », which
+    /// its card and a notification say. « Auto »: the one a new agent of its project goes to.
+    fn ticket_start_account(
+        self: &Arc<Self>,
+        project: &Project,
+        t: &Ticket,
+        engine: EngineId,
+    ) -> Result<String> {
+        if !t.account.is_empty() {
+            match self.lost_account(project, engine, &t.account) {
+                None => return Ok(t.account.clone()),
+                Some(why) => self.back_to_auto(&t.id, &t.account, &why),
+            }
+        }
+        self.account_for_new(&project.id, engine)
+    }
+
+    /// Why the ticket set on the account `id` may no longer go to it: gone, switched off, signed
+    /// out, or refused to its project since (reserved to others, `accounts::ticket_refusal`).
+    fn lost_account(&self, project: &Project, engine: EngineId, id: &str) -> Option<Lost> {
+        let settings = self.settings.read().clone();
+        match accounts::find(&settings, id) {
+            None => return Some(Lost::Gone),
+            Some(a) if !a.active => return Some(Lost::Off),
+            Some(_) => {}
+        }
+        let signed_out = self
+            .usage
+            .lock()
+            .accounts
+            .iter()
+            .any(|u| u.id == id && !u.connected);
+        if signed_out {
+            return Some(Lost::SignedOut);
+        }
+        accounts::ticket_refusal(&settings, project, engine, id)
+            .map(|e| Lost::Refused(e.to_string()))
+    }
+
+    /// The ticket set on the account `id` (named `name`, the settings may not have it any more)
+    /// goes back to « Auto », for `why`: its card says it, and so does a notification.
+    fn back_to_auto_named(self: &Arc<Self>, ticket_id: &str, name: &str, why: &Lost) {
+        let lang = i18n::ui();
+        let card = lost_line(lang, name, why);
+        let back = self.edit_ticket(ticket_id, |t| {
+            if t.account.is_empty() {
+                return Ok(None);
+            }
+            t.account.clear();
+            t.account_lost = Some(card.clone());
+            Ok(Some(t.clone()))
+        });
+        let Ok(Some(t)) = back else { return };
+        log::info!("ticket {}: its account is lost, back to Auto", t.key);
+        let project = self
+            .project(&t.project_id)
+            .map(|p| p.name)
+            .unwrap_or_default();
+        self.alert(
+            NotifyKind::Ticket,
+            project,
+            lost_alert(lang, &t.key, name, why),
+            UiEvent::FocusBoard {
+                project_id: t.project_id,
+            },
+        );
+    }
+
+    /// `back_to_auto_named`, the account named as the settings have it (by its id when gone).
+    fn back_to_auto(self: &Arc<Self>, ticket_id: &str, id: &str, why: &Lost) {
+        let name = accounts::find(&self.settings.read(), id)
+            .map_or_else(|| id.to_string(), |a| accounts::name_in(i18n::ui(), a));
+        self.back_to_auto_named(ticket_id, &name, why);
+    }
+
+    /// The settings saved: a ticket set on an account removed or switched off goes back to
+    /// « Auto » at once (`before`: the settings before, which name it). One done keeps it, as its
+    /// history.
+    pub(crate) fn release_lost_accounts(self: &Arc<Self>, before: &Settings) {
+        let settings = self.settings.read().clone();
+        let lost: Vec<(String, String, Lost)> = self
+            .tickets
+            .read()
+            .iter()
+            .filter(|t| !t.account.is_empty() && t.column != Column::Done)
+            .filter_map(|t| {
+                let why = match accounts::find(&settings, &t.account) {
+                    None => Lost::Gone,
+                    Some(a) if !a.active => Lost::Off,
+                    Some(_) => return None,
+                };
+                let name = accounts::find(before, &t.account)
+                    .or_else(|| accounts::find(&settings, &t.account))
+                    .map_or_else(|| t.account.clone(), |a| accounts::name_in(i18n::ui(), a));
+                Some((t.id.clone(), name, why))
+            })
+            .collect();
+        for (id, name, why) in lost {
+            self.back_to_auto_named(&id, &name, &why);
+        }
+    }
+
+    /// Whether the ticket may not start now for want of an account (`held`): one set on an account
+    /// waits for that account alone (ESC-153), else for those of its harness.
+    fn ticket_held(&self, project: &Project, t: &Ticket, engine: EngineId) -> bool {
+        match self.pinned(project, t, engine) {
+            Some(id) => self.account_hold(&id).is_some(),
+            None => self.held(&project.id, engine),
+        }
+    }
+
+    /// The account the ticket is set to, while it may still take it (`lost_account`).
+    pub(crate) fn pinned(&self, project: &Project, t: &Ticket, engine: EngineId) -> Option<String> {
+        (!t.account.is_empty() && self.lost_account(project, engine, &t.account).is_none())
+            .then(|| t.account.clone())
+    }
+
+    /// Whether the agent works on a ticket set on an account (ESC-153): it never leaves it on its
+    /// own, at the limit as past « Changer de compte à ».
+    pub(crate) fn agent_pinned(&self, agent_id: &str) -> bool {
+        self.tickets.read().iter().any(|t| {
+            t.agent_id.as_deref() == Some(agent_id)
+                && t.column != Column::Done
+                && !t.account.is_empty()
+        })
+    }
+
     /// The ticket's agent: its worktree on `<prefix><key>` (`ticket/<key>`) from the target branch, its block of
     /// ports (none when isola runs the project's services), the protocol appended to its system
     /// prompt; then, its worktree set up, its first message.
@@ -1524,7 +1800,7 @@ impl<R: Runtime> Core<R> {
         let lang = self.lang().claude;
         // Its account, picked now: whether its model takes the mode `auto` is what its `claude` told.
         let engine = t.engine.unwrap_or(project.engine());
-        let account = self.account_for_new(&project.id, engine)?;
+        let account = self.ticket_start_account(project, t, engine)?;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
         let defaults = accounts::defaults(accounts::find(&settings, &account), engine);
         let (model, effort, mode) =
@@ -1785,6 +2061,10 @@ impl<R: Runtime> Core<R> {
                 rt.meta.engine,
             )
         };
+        // Its ticket is set on its account: never another (ESC-153).
+        if self.agent_pinned(agent_id) {
+            return Err(NoOther::Pinned);
+        }
         // No account of its harness serves the project any more: none to go on on. Another
         // harness's would be a handover, not a switch (ESC-88).
         if !accounts::serves_any(&settings, engine, Some(&project)) {

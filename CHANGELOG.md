@@ -6,6 +6,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+### Nouveautés
+
+- Un ticket a « Compte », « Modèle » et « Effort » à côté de « Harness » : son agent part toujours sur ce que tu choisis, et un ticket fixé sur un compte y reste, en attendant sa remise à zéro plutôt que de changer de compte. Par défaut, « Auto » dit ce qu’il donnera : le compte courant, le modèle et l’effort du Kanban.
+
 ### Corrections
 
 - Le `.escouade.yml` qu’écrit Escouade passe Prettier : ses listes sont indentées de la même façon à la racine comme dans un groupe, et ses valeurs ne prennent des guillemets que lorsque YAML l’exige.

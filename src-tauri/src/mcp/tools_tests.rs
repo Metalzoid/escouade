@@ -577,6 +577,9 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
         "progress": ["Fichier écrit"],
         "images": [],
         "files": [],
+        "account": "auto",
+        "model": "auto",
+        "effort": "auto",
         "external": {
             "service": "jira",
             "key": "ATL-12",
@@ -609,11 +612,14 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
             "ok"
         )
     );
-    // Not imported: no external ticket. No model or effort of its own either: they are left out.
+    // Not imported: no external ticket. No account, model or effort of its own either: « auto » (ESC-153).
     let plain = read(&c, "get_ticket", json!({ "ticket": "DEM-1" })).await;
     assert_eq!(plain["external"], json!(null));
-    assert!(!plain.as_object().unwrap().contains_key("model"));
-    assert!(!plain.as_object().unwrap().contains_key("effort"));
+    assert_eq!(
+        (&plain["account"], &plain["model"], &plain["effort"]),
+        (&json!("auto"), &json!("auto"), &json!("auto"))
+    );
+    assert!(!plain.as_object().unwrap().contains_key("accountId"));
     // Launched with a model and an effort of its own (`start_ticket`): read back, its agent's alone.
     put(
         &h,

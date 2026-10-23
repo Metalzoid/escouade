@@ -349,3 +349,32 @@ async fn new_agents_go_to_another_account_past_the_threshold() {
         "pro"
     );
 }
+
+#[tokio::test]
+async fn a_ticket_set_on_its_account_stays_there_past_the_threshold_and_is_told_why() {
+    // ESC-153: « Compte » set on Pro, its agent never leaves it on its own.
+    let h = harness("switch-at-pinned");
+    let (p, _) = h.project(false).await;
+    let (pro, _) = pro_and_team(&h);
+    uses(&pro, "fake-pct", 96);
+    let t = h
+        .core
+        .ticket_create(
+            &p.id,
+            crate::tickets::TicketDraft {
+                account: Some("pro".into()),
+                ..draft("Un [ok]", &[], 5)
+            },
+        )
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "to test", |t| t.column == Column::Review)
+        .await;
+    let id = h.ticket(&t.id).agent_id.unwrap();
+    let said = "Pro est à 96 % de sa fenêtre de 5 h, mais le ticket de l’agent est fixé sur ce compte : il y reste.";
+    h.wait("told why it stays", |h| notices(h, &id) == [said])
+        .await;
+    assert!(!h.core.switch_if_over(&id).await);
+    assert_eq!(h.agent(&id).account, "pro");
+    assert_eq!(config_dirs(&h, &h.worktree_of(&t.id)).len(), 1);
+}

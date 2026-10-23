@@ -280,6 +280,10 @@ async fn a_ticket_is_created_in_to_do_with_its_criteria_and_what_it_comes_after(
             "progress": [],
             "images": [],
             "files": [],
+            // Its account, model and effort left to their default (ESC-153).
+            "account": "auto",
+            "model": "auto",
+            "effort": "auto",
             "external": null,
             "agent": null,
             "branch": null,
@@ -4497,6 +4501,138 @@ async fn the_answer_of_start_ticket_has_no_effort_when_the_model_of_its_agent_ta
         })
         .await;
     }
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- the account, the model and the effort of a ticket (ESC-153) ----------
+
+#[tokio::test]
+async fn a_tickets_account_model_and_effort_are_set_read_and_given_at_its_start() {
+    let h = harness("mcp-act-ticket-account");
+    let p = project(&h).await;
+    with_pro(&h);
+    let c = external(&h).await;
+    // Made on Pro, named by its name in any case, on opus at its highest effort.
+    let v = read(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Sur Pro [ok]", "account": "pro", "model": "opus", "effort": "MAX" }),
+    )
+    .await;
+    assert_eq!(
+        (&v["account"], &v["accountId"], &v["model"], &v["effort"]),
+        (&json!("Pro"), &json!("pro"), &json!("opus"), &json!("max"))
+    );
+    let t = stored(&h, v["id"].as_str().unwrap());
+    assert_eq!(
+        (t.account.as_str(), t.model.as_str(), t.effort.as_str()),
+        ("pro", "opus", "max")
+    );
+    // One left to « Auto » says so; the list says only what is not.
+    let auto = read(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Auto [ok]" }),
+    )
+    .await;
+    assert_eq!(
+        (
+            &auto["account"],
+            auto.get("accountId"),
+            &auto["model"],
+            &auto["effort"]
+        ),
+        (&json!("auto"), None, &json!("auto"), &json!("auto"))
+    );
+    let rows = read(&c, "list_tickets", json!({ "project": p.id })).await;
+    assert_eq!(
+        (&rows[0]["account"], &rows[0]["model"], &rows[0]["effort"]),
+        (&json!("Pro"), &json!("opus"), &json!("max"))
+    );
+    assert_eq!(
+        (
+            rows[1].get("account"),
+            rows[1].get("model"),
+            rows[1].get("effort")
+        ),
+        (None, None, None)
+    );
+    // Back to « Auto » by an update, the account alone; then the effort alone.
+    let v = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.key, "account": "AUTO" }),
+    )
+    .await;
+    assert_eq!(
+        (&v["account"], &v["model"], &v["effort"]),
+        (&json!("auto"), &json!("opus"), &json!("max"))
+    );
+    let v = read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.key, "effort": "auto", "account": "Pro" }),
+    )
+    .await;
+    assert_eq!(
+        (&v["account"], &v["effort"]),
+        (&json!("Pro"), &json!("auto"))
+    );
+    let got = read(&c, "get_ticket", json!({ "ticket": t.key })).await;
+    assert_eq!(
+        (&got["account"], &got["model"], &got["effort"]),
+        (&json!("Pro"), &json!("opus"), &json!("auto"))
+    );
+    // An effort that is none, an account reserved to another project: refused, with why.
+    let e = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.key, "effort": "énorme" }),
+    )
+    .await;
+    assert!(e.starts_with("Effort « énorme » inconnu."), "{e}");
+    let q = other_project(&h, "autre").await;
+    h.set_settings(|s| {
+        for a in s.accounts.iter_mut().filter(|a| a.id == "pro") {
+            a.projects = vec![q.id.clone()];
+        }
+    });
+    let e = refused(
+        &c,
+        "create_ticket",
+        json!({ "project": p.id, "title": "Sur Pro [ok]", "account": "pro" }),
+    )
+    .await;
+    assert_eq!(e, "Le compte « Pro » est réservé à d’autres projets.");
+    let e = refused(
+        &c,
+        "start_ticket",
+        json!({ "ticket": auto["key"], "account": "pro" }),
+    )
+    .await;
+    assert_eq!(e, "Le compte « Pro » est réservé à d’autres projets.");
+    h.set_settings(|s| {
+        for a in s.accounts.iter_mut().filter(|a| a.id == "pro") {
+            a.projects.clear();
+        }
+    });
+    // Started on Pro by start_ticket: it is the ticket's, and its agent goes there.
+    read(
+        &c,
+        "start_ticket",
+        json!({ "ticket": auto["key"], "account": "Pro" }),
+    )
+    .await;
+    let id = auto["id"].as_str().unwrap();
+    assert_eq!(stored(&h, id).account, "pro");
+    h.wait("its agent to be made", |h| stored(h, id).agent_id.is_some())
+        .await;
+    assert_eq!(h.agent(&stored(&h, id).agent_id.unwrap()).account, "pro");
+    h.wait("its turn to end", |h| {
+        stored(h, id).column == Column::Review
+    })
+    .await;
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

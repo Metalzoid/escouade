@@ -860,10 +860,14 @@ export interface Ticket {
   external: ExternalRef | null;
   /** An existing branch its agent takes up; empty: its own, `ticket/<key>`, made at its start. */
   branch: string;
-  /** The model its agent runs, over the Kanban's (the MCP `start_ticket` sets it); empty: the Kanban's. */
+  /** The model its agent runs, over the Kanban's (« Modèle » in its form, or the MCP `start_ticket`); empty: « Auto », the Kanban's, else the account's. */
   model: string;
-  /** The effort its agent runs at, over the Kanban's; empty: the Kanban's. */
+  /** The effort its agent runs at, over the Kanban's; empty: « Auto », the Kanban's, else the account's. */
   effort: string;
+  /** The account its agents start on and stay on (« Compte », ESC-153), by id; empty: « Auto », the current account of its harness. */
+  account: string;
+  /** Why it went back to « Auto » (its account removed, switched off or signed out), until it is saved again. */
+  accountLost: string | null;
   /** The harness its agents run on (the autopilot starts them on it); null: the project's. */
   engine: EngineId | null;
   /** The images pasted or dropped in its form, in their order: its agent gets them with its first message. */
@@ -950,6 +954,10 @@ export interface TicketDraft {
   files?: DraftFile[];
   /** Its harness (« Harness »), null for the project's; absent: it stays as it is. */
   engine?: EngineId | null;
+  /** Its account, model and effort (ESC-153), empty for « Auto »; absent: they stay as they are. */
+  account?: string;
+  model?: string;
+  effort?: string;
 }
 
 export interface RecipeStep {

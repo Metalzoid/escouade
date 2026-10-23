@@ -1951,6 +1951,8 @@ impl<R: Runtime> Core<R> {
         // Accounts added, removed, put in another order, a threshold or a language changed: the
         // quotas as the window shows them.
         self.settle_usage();
+        // A ticket set on an account removed or switched off goes back to « Auto » (ESC-153).
+        self.release_lost_accounts(&before_settings);
         if !auto_resume {
             // Turned off: the resumes already planned go too.
             let dropped: Vec<AgentView> = self

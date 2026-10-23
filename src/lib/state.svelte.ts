@@ -160,6 +160,8 @@ export interface TicketFormDraft {
   branch: string;
   /** Its harness (null: the project's); absent: the ticket's. */
   engine?: EngineId | null;
+  /** Its account, model and effort (empty: « Auto »); absent: the ticket's. */
+  options?: { account: string; model: string; effort: string };
   /** Absent: those of the ticket. */
   images?: FormImage[];
   /** The files of the ticket's images as the window showed them, those gone from its folder left out; absent: the ticket's. */

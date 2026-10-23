@@ -829,7 +829,8 @@ impl<R: Runtime> Core<R> {
                 rt.meta.handed_from.as_ref().map(|l| l.engine),
             )
         };
-        if archived || !self.engine_spent(id).unwrap_or(false) {
+        // Its ticket set on its account waits for it, on its harness (ESC-153).
+        if archived || self.agent_pinned(id) || !self.engine_spent(id).unwrap_or(false) {
             return false;
         }
         let targets = self.handover_targets(id).unwrap_or_default();

@@ -1074,3 +1074,43 @@ describe('TicketCard: the brand of its agent’s harness (ESC-29)', () => {
     expect(screen.getByRole('img', { name: 'Harness : Harness nu' })).toBeInTheDocument();
   });
 });
+
+// A ticket set on an account (ESC-153) says it on its card, and that its agent waits for that account alone.
+describe('TicketCard with an account of its own', () => {
+  beforeEach(() => {
+    resetApp({ agents: [agent({ status: 'running' })] });
+    app.settings = {
+      ...app.settings,
+      accounts: [{ id: 'pro', name: 'Pro', engine: 'claude', configDir: 'C:\\pro', claudePath: '', active: true }],
+    };
+  });
+
+  it('names the account next to the key, nothing on « Auto »', () => {
+    fakeBackend();
+    const { unmount } = show(ticket({ account: 'pro' }));
+    const chip = screen.getByLabelText('Compte de ce ticket : Pro (ses agents y restent)');
+    expect(chip).toHaveTextContent(/^Pro$/);
+    unmount();
+    show(ticket());
+    expect(screen.queryByLabelText(/^Compte de ce ticket/)).toBeNull();
+  });
+
+  it('says its agent waits for the quota of its account, and when it resumes', () => {
+    const at = new Date();
+    at.setHours(15, 30, 0, 0);
+    resetApp({ agents: [agent({ id: 'a1', status: 'idle', resumeAt: at.getTime() })] });
+    app.settings = {
+      ...app.settings,
+      accounts: [{ id: 'pro', name: 'Pro', engine: 'claude', configDir: 'C:\\pro', claudePath: '', active: true }],
+    };
+    fakeBackend();
+    show(doing({ account: 'pro' }));
+    expect(screen.getByText('En attente du quota de Pro, reprise à 15:30')).toBeInTheDocument();
+  });
+
+  it('says why it went back to « Auto »', () => {
+    fakeBackend();
+    show(ticket({ accountLost: 'Le compte Pro n’existe plus : repassé en « Auto ».' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Le compte Pro n’existe plus : repassé en « Auto ».');
+  });
+});

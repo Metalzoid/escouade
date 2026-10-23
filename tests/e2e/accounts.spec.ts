@@ -429,3 +429,48 @@ test('the status bar projects each window to its reset, unless « Projection des
   const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
   await expect.poll(() => settings().quotaProjection).toBe(false);
 });
+
+// « Compte », « Modèle » and « Effort » of a ticket (ESC-153): its agent starts on what its form chose.
+test.describe('two accounts, a ticket set on the second', () => {
+  test.use({
+    preStart: {
+      run: (root) => {
+        for (const dir of [principalDir(root), proDir(root)]) {
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(path.join(dir, '.credentials.json'), SIGNED_IN);
+        }
+        return { accounts: [{ id: 'pro', name: 'Pro', configDir: proDir(root), claudePath: '', active: true }] };
+      },
+    },
+  });
+
+  test('starts its agent on the account, the model and the effort its form chose, and its card names the account', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo, { firstAgent: false });
+    await page.getByRole('button', { name: /^Kanban/ }).click();
+    await page.getByRole('button', { name: 'Nouveau ticket' }).click();
+    await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Sur Pro [ok]');
+    const field = (name: string) => page.getByRole('button', { name: new RegExp(`^${name} `) });
+    // « Auto » says what it gives: Principal, the current account.
+    await expect(field('Compte')).toHaveAccessibleName('Compte Auto · Principal');
+    await field('Compte').click();
+    await page.getByRole('menuitem', { name: 'Pro', exact: true }).click();
+    await expect(field('Compte')).toHaveAccessibleName('Compte Pro');
+    await field('Modèle').click();
+    await page.getByRole('menuitem', { name: /^Opus/ }).click();
+    await expect(field('Modèle')).toHaveAccessibleName(/^Modèle Opus/);
+    await field('Effort').click();
+    await page.getByRole('menuitem', { name: 'Élevé', exact: true }).click();
+    await expect(field('Effort')).toHaveAccessibleName('Effort Élevé');
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+
+    const review = page.getByRole('region', { name: 'À tester' });
+    await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(review.getByLabel('Compte de ce ticket : Pro (ses agents y restent)')).toBeVisible();
+    // Its agent ran on Pro alone, on opus at a high effort.
+    const runs = app.launches().filter(isAgent);
+    expect(runs.map((l) => l.configDir)).toEqual([proDir(app.root)]);
+    const argv = runs[0].argv;
+    expect([argv[argv.indexOf('--model') + 1], argv[argv.indexOf('--effort') + 1]]).toEqual(['opus', 'high']);
+  });
+});

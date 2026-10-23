@@ -40,6 +40,10 @@ export default {
     ownModel: 'Modèle de ce ticket : {model} (avant celui du Kanban)',
     ownEffort: 'Effort de ce ticket : {effort} (avant celui du Kanban)',
     ownBoth: 'Modèle de ce ticket : {model}, effort {effort} (avant celui du Kanban)',
+    // Its own account (ESC-153): its agents start on it, and stay there.
+    ownAccount: 'Compte de ce ticket : {account} (ses agents y restent)',
+    // A ticket set on an account, its agent waiting for that account's quota: it never goes elsewhere.
+    waitsAccount: 'En attente du quota de {account}, reprise à {at}',
     doneHeading: 'Ce qui a été fait',
     progressLabel: 'Avancement',
     moreSteps: { one: '{count} autre élément', other: '{count} autres éléments' },
@@ -99,6 +103,23 @@ export default {
     /** « Harness » of the ticket, from two harnesses found on: the project's by default, which the autopilot follows. */
     engine: 'Harness',
     engineProject: 'Celui du projet ({engine})',
+    // « Compte », « Modèle », « Effort » of the ticket (ESC-153): « Auto » says what it gives.
+    options: {
+      account: 'Compte',
+      model: 'Modèle',
+      effort: 'Effort',
+      auto: 'Auto',
+      autoIs: 'Auto · {what}',
+      autoFromBoard: 'Auto · {what} (Kanban)',
+      autoFromAccount: 'Auto · {what} (compte)',
+      autoAccountDetail: 'Le compte courant du harness pour ce projet, au démarrage du ticket.',
+      pinnedDetail: 'Ses agents partent sur ce compte et y restent : à sa limite, ils attendent sa remise à zéro.',
+      noEffort: '{model} ne prend pas d’effort',
+      noEffortHarness: 'Ce harness ne prend pas d’effort',
+      accountReset: '« Compte » remis sur « Auto » : {account} ne sert pas ce ticket sur ce harness.',
+      modelReset: '« Modèle » remis sur « Auto » : {account} n’a pas {model}.',
+      effortReset: '« Effort » remis sur « Auto » : {model} ne prend pas l’effort {effort}.',
+    },
     editTitle: 'Modifier {key}',
     addHint: '{key} pour ajouter',
     saveHint: '{key} pour enregistrer',

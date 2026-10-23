@@ -1,9 +1,9 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { newAgentDefaults, pauseOf } from '../../lib/accounts';
+  import { accountName, newAgentDefaults, pauseOf } from '../../lib/accounts';
   import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
-  import { fWhen } from '../../lib/format';
+  import { fTime, fWhen } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { SERVICES, shortName } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
@@ -57,6 +57,12 @@
         ? t('board.card.ownEffort', { effort })
         : t('board.card.ownBoth', { model, effort });
     return { text: [model, effort].filter(Boolean).join(' · '), label };
+  });
+  /** The name of the account it is set to (ESC-153), its id when the settings no longer have it; null on « Auto ». */
+  const ownAccount = $derived.by(() => {
+    if (!ticket.account) return null;
+    const a = (app.settings.accounts ?? []).find((x) => x.id === ticket.account);
+    return a ? accountName(a) : ticket.account;
   });
   /** What the paperclip counts: its images and its files, said apart (« 1 image jointe, 2 fichiers joints »). */
   const attached = $derived(ticket.images.length + ticket.files.length);
@@ -287,6 +293,12 @@
         ><span class="mono" aria-hidden="true">{attached}</span><span class="sr">{said}</span></span
       >
     {/if}
+    {#if ownAccount}<span
+        class="own"
+        role="img"
+        aria-label={t('board.card.ownAccount', { account: ownAccount })}
+        use:tip={t('board.card.ownAccount', { account: ownAccount })}>{ownAccount}</span
+      >{/if}
     {#if own}<span class="own mono" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
     <div style="flex:1"></div>
     {#if ticket.column === 'doing'}<span class="loop mono"
@@ -361,6 +373,9 @@
     {#if !ticket.blocked}
       {#if waiting}
         <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>{t('board.card.questionWaiting')}</div>
+      {:else if agent?.resumeAt && ownAccount}
+        <!-- Set on its account, it waits for that one's reset, never going elsewhere (ESC-153). -->
+        <div class="act">{t('board.card.waitsAccount', { account: ownAccount, at: fTime(agent.resumeAt) })}</div>
       {:else if agent?.resumeAt}
         <div class="act">{t('board.card.resumes', { when: fWhen(agent.resumeAt, app.now) })}</div>
       {:else if agent?.setup}
@@ -371,6 +386,11 @@
         <div class="act"><span class="dots"><span></span><span></span><span></span></span>{agent.activity ?? t('board.card.thinking')}</div>
       {/if}
     {/if}
+  {/if}
+
+  {#if ticket.accountLost && ticket.column !== 'done'}
+    <!-- Its account removed, switched off or signed out: back on « Auto », until it is saved again. -->
+    <span class="lost" role="status">{ticket.accountLost}</span>
   {/if}
 
   {#if ticket.column === 'todo'}
@@ -707,6 +727,10 @@
   .meta {
     font-size: 11.5px;
     color: var(--muted);
+  }
+  .lost {
+    font-size: 11.5px;
+    color: var(--wait);
   }
   .k {
     font-size: 11px;
