@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 const MISSING: &str = "zz-introuvable";
 
 /// `p` made private, as « Projet privé » saves it.
-fn make_private(h: &Harness, p: &Project) -> Project {
+pub(super) fn make_private(h: &Harness, p: &Project) -> Project {
     let mut projects = h.core.projects.write();
     let found = projects.iter_mut().find(|x| x.id == p.id).unwrap();
     found.private = true;

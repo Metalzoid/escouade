@@ -11,9 +11,9 @@
 //!   exceeded by a ticket launched, nor its most agents working at once by an agent created;
 //! - a ticket that comes after tickets not done is launched by hand only once the user agreed in
 //!   the window (a confirmation): here it is refused, and the refusal says which tickets;
-//! - an agent never writes to nor stops itself, and acts on its own project alone (it reads the
-//!   others: the tools that read are open), but a private project is not found by the agents of
-//!   the others, and its own agents find no other (`resolve::Sight`);
+//! - an agent never writes to nor stops itself, and acts where it sees (`resolve::Sight`): the
+//!   agent of a project that is not private on every project that is not private; a private
+//!   project is not found by the agents of the others, and its own agents find no other;
 //! - a project's Kanban settings are set as the window's form sets them (`set_board`, the same
 //!   function of the core), under its checks; what runs without a question stays the user's, given
 //!   in the window: the mode `bypassPermissions` (kept when the Kanban is on it already) and the
@@ -45,7 +45,7 @@ use super::images;
 use super::read::{
     answerable, asked_questions, board_view, json, request_type, ticket_view, todo_keys, TicketView,
 };
-use super::resolve;
+use super::resolve::{self, Sight};
 use super::tools::{
     AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateTicketArgs,
     DecisionArg, DeleteTicketArgs, DismissBlockArgs, MoveTicketArgs, PositionArg, QuestionAnswer,
@@ -103,9 +103,11 @@ fn agent_only(caller: &Caller) -> Result<&str, ToolError> {
     }
 }
 
-/// An agent of Escouade acts on its own project alone (it may read the others it sees,
-/// `resolve::Sight`); Claude outside Escouade acts on any.
-pub(super) fn own_project_only<R: Runtime>(
+/// An agent of Escouade acts where it sees (`resolve::Sight`): the agent of a project that is not
+/// private on every project that is not private, the agent of a private project on its own alone;
+/// Claude outside Escouade acts on any. An agent the core no longer has acts nowhere. The refusal
+/// names no project: one the agent does not see may be private, and is not said to be.
+pub(super) fn may_act_on<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     project_id: &str,
@@ -113,21 +115,19 @@ pub(super) fn own_project_only<R: Runtime>(
     let Caller::Agent(id) = caller else {
         return Ok(());
     };
-    let (name, own) = match core.agent(id) {
-        Ok(h) => {
-            let rt = h.lock();
-            (rt.meta.name.clone(), rt.meta.project_id.clone())
-        }
-        Err(_) => (id.clone(), String::new()),
+    let Ok(h) = core.agent(id) else {
+        return Err(ToolError::Refused(tr!(
+            "L’agent {id} n’est plus dans Escouade : il n’agit plus.",
+            "The agent {id} is no longer in Escouade: it no longer acts."
+        )));
     };
-    if own == project_id {
+    let name = h.lock().meta.name.clone();
+    if Sight::of(core, caller).sees(project_id) {
         return Ok(());
     }
-    let project_name = |id: &str| core.project(id).map_or_else(|_| id.to_string(), |p| p.name);
-    let (own_name, other) = (project_name(&own), project_name(project_id));
     Err(ToolError::Refused(tr!(
-        "L’agent {name} n’agit que dans son propre projet ({own_name}) : le projet {other} n’est pas le sien.",
-        "The agent {name} only acts in its own project ({own_name}): the project {other} is not its own."
+        "L’agent {name} n’agit pas sur ce projet : il ne le voit pas.",
+        "The agent {name} does not act on this project: it does not see it."
     )))
 }
 
@@ -472,7 +472,7 @@ pub(super) async fn create_ticket<R: Runtime>(
     a: CreateTicketArgs,
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
-    own_project_only(core, caller, &project.id)?;
+    may_act_on(core, caller, &project.id)?;
     // The copies of the drafts the core does not move into the ticket go once the call is over.
     let mut drafted = Drafted::new(core);
     let draft = TicketDraft {
@@ -522,7 +522,7 @@ pub(super) async fn update_ticket<R: Runtime>(
     a: UpdateTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     // An empty list is none given.
     let (add, remove) = (
         a.add_images.unwrap_or_default(),
@@ -625,7 +625,7 @@ pub(super) fn move_ticket<R: Runtime>(
     a: MoveTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     let before = a.before.as_deref().map(str::trim).filter(|b| !b.is_empty());
     let target;
     let to = match (a.position, before) {
@@ -661,7 +661,7 @@ pub(super) fn start_ticket<R: Runtime>(
     a: StartTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
     let model = model_setting(core, auto_off(a.model.as_deref()))?;
     let effort = effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?;
@@ -1073,7 +1073,7 @@ pub(super) async fn set_board<R: Runtime>(
     a: SetBoardArgs,
 ) -> Result<(String, String), ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
-    own_project_only(core, caller, &project.id)?;
+    may_act_on(core, caller, &project.id)?;
     let model = model_setting(core, a.model.as_deref())?;
     // Git is read only for a target that is not the Kanban's own: giving that one back needs no
     // repository at all.
@@ -1183,7 +1183,7 @@ pub(super) fn approve_ticket<R: Runtime>(
     a: ApproveTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     // Its own work merged without a review: that is the user's call.
     not_own_ticket(
         core,
@@ -1209,7 +1209,7 @@ pub(super) async fn reject_ticket<R: Runtime>(
     a: RejectTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(
         core,
         caller,
@@ -1251,7 +1251,7 @@ pub(super) async fn resume_ticket<R: Runtime>(
     a: ResumeTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     // Where the window would go ahead: a message to the ticket's agent, else a new agent. One that
     // waits for its quota is refused by the core, which says until when.
@@ -1283,7 +1283,7 @@ pub(super) async fn resolve_conflict<R: Runtime>(
     a: ResolveConflictArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     if t.column != Column::Review {
         return Err(refusal(Refusal::NotInReview.into()));
@@ -1315,7 +1315,7 @@ pub(super) fn dismiss_block<R: Runtime>(
     a: DismissBlockArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     if t.column != Column::Review {
         return Err(refusal(Refusal::NotInReview.into()));
@@ -1342,7 +1342,7 @@ pub(super) async fn delete_ticket<R: Runtime>(
     a: DeleteTicketArgs,
 ) -> Result<String, ToolError> {
     let t = resolve::ticket(core, caller, &a.ticket)?;
-    own_project_only(core, caller, &t.project_id)?;
+    may_act_on(core, caller, &t.project_id)?;
     not_own_ticket(core, caller, &t, own_ticket_with_this_tool())?;
     // Its approval would go on without it: merging a ticket that is gone.
     if t.step.is_some() {
@@ -1418,7 +1418,7 @@ pub(super) async fn create_agent<R: Runtime>(
     a: CreateAgentArgs,
 ) -> Result<String, ToolError> {
     let project = resolve::project(core, caller, &a.project)?;
-    own_project_only(core, caller, &project.id)?;
+    may_act_on(core, caller, &project.id)?;
     let message = a.message.trim();
     if message.is_empty() {
         return Err(ToolError::Failed(tr!(
@@ -1477,7 +1477,7 @@ pub(super) async fn create_agent<R: Runtime>(
 }
 
 /// The agent `asked` names (in the project `project` when given), who is not the caller and,
-/// for an agent calling, is of its project.
+/// for an agent calling, is in a project it acts on (`may_act_on`).
 pub(super) fn other_agent<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -1492,7 +1492,7 @@ pub(super) fn other_agent<R: Runtime>(
     if matches!(caller, Caller::Agent(id) if *id == found.id) {
         return Err(ToolError::Refused(itself));
     }
-    own_project_only(core, caller, &found.project_id)?;
+    may_act_on(core, caller, &found.project_id)?;
     Ok(found)
 }
 
@@ -1952,7 +1952,7 @@ pub(super) async fn split_ticket<R: Runtime>(
                 "The agent {name} has no ticket: it has nothing to split."
             ))
         })?;
-    own_project_only(core, caller, &own.project_id)?;
+    may_act_on(core, caller, &own.project_id)?;
     let count = a.tickets.len();
     if count == 0 {
         return Err(ToolError::Failed(tr!(

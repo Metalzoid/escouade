@@ -6,6 +6,7 @@
 //! refused call leaves nothing behind: no ticket, no key used up, no file, no copy in the drafts.
 
 #[cfg(windows)]
+use super::private_tests::make_private;
 use super::tools_tests::junction;
 use super::tools_tests::{
     as_agent, call, external, link, other_project, project, put_agent, read, refused, Client,
@@ -626,20 +627,35 @@ async fn a_ticket_that_has_started_is_refused_before_any_file_is_read_or_referen
 }
 
 #[tokio::test]
-async fn an_agent_does_not_change_the_files_of_a_ticket_of_another_project() {
+async fn an_agent_changes_the_files_of_a_ticket_of_another_project_unless_it_is_private() {
     let h = harness("mcp-files-update-other");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
-    let theirs = made(&h, &other, "Le leur", &[("a.zip", b"a")]).await;
+    let theirs = made(&h, &other, "Le leur", &[("a.zip", b"a"), ("b.zip", b"b")]).await;
     let agent = put_agent(&h, &p, "chef", 1);
     let c = as_agent(&h, &agent.id).await;
+    // Another project that is not private: as in its own.
+    read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": theirs.key, "removeFiles": [{ "index": 0 }] }),
+    )
+    .await;
+    assert_eq!(stored(&h, &theirs.id).files, theirs.files[1..]);
+    // A private one: not found, and its files stay.
+    let theirs = stored(&h, &theirs.id);
+    make_private(&h, &other);
     let why = refused(
         &c,
         "update_ticket",
         json!({ "ticket": theirs.key, "removeFiles": [{ "index": 0 }] }),
     )
     .await;
-    assert!(why.contains("son propre projet"), "{why}");
+    assert!(
+        why.starts_with(&format!("Aucun ticket « {} »", theirs.key)),
+        "{why}"
+    );
+    assert!(!why.contains("autre") && !why.contains("Le leur"), "{why}");
     assert_eq!(stored(&h, &theirs.id).files, theirs.files);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
@@ -751,7 +767,7 @@ async fn a_file_is_read_by_its_end_or_a_part_as_text_or_base64_and_bounded() {
 }
 
 #[tokio::test]
-async fn an_agent_reads_the_files_of_its_own_project_only_and_is_given_no_path() {
+async fn an_agent_reads_the_files_of_the_projects_it_sees_and_is_given_no_path() {
     let h = harness("mcp-files-read-agent");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
@@ -765,15 +781,34 @@ async fn an_agent_reads_the_files_of_its_own_project_only_and_is_given_no_path()
     let got = read(&c, "get_ticket_file", json!({ "index": 0 })).await;
     assert_eq!(got["content"], "le sien");
     assert!(got.get("path").is_none(), "{got}");
-    // Another project's: refused, though get_ticket stays open to it.
-    let why = refused(
+    // Another project's that is not private, without a path either.
+    let got = read(
         &c,
         "get_ticket_file",
         json!({ "ticket": theirs.key, "index": 0 }),
     )
     .await;
-    assert!(why.contains("son propre projet"), "{why}");
-    read(&c, "get_ticket", json!({ "ticket": theirs.key })).await;
+    assert_eq!(got["content"], "le leur");
+    assert!(got.get("path").is_none(), "{got}");
+    // A private project's: not found, as with get_ticket.
+    make_private(&h, &other);
+    for (tool, args) in [
+        (
+            "get_ticket_file",
+            json!({ "ticket": theirs.key, "index": 0 }),
+        ),
+        ("get_ticket", json!({ "ticket": theirs.key })),
+    ] {
+        let why = refused(&c, tool, args).await;
+        assert!(
+            why.starts_with(&format!("Aucun ticket « {} »", theirs.key)),
+            "{tool}: {why}"
+        );
+        assert!(
+            !why.contains("le leur") && !why.contains("autre"),
+            "{tool}: {why}"
+        );
+    }
     // Claude outside Escouade must name the ticket.
     let outside = external(&h).await;
     let why = refused(&outside, "get_ticket_file", json!({ "index": 0 })).await;

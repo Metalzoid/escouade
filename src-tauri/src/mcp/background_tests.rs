@@ -2,6 +2,7 @@
 //! on a test core: plans put on agents as the stream would leave them, and the fake `claude` for
 //! what has to reach a process (a task stopped, its output, a message to a subagent).
 
+use super::private_tests::make_private;
 use super::tools_tests::{
     as_agent, call, external, last_entry, other_project, project, put_agent, read, refused, Client,
 };
@@ -524,7 +525,8 @@ const COMMAND_WITH_A_SECRET: &str =
     "curl -H 'Authorization: Bearer SECRET-TOKEN-107' https://example.test/api";
 
 #[tokio::test]
-async fn an_agent_of_escouade_is_given_only_what_runs_of_the_work_of_another_projects_agent() {
+async fn an_agent_of_escouade_is_given_the_work_it_sees_and_one_the_core_no_longer_has_only_what_runs(
+) {
     let h = harness("mcp-bg-list-outline");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
@@ -602,8 +604,9 @@ async fn an_agent_of_escouade_is_given_only_what_runs_of_the_work_of_another_pro
         .unwrap();
     assert_eq!(b1["command"], COMMAND_WITH_A_SECRET);
     assert_eq!(full["subagents"][0]["doing"], "Édite src/a.ts");
-    // So is an agent of the project of that agent, its own work included.
-    for caller in [&mate.id, &target.id] {
+    // So is an agent of the project of that agent, its own work included, and one of another
+    // project that is not private.
+    for caller in [&mate.id, &target.id, &far.id] {
         let c = as_agent(&h, caller).await;
         assert_eq!(
             read(&c, "list_background_work", ask.clone()).await,
@@ -613,8 +616,18 @@ async fn an_agent_of_escouade_is_given_only_what_runs_of_the_work_of_another_pro
         c.cancel().await.unwrap();
     }
 
-    // An agent of another project is given which work there is, and how it stands.
+    // An agent of a private project does not find it, as an agent that does not exist.
+    let vault = make_private(&h, &other_project(&h, "coffre").await);
+    let inside = put_agent(&h, &vault, "enferme", 4);
+    let c = as_agent(&h, &inside.id).await;
+    let (text, error) = call(&c, "list_background_work", ask.clone()).await;
+    assert!(error && text.starts_with("Aucun agent « cible »"), "{text}");
+    assert!(!text.contains("autre"), "{text}");
+    c.cancel().await.unwrap();
+
+    // An agent the core no longer has is given which work there is, and how it stands.
     let from = as_agent(&h, &far.id).await;
+    h.core.agents.write().remove(&far.id);
     let (text, error) = call(&from, "list_background_work", ask.clone()).await;
     assert!(!error, "{text}");
     let outline: Value = serde_json::from_str(&text).unwrap();
@@ -697,12 +710,27 @@ async fn an_agent_of_escouade_is_given_only_what_runs_of_the_work_of_another_pro
     assert_eq!(
         last_entry(&h),
         (
-            "voisin".into(),
+            far.id.clone(),
             "list_background_work".into(),
             "agent: cible".into(),
             "ok"
         )
     );
+    // And it acts nowhere: not even on what it may still find.
+    let why = refused(
+        &from,
+        "get_background_output",
+        json!({ "agent": "cible", "id": "b1" }),
+    )
+    .await;
+    assert_eq!(
+        why,
+        format!(
+            "L’agent {} n’est plus dans Escouade : il n’agit plus.",
+            far.id
+        )
+    );
+    assert_eq!(last_entry(&h).3, "refused");
     from.cancel().await.unwrap();
     outside.cancel().await.unwrap();
     h.core.mcp.stop();
@@ -1411,7 +1439,7 @@ async fn work_that_cannot_be_stopped_is_refused_in_the_words_of_the_window() {
 }
 
 #[tokio::test]
-async fn an_agent_of_escouade_stops_the_work_of_the_agents_of_its_project_and_never_its_own() {
+async fn an_agent_of_escouade_stops_the_work_of_the_agents_it_sees_and_never_its_own() {
     let h = harness("mcp-bg-stop-callers");
     let (p, r) = h.project(false).await;
     let other = other_project(&h, "autre").await;
@@ -1432,14 +1460,19 @@ async fn an_agent_of_escouade_stops_the_work_of_the_agents_of_its_project_and_ne
         (logged.0.as_str(), logged.1.as_str(), logged.3),
         ("travailleur", "stop_background_work", "refused")
     );
-    // An agent of another project may read it, not act on it.
-    let far = as_agent(&h, &neighbour.id).await;
-    let said = refused(&far, "stop_background_work", ask.clone()).await;
+    // An agent of a private project does not find it, and nothing is sent.
+    let vault = make_private(&h, &other_project(&h, "coffre").await);
+    let inside = put_agent(&h, &vault, "enferme", 4);
+    let shut = as_agent(&h, &inside.id).await;
+    let said = refused(&shut, "stop_background_work", ask.clone()).await;
+    assert!(said.starts_with("Aucun agent «"), "{said}");
     assert!(
-        said.contains("n’agit que dans son propre projet") && said.contains("autre"),
+        !said.contains("travailleur") && !said.contains("demo"),
         "{said}"
     );
-    assert_eq!(last_entry(&h).3, "refused");
+    assert_eq!(last_entry(&h).3, "error");
+    shut.cancel().await.unwrap();
+    let far = as_agent(&h, &neighbour.id).await;
     // The Claude Code view, where the interface does it: refused, and nothing is sent either.
     let near = as_agent(&h, &mate.id).await;
     h.core.agent(&worker.id).unwrap().lock().tui = Some(crate::agent::TuiRun::quiet(false));
@@ -1449,8 +1482,8 @@ async fn an_agent_of_escouade_stops_the_work_of_the_agents_of_its_project_and_ne
     );
     h.core.agent(&worker.id).unwrap().lock().tui = None;
     assert!(stops(&h, &r).is_empty(), "nothing was asked of Claude Code");
-    // An agent of its project stops it.
-    let v = read(&near, "stop_background_work", ask).await;
+    // An agent of another project that is not private stops it, as one of its own would.
+    let v = read(&far, "stop_background_work", ask).await;
     assert_eq!(
         (&v["stopped"], &v["type"], &v["id"]),
         (&json!(true), &json!("command"), &json!(row.id))
@@ -1461,7 +1494,7 @@ async fn an_agent_of_escouade_stops_the_work_of_the_agents_of_its_project_and_ne
     let logged = last_entry(&h);
     assert_eq!(
         (logged.0.as_str(), logged.1.as_str(), logged.3),
-        ("collegue", "stop_background_work", "ok")
+        ("voisin", "stop_background_work", "ok")
     );
     for client in [own, far, near] {
         client.cancel().await.unwrap();
@@ -1947,14 +1980,14 @@ async fn a_message_to_a_subagent_is_32000_characters_at_most_counted_as_characte
 }
 
 #[tokio::test]
-async fn an_agent_writes_to_the_subagents_of_its_project_and_never_to_its_own_nor_to_another_projects(
-) {
+async fn an_agent_writes_to_the_subagents_it_sees_and_never_to_its_own() {
     let h = harness("mcp-bg-message-callers");
     let (p, r) = h.project(false).await;
     let other = other_project(&h, "autre").await;
+    let vault = make_private(&h, &other_project(&h, "coffre").await);
     let worker = named(&h, &p, "travailleur").await;
     let row = run_subagent(&h, &worker.id).await;
-    let mate = put_agent(&h, &p, "collegue", 2);
+    let inside = put_agent(&h, &vault, "enferme", 2);
     let neighbour = put_agent(&h, &other, "voisin", 3);
     let ask =
         json!({ "agent": worker.id, "subagent": row.id, "text": format!("Bonjour {SECRET}") });
@@ -1970,29 +2003,31 @@ async fn an_agent_writes_to_the_subagents_of_its_project_and_never_to_its_own_no
         (logged.0.as_str(), logged.1.as_str(), logged.3),
         ("travailleur", "message_subagent", "refused")
     );
-    // Another project's: read, not written to.
-    let far = as_agent(&h, &neighbour.id).await;
-    let said = refused(&far, "message_subagent", ask.clone()).await;
+    // An agent of a private project does not find it: nothing is passed on.
+    let shut = as_agent(&h, &inside.id).await;
+    let said = refused(&shut, "message_subagent", ask.clone()).await;
+    assert!(said.starts_with("Aucun agent «"), "{said}");
     assert!(
-        said.contains("n’agit que dans son propre projet") && said.contains("autre"),
+        !said.contains("travailleur") && !said.contains("demo"),
         "{said}"
     );
-    assert_eq!(last_entry(&h).3, "refused");
+    assert_eq!(last_entry(&h).3, "error");
     assert!(passed_on(&h, &r).is_empty());
-    // An agent of its project: its words reach the subagent under its name.
-    let near = as_agent(&h, &mate.id).await;
-    let v = read(&near, "message_subagent", ask).await;
+    // An agent of another project that is not private: its words reach the subagent under its
+    // name, as those of an agent of its own project would.
+    let far = as_agent(&h, &neighbour.id).await;
+    let v = read(&far, "message_subagent", ask).await;
     assert_eq!(v["subagent"], row.id.as_str());
     h.wait("the message", |h| !passed_on(h, &r).is_empty())
         .await;
-    assert!(passed_on(&h, &r)[0].ends_with(&format!("\n\nMessage de collegue : Bonjour {SECRET}")));
+    assert!(passed_on(&h, &r)[0].ends_with(&format!("\n\nMessage de voisin : Bonjour {SECRET}")));
     let logged = last_entry(&h);
     assert_eq!(
         (logged.0.as_str(), logged.1.as_str(), logged.3),
-        ("collegue", "message_subagent", "ok")
+        ("voisin", "message_subagent", "ok")
     );
     no_trace(&h);
-    for client in [own, far, near] {
+    for client in [own, far, shut] {
         client.cancel().await.unwrap();
     }
     h.core.mcp.stop();
@@ -2309,7 +2344,7 @@ async fn reading_the_output_of_a_subagent_in_the_claude_code_view_leaves_its_row
 }
 
 #[tokio::test]
-async fn an_unknown_id_is_told_and_an_agent_of_escouade_reads_its_own_project_and_its_own_tasks() {
+async fn an_unknown_id_is_told_and_an_agent_of_escouade_reads_the_tasks_of_the_projects_it_sees() {
     let h = harness("mcp-bg-output-access");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
@@ -2358,7 +2393,8 @@ async fn an_unknown_id_is_told_and_an_agent_of_escouade_reads_its_own_project_an
     // Claude outside Escouade reads any project's.
     let v = output_of(&c, "voisin", "b-voisin", None).await;
     assert_eq!(v["output"], "sortie de voisin");
-    // An agent of Escouade: its own tasks, those of its project's agents, not another project's.
+    // An agent of Escouade: its own tasks, those of its project's agents, and those of another
+    // project that is not private.
     let from = as_agent(&h, &calling.id).await;
     assert_eq!(
         output_of(&from, "appelant", "b-appelant", None).await["output"],
@@ -2368,32 +2404,33 @@ async fn an_unknown_id_is_told_and_an_agent_of_escouade_reads_its_own_project_an
         output_of(&from, "collegue", "b-collegue", None).await["output"],
         "sortie de collegue"
     );
+    assert_eq!(
+        output_of(&from, "voisin", "b-voisin", None).await["output"],
+        "sortie de voisin"
+    );
+    assert_eq!(
+        last_entry(&h),
+        (
+            "appelant".into(),
+            "get_background_output".into(),
+            "agent: voisin · id: b-voisin".into(),
+            "ok"
+        )
+    );
+    // Not those of a private project, which it does not find.
+    make_private(&h, &other);
     let said = refused(
         &from,
         "get_background_output",
         json!({ "agent": "voisin", "id": "b-voisin" }),
     )
     .await;
+    assert!(said.starts_with("Aucun agent « voisin »"), "{said}");
     assert!(
-        said.contains("n’agit que dans son propre projet") && said.contains("autre"),
+        !said.contains("sortie de voisin") && !said.contains("autre"),
         "{said}"
     );
-    assert!(!said.contains("sortie de voisin"));
-    let logged = last_entry(&h);
-    assert_eq!(
-        (
-            logged.0.as_str(),
-            logged.1.as_str(),
-            logged.2.as_str(),
-            logged.3
-        ),
-        (
-            "appelant",
-            "get_background_output",
-            "agent: voisin · id: b-voisin",
-            "refused"
-        )
-    );
+    assert_eq!(last_entry(&h).3, "error");
     from.cancel().await.unwrap();
     c.cancel().await.unwrap();
     h.core.mcp.stop();
@@ -2518,10 +2555,11 @@ async fn a_real_client_lists_the_four_tools_with_their_schemas_and_reads_the_wor
     ] {
         assert!(said.contains("32,000 characters"), "{name}: {said}");
     }
-    // What an agent of another project is not given is said.
+    // Which projects an agent sees is said.
     let said = tool("list_background_work");
     assert!(
-        said.contains("another project") && said.contains("startedAt and endedAt"),
+        said.contains("every project that is not private")
+            && said.contains("seen by its own agents alone"),
         "{said}"
     );
     for (name, arg) in [

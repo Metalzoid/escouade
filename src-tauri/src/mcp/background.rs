@@ -4,7 +4,7 @@
 //! written to (`message_subagent`). Each does what the window does through the same function of
 //! the core, which keeps the window's refusals and bounds: nothing is decided twice.
 
-use super::act::{account_not_held, message_text, other_agent, own_project_only};
+use super::act::{account_not_held, may_act_on, message_text, other_agent};
 use super::activity;
 use super::read::{json, WorkCounts};
 use super::resolve;
@@ -389,9 +389,9 @@ struct Listing {
 
 /// `list_background_work`: the subagents and the background tasks of the agent `agent` names (in
 /// `project` when given), as the window lists them under its card. The list is open to all, what is
-/// in it is not: an agent of Escouade is given every field of the agents of its own project, but of
-/// another project's only which work there is and how it stands (`outline`): a command line may hold
-/// a secret, and what the work does is that project's own.
+/// in it is not: an agent of Escouade is given every field of the agents of the projects it acts on
+/// (`may_act_on`), but of the others only which work there is and how it stands (`outline`): a
+/// command line may hold a secret, and what the work does is that project's own.
 pub(super) fn list<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -399,8 +399,8 @@ pub(super) fn list<R: Runtime>(
     project: Option<&str>,
 ) -> Result<String, ToolError> {
     let (found, status, plan) = plan_of(core, caller, agent, project)?;
-    // The same test as `own_project_only`, which refuses where this only says less.
-    let full = own_project_only(core, caller, &found.project_id).is_ok();
+    // The test of `may_act_on`, which refuses where this only says less.
+    let full = may_act_on(core, caller, &found.project_id).is_ok();
     json(&Listing {
         id: found.id,
         name: found.name,
@@ -468,8 +468,8 @@ pub(super) async fn output<R: Runtime>(
 ) -> Result<String, ToolError> {
     let (found, _, plan) = plan_of(core, caller, &a.agent, a.project.as_deref())?;
     // The sheet of an agent is open to all, the files of its tasks are the files of its project: an
-    // agent of Escouade reads those of its own.
-    own_project_only(core, caller, &found.project_id)?;
+    // agent of Escouade reads those of the projects it acts on.
+    may_act_on(core, caller, &found.project_id)?;
     let work = find(plan.as_ref(), &a.id).ok_or_else(|| unknown(&found.name, &a.id))?;
     // A client takes 8 KiB unless it asks for more, 64 KiB at most: the window's own bound for a
     // task that is over (256 KiB) is more than an answer to a client carries.

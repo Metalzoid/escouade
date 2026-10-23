@@ -3,6 +3,7 @@
 //! with the fake `claude`: what a request says, who may answer it and how, and that the
 //! conversation of the agent that asked says who answered.
 
+use super::private_tests::make_private;
 use super::tests::ANSWERING;
 use super::tools_tests::{
     as_agent, call, external, last_entry, link, other_project, project, put, put_agent, read,
@@ -153,7 +154,7 @@ async fn the_answering_tools_offer_allow_and_deny_and_never_a_lasting_permission
     for name in ANSWERING {
         let v = tool(name);
         let description = v["description"].as_str().unwrap();
-        for word in ["no longer waits", "another project", "Claude Code view"] {
+        for word in ["no longer waits", "Claude Code view"] {
             assert!(description.contains(word), "{name}: {description}");
         }
         // They change something, and are no read.
@@ -1077,7 +1078,8 @@ async fn several_questions_are_answered_one_by_one_and_several_options_only_wher
 }
 
 #[tokio::test]
-async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or_a_request_gone() {
+async fn an_answer_is_refused_for_always_oneself_a_private_project_a_wrong_kind_or_a_request_gone()
+{
     let h = harness("mcp-req-refusals");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
@@ -1155,7 +1157,8 @@ async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or
     assert_eq!(ids(&listed), ["req_question"]);
     from_perm.cancel().await.unwrap();
 
-    // An agent acts on its own project alone.
+    // The agent of a private project acts on its own alone: the others are not found.
+    let other = make_private(&h, &other);
     let from_away = as_agent(&h, &away.id).await;
     for (tool, args) in [
         (
@@ -1168,18 +1171,26 @@ async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or
         ),
     ] {
         let why = refused(&from_away, tool, args).await;
+        assert!(why.starts_with("Aucun agent «"), "{tool}: {why}");
         assert!(
-            why.contains("agent-ailleurs") && why.contains("propre projet (autre)"),
+            !why.contains("agent-perm") && !why.contains("demo"),
             "{tool}: {why}"
         );
         let logged = last_entry(&h);
         assert_eq!(
             (logged.0.as_str(), logged.1.as_str(), logged.3),
-            ("agent-ailleurs", tool, "refused")
+            ("agent-ailleurs", tool, "error")
         );
     }
     nothing_changed(&h);
     from_away.cancel().await.unwrap();
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == other.id)
+        .unwrap()
+        .private = false;
 
     // A permission is no question, nor a question a permission.
     let wrong = refused(
@@ -1270,6 +1281,24 @@ async fn an_answer_is_refused_for_always_oneself_another_project_a_wrong_kind_or
     .await;
     assert!(gone.contains("n’attend plus de réponse"), "{gone}");
     c.cancel().await.unwrap();
+
+    // Once its project is not private, it answers the requests of another project as of its own.
+    let demo = h.core.project(&perm.project_id).unwrap();
+    let third = asking(&h, &demo, "agent-trois", "permission").await;
+    let from_away = as_agent(&h, &away.id).await;
+    read(
+        &from_away,
+        "answer_permission",
+        json!({ "agent": third.id, "request": "req_perm", "decision": "allow" }),
+    )
+    .await;
+    assert!(waiting(&h, &third.id).is_empty());
+    let logged = last_entry(&h);
+    assert_eq!(
+        (logged.0.as_str(), logged.1.as_str(), logged.3),
+        ("agent-ailleurs", "answer_permission", "ok")
+    );
+    from_away.cancel().await.unwrap();
     h.core.mcp.stop();
 }
 

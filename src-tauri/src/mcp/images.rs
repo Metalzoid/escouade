@@ -5,7 +5,7 @@
 //! What the tools add is the ways in (a content in base64, or the path of a file) and the care
 //! that a name or a path from the model leads nowhere it should not.
 
-use super::act::{own_project_only, visible_line};
+use super::act::{may_act_on, visible_line};
 use super::read::own_ticket;
 use super::resolve;
 use super::tools::{GetTicketImageArgs, ImageArg, ImageRef, ToolError};
@@ -192,8 +192,8 @@ pub(super) async fn fetch<R: Runtime>(
         None => own_ticket(core, caller)?,
     };
     // The sheet of a ticket (`get_ticket`) is open to all, the files of its images are the files of
-    // its project: an agent reads those of its own.
-    own_project_only(core, caller, &t.project_id)?;
+    // its project: an agent reads those of the projects it acts on.
+    may_act_on(core, caller, &t.project_id)?;
     let index = find(
         &t.images,
         &ImageRef {

@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Un ticket a « Compte », « Modèle » et « Effort » à côté de « Harness » : son agent part toujours sur ce que tu choisis, et un ticket fixé sur un compte y reste, en attendant sa remise à zéro plutôt que de changer de compte. Par défaut, « Auto » dit ce qu’il donnera : le compte courant, le modèle et l’effort du Kanban.
 - « Nouvel agent sur une branche… » crée aussi la branche que tu tapes, depuis le même point de départ qu’un nouvel agent, et le dossier du worktree porte le nom de la branche (`feat/signup` donne `signup`) : un script de préparation peut s’en servir pour son adresse locale ou sa base de données. Renommer un agent renomme aussi sa branche, sauf si elle est déjà poussée, a une PR ou existait avant lui. Merci à MrKayJayDee sur Discord.
+- Par le serveur MCP, un agent agit maintenant sur tous les projets qui ne sont pas privés, plus seulement sur le sien : l’agent de ton back peut créer, modifier et lancer les tickets de ton front, et écrire à ses agents. Un projet privé reste réservé à ses propres agents. Merci à Cédric sur Discord.
 
 ### Corrections
 

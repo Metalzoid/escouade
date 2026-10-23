@@ -3,16 +3,17 @@
 //! window and the autopilot; every call, refused ones included, is in the activity log.
 
 use super::act::{board_change, board_changes};
+use super::private_tests::make_private;
 use super::tests::{ACTING, AGENTS_ONLY, EXPOSED};
 use super::tools::{SetBoardArgs, ToolError};
 use super::tools_tests::{
     as_agent, external, keys, last_entry, link, other_project, project, put, put_agent, read,
-    refused, ticket, Client,
+    refused, still, ticket, Client,
 };
 use crate::accounts::PRINCIPAL;
 use crate::board::clock;
 use crate::core::RESUME_MARGIN_MS;
-use crate::core_tests::{agent_on, git, harness, Harness};
+use crate::core_tests::{agent_on, git, harness, repo, Harness};
 use crate::model::*;
 use crate::tickets::TicketDraft;
 use crate::tickets_tests::{conflicting, draft, gated_tests, reviewed, wait_running};
@@ -1895,19 +1896,139 @@ async fn a_ticket_edited_through_the_server_says_who_edited_it_without_stacking_
 }
 
 #[tokio::test]
-async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
-    let h = harness("mcp-act-own-project");
+async fn an_agent_acts_on_another_project_that_is_not_private_as_on_its_own() {
+    // Cédric's case (Discord): the agent of his back end makes, edits and starts a ticket of his
+    // front end, another project of Escouade, and writes to its agent.
+    let h = harness("mcp-act-other-project");
     let p = project(&h).await;
-    let other = other_project(&h, "autre").await;
-    let mine = put_agent(&h, &p, "mon-agent", 1);
-    let theirs = put_agent(&h, &other, "leur-agent", 2);
-    let t_mine = made(&h, &p, "Chez moi").await;
+    // A repository of its own, which a ticket started there can branch from.
+    let other = h
+        .core
+        .create_project(
+            &repo(&h.dir.join("autre")).to_string_lossy(),
+            "autre",
+            "oklch(0.7 0.1 200)",
+            false,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+    let other = still(&h, &other);
+    let mine = put_agent(&h, &p, "agent-root", 1);
+    let theirs = h
+        .core
+        .create_agent_with(
+            &other.id,
+            crate::core::AgentOptions {
+                name: Some("leur-agent".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
     let t_other = made(&h, &other, "Chez l’autre").await;
     let c = as_agent(&h, &mine.id).await;
-    let (tickets, agents) = (h.core.tickets.read().len(), h.core.agents.read().len());
+    let logged_ok = |h: &Harness, tool: &str| {
+        let logged = entry(h);
+        assert_eq!(
+            (logged.caller.as_str(), logged.tool.as_str(), logged.outcome),
+            ("agent-root", tool, "ok")
+        );
+    };
 
+    // It makes a ticket there.
+    let v = read(
+        &c,
+        "create_ticket",
+        json!({ "project": "autre", "title": "Pour le front" }),
+    )
+    .await;
+    logged_ok(&h, "create_ticket");
+    let created = stored(&h, v["id"].as_str().unwrap());
+    assert_eq!(
+        (created.project_id.as_str(), created.title.as_str()),
+        (other.id.as_str(), "Pour le front")
+    );
+    assert!(created.description.contains("agent-root"));
+    // Edits it, and puts it first.
+    read(
+        &c,
+        "update_ticket",
+        json!({ "ticket": created.key, "title": "Pour le front, revu" }),
+    )
+    .await;
+    logged_ok(&h, "update_ticket");
+    assert_eq!(stored(&h, &created.id).title, "Pour le front, revu");
+    read(
+        &c,
+        "move_ticket",
+        json!({ "ticket": created.key, "position": "top" }),
+    )
+    .await;
+    assert_eq!(
+        todo(&c, &other).await,
+        [created.key.as_str(), t_other.key.as_str()]
+    );
+    // Starts it: the scheduler gives it an agent of that project.
+    read(&c, "start_ticket", json!({ "ticket": created.key })).await;
+    logged_ok(&h, "start_ticket");
+    h.wait("the ticket to start", |h| {
+        stored(h, &created.id).column != Column::Todo
+    })
+    .await;
+    assert!(h.events.lock().iter().any(|e| e["type"] == "ticket"
+        && e["ticket"]["id"] == created.id.as_str()
+        && e["ticket"]["forced"] == true));
+    h.wait("its agent to be made", |h| {
+        stored(h, &created.id).agent_id.is_some()
+    })
+    .await;
+    let runner = stored(&h, &created.id).agent_id.unwrap();
+    assert_eq!(h.agent(&runner).project_id, other.id);
+    // Writes to its agent, under its own name.
+    read(
+        &c,
+        "send_message",
+        json!({ "agent": "leur-agent", "project": "autre", "text": "Le contrat d’API change" }),
+    )
+    .await;
+    logged_ok(&h, "send_message");
+    turn_over(&h, &theirs.id).await;
+    assert!(h
+        .items(&theirs.id)
+        .iter()
+        .any(|i| i["kind"] == "user"
+            && i["text"] == "Message de agent-root : Le contrat d’API change"));
+    // Interrupts it (it is at rest: nothing to interrupt) and makes an agent there.
+    let v = read(&c, "stop_agent", json!({ "agent": theirs.id })).await;
+    assert_eq!(v["interrupted"], false);
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": other.id, "message": "Regarde le front" }),
+    )
+    .await;
+    let made_there = v["id"].as_str().unwrap().to_string();
+    assert_eq!(h.agent(&made_there).project_id, other.id);
+    turn_over(&h, &made_there).await;
+    h.wait("the started ticket's turn to end", |h| {
+        stored(h, &created.id).column == Column::Review
+    })
+    .await;
+    c.cancel().await.unwrap();
+
+    // A project made private is no longer found, and nothing changes in it.
+    let other = make_private(&h, &other);
+    let c = as_agent(&h, &mine.id).await;
+    let (tickets, agents) = (h.core.tickets.read().len(), h.core.agents.read().len());
+    let prompts = h.agent(&theirs.id).prompts;
     for (tool, args) in [
-        ("create_ticket", json!({ "project": "autre", "title": "x" })),
+        (
+            "create_ticket",
+            json!({ "project": other.id, "title": "x" }),
+        ),
         (
             "update_ticket",
             json!({ "ticket": t_other.key, "title": "x" }),
@@ -1917,7 +2038,6 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
             json!({ "ticket": t_other.key, "position": "top" }),
         ),
         ("start_ticket", json!({ "ticket": t_other.key })),
-        ("set_board", json!({ "project": "autre", "draft": true })),
         (
             "create_agent",
             json!({ "project": other.id, "message": "x" }),
@@ -1926,20 +2046,21 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
         ("stop_agent", json!({ "agent": theirs.id })),
     ] {
         let why = refused(&c, tool, args).await;
+        assert!(why.starts_with("Aucun "), "{tool}: {why}");
         assert!(
-            why.contains("mon-agent")
-                && why.contains("propre projet (demo)")
-                && why.contains("le projet autre"),
+            !why.contains("autre") && !why.contains("leur-agent"),
             "{tool}: {why}"
         );
-        let logged = entry(&h);
-        assert_eq!(
-            (logged.caller.as_str(), logged.tool.as_str(), logged.outcome),
-            ("mon-agent", tool, "refused")
-        );
+        assert_eq!(entry(&h).outcome, "error", "{tool}");
     }
-    // A ticket of another project is no ticket of its own to split: its agent's ticket is
-    // another project's by mistake.
+    assert_eq!(
+        (h.core.tickets.read().len(), h.core.agents.read().len()),
+        (tickets, agents)
+    );
+    assert_eq!(stored(&h, &t_other.id).title, "Chez l’autre");
+    assert!(!stored(&h, &t_other.id).forced);
+    assert_eq!(h.agent(&theirs.id).prompts, prompts);
+    // An agent of its own project whose ticket is there does not split it from another project.
     let stray = put_agent(&h, &p, "egare", 3);
     h.core.agent(&stray.id).unwrap().lock().meta.ticket_id = Some(t_other.id.clone());
     let from_stray = as_agent(&h, &stray.id).await;
@@ -1949,45 +2070,12 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
         json!({ "tickets": [{ "title": "Un" }] }),
     )
     .await;
-    assert!(why.contains("propre projet"), "{why}");
+    assert!(why.contains("egare") && !why.contains("autre"), "{why}");
+    assert_eq!(h.core.tickets.read().len(), tickets);
     from_stray.cancel().await.unwrap();
-    // Nothing happened over there.
-    assert_eq!(
-        (h.core.tickets.read().len(), h.core.agents.read().len()),
-        (tickets, agents + 1)
-    );
-    assert_eq!(stored(&h, &t_other.id).title, "Chez l’autre");
-    assert!(!stored(&h, &t_other.id).forced);
-    assert_eq!(h.agent(&theirs.id).prompts, 0);
-
-    // It reads them all the same.
-    let listed = read(&c, "list_tickets", json!({ "project": "autre" })).await;
-    assert_eq!(keys(&listed), [t_other.key.as_str()]);
-    let summary = read(&c, "get_agent_summary", json!({ "agent": theirs.id })).await;
-    assert_eq!(summary["name"], "leur-agent");
-    assert_eq!(
-        read(&c, "get_ticket", json!({ "ticket": t_other.key })).await["title"],
-        "Chez l’autre"
-    );
-
-    // And acts on its own.
-    let made_here = read(
-        &c,
-        "create_ticket",
-        json!({ "project": "demo", "title": "Pour moi" }),
-    )
-    .await;
-    assert_eq!(made_here["column"], "todo");
-    read(
-        &c,
-        "update_ticket",
-        json!({ "ticket": t_mine.key, "title": "Chez moi, revu" }),
-    )
-    .await;
-    assert_eq!(stored(&h, &t_mine.id).title, "Chez moi, revu");
     c.cancel().await.unwrap();
 
-    // Claude outside Escouade is the user's: it acts on any project.
+    // Claude outside Escouade is the user's: it acts on any project, private ones too.
     let outside = external(&h).await;
     read(
         &outside,
@@ -1996,12 +2084,6 @@ async fn an_agent_acts_on_its_own_project_alone_and_reads_the_others() {
     )
     .await;
     assert_eq!(stored(&h, &t_other.id).title, "Revu de l’extérieur");
-    read(
-        &outside,
-        "create_ticket",
-        json!({ "project": "autre", "title": "Aussi" }),
-    )
-    .await;
     outside.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -2354,19 +2436,27 @@ const RESUME_NOT_BLOCKED: &str = "Ce ticket n'est pas bloqué.";
 const OWN_TICKET: &str = "Un agent n’agit pas sur son propre ticket avec cet outil : c’est à l’utilisateur ou à un autre client de le faire.";
 
 #[tokio::test]
-async fn the_tools_of_the_flow_refuse_an_agent_that_acts_on_its_own_ticket_or_on_another_projects()
-{
+async fn the_tools_of_the_flow_refuse_an_agent_its_own_ticket_and_act_on_the_projects_that_are_not_private(
+) {
     let h = harness("mcp-act-flow-agents");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
+    let vault = other_project(&h, "coffre").await;
+    let vault = make_private(&h, &vault);
     let (own, agent) = staffed(&h, &p, "DEM-1", Column::Review, 1);
+    let waiting = put(&h, ticket(&p, "DEM-9", "En attente", Column::Todo, 9));
     // Its record names the ticket though the ticket names another agent: it is the same ticket.
     let relieved = put_agent(&h, &p, "releve", 2);
     h.core.agent(&relieved.id).unwrap().lock().meta.ticket_id = Some(own.id.clone());
     let elsewhere = put_agent(&h, &other, "ailleurs", 3);
+    let vaulted = put_agent(&h, &vault, "enferme", 4);
     let args = |tool: &str| match tool {
         "reject_ticket" => json!({ "ticket": own.key, "comment": "Pas bon" }),
         _ => json!({ "ticket": own.key }),
+    };
+    let on_waiting = |tool: &str| match tool {
+        "reject_ticket" => json!({ "ticket": waiting.key, "comment": "Pas bon" }),
+        _ => json!({ "ticket": waiting.key }),
     };
     for (tool, said) in [
         (
@@ -2390,15 +2480,24 @@ async fn the_tools_of_the_flow_refuse_an_agent_that_acts_on_its_own_ticket_or_on
             assert_eq!(entry(&h).caller, caller.name, "{tool}, {who}");
             c.cancel().await.unwrap();
         }
-        // An agent of another project acts on its own project alone.
-        let c = as_agent(&h, &elsewhere.id).await;
-        let why = turned_down(&h, &c, tool, args(tool), "refused", &own).await;
-        assert_eq!(
-            why,
-            "L’agent ailleurs n’agit que dans son propre projet (autre) : le projet demo n’est pas le sien.",
-            "{tool}"
-        );
+        // An agent of a private project acts on no other: the ticket is not found, as one that
+        // does not exist, and the refusal names no project.
+        let c = as_agent(&h, &vaulted.id).await;
+        let why = turned_down(&h, &c, tool, args(tool), "error", &own).await;
+        assert!(why.starts_with("Aucun ticket « DEM-1 »"), "{tool}: {why}");
+        assert!(!why.contains("coffre") && !why.contains("demo"), "{tool}: {why}");
         c.cancel().await.unwrap();
+        // An agent of another project that is not private acts here as Claude outside Escouade
+        // does: on a ticket to do, the window's own refusal (but for `delete_ticket`, below).
+        if tool != "delete_ticket" {
+            let c = external(&h).await;
+            let said = refused(&c, tool, on_waiting(tool)).await;
+            c.cancel().await.unwrap();
+            let c = as_agent(&h, &elsewhere.id).await;
+            let why = turned_down(&h, &c, tool, on_waiting(tool), "refused", &waiting).await;
+            assert_eq!(why, said, "{tool}");
+            c.cancel().await.unwrap();
+        }
         // Claude outside Escouade acts on any (what it does is checked by each tool's own test):
         // an unknown ticket is told so, for every tool.
         let c = external(&h).await;
@@ -2408,6 +2507,25 @@ async fn the_tools_of_the_flow_refuse_an_agent_that_acts_on_its_own_ticket_or_on
         c.cancel().await.unwrap();
     }
     assert_eq!(stored(&h, &own.id), own);
+
+    // And it acts there: it dismisses the block of a ticket and deletes another.
+    let c = as_agent(&h, &elsewhere.id).await;
+    h.core
+        .edit_ticket(&own.id, |x| {
+            x.blocked = Some("Bloqué".into());
+            Ok(())
+        })
+        .unwrap();
+    let v = read(&c, "dismiss_block", json!({ "ticket": own.key })).await;
+    assert_eq!(v["key"], "DEM-1");
+    assert_eq!(stored(&h, &own.id).blocked, None);
+    read(&c, "delete_ticket", json!({ "ticket": waiting.key })).await;
+    assert!(h.core.ticket(&waiting.id).is_err());
+    assert_eq!(
+        (entry(&h).caller.as_str(), entry(&h).outcome),
+        ("ailleurs", "ok")
+    );
+    c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
 
@@ -4104,41 +4222,62 @@ async fn a_target_branch_deleted_since_is_taken_back_as_get_board_shows_it_and_n
 }
 
 #[tokio::test]
-async fn an_agent_sets_the_board_of_its_own_project_alone_and_claude_outside_escouade_any() {
+async fn an_agent_sets_the_board_of_the_projects_that_are_not_private_and_claude_outside_escouade_any(
+) {
     let h = harness("mcp-act-set-board-own");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
+    let vault = other_project(&h, "coffre").await;
+    let vault = make_private(&h, &vault);
     let mine = put_agent(&h, &p, "mon-agent", 1);
     let c = as_agent(&h, &mine.id).await;
-    let theirs_before = board_of(&h, &other);
 
-    let why = refused(
+    // Its own, and another project that is not private.
+    let v = read(&c, "set_board", json!({ "project": "demo", "draft": true })).await;
+    assert_eq!(v["draft"], true);
+    assert!(board_of(&h, &p).draft);
+    assert_eq!(entry(&h).caller, "mon-agent");
+    assert_eq!(
+        read(&c, "get_board", json!({ "project": "autre" })).await["draft"],
+        false
+    );
+    let v = read(
         &c,
         "set_board",
         json!({ "project": "autre", "draft": true }),
     )
     .await;
-    assert!(
-        why.contains("mon-agent")
-            && why.contains("propre projet (demo)")
-            && why.contains("le projet autre"),
-        "{why}"
-    );
+    assert_eq!(v["projectId"], other.id.as_str());
+    assert!(board_of(&h, &other).draft);
     let logged = entry(&h);
     assert_eq!(
         (logged.caller.as_str(), logged.tool.as_str(), logged.outcome),
-        ("mon-agent", "set_board", "refused")
+        ("mon-agent", "set_board", "ok")
     );
-    assert_eq!(board_of(&h, &other), theirs_before);
-    // It reads theirs all the same, and sets its own.
-    assert_eq!(
-        read(&c, "get_board", json!({ "project": "autre" })).await["draft"],
-        false
-    );
-    let v = read(&c, "set_board", json!({ "project": "demo", "draft": true })).await;
-    assert_eq!(v["draft"], true);
-    assert!(board_of(&h, &p).draft);
-    assert_eq!(entry(&h).caller, "mon-agent");
+    // A private project is not found, and its Kanban stays as it was.
+    let vault_before = board_of(&h, &vault);
+    let why = refused(
+        &c,
+        "set_board",
+        json!({ "project": vault.id, "draft": true }),
+    )
+    .await;
+    assert!(why.starts_with("Aucun projet «"), "{why}");
+    assert!(!why.contains("coffre"), "{why}");
+    assert_eq!(board_of(&h, &vault), vault_before);
+    c.cancel().await.unwrap();
+    // Nor does its own agent set another project's.
+    let inside = put_agent(&h, &vault, "enferme", 2);
+    let c = as_agent(&h, &inside.id).await;
+    let p_before = board_of(&h, &p);
+    let why = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "maxParallel": 5 }),
+    )
+    .await;
+    assert!(why.starts_with("Aucun projet « demo »"), "{why}");
+    assert_eq!(board_of(&h, &p), p_before);
     c.cancel().await.unwrap();
 
     // Claude outside Escouade is the user's: it sets any project's.

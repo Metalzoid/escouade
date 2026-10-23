@@ -8,7 +8,7 @@
 //! file), the checks made before a byte is copied, and the care that a name or a path from the
 //! model leads nowhere it should not.
 
-use super::act::own_project_only;
+use super::act::may_act_on;
 use super::images::{open_within, shown, working_folder};
 use super::read::own_ticket;
 use super::resolve;
@@ -256,8 +256,8 @@ pub(super) async fn fetch<R: Runtime>(
         None => own_ticket(core, caller)?,
     };
     // The sheet of a ticket (`get_ticket`) is open to all, its files are the files of its project:
-    // an agent reads those of its own.
-    own_project_only(core, caller, &t.project_id)?;
+    // an agent reads those of the projects it acts on.
+    may_act_on(core, caller, &t.project_id)?;
     let index = find(
         &t.files,
         &FileRef {

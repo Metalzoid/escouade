@@ -5,6 +5,7 @@
 //! key used up, no file, no folder.
 
 #[cfg(windows)]
+use super::private_tests::make_private;
 use super::tools_tests::junction;
 use super::tools_tests::{
     as_agent, call, external, last_entry, link, other_project, project, put_agent, read, refused,
@@ -1185,23 +1186,44 @@ async fn empty_lists_alone_are_nothing_to_change() {
 }
 
 #[tokio::test]
-async fn an_agent_does_not_change_the_images_of_a_ticket_of_another_project() {
+async fn an_agent_changes_the_images_of_a_ticket_of_another_project_unless_it_is_private() {
     let h = harness("mcp-images-update-other");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
     let t = made(&h, &p, "Chez nous", &[("a.png", PNG)]).await;
     let agent = put_agent(&h, &other, "voisin", 1);
     let c = as_agent(&h, &agent.id).await;
-    let before_files = files_of(&dir_of(&h, &t.id));
+    // Another project that is not private: as in its own.
     for args in [
         json!({ "ticket": t.key, "addImages": [shot("b.png", PNG)] }),
         json!({ "ticket": t.key, "removeImages": [{ "index": 0 }] }),
     ] {
-        let got = refused(&c, "update_ticket", args).await;
-        assert!(got.contains("n’agit que dans son propre projet"), "{got}");
-        assert_eq!(last_entry(&h).3, "refused");
+        read(&c, "update_ticket", args).await;
+        assert_eq!(last_entry(&h).3, "ok");
     }
-    assert_eq!(stored(&h, &t.id).images.len(), 1);
+    let names: Vec<String> = stored(&h, &t.id)
+        .images
+        .iter()
+        .map(|i| i.name.clone())
+        .collect();
+    assert_eq!(names, ["b.png"]);
+    // A private one: not found, and nothing changes.
+    make_private(&h, &p);
+    let before_files = files_of(&dir_of(&h, &t.id));
+    let before = stored(&h, &t.id).images;
+    for args in [
+        json!({ "ticket": t.key, "addImages": [shot("c.png", PNG)] }),
+        json!({ "ticket": t.key, "removeImages": [{ "index": 0 }] }),
+    ] {
+        let got = refused(&c, "update_ticket", args).await;
+        assert!(
+            got.starts_with(&format!("Aucun ticket « {} »", t.key)),
+            "{got}"
+        );
+        assert!(!got.contains("demo") && !got.contains("Chez nous"), "{got}");
+        assert_eq!(last_entry(&h).3, "error");
+    }
+    assert_eq!(stored(&h, &t.id).images, before);
     assert_eq!(files_of(&dir_of(&h, &t.id)), before_files);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
@@ -1459,15 +1481,26 @@ async fn an_image_that_is_not_the_tickets_or_is_gone_is_refused_with_a_text() {
 }
 
 #[tokio::test]
-async fn an_agent_reads_only_the_images_of_the_tickets_of_its_own_project() {
+async fn an_agent_reads_the_images_of_the_tickets_of_the_projects_it_sees() {
     let h = harness("mcp-images-get-image-project");
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
     let t = made(&h, &p, "Chez nous", &[("a.png", PNG)]).await;
     let neighbour = put_agent(&h, &other, "voisin", 1);
     let c = as_agent(&h, &neighbour.id).await;
-    // The sheet of the ticket is open to all, its image files are not.
+    // Another project that is not private: its sheet and its images.
     assert_eq!(listed(&c, &t.key).await[0]["name"], "a.png");
+    for args in [
+        json!({ "ticket": t.key, "index": 0 }),
+        json!({ "ticket": t.key, "file": t.images[0].file }),
+    ] {
+        let (got, error) = blocks(&c, args).await;
+        assert!(!error, "{got:?}");
+        assert_eq!(got[0]["data"], b64(PNG));
+        assert_eq!(last_entry(&h).3, "ok");
+    }
+    // A private one: not found, and no image.
+    make_private(&h, &p);
     for args in [
         json!({ "ticket": t.key, "index": 0 }),
         json!({ "ticket": t.key, "file": t.images[0].file }),
@@ -1476,9 +1509,15 @@ async fn an_agent_reads_only_the_images_of_the_tickets_of_its_own_project() {
         assert!(error, "{got:?}");
         assert_eq!(got.len(), 1, "{got:?}");
         let text = got[0]["text"].as_str().unwrap();
-        assert!(text.contains("n’agit que dans son propre projet"), "{text}");
-        assert!(!text.contains(&b64(PNG)));
-        assert_eq!(last_entry(&h).3, "refused");
+        assert!(
+            text.starts_with(&format!("Aucun ticket « {} »", t.key)),
+            "{text}"
+        );
+        assert!(
+            !text.contains(&b64(PNG)) && !text.contains("demo"),
+            "{text}"
+        );
+        assert_eq!(last_entry(&h).3, "error");
     }
     c.cancel().await.unwrap();
     // An agent of the same project reads it, and so does Claude outside Escouade, whatever the project.
