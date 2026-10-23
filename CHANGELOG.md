@@ -8,14 +8,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
-- Un ticket a « Compte », « Modèle » et « Effort » à côté de « Harness » : son agent part toujours sur ce que tu choisis, et un ticket fixé sur un compte y reste, en attendant sa remise à zéro plutôt que de changer de compte. Par défaut, « Auto » dit ce qu’il donnera : le compte courant, le modèle et l’effort du Kanban.
-- « Nouvel agent sur une branche… » crée aussi la branche que tu tapes, depuis le même point de départ qu’un nouvel agent, et le dossier du worktree porte le nom de la branche (`feat/signup` donne `signup`) : un script de préparation peut s’en servir pour son adresse locale ou sa base de données. Renommer un agent renomme aussi sa branche, sauf si elle est déjà poussée, a une PR ou existait avant lui. Merci à MrKayJayDee sur Discord.
 - Le worktree d’un nouvel agent se crée à son premier message : l’agent est d’abord nommé, puis sa branche et son dossier prennent ce nom, et sa préparation tourne dans ce dossier. Un script de préparation qui s’en sert pour son adresse locale ou sa base de données a donc le bon nom. Un réglage par projet, allumé partout, redonne l’ancien comportement. Merci à MrKayJayDee sur Discord.
-
-### Corrections
-
-- Le `.escouade.yml` qu’écrit Escouade passe Prettier : ses listes sont indentées de la même façon à la racine comme dans un groupe, et ses valeurs ne prennent des guillemets que lorsque YAML l’exige.
-- Les commandes de Claude Code (`/compact`, `/cost`, `/context`, `! git status`…) et le réveil d’une boucle `/loop` n’apparaissent plus avec leurs balises dans la conversation : la commande telle que tapée, sa sortie dessous, son erreur en rouge, y compris dans les conversations déjà enregistrées.
 
 ## [1.8.10] — 2026-10-23
 

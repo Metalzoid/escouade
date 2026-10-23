@@ -8,14 +8,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
-- A ticket has “Account”, “Model” and “Effort” next to “Harness”: its agent always starts on what you choose, and a ticket set on an account stays there, waiting for its reset rather than switching accounts. By default, “Auto” says what it will give: the current account, the Kanban’s model and effort.
-- “New agent on a branch…” also creates the branch you type, from where a new agent starts, and the worktree’s folder is named after the branch (`feat/signup` gives `signup`): a setup script can use it for its local address or its database. Renaming an agent renames its branch too, unless it is pushed already, has a pull request or was there before the agent. Thanks to MrKayJayDee on Discord.
 - A new agent’s worktree is created at its first message: the agent is named first, then its branch and its folder take that name, and its setup runs in that folder. A setup script that uses it for its local address or its database gets the right name. A per-project setting, on everywhere, gives back the old behavior. Thanks to MrKayJayDee on Discord.
-
-### Fixes
-
-- The `.escouade.yml` Escouade writes passes Prettier: its lists are indented the same way at the root as in a group, and its values take quotes only where YAML requires them.
-- Claude Code’s commands (`/compact`, `/cost`, `/context`, `! git status`…) and the wake-up of a `/loop` no longer show with their tags in the conversation: the command as typed, its output under it, its error in red, in conversations saved before too.
 
 ## [1.8.10] — 2026-10-23
 
