@@ -597,3 +597,91 @@ fn a_turns_tokens_are_its_threads_since_it_began_and_its_cost_is_estimated_from_
     let fx = completed(&mut a, json!({ "id": "t2", "status": "completed" }));
     assert_eq!((fx.turns[0].input, fx.turns[0].cost), (1_000_000, 0.0));
 }
+
+/// What Claude Code's agent says it does with the tool `name` on `input` (cwd `C:/p`).
+fn claude_says(name: &str, input: Value) -> Option<String> {
+    crate::agent::tool_activity(name, &input, "C:/p")
+}
+
+#[test]
+fn it_says_what_it_does_with_the_words_of_claude_code() {
+    let mut a = rt();
+    started(&mut a, "t1");
+    let change = json!({ "path": "C:/p/src/auth/jwt.ts", "kind": { "type": "update", "move_path": null }, "diff": "" });
+    item(
+        &mut a,
+        false,
+        json!({ "type": "fileChange", "id": "f1", "changes": [change], "status": "inProgress" }),
+    );
+    let edit = json!({ "file_path": "C:/p/src/auth/jwt.ts" });
+    assert_eq!(a.activity, claude_says("Edit", edit));
+    let add = json!({ "path": "C:/p/b.txt", "kind": { "type": "add" }, "diff": "un\n" });
+    item(
+        &mut a,
+        false,
+        json!({ "type": "fileChange", "id": "f2", "changes": [add], "status": "inProgress" }),
+    );
+    assert_eq!(
+        a.activity,
+        claude_says("Write", json!({ "file_path": "C:/p/b.txt" }))
+    );
+    // A command that reads a file is a Read, one that searches a Grep: Claude Code has tools for them.
+    item(
+        &mut a,
+        false,
+        json!({
+            "type": "commandExecution", "id": "c1", "command": "\"pwsh.exe\" -Command 'cat src/db.ts'",
+            "commandActions": [{ "type": "read", "command": "cat src/db.ts", "name": "db.ts", "path": "C:/p/src/db.ts" }],
+            "status": "inProgress",
+        }),
+    );
+    assert_eq!(
+        a.activity,
+        claude_says("Read", json!({ "file_path": "C:/p/src/db.ts" }))
+    );
+    item(
+        &mut a,
+        false,
+        json!({
+            "type": "commandExecution", "id": "c2", "command": "rg -n jwt src",
+            "commandActions": [{ "type": "search", "command": "rg -n jwt src", "query": "jwt", "path": "src" }],
+            "status": "inProgress",
+        }),
+    );
+    assert_eq!(a.activity, claude_says("Grep", json!({ "pattern": "jwt" })));
+    // Anything else, or several actions at once, is run as Claude Code runs a command.
+    item(
+        &mut a,
+        false,
+        json!({
+            "type": "commandExecution", "id": "c3", "command": "npm test",
+            "commandActions": [{ "type": "unknown", "command": "npm test" }], "status": "inProgress",
+        }),
+    );
+    assert_eq!(
+        a.activity,
+        claude_says("Bash", json!({ "command": "npm test" }))
+    );
+    item(
+        &mut a,
+        false,
+        json!({
+            "type": "commandExecution", "id": "c4", "command": "x",
+            "commandActions": [
+                { "type": "read", "command": "cat a.ts", "name": "a.ts", "path": "C:/p/a.ts" },
+                { "type": "read", "command": "cat b.ts", "name": "b.ts", "path": "C:/p/b.ts" },
+            ],
+            "status": "inProgress",
+        }),
+    );
+    assert_eq!(
+        a.activity,
+        claude_says("Bash", json!({ "command": "cat a.ts && cat b.ts" }))
+    );
+    // What it is told by Claude Code's words: a verb, then what it acts on, relative to its folder.
+    assert!(a
+        .activity
+        .as_deref()
+        .unwrap()
+        .ends_with(" cat a.ts && cat b.ts"));
+}

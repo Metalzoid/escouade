@@ -2823,6 +2823,37 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(act.querySelector('[data-icon="check"]')).not.toBeNull();
     });
 
+    it('marks « ≈ » the cost of a harness that tells none, its turn over too (Codex), with why', () => {
+      const codex = { ...BARE_ENGINE, name: 'Codex', caps: { ...BARE_ENGINE.caps, cost: 'estimated' as const } };
+      resetApp({ agents: [agent({ status: 'done', engine: 'codex', tokens: 184_300, cost: 2.41 })] });
+      app.engines = [CLAUDE_ENGINE, codex];
+      app.git.p1 = gitInfo();
+      app.git.p1.agents = { a1: 2 };
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const act = screen.getByRole('button', { name: /refacto-auth/ }).querySelector<HTMLElement>('.a-act')!;
+      expect(act).toHaveTextContent('2 fichiers modifiés');
+      expect(act.querySelector('.spend')).toHaveTextContent('184,3 k · ≈ 2,41 $');
+      expect(act.dataset.tip).toMatch(/^Coût estimé : le harness ne le donne pas/);
+    });
+
+    it('says what it does, and its result, in English', async () => {
+      setLang('en');
+      onTestFinished(() => setLang('fr'));
+      resetApp({ agents: [agent({ status: 'running', activity: 'Editing src/auth/jwt.ts', tokens: 184_300, cost: 2.41 })] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const act = screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-act')!;
+      expect(act.querySelector('b')).toHaveTextContent('Editing');
+      expect(act.querySelector('.spend')).toHaveTextContent('184.3k · $2.41');
+      app.agents.a1 = { ...app.agents.a1, status: 'done' };
+      app.git.p1 = gitInfo();
+      app.git.p1.agents = { a1: 1 };
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-act')).toHaveTextContent('1 file changed'),
+      );
+    });
+
     it('says an agent never written to has no message yet', () => {
       resetApp({ agents: [agent({ status: 'idle', prompts: 0, activeMs: 0 })] });
       fakeBackend();
@@ -2847,6 +2878,24 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
     expect(card).toHaveClass('awaits');
     expect(card.querySelector('.state-dot')).toHaveClass('awaits');
     expect(card.querySelector('[data-pending]')).toHaveTextContent('Attend');
+  });
+
+  it('says its turn is over and what goes on, with its tokens and its cost, as the preview’s #waiting', () => {
+    const plan = {
+      source: null,
+      tasks: [],
+      agents: [{ id: 's1', title: 'test-writer', status: 'running', background: false, tools: 0, startedAt: 1 }],
+      launched: 1,
+      workflows: [],
+      bgTasks: [{ id: 'b1', kind: 'command', title: 'npm run test:watch', status: 'running', startedAt: 1 }],
+    };
+    resetApp({ agents: [agent({ status: 'done', plan: plan as never, tokens: 184_300, cost: 2.41 })] });
+    fakeBackend();
+    render(Sidebar, { project: project() });
+    const act = screen.getByRole('button', { name: /refacto-auth/ }).querySelector('.a-act')!;
+    expect(act.querySelector('[data-icon="check"]')).not.toBeNull();
+    expect(act.querySelector('.tgt')).toHaveTextContent('Tour fini · 1 sous-agent, 1 tâche de fond');
+    expect(act.querySelector('.spend')).toHaveTextContent('184,3 k · 2,41 $');
   });
 
   it('draws its icons, no character in their place', () => {

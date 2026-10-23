@@ -3,11 +3,11 @@
   import { keyLabel } from '../lib/platform';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
-  import { fDur, fTok, fUsd, fWhen, tildify } from '../lib/format';
+  import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, addAccount, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
-  import { cardActivity, listQuestion, sidebarOrder, type ListQuestion } from '../lib/sidebar';
+  import { cardActivity, cardSpend, listQuestion, sidebarOrder, type ListQuestion } from '../lib/sidebar';
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
-  import { can, canFork, engineName, showsCost, speakerOf } from '../lib/engines';
+  import { can, canFork, engineName, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
   import { canFixChecks, canFixReviews, cardPrs, fixPr, openPr, prIcon, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
@@ -18,7 +18,7 @@
   import { planView } from '../lib/plan';
   import { sidebarSubs, type SubRow } from '../lib/subagents';
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
-  import { estimateHint, fSpentUsd, spent } from '../lib/spend';
+  import { estimateHint, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
@@ -564,7 +564,7 @@
       {@const remote = remoteStateOf(a)}
       {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
       {@const q = listQuestion(a)}
-      {@const act = cardActivity(a, git?.agents[a.id] ?? 0)}
+      {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
       <div
         class="agent card"
         class:waiting={a.status === 'waiting'}
@@ -726,14 +726,14 @@
               <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
             {:else if act?.kind === 'thinking'}
               <span class="tgt">{t('stats.overview.thinking')}</span>
+            {:else if act?.kind === 'over'}
+              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt">{t('nav.sidebar.over')} · {act.goes}</span>
             {:else if act?.kind === 'result'}
               <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
                 >{t('nav.sidebar.changed', { count: act.files })}</span
               >
             {/if}
-            <span class="spend"
-              >{fTok(s.tokens)}{#if showsCost(a)}{' · '}{fSpentUsd(s)}{/if}</span
-            >
+            <span class="spend">{cardSpend(a)}</span>
           </div>
         {/if}
       </div>
@@ -1373,8 +1373,10 @@
     color: var(--muted);
     text-overflow: ellipsis;
   }
+  /* As the preview's .mono: a size under the line's, set closer. */
   .a-act .mono {
-    font-size: 11.5px;
+    font-size: 0.92em;
+    letter-spacing: -0.01em;
   }
   .a-act .ok {
     display: inline-flex;

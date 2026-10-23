@@ -612,3 +612,57 @@ fn the_sessions_ceiling_of_credits_is_a_card_whose_choices_answer_copilot() {
         "cancel"
     );
 }
+
+#[test]
+fn it_says_what_it_does_with_the_words_of_claude_code() {
+    let mut rt = agent("C:/p", "default");
+    let claude_says = |name: &str, input: Value| crate::agent::tool_activity(name, &input, "C:/p");
+    let mut tool = |n: usize, tool: &str, args: Value| {
+        feed(
+            &mut rt,
+            &[ev(
+                "tool.execution_start",
+                json!({ "toolCallId": format!("t{n}"), "toolName": tool, "arguments": args }),
+            )],
+        );
+        rt.activity.clone()
+    };
+    assert_eq!(
+        tool(1, "view", json!({ "path": "C:/p/src/db.ts" })),
+        claude_says("Read", json!({ "file_path": "C:/p/src/db.ts" }))
+    );
+    assert_eq!(
+        tool(
+            2,
+            "edit",
+            json!({ "path": "src/auth/jwt.ts", "old_str": "a", "new_str": "b" })
+        ),
+        claude_says("Edit", json!({ "file_path": "C:/p/src/auth/jwt.ts" }))
+    );
+    assert_eq!(
+        tool(
+            3,
+            "create",
+            json!({ "path": "C:/p/b.txt", "file_text": "un" })
+        ),
+        claude_says("Write", json!({ "file_path": "C:/p/b.txt" }))
+    );
+    assert_eq!(
+        tool(4, "rg", json!({ "pattern": "jwt" })),
+        claude_says("Grep", json!({ "pattern": "jwt" }))
+    );
+    assert_eq!(
+        tool(
+            5,
+            "powershell",
+            json!({ "command": "npm test", "description": "Tests" })
+        ),
+        claude_says("Bash", json!({ "command": "npm test" }))
+    );
+    assert!(tool(
+        6,
+        "apply_patch",
+        json!({ "input": "*** Begin Patch\n*** Update File: src/x.ts\n" })
+    )
+    .is_some_and(|a| a.ends_with(" src/x.ts")));
+}

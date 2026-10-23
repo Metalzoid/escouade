@@ -31,6 +31,15 @@ export default {
     worktreeLaterTitle: 'Le worktree sera créé au premier message, au nom de l’agent',
     /** The line of a card after a turn: what it changed (2.0 design). */
     changed: { one: '{count} fichier modifié', other: '{count} fichiers modifiés' },
+    /** What an agent of a harness counted in credits (Copilot CLI) has spent, on its card. */
+    credits: { one: '{n} crédit', other: '{n} crédits' },
+    /** The line of the card of an agent whose turn is over while its work goes on: « Tour fini · 1 sous-agent, … ». */
+    over: 'Tour fini',
+    goes: {
+      subagents: { one: '{count} sous-agent', other: '{count} sous-agents' },
+      background: { one: '{count} tâche de fond', other: '{count} tâches de fond' },
+      driven: { one: '{count} agent piloté', other: '{count} agents pilotés' },
+    },
     /** The meta line of a card: a ticket's loop, a ticket to test, an agent never written to. */
     loop: 'boucle {iteration}/{max}',
     toTest: 'à tester',

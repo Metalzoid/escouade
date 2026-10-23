@@ -554,3 +554,64 @@ fn a_message_typed_in_another_client_is_shown_once_and_escouades_own_never_twice
     assert_eq!(item["origin"], "terminal");
     assert_eq!(item["queued"], false);
 }
+
+#[test]
+fn it_says_what_it_does_with_the_words_of_claude_code() {
+    let mut rt = agent("C:/p");
+    start(&mut rt);
+    feed(
+        &mut rt,
+        &[ev(
+            "message.updated",
+            json!({ "sessionID": S, "info": { "id": "msg_a", "role": "assistant", "sessionID": S } }),
+        )],
+    );
+    let claude_says = |name: &str, input: Value| crate::agent::tool_activity(name, &input, "C:/p");
+    let mut tool = |n: usize, tool: &str, input: Value| {
+        feed(
+            &mut rt,
+            &[ev(
+                "message.part.updated",
+                json!({ "sessionID": S, "part": {
+                    "id": format!("prt_{n}"), "messageID": "msg_a", "sessionID": S, "type": "tool", "tool": tool,
+                    "callID": format!("call_{n}"), "state": { "status": "running", "input": input },
+                } }),
+            )],
+        );
+        rt.activity.clone()
+    };
+    assert_eq!(
+        tool(1, "read", json!({ "filePath": "src/db.ts" })),
+        claude_says("Read", json!({ "file_path": "C:/p/src/db.ts" }))
+    );
+    assert_eq!(
+        tool(
+            2,
+            "edit",
+            json!({ "filePath": "C:/p/src/auth/jwt.ts", "oldString": "a", "newString": "b" })
+        ),
+        claude_says("Edit", json!({ "file_path": "C:/p/src/auth/jwt.ts" }))
+    );
+    assert_eq!(
+        tool(3, "write", json!({ "filePath": "b.txt", "content": "un" })),
+        claude_says("Write", json!({ "file_path": "C:/p/b.txt" }))
+    );
+    assert_eq!(
+        tool(4, "grep", json!({ "pattern": "jwt" })),
+        claude_says("Grep", json!({ "pattern": "jwt" }))
+    );
+    assert_eq!(
+        tool(
+            5,
+            "bash",
+            json!({ "command": "npm test", "description": "Tests" })
+        ),
+        claude_says("Bash", json!({ "command": "npm test" }))
+    );
+    assert!(tool(
+        6,
+        "patch",
+        json!({ "patchText": "*** Begin Patch\n*** Update File: src/x.ts\n" })
+    )
+    .is_some_and(|a| a.ends_with(" src/x.ts")));
+}

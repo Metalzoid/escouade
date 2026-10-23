@@ -376,14 +376,19 @@ impl AgentRt {
             }
             "commandExecution" => {
                 let input = json!({ "command": shown_command(item) });
+                let new = parent.is_none() && !self.conv.contains(id);
+                self.codex_call(id, "Bash", input, parent, fx);
+                if let Some((tool, what)) = command_tool(item).filter(|_| new) {
+                    // Said as Claude Code says it: it reads a file with Read, not with a command.
+                    let activity = tool_activity(tool, &what, &self.meta.cwd);
+                    self.set_activity(activity, fx);
+                }
                 if !done {
-                    self.codex_call(id, "Bash", input, parent, fx);
                     return;
                 }
                 let ok =
                     item["status"] == "completed" && item["exitCode"].as_i64().unwrap_or(0) == 0;
                 let text = item["aggregatedOutput"].as_str().unwrap_or_default();
-                self.codex_call(id, "Bash", input, parent, fx);
                 self.codex_result(id, !ok, text.to_string(), &Value::Null, fx);
             }
             "fileChange" => {
@@ -913,6 +918,19 @@ fn shown_command(v: &Value) -> String {
         v["command"].as_str().unwrap_or_default().to_string()
     } else {
         actions.join(" && ")
+    }
+}
+
+/// The tool of Claude Code for a command that only reads a file (`Read`) or only searches
+/// (`Grep`), as `commandActions` tells it; None for any other command, or several actions.
+fn command_tool(v: &Value) -> Option<(&'static str, Value)> {
+    let [action] = v["commandActions"].as_array()?.as_slice() else {
+        return None;
+    };
+    match action["type"].as_str()? {
+        "read" => Some(("Read", json!({ "file_path": action["path"].as_str()? }))),
+        "search" => Some(("Grep", json!({ "pattern": action["query"].as_str()? }))),
+        _ => None,
     }
 }
 

@@ -23,6 +23,14 @@ export default defineZone('nav', {
     worktreeLater: 'worktree at the first message',
     worktreeLaterTitle: 'The worktree will be created at the first message, under the agent’s name',
     changed: { one: '{count} file changed', other: '{count} files changed' },
+    /** What an agent of a harness counted in credits (Copilot CLI) has spent, on its card. */
+    credits: { one: '{n} credit', other: '{n} credits' },
+    over: 'Turn over',
+    goes: {
+      subagents: { one: '{count} subagent', other: '{count} subagents' },
+      background: { one: '{count} background task', other: '{count} background tasks' },
+      driven: { one: '{count} driven agent', other: '{count} driven agents' },
+    },
     loop: 'loop {iteration}/{max}',
     toTest: 'to review',
     noMessage: 'No message',

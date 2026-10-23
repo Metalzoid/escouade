@@ -4,11 +4,13 @@
 // their room; the motion stopped by prefers-reduced-motion. The captures of the app and of the preview go to
 // ESCOUADE_E2E_SHOTS when it is set, to be looked at side by side.
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { addProject, expect, send, test } from './fixture';
+import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -256,5 +258,182 @@ test.describe('in English', () => {
     expect(box.x + box.width).toBeLessThanOrEqual(1028);
     expect(box.y + box.height).toBeLessThanOrEqual(779);
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'new-agent-small-en.app.png') });
+  });
+});
+
+// What the agent does, on its card (ESC-74): its turn over while its work goes on, its tokens and its cost, its pull
+// request under it, as the preview's #waiting and #pr draw them; then a turn running, its tool and what it acts on.
+test.describe('what the agent does, on its card', () => {
+  let github: { url: string; close: () => Promise<void> };
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+
+  test.beforeAll(async () => {
+    github = await startFakeTrackers(0);
+    // Read by the app the fixture starts next: github.com's API is the fake one, its pull requests read at each selection.
+    process.env.ESCOUADE_GITHUB_API = `${github.url}/github`;
+    process.env.ESCOUADE_PR_READ_EVERY_MS = '0';
+  });
+
+  test.afterAll(async () => {
+    await github?.close();
+    delete process.env.ESCOUADE_GITHUB_API;
+    delete process.env.ESCOUADE_PR_READ_EVERY_MS;
+  });
+
+  /** Connects github.com's account (the fake one's) in Réglages › Intégrations. */
+  async function connectGithub(page: Page) {
+    await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+    const settings = page.getByRole('dialog', { name: 'Réglages' });
+    await settings.getByRole('tab', { name: 'Intégrations' }).click();
+    await settings.getByRole('button', { name: 'Connecter…' }).nth(2).click();
+    const form = settings.getByRole('form', { name: 'Connexion à GitHub Issues' });
+    await form.getByLabel(/Jeton/).fill('ghp_jeton');
+    await form.getByRole('button', { name: 'Connecter' }).click();
+    await expect(settings.getByText('Connecté · @ada').first()).toBeVisible();
+    await settings.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(settings).toHaveCount(0);
+  }
+
+  test('looks as the preview’s #waiting and #pr draw it, in both themes, at both sizes, then says what it runs', async ({ app }) => {
+    const exe = chromium.executablePath();
+    test.skip(
+      !fs.existsSync(exe) || !fs.existsSync(PREVIEW_FONT),
+      'the preview needs Playwright’s Chromium and the site’s packages (website/npm ci)',
+    );
+    const { page } = app;
+    git(app.repo, 'remote', 'add', 'origin', 'https://github.com/acme/demo.git');
+    await addProject(page, app.repo, { worktrees: true });
+    const side = page.locator('aside.side');
+    const card = side.locator('.agent').first();
+    await expect(side.locator('.agent')).toHaveCount(1, { timeout: 60_000 });
+    await connectGithub(page);
+    // A pull request on the branch of the agent's worktree, its CI failed: under its card once it is read again. The
+    // repository's own worktree comes first in the list.
+    const worktrees = () =>
+      git(app.repo, 'worktree', 'list', '--porcelain')
+        .split('\n')
+        .filter((l) => l.startsWith('worktree '))
+        .map((l) => l.slice('worktree '.length))
+        .slice(1);
+    await expect.poll(() => worktrees().length, { timeout: 30_000 }).toBe(1);
+    const branch = git(worktrees()[0], 'branch', '--show-current');
+    await fetch(`${github.url}/github/repos/acme/demo/pulls`, {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Connexion par jeton', body: '', head: branch, base: 'main' }),
+    });
+    await fetch(`${github.url}/__github/pulls/101`, { method: 'POST', body: JSON.stringify({ checks: 'FAILURE' }) });
+    await page.getByRole('button', { name: /^Kanban/ }).click();
+    await page.getByRole('button', { name: 'Agents', exact: true }).click();
+    await card.click();
+    const prs = side.getByRole('group', { name: /^Pull requests de / });
+    await expect(prs.locator('.prnum')).toHaveText('#101');
+    await expect(prs.locator('.prnum [data-icon="close"]')).toHaveCount(1);
+
+    // Its turn over, a command left running: « Attend », and what goes on in the place of what it did.
+    await send(page, 'commande de fond 600s');
+    await expect(card.locator('[data-pending]')).toHaveText('Attend', { timeout: 30_000 });
+    const act = card.locator('.a-act');
+    await expect(act.locator('.tgt')).toHaveText('Tour fini · 1 tâche de fond');
+    await expect(act.locator('[data-icon="check"]')).toHaveCount(1);
+    await expect(act.locator('.spend')).toHaveText(/^[\d,]+(\sk)? · [\d,]+\s\$$/);
+
+    const browser = await chromium.launch();
+    const preview = await browser.newPage();
+    /** The preview at `route`, in theme `t`, at `size`, the app beside it alike. */
+    const both = async (route: string, t: 'dark' | 'light', size: (typeof SIZES)[number]) => {
+      await page.setViewportSize(size);
+      await preview.setViewportSize(size);
+      // Another page first: from one route to another, only the hash would change, and the preview reads it once.
+      await preview.goto('about:blank');
+      await preview.goto(`${pathToFileURL(PREVIEW).href}?theme=${t}#${route}`);
+      await preview.evaluate(() => document.fonts.ready);
+      await theme(page, t);
+      await still(page);
+      await still(preview);
+      await page.evaluate(() => document.fonts.ready);
+      await page.mouse.move(size.width / 2, size.height / 2);
+      await preview.mouse.move(size.width / 2, size.height / 2);
+    };
+    const shot = async (name: string) => {
+      if (!SHOTS) return;
+      fs.mkdirSync(SHOTS, { recursive: true });
+      await page.screenshot({ path: path.join(SHOTS, `${name}.app.png`) });
+      await preview.screenshot({ path: path.join(SHOTS, `${name}.preview.png`) });
+    };
+    /** Where `parts` stand in the card `c`: from its left and its top. */
+    const within = async (c: Locator, parts: Locator[]) => {
+      const [x, y] = await place(c);
+      return Promise.all(parts.map(async (p) => ((r) => [r[0] - x, r[1] - y])(await place(p))));
+    };
+    /** Where the group `g` stands under the card `c`: from its left, and from its bottom. */
+    const under = async (c: Locator, g: Locator) => {
+      const card = await c.evaluate((n) => n.getBoundingClientRect().toJSON());
+      const group = await g.evaluate((n) => n.getBoundingClientRect().toJSON());
+      return [Math.round(group.x - card.x), Math.round(group.y - card.bottom)];
+    };
+    try {
+      for (const t of ['dark', 'light'] as const)
+        for (const size of SIZES) {
+          const where = `${t} ${size.width}×${size.height}`;
+          const light = t === 'light' ? '-light' : '';
+
+          // #waiting: « refacto-auth », its turn over, a subagent and a background task going on.
+          await both('waiting', t, size);
+          const pc = preview.locator('#ag-refacto');
+          const pact = pc.locator('.a-act');
+          expect
+            .soft(await lookBut(card.locator('.a-state'), 'width'), `« Attend », ${where}`)
+            .toEqual(await lookBut(pc.locator('.a-state'), 'width'));
+          expect.soft(await lookBut(act, 'width'), `the line of what it did, ${where}`).toEqual(await lookBut(pact, 'width'));
+          expect.soft(await look(act.locator('.ok svg')), `its check, ${where}`).toEqual(await look(pact.locator('svg.ok')));
+          expect
+            .soft(await lookBut(act.locator('.tgt'), 'width'), `« Tour fini · … », ${where}`)
+            .toEqual(await lookBut(pact.locator('.tgt'), 'width'));
+          expect
+            .soft(await lookBut(act.locator('.spend'), 'width'), `its tokens and cost, ${where}`)
+            .toEqual(await lookBut(pact.locator('.spend'), 'width'));
+          expect
+            .soft(await within(card, [act.locator('.ok svg'), act.locator('.tgt')]), `its parts' place, ${where}`)
+            .toEqual(await within(pc, [pact.locator('svg.ok'), pact.locator('.tgt')]));
+          await shot(`card-waiting${size.name}${light}`);
+
+          // #pr: the pull request under the card, its CI failed, « L’agent corrige ».
+          await both('pr', t, size);
+          const pp = preview.locator('#prs-refacto');
+          expect.soft(await lookBut(prs, 'width', 'height'), `the group, ${where}`).toEqual(await lookBut(pp, 'width', 'height'));
+          expect
+            .soft(await lookBut(prs.locator('.prnum'), 'width'), `its number, ${where}`)
+            .toEqual(await lookBut(pp.locator('.prnum'), 'width'));
+          expect.soft(await look(prs.locator('.prnum svg')), `its icon, ${where}`).toEqual(await look(pp.locator('.prnum svg')));
+          expect
+            .soft(await lookBut(prs.locator('.prfix'), 'width'), `its correction, ${where}`)
+            .toEqual(await lookBut(pp.locator('.prfix'), 'width'));
+          expect
+            .soft(await under(card, prs), `its place under the card, ${where}`)
+            .toEqual(await under(preview.locator('#ag-refacto'), pp));
+          await shot(`card-pr${size.name}${light}`);
+        }
+
+      // A turn running: its tool and what it acts on, as « pagination-users » says « Bash npm test ».
+      await send(page, 'commande premier plan 60s');
+      await expect(act.locator('b')).toHaveText('Lance', { timeout: 30_000 });
+      await expect(act.locator('.tgt')).toContainText('for i in');
+      for (const t of ['dark', 'light'] as const)
+        for (const size of SIZES) {
+          const where = `${t} ${size.width}×${size.height}`;
+          await both('', t, size);
+          const pa = preview.locator('#ag-pag .a-act');
+          expect.soft(await lookBut(act.locator('b'), 'width'), `its verb, ${where}`).toEqual(await lookBut(pa.locator('b'), 'width'));
+          expect
+            .soft(await lookBut(act.locator('.tgt'), 'width'), `what it acts on, ${where}`)
+            .toEqual(await lookBut(pa.locator('.tgt'), 'width'));
+          expect
+            .soft(await lookBut(act.locator('.spend'), 'width'), `its spending, ${where}`)
+            .toEqual(await lookBut(pa.locator('.spend'), 'width'));
+          await shot(`card-running${size.name}${t === 'light' ? '-light' : ''}`);
+        }
+    } finally {
+      await browser.close();
+    }
   });
 });
