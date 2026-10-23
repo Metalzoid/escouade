@@ -208,6 +208,28 @@ test('a subagent’s report and a background task are shown as such, not as the 
   await expect(page.locator('header.head .m', { hasText: 'Contexte' })).toContainText('/ 200 k');
 });
 
+test('a local command shows as typed with its output under it, and the wake-up of a loop as a wake-up, no tag shown (ESC-154)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await addProject(page, app.repo);
+  const msgs = page.locator('.msgs');
+  await send(page, '/cost');
+  // Its lines and their columns kept, without its ANSI codes.
+  const output = page.locator('.notice.output');
+  await expect(output).toHaveText('Total cost:            $0.05\nTotal duration (API):  1.2s\nUsage:                 100 input, 20 output');
+  await send(page, '/cost echec');
+  await expect(page.locator('.notice.error')).toHaveText('Erreur de /cost : indisponible');
+  // A ticket driven by a loop: the wake-up runs `/loop` again (Claude Code 2.1.309), then the ticket's return.
+  await send(page, '/loop suivre ESC-1');
+  await expect(page.getByText('Le ticket est revenu (suivre ESC-1).')).toBeVisible();
+  await expect(page.locator('.event', { hasText: 'Réveil' })).toContainText('/loop suivre ESC-1');
+  // The commands as typed, once each; nothing of the caveat.
+  await expect(page.locator('.bubble .text')).toHaveText(['/cost', '/cost echec', '/loop suivre ESC-1']);
+  await expect(msgs).not.toContainText('Caveat');
+  expect(await msgs.innerText()).not.toMatch(/<\/?(local-command|command-|bash-)|\u001b/);
+});
+
 test('a background task that ends while the agent waits is shown before what Claude says of it', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo);

@@ -13,6 +13,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - Le `.escouade.yml` qu’écrit Escouade passe Prettier : ses listes sont indentées de la même façon à la racine comme dans un groupe, et ses valeurs ne prennent des guillemets que lorsque YAML l’exige.
+- Les commandes de Claude Code (`/compact`, `/cost`, `/context`, `! git status`…) et le réveil d’une boucle `/loop` n’apparaissent plus avec leurs balises dans la conversation : la commande telle que tapée, sa sortie dessous, son erreur en rouge, y compris dans les conversations déjà enregistrées.
 
 ## [1.8.9] — 2026-10-22
 

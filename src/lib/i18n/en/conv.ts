@@ -103,6 +103,7 @@ export default defineZone('conv', {
     taskStopped: 'Background task stopped',
     taskStatus: 'Background task {status}',
     notification: 'Notification',
+    wake: 'Wake-up',
     fromClaudeCode: 'Message from Claude Code ({source})',
     handbackNamed: 'Report from the subagent “{label}”',
     handback: 'Report from a subagent',

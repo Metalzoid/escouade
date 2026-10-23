@@ -1733,14 +1733,15 @@ export interface HandedFrom {
 export interface NoticeItem extends Base {
   kind: 'notice';
   ts: number;
-  level: 'info' | 'warn' | 'error';
+  /** 'output': what a local command printed (`/cost`, `! ls`), its lines kept (ESC-154). */
+  level: 'info' | 'warn' | 'error' | 'output';
   text: string;
 }
 
 /** Passed on to Claude by Claude Code itself: a background task that ended, a subagent's message. */
 export interface EventItem extends Base {
   kind: 'event';
-  /** 'task' (a background task), 'agent' (a subagent or another session), else the origin Claude Code gave. */
+  /** 'task' (a background task), 'agent' (a subagent or another session), 'wake' (the wake-up of a loop, its command as text), else the origin Claude Code gave. */
   source: string;
   /** The subagent that sent it. */
   from?: string;

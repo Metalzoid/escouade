@@ -5,7 +5,7 @@
   import { tip } from '../../lib/tip';
 
   // What Claude Code passed on to Claude by itself: `source` "task" (a background task), "agent"
-  // (a subagent or another session), or another origin. `label`: the task a subagent was given.
+  // (a subagent or another session), "wake" (the wake-up of a loop, `text` the command it runs again), or another origin. `label`: the task a subagent was given.
   let { source, text, label = null }: { source: string; text: string; label?: string | null } = $props();
 
   // How a background task ended, as a whole sentence (the status the CLI reports is shown as is when it is another).
@@ -29,6 +29,7 @@
     if (task?.status) return { what: taskEnded(task.status), detail: task.summary };
     // A notification that does not say a task ended (a scheduled trigger, a check-in…).
     if (task) return { what: t('conv.event.notification'), detail: task.summary ?? plainText(text) };
+    if (source === 'wake') return { what: t('conv.event.wake'), detail: text };
     return { what: t('conv.event.fromClaudeCode', { source }), detail: plainText(text) };
   });
   const title = $derived.by(() => {

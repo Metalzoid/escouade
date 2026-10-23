@@ -81,7 +81,12 @@ impl AgentRt {
                 // A local command's output, failed ones' (2.1.302: `/compact` that fails).
                 "local_command" => {
                     let failed = e["commandOutcome"]["kind"] == "failed";
-                    self.on_local_command(e["content"].as_str().unwrap_or(""), failed, fx)
+                    self.on_local_command(
+                        e["uuid"].as_str(),
+                        e["content"].as_str().unwrap_or(""),
+                        failed,
+                        fx,
+                    )
                 }
                 // Started with Remote Control, the interface tells the link of its session.
                 "bridge_status" => self.on_bridge_status(e, fx),
@@ -223,25 +228,14 @@ impl AgentRt {
             }
             return;
         }
-        // What a local command (`/model`, `/cost`, `/compact`) printed.
-        if text.contains("<local-command-stdout>") || text.contains("<local-command-stderr>") {
-            return self.on_local_command(&text, false, fx);
-        }
-        // A command typed in the interface: shown as typed.
-        let text = match text.split_once("<command-name>") {
-            Some((_, rest)) => {
-                let name = rest.split("</command-name>").next().unwrap_or("").trim();
-                let args = rest
-                    .split_once("<command-args>")
-                    .and_then(|(_, a)| a.split("</command-args>").next())
-                    .unwrap_or("")
-                    .trim();
-                if args.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{name} {args}")
-                }
-            }
+        // A local command (`/model opus`, `! ls`): shown as typed, then what it printed.
+        let text = match localcmd::parse(&text) {
+            Some(parts) => match parts.into_iter().next() {
+                Some(localcmd::Part::Typed(typed)) => typed,
+                // Its caveat, Claude Code's own.
+                None if text.contains("<local-command-caveat>") => return,
+                _ => return self.on_local_command(e["uuid"].as_str(), &text, false, fx),
+            },
             None => text,
         };
         let kind = e["origin"]["kind"].as_str();
@@ -345,24 +339,39 @@ impl AgentRt {
         (self.meta.prompts, self.codex_turn())
     }
 
-    /// What a local command printed (`text`, its `<local-command-stdout>` or `-stderr>`): told,
-    /// and its turn over, as an error when it failed (`failed`, or its error output). Claude Code
+    /// What a local command printed (`text`, its `<local-command-stdout>` or `-stderr>`, the `!`
+    /// mode's `<bash-stdout>`…, in the entry `id`): shown, and its turn over, as an error when it
+    /// failed (`failed`, or its error output), the error then on the turn's card only. Claude Code
     /// ends such a turn with no `turn_duration` (2.1.302, ESC-12).
-    fn on_local_command(&mut self, text: &str, failed: bool, fx: &mut Effects) {
-        let frame = json!({ "type": "user", "message": { "content": text } });
-        self.on_user(&frame, fx);
+    fn on_local_command(&mut self, id: Option<&str>, text: &str, failed: bool, fx: &mut Effects) {
+        let mut parts = localcmd::parse(text).unwrap_or_else(|| {
+            let plain = strip_tags(text);
+            let plain = (!plain.is_empty()).then_some(localcmd::Part::Output(plain));
+            plain.into_iter().collect()
+        });
         // Only the command's own turn: one typed while the model runs a turn leaves that turn be.
         let commands = self
             .tui_prompt
             .as_deref()
-            .is_some_and(|p| p.starts_with('/'));
-        if !self.meta.status.is_active() || !commands {
-            return;
+            .is_some_and(|p| p.starts_with('/') || p.starts_with("! "));
+        let ends = self.meta.status.is_active() && commands;
+        if ends {
+            let error = |p: &localcmd::Part| match p {
+                localcmd::Part::Error(t) => Some(t.clone()),
+                _ => None,
+            };
+            let errors: Vec<String> = parts.iter().filter_map(error).collect();
+            if !errors.is_empty() {
+                self.tui_error = Some(errors.join("\n"));
+                parts.retain(|p| error(p).is_none());
+            } else if failed {
+                self.tui_error = Some(strip_tags(text));
+            }
         }
-        if failed || text.contains("<local-command-stderr>") {
-            self.tui_error = Some(strip_ansi(&strip_tags(text)).trim().to_string());
+        self.local_output(id, &parts, fx);
+        if ends {
+            self.end_tui_turn(None, fx);
         }
-        self.end_tui_turn(None, fx);
     }
 
     /// The end the core makes when the transcript still did not tell that of the turn a `Stop`
@@ -709,6 +718,81 @@ mod tests {
             .filter(|i| i["kind"] == "user")
             .count();
         assert_eq!(users, 1);
+    }
+
+    /// The (kind, level, text) of the items of the conversation, but its turns'.
+    fn shown(a: &mut AgentRt) -> Vec<(String, String, String)> {
+        let s = |v: &Value| v.as_str().unwrap_or_default().to_string();
+        a.conv
+            .items()
+            .iter()
+            .filter(|i| i["kind"] != "turn")
+            .map(|i| (s(&i["kind"]), s(&i["level"]), s(&i["text"])))
+            .collect()
+    }
+
+    #[test]
+    fn a_shell_command_of_the_bang_mode_shows_as_typed_with_its_outputs() {
+        let mut a = agent();
+        let mut fx = Effects::default();
+        let user = |content: Value| json!({ "type": "user", "uuid": new_id(), "message": { "role": "user", "content": content } });
+        a.on_transcript(&user(json!("<bash-input>git status</bash-input>")), &mut fx);
+        a.on_transcript(
+            &user(json!("<bash-stdout>On branch main\n\u{1b}[32mnothing to commit\u{1b}[m</bash-stdout><bash-stderr></bash-stderr>")),
+            &mut fx,
+        );
+        a.on_transcript(&user(json!("<bash-input>false</bash-input>")), &mut fx);
+        a.on_transcript(
+            &user(json!([{ "type": "text", "text": "<bash-stdout></bash-stdout><bash-stderr>Command failed: false</bash-stderr>" }])),
+            &mut fx,
+        );
+        let s = |k: &str, l: &str, t: &str| (k.to_string(), l.to_string(), t.to_string());
+        assert_eq!(
+            shown(&mut a),
+            [
+                s("user", "", "! git status"),
+                s("notice", "output", "On branch main\nnothing to commit"),
+                s("user", "", "! false"),
+            ]
+        );
+        // Each its turn, over with its output; the error is the failed one's, shown on its card.
+        let turns: Vec<Value> = a
+            .conv
+            .items()
+            .into_iter()
+            .filter(|i| i["kind"] == "turn")
+            .collect();
+        assert_eq!(turns.len(), 2, "{turns:?}");
+        assert_eq!(turns[0]["isError"], false);
+        assert_eq!(turns[1]["error"], "Command failed: false");
+        assert!(!a.meta.status.is_active());
+    }
+
+    #[test]
+    fn a_local_commands_output_in_text_blocks_shows_as_an_output_and_its_caveat_not_at_all() {
+        let mut a = agent();
+        let mut fx = Effects::default();
+        let user = |content: Value| json!({ "type": "user", "uuid": new_id(), "message": { "role": "user", "content": content } });
+        // A caveat Claude Code would not mark as its own.
+        a.on_transcript(
+            &user(json!(
+                "<local-command-caveat>Caveat: x</local-command-caveat>"
+            )),
+            &mut fx,
+        );
+        a.on_transcript(&user(json!([{ "type": "text", "text": "<command-name>/context</command-name>\n<command-message>context</command-message>\n<command-args></command-args>" }])), &mut fx);
+        a.on_transcript(
+            &user(json!([{ "type": "text", "text": "<local-command-stdout> \u{1b}[1mContext Usage\u{1b}[22m\n ⛁ ⛀   12k/200k</local-command-stdout>" }])),
+            &mut fx,
+        );
+        let s = |k: &str, l: &str, t: &str| (k.to_string(), l.to_string(), t.to_string());
+        assert_eq!(
+            shown(&mut a),
+            [
+                s("user", "", "/context"),
+                s("notice", "output", " Context Usage\n ⛁ ⛀   12k/200k"),
+            ]
+        );
     }
 
     #[test]

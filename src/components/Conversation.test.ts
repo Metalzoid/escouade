@@ -1026,6 +1026,30 @@ describe('Conversation', () => {
     expect([...container.querySelectorAll('.bubble')].map((b) => b.textContent?.trim())).toEqual(['Enquête sur le bug']);
   });
 
+  it('shows the local commands a conversation saved before kept with their tags as typed, with their outputs (ESC-154)', async () => {
+    const remote = (id: string, text: string) => ({ ...user(0), id, text, origin: 'remote' });
+    const { container } = setup({ status: 'done' }, [
+      remote('c0', '<local-command-caveat>Caveat: x</local-command-caveat>'),
+      remote('c1', '<command-name>/context</command-name>\n<command-message>context</command-message>\n<command-args></command-args>'),
+      remote('c2', '<local-command-stdout> \u001b[1mContext Usage\u001b[22m\n ⛁ ⛀   12k/200k</local-command-stdout>'),
+      remote('c3', '<local-command-stderr>Unknown model</local-command-stderr>'),
+      remote('c4', '<command-message>loop</command-message>\n<command-name>/loop</command-name>\n<command-args>check ESC-1</command-args>'),
+      { kind: 'notice', id: 'n1', ts: 1, level: 'output', text: 'Total cost: $0.01\nTotal duration: 3s' },
+      { kind: 'event', id: 'e1', ts: 2, source: 'wake', text: '/loop check ESC-2' },
+    ]);
+    await screen.findByText('/context');
+    expect(container.textContent).not.toMatch(/<\/?(local-command|command-|bash-)/);
+    expect(container.textContent).not.toContain('\u001b');
+    expect([...container.querySelectorAll('.bubble .text')].map((b) => b.textContent)).toEqual(['/context']);
+    const outputs = [...container.querySelectorAll('.notice.output')].map((n) => n.textContent);
+    expect(outputs).toEqual([' Context Usage\n ⛁ ⛀   12k/200k', 'Total cost: $0.01\nTotal duration: 3s']);
+    expect(container.querySelector('.notice.error')?.textContent).toBe('Unknown model');
+    expect([...container.querySelectorAll('.event .detail')].map((d) => d.textContent)).toEqual(['/loop check ESC-1', '/loop check ESC-2']);
+    expect(screen.getAllByText('Réveil')).toHaveLength(2);
+    // The caveat shows nothing, not even an empty block.
+    expect(container.querySelector('[data-item="c0"]')).toBeNull();
+  });
+
   it('keeps telling when a stopped agent resumes, even with a notice after its turn', async () => {
     const end = { kind: 'turn', id: 'r1', ts: 1, durationMs: 1, cost: 0, tokens: 0, isError: true, interrupted: false, error: 'limit' };
     const notice = { kind: 'notice', id: 'n1', ts: 2, level: 'info', text: 'Contexte compacté' };

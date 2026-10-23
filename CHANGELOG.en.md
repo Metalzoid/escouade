@@ -13,6 +13,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - The `.escouade.yml` Escouade writes passes Prettier: its lists are indented the same way at the root as in a group, and its values take quotes only where YAML requires them.
+- Claude Code’s commands (`/compact`, `/cost`, `/context`, `! git status`…) and the wake-up of a `/loop` no longer show with their tags in the conversation: the command as typed, its output under it, its error in red, in conversations saved before too.
 
 ## [1.8.9] — 2026-10-22
 

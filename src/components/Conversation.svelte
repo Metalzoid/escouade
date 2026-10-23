@@ -28,6 +28,7 @@
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import { engineName, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
+  import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
   import { editsByTurn } from '../lib/tools';
   import { app, type SubFocus } from '../lib/state.svelte';
@@ -129,6 +130,8 @@
   const marked = $derived(conv.items.some((i) => i.kind === 'handover'));
   // Subagents named after their tasks, for their messages.
   const labels = $derived(subagentLabels(conv.items));
+  // The local commands conversations saved before kept with their tags (ESC-154).
+  const commands = $derived(localCommandViews(conv.items));
   const branch = $derived(agent.worktree?.branch ?? app.git[project.id]?.branch ?? '');
   const files = $derived(app.git[project.id]?.agents[agent.id] ?? 0);
   // Its pull requests (ESC-64): read when it is shown, then every minute while it is (the backend asks its host at most
@@ -516,6 +519,10 @@
     if (item.kind === 'text') return !!item.text.trim() || item.streaming || !!item.spoken;
     if (item.kind === 'thinking') return !!item.text.trim() || item.streaming;
     if (item.kind === 'tool') return item.name !== 'AskUserQuestion' && item.name !== 'ExitPlanMode';
+    if (item.kind === 'user') {
+      const command = commands.get(item.id);
+      return command?.kind !== 'notices' || command.notices.length > 0;
+    }
     return true;
   }
 </script>
@@ -751,7 +758,16 @@
             <div class="item" class:found={found === item.id} data-item={item.id}>
               {#if item.kind === 'user'}
                 {@const injected = injectedSource(item)}
-                {#if injected}
+                {@const command = commands.get(item.id)}
+                {#if command?.kind === 'user'}
+                  <UserMessage item={{ ...item, text: command.text }} engine={agent.engine} />
+                {:else if command?.kind === 'wake'}
+                  <EventMessage source="wake" text={command.text} />
+                {:else if command}
+                  {#each command.notices as notice, k (k)}
+                    <Notice item={{ kind: 'notice', id: item.id, ts: item.ts, ...notice }} />
+                  {/each}
+                {:else if injected}
                   <EventMessage source={injected} text={item.text} label={labels.get(parseAgentMessage(item.text).from ?? '')} />
                 {:else}
                   <UserMessage {item} engine={agent.engine} />

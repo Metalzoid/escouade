@@ -1439,6 +1439,17 @@ async fn a_local_command_is_one_message_and_its_output_ends_its_turn() {
         notices.iter().any(|n| n == "Contexte compacté"),
         "{notices:?}"
     );
+    // Its output under it, without its tags nor its ANSI codes (ESC-154).
+    let output = h
+        .items(&id)
+        .into_iter()
+        .find(|i| i["kind"] == "notice" && i["level"] == "output");
+    assert_eq!(
+        output.as_ref().map(|o| o["text"].clone()),
+        Some(json!("Compacted (ctrl+o to see full summary)")),
+        "{notices:?}"
+    );
+    no_local_command_tag(&h, &id);
     let turns = turns_of(&h, &id);
     assert_eq!(turns.len(), 1);
     assert_eq!(
@@ -1463,6 +1474,25 @@ async fn a_local_command_that_fails_ends_its_turn_with_its_error() {
             .is_some_and(|e| e.contains("Error during compaction")),
         "{turns:?}"
     );
+    // The error on its card only, not again as a notice (ESC-154).
+    let notices = texts(&h, &id, "notice");
+    assert!(
+        !notices
+            .iter()
+            .any(|n| n.contains("Error during compaction")),
+        "{notices:?}"
+    );
+    no_local_command_tag(&h, &id);
+}
+
+/// No item of the conversation of `id` shows a tag of a local command (ESC-154).
+fn no_local_command_tag(h: &Harness, id: &str) {
+    for i in h.items(id) {
+        let text = i["text"].as_str().unwrap_or_default();
+        for tag in ["<local-command", "<command-", "<bash-", "\u{1b}"] {
+            assert!(!text.contains(tag), "{i}");
+        }
+    }
 }
 
 /// `text` typed in the interface, until its turn comes back from the transcript.

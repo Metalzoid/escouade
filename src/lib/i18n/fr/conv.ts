@@ -122,6 +122,7 @@ export default {
     /** The status the CLI reports, when it is none of those. */
     taskStatus: 'Tâche de fond {status}',
     notification: 'Notification',
+    wake: 'Réveil',
     fromClaudeCode: 'Message de Claude Code ({source})',
     handbackNamed: 'Rapport du sous-agent « {label} »',
     handback: 'Rapport d’un sous-agent',

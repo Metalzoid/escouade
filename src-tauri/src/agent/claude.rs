@@ -126,10 +126,13 @@ impl AgentRt {
                 fx.agent_changed = true;
             }
             "local_command_output" => {
-                let text = f["content"].as_str().unwrap_or("").to_string();
-                if !text.trim().is_empty() {
-                    self.notice("info", strip_tags(&text), fx);
-                }
+                let text = f["content"].as_str().unwrap_or("");
+                let parts = localcmd::parse(text).unwrap_or_else(|| {
+                    let plain = strip_tags(text);
+                    let plain = (!plain.is_empty()).then_some(localcmd::Part::Output(plain));
+                    plain.into_iter().collect()
+                });
+                self.local_output(f["uuid"].as_str(), &parts, fx);
             }
             _ => {}
         }
@@ -491,6 +494,43 @@ impl AgentRt {
                 .collect::<Vec<_>>()
                 .join("\n"),
         };
+        let human =
+            f["origin"]["kind"].as_str().is_none_or(|k| k == "human") && f["isSynthetic"] != true;
+        let parts = localcmd::parse(&text);
+        // The wake-up of a loop (`ScheduleWakeup`) runs its prompt again, as a message of no
+        // origin (a human's, `<command-name>/loop</command-name>…` for `/loop`): a wake-up, not a
+        // message of the user's (ESC-154).
+        if human && self.loop_wake_due() {
+            let typed = parts.iter().flatten().find_map(|p| match p {
+                localcmd::Part::Typed(t) => Some(t.clone()),
+                _ => None,
+            });
+            if let Some(text) = typed.or_else(|| parts.is_none().then(|| text.clone())) {
+                // It fired: a message that comes next is no wake-up, unless the loop asks another.
+                self.plan_apply(fx, |p| {
+                    p.wakes.retain(|w| w.kind != crate::plan::WakeKind::Loop);
+                    Change::Saved
+                });
+                self.append(
+                    json!({ "kind": "event", "id": id, "source": "wake", "text": text, "ts": now_ms() }),
+                    fx,
+                );
+                fx.save = true;
+                return;
+            }
+        }
+        // A local command (`/compact`, `! ls`): as typed, then what it printed. The one the app
+        // sent is listed already, as typed (the replay has its uuid).
+        if let Some(parts) = parts {
+            for part in &parts {
+                if let localcmd::Part::Typed(typed) = part {
+                    self.push_user_from(&id, typed, 0, &[], Some("remote"), fx);
+                }
+            }
+            self.local_output(Some(&id), &parts, fx);
+            fx.save = true;
+            return;
+        }
         // Only a human's message is the user's (no origin, or "human", as Claude Code tells). The
         // rest Claude Code passes on to Claude by itself (a subagent's report, a background task
         // that ended, an MCP channel, a meta message): an event.
@@ -544,17 +584,21 @@ impl AgentRt {
         }
         let content = &f["message"]["content"];
         if let Some(text) = content.as_str() {
-            if text.contains("<local-command-stdout>") || text.contains("<local-command-stderr>") {
-                let clean = strip_tags(text);
-                if !clean.trim().is_empty() {
-                    self.notice("info", clean, fx);
-                }
+            if let Some(parts) = localcmd::parse(text) {
+                self.local_output(f["uuid"].as_str(), &parts, fx);
             }
             return;
         }
         let Some(blocks) = content.as_array() else {
             return;
         };
+        if !blocks.iter().any(|b| b["type"] == "tool_result") {
+            let text: Vec<&str> = blocks.iter().filter_map(|b| b["text"].as_str()).collect();
+            if let Some(parts) = localcmd::parse(&text.join("\n")) {
+                self.local_output(f["uuid"].as_str(), &parts, fx);
+            }
+            return;
+        }
         // A tool's result in its main chain is an entry of its session too: the last one of a turn
         // stopped (or failed) before any reply, which a copy must not lose.
         if f["parent_tool_use_id"].is_null() && blocks.iter().any(|b| b["type"] == "tool_result") {
@@ -585,6 +629,47 @@ impl AgentRt {
             self.patch(
                 id,
                 json!({ "status": if is_error { "error" } else { "ok" }, "result": result }),
+                fx,
+            );
+        }
+    }
+
+    /// The wake-up of a loop is due: its time has come (it fires once the process is idle, so
+    /// late when a turn ran then), not long ago (a loop left without its stop would hold one).
+    fn loop_wake_due(&self) -> bool {
+        const EARLY_MS: i64 = 30_000;
+        const LATE_MS: i64 = 30 * 60_000;
+        let now = now_ms();
+        self.meta.plan.as_ref().is_some_and(|p| {
+            p.wakes.iter().any(|w| {
+                w.kind == crate::plan::WakeKind::Loop
+                    && w.at <= now + EARLY_MS
+                    && w.at >= now - LATE_MS
+            })
+        })
+    }
+
+    /// What a local command printed (`parts`, as `localcmd` read them), under the command: its
+    /// output as an output, its error as an error (ESC-154). Given the id of its entry (`id`),
+    /// one read again is listed once.
+    pub(super) fn local_output(
+        &mut self,
+        id: Option<&str>,
+        parts: &[localcmd::Part],
+        fx: &mut Effects,
+    ) {
+        for (k, part) in parts.iter().enumerate() {
+            let (level, text) = match part {
+                localcmd::Part::Output(t) => ("output", t),
+                localcmd::Part::Error(t) => ("error", t),
+                localcmd::Part::Typed(_) => continue,
+            };
+            let item_id = id.map_or_else(new_id, |id| format!("{id}:out{k}"));
+            if self.conv.contains(&item_id) {
+                continue;
+            }
+            self.append(
+                json!({ "kind": "notice", "id": item_id, "ts": now_ms(), "level": level, "text": text }),
                 fx,
             );
         }

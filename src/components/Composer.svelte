@@ -19,6 +19,7 @@
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, setDraft } from '../lib/drafts';
   import { injectedSource } from '../lib/events';
+  import { parseLocalCommand } from '../lib/localcmd';
   import { fileOrigins } from '../lib/file-origin';
   import { basename, dirname } from '../lib/format';
   import { t } from '../lib/i18n';
@@ -254,7 +255,12 @@
   function lastUserMessage(): string | null {
     for (let i = conv.items.length - 1; i >= 0; i--) {
       const it = conv.items[i];
-      if (it.kind === 'user' && !injectedSource(it)) return it.text;
+      if (it.kind !== 'user' || injectedSource(it)) continue;
+      // A local command kept with its tags (ESC-154): as typed; its output is no message.
+      const parts = parseLocalCommand(it.text);
+      if (!parts) return it.text;
+      const typed = parts.find((p) => p.kind === 'typed');
+      if (typed) return typed.text;
     }
     return null;
   }

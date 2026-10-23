@@ -15,6 +15,18 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* What a local command printed: its lines and their columns as it wrote them (the table of /context). */
+  .output {
+    padding: 8px 12px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    white-space: pre;
+    overflow: auto;
+    max-height: 360px;
+  }
   .warn {
     color: var(--wait);
   }
