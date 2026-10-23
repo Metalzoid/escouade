@@ -87,6 +87,18 @@
         --on-primary-dim: #4a4e55;
         --on-wait: #1a1405;
         --on-hit: #fff;
+        /* A project's tile: its initials on its own colour, the same in both themes (the colours do not change). */
+        --on-tile: #101114;
+        /* macOS's window buttons, drawn where they sit (?os=mac). */
+        --mac-close: #ff5f57;
+        --mac-min: #febc2e;
+        --mac-zoom: #28c840;
+        /* A project's colour is its hue at this lightness and chroma (PROJECT_COLORS): the tiles, the menu's swatches. */
+        --proj-l: 0.72;
+        --proj-c: 0.12;
+        /* The projects' rail and the agents' sidebar (ESC-158). */
+        --rail: 52px;
+        --side: 276px;
         --vo-base: #070809;
         --orb-base: #0b0c0e;
         /* Code, diffs and the terminal (xterm's theme, CodeMirror's highlight). */
@@ -270,6 +282,8 @@
       .app {
         position: relative;
         display: grid;
+        /* The projects' rail on the left (ESC-158), the title bar and the status bar across the window. */
+        grid-template-columns: var(--rail) minmax(0, 1fr);
         grid-template-rows: 44px 1fr 30px;
         height: 100vh;
         min-width: 1000px;
@@ -287,19 +301,72 @@
         pointer-events: none;
       }
 
-      /* ---------- Title bar ---------- */
+      /* ---------- Title bar (ESC-158): no tabs; the project's name over its sidebar, the search in the middle ---------- */
       .titlebar {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .tb-left,
+      .tb-right {
         display: flex;
         align-items: center;
         gap: 4px;
-        padding-left: 12px;
-        -webkit-user-select: none;
-        user-select: none;
+        min-width: 0;
+      }
+      .tb-right {
+        grid-column: 3;
+        justify-self: end;
+      }
+      .titlebar .search {
+        grid-column: 2;
+      }
+      /* Windows and Linux: the logo over the rail. macOS: its three buttons there instead (?os=mac). */
+      .tb-corner {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: var(--rail);
       }
       .logo {
         width: 22px;
         height: 22px;
-        margin-right: 8px;
+      }
+      .mac-lights {
+        display: none;
+        gap: 8px;
+      }
+      .mac-lights i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--mac-close);
+        box-shadow: inset 0 0 0 0.5px rgba(var(--fg-rgb), 0.12);
+      }
+      .mac-lights i:nth-child(2) {
+        background: var(--mac-min);
+      }
+      .mac-lights i:nth-child(3) {
+        background: var(--mac-zoom);
+      }
+      /* 84 px, the room the app leaves today for the buttons macOS draws (TitleBar, .bar.mac). */
+      .app.mac .tb-corner {
+        width: 84px;
+        justify-items: start;
+        padding-left: 14px;
+      }
+      .app.mac .mac-lights {
+        display: flex;
+      }
+      .app.mac .logo,
+      .app.mac .winctl {
+        display: none;
+      }
+      .app.mac .tb-right {
+        padding-right: 8px;
       }
       .tb-btn {
         white-space: nowrap;
@@ -319,85 +386,348 @@
         background: var(--hover);
         color: var(--text);
       }
-      .tabs {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        margin-left: 4px;
-      }
-      .tab {
-        white-space: nowrap;
-        position: relative;
+      /* The active project, over its sidebar: its name, its changes, the same menu as its tile. */
+      .tb-proj {
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
         height: 30px;
-        padding: 0 11px 0 10px;
+        margin-left: 2px;
+        padding: 0 8px 0 9px;
         border-radius: 8px;
-        color: var(--muted);
-        font-weight: 500;
-        letter-spacing: -0.005em;
-        transition:
-          background-color 0.15s,
-          color 0.15s;
-      }
-      .tab:hover {
         color: var(--text);
+        font-weight: 600;
+        letter-spacing: -0.005em;
+        white-space: nowrap;
+        transition: background-color 0.15s;
+      }
+      .tb-proj:hover,
+      .tb-proj[aria-expanded='true'] {
         background: var(--hover);
       }
-      .tab[aria-selected='true'] {
-        color: var(--text);
-        background: color-mix(in oklch, var(--p) 18%, rgba(var(--fg-rgb), 0.05));
-        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent);
-      }
-      .tab .sw {
+      .tb-proj .sw {
+        flex: none;
         width: 8px;
         height: 8px;
         border-radius: 2.5px;
-        background: var(--c);
+        background: var(--p);
       }
-      .tab .delta {
+      .tb-proj .proj-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tb-proj .lock {
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .tb-proj .delta {
         color: var(--dim);
         font-size: 11.5px;
+        font-weight: 500;
         font-variant-numeric: tabular-nums;
       }
-      .tab .ask {
-        display: inline-grid;
+      .tb-proj > svg:last-child {
+        color: var(--muted);
+      }
+      .app.global .tb-proj {
+        visibility: hidden;
+      }
+
+      /* ---------- The projects' rail (ESC-158), as Slack's workspaces: one tile per project ---------- */
+      .prail {
+        grid-column: 1;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-height: 0;
+        padding: 6px 0 8px;
+      }
+      .r-list {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        flex: 0 1 auto;
+        min-height: 0;
+        width: 100%;
+        padding: 6px 0;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      .r-list::-webkit-scrollbar {
+        display: none;
+      }
+      /* More projects above or below: the edge fades. */
+      .r-list.more-down {
+        mask-image: linear-gradient(to bottom, var(--frame) calc(100% - 28px), transparent);
+      }
+      .r-list.more-up {
+        mask-image: linear-gradient(to bottom, transparent, var(--frame) 28px);
+      }
+      .r-list.more-up.more-down {
+        mask-image: linear-gradient(to bottom, transparent, var(--frame) 28px, var(--frame) calc(100% - 28px), transparent);
+      }
+      .r-sep {
+        flex: none;
+        width: 24px;
+        height: 1px;
+        background: var(--line-2);
+      }
+      .r-spacer {
+        flex: 1;
+        min-height: 0;
+      }
+      .tile {
+        position: relative;
+        flex: none;
+        display: grid;
         place-items: center;
-        min-width: 17px;
-        height: 17px;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(var(--fg-rgb), 0.06);
+        color: var(--muted);
+        transition:
+          background-color 0.15s,
+          color 0.15s,
+          box-shadow 0.2s var(--ease);
+      }
+      .tile:hover {
+        color: var(--text);
+        background: rgba(var(--fg-rgb), 0.1);
+      }
+      /* The trait on the rail's edge: short when hovered, long when active. */
+      .tile::before {
+        content: '';
+        position: absolute;
+        left: -8px;
+        top: 50%;
+        width: 4px;
+        height: 0;
+        border-radius: 0 3px 3px 0;
+        background: var(--line-3);
+        transform: translateY(-50%);
+        transition: height 0.2s var(--ease);
+      }
+      .tile:hover::before {
+        height: 10px;
+      }
+      .tile[aria-selected='true']::before,
+      .tile[aria-pressed='true']::before {
+        height: 22px;
+        background: var(--p-ink);
+      }
+      .tile[aria-selected='true'],
+      .tile[aria-pressed='true'] {
+        box-shadow:
+          0 0 0 2px var(--frame),
+          0 0 0 4px var(--p-ink);
+      }
+      .tile[aria-pressed='true'] {
+        color: var(--p-ink);
+        background: var(--p-soft);
+      }
+      /* A project: its colour and its initials. */
+      .tile.proj {
+        --c: oklch(var(--proj-l) var(--proj-c) var(--h));
+        background: var(--c);
+        color: var(--on-tile);
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+      }
+      .tile.proj:hover {
+        background: color-mix(in oklch, var(--c) 88%, var(--text));
+        color: var(--on-tile);
+      }
+      .app.global .tile.proj[aria-selected='true'] {
+        box-shadow: none;
+      }
+      .app.global .tile.proj[aria-selected='true']::before {
+        height: 0;
+      }
+      /* What the tab said: the agents waiting (amber count), at work (green dot), the private project's lock. */
+      .tile .ask {
+        position: absolute;
+        top: -6px;
+        right: -7px;
+        display: grid;
+        place-items: center;
+        min-width: 18px;
+        height: 18px;
         padding: 0 5px;
+        border-radius: 9px;
+        background: var(--wait);
+        color: var(--on-wait);
+        box-shadow: 0 0 0 2px var(--frame);
+        font-size: 11px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0;
+        transition:
+          transform 0.3s var(--ease),
+          opacity 0.3s;
+      }
+      .tile .ask.gone {
+        transform: scale(0.4);
+        opacity: 0;
+      }
+      .tile .busy {
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--run);
+        box-shadow: 0 0 0 2px var(--frame);
+      }
+      .tile .lock {
+        position: absolute;
+        left: -5px;
+        bottom: -5px;
+        width: 17px;
+        height: 17px;
+        padding: 2.5px;
+        border-radius: 50%;
+        background: var(--frame);
+        color: var(--soft);
+        stroke-width: 1.7;
+      }
+      .tile.t-add {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .tile.t-add:hover,
+      .tile.t-add[aria-expanded='true'] {
+        background: var(--hover);
+        box-shadow: inset 0 0 0 1px var(--line-3);
+      }
+      /* A tile being dragged: its place stays hollow, a line says where it lands. */
+      .tile.dragging {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px var(--line-3);
+      }
+      .tile.dragging > *,
+      .tile.dragging .ini {
+        visibility: hidden;
+      }
+      .r-drop {
+        flex: none;
+        width: 32px;
+        height: 3px;
+        margin: -5.5px 0;
+        border-radius: 2px;
+        background: var(--p-ink);
+      }
+      .tile.ghost {
+        position: fixed;
+        z-index: 40;
+        pointer-events: none;
+        transform: rotate(-4deg);
+        box-shadow: 0 12px 28px -6px rgba(0, 0, 0, calc(0.7 * var(--shade)));
+      }
+      /* A project out of view that waits: an amber chevron at the rail's edge. */
+      .r-more {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        height: 18px;
+        margin-top: -4px;
+        padding: 0 6px 0 4px;
         border-radius: 9px;
         background: var(--wait);
         color: var(--on-wait);
         font-size: 11px;
         font-weight: 650;
         font-variant-numeric: tabular-nums;
-        transition:
-          transform 0.3s var(--ease),
-          opacity 0.3s;
       }
-      .tab .ask.gone {
-        transform: scale(0.4);
-        opacity: 0;
+      .r-more svg {
+        width: 11px;
+        height: 11px;
+        stroke-width: 2;
       }
-      .tab .busy {
-        width: 6px;
-        height: 6px;
+      /* The name in a bubble beside the tile, with what the tab showed. */
+      .r-tip {
+        position: fixed;
+        z-index: 35;
+        display: grid;
+        gap: 3px;
+        min-width: 160px;
+        padding: 8px 11px 9px;
+        border-radius: 9px;
+        background: var(--raise-2);
+        box-shadow:
+          inset 0 0 0 1px var(--line-2),
+          0 12px 32px -8px rgba(0, 0, 0, calc(0.7 * var(--shade)));
+        font-size: 12px;
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translateY(-50%);
+      }
+      .r-tip b {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 1px;
+        color: var(--text);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .r-tip b kbd {
+        margin-left: auto;
+      }
+      .r-tip span {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .r-tip span i {
+        width: 7px;
+        height: 7px;
         border-radius: 50%;
-        background: var(--run);
       }
-      .tb-spacer {
-        flex: 1;
-        align-self: stretch;
+      /* The project's menu: by a right click on its tile, or by its name in the title bar. */
+      .menu.proj-menu {
+        width: 300px;
+      }
+      .menu.add-menu {
+        width: 320px;
+      }
+      /* The colours, as in Réglages › Projets (.swatches), smaller. */
+      .menu .swatches {
+        gap: 7px;
+        padding: 2px 9px 8px 35px;
+      }
+      .menu .swatches button {
+        --c: oklch(var(--proj-l) var(--proj-c) var(--h));
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+      }
+      .menu .swatches button[aria-pressed='true'] {
+        box-shadow:
+          0 0 0 2px var(--raise-2),
+          0 0 0 3.5px var(--c);
+      }
+      .mi .reopen {
+        color: var(--p-ink);
+        font-size: 12px;
+        font-weight: 550;
       }
       .search {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        width: 248px;
+        width: min(340px, 33vw);
         height: 30px;
-        margin-right: 8px;
         padding: 0 6px 0 10px;
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -439,8 +769,10 @@
 
       /* ---------- Body: the sidebar on the frame, the work on its panel ---------- */
       .body {
+        grid-column: 2;
+        grid-row: 2;
         display: grid;
-        grid-template-columns: 276px 1fr;
+        grid-template-columns: var(--side) minmax(0, 1fr);
         min-height: 0;
         padding: 0 8px 0 0;
       }
@@ -1067,6 +1399,8 @@
       }
       .thread {
         display: grid;
+        /* One column that shrinks with the panel: a long line truncates instead of pushing the thread wider. */
+        grid-template-columns: minmax(0, 1fr);
         gap: 18px;
         width: min(780px, 100% - 64px);
         margin: 0 auto;
@@ -1659,6 +1993,7 @@
 
       /* ---------- Status bar ---------- */
       .statusbar {
+        grid-column: 1 / -1;
         display: flex;
         align-items: center;
         gap: 18px;
@@ -2977,10 +3312,12 @@
 
       /* ---------- Global views: every project at once, in Escouade's own light ---------- */
       .full {
+        grid-column: 2;
+        grid-row: 2;
         display: none;
         flex-direction: column;
         min-height: 0;
-        margin: 0 8px;
+        margin: 0 8px 0 0;
         border-radius: 12px;
         background: var(--panel);
         box-shadow:
@@ -2998,11 +3335,6 @@
         background: color-mix(in oklch, var(--p) 18%, rgba(var(--fg-rgb), 0.05));
         box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 32%, transparent);
         color: var(--text);
-      }
-      .app.global .tab[aria-selected='true'] {
-        background: transparent;
-        box-shadow: none;
-        color: var(--muted);
       }
       .full-head {
         display: flex;
@@ -4185,21 +4517,12 @@
       }
 
       @media (max-width: 1240px) {
-        .search {
-          width: 40px;
-          padding: 0;
-          justify-content: center;
-        }
-        .search span,
-        .search kbd {
-          display: none;
-        }
         .sb-hide {
           display: none;
         }
-        .titlebar .lbl,
-        .tab .delta {
-          display: none;
+        /* The rail sits beside the sidebar: its left margin shrinks, its width stays (ESC-158). */
+        .sidebar {
+          padding-left: 6px;
         }
         .ov {
           --cols: minmax(200px, 1.2fr) minmax(200px, 2fr) 74px 64px 60px;
@@ -5842,19 +6165,18 @@
       /* The first start, no project and no harness yet: the panel alone. */
       .app.first .body {
         grid-template-columns: 1fr;
-        padding-left: 8px;
       }
+      /* The rail keeps « + » and Réglages: the way to a first project, and to the settings. */
       .app.first .sidebar,
-      .app.first .tabs .tab,
+      .app.first .r-list,
+      .app.first .r-sep,
       .app.first #btn-overview,
-      .app.first .titlebar [data-go='editor'],
       .app.first #btn-stats,
+      .app.first .tb-proj,
+      .app.first .titlebar [data-go='editor'],
       .app.first .search,
-      .app.first .statusbar > :not(#btn-settings) {
+      .app.first .statusbar > * {
         display: none;
-      }
-      .app.first .statusbar {
-        justify-content: flex-end;
       }
 
       /* What comes after the redesign (code hosts): its place, not its detail. */
@@ -6220,13 +6542,6 @@
         flex: none;
         height: 26px;
       }
-      .tab .lock {
-        width: 12px;
-        height: 12px;
-        margin-left: -2px;
-        color: var(--muted);
-      }
-
       /* Pending commands of .escouade.yml: read whole before they run. */
       .pending {
         display: grid;
@@ -6679,46 +6994,54 @@
     </svg>
 
     <div class="app">
-      <!-- Title bar -->
+      <!-- Title bar (ESC-158): no tabs. Over the rail, the logo (Windows, Linux) or macOS's buttons (?os=mac); over the
+           sidebar, the active project's name and its menu; the search in the middle; the editor and the window's buttons. -->
       <header class="titlebar">
-        <svg class="logo" viewBox="0 0 100 100" aria-label="Escouade">
-          <rect x="8" y="8" width="84" height="84" rx="24" fill="#35C1BD" />
-          <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
-          <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round">
-            <path d="M0 -12V12M-12 0H12" stroke-width="5.4" />
-            <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" />
-          </g>
-        </svg>
-        <button class="tb-btn" id="btn-overview" aria-pressed="false" aria-label="Tous les agents de tous les projets (Ctrl+Maj+A)">
-          <svg class="i"><use href="#i-overview" /></svg><span class="lbl">Vue d’ensemble</span>
-        </button>
-        <nav class="tabs" role="tablist" aria-label="Projets">
-          <button class="tab" role="tab" aria-selected="true" data-hue="48" style="--c: oklch(0.72 0.12 48)">
-            <span class="sw"></span>demo-api<svg class="i lock" id="tab-lock" role="img" aria-label="Projet privé : invisible pour les agents des autres projets" hidden><use href="#i-lock" /></svg><span class="ask" id="tab-ask">1</span><span class="delta">Δ 7</span>
+        <div class="tb-left">
+          <div class="tb-corner">
+            <div class="mac-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <svg class="logo" viewBox="0 0 100 100" aria-label="Escouade">
+              <rect x="8" y="8" width="84" height="84" rx="24" fill="#35C1BD" />
+              <path d="M25 33L42 50L25 67" fill="none" stroke="#08090A" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round" />
+              <g transform="translate(65 50)" stroke="#08090A" stroke-linecap="round">
+                <path d="M0 -12V12M-12 0H12" stroke-width="5.4" />
+                <path d="M-7.1 -7.1L7.1 7.1M-7.1 7.1L7.1 -7.1" stroke-width="4.4" />
+              </g>
+            </svg>
+          </div>
+          <button class="tb-proj" id="tb-proj" aria-haspopup="menu" aria-expanded="false" aria-controls="proj-menu" aria-label="Menu du projet">
+            <span class="sw"></span><span class="proj-name">demo-api</span><svg class="i lock" id="tb-lock" role="img" aria-label="Projet privé : invisible pour les agents des autres projets" hidden><use href="#i-lock" /></svg><span class="delta" id="tb-delta">Δ 7</span><svg class="i s14"><use href="#i-down" /></svg>
           </button>
-          <button class="tab" role="tab" aria-selected="false" data-hue="300" style="--c: oklch(0.72 0.12 300)">
-            <span class="sw"></span>studio-web<span class="delta">Δ 3</span>
-          </button>
-          <button class="tab" role="tab" aria-selected="false" data-hue="200" style="--c: oklch(0.72 0.12 200)">
-            <span class="sw"></span>mobile-app<span class="busy" aria-label="Un agent travaille"></span><span class="delta">Δ 12</span>
-          </button>
-          <button class="tab" role="tab" aria-selected="false" data-hue="150" style="--c: oklch(0.72 0.12 150)">
-            <span class="sw"></span>infra
-          </button>
-          <button class="tb-btn" aria-label="Ajouter un projet" style="padding: 0 7px"><svg class="i"><use href="#i-plus" /></svg></button>
-        </nav>
-        <div class="tb-spacer"></div>
+        </div>
         <button class="search" aria-label="Rechercher dans les conversations (Ctrl+K)">
           <svg class="i s14"><use href="#i-search" /></svg><span>Rechercher</span><kbd>Ctrl K</kbd>
         </button>
-        <button class="tb-btn" data-go="editor" aria-label="Éditeur"><svg class="i"><use href="#i-code" /></svg><span class="lbl">Éditeur</span></button>
-        <button class="tb-btn" id="btn-stats" aria-pressed="false" aria-label="Stats"><svg class="i"><use href="#i-stats" /></svg><span class="lbl">Stats</span></button>
-        <div class="winctl">
-          <button aria-label="Réduire"><svg class="i"><use href="#i-min" /></svg></button>
-          <button aria-label="Agrandir"><svg class="i"><use href="#i-max" /></svg></button>
-          <button class="close" aria-label="Fermer"><svg class="i"><use href="#i-close" /></svg></button>
+        <div class="tb-right">
+          <button class="tb-btn" data-go="editor" aria-label="Éditeur"><svg class="i"><use href="#i-code" /></svg><span class="lbl">Éditeur</span></button>
+          <div class="winctl">
+            <button aria-label="Réduire"><svg class="i"><use href="#i-min" /></svg></button>
+            <button aria-label="Agrandir"><svg class="i"><use href="#i-max" /></svg></button>
+            <button class="close" aria-label="Fermer"><svg class="i"><use href="#i-close" /></svg></button>
+          </div>
         </div>
       </header>
+
+      <!-- The projects' rail (ESC-158), as Slack's workspaces: the overview on top, a tile per project (its colour, its
+           initials; waiting in amber, at work in green, a lock if private), « + », then the stats and the settings. -->
+      <nav class="prail" aria-label="Projets">
+        <button class="tile" id="btn-overview" aria-pressed="false" aria-label="Vue d’ensemble : tous les agents de tous les projets (Ctrl+Maj+A)" data-tip="overview"><svg class="i"><use href="#i-overview" /></svg></button>
+        <div class="r-sep"></div>
+        <div class="r-list" id="r-list" role="tablist" aria-orientation="vertical" aria-label="Projets ouverts">
+          <button class="tile proj" role="tab" aria-selected="true" data-hue="48" style="--h: 48" aria-label="demo-api"><span class="ini">DA</span><svg class="i lock" id="tab-lock" hidden><use href="#i-lock" /></svg><span class="ask" id="tab-ask">1</span></button>
+          <button class="tile proj" role="tab" aria-selected="false" data-hue="300" style="--h: 300" aria-label="studio-web"><span class="ini">SW</span></button>
+          <button class="tile proj" role="tab" aria-selected="false" data-hue="200" style="--h: 200" aria-label="mobile-app"><span class="ini">MA</span><span class="busy"></span></button>
+          <button class="tile proj" role="tab" aria-selected="false" data-hue="150" style="--h: 150" aria-label="infra"><span class="ini">In</span></button>
+        </div>
+        <button class="tile t-add" id="r-add" aria-haspopup="menu" aria-expanded="false" aria-controls="add-menu" aria-label="Ajouter un projet" data-tip="add"><svg class="i"><use href="#i-plus" /></svg></button>
+        <div class="r-spacer"></div>
+        <button class="tile" id="btn-stats" aria-pressed="false" aria-label="Stats" data-tip="stats"><svg class="i"><use href="#i-stats" /></svg></button>
+        <button class="tile" id="btn-settings" aria-label="Réglages (Ctrl+,)" data-tip="settings"><svg class="i"><use href="#i-sliders" /></svg></button>
+      </nav>
 
       <div class="body">
         <!-- Sidebar -->
@@ -8037,7 +8360,6 @@ to work in this folder without asking for approval.
         <span class="sb-sep"></span>
         <span class="sb-item"><svg class="i s14"><use href="#i-branch" /></svg><b class="mono">main</b> ↓3 ↑1</span>
         <button class="sb-icon" aria-label="Son des notifications"><svg class="i s14"><use href="#i-sound" /></svg></button>
-        <button class="sb-icon" id="btn-settings" aria-label="Réglages (Ctrl+,)"><svg class="i s14"><use href="#i-sliders" /></svg></button>
       </footer>
     </div>
 
@@ -8173,6 +8495,36 @@ to work in this folder without asking for approval.
     </div>
 
     <!-- The agent's menu: right click on its card, or « … » in its header. -->
+    <!-- A project's menu (ESC-158): a right click on its tile, or its name in the title bar. What the tab's menu had. -->
+    <div class="menu proj-menu" id="proj-menu" role="menu" aria-label="Actions de demo-api" hidden>
+      <div class="menu-h split"><span class="proj-name">demo-api</span><span class="d"><kbd>Ctrl 1</kbd></span></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Renommer…</b></span></button>
+      <div class="menu-h" style="padding-left: 35px">Couleur</div>
+      <div class="swatches" role="group" aria-label="Couleur">
+        <button aria-pressed="true" style="--h: 48" aria-label="Couleur 1"></button><button aria-pressed="false" style="--h: 300" aria-label="Couleur 2"></button><button aria-pressed="false" style="--h: 200" aria-label="Couleur 3"></button><button aria-pressed="false" style="--h: 150" aria-label="Couleur 4"></button><button aria-pressed="false" style="--h: 250" aria-label="Couleur 5"></button><button aria-pressed="false" style="--h: 0" aria-label="Couleur 6"></button><button aria-pressed="false" style="--h: 25" aria-label="Couleur 7"></button><button aria-pressed="false" style="--h: 70" aria-label="Couleur 8"></button><button aria-pressed="false" style="--h: 110" aria-label="Couleur 9"></button><button aria-pressed="false" style="--h: 175" aria-label="Couleur 10"></button><button aria-pressed="false" style="--h: 225" aria-label="Couleur 11"></button><button aria-pressed="false" style="--h: 275" aria-label="Couleur 12"></button><button aria-pressed="false" style="--h: 325" aria-label="Couleur 13"></button>
+      </div>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-branch" /></svg><span class="ml"><b>Désactiver le worktree par agent</b><span class="d">nouveaux agents</span></span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-sliders" /></svg><span class="ml"><b>Réglages du projet…</b></span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-folder" /></svg><span class="ml"><b>Ouvrir le dossier</b></span></button>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-up" /></svg><span class="ml"><b>Monter</b></span><kbd>Alt ↑</kbd></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-down" /></svg><span class="ml"><b>Descendre</b></span><kbd>Alt ↓</kbd></button>
+      <div class="menu-sep"></div>
+      <button class="mi no-mark danger" role="menuitem"><svg class="i s14 ic"><use href="#i-close" /></svg><span class="ml"><b>Fermer le projet…</b><span class="d">Son historique est gardé : « + » le rouvre</span></span></button>
+    </div>
+    <!-- « + » (ESC-158): a new project by the assistant, or a closed one reopened with its history. -->
+    <div class="menu add-menu" id="add-menu" role="menu" aria-label="Ajouter un projet" hidden>
+      <button class="mi no-mark kb" role="menuitem"><svg class="i s14 ic"><use href="#i-plus" /></svg><span class="ml"><b>Ajouter un projet…</b><span class="d">Un dossier, un dépôt à cloner ou un projet vide, par l’assistant</span></span></button>
+      <div class="menu-sep"></div>
+      <div class="menu-h">Projets fermés · leur historique est gardé</div>
+      <button class="mi no-mark" role="menuitem"><span class="tile proj" style="--h: 25; width: 18px; height: 18px; border-radius: 5px; font-size: 9px" aria-hidden="true">LB</span><span class="ml"><b>legacy-billing</b><span class="d">Fermé le 18 oct. · 23 agents</span></span><span class="reopen">Rouvrir</span></button>
+      <button class="mi no-mark" role="menuitem"><span class="tile proj" style="--h: 110; width: 18px; height: 18px; border-radius: 5px; font-size: 9px" aria-hidden="true">DS</span><span class="ml"><b>docs-site</b><span class="d">Fermé le 9 oct. · 6 agents</span></span><span class="reopen">Rouvrir</span></button>
+      <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-sliders" /></svg><span class="ml"><b>Tous les projets fermés…</b><span class="d">Réglages › Projets</span></span></button>
+    </div>
+    <!-- The name of a tile, beside it, on hover. -->
+    <div class="r-tip" id="r-tip" role="tooltip" hidden></div>
+
     <div class="menu agent-menu" id="agent-menu" role="menu" aria-label="Actions de refacto-auth" hidden>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-edit" /></svg><span class="ml"><b>Renommer</b></span><kbd>F2</kbd></button>
       <button class="mi no-mark" role="menuitem"><svg class="i s14 ic"><use href="#i-term" /></svg><span class="ml"><b>Vue Claude Code</b><span class="d">L’interface de Claude Code elle-même, dans un terminal</span></span></button>
@@ -8798,7 +9150,7 @@ If your browser did not open, navigate to this URL to authenticate:
                   <button class="check-row"><span class="cb" role="checkbox" aria-checked="true"><svg class="i"><use href="#i-check" /></svg></span>Erreurs</button>
                   <button class="check-row"><span class="cb" role="checkbox" aria-checked="false"><svg class="i"><use href="#i-check" /></svg></span>Tickets (prêt à tester, bloqué)</button>
                 </div>
-                <p class="note" style="margin: 8px 0 14px">Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et la barre des tâches signalent toujours l’agent.</p>
+                <p class="note" style="margin: 8px 0 14px">Désactivé : ni notification système ni carillon pour ce type ; la tuile du projet, la carte et la barre des tâches signalent toujours l’agent.</p>
               </section>
               <section class="sg">
                 <h2>Canaux</h2>
@@ -9173,6 +9525,15 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ['Affichage', 'Display'], ['Thème', 'Theme'], ['Clair', 'Light'], ['Sombre', 'Dark'],
         ['Système suit le thème de Windows, macOS ou Linux, et ses changements. Appliqué tout de suite, barre de titre comprise.', 'System follows the Windows, macOS or Linux theme, and its changes. Applied at once, title bar included.'],
         ['Vue d’ensemble', 'Overview'], ['Rechercher', 'Search'], ['Éditeur', 'Editor'], ['Stats', 'Stats'],
+        // The projects' rail (ESC-158): its tiles, the project's menu (src/lib/i18n/en, nav.titleBar.menu), « + ».
+        ['Projets', 'Projects'], ['Projets ouverts', 'Open projects'], ['Menu du projet', 'Project menu'], ['Réglages (Ctrl+,)', 'Settings (Ctrl+,)'],
+        ['Vue d’ensemble : tous les agents de tous les projets (Ctrl+Maj+A)', 'Overview: all agents of all projects (Ctrl+Shift+A)'],
+        ['Renommer…', 'Rename…'], ['Couleur', 'Color'], ['Désactiver le worktree par agent', 'Turn off a worktree per agent'], ['nouveaux agents', 'new agents'],
+        ['Réglages du projet…', 'Project settings…'], ['Ouvrir le dossier', 'Open the folder'], ['Monter', 'Move up'], ['Descendre', 'Move down'],
+        ['Fermer le projet…', 'Close the project…'], ['Son historique est gardé : « + » le rouvre', 'Its history is kept: “+” reopens it'],
+        ['Ajouter un projet…', 'Add a project…'], ['Un dossier, un dépôt à cloner ou un projet vide, par l’assistant', 'A folder, a repository to clone or an empty project, through the assistant'],
+        ['Projets fermés · leur historique est gardé', 'Closed projects · their history is kept'], ['Fermé le 18 oct. · 23 agents', 'Closed on Oct 18 · 23 agents'],
+        ['Fermé le 9 oct. · 6 agents', 'Closed on Oct 9 · 6 agents'], ['Rouvrir', 'Reopen'], ['Tous les projets fermés…', 'All closed projects…'], ['Réglages › Projets', 'Settings › Projects'],
         ['Agents', 'Agents'], ['Nouvel agent', 'New agent'], ['Question', 'Question'], ['En cours', 'Running'], ['Terminé', 'Done'], ['Prêt', 'Ready'],
         ['Oui', 'Yes'], ['Seulement auth', 'Auth only'], ['Lancer toute la suite e2e (38 tests) ?', 'Run the whole e2e suite (38 tests)?'],
         ['boucle 1/5', 'loop 1/5'], ['boucle 2/5', 'loop 2/5'], ['Aucun message', 'No message'], ['2 fichiers modifiés', '2 files changed'],
@@ -9602,16 +9963,157 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         tint(`oklch(0.72 0.12 ${hue})`);
       }
 
-      $$('.tab[data-hue]').forEach((tab) =>
-        tab.addEventListener('click', () => {
-          $$('.tab[data-hue]').forEach((t) => t.setAttribute('aria-selected', String(t === tab)));
-          hue = tab.dataset.hue;
-          leaveGlobal();
-          tint(`oklch(0.72 0.12 ${hue})`);
-          $$('.proj-name').forEach((n) => (n.textContent = names[hue]));
-          $('#proj-path').textContent = `~/dev/${names[hue]}`;
-        }),
-      );
+      // ---------- The projects' rail (ESC-158) ----------
+      const EN_UI = new URLSearchParams(location.search).get('lang') === 'en';
+      if (new URLSearchParams(location.search).get('os') === 'mac') app.classList.add('mac');
+      /** What a tile says in its bubble: what the tab showed (waiting, at work, Δ), and its shortcut. */
+      const PROJ = {
+        'demo-api': { wait: 1, delta: 7 },
+        'studio-web': { delta: 3 },
+        'mobile-app': { busy: 2, delta: 12 },
+        infra: {},
+      };
+      const initials = (n) => {
+        const w = n.split(/[-_ .]+/).filter(Boolean);
+        return w.length > 1 ? (w[0][0] + w[1][0]).toUpperCase() : n[0].toUpperCase() + (n[1] ?? '');
+      };
+      const projTiles = () => $$('#r-list .tile.proj');
+      function selectTile(tile) {
+        projTiles().forEach((t) => t.setAttribute('aria-selected', String(t === tile)));
+        hue = tile.dataset.hue;
+        const name = tile.dataset.name;
+        leaveGlobal();
+        tint(`oklch(0.72 0.12 ${hue})`);
+        $$('.proj-name').forEach((n) => (n.textContent = name));
+        $('#proj-path').textContent = `~/dev/${name}`;
+        const d = PROJ[name]?.delta;
+        $('#tb-delta').hidden = !d;
+        $('#tb-delta').textContent = `Δ ${d ?? 0}`;
+        $('#tb-lock').hidden = !PROJ[name]?.priv;
+        $('#proj-menu').setAttribute('aria-label', (EN_UI ? 'Actions for ' : 'Actions de ') + name);
+        $('#proj-menu kbd').textContent = `Ctrl ${projTiles().indexOf(tile) + 1}`;
+        $('#proj-menu kbd').hidden = projTiles().indexOf(tile) > 8;
+        $$('#proj-menu .swatches button').forEach((b) => b.setAttribute('aria-pressed', String(b.style.getPropertyValue('--h').trim() === hue)));
+        tile.scrollIntoView({ block: 'nearest' });
+        railFade();
+      }
+      function railFade() {
+        const l = $('#r-list');
+        l.classList.toggle('more-up', l.scrollTop > 1);
+        l.classList.toggle('more-down', l.scrollTop + l.clientHeight < l.scrollHeight - 1);
+      }
+      $('#r-list').addEventListener('scroll', railFade);
+      function wireTile(tile) {
+        const name = tile.dataset.name;
+        const p = PROJ[name] ?? {};
+        const parts = [name, p.wait && (EN_UI ? `${p.wait} waiting` : `${p.wait} en attente`), p.busy && (EN_UI ? `${p.busy} at work` : `${p.busy} au travail`), p.delta && `Δ ${p.delta}`, p.priv && (EN_UI ? 'private' : 'privé')];
+        tile.setAttribute('aria-label', parts.filter(Boolean).join(', '));
+        tile.addEventListener('click', () => selectTile(tile));
+        tile.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          projMenuAt(tile);
+        });
+      }
+      projTiles().forEach((t) => {
+        t.dataset.name = names[t.dataset.hue];
+        wireTile(t);
+      });
+
+      /** The bubble beside a tile: its name, its shortcut, then what the tab showed. */
+      const TIPS = {
+        overview: [['Vue d’ensemble', 'Overview'], 'Ctrl Maj A', [['Tous les agents de tous les projets', 'Every agent of every project']]],
+        add: [['Ajouter un projet', 'Add a project'], '', [['Ou rouvrir un projet fermé', 'Or reopen a closed project']]],
+        stats: [['Stats', 'Stats'], '', [['Coût, tokens et agents de tous les projets', 'Cost, tokens and agents of every project']]],
+        settings: [['Réglages', 'Settings'], 'Ctrl ,', []],
+      };
+      const L = (pair) => (EN_UI ? pair[1] : pair[0]);
+      function tipFor(tile) {
+        const tip = $('#r-tip');
+        let html;
+        if (tile.dataset.tip) {
+          const [title, kbd, lines] = TIPS[tile.dataset.tip];
+          html = `<b>${L(title)}${kbd ? `<kbd>${EN_UI ? kbd.replace('Maj', 'Shift') : kbd}</kbd>` : ''}</b>` + lines.map((l) => `<span>${L(l)}</span>`).join('');
+        } else {
+          const name = tile.dataset.name;
+          const p = PROJ[name] ?? {};
+          const i = projTiles().indexOf(tile);
+          html = `<b>${name}${i < 9 ? `<kbd>Ctrl ${i + 1}</kbd>` : ''}</b>`;
+          if (p.wait) html += `<span><i style="background: var(--wait)"></i>${EN_UI ? `${p.wait} agent waiting for you` : `${p.wait} agent${p.wait > 1 ? 's attendent' : ' attend'} ta réponse`}</span>`;
+          if (p.busy) html += `<span><i style="background: var(--run)"></i>${EN_UI ? `${p.busy} agent${p.busy > 1 ? 's' : ''} at work` : `${p.busy} agent${p.busy > 1 ? 's travaillent' : ' travaille'}`}</span>`;
+          if (p.delta) html += `<span><i style="background: var(--git-m)"></i>Δ ${p.delta} · ${EN_UI ? 'uncommitted changes' : 'modifications non commitées'}</span>`;
+          if (p.priv) html += `<span><svg class="i s14" style="width: 12px; height: 12px"><use href="#i-lock" /></svg>${EN_UI ? 'Private project' : 'Projet privé'}</span>`;
+          if (!p.wait && !p.busy && !p.delta && !p.priv) html += `<span>${EN_UI ? 'Nothing running, nothing changed' : 'Rien en cours, rien de modifié'}</span>`;
+        }
+        tip.innerHTML = html;
+        const r = tile.getBoundingClientRect();
+        tip.style.left = `${r.right + 12}px`;
+        tip.style.top = `${r.top + r.height / 2}px`;
+        tip.hidden = false;
+      }
+      const tipOff = () => ($('#r-tip').hidden = true);
+      $('.prail').addEventListener('mouseover', (e) => {
+        const t = e.target.closest('.tile');
+        if (t && !t.closest('.menu')) tipFor(t);
+      });
+      $('.prail').addEventListener('mouseleave', tipOff);
+      $('.prail').addEventListener('contextmenu', tipOff);
+
+      /** The project's menu beside its tile (right click), or under its name (title bar). */
+      function projMenuAt(tile) {
+        tipOff();
+        if (tile.getAttribute('aria-selected') !== 'true') selectTile(tile);
+        pop('#proj-menu', true);
+        const m = $('#proj-menu');
+        const r = tile.getBoundingClientRect();
+        m.style.left = `${r.right + 12}px`;
+        m.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - m.offsetHeight - 8))}px`;
+      }
+      document.addEventListener('keydown', (e) => {
+        if (!e.ctrlKey || !/^[1-9]$/.test(e.key) || e.target.closest('input, textarea')) return;
+        const t = projTiles()[Number(e.key) - 1];
+        if (t) (e.preventDefault(), selectTile(t));
+      });
+
+      /** Many projects (#rail, #rail-menu, #rail-add): the rail scrolls, the active stays in view. */
+      const MORE = [
+        ['billing-svc', 250, {}],
+        ['auth-gateway', 0, { busy: 1, delta: 4 }],
+        ['design-system', 25, { delta: 2 }],
+        ['data-pipeline', 70, { busy: 3, delta: 9 }],
+        ['marketing-site', 110, {}],
+        ['ml-models', 175, { busy: 1 }],
+        ['ops-runbooks', 225, { priv: true }],
+        ['search-index', 275, { delta: 1 }],
+        ['notif-service', 325, { busy: 1, delta: 5 }],
+        ['admin-panel', 300, {}],
+        ['cli-tools', 200, {}],
+        ['payments', 150, { wait: 2, busy: 1, delta: 6 }],
+        ['mobile-legacy', 250, {}],
+        ['analytics', 0, {}],
+      ];
+      function manyProjects() {
+        for (const [name, h, p] of MORE) {
+          PROJ[name] = p;
+          const t = document.createElement('button');
+          t.className = 'tile proj';
+          t.setAttribute('role', 'tab');
+          t.setAttribute('aria-selected', 'false');
+          t.dataset.hue = h;
+          t.dataset.name = name;
+          t.style.setProperty('--h', h);
+          t.innerHTML = `<span class="ini">${initials(name)}</span>` + (p.priv ? '<svg class="i lock"><use href="#i-lock" /></svg>' : '') + (p.wait ? `<span class="ask">${p.wait}</span>` : '') + (p.busy ? '<span class="busy"></span>' : '');
+          $('#r-list').append(t);
+          wireTile(t);
+        }
+        // A project out of view waits: an amber chevron under the list says how many.
+        const more = document.createElement('span');
+        more.className = 'r-more';
+        more.setAttribute('role', 'status');
+        more.setAttribute('aria-label', EN_UI ? 'payments: 2 agents waiting, further down' : 'payments : 2 agents en attente, plus bas');
+        more.innerHTML = '<svg class="i"><use href="#i-down" /></svg>2';
+        $('#r-list').after(more);
+        selectTile(projTiles().find((t) => t.dataset.name === 'notif-service'));
+      }
       $('#btn-overview').addEventListener('click', () => (app.classList.contains('global') && $('#full-overview').classList.contains('on') ? leaveGlobal() : global('overview')));
       $('#btn-stats').addEventListener('click', () => (app.classList.contains('global') && $('#full-stats').classList.contains('on') ? leaveGlobal() : global('stats')));
       $$('.seg [data-view]').forEach((b) => b.addEventListener('click', () => show(b.dataset.view)));
@@ -9816,7 +10318,7 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
           if (!modal.hidden) modal.hidden = true;
           else leaveGlobal();
         }
-        if (view === 'agents' && !app.classList.contains('global') && (e.key === '1' || e.key === '2')) answer(Number(e.key) - 1);
+        if (view === 'agents' && !app.classList.contains('global') && !e.ctrlKey && (e.key === '1' || e.key === '2')) answer(Number(e.key) - 1);
         if (e.ctrlKey && e.key.toLowerCase() === 'j') {
           e.preventDefault();
           show('agents');
@@ -9962,6 +10464,8 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ['#chip-mode', '#mode-menu'],
         ['#sb-q', '#qpanel'],
         ['#h-more', '#agent-menu'],
+        ['#tb-proj', '#proj-menu'],
+        ['#r-add', '#add-menu'],
       ];
       function pop(which, on) {
         for (const [btn, el] of POPS) {
@@ -9979,6 +10483,44 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
           pop('#agent-menu', true);
         }),
       );
+      // The rail's menus (ESC-158): the project's under its name, « + » beside it.
+      $('#tb-proj').addEventListener('click', () => {
+        const r = $('#tb-proj').getBoundingClientRect();
+        Object.assign($('#proj-menu').style, { left: `${r.left}px`, top: `${r.bottom + 6}px` });
+      });
+      function addMenuAt() {
+        const m = $('#add-menu');
+        const r = $('#r-add').getBoundingClientRect();
+        Object.assign(m.style, { left: `${r.right + 12}px`, top: `${Math.max(8, Math.min(r.top - 6, innerHeight - m.offsetHeight - 8))}px` });
+      }
+      $('#r-add').addEventListener('click', () => (tipOff(), addMenuAt()));
+
+      // Straight to the rail with many projects: #rail (hover and drag), #rail-menu (a tile's menu), #rail-add (« + »).
+      if (route.startsWith('rail')) {
+        manyProjects();
+        railFade();
+      }
+      if (route === 'rail') {
+        const dragged = projTiles().find((t) => t.dataset.name === 'ml-models');
+        const before = projTiles().find((t) => t.dataset.name === 'auth-gateway');
+        const line = document.createElement('i');
+        line.className = 'r-drop';
+        line.setAttribute('aria-hidden', 'true');
+        before.before(line);
+        $('#r-list .tile[aria-selected="true"]').scrollIntoView({ block: 'nearest' });
+        railFade();
+        tipFor(projTiles().find((t) => t.dataset.name === 'marketing-site'));
+        const ghost = dragged.cloneNode(true);
+        ghost.classList.add('ghost');
+        ghost.setAttribute('aria-hidden', 'true');
+        ghost.removeAttribute('role');
+        dragged.classList.add('dragging');
+        const r = line.getBoundingClientRect();
+        Object.assign(ghost.style, { left: `${r.left + 24}px`, top: `${r.top - 24}px` });
+        document.body.append(ghost);
+      }
+      if (route === 'rail-menu') projMenuAt($('#r-list .tile[aria-selected="true"]'));
+      if (route === 'rail-add') (pop('#add-menu', true), addMenuAt());
 
       /** A conversation of the panel: whose, on which harness, which thread. */
       const VARIANTS = {
@@ -10217,6 +10759,8 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
       // Private projects (ESC-139 to 142).
       if (route === 'private' || route === 'private-accounts') {
         $('#tab-lock').removeAttribute('hidden');
+        $('#tb-lock').removeAttribute('hidden');
+        PROJ['demo-api'].priv = true;
         $('#tgl-private').setAttribute('aria-checked', 'true');
         $$('.priv-on').forEach((e) => (e.hidden = false));
         settingsAt('projects', route === 'private' ? 'sg-private' : 'sh-private-accounts');

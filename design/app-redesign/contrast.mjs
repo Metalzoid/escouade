@@ -61,6 +61,9 @@ const ON = [
   ['bouton principal', '--on-primary', ['var(--primary)']],
   ['bouton principal survolé', '--on-primary', ['var(--primary-hover)']],
   ['pastille qui attend', '--on-wait', ['var(--wait)']],
+  // A project's tile on the rail (ESC-158): its initials on its own colour, for every project colour.
+  ['initiales d’une tuile', '--on-tile', ['var(--p)']],
+  ['initiales d’une tuile survolée', '--on-tile', ['color-mix(in oklch, var(--p) 88%, var(--text))']],
   ['sélection du terminal', '--term-sel-fg', ['var(--term-sel-bg)']],
   ['occurrence courante (éditeur)', '--on-hit', ['var(--well)', 'color-mix(in oklch, var(--p) 55%, transparent)']],
   ['texte sélectionné', '--text', ['var(--panel)', 'color-mix(in oklch, var(--p) var(--sel), transparent)']],

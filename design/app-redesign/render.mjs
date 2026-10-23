@@ -29,7 +29,7 @@ const shots = [
   { name: 'settings-projects', ...BIG, hash: 'settings-projects' },
   { name: 'settings-board', ...BIG, hash: 'settings-board' },
   { name: 'settings-small', ...SMALL, hash: 'settings-notifications' },
-  { name: 'tint-studio-web', ...BIG, click: '.tab[data-hue="300"]' },
+  { name: 'tint-studio-web', ...BIG, click: '.tile[data-hue="300"]' },
   { name: 'agents-small', ...SMALL },
   { name: 'git-small', ...SMALL, hash: 'git' },
   { name: 'overview-small', ...SMALL, hash: 'overview' },
@@ -133,10 +133,19 @@ const shots = [
   { name: 'overage-small-en', ...SMALL, ...EN, hash: 'overage' },
   { name: 'agent-menu-small-en', ...SMALL, ...EN, hash: 'agent-menu' },
   { name: 'opencode-view-small-en', ...SMALL, ...EN, hash: 'opencode-view' },
+  // The projects' rail (ESC-158): many projects, a tile hovered and one dragged, a tile's menu, « + », macOS's title bar.
+  { name: 'rail', ...BIG, hash: 'rail' },
+  { name: 'rail-menu', ...BIG, hash: 'rail-menu' },
+  { name: 'rail-add', ...BIG, hash: 'rail-add' },
+  { name: 'agents-mac', ...BIG, os: 'mac' },
+  { name: 'rail-small', ...SMALL, hash: 'rail' },
+  { name: 'rail-small-en', ...SMALL, ...EN, hash: 'rail' },
+  { name: 'rail-menu-small-en', ...SMALL, ...EN, hash: 'rail-menu' },
+  { name: 'rail-add-small-en', ...SMALL, ...EN, hash: 'rail-add' },
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en'];
+const LIGHT_SMALL = ['pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))
@@ -152,10 +161,11 @@ for (const s of shots.filter((x) => !only.length || only.includes(x.name))) {
   page.on('pageerror', (e) => errors.push(`${s.name}: ${e.message}`));
   const theme = s.theme ?? 'dark';
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: theme });
-  const query = new URLSearchParams({ theme: s.system ? 'system' : theme, ...(s.lang ? { lang: s.lang } : {}) });
+  const query = new URLSearchParams({ theme: s.system ? 'system' : theme, ...(s.lang ? { lang: s.lang } : {}), ...(s.os ? { os: s.os } : {}) });
   await page.goto(`${url}?${query}${s.hash ? `#${s.hash}` : ''}`);
   await page.evaluate(() => document.fonts.ready);
-  if (s.click) await page.click(s.click);
+  // A click leaves the mouse on its target: moved away, so no hover bubble stays on the capture.
+  if (s.click) (await page.click(s.click), await page.mouse.move(s.width - 10, s.height / 2));
   await page.waitForTimeout(300);
   if (s.hover) await page.hover(s.hover);
   const out = join(dir, `${s.name}.png`);
