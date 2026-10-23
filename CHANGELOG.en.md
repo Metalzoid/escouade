@@ -11,7 +11,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
 - Projects move to a rail on the left, like Slack’s workspaces: a tile per project, with its agents waiting and at work, dragged or moved by Alt+↑ and Alt+↓. The title bar keeps the name of the project on screen and the search; the status bar shows the quotas of each harness at work.
 - The list of agents is redrawn: the agent waiting goes first with its question, which you answer in a click or with 1, 2… without leaving the conversation open, and each card says what the agent is doing (“Editing src/auth.ts”) or what it changed. The arrow of “New agent”, or Ctrl+Shift+N, opens the menu of the harnesses, numbered.
-- Each project chooses the branch its new agents’ worktrees start from: the folder’s, the board’s target branch or a branch of your choice, which becomes their base and that of their PR. “New agent” can choose another one for an agent, including for a branch you create. Thanks to Metalzoid on Discord.
+
+## [1.8.12] — 2026-10-23
+
+### New
+
+- Each project chooses the branch its new agents’ worktrees start from: the folder’s, the board’s target branch or a branch of your choice, which becomes their base and that of their PR. “+ New agent” can choose another one for an agent, including for a branch you create. Thanks to Metalzoid on Discord.
 
 ### Fixes
 
