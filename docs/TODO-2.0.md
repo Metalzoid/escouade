@@ -303,7 +303,7 @@ Lots, dans l'ordre :
     - Nouveaux : `modals/TelemetryModal`, `wizard/*` (`AccountStep`, `Checks`, `CopiedStep`, `IntegrationsStep`, `KanbanStep`, `LaunchStep`, `SummaryStep`, `WorktreesStep`), `settings/ClosedProjects`, `settings/VoiceTab`, `settings/SpeechSettings`.
     - Lot 0 : Réglages › Harness en un groupe par harness ; « Quand un quota est épuisé » dans Comptes ; un onglet « Serveur MCP » (`McpSection`) ; Voix ; Projets (harness par défaut, assistant, projets fermés) ; À propos (statistiques, échec de mise à jour).
     - Lot 0 bis : `PrModal` ; Harness (version et plage testée, mise à jour de Claude Code, `ModelFavorites`) ; `AccountsTab` (« Nouveaux agents » par compte, « Aucun compte », budget, « Changer de compte à », projection) et `AccountModal` (compte de la machine) ; `VoiceTab`, `SpeechSettings`, `OnlineKey`, `OnlineModel`, `OnlineVoiceField` (« Local | En ligne », temps réel) ; `ApplicationTab` (zoom, « Modèle des textes rédigés ») ; `BoardTab` (branche cible, worktree d'un ticket fini) ; `ForgesSection` ; `ProjectTab` (« Confidentialité », ses fichiers, ses comptes, worktrees restés), `SharedSection` (.escouade.yml), `NewProjects` ; `McpSection` par harness ; À propos (site, Discord) ; `wizard/*` (point de départ : .escouade.yml, projet privé non proposé).
-    - Ce lot a presque doublé : le couper en deux (fenêtres, puis réglages) est à décider avec le Kanban.
+    - Ce lot a presque doublé : coupé en deux le 2026-10-23, 11a les fenêtres (ESC-83), puis 11b les réglages (ESC-152).
 
 **Méthode.**
 - Impeccable, chemin code-led : le contrat de direction est déjà écrit et l'aperçu tient lieu de comp de référence. Relire le contrat et les captures avant chaque lot.
