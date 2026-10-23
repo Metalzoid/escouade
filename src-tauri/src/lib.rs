@@ -367,7 +367,8 @@ pub fn run() {
                 }
                 if w.theme().is_ok_and(|t| t == tauri::Theme::Light) {
                     // The light frame, where the config has the dark one.
-                    let _ = w.set_background_color(Some(tauri::window::Color(0xf0, 0xf1, 0xf3, 0xff)));
+                    let _ =
+                        w.set_background_color(Some(tauri::window::Color(0xf0, 0xf1, 0xf3, 0xff)));
                 }
                 match window {
                     _ if paths::hidden_window() => notify::show_out_of_sight(&w),

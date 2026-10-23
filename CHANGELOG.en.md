@@ -10,6 +10,10 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 - Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
 
+### Fixes
+
+- Settings › Harness no longer talks about the tested versions: a newer version of a harness shows like the others, with no warning. Only what keeps it from starting is told, like a version too old and the command that updates it.
+
 ## [1.8.11] — 2026-10-23
 
 ### New

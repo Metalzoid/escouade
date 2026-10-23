@@ -8906,7 +8906,7 @@ If your browser did not open, navigate to this URL to authenticate:
             <!-- Harness: one group per harness (state, executable, defaults, view), then what holds for them all. -->
             <div class="s-pane" data-pane="claude">
               <section class="sg">
-                <div class="hg"><h2>Claude Code</h2><span class="hstate"><i></i>Prêt · 2.1.301, testée avec Escouade (de la 2.1.283 à la 2.1.301)</span></div>
+                <div class="hg"><h2>Claude Code</h2><span class="hstate"><i></i>Prêt · 2.1.301</span></div>
                 <div class="sr">
                   <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\.local\bin\claude.exe</span></div>
                   <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Claude Code" /></div>
@@ -8921,9 +8921,9 @@ If your browser did not open, navigate to this URL to authenticate:
                 </div>
               </section>
               <section class="sg">
-                <div class="hg"><h2>Codex</h2><span class="hstate warn"><i></i>Version non testée · 0.165.0, testée jusqu’à la 0.163.0</span></div>
+                <div class="hg"><h2>Codex</h2><span class="hstate"><i></i>Prêt · 0.165.0</span></div>
                 <div class="sr">
-                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd</span><span>Plus récente que celles essayées : ce qu’Escouade ne reconnaît pas de son flux est ignoré, sans couper le tour.</span></div>
+                  <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\codex.cmd</span></div>
                   <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable de Codex" /></div>
                 </div>
                 <div class="sr">
@@ -8932,7 +8932,7 @@ If your browser did not open, navigate to this URL to authenticate:
                 </div>
               </section>
               <section class="sg" id="sg-opencode">
-                <div class="hg"><h2>OpenCode</h2><span class="hstate"><i></i>Prêt · 1.19.3, testée avec Escouade</span></div>
+                <div class="hg"><h2>OpenCode</h2><span class="hstate"><i></i>Prêt · 1.19.3</span></div>
                 <div class="sr">
                   <div class="lab"><b>Chemin de l’exécutable</b><span class="found"><svg class="i s14"><use href="#i-check" /></svg>Trouvé : C:\Users\guill\AppData\Roaming\npm\opencode.cmd</span></div>
                   <div class="ctl"><input class="inp mono w-l" placeholder="vide = détection automatique" aria-label="Chemin de l’exécutable d’OpenCode" /></div>
@@ -9593,7 +9593,7 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ['Commande en fond', 'Background command'], ['État', 'State'], ['Lancée par', 'Started by'], ['Sortie', 'Output'], ['lue dans le fichier de sortie', 'read from the output file'], ['Suivre la fin', 'Follow the end'],
         // Settings of the lot.
         ['Réglages', 'Settings'], ['Application', 'Application'], ['Harness', 'Harness'], ['Comptes', 'Accounts'], ['Voix', 'Voice'], ['Notifications', 'Notifications'], ['Par projet', 'Per project'], ['Projets', 'Projects'], ['Kanban', 'Kanban'], ['Intégrations', 'Integrations'], ['Système', 'System'], ['Serveur MCP', 'MCP server'], ['Réseau', 'Network'], ['À propos', 'About'],
-        ['Enregistrer', 'Save'], ['Prêt · 2.1.4, testée avec Escouade', 'Ready · 2.1.4, tested with Escouade'], ['Version non testée · 0.165.0, testée jusqu’à la 0.163', 'Untested version · 0.165.0, tested up to 0.163'],
+        ['Enregistrer', 'Save'],
         ['Chemin de l’exécutable', 'Executable path'], ['Nouveaux agents', 'New agents'], ['Modèle, effort et mode de permission par défaut', 'Default model, effort and permission mode'], ['Opus 5.5', 'Opus 5.5'], ['Auto', 'Auto'],
         ['Remote control pour tous les agents', 'Remote control for every agent'], ['Chaque agent, existant ou nouveau, est joignable depuis claude.ai et l’app Claude, sous le nom « projet · agent ». Un agent à part : clic droit, « Désactiver le remote control ».', 'Every agent, existing or new, is reachable from claude.ai and the Claude app, as “project · agent”. To leave one out: right click, “Turn off remote control”.'],
         ['Claude Code seulement : Codex n’a pas de remote control.', 'Claude Code only: Codex has no remote control.'],
@@ -9654,14 +9654,13 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
         ["Après chaque quota, où il en sera à sa remise à zéro au rythme actuel : vert, orange au-delà de 80 %, rouge au-delà de 100 %. La barre d’état ne montre que celles qui passent 80 %.", "After each quota, where it will stand at its reset at the current pace: green, amber past 80%, red past 100%. The status bar only shows those past 80%."],
         ["usage supplémentaire", "extra usage"],
         ["Client Acme : usage supplémentaire en cours, facturé à part. Les agents déjà lancés y restent, les nouveaux partent sur un autre compte.", "Client Acme: extra usage in progress, billed separately. Agents already running stay on it, new ones go to another account."],
-        ["Prêt · 2.1.301, testée avec Escouade (de la 2.1.283 à la 2.1.301)", "Ready · 2.1.301, tested with Escouade (from 2.1.283 to 2.1.301)"],
+        ["Prêt · 2.1.301", "Ready · 2.1.301"],
         ["Mettre à jour Claude Code automatiquement", "Update Claude Code automatically"],
         ["Escouade lance claude update à son démarrage puis chaque jour, à part de ses agents : leur arrêt ne coupe plus une installation à mi-chemin.", "Escouade runs claude update when it starts, then every day, apart from its agents: stopping them no longer cuts an install halfway."],
         ["Mis à jour en 2.1.301 (depuis la 2.1.298).", "Updated to 2.1.301 (from 2.1.298)."],
         ["Claude Code seulement : les autres harness n’ont pas de remote control.", "Claude Code only: the other harnesses have no remote control."],
-        ["Version non testée · 0.165.0, testée jusqu’à la 0.163.0", "Untested version · 0.165.0, tested up to 0.163.0"],
-        ["Plus récente que celles essayées : ce qu’Escouade ne reconnaît pas de son flux est ignoré, sans couper le tour.", "Newer than the ones tried: what Escouade doesn’t recognize in its stream is ignored, without cutting the turn."],
-        ["Prêt · 1.19.3, testée avec Escouade", "Ready · 1.19.3, tested with Escouade"],
+        ["Prêt · 0.165.0", "Ready · 0.165.0"],
+        ["Prêt · 1.19.3", "Ready · 1.19.3"],
         ["Trouvé : C:\\Users\\guill\\AppData\\Roaming\\npm\\opencode.cmd", "Found: C:\\Users\\guill\\AppData\\Roaming\\npm\\opencode.cmd"],
         ["Trouvé : C:\\Users\\guill\\AppData\\Roaming\\npm\\copilot.cmd", "Found: C:\\Users\\guill\\AppData\\Roaming\\npm\\copilot.cmd"],
         ["Modèles", "Models"],

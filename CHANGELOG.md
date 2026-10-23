@@ -10,6 +10,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 - Escouade a un thème clair : Réglages › Application › Affichage › « Thème » propose Système, Clair ou Sombre, appliqué tout de suite, barre de titre comprise. Par défaut, il suit celui de Windows, macOS ou Linux.
 
+### Corrections
+
+- Réglages › Harness ne parle plus des versions testées : une version plus récente d’un harness s’affiche comme les autres, sans avertissement. Seul ce qui l’empêche de démarrer est dit, comme une version trop ancienne et la commande qui la met à jour.
+
 ## [1.8.11] — 2026-10-23
 
 ### Nouveautés
