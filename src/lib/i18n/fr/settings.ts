@@ -4,7 +4,7 @@ import type { Tree } from '../types';
 export default {
   // The tabs of the window: their name and what they set (under the title, in the header).
   tabs: {
-    app: { label: 'Application', desc: 'Zoom, taille du texte et langues' },
+    app: { label: 'Application', desc: 'Thème, zoom, langue de l’interface et textes rédigés' },
     claude: { label: 'Harness', desc: 'Exécutables, versions et serveur MCP' },
     accounts: {
       label: 'Comptes',
@@ -68,6 +68,11 @@ export default {
   // The « Application » tab.
   app: {
     display: 'Affichage',
+    theme: 'Thème',
+    themeDesc: 'Système suit le thème de Windows, macOS ou Linux, et ses changements. Appliqué tout de suite, barre de titre comprise.',
+    themeSystem: 'Système',
+    themeLight: 'Clair',
+    themeDark: 'Sombre',
     zoom: 'Zoom de l’interface',
     zoomDesc:
       'Le texte, les espacements et les icônes de toute l’application grandissent ensemble, terminaux et éditeur compris. Appliqué et enregistré tout de suite.',

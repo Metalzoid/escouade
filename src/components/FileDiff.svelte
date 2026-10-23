@@ -46,7 +46,7 @@
     <span class="p mono" use:tip={{ text: path, cut: true }}>{path}</span>
     {#if file && !file.tooLarge}<span class="add mono">+{file.add}</span><span class="del mono">−{file.del}</span>{/if}
     <div style="flex:1"></div>
-    <div class="segmented">
+    <div class="segmented small">
       <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
       <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
     </div>

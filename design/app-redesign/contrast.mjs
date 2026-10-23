@@ -1,8 +1,8 @@
 // Checks the preview's colours in both themes: `node design/app-redesign/contrast.mjs [--verbose]`. For every project
 // colour (PROJECT_COLORS, then Escouade's teal of the overview and the stats), each text token is read by the browser on
 // each surface it sits on (hovers, the waiting card and the project's light included) and must reach WCAG AA, 4.5:1;
-// marks that are not text (dots, rings) must reach 3:1. The worst ratio of each pair is printed. The light theme must pass
-// (exit code 1 otherwise); the dark one, validated before and left as it is by ESC-129, prints its shortfalls for lot 1.
+// marks that are not text (dots, rings) must reach 3:1. The worst ratio of each pair is printed. Both themes must pass (exit
+// code 1 otherwise): the dark one's 28 old shortfalls were raised by lot 1 (ESC-71); src/lib/contrast.test.ts checks the app's tokens.
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -127,7 +127,7 @@ for (const theme of ['dark', 'light']) {
   const worst = new Map();
   for (const row of rows) if (!worst.has(row.pair) || row.r < worst.get(row.pair).r) worst.set(row.pair, row);
   const bad = [...worst.values()].filter((w) => w.r < w.min);
-  if (theme === 'light') failures += bad.length;
+  failures += bad.length;
   console.log(`\n${theme === 'dark' ? 'Sombre' : 'Clair'} : ${worst.size} paires × ${COLORS.length} couleurs, ${bad.length} sous le seuil`);
   for (const w of verbose ? worst.values() : bad)
     console.log(`  ${w.r < w.min ? 'ÉCHEC' : 'ok   '} ${w.r.toFixed(2).padStart(5)} (≥ ${w.min})  ${w.pair}  [pire : ${w.color}]`);

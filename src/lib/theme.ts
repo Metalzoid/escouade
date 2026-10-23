@@ -1,6 +1,10 @@
-// Tints the UI surfaces with the active project's color, as the design's applyTheme() does.
+// The tint of the whole window: `--p`, the active project's colour, from which src/app.css draws every surface (frame,
+// panel, reliefs, wells), the focus, the selection and the project's light (`.root::before` in App.svelte, at `--glow`).
+// `--p` is a registered property (`@property` in app.css): it glides in 0.7 s from one project to the next, and stops
+// gliding with prefers-reduced-motion. The overview, the stats and a window without a project take Escouade's teal.
 
-const DEFAULT = 'oklch(0.72 0.12 48)';
+/** Escouade's teal, the colour of the views over every project (the overview, the stats) and of no project at all. */
+export const BRAND = 'oklch(0.74 0.115 190)';
 
 export const PROJECT_COLORS = [48, 300, 200, 150, 250, 0, 25, 70, 110, 175, 225, 275, 325]
   .map((h) => `oklch(0.72 0.12 ${h})`)
@@ -8,27 +12,15 @@ export const PROJECT_COLORS = [48, 300, 200, 150, 250, 0, 25, 70, 110, 175, 225,
 
 let applied = '';
 
+/** Tints the window with a project's colour, or Escouade's teal (`null`: the overview, the stats, no project). */
 export function applyTheme(color: string | null) {
-  const c = color ?? DEFAULT;
-  const tint = color !== null;
-  const key = c + (tint ? ':t' : ':n');
-  if (applied === key) return;
-  applied = key;
-  const st = document.documentElement.style;
-  const mix = (pct: number, base: string) => (tint ? `color-mix(in oklch, ${c} ${pct}%, ${base})` : base);
-  st.setProperty('--accent', c);
-  st.setProperty('--accent-soft', `color-mix(in oklch, ${c} 38%, transparent)`);
-  st.setProperty('--bg', mix(7, '#191715'));
-  st.setProperty('--panel', mix(11, '#1e1c1a'));
-  st.setProperty('--elev', mix(14, '#272422'));
-  st.setProperty('--elev2', mix(18, '#302d2a'));
-  st.setProperty('--user', mix(22, '#2c2926'));
-  st.setProperty('--line', mix(22, 'rgba(255,236,214,.08)'));
-  st.setProperty('--line2', mix(35, 'rgba(255,236,214,.15)'));
-  st.setProperty('--term', mix(5, '#121110'));
+  const c = color ?? BRAND;
+  if (applied === c) return;
+  applied = c;
+  document.documentElement.style.setProperty('--p', c);
 }
 
-/** Resolved background color for canvases that cannot read CSS variables (xterm WebGL). */
-export function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/** The colour the window is tinted with now. */
+export function tint(): string {
+  return applied || BRAND;
 }

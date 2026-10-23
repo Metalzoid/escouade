@@ -7,13 +7,28 @@
 //     icon, else the description of a control (`aria-describedby` to a hidden text: not every engine reads
 //     `aria-description`), or of what is out of the tab order (`aria-description`, see `apply`).
 
+import { iconId, type IconName } from './icons';
+
 /**
  * A tooltip: its text (several lines with `\n`; none: no tooltip), or the text and
  * - `cut`: the whole of a text the element (or what it holds) cuts short, shown only while it is cut, and nothing more to a
  *   screen reader, which reads the whole text already;
- * - `aria: false`: the element already says it to a screen reader (`aria-valuetext`, a description of its own).
+ * - `aria: false`: the element already says it to a screen reader (`aria-valuetext`, a description of its own);
+ * - `title` and `rows`: a rich tooltip, its title in bold over lines that may start with an icon (« Attend », a pull
+ *   request). Its text, when none is given, is theirs, a line each: what `data-tip` holds and a screen reader gets.
  */
-export type TipContent = string | null | undefined | false | { text: string | null | undefined; cut?: boolean; aria?: boolean };
+export type TipContent =
+  | string
+  | null
+  | undefined
+  | false
+  | { text?: string | null | undefined; cut?: boolean; aria?: boolean; title?: string; rows?: (TipRow | string)[] };
+
+/** A line of a rich tooltip: its text, after an icon of the app. */
+export interface TipRow {
+  icon?: IconName;
+  text: string;
+}
 
 /** How long the pointer stays on an element before its tooltip shows. */
 export const SHOW_DELAY = 400;
@@ -28,17 +43,61 @@ interface Options {
   text: string;
   cut: boolean;
   aria: boolean;
+  title?: string;
+  rows: TipRow[];
 }
 
 function options(content: TipContent): Options {
-  if (content && typeof content === 'object') return { text: content.text ?? '', cut: !!content.cut, aria: content.aria !== false };
-  return { text: content || '', cut: false, aria: true };
+  if (content && typeof content === 'object') {
+    const rows = (content.rows ?? []).map((r) => (typeof r === 'string' ? { text: r } : r));
+    const own = [content.title, ...rows.map((r) => r.text)].filter(Boolean).join('\n');
+    return { text: content.text ?? own, cut: !!content.cut, aria: content.aria !== false, title: content.title, rows };
+  }
+  return { text: content || '', cut: false, aria: true, rows: [] };
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** Writes a tooltip into its box: its text, or its title and its lines. */
+function fill(el: HTMLElement, o: Options) {
+  const rich = !!(o.title || o.rows.length);
+  el.classList.toggle('rich', rich);
+  if (!rich) {
+    el.textContent = o.text;
+    return;
+  }
+  el.replaceChildren();
+  if (o.title) {
+    const b = document.createElement('b');
+    b.textContent = o.title;
+    el.append(b);
+  }
+  for (const r of o.rows) {
+    const row = document.createElement('span');
+    row.className = 'tip-row';
+    if (r.icon) {
+      const svg = document.createElementNS(SVG, 'svg');
+      svg.setAttribute('class', 'icon');
+      svg.setAttribute('width', '14');
+      svg.setAttribute('height', '14');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.dataset.icon = r.icon;
+      const use = document.createElementNS(SVG, 'use');
+      use.setAttribute('href', `#${iconId(r.icon)}`);
+      svg.append(use);
+      row.append(svg);
+    }
+    row.append(r.text);
+    el.append(row);
+  }
 }
 
 /** An element with a tooltip, as the shared state knows it. */
 interface Tipped {
   node: HTMLElement;
   text(): string;
+  /** What its tooltip shows. */
+  options(): Options;
   /** Whether its tooltip would say something now (a cut text that is not cut says nothing). */
   says(): boolean;
   /** Whether the element is described by its tooltip while it is up (a control that its text names and says no more of). */
@@ -100,7 +159,7 @@ function open(t: Tipped) {
   el.className = 'tip-box';
   el.id = BOX;
   el.setAttribute('role', 'tooltip');
-  el.textContent = t.text();
+  fill(el, t.options());
   document.body.append(el);
   box = el;
   owner = t;
@@ -207,6 +266,7 @@ export function tip(node: HTMLElement, content: TipContent): { update: (content:
   const self: Tipped = {
     node,
     text: () => o.text,
+    options: () => o,
     says: () => !!o.text && (!o.cut || [node, ...node.querySelectorAll('*')].some(cutShort)),
     describes: () => describing,
   };
@@ -299,7 +359,7 @@ export function tip(node: HTMLElement, content: TipContent): { update: (content:
       apply();
       if (owner !== self || !box) return;
       if (!self.says()) return close(self);
-      box.textContent = o.text;
+      fill(box, o);
       pointing(node, BOX, describing);
       position();
     },

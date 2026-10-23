@@ -9,6 +9,8 @@ import type { Page } from '@playwright/test';
 import { addProject, expect, SHOW, test } from './fixture';
 
 const STEPS = [80, 90, 100, 110, 125, 150, 175, 200];
+/** The steps the settings offer in segments (the keys reach the others). */
+const SEGMENTS = [90, 100, 110, 125, 150];
 const BRANCH = 'ticket/esc-112-une-branche-au-nom-bien-trop-long-pour-tenir-dans-la-barre-d-etat';
 const percent = (n: number) => `${n} %`;
 
@@ -70,7 +72,7 @@ test('the zoom of Réglages › Application grows the whole interface at once, n
   let dialog = await openDisplay(page);
   const zoom = dialog.getByRole('group', { name: 'Zoom de l’interface' });
   await expect(zoom.getByRole('button', { name: percent(100) })).toHaveAttribute('aria-pressed', 'true');
-  for (const z of STEPS) {
+  for (const z of SEGMENTS) {
     if (z > fit) await expect(zoom.getByRole('button', { name: percent(z) })).toBeDisabled();
     else await expect(zoom.getByRole('button', { name: percent(z) })).toBeEnabled();
   }

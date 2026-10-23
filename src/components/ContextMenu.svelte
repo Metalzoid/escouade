@@ -2,6 +2,7 @@
   import { t } from '../lib/i18n';
   import { menu } from '../lib/menu.svelte';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
 
   let el = $state<HTMLDivElement>();
   let pos = $state({ x: 0, y: 0 });
@@ -112,6 +113,7 @@
         <button
           role="menuitem"
           class:danger={item.danger}
+          class:iconed={!!item.icon}
           disabled={item.disabled}
           use:tip={item.title}
           onclick={() => {
@@ -119,7 +121,10 @@
             item.onClick?.();
           }}
         >
-          <span>{item.label}</span>
+          {#if item.icon}<span class="ic"><Icon name={item.icon} /></span>{/if}
+          <span class="ml"
+            ><span class="l">{item.label}</span>{#if item.disabled && item.reason}<span class="reason">{item.reason}</span>{/if}</span
+          >
           {#if item.hint}<span class="hint">{item.hint}</span>{/if}
         </button>
       {/if}
@@ -136,55 +141,83 @@
   .menu {
     position: fixed;
     z-index: 91;
-    min-width: 190px;
+    min-width: 200px;
+    max-width: 380px;
     display: flex;
     flex-direction: column;
     padding: 5px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-    animation: ccFadeIn 0.08s ease-out;
+    border-radius: 11px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
+    animation: ccFadeIn 0.2s var(--ease);
   }
   button {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    height: 32px;
-    padding: 0 10px;
+    gap: 10px;
+    min-height: 32px;
+    padding: 6px 9px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
+    color: var(--text);
     font-size: 13px;
     text-align: left;
     cursor: pointer;
   }
-  button:hover:not(:disabled) {
-    background: var(--elev2);
+  button:hover:not(:disabled),
+  button:focus-visible {
+    background: rgba(var(--fg-rgb), 0.06);
   }
+  /* What cannot be done stays legible: its label greyed, its reason in full (choice 17). */
   button:disabled {
-    opacity: 0.45;
     cursor: default;
   }
-  .danger {
+  button:disabled .l,
+  button:disabled .ic {
+    opacity: 0.55;
+  }
+  .ic {
+    display: inline-flex;
+    flex: none;
+    color: var(--muted);
+  }
+  .ml {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .l {
+    font-weight: 500;
+  }
+  .reason {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .danger,
+  .danger .ic {
     color: var(--del);
   }
   .hint {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--dim);
+    flex: none;
+    font-size: 12px;
+    color: var(--muted);
   }
   .sep {
     height: 1px;
-    margin: 4px 6px;
+    margin: 5px 4px;
     background: var(--line);
   }
   .colors {
     display: flex;
     flex-direction: column;
     gap: 7px;
-    padding: 7px 10px 8px;
+    padding: 7px 9px 8px;
   }
   .clabel {
     font-size: 13px;
@@ -197,16 +230,17 @@
   .swatches .swatch {
     width: 16px;
     height: 16px;
+    min-height: 0;
     padding: 0;
     border-radius: 5px;
   }
   .swatches .swatch:hover {
-    outline: 1px solid var(--line2);
+    outline: 1px solid var(--line-3);
     outline-offset: 1px;
   }
   .swatches .swatch.on {
     box-shadow:
-      0 0 0 2px var(--elev),
+      0 0 0 2px var(--raise-2),
       0 0 0 3px var(--text);
   }
 </style>

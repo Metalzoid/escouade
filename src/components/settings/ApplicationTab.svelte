@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { THEMES, themeChoice } from '../../lib/appearance';
   import { DEFAULT_FONT_SIZE, FONT_SIZE_MAX, FONT_SIZE_MIN, fontSize, setDisplay, ZOOM_LEVELS, zoomState } from '../../lib/display.svelte';
   import { writerOf, writerOptions } from '../../lib/engines';
   import { LANG_NAMES, t, type Lang } from '../../lib/i18n';
@@ -11,7 +12,7 @@
 
   // The « Application » tab: the language of the interface and that of the texts Claude writes, saved with the other
   // settings and applied at once (the backend tells the window, the menus and its own texts); and the display (the zoom,
-  // the font sizes of the terminals and of the editor), applied and saved as it changes, apart from the draft: its
+  // the font sizes of the terminals and of the editor) and the theme, applied and saved as it changes, apart from the draft: its
   // shortcuts change it too, the modal open or not.
   const s = $derived(settingsForm.settings);
   /** Each language named in itself, whatever the interface's: who does not read it still finds their own. */
@@ -32,10 +33,21 @@
   const writerDefault = $derived(writerModels?.find((m) => m.default));
   /** What the menu shows: the model chosen while it is one of them, else the default. */
   const writerModel = $derived(writerModels?.some((m) => m.id === s.writerModel) ? (s.writerModel ?? '') : '');
+  /** « Thème »: Système, Clair, Sombre. */
+  const themeOptions = $derived(
+    THEMES.map((v) => ({
+      value: v,
+      label: { system: t('settings.app.themeSystem'), light: t('settings.app.themeLight'), dark: t('settings.app.themeDark') }[v],
+    })),
+  );
+  const SEGMENT_ZOOMS: number[] = [90, 100, 110, 125, 150];
   const percent = (n: number) => t('settings.app.percent', { n });
-  /** The steps the window cannot hold are not offered (`zoomState.fit`). */
+  /**
+   * The usual steps in segments, 90 to 150 % (choice 35 of the 2.0 design), and the one chosen when it is another (80,
+   * 175 or 200 %, which the keys reach); the steps the window cannot hold are not offered (`zoomState.fit`).
+   */
   const zoomOptions = $derived(
-    ZOOM_LEVELS.map((z) => ({
+    ZOOM_LEVELS.filter((z) => SEGMENT_ZOOMS.includes(z) || z === (app.settings.uiZoom ?? 100)).map((z) => ({
       value: z as number,
       label: percent(z),
       disabled: z > zoomState.fit,
@@ -56,6 +68,13 @@
 </script>
 
 <Group title={t('settings.app.display')}>
+  <Row label={t('settings.app.theme')} desc={t('settings.app.themeDesc')}>
+    <Chips
+      label={t('settings.app.theme')}
+      options={themeOptions}
+      bind:value={() => themeChoice(app.settings.theme), (v) => setDisplay({ theme: v })}
+    />
+  </Row>
   <Row label={t('settings.app.zoom')} desc={`${t('settings.app.zoomDesc')} ${zoomKeys}`}>
     <Chips
       label={t('settings.app.zoom')}
@@ -75,7 +94,7 @@
       desc={t('settings.app.fontSizeDesc')}
     >
       <input
-        class="field mono input"
+        class="field input"
         type="number"
         min={FONT_SIZE_MIN}
         max={FONT_SIZE_MAX}
@@ -141,16 +160,12 @@
     width: 260px;
     max-width: 50%;
     flex: none;
-    height: 32px;
-    background: var(--panel);
-    font-size: 12px;
   }
+  /* The common field (src/app.css), a number's width. */
   .input {
-    width: 90px;
+    width: 72px;
     flex: none;
-    height: 32px;
-    padding: 0 10px;
-    background: var(--panel);
-    font-size: 12px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 </style>

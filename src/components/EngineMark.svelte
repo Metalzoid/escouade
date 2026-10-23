@@ -4,9 +4,10 @@
   import { tip } from '../lib/tip';
   import type { EngineId } from '../lib/types';
 
-  // The brand of an agent's harness: on its card, in the overview, in its header. Only once agents run on two harnesses:
-  // with one, it would say nothing.
-  let { engine }: { engine: EngineId | null | undefined } = $props();
+  // The brand of an agent's harness, a word in a hairline (« Claude », « Codex », « OpenCode », « Copilot »), never a
+  // colour: the same on its card, in the overview, its header, its ticket and the menus. Only once agents run on two
+  // harnesses: with one, it would say nothing. `large`: in a header, or beside a title.
+  let { engine, large = false }: { engine: EngineId | null | undefined; large?: boolean } = $props();
 
   const name = $derived(engineName(engine ?? 'claude'));
   /** Its first word: « Claude » for Claude Code, « Copilot » for Copilot CLI. */
@@ -16,6 +17,7 @@
 {#if showsMark()}
   <span
     class="mark"
+    class:large
     data-engine={engine ?? 'claude'}
     role="img"
     aria-label={t('nav.sidebar.engineMark', { engine: name })}
@@ -26,12 +28,22 @@
 <style>
   .mark {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 16px;
     padding: 0 5px;
-    border: 1px solid var(--line);
     border-radius: 4px;
-    font-size: 10px;
-    line-height: 15px;
-    color: var(--muted);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--soft);
+    font-size: 10.5px;
+    font-weight: 560;
+    line-height: 1;
+    letter-spacing: 0.01em;
     white-space: nowrap;
+  }
+  .mark.large {
+    height: 20px;
+    padding: 0 7px;
+    font-size: 11.5px;
   }
 </style>

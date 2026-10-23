@@ -5,6 +5,8 @@
     detail?: string;
     title?: string;
     disabled?: boolean;
+    /** Why it is disabled, written under it (choice 17 of the 2.0 design: what a harness lacks stays in its place, greyed, with its reason). */
+    reason?: string;
     /** Marked as a favorite (the menu has favorites: `onFavorite`). */
     favorite?: boolean;
     /** The heading of the group it is shown under (the models' families, ESC-127): the options of a group follow each other. */
@@ -15,6 +17,7 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
   import Star from './Star.svelte';
 
   // A compact picker whose menu opens upwards (the composer sits at the bottom of the window).
@@ -115,9 +118,12 @@
       use:tip={o.title}
       onclick={() => onPick(o.value)}
     >
-      <span class="check" aria-hidden="true">{o.value === value ? '✓' : ''}</span>
+      <span class="check"
+        >{#if o.value === value}<Icon name="check" size={14} />{/if}</span
+      >
       <span class="ml">{o.label}</span>
       {#if o.detail}<span class="md">{o.detail}</span>{/if}
+      {#if o.disabled && o.reason}<span class="md reason">{o.reason}</span>{/if}
     </button>
     {#if onFavorite}
       <button
@@ -145,7 +151,9 @@
     {disabled}
     onclick={readonly ? undefined : onToggle}
   >
-    {#if showCaption}<span class="cap">{caption}</span>{/if}<span class="val">{shown}</span>{#if !readonly}<span class="chev">▾</span>{/if}
+    {#if showCaption}<span class="cap">{caption}</span>{/if}<span class="val">{shown}</span>{#if !readonly}<span class="chev"
+        ><Icon name="down" size={12} /></span
+      >{/if}
   </button>
   {#if open && !readonly}
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
@@ -192,24 +200,30 @@
     min-width: 0;
     flex: 0 1 auto;
   }
+  /* A chip of the composer's bar (the 2.0 design): its caption, then its value, with no frame until hovered. */
   .trigger {
-    height: 30px;
+    height: 28px;
     max-width: 100%;
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 0 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line);
-    background: var(--panel);
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
   }
-  .trigger:hover:not(:disabled, .readonly) {
-    border-color: var(--line2);
+  .trigger:hover:not(:disabled, .readonly),
+  .trigger[aria-expanded='true'] {
+    background: var(--hover);
+    color: var(--text);
   }
   .trigger.readonly {
     cursor: default;
@@ -218,23 +232,27 @@
     opacity: 0.45;
     cursor: default;
   }
-  .trigger.danger {
-    border-color: color-mix(in oklch, var(--del) 55%, transparent);
+  .trigger.danger,
+  .trigger.danger .val {
     color: var(--del);
   }
   .cap {
-    font-family: var(--ui);
-    color: var(--dim);
+    color: var(--muted);
   }
   .val {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: var(--soft);
+    font-weight: 560;
+  }
+  .trigger:hover:not(:disabled, .readonly) .val {
+    color: var(--text);
   }
   .chev {
     flex: none;
-    color: var(--dim);
-    font-size: 9px;
+    display: inline-flex;
+    color: var(--muted);
   }
   .backdrop {
     position: fixed;
@@ -247,15 +265,17 @@
     bottom: calc(100% + 6px);
     z-index: 30;
     width: max-content;
-    min-width: 170px;
-    max-width: 330px;
+    min-width: 200px;
+    max-width: 340px;
     display: flex;
     flex-direction: column;
     padding: 5px;
-    border-radius: var(--r);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    border-radius: 11px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
+    animation: ccFadeIn 0.2s var(--ease);
   }
   .menu.long {
     max-width: 420px;
@@ -268,11 +288,19 @@
   }
   .search {
     margin: 0 0 5px;
-    padding: 6px 8px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line);
-    background: var(--panel);
+    height: 30px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     font-size: 12.5px;
+    outline: none;
+  }
+  .search:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
   }
   .row {
     display: flex;
@@ -283,7 +311,7 @@
     min-width: 0;
   }
   /* A star without a background or a border: an outline that shows more on its row's hover and on focus, filled in the
-     accent's color for a favorite. */
+     project's colour for a favorite. */
   .menu .star {
     display: flex;
     flex: none;
@@ -292,9 +320,9 @@
     width: 30px;
     padding: 0;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
-    color: color-mix(in oklch, var(--dim) 70%, transparent);
+    color: var(--dim);
     cursor: pointer;
   }
   .row:hover .star,
@@ -305,7 +333,7 @@
     color: var(--text);
   }
   .menu .star.on {
-    color: var(--accent);
+    color: var(--p-ink);
   }
   .group + .group {
     margin-top: 4px;
@@ -313,47 +341,57 @@
     border-top: 1px solid var(--line);
   }
   .gtitle {
-    padding: 4px 10px 3px;
-    font-size: 11px;
+    padding: 7px 9px 5px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: var(--dim);
+    color: var(--muted);
     user-select: none;
   }
   .none {
-    padding: 7px 10px;
+    padding: 7px 9px;
     font-size: 12.5px;
-    color: var(--dim);
+    color: var(--muted);
   }
   .menu .item {
     display: grid;
-    grid-template-columns: 16px auto;
-    column-gap: 6px;
-    padding: 7px 10px;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 1px;
+    min-height: 32px;
+    padding: 6px 9px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
+    color: var(--text);
     text-align: left;
     cursor: pointer;
   }
   .menu .item:hover:not(:disabled),
   .menu .item:focus-visible {
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
   }
+  /* What cannot be chosen stays legible: its label greyed, its reason in full (choice 17). */
   .menu .item:disabled {
-    opacity: 0.45;
     cursor: default;
   }
+  .menu .item:disabled .ml {
+    opacity: 0.55;
+  }
   .check {
-    grid-row: span 2;
-    color: var(--accent);
-    font-size: 12px;
+    grid-row: span 3;
+    align-self: center;
+    display: inline-flex;
+    color: var(--p-ink);
   }
   .ml {
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 550;
   }
   .md {
-    font-size: 11.5px;
-    color: var(--dim);
+    grid-column: 2;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted);
   }
 </style>

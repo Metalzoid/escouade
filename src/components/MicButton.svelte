@@ -5,6 +5,7 @@
   import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
+  import Level from './Level.svelte';
 
   // The microphone beside a field: a click starts the dictation and another ends it, a press held dictates until it is
   // let go. While it listens, its panel shows the level and the time; the first time, it offers the model's download.
@@ -47,16 +48,7 @@
           <span class="strong">{t('voice.panel.listening')}</span>
           <span class="time mono">{duration(dictation.ms)}</span>
         </div>
-        <div
-          class="meter"
-          role="meter"
-          aria-label={t('voice.panel.level')}
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow={Math.round(dictation.level * 100)}
-        >
-          <div class="fill" style:width="{Math.round(dictation.level * 100)}%"></div>
-        </div>
+        <Level level={dictation.level} label={t('voice.panel.level')} />
         {#if dictation.partial}
           <p class="partial" data-voice-partial><span>{dictation.partial}</span></p>
         {/if}
@@ -81,8 +73,8 @@
         <span class="muted small"
           >{t('voice.panel.downloading', { model: progress.model, done: fBytes(progress.done), total: fBytes(progress.total) })}</span
         >
-        <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
-          <div class="fill dl" style:width="{pct}%"></div>
+        <div class="gauge dl" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pct)}>
+          <div class="fill" style:width="{pct}%"></div>
         </div>
         <div class="actions">
           <button class="btn ghost" onclick={() => dictation.cancel()}>{t('voice.panel.cancel')}</button>
@@ -189,19 +181,9 @@
     font-size: 12px;
     line-height: 1.45;
   }
-  .meter {
-    height: 6px;
-    border-radius: 3px;
-    background: var(--panel);
-    overflow: hidden;
-  }
-  .fill {
-    height: 100%;
-    background: var(--del);
-    transition: width 0.06s linear;
-  }
-  .fill.dl {
-    background: var(--accent);
+  /* The download's gauge (src/app.css), the width of the panel. */
+  .gauge.dl {
+    width: 100%;
   }
   /* What the service understood so far (ESC-136): the last lines, as they are written. */
   .partial {
@@ -223,8 +205,7 @@
     .dot {
       animation: none;
     }
-    .mic.on,
-    .fill {
+    .mic.on {
       transition: none;
     }
   }

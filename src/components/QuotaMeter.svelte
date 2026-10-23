@@ -44,8 +44,8 @@
   <!-- The bar is a meter, and reached by Tab: its value is the only way to read it without a pointer. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <span
-    class="bar"
-    class:warn={pct > 80}
+    class="bar gauge"
+    class:hot={pct > 80}
     role="meter"
     tabindex={focusable && !detail ? 0 : undefined}
     aria-label={name}
@@ -75,32 +75,9 @@
     align-items: center;
     gap: 6px;
   }
+  /* The common gauge (src/app.css). */
   .bar {
-    width: 48px;
-    height: 5px;
-    border-radius: 3px;
-    background: var(--elev2);
-    overflow: hidden;
     margin-left: 2px;
-    flex: none;
-  }
-  .bar:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-  .fill {
-    display: block;
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.4s;
-  }
-  .warn .fill {
-    background: var(--wait);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .fill {
-      transition: none;
-    }
   }
   .v {
     color: var(--text);

@@ -9,6 +9,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### New
 
 - A new agent’s worktree is created at its first message: the agent is named first, then its branch and its folder take that name, and its setup runs in that folder. A setup script that uses it for its local address or its database gets the right name. A per-project setting, on everywhere, gives back the old behavior. Thanks to MrKayJayDee on Discord.
+- Escouade has a light theme: Settings › Application › Display › “Theme” offers System, Light or Dark, applied at once, title bar included. By default, it follows the one of Windows, macOS or Linux.
 
 ## [1.8.10] — 2026-10-23
 

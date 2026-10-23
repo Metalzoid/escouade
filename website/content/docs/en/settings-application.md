@@ -1,6 +1,6 @@
 # Settings: Application
 
-This page describes the settings window (its tabs, how to open it, how it saves) and its “Application” tab, which sets the display (the interface zoom, the text size of the terminals and of the editor) and the language of the interface and of the texts Claude writes.
+This page describes the settings window (its tabs, how to open it, how it saves) and its “Application” tab, which sets the display (the theme, the interface zoom, the text size of the terminals and of the editor) and the language of the interface and of the texts Claude writes.
 
 ## The settings window
 
@@ -12,7 +12,7 @@ The left column lists the tabs, with Escouade’s version at the bottom. The nam
 
 | Tab | What it sets |
 |---|---|
-| “Application” | Zoom, text size, and languages |
+| “Application” | Theme, zoom, languages and written texts |
 | [“Harness”](settings-claude-code) | Executable, model, and default permissions |
 | [“Accounts”](settings-accounts) | The accounts agents start on, saved as you change them |
 | [“Notifications”](settings-notifications) | Visual and sound alerts |
@@ -43,11 +43,12 @@ The tab has three groups, “Display”, “Language”, and “Written texts”
 
 ### Display
 
-These three settings apply right away, with no “Save” and no restart, and stay from one launch to the next.
+These four settings apply right away, with no “Save” and no restart, and stay from one launch to the next.
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Interface zoom” | Makes the whole window bigger or smaller, like a browser’s zoom: text, spacing, and icons together, terminals and editor included. Steps: 80%, 90%, 100%, 110%, 125%, 150%, 175%, and 200%. | 100% |
+| “Theme” | “System”, “Light”, or “Dark”. “System” follows the Windows, macOS, or Linux theme, and its changes, as they happen. The title bar and the native controls (scroll bars, menus) follow too. | “System” |
+| “Interface zoom” | Makes the whole window bigger or smaller, like a browser’s zoom: text, spacing, and icons together, terminals and editor included. Steps: 80%, 90%, 100%, 110%, 125%, 150%, 175%, and 200%. The settings offer the usual ones, 90% to 150%, in segments (and the current one when it is another); the keyboard reaches every step. | 100% |
 | “Terminal text size” | The font size of the terminals and of the [Claude Code view](claude-code-view), in pixels, from 9 to 24 in half-pixel steps. The zoom adds to it. | 12.5 |
 | “Editor text size” | The font size of the [editor](editor), in pixels, from 9 to 24; the lines grow with it. The zoom adds to it. | 12.5 |
 

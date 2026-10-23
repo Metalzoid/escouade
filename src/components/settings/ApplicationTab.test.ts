@@ -31,7 +31,7 @@ describe('the « Application » tab', () => {
     render(SettingsModal, { tab: 'app' });
     expect(screen.getAllByRole('tab')[0]).toHaveTextContent('Application');
     expect(screen.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Zoom, taille du texte et langues')).toBeInTheDocument();
+    expect(screen.getByText('Thème, zoom, langue de l’interface et textes rédigés')).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'Langue' })).toBeInTheDocument();
     expect(choices(UI)).toEqual(['Système (Français)', 'English', 'Français']);
     expect(choices(CLAUDE)).toEqual(['Comme l’interface (par défaut)', 'English', 'Français']);
@@ -78,9 +78,10 @@ describe('the « Application » tab', () => {
     setLang('en');
     render(SettingsModal, { tab: 'app' });
     expect(screen.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Zoom, text size, and languages')).toBeInTheDocument();
+    expect(screen.getByText('Theme, zoom, languages and written texts')).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'Display' })).toBeInTheDocument();
-    expect(choices('Interface zoom')).toEqual(['80%', '90%', '100%', '110%', '125%', '150%', '175%', '200%']);
+    expect(choices('Theme')).toEqual(['System', 'Light', 'Dark']);
+    expect(choices('Interface zoom')).toEqual(['90%', '100%', '110%', '125%', '150%']);
     expect(panel()).toHaveTextContent('Also from the keyboard: Ctrl+= to zoom in, Ctrl+- to zoom out, Ctrl+0 to go back to 100%.');
     expect(within(panel()).getByRole('spinbutton', { name: 'Terminal text size' })).toBeInTheDocument();
     expect(within(panel()).getByRole('spinbutton', { name: 'Editor text size' })).toBeInTheDocument();
@@ -106,7 +107,7 @@ describe('the « Application » tab', () => {
           .getAllByRole('heading')
           .map((h) => h.textContent),
       ).toEqual(['Affichage', 'Langue', 'Textes rédigés']);
-      expect(choices(ZOOM)).toEqual(['80 %', '90 %', '100 %', '110 %', '125 %', '150 %', '175 %', '200 %']);
+      expect(choices(ZOOM)).toEqual(['90 %', '100 %', '110 %', '125 %', '150 %']);
       expect(choice(ZOOM, '100 %')).toHaveAttribute('aria-pressed', 'true');
       expect(panel()).toHaveTextContent('Aussi au clavier : Ctrl+= pour agrandir, Ctrl+- pour réduire, Ctrl+0 pour revenir à 100 %.');
       expect(field('Taille du texte des terminaux').value).toBe('12.5');
@@ -133,16 +134,45 @@ describe('the « Application » tab', () => {
       expect(backend.called('save_settings')[1].args.settings).toMatchObject({ language: 'en', uiZoom: 150 });
     });
 
+    it('chooses the theme in segments, Système by default, applied at once and saved by itself, the draft left as it is', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const backend = fakeBackend({ save_settings: () => [] });
+      render(SettingsModal, { tab: 'app' });
+      expect(choices('Thème')).toEqual(['Système', 'Clair', 'Sombre']);
+      expect(choice('Thème', 'Système')).toHaveAttribute('aria-pressed', 'true');
+      expect(panel()).toHaveTextContent('Système suit le thème de Windows, macOS ou Linux, et ses changements.');
+      await userEvent.click(choice('Thème', 'Clair'));
+      expect(choice('Thème', 'Clair')).toHaveAttribute('aria-pressed', 'true');
+      expect(app.settings.theme).toBe('light');
+      expect(document.documentElement.dataset.theme).toBe('light');
+      // The window's own theme, its title bar with it.
+      expect(backend.called('plugin:window|set_theme').map((c) => c.args.value)).toEqual(['light']);
+      expect(screen.getByRole('tab', { name: 'Application' })).not.toHaveClass('changed');
+      vi.advanceTimersByTime(SAVE_DELAY_MS);
+      expect(backend.called('save_settings')[0].args.settings.theme).toBe('light');
+      // Back to the system's: the window's theme is the system's again.
+      await userEvent.click(choice('Thème', 'Système'));
+      expect(backend.called('plugin:window|set_theme').map((c) => c.args.value)).toEqual(['light', null]);
+      // A language saved afterwards keeps the theme.
+      await userEvent.click(choice(UI, 'English'));
+      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      expect(backend.called('save_settings').at(-1)?.args.settings).toMatchObject({ language: 'en', theme: 'system' });
+    });
+
     it('does not offer the steps the window cannot hold, and says when the zoom chosen is held to a smaller one', () => {
       fakeBackend();
       Object.assign(zoomState, { fit: 125, shown: 125 });
       render(SettingsModal, { tab: 'app' });
       expect(choice(ZOOM, '125 %')).toBeEnabled();
       expect(choice(ZOOM, '150 %')).toBeDisabled();
-      expect(choice(ZOOM, '200 %')).toBeDisabled();
+      // A step out of the segments (the keys reach it) is shown only while it is the one chosen.
+      expect(choices(ZOOM)).not.toContain('200 %');
       expect(within(panel()).queryByRole('status')).toBeNull();
       app.settings.uiZoom = 200;
       flushSync();
+      expect(choices(ZOOM)).toEqual(['90 %', '100 %', '110 %', '125 %', '150 %', '200 %']);
+      expect(choice(ZOOM, '200 %')).toBeDisabled();
+      expect(choice(ZOOM, '200 %')).toHaveAttribute('aria-pressed', 'true');
       expect(within(panel()).getByRole('status').textContent?.trim()).toBe(
         'La fenêtre est trop petite pour 200 % : l’interface est à 125 % tant qu’elle ne grandit pas.',
       );

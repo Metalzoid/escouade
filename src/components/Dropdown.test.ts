@@ -131,9 +131,9 @@ describe('Dropdown in groups, with a drawn star (ESC-127)', () => {
   it('draws its star: an outline for a model that is no favorite, filled for a favorite', () => {
     setLang('fr');
     open();
-    const path = (name: string) => screen.getByRole('button', { name }).querySelector('svg path');
-    expect(path('Ajouter aux favoris : Opus 5.5')).toHaveAttribute('fill', 'none');
-    expect(path('Retirer des favoris : Sonnet 5.5')).toHaveAttribute('fill', 'currentColor');
+    const star = (name: string) => screen.getByRole('button', { name }).querySelector('svg[data-icon="star"]');
+    expect(star('Ajouter aux favoris : Opus 5.5')).not.toHaveClass('on');
+    expect(star('Retirer des favoris : Sonnet 5.5')).toHaveClass('on');
     // No glyph: the drawing alone.
     expect(screen.getByRole('button', { name: 'Ajouter aux favoris : Opus 5.5' }).textContent).toBe('');
   });

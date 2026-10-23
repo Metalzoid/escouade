@@ -512,7 +512,7 @@ describe('settingsForm', () => {
     setLang('en');
     flushSync();
     expect(names()).toEqual([
-      'Application / Zoom, text size, and languages',
+      'Application / Theme, zoom, languages and written texts',
       'Harness / Executables, versions and the MCP server',
       'Accounts / Each harness’s accounts that agents start on, and their quotas, saved as you change them',
       'Notifications / Visual and sound alerts',

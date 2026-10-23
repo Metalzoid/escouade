@@ -1,6 +1,7 @@
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
+import { earlyAppearance } from './lib/appearance';
 import { guardFileDrops } from './lib/attachments';
 import { guardLinks } from './lib/links';
 
@@ -16,5 +17,8 @@ guardFileDrops(window);
 
 // A link never takes the window away from the app: the ones that go outside open in the browser.
 guardLinks(document);
+
+// The theme the page kept, before the first render: the settings say it again a moment later.
+earlyAppearance();
 
 mount(App, { target: document.getElementById('app')! });

@@ -79,9 +79,9 @@ describe('QuotaMeter in the status bar', () => {
 
   it('turns to the warning color past 80 %, not at 80 %', async () => {
     const { rerender } = render(QuotaMeter, { minutes: 300, usage: { pct: 80, resetsAt: SOON }, now: NOW });
-    expect(screen.getByRole('meter')).not.toHaveClass('warn');
+    expect(screen.getByRole('meter')).not.toHaveClass('hot');
     await rerender({ minutes: 300, usage: { pct: 80.5, resetsAt: SOON }, now: NOW });
-    expect(screen.getByRole('meter')).toHaveClass('warn');
+    expect(screen.getByRole('meter')).toHaveClass('hot');
   });
 
   it('fills the bar to the percentage, never beyond the bar', async () => {
@@ -201,7 +201,7 @@ describe('QuotaMeter in the panel', () => {
 
   it('turns to the warning color past 80 % here too', () => {
     render(QuotaMeter, { minutes: 10080, usage: { pct: 95, resetsAt: LATER }, now: NOW, detail: true });
-    expect(screen.getByRole('meter')).toHaveClass('warn');
+    expect(screen.getByRole('meter')).toHaveClass('hot');
   });
 });
 

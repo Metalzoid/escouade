@@ -1,4 +1,4 @@
-// The size of what the window shows: « Zoom de l’interface » (the WebView's zoom: text, spacing and icons together),
+// The look of the window, « Thème » (lib/appearance.ts), and the size of what it shows: « Zoom de l’interface » (the WebView's zoom: text, spacing and icons together),
 // and the font sizes of the terminals and of the editor, set apart (and zoomed with the rest). Applied at once, and
 // saved a moment after the last change: Ctrl+= pressed five times is one save.
 //
@@ -7,6 +7,7 @@
 
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { applyAppearance, themeChoice } from './appearance';
 import { api } from './ipc';
 import { IS_MAC, primaryKey } from './platform';
 import { app } from './state.svelte';
@@ -64,7 +65,7 @@ export function zoomKey(e: KeyboardEvent, mac = IS_MAC): -1 | 0 | 1 | null {
 }
 
 /** The display settings, as the window has them. */
-type Display = Pick<Settings, 'uiZoom' | 'terminalFontSize' | 'editorFontSize'>;
+type Display = Pick<Settings, 'theme' | 'uiZoom' | 'terminalFontSize' | 'editorFontSize'>;
 
 /** What the window holds: the biggest step of the zoom (`fit`), and the zoom shown (`shown`, the one chosen or `fit`). */
 export const zoomState = $state({ fit: 200 as number, shown: 100 as number });
@@ -121,6 +122,7 @@ export function watchZoom(): () => void {
  */
 export function setDisplay(change: Partial<Display>) {
   const s = app.settings;
+  if (change.theme !== undefined) applyAppearance((s.theme = themeChoice(change.theme)));
   if (change.uiZoom !== undefined) s.uiZoom = nearestZoom(change.uiZoom);
   if (change.terminalFontSize !== undefined) s.terminalFontSize = fontSize(change.terminalFontSize);
   if (change.editorFontSize !== undefined) s.editorFontSize = fontSize(change.editorFontSize);

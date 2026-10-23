@@ -746,7 +746,7 @@
          sidebar's class: one locator must not find both. -->
     <aside class="editor-side" style:width="{treeShown}px">
       <div class="views">
-        <div class="segmented" role="group" aria-label={t('editor.side.viewLabel')}>
+        <div class="segmented small" role="group" aria-label={t('editor.side.viewLabel')}>
           <button
             class:on={!search.shown}
             aria-pressed={!search.shown}

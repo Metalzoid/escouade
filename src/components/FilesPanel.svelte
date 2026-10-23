@@ -171,7 +171,7 @@
 
 <div class="files" class:docked>
   <div class="scope">
-    <div class="segmented" style="width:100%">
+    <div class="segmented small" style="width:100%">
       <button style="flex:1;font-family:var(--ui);font-size:12px" class:on={scope === 'agent'} onclick={() => (app.filesScope = 'agent')}
         >{t('git.files.scopeAgent')}</button
       >

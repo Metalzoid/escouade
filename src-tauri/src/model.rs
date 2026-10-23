@@ -140,6 +140,8 @@ pub struct Settings {
     /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
+    /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
+    pub theme: ThemeChoice,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
     pub ui_zoom: u32,
@@ -166,6 +168,18 @@ pub const MIN_ROOM: (f64, f64) = (1000.0, 600.0);
 /// The zoom `zoom` as a window of `width` × `height` logical pixels can show it: the biggest
 /// step up to it that leaves the interface its `MIN_ROOM`, never under 100 % (as the window's
 /// `fitZoom`).
+/// « Thème »: the system's (and its changes, at once), light or dark. What a later version may
+/// write, or a hand, is the system's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeChoice {
+    Light,
+    Dark,
+    #[default]
+    #[serde(other)]
+    System,
+}
+
 pub fn fit_zoom(zoom: u32, width: f64, height: f64) -> u32 {
     let fits = |z: u32| {
         let f = f64::from(z) / 100.0;
@@ -527,6 +541,7 @@ impl Default for Settings {
             attach_keep_days: 0,
             remote_control_all: false,
             private_projects: false,
+            theme: ThemeChoice::System,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -2432,6 +2447,27 @@ mod tests {
             (v["uiZoom"].clone(), v["editorFontSize"].clone()),
             (json!(80), json!(24.0))
         );
+    }
+
+    #[test]
+    fn the_theme_is_the_system_s_by_default_and_for_what_it_does_not_know() {
+        let s: Settings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(s.theme, ThemeChoice::System);
+        for (written, theme) in [
+            ("light", ThemeChoice::Light),
+            ("dark", ThemeChoice::Dark),
+            ("system", ThemeChoice::System),
+            ("sepia", ThemeChoice::System),
+        ] {
+            let s: Settings = serde_json::from_value(json!({ "theme": written })).unwrap();
+            assert_eq!(s.theme, theme, "{written}");
+        }
+        let v = serde_json::to_value(Settings {
+            theme: ThemeChoice::Light,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(v["theme"], json!("light"));
     }
 
     #[test]

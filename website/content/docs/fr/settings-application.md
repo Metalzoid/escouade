@@ -1,6 +1,6 @@
 # Réglages : Application
 
-Cette page décrit la fenêtre des réglages (ses onglets, son ouverture, son enregistrement) et son onglet « Application », qui règle l’affichage (le zoom de l’interface, la taille du texte des terminaux et de l’éditeur) et choisit la langue de l’interface et celle des textes que Claude rédige.
+Cette page décrit la fenêtre des réglages (ses onglets, son ouverture, son enregistrement) et son onglet « Application », qui règle l’affichage (le thème, le zoom de l’interface, la taille du texte des terminaux et de l’éditeur) et choisit la langue de l’interface et celle des textes que Claude rédige.
 
 ## La fenêtre des réglages
 
@@ -12,7 +12,7 @@ La colonne de gauche liste les onglets, avec la version d’Escouade en bas. Le 
 
 | Onglet | Ce qu’il règle |
 |---|---|
-| « Application » | Zoom, taille du texte et langues |
+| « Application » | Thème, zoom, langue de l’interface et textes rédigés |
 | [« Harness »](settings-claude-code) | Exécutable, modèle et permissions par défaut |
 | [« Comptes »](settings-accounts) | Les comptes sur lesquels partent les agents, enregistrés à chaque changement |
 | [« Notifications »](settings-notifications) | Alertes visuelles et sonores |
@@ -43,11 +43,12 @@ L’onglet a deux groupes, « Affichage » et « Langue ».
 
 ### Affichage
 
-Ces trois réglages s’appliquent tout de suite, sans « Enregistrer » ni redémarrage, et restent d’un lancement à l’autre.
+Ces quatre réglages s’appliquent tout de suite, sans « Enregistrer » ni redémarrage, et restent d’un lancement à l’autre.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Zoom de l’interface » | Agrandit ou réduit toute la fenêtre, comme le zoom d’un navigateur : le texte, les espacements et les icônes ensemble, terminaux et éditeur compris. Paliers : 80 %, 90 %, 100 %, 110 %, 125 %, 150 %, 175 % et 200 %. | 100 % |
+| « Thème » | « Système », « Clair » ou « Sombre ». « Système » suit le thème de Windows, macOS ou Linux, et ses changements, à chaud. La barre de titre et les contrôles natifs (barres de défilement, menus) suivent aussi. | « Système » |
+| « Zoom de l’interface » | Agrandit ou réduit toute la fenêtre, comme le zoom d’un navigateur : le texte, les espacements et les icônes ensemble, terminaux et éditeur compris. Paliers : 80 %, 90 %, 100 %, 110 %, 125 %, 150 %, 175 % et 200 %. Les réglages proposent les plus courants, de 90 à 150 %, en segments (et celui en cours quand il n’en fait pas partie) ; le clavier atteint tous les paliers. | 100 % |
 | « Taille du texte des terminaux » | La taille de la police des terminaux et de la [vue Claude Code](claude-code-view), en pixels, de 9 à 24 par demi-pixel. Le zoom s’y ajoute. | 12.5 |
 | « Taille du texte de l’éditeur » | La taille de la police de l’[éditeur](editor), en pixels, de 9 à 24 ; les lignes grandissent avec elle. Le zoom s’y ajoute. | 12.5 |
 

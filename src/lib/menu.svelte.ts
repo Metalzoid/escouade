@@ -1,5 +1,7 @@
 // Global context menu.
 
+import type { IconName } from './icons';
+
 export interface MenuItem {
   label: string;
   onClick?: () => void;
@@ -7,8 +9,12 @@ export interface MenuItem {
   disabled?: boolean;
   separator?: boolean;
   hint?: string;
-  /** Its tooltip: why it is disabled, for one. */
+  /** Its tooltip. */
   title?: string;
+  /** Why it is disabled, written under it: what cannot be done stays in its place, greyed, with its reason (choice 17 of the 2.0 design). */
+  reason?: string;
+  /** An icon of the app before its label. */
+  icon?: IconName;
   /** A row of colors to pick from, named by the label. */
   colors?: { values: string[]; selected: string; onPick: (color: string) => void };
 }

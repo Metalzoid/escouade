@@ -604,14 +604,14 @@ describe('Composer', () => {
     };
     expect(a.account).toBe('pro');
     await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
-    const names = screen.getAllByRole('menuitemradio').map((o) => o.textContent?.replace('✓', '').trim());
+    const names = screen.getAllByRole('menuitemradio').map((o) => o.textContent?.trim());
     expect(names.some((n) => n?.startsWith('Mythos'))).toBe(true);
     expect(names.some((n) => n?.startsWith('Opus 5.5'))).toBe(true);
     expect(names.some((n) => n?.startsWith('Fable'))).toBe(false);
     expect(names.some((n) => n?.startsWith('Sonnet'))).toBe(false);
     await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('button', { name: /^Effort/ }));
-    expect(screen.getAllByRole('menuitemradio').map((o) => o.textContent?.replace('✓', '').trim())).toEqual([
+    expect(screen.getAllByRole('menuitemradio').map((o) => o.textContent?.trim())).toEqual([
       'Élevé Réflexion approfondie',
       'Max Réflexion maximale, plus de tokens',
     ]);
@@ -1136,12 +1136,13 @@ describe('Composer: the menus come from the agent’s harness (ESC-29)', () => {
     fakeBackend({ get_conversation: () => [] });
     const { unmount } = render(Composer, { agent: app.agents.cc });
     await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
-    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['Fable', '✓ Opus', 'Sonnet', 'Haiku']);
+    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['Fable', 'Opus', 'Sonnet', 'Haiku']);
+    expect(screen.getAllByRole('menuitemradio')[1]).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(screen.getByRole('button', { name: /^Effort/ }));
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(5);
     unmount();
     render(Composer, { agent: app.agents.cx });
     await userEvent.click(screen.getByRole('button', { name: /^Modèle/ }));
-    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['✓ GPT-5.5', 'GPT-5.5 mini']);
+    expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent?.trim())).toEqual(['GPT-5.5', 'GPT-5.5 mini']);
   });
 });

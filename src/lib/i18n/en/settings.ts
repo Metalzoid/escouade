@@ -3,7 +3,7 @@ import { defineZone } from '../types';
 // The settings window and the settings of a project.
 export default defineZone('settings', {
   tabs: {
-    app: { label: 'Application', desc: 'Zoom, text size, and languages' },
+    app: { label: 'Application', desc: 'Theme, zoom, languages and written texts' },
     claude: { label: 'Harness', desc: 'Executables, versions and the MCP server' },
     accounts: { label: 'Accounts', desc: 'Each harness’s accounts that agents start on, and their quotas, saved as you change them' },
     notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
@@ -56,6 +56,11 @@ export default defineZone('settings', {
 
   app: {
     display: 'Display',
+    theme: 'Theme',
+    themeDesc: 'System follows the Windows, macOS or Linux theme, and its changes. Applied at once, title bar included.',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     zoom: 'Interface zoom',
     zoomDesc: 'Text, spacing, and icons across the whole app grow together, terminals and editor included. Applied and saved right away.',
     zoomKeys: 'Also from the keyboard: {in} to zoom in, {out} to zoom out, {reset} to go back to 100%.',

@@ -679,7 +679,7 @@ describe('StatusBar quotas of the accounts', () => {
         .getAllByRole('meter')
         .map((m) => m.getAttribute('aria-valuenow')),
     ).toEqual(['95', '30']);
-    expect(within(button).getAllByRole('meter')[0]).toHaveClass('warn');
+    expect(within(button).getAllByRole('meter')[0]).toHaveClass('hot');
   });
 
   it('opens the panel of the accounts over the bar on a click, with the focus in it', async () => {

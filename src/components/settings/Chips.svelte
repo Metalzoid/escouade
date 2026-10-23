@@ -1,7 +1,7 @@
 <script lang="ts" generics="T extends string | number">
   import { tip } from '../../lib/tip';
-  // One choice among a few, each a chip; `lang`: the language a choice is written in, when not the interface's (a
-  // language named in itself), for screen readers.
+  // One choice among a few, in segments (the common control of src/app.css, `.segmented`); `lang`: the language a
+  // choice is written in, when not the interface's (a language named in itself), for screen readers.
   let {
     value = $bindable(),
     options,
@@ -15,7 +15,7 @@
   } = $props();
 </script>
 
-<div class="chips" role="group" aria-label={label}>
+<div class="segmented chips" role="group" aria-label={label}>
   {#each options as o (o.value)}
     <button
       class="chip"
@@ -31,40 +31,14 @@
 </div>
 
 <style>
+  /* On one line, as the preview has them: the text of the setting gives way. */
   .chips {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 4px;
-    max-width: 60%;
-  }
-  .chip {
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .chip:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-  .chip:hover:not(.on):not(:disabled) {
-    color: var(--text);
+    flex: none;
+    max-width: 70%;
+    overflow-x: auto;
   }
   .chip.mono {
     font-family: var(--mono);
     font-size: 11.5px;
-  }
-  .chip.on {
-    border-color: var(--accent);
-    background: var(--elev2);
-    color: var(--text);
   }
 </style>

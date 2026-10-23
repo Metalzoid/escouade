@@ -1,5 +1,6 @@
 // Mirrors the Rust types in src-tauri/src/model.rs.
 
+import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
@@ -79,6 +80,8 @@ export interface Settings {
   remoteControlAll: boolean;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
+  /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */
+  theme: ThemeChoice;
   /** « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the WebView's zoom, text, spacing and icons together. */
   uiZoom: number;
   /** « Taille du texte des terminaux », in CSS pixels before the zoom. */

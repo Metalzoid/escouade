@@ -176,7 +176,7 @@
       <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
     </div>
     <div class="scope">
-      <div class="segmented" role="group" aria-label={t('conv.search.scope')}>
+      <div class="segmented small" role="group" aria-label={t('conv.search.scope')}>
         <button class:on={!everywhere} aria-pressed={!everywhere} disabled={!app.project} onclick={() => (everywhere = false)}
           >{t('conv.search.thisProject')}</button
         >

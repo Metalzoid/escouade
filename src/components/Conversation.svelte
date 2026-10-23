@@ -672,7 +672,7 @@
       {/if}
       <div class="m opt"><span class="k">{t('conv.header.duration')}</span><span class="v mono">{duration}</span></div>
     </div>
-    <div class="segmented layout" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
+    <div class="segmented small layout" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
       <button
         class:on={!app.split}
         aria-pressed={!app.split}

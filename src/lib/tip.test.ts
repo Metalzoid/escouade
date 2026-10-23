@@ -58,6 +58,34 @@ describe('use:tip', () => {
     expect(shown()).toBeNull();
   });
 
+  it('shows a rich tooltip: its title in bold over its lines, each after its icon, and says them all as its text', () => {
+    const { node, action } = make('<span>Attend</span>', {
+      title: 'Son tour est fini, mais il attend :',
+      rows: [
+        { icon: 'agents', text: '2 agents pilotés au travail' },
+        { icon: 'clock', text: 'Claude Code le relance à 15:30' },
+        'Sans icône',
+      ],
+    });
+    expect(node).toHaveAttribute(
+      'data-tip',
+      'Son tour est fini, mais il attend :\n2 agents pilotés au travail\nClaude Code le relance à 15:30\nSans icône',
+    );
+    fireEvent.mouseEnter(node);
+    vi.advanceTimersByTime(SHOW_DELAY);
+    const box = shown()!;
+    expect(box).toHaveClass('rich');
+    expect(box.querySelector('b')).toHaveTextContent('Son tour est fini, mais il attend :');
+    const rows = [...box.querySelectorAll('.tip-row')];
+    expect(rows.map((r) => r.textContent)).toEqual(['2 agents pilotés au travail', 'Claude Code le relance à 15:30', 'Sans icône']);
+    expect(rows.map((r) => r.querySelector('svg')?.dataset.icon ?? null)).toEqual(['agents', 'clock', null]);
+    expect(rows[0].querySelector('use')).toHaveAttribute('href', '#i-agents');
+    // Changed while it is up: shown again, a plain text when it has no lines.
+    action.update('Terminé');
+    expect(box).not.toHaveClass('rich');
+    expect(box.textContent).toBe('Terminé');
+  });
+
   it('shows nothing when the pointer only passes over the element', () => {
     const { node } = make('<button>Lancer</button>', 'Lancer le ticket');
     fireEvent.mouseEnter(node);

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { applyAppearance, themeChoice } from './lib/appearance';
   import { DEFAULT_FONT_SIZE, watchZoom } from './lib/display.svelte';
   import { t } from './lib/i18n';
   import { api } from './lib/ipc';
@@ -16,6 +17,7 @@
   import MergedBranchesModal from './components/branches/MergedBranchesModal.svelte';
   import NewBranchModal from './components/branches/NewBranchModal.svelte';
   import ContextMenu from './components/ContextMenu.svelte';
+  import IconSprite from './components/IconSprite.svelte';
   import Conversation from './components/Conversation.svelte';
   import ConversationOverlay from './components/ConversationOverlay.svelte';
   import ConvSearch from './components/ConvSearch.svelte';
@@ -63,6 +65,11 @@
     void app.ui.view;
     void app.project?.color;
     app.applyTheme();
+  });
+
+  // « Thème » as saved, once the settings are read (until then, the one the page kept: main.ts).
+  $effect(() => {
+    if (app.ready) applyAppearance(themeChoice(app.settings.theme));
   });
 
   // « Zoom de l’interface » as saved, held to what the window holds, once the settings are read (the backend zoomed the
@@ -238,15 +245,28 @@
 {/if}
 <ContextMenu />
 <Toasts />
+<IconSprite />
 
 <style>
   .root {
+    position: relative;
+    isolation: isolate;
     height: 100vh;
     min-width: 1000px;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
+    background: var(--frame);
     overflow: hidden;
+  }
+  /* The project's light (lib/theme.ts): it falls from the title bar over the whole window. */
+  .root::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 520px;
+    z-index: -1;
+    background: radial-gradient(80% 100% at 18% 0%, color-mix(in oklch, var(--p) var(--glow), transparent), transparent 75%);
+    pointer-events: none;
   }
   .body {
     flex: 1;

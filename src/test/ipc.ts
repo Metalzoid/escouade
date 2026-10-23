@@ -102,6 +102,7 @@ export const SETTINGS: Settings = {
   terminalView: false,
   remoteControlAll: false,
   privateProjects: false,
+  theme: 'system',
   uiZoom: 100,
   quotaProjection: true,
   terminalFontSize: 12.5,

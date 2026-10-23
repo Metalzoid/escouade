@@ -67,10 +67,10 @@ L'implémentation a ensuite été repoussée à la 2.0, avec ce fichier et les a
 | Puits (code, terminal) | 2 % sur #0a0b0d |
 | Filets | blanc à 7,5 %, 12 % et 20 % |
 | Survol | blanc à 4,5 % |
-| Textes | #F7F8F8, #D0D3D8, #8A8F98, #7B8089 |
+| Textes | #F7F8F8, #D0D3D8, #989DA6, #8F949E (remontés au lot 1 pour le contraste AA) |
 
 D'autres couleurs viennent compléter les surfaces :
-- **Lumière du projet** : un dégradé radial du projet à 20 %, depuis le haut à gauche, sur 520 px.
+- **Lumière du projet** : un dégradé radial du projet à 14 % (20 % avant le lot 1), depuis le haut à gauche, sur 520 px.
 - **Vue d'ensemble et stats** : elles prennent le teal d'Escouade, `oklch(0.74 0.115 190)`.
 - **États** : en cours oklch(0.79 0.15 155), attente oklch(0.84 0.14 82) (fond à 7 %, filet à 32 %), erreur oklch(0.74 0.14 22), ajout oklch(0.8 0.13 155), git modifié oklch(0.82 0.11 75).
 - **Bouton principal** : blanc (#F2F3F4, encre #08090A). Le teal reste au logo et aux vues globales. Le focus et la sélection prennent la couleur du projet.
@@ -115,10 +115,12 @@ Demandé par l'utilisateur le 2026-10-19. Le design ci-dessus est le thème somb
 | Survol | `--hover` | blanc 4,5 % | encre 4,5 % |
 | Ombres et assombrissements | `--shade` (multiplie l'alpha) | 1 | 0,3 |
 | Voile des fenêtres | `--scrim` | rgba(3, 4, 5, 0.62) | rgba(24, 26, 32, 0.3) |
-| Textes | `--text`, `--soft`, `--muted`, `--dim` | #F7F8F8, #D0D3D8, #8A8F98, #7B8089 | #15171C, #363A42, #555A63, #5C616A |
+| Textes | `--text`, `--soft`, `--muted`, `--dim` | #F7F8F8, #D0D3D8, #989DA6, #8F949E | #15171C, #363A42, #555A63, #5C616A |
 | Réponse de l'agent | `--text-ai` | #E9EBEE | #1D2026 |
 | Couleur du projet en texte (liens, focus) | `--p-ink` | `--p` 70 % avec blanc | `--p` 50 % avec #15171c |
-| Lumière du projet | `--glow` | 20 % | 10 % |
+| Lumière du projet | `--glow` | 14 % | 10 % |
+| Puce du projet | `--p-soft` | `--p` à 14 % | `--p` à 14 % |
+| Terminé | `--done` | #989DA6 | #555A63 |
 | Sélection | `--sel` | `--p` à 40 % | `--p` à 26 % |
 | Teal d'Escouade (icônes) | `--brand` | #35C1BD | oklch(0.52 0.09 190) |
 | En cours | `--run` | oklch(0.79 0.15 155) | oklch(0.48 0.13 155) |
@@ -128,7 +130,7 @@ Demandé par l'utilisateur le 2026-10-19. Le design ci-dessus est le thème somb
 | Git modifié | `--git-m` | oklch(0.82 0.11 75) | oklch(0.5 0.11 65) |
 | Avertissement en texte | `--warn-ink` | oklch(0.8 0.1 60) | oklch(0.49 0.11 55) |
 | Teal en texte | `--teal-ink`, `--teal-ink-2` | oklch(0.86 0.08 190), oklch(0.82 0.09 190) | oklch(0.47 0.08 190) |
-| Points inactifs, cases vides | `--idle`, `--ring` | #5D626B, #4D5259 | #7A7F88 |
+| Points inactifs, cases vides | `--idle`, `--ring` | #7A7F88, #737881 | #7A7F88 |
 | Séparateurs « · » | `--sep` | #4A4E55 | #B0B4BB |
 | Bouton principal | `--primary`, survol `--primary-hover`, texte `--on-primary` | #F2F3F4, #FFF, #08090A | #1B1D22, #30333A, #F7F8F8 |
 | Pastille qui attend (chiffre) | `--on-wait` | #1A1405 | #FFF |
@@ -141,7 +143,7 @@ Les puces d'état prennent leur fond et leur filet de leur couleur (`oklch(from 
 | Rôle | Jeton | Sombre | Clair |
 |---|---|---|---|
 | Texte du code et du terminal | `--code-fg` | #D5D8DD | #24272E |
-| Commentaires, `dim` du terminal | `--code-dim` | #6C717A | #62676F |
+| Commentaires, `dim` du terminal | `--code-dim` | #8A8F98 | #62676F |
 | Numéros de ligne (diff, éditeur) | `--code-ln`, `--code-nb` | #555A62, #565B63 | #8F949C |
 | Mots-clés | `--syn-k` | oklch(0.78 0.11 300) | oklch(0.5 0.16 300) |
 | Fonctions | `--syn-f` | oklch(0.83 0.09 235) | oklch(0.5 0.13 250) |
@@ -160,7 +162,7 @@ Pour le lot 8, le thème clair d'xterm reprend ces valeurs : `foreground` `--cod
 
 **Contraste.** `node design/app-redesign/contrast.mjs` lit chaque jeton dans le navigateur, pour chaque couleur de `PROJECT_COLORS` (et le teal des vues globales), sur chaque surface où il se pose : cadre, cadre sous la lumière du projet, cadre et panneau survolés, panneau, reliefs, puits, carte qui attend, puce du projet ; et les textes posés sur une couleur (bouton principal, pastille d'attente, sélection du terminal, occurrence courante, texte sélectionné). Seuil AA : 4,5:1 pour un texte, 3:1 pour un point ou un anneau.
 - **Clair : 183 paires × 15 couleurs, toutes au-dessus du seuil.** Les plus justes : le jaune ANSI sur relief (4,54), l'attente sur la carte qui attend (4,57), `--dim` sur cette carte (4,63) ; les anneaux à 3,08 sur le cadre survolé.
-- **Sombre : 28 paires sous le seuil, déjà là avant ESC-129** et laissées telles quelles (l'aperçu sombre ne change pas) : `--muted`, `--dim` et `--done` sous la lumière du projet (jusqu'à 3,06 avec la couleur grise), `--dim` sur les reliefs et les survols (3,9 à 4,2), `--code-dim` (3,4 à 3,95), `--idle` et `--ring` (1,5 à 3). Le lot 1 les remonte jusqu'à ce que `contrast.mjs` passe aussi en sombre ; l'écart visuel est faible (quelques points de luminosité sur des gris).
+- **Sombre : 183 paires × 15 couleurs, toutes au-dessus du seuil depuis le lot 1 (ESC-71).** Les 28 écarts d'avant ESC-129 (`--muted`, `--dim` et `--done` sous la lumière du projet, `--dim` sur les reliefs et les survols, `--code-dim`, `--idle` et `--ring`) sont corrigés en remontant ces gris de quelques points, la lumière du projet à 14 % et la puce du projet à 14 % ; l'aperçu et ses captures sombres sont refaits avec. Les plus justes : `--dim` sur la puce du projet grise (4,56) et sous sa lumière (4,62), `--ring` sous la lumière (3,17). `contrast.mjs` échoue désormais si un des deux thèmes passe sous le seuil, et `src/lib/contrast.test.ts` refait le contrôle sur les jetons de l'app (`src/app.css`), qui doivent rester ceux de l'aperçu.
 
 **Ce que chaque lot vérifie dans les deux thèmes.**
 - Aucune couleur en dur dans un composant : tout passe par un jeton (`src/app.css`), qui a ses deux valeurs.
@@ -275,7 +277,8 @@ Organisation prévue :
 Lots, dans l'ordre :
 0. **Mode clair dans l'aperçu** (ESC-129, fait le 2026-10-23) : le thème clair de chaque écran de `design/app-redesign/`, le sélecteur « Thème » (`#settings-app`), les captures `-light`, le contrôle `contrast.mjs` ; voir « Le thème clair ». Direction claire validée par l'utilisateur le 2026-10-23.
    - **Lot 0 bis** (ESC-150, 2026-10-23) : les fonctionnalités de la 1.8.0 à la 1.8.9 dans l'aperçu, en sombre et en clair (voir « Écran par écran » et la section « Lot 0 bis » de `UX-NOTES.md`, choix 14 à 38 validés le 2026-10-23). Les lignes « Lot 0 bis » ci-dessous disent ce que chaque lot en reprend.
-1. **Fondations** : Inter (`@fontsource-variable/inter`), jetons de `src/app.css` dans les deux thèmes et le réglage « Thème », teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
+1. **Fondations** (ESC-71, fait le 2026-10-23) : Inter (`@fontsource-variable/inter`), jetons de `src/app.css` dans les deux thèmes et le réglage « Thème », teint par projet et lumière dans `src/lib/theme.ts`, un composant d'icône, les contrôles communs (bouton, interrupteur, segments, champ, `kbd`), l'infobulle.
+   - Fait : `src/app.css` (jetons des deux thèmes ; les anciens noms `--bg`, `--elev`, `--accent`… renvoient aux nouveaux jusqu'à ce que chaque lot les remplace) ; `lib/appearance.ts` (« Thème », lu avant le premier rendu, fenêtre native par `set_theme`, côté Rust avant de la montrer) ; `lib/theme.ts` (`--p`, teal pour les vues globales) et la lumière dans `App.svelte` ; `lib/icons.ts`, `Icon`, `IconSprite` (les 60 tracés de l'aperçu) ; `.btn`, `.icon-btn`, `.segmented` (et `.small`), `.field`, `.switch`, `kbd`, `.gauge` dans `app.css`, `Level` (niveau du micro), `Chips` en segments, le zoom en segments de 90 à 150 % (choix 35) ; `Dropdown` (puces de la zone de saisie) et `ContextMenu` (entrée grisée avec sa raison, `reason`, choix 17) ; l'infobulle riche (`title`, `rows` avec icônes) ; `EngineMark` (quatre harness, `large`), `Star`, `SharedMark`, `PrivateMark`. Tests : `contrast.test.ts`, `icon-glyphs.test.ts` (aucun caractère en guise d'icône dans les composants redessinés, liste à compléter par lot), `foundations.test.ts`, e2e `theme.spec.ts` (thème, mouvement, anglais, contrôles comparés à l'aperçu dans les deux thèmes et aux deux tailles).
    - Nouveau : `EngineMark`, la marque du harness, partout.
    - Lot 0 bis : `EngineMark` pour quatre harness (« OpenCode », « Copilot ») ; `Star` (favori plein ou en contour) ; les marques d'origine d'un réglage (`SharedMark` : teal « Défini par .escouade.yml », neutre « Réglage local », ambre « en attente ») ; `PrivateMark` (cadenas) ; le menu à état grisé avec sa raison ; une infobulle riche (plusieurs lignes, icônes).
 2. **Coque** : `App.svelte`, `TitleBar`, `StatusBar`, `QuotaMeter`, `AccountsPanel`, `Toasts`, `Welcome`.

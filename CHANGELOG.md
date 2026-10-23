@@ -9,6 +9,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Le worktree d’un nouvel agent se crée à son premier message : l’agent est d’abord nommé, puis sa branche et son dossier prennent ce nom, et sa préparation tourne dans ce dossier. Un script de préparation qui s’en sert pour son adresse locale ou sa base de données a donc le bon nom. Un réglage par projet, allumé partout, redonne l’ancien comportement. Merci à MrKayJayDee sur Discord.
+- Escouade a un thème clair : Réglages › Application › Affichage › « Thème » propose Système, Clair ou Sombre, appliqué tout de suite, barre de titre comprise. Par défaut, il suit celui de Windows, macOS ou Linux.
 
 ## [1.8.10] — 2026-10-23
 

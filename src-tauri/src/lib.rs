@@ -210,6 +210,15 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The window's theme for « Thème »: none is the system's.
+fn window_theme(choice: model::ThemeChoice) -> Option<tauri::Theme> {
+    match choice {
+        model::ThemeChoice::System => None,
+        model::ThemeChoice::Dark => Some(tauri::Theme::Dark),
+        model::ThemeChoice::Light => Some(tauri::Theme::Light),
+    }
+}
+
 /// The main window, made from the config's (`create: false` there: the guard of `navigation` can
 /// only be put on it as it is made), hidden until `setup` (in `run`) shows it.
 fn build_window(app: &tauri::App) -> tauri::Result<()> {
@@ -349,6 +358,16 @@ pub fn run() {
                 };
                 if let Err(e) = w.set_zoom(f64::from(zoom) / 100.0) {
                     log::warn!("zoom not set: {e}");
+                }
+                // « Thème », before the window shows: born in it (the title bar of macOS, the
+                // corners and shadow of Windows 11, what shows before the page); the page follows
+                // its changes (lib/appearance.ts).
+                if let Err(e) = w.set_theme(window_theme(core.settings.read().theme)) {
+                    log::warn!("theme not set: {e}");
+                }
+                if w.theme().is_ok_and(|t| t == tauri::Theme::Light) {
+                    // The light frame, where the config has the dark one.
+                    let _ = w.set_background_color(Some(tauri::window::Color(0xf0, 0xf1, 0xf3, 0xff)));
                 }
                 match window {
                     _ if paths::hidden_window() => notify::show_out_of_sight(&w),

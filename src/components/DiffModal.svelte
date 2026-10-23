@@ -73,7 +73,7 @@
       <span class="t">{title}</span>
       <span class="n mono">{t('common.count.files', { count: files.length })}</span>
       <div style="flex:1"></div>
-      <div class="segmented">
+      <div class="segmented small">
         <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
         <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
       </div>

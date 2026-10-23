@@ -179,14 +179,15 @@ test('the tooltip of the resources is the app’s: its look, one agent a line, a
   await expect(tip).toHaveText(/^Processus des agents en cours[^\n]*\n[^\n]+ : \d+ Mo · \d+ %$/);
   const look = await tip.evaluate((el) => {
     const probe = document.createElement('div');
-    probe.style.background = 'var(--elev)';
+    // The relief of what floats (the 2.0 design).
+    probe.style.background = 'var(--raise-2)';
     document.body.append(probe);
-    const elev = getComputedStyle(probe).backgroundColor;
+    const raise = getComputedStyle(probe).backgroundColor;
     probe.remove();
     const s = getComputedStyle(el);
-    return { background: s.backgroundColor, elev, whiteSpace: s.whiteSpace, position: s.position };
+    return { background: s.backgroundColor, raise, whiteSpace: s.whiteSpace, position: s.position };
   });
-  expect(look).toEqual({ background: look.elev, elev: look.elev, whiteSpace: 'pre-line', position: 'fixed' });
+  expect(look).toEqual({ background: look.raise, raise: look.raise, whiteSpace: 'pre-line', position: 'fixed' });
   const [box, item] = [(await tip.boundingBox())!, (await procs.boundingBox())!];
   expect(box.y + box.height).toBeLessThanOrEqual(item.y);
   expect(box.x).toBeGreaterThanOrEqual(8);
