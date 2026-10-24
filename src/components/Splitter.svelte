@@ -188,12 +188,12 @@
       transition: opacity 0.12s;
     }
   }
-  /* Under a block (the plan of a conversation): a band across it, with a grip of 36 x 3 px in its middle. Half of it
-     overlaps what follows, so the block keeps its size. */
+  /* Under a block (the plan of a conversation): a band across it, with a grip of 28 x 3 px in its middle, as the 2.0
+     design draws it (`.grip`). Most of it overlaps what follows, so the block keeps its size. */
   .splitter.row {
     width: auto;
     height: 10px;
-    margin-bottom: -5px;
+    margin-bottom: -6px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -205,21 +205,21 @@
   }
   .splitter.row::after {
     position: static;
-    width: 36px;
+    width: 28px;
     height: 3px;
     border-radius: 2px;
-    background: var(--line2);
+    background: rgba(var(--fg-rgb), 0.12);
     opacity: 1;
   }
-  .splitter.row:hover {
-    background: color-mix(in oklch, var(--accent) 12%, transparent);
+  .splitter.row:hover::after {
+    background: rgba(var(--fg-rgb), 0.28);
   }
   .splitter.row:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
   }
   .splitter.row:focus-visible::after,
   .splitter.row.dragging::after {
-    background: var(--accent);
+    background: var(--p-ink);
   }
 </style>

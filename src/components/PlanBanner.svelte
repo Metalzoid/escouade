@@ -8,6 +8,7 @@
   import { clamp } from '../lib/resize';
   import { app } from '../lib/state.svelte';
   import type { Agent } from '../lib/types';
+  import Icon from './Icon.svelte';
   import Splitter from './Splitter.svelte';
   import { tip } from '../lib/tip';
 
@@ -17,8 +18,9 @@
   const uid = $props.id();
   const listId = `plan-list-${uid}`;
 
-  /** A window this tall opens the list of a plan whose banner the reader has not folded or unfolded. */
-  const TALL = 800;
+  /** A window this tall opens the list of a plan whose banner the reader has not folded or unfolded: the preview's small
+   *  window (1028 × 779) has it open. */
+  const TALL = 760;
   /** Dots of subagents drawn in the stack; the count says the rest, and the menu of the stack lists them all. */
   const DOTS = 6;
   /** After the reader scrolled the list, it is left alone this long. */
@@ -143,8 +145,9 @@
     );
   /** How far a task is, or the word for a task under way that nothing measures. */
   const progress = (row: PlanRow) => (row.percent === null ? stateWord(row.state) : t('plan.percent', { percent: row.percent }));
-  /** The segment of a task: whole for a task done, to do, or not measured (faint); as far as it is otherwise. */
-  const segWidth = (row: PlanRow) => (row.state === 'run' || row.state === 'block' ? (row.percent ?? 100) : 100);
+  /** The share of its segment a task fills: whole once done, none to do, as far as it is under way (whole but faint when
+   *  nothing measures it). */
+  const segShare = (row: PlanRow) => (row.state === 'done' ? 1 : row.state === 'todo' ? 0 : (row.percent ?? 100) / 100);
   const titleTip = $derived(view ? (view.file ? `${view.title}\n${t('plan.source', { file: view.file })}` : view.title) : '');
 
   /**
@@ -175,8 +178,8 @@
 
 <svelte:window onresize={() => (tall = window.innerHeight >= TALL)} />
 
-<!-- The subagents running: a stack of a dot for each, in one button, and their count. The button opens the conversation of the
-     subagent in place of the agent's, or a menu of them to pick one when several run. The dots are drawings. -->
+<!-- The subagents running: a dot for each, breathing, in one button, and their count. The button opens the conversation of
+     the subagent in place of the agent's, or a menu of them to pick one when several run. The dots are drawings. -->
 {#snippet subs()}
   {#if view && view.subsRunning > 0}
     {@const dots = view.subDots}
@@ -203,7 +206,7 @@
       {#if hasTasks}
         <!-- The subagents are beside the button that folds the banner, not in it (no button in a button): the button
              spans the row, they sit above it, where they stood inside it. -->
-        <div class="head tasks" class:has-subs={view.subsRunning > 0}>
+        <div class="head tasks">
           <button
             type="button"
             class="fold"
@@ -214,9 +217,9 @@
           >
             <span class="badge">{t('plan.badge')}</span>
             <span class="title" use:tip={titleTip}>{view.title}</span>
-            <span class="count mono">{t('plan.tasks', { done: view.done, count: view.total })}</span>
-            <span class="pct mono">{t('plan.percent', { percent: view.percent })}</span>
-            <span class="chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
+            <span class="count">{t('plan.tasks', { done: view.done, count: view.total })}</span>
+            <span class="pct">{t('plan.percent', { percent: view.percent })}</span>
+            <span class="chev" class:closed={!open}><Icon name="down" size={14} /></span>
           </button>
           {@render subs()}
         </div>
@@ -231,12 +234,7 @@
         >
           {#each view.rows as row (row.n)}
             <span class="seg {row.state}" aria-hidden="true"
-              ><span
-                class="fill"
-                class:faint={row.state === 'todo'}
-                class:unmeasured={row.percent === null && row.state !== 'todo'}
-                style:width="{segWidth(row)}%"
-              ></span></span
+              ><span class="fill" class:unmeasured={row.percent === null && row.state !== 'todo'} style:--w={segShare(row)}></span></span
             >
           {/each}
         </div>
@@ -255,17 +253,17 @@
           >
             {#each view.rows as row (row.n)}
               <li class="row {row.state}" class:focus={row.focus} data-plan-task={row.n}>
-                <span class="n mono">{row.n}</span>
+                <span class="n">{row.n}</span>
                 <span class="ico" use:tip={stateWord(row.state)}>
                   <span class="sr">{stateWord(row.state)}</span>
                   {#if row.state === 'done'}
-                    <span class="check" aria-hidden="true">✓</span>
+                    <span class="check" aria-hidden="true"><Icon name="check-c" size={14} /></span>
                   {:else if row.state === 'run'}
                     <span class="spin" aria-hidden="true"></span>
                   {:else if row.state === 'block'}
-                    <span class="bang" aria-hidden="true">!</span>
+                    <span class="hold" aria-hidden="true"></span>
                   {:else}
-                    <span class="dash" aria-hidden="true"></span>
+                    <span class="ring" aria-hidden="true"></span>
                   {/if}
                 </span>
                 <span class="what">
@@ -275,24 +273,26 @@
                       {@const sub = row.sub}
                       <!-- Its conversation opens in place of the agent's. -->
                       <button
-                        class="subtag mono"
+                        type="button"
+                        class="subtag"
                         data-open-sub={sub.id}
                         data-open-from="task"
                         use:tip={t('subagents.openRow', { name: sub.name })}
                         onclick={() => app.openSubagent(agent.id, sub.id)}
-                        >{t('plan.subOn', { name: sub.name })}{#if sub.model}<span class="model">{modelLabel(sub.model, app.models)}</span
+                        ><Icon name="sub" size={12} /><span class="sname">{sub.name}</span>{#if sub.model}<span class="model"
+                            >{modelLabel(sub.model, app.models)}</span
                           >{/if}</button
                       >
                     {/if}
                     {#if row.step}<span class="step" use:tip={{ text: row.step, cut: true }}>{row.step}</span>{/if}
                     {#if row.state === 'block'}<span class="wait">{t('plan.waiting')}</span>{/if}
-                    {#if row.after}<span class="after mono">{t('plan.after', { list: row.after })}</span>{/if}
+                    {#if row.after}<span class="after">{t('plan.after', { list: row.after })}</span>{/if}
                   </span>
                 </span>
                 <span class="rbar" aria-hidden="true"
-                  ><span class="rfill" class:unmeasured={row.percent === null} style:width="{row.percent ?? 100}%"></span></span
+                  ><span class="rfill" class:unmeasured={row.percent === null} style:--w={(row.percent ?? 100) / 100}></span></span
                 >
-                <span class="rpct mono" use:tip={row.steps ? t('plan.stepsOf', { done: row.steps[0], count: row.steps[1] }) : undefined}
+                <span class="rpct" use:tip={row.steps ? t('plan.stepsOf', { done: row.steps[0], count: row.steps[1] }) : undefined}
                   >{progress(row)}</span
                 >
               </li>
@@ -326,6 +326,8 @@
 {/if}
 
 <style>
+  /* The banner of the 2.0 design (design/app-redesign/index.html, `.plan-box`): under the header, across the
+     conversation, its rows in the thread's column of 780 px. */
   .plan {
     position: relative;
     flex: 0 1 auto;
@@ -333,34 +335,35 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--line);
-    background: var(--panel);
+    background: rgba(var(--fg-rgb), 0.012);
   }
+  /* A column that gives up the list's height first when the window is short. */
   .inner {
-    /* The rows ask for less room when the conversation is narrow (half the window, in the split layout). */
-    container-type: inline-size;
-    width: 100%;
-    max-width: 780px;
-    min-height: 0;
-    margin: 0 auto;
-    padding: 12px 28px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: min(780px, 100% - 64px);
+    min-height: 0;
+    margin: 0 auto;
+    padding: 12px 0 10px;
   }
   .head {
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    min-width: 0;
+    font-size: 12.5px;
+    white-space: nowrap;
   }
-  /* With tasks: a grid, so that the subagents sit between the title and the count while the button that folds the banner
-     (the whole row, in the subgrid below) holds everything else. A named line is a column; without subagents the
-     count's line is the subagents' (no column, no gap). */
+  /* With tasks: a grid, so that the subagents sit right after the title while the button that folds the banner (the
+     whole row, in the subgrid below) holds everything else; the count, the share and the chevron keep to the right. */
   .head.tasks {
     display: grid;
-    grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs] auto [count] auto [pct] auto [chev] auto;
-  }
-  .head.tasks:not(.has-subs) {
-    grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs count] auto [pct] auto [chev] auto;
+    grid-template-columns:
+      [badge] auto [title] minmax(0, max-content) [subs] auto [room] minmax(0, 1fr)
+      [count] auto [pct] auto [chev] auto;
+    column-gap: 10px;
   }
   .fold {
     grid-column: 1 / -1;
@@ -368,6 +371,7 @@
     display: grid;
     grid-template-columns: subgrid;
     align-items: center;
+    min-width: 0;
     padding: 0;
     border: none;
     background: transparent;
@@ -396,51 +400,46 @@
     grid-row: 1;
   }
   .fold:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: 3px;
-    border-radius: 3px;
+    border-radius: 4px;
   }
   .badge {
     flex: none;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 3px 7px;
-    border-radius: 3px;
-    background: var(--accent);
-    color: var(--accent-ink);
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: color-mix(in oklch, var(--p) 18%, transparent);
+    color: var(--p-ink);
+    font-size: 11.5px;
+    font-weight: 650;
   }
   .title {
-    flex: 1;
     min-width: 0;
-    font-size: 13.5px;
-    font-weight: 700;
     overflow: hidden;
+    color: var(--text);
+    font-weight: 600;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .subs {
     flex: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11.5px;
     color: var(--muted);
-    white-space: nowrap;
   }
-  /* One button for the whole stack: it opens the conversation of the subagent, or a menu of them. Its target is 24 px
-     square at least (WCAG 2.5.8); the circles are drawn in it as they were when each was a button, 16 px each over the
-     4 px of the one before, and the margins give back the room the padding takes, so that the circles and the count keep
-     their place. */
+  /* One button for all the dots: it opens the conversation of the subagent, or a menu of them. Its target is 24 px
+     square at least (WCAG 2.5.8); its margins give back the room its padding takes, so the dots keep their place. */
   .stack {
     flex: none;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     min-width: 24px;
     min-height: 24px;
-    margin: -4px -4px -4px -8px;
-    padding: 4px;
+    margin: -8px;
+    padding: 8px;
     border: none;
     border-radius: 12px;
     background: transparent;
@@ -448,93 +447,102 @@
   }
   .dot {
     flex: none;
-    width: 16px;
-    height: 16px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    border: 2px solid var(--panel);
-    background: var(--accent-soft);
+    background: var(--p-ink);
+    box-shadow: 0 0 0 2px var(--panel);
+    animation: breathe 1.8s ease-in-out infinite;
   }
   .dot + .dot {
-    margin-left: -4px;
+    margin-left: -2px;
   }
   .stack:hover .dot,
   .stack:focus-visible .dot {
-    background: var(--accent);
+    background: var(--text);
   }
   .stack:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 0;
+    outline: 2px solid var(--p-ink);
+    outline-offset: -4px;
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.45;
+    }
   }
   .count {
-    flex: none;
-    font-size: 11.5px;
     color: var(--muted);
-    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   .pct {
-    flex: none;
-    min-width: 46px;
-    text-align: right;
-    font-size: 14px;
+    min-width: 34px;
+    color: var(--soft);
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
   .chev {
-    flex: none;
-    font-size: 10px;
-    color: var(--dim);
+    color: var(--muted);
+    transition: transform 0.25s var(--ease);
+  }
+  .chev.closed {
+    transform: rotate(-90deg);
   }
 
   /* The bar: one segment for each task. */
   .segs {
+    flex: none;
     display: flex;
     gap: 3px;
-    height: 6px;
   }
   .seg {
     flex: 1;
+    height: 4px;
     border-radius: 2px;
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.09);
     overflow: hidden;
   }
+  /* A fill as far as the task is (`--w`, from 0 to 1): grown by a transform, which costs no layout. */
   .fill,
   .rfill {
     display: block;
     height: 100%;
+    border-radius: 2px;
     background: var(--st);
-    transition: width 1s linear;
+    transform: scaleX(var(--w, 0));
+    transform-origin: left;
+    transition: transform 1s linear;
   }
   /* The colour of a state, for its segment, its bar and its figure. */
   .done {
-    --st: var(--ok);
+    --st: var(--soft);
   }
   .run {
-    --st: var(--accent);
+    --st: var(--p-ink);
   }
   .block {
     --st: var(--wait);
   }
   .todo {
-    --st: var(--dim);
+    --st: transparent;
   }
-  /* A task under way that nothing measures is whole but faint, a task to do fainter: no figure is made up. */
+  /* A task under way that nothing measures is whole but faint: no figure is made up. */
   .unmeasured {
     opacity: 0.35;
-  }
-  .faint {
-    opacity: 0.25;
   }
 
   /* The list. */
   .list {
     position: relative;
     min-height: 0;
-    max-height: min(300px, 28vh);
-    margin: 2px -10px 0;
+    max-height: 232px;
+    margin: 2px -8px 0;
     padding: 0;
     list-style: none;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
+    display: grid;
+    align-content: start;
+    gap: 1px;
+    overflow: auto;
     overscroll-behavior: contain;
     scroll-behavior: smooth;
   }
@@ -542,153 +550,161 @@
     max-height: none;
   }
   .row {
-    flex: none;
     display: grid;
-    grid-template-columns: 22px 20px minmax(0, 1fr) 150px 56px;
+    grid-template-columns: 20px 18px minmax(0, 1fr) 56px 68px;
     align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
-    border-radius: var(--r-sm);
+    gap: 8px;
+    min-height: 30px;
+    padding: 0 8px;
+    border-radius: 7px;
+    font-size: 12.5px;
   }
   .row.focus {
-    background: color-mix(in oklch, var(--accent) 10%, transparent);
-    box-shadow: inset 2px 0 0 var(--accent);
-  }
-  .row:hover {
-    background: var(--elev);
+    background: rgba(var(--fg-rgb), 0.045);
   }
   .n {
-    font-size: 10.5px;
-    /* The rank is what “après 03” refers to: legible, where the design's dimmer colour is not. */
-    color: var(--muted);
+    color: var(--dim);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
   .ico {
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .check,
-  .bang {
+    display: grid;
+    place-items: center;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 800;
   }
   .check {
-    background: var(--ok);
-    color: var(--bg);
+    display: grid;
+    color: var(--add);
   }
-  .bang {
-    background: var(--wait);
-    color: #2a1f05;
+  .ring,
+  .hold {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--ring);
+  }
+  /* Blocked: an amber ring and its middle, the agent's question waits. */
+  .hold {
+    background: radial-gradient(circle, var(--wait) 0 2px, transparent 2.5px);
+    box-shadow: inset 0 0 0 1.5px var(--wait);
   }
   .spin {
-    display: inline-block;
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid var(--accent-soft);
-    border-top-color: var(--accent);
-    animation: ccSpin 0.9s linear infinite;
+    border: 1.75px solid color-mix(in oklch, var(--p) 30%, transparent);
+    border-top-color: var(--p-ink);
+    animation: spin 0.9s linear infinite;
   }
-  .dash {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 1.5px dashed var(--dim);
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .what {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .rt {
-    font-size: 13px;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .row.todo .rt {
-    color: var(--muted);
-  }
-  .meta {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
-    font-size: 11px;
+    white-space: nowrap;
+  }
+  .rt {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--soft);
+    text-overflow: ellipsis;
+  }
+  .row.done .rt {
     color: var(--muted);
+  }
+  .row.run .rt,
+  .row.block .rt {
+    color: var(--text);
+    font-weight: 550;
+  }
+  .meta {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
   }
   .meta:empty {
     display: none;
   }
   .subtag {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    display: inline-flex;
     flex: none;
-    max-width: 60%;
-    padding: 1px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--text);
-    font-size: 10.5px;
-    white-space: nowrap;
+    align-items: center;
+    gap: 6px;
+    max-width: 260px;
+    height: 20px;
+    padding: 0 7px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--soft);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .subtag :global(.icon) {
+    margin-right: -3px;
+  }
+  .sname {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* A button: it opens the subagent's conversation. */
-  button.subtag {
-    border: 1px solid transparent;
-    font-family: var(--mono);
-    cursor: pointer;
+  .subtag:hover {
+    background: rgba(var(--fg-rgb), 0.09);
+    color: var(--text);
   }
-  button.subtag:hover {
-    border-color: var(--accent);
-  }
-  button.subtag:focus-visible {
-    outline: 2px solid var(--accent);
+  .subtag:focus-visible {
+    outline: 2px solid var(--p-ink);
     outline-offset: 1px;
   }
   .model {
+    flex: none;
     color: var(--muted);
   }
   .step {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .wait {
     color: var(--wait);
   }
   .after {
-    font-size: 10.5px;
-    color: var(--muted);
-    white-space: nowrap;
+    color: var(--dim);
+    font-size: 11.5px;
   }
   .rbar {
-    height: 4px;
+    height: 3px;
     border-radius: 2px;
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.08);
     overflow: hidden;
   }
+  .row.todo .rbar {
+    visibility: hidden;
+  }
   .rpct {
-    font-size: 11px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
     text-align: right;
-    color: var(--st);
     white-space: nowrap;
   }
-  .row.todo .rpct {
-    color: var(--muted);
+  .row.done .rpct {
+    color: var(--dim);
+  }
+  .row.block .rpct {
+    color: var(--wait);
   }
   /* Read by screen readers only. */
   .sr {
@@ -698,26 +714,39 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
-  @container (max-width: 560px) {
-    .row {
-      grid-template-columns: 22px 20px minmax(0, 1fr) 56px;
-    }
-    .rbar,
-    .head:not(.static) .subs {
+  /* Narrower, as the conversation's header (its container `conv`): the subagents' count, then the step, then the tag of the
+     subagent, the bars of the rows and the count of tasks give their room to the titles. */
+  @container conv (max-width: 1000px) {
+    .head.tasks .subs {
       display: none;
     }
-    /* The subagents' column goes with them. */
-    .head.tasks {
-      grid-template-columns: [badge] auto [title] minmax(0, 1fr) [subs count] auto [pct] auto [chev] auto;
+  }
+  @container conv (max-width: 760px) {
+    .meta .step {
+      display: none;
+    }
+  }
+  @container conv (max-width: 580px) {
+    .subtag,
+    .rbar,
+    .count {
+      display: none;
+    }
+    .row {
+      grid-template-columns: 20px 18px minmax(0, 1fr) 68px;
     }
   }
   @media (prefers-reduced-motion: reduce) {
     .spin {
       animation: none;
-      border-color: var(--accent);
+      border-color: var(--p-ink);
+    }
+    .dot {
+      animation: none;
     }
     .fill,
-    .rfill {
+    .rfill,
+    .chev {
       transition: none;
     }
     .list {

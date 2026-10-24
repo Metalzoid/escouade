@@ -60,6 +60,7 @@ const REDRAWN = {
     'src/components/SubagentView.svelte',
     'src/components/TaskView.svelte',
   ],
+  'lot 5 (ESC-77)': ['src/components/PlanBanner.svelte'],
 };
 
 /**

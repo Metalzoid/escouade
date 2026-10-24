@@ -6063,7 +6063,8 @@
       .log .res.error {
         color: var(--del);
       }
-      .closed {
+      /* A closed project of Settings › Projects (not `.closed`: the folded plan is `.plan-box.closed`). */
+      .closed-row {
         display: grid;
         grid-template-columns: 10px minmax(0, 1fr) auto auto;
         align-items: center;
@@ -6071,16 +6072,16 @@
         padding: 10px 0;
         border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
       }
-      .closed i {
+      .closed-row i {
         width: 8px;
         height: 8px;
         border-radius: 3px;
       }
-      .closed .cn {
+      .closed-row .cn {
         display: grid;
         min-width: 0;
       }
-      .closed .cn span {
+      .closed-row .cn span {
         color: var(--muted);
         font-size: 12px;
       }
@@ -9329,8 +9330,8 @@ npx prisma generate --schema api/prisma/schema.prisma</pre>
               <section class="sg">
                 <h2>Projets fermés</h2>
                 <p class="note">Leur historique est gardé. Rouvrir le rend tel qu’il était ; l’effacer le supprime, réservations de comptes comprises.</p>
-                <div class="closed"><i style="background: oklch(0.72 0.12 200)"></i><span class="cn"><b>mobile-app</b><span>12 agents, 9 tickets · dernière activité le 03/10 · <span class="mono">~/dev/mobile-app</span></span></span><button class="btn">Rouvrir</button><button class="btn danger">Effacer…</button></div>
-                <div class="closed"><i style="background: oklch(0.72 0.12 25)"></i><span class="cn"><b>landing-2025</b><span>3 agents, aucun ticket · le 18/08 · dossier introuvable</span></span><button class="btn" disabled style="opacity: 0.45">Rouvrir</button><button class="btn danger">Effacer…</button></div>
+                <div class="closed-row"><i style="background: oklch(0.72 0.12 200)"></i><span class="cn"><b>mobile-app</b><span>12 agents, 9 tickets · dernière activité le 03/10 · <span class="mono">~/dev/mobile-app</span></span></span><button class="btn">Rouvrir</button><button class="btn danger">Effacer…</button></div>
+                <div class="closed-row"><i style="background: oklch(0.72 0.12 25)"></i><span class="cn"><b>landing-2025</b><span>3 agents, aucun ticket · le 18/08 · dossier introuvable</span></span><button class="btn" disabled style="opacity: 0.45">Rouvrir</button><button class="btn danger">Effacer…</button></div>
               </section>
             </div>
 

@@ -12,6 +12,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les projets passent dans une barre à gauche, comme les espaces de travail de Slack : une tuile par projet, avec ses agents qui attendent et ceux qui travaillent, que l’on glisse ou déplace par Alt+↑ et Alt+↓. La barre de titre garde le nom du projet affiché et la recherche ; la barre d’état montre les quotas de chaque harness au travail.
 - La liste des agents est redessinée : l’agent qui attend passe en tête avec sa question, à laquelle tu réponds d’un clic ou par 1, 2… sans quitter la conversation ouverte (plusieurs questions et les autorisations aussi ; Ctrl+J met le focus sur sa carte), et chaque carte dit ce que fait l’agent (« Modifie src/auth.ts »), quel que soit son harness, ce qu’il a changé, ou ce qui tourne encore une fois son tour fini. La flèche de « Nouvel agent », ou Ctrl+Maj+N, ouvre le menu des harness, numérotés.
 - La conversation est redessinée : un en-tête avec l’état en pastille et les chiffres de l’agent, ses actions sous « … », les appels d’outils d’un tour en un seul fil et un champ de message flottant où se font la dictée et le dépôt de fichiers. Un message refusé faute de compte le dit dans la conversation, avec « Ajouter un compte… » à portée de clic.
+- Le bandeau « Plan » est redessiné dans la colonne de la conversation : une case par tâche, puis chaque tâche avec son état, le sous-agent qui y travaille et le modèle sur lequel il tourne vraiment, quel que soit son harness, ce qu’il fait et ce qu’elle attend.
 
 ### Corrections
 

@@ -12,7 +12,6 @@ export default defineZone('plan', {
   source: 'Plan: {file}',
   list: 'Plan tasks',
   state: { done: 'Done', inProgress: 'In progress', todo: 'To do', blocked: 'Blocked' },
-  subOn: '↳ {name}',
   after: 'after {list}',
   waiting: 'Waiting for your answer',
   stepsOf: { one: '{done}/{count} step', other: '{done}/{count} steps' },

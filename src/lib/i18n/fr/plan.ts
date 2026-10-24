@@ -19,8 +19,6 @@ export default {
   list: 'Tâches du plan',
   /** The state of a task, said in words next to its icon. */
   state: { done: 'Terminé', inProgress: 'En cours', todo: 'À faire', blocked: 'Bloqué' },
-  /** « ↳ visuel-produit »: the subagent working on a task. The model follows, in its own tag. */
-  subOn: '↳ {name}',
   /** « après 03, 05 »: the ranks of the tasks a task to do waits for. */
   after: 'après {list}',
   /** What a blocked task says: the agent asked a question or a permission. */

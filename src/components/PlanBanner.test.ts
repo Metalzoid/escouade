@@ -387,10 +387,13 @@ describe('PlanBanner', () => {
       expect(head).toHaveAttribute('aria-expanded', 'false');
       expect(document.querySelector('.list')).toBeNull();
       expect(screen.queryByRole('separator')).toBeNull();
-      expect(within(head).getByText('▸')).toHaveAttribute('aria-hidden', 'true');
+      // The chevron is the icon « down », turned a quarter while the list is folded; it is not read.
+      const chev = head.querySelector('.chev')!;
+      expect(chev.querySelector('svg[data-icon="down"]')).toHaveAttribute('aria-hidden', 'true');
+      expect(chev).toHaveClass('closed');
       await userEvent.click(head);
       expect(head).toHaveAttribute('aria-expanded', 'true');
-      expect(within(head).getByText('▾')).toBeInTheDocument();
+      expect(head.querySelector('.chev')).not.toHaveClass('closed');
     });
 
     it('is reached and used from the keyboard', async () => {
@@ -405,12 +408,12 @@ describe('PlanBanner', () => {
   });
 
   describe('open or folded', () => {
-    it('is open when the window is 800 px tall, folded under', () => {
-      setWindowHeight(800);
+    it('is open when the window is 760 px tall (the preview’s small window is 779), folded under', () => {
+      setWindowHeight(760);
       const { unmount } = show(agentOf(FIVE()));
       expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       unmount();
-      setWindowHeight(799);
+      setWindowHeight(759);
       show(agentOf(FIVE()));
       expect(toggle()).toHaveAttribute('aria-expanded', 'false');
       expect(document.querySelector('.list')).toBeNull();
@@ -470,15 +473,17 @@ describe('PlanBanner', () => {
       }));
       // The first task under way is blocked: the agent waits for an answer.
       expect(fills.map((f) => f.state)).toEqual(['done', 'block', 'run', 'todo']);
-      expect(fills[0].fill.style.width).toBe('100%');
+      // The share filled is `--w`, from 0 to 1 (a transform grows it).
+      const share = (el: HTMLElement) => el.style.getPropertyValue('--w');
+      expect(share(fills[0].fill)).toBe('1');
       // Measured: as far as it is. Not measured: whole, but faint.
-      expect(fills[1].fill.style.width).toBe('25%');
+      expect(share(fills[1].fill)).toBe('0.25');
       expect(fills[1].fill).not.toHaveClass('unmeasured');
-      expect(fills[2].fill.style.width).toBe('100%');
+      expect(share(fills[2].fill)).toBe('1');
       expect(fills[2].fill).toHaveClass('unmeasured');
-      // To do: faint and whole.
-      expect(fills[3].fill.style.width).toBe('100%');
-      expect(fills[3].fill).toHaveClass('faint');
+      // To do: empty, as the preview draws it.
+      expect(share(fills[3].fill)).toBe('0');
+      expect(fills[3].fill).not.toHaveClass('unmeasured');
     });
 
     it('moves with the plan', async () => {
@@ -517,10 +522,12 @@ describe('PlanBanner', () => {
         const title = row.querySelector('.rt')!;
         expect(word.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       }
-      expect(done.querySelector('.ico')).toHaveTextContent('✓');
-      expect(blocked.querySelector('.ico')).toHaveTextContent('!');
+      // Drawn, not written: the icon « check-c », a spinner, an amber ring, an empty ring.
+      expect(done.querySelector('.ico svg[data-icon="check-c"]')).not.toBeNull();
+      expect(blocked.querySelector('.ico .hold')).not.toBeNull();
       expect(run.querySelector('.ico .spin')).not.toBeNull();
-      expect(todo.querySelector('.ico .dash')).not.toBeNull();
+      expect(todo.querySelector('.ico .ring')).not.toBeNull();
+      for (const row of rows()) expect(row.querySelector('.ico [aria-hidden="true"]')!.textContent).toBe('');
       // The drawings are not read: the words are.
       expect(done.querySelector('.ico [aria-hidden="true"]')).not.toBeNull();
       expect(run.querySelector('.ico .spin')).toHaveAttribute('aria-hidden', 'true');
@@ -538,7 +545,7 @@ describe('PlanBanner', () => {
       expect(rows()[1].querySelector('.rpct')).toHaveAttribute('data-tip', '2/3 étapes');
       // The bar of the row: as far as it is, or faint and whole.
       const bars = rows().map((r) => r.querySelector<HTMLElement>('.rfill')!);
-      expect(bars.map((b) => b.style.width)).toEqual(['100%', '67%', '100%', '0%']);
+      expect(bars.map((b) => b.style.getPropertyValue('--w'))).toEqual(['1', '0.67', '1', '0']);
       expect(bars[2]).toHaveClass('unmeasured');
     });
 
@@ -581,7 +588,9 @@ describe('PlanBanner', () => {
       show(a);
       const [first, second] = rows();
       const tag = first.querySelector('.subtag')!;
-      expect(tag).toHaveTextContent('↳ visuel-produit');
+      // The icon « sub » says it is a subagent; its name and its model follow.
+      expect(tag.querySelector('svg[data-icon="sub"]')).not.toBeNull();
+      expect(tag.querySelector('.sname')).toHaveTextContent('visuel-produit');
       expect(tag.querySelector('.model')).toHaveTextContent('Sonnet');
       expect(first.querySelector('.step')).toHaveTextContent('Édite src/Hero.tsx');
       // Another task has no tag: it says what the task itself says it does.
@@ -593,7 +602,7 @@ describe('PlanBanner', () => {
       const a = agentOf([task('1', 'inProgress')], { id: 'a1' }, { agents: [sub('s1', { title: 'visuel-produit', planTask: '1' })] });
       show(a);
       app.ui.selectedAgent = { p1: 'a1' };
-      const tag = screen.getByRole('button', { name: /↳ visuel-produit/ });
+      const tag = screen.getByRole('button', { name: /^visuel-produit/ });
       expect(tag).toHaveAttribute('data-tip', 'Ouvrir la conversation du sous-agent visuel-produit');
       await userEvent.click(tag);
       expect(app.subView.a1).toBe('s1');
@@ -607,6 +616,24 @@ describe('PlanBanner', () => {
       expect(rows()[0].querySelector('.subtag .model')).toHaveTextContent('Haiku 4.5');
     });
 
+    it('names the model a subagent of each harness runs on, as its messages tell it', () => {
+      // The model of a subagent is the one its messages come from (1.8.9), whichever harness runs it: the tag says it as
+      // the subagent's view (« Modèle », #subagent) does.
+      const models = ['claude-haiku-5-5', 'gpt-5.5-codex', 'anthropic/claude-sonnet-5-5', 'gpt-5.4'];
+      const a = agentOf(
+        models.map((_, i) => task(String(i + 1), 'inProgress')),
+        {},
+        { agents: models.map((model, i) => sub(`s${i}`, { model, planTask: String(i + 1) })) },
+      );
+      show(a);
+      expect(rows().map((r) => r.querySelector('.subtag .model')?.textContent)).toEqual([
+        'Haiku 5.5',
+        'gpt-5.5-codex',
+        'Sonnet 5.5',
+        'gpt-5.4',
+      ]);
+    });
+
     it('leaves the model out when the call named none, and a subagent that ended', () => {
       const a = agentOf(
         [task('1', 'inProgress'), task('2', 'inProgress')],
@@ -616,7 +643,7 @@ describe('PlanBanner', () => {
         },
       );
       show(a);
-      expect(rows()[0].querySelector('.subtag')).toHaveTextContent('↳ sous-agent s1');
+      expect(rows()[0].querySelector('.subtag')).toHaveTextContent('sous-agent s1');
       expect(rows()[0].querySelector('.subtag .model')).toBeNull();
       expect(rows()[1].querySelector('.subtag')).toBeNull();
     });
@@ -644,7 +671,7 @@ describe('PlanBanner', () => {
       expect(within(toggle()).getByText(bad)).toBeInTheDocument();
       expect(rows()[0].querySelector('.rt')).toHaveTextContent(bad);
       expect(rows()[0].querySelector('.step')).toHaveTextContent(bad);
-      expect(rows()[0].querySelector('.subtag')).toHaveTextContent(`↳ ${bad}`);
+      expect(rows()[0].querySelector('.subtag .sname')).toHaveTextContent(bad);
       expect(document.querySelector('.subs > button')).toHaveAttribute('data-tip', bad);
       expect(document.querySelector('.subs > button')).toHaveAccessibleName(`Ouvrir la conversation du sous-agent ${bad}`);
     });
@@ -989,7 +1016,7 @@ describe('PlanBanner', () => {
       const [, , blocked, , todo] = rows();
       expect(blocked.querySelector('.ico .sr')).toHaveTextContent('Blocked');
       expect(blocked).toHaveTextContent('Waiting for your answer');
-      expect(blocked.querySelector('.subtag')).toHaveTextContent('↳ sous-agent s1');
+      expect(blocked.querySelector('.subtag')).toHaveTextContent('sous-agent s1');
       expect(todo.querySelector('.ico .sr')).toHaveTextContent('To do');
       expect(todo.querySelector('.after')).toHaveTextContent('after 04');
       expect(rows()[0].querySelector('.ico .sr')).toHaveTextContent('Done');
@@ -1037,17 +1064,26 @@ describe('PlanBanner', () => {
   });
 
   describe('in a narrow conversation', () => {
-    // jsdom applies no container query: the stylesheet is read for what it hides under 560 px.
+    // jsdom applies no container query: the stylesheet is read for what it hides as the conversation (`conv`) narrows,
+    // at the preview's widths.
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'PlanBanner.svelte'), 'utf8');
-    const narrow = source.slice(source.indexOf('@container (max-width: 560px)'), source.indexOf('@media (prefers-reduced-motion: reduce)'));
+    const under = (px: number) => {
+      const from = source.indexOf(`@container conv (max-width: ${px}px)`);
+      expect(from).toBeGreaterThan(-1);
+      const block = source.slice(from, source.indexOf('\n  }\n', from));
+      return (block.match(/[^{}]+(?=\{)/g) ?? []).slice(1).flatMap((list) => list.split(',').map((s) => s.trim()));
+    };
 
-    it('hides the bar of a row and the count of subagents of a list, not the one of the banner that has no list', () => {
-      expect(narrow).toContain('.rbar');
+    it('hides the count of subagents of a list under 1000 px, not the one of the banner that has no list', () => {
       // The count is hidden only in the head of a banner that has a list (the title needs the room there); in the banner of
       // subagents alone it is all there is to read.
-      expect(narrow).toMatch(/\.head:not\(\.static\) \.subs/);
-      const selectors = (narrow.match(/[^{}]+(?=\{)/g) ?? []).flatMap((list) => list.split(',').map((s) => s.trim()));
-      expect(selectors).not.toContain('.subs');
+      expect(under(1000)).toEqual(['.head.tasks .subs']);
+    });
+
+    it('hides the step under 760 px, then the tag of the subagent, the bars of the rows and the count of tasks under 580', () => {
+      expect(under(760)).toEqual(['.meta .step']);
+      expect(under(580)).toEqual(expect.arrayContaining(['.subtag', '.rbar', '.count', '.row']));
+      expect(under(580)).not.toContain('.subs');
     });
   });
 
@@ -1059,13 +1095,15 @@ describe('PlanBanner', () => {
     it('stops the spinner, the growing of the bars and the smooth scrolling for a reader who asked for less motion', () => {
       expect(source).toContain('@media (prefers-reduced-motion: reduce)');
       expect(reduced).toMatch(/\.spin\s*\{[^}]*animation:\s*none/);
+      expect(reduced).toMatch(/\.dot\s*\{[^}]*animation:\s*none/);
       expect(reduced).toMatch(/transition:\s*none/);
       expect(reduced).toMatch(/scroll-behavior:\s*auto/);
     });
 
     it('moves them otherwise', () => {
-      expect(source).toMatch(/\.spin\s*\{[^}]*animation:\s*ccSpin 0\.9s linear infinite/);
-      expect(source).toMatch(/transition:\s*width 1s linear/);
+      expect(source).toMatch(/\.spin\s*\{[^}]*animation:\s*spin 0\.9s linear infinite/);
+      expect(source).toMatch(/\.dot\s*\{[^}]*animation:\s*breathe 1\.8s/);
+      expect(source).toMatch(/transition:\s*transform 1s linear/);
       expect(source).toMatch(/scroll-behavior:\s*smooth/);
     });
   });
