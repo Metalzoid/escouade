@@ -263,6 +263,8 @@ test.describe('with « Joindre le fichier d’origine » off', () => {
     await expect.poll(() => copiesOf(app, id).map((c) => c.name)).toEqual(['a_b_.zip']);
     await send(page, 'Lis ce fichier');
     await expect(shownMessage(page)).toBeVisible();
+    // The message may show before the line of its file: read once it is there.
+    await expect.poll(async () => told(await shownMessage(page).innerText()).length).toBe(1);
     const [file] = told(await shownMessage(page).innerText());
     expect(file.name).toBe('a_b_.zip');
     const copy = copiesOf(app, id)[0];

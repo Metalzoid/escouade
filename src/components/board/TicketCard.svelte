@@ -505,6 +505,8 @@
     display: grid;
     gap: 9px;
     min-width: 0;
+    /* Its top line gives way by its own width (the column's), never the window's: see the end. */
+    container: tcard / inline-size;
     padding: 12px 12px 11px;
     border-radius: 10px;
     background: var(--raise);
@@ -873,5 +875,12 @@
   .btn[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
+  }
+  /* A narrow card (a column of 220 px at 1028 px) with its harness, its attachments and its loop: the squares of the
+     loop go (« Boucle 1/5 » says it), then an account's chip shortens; the key never wraps nor shrinks. */
+  @container tcard (max-width: 270px) {
+    .loops {
+      display: none;
+    }
   }
 </style>

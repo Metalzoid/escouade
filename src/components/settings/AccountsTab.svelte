@@ -17,7 +17,7 @@
   } from '../../lib/accounts';
   import { capsOf, defaultModelOf, effortsOf, engineName, modelsOf, modesOf, offered } from '../../lib/engines';
   import { EFFORTS, MODES } from '../../lib/models';
-  import { fList, fPct, tildify } from '../../lib/format';
+  import { fList, fPct, fUsd, tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -304,6 +304,12 @@
                 {#each meters as m (m.minutes ?? 'credits')}
                   <QuotaMeter minutes={m.minutes} usage={m.usage} now={app.now} />
                 {/each}
+                {#if a.active && noQuota(g.engine)}
+                  <!-- No quota to gauge (OpenCode): what it spent today, its budget on its own row below. -->
+                  <span class="spent"
+                    >{t('accounts.tab.today')} <b>{fUsd(app.usage.accounts.find((u) => u.id === a.id)?.todayCost ?? 0)}</b></span
+                  >
+                {/if}
               </span>
               <button
                 class="switch"
@@ -617,6 +623,16 @@
     align-items: center;
     gap: 10px;
     margin-left: auto;
+  }
+  .spent {
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .spent b {
+    color: var(--soft);
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
   }
   .ord {
     display: inline-flex;

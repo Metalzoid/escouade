@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T18:35:11.759Z",
+  "title": "Design System: Escouade",
+  "extensions": {
+    "colorMeta": {
+      "project": {
+        "role": "primary",
+        "displayName": "Couleur du projet",
+        "canonical": "oklch(0.72 0.12 <teinte de PROJECT_COLORS>)",
+        "tonalRamp": [
+          "oklch(0.18 0.12 48)",
+          "oklch(0.28 0.12 48)",
+          "oklch(0.38 0.12 48)",
+          "oklch(0.5 0.12 48)",
+          "oklch(0.62 0.12 48)",
+          "oklch(0.72 0.12 48)",
+          "oklch(0.84 0.12 48)",
+          "oklch(0.94 0.12 48)"
+        ]
+      },
+      "brand-teal": {
+        "role": "primary",
+        "displayName": "Teal d’Escouade",
+        "canonical": "#35c1bd",
+        "tonalRamp": [
+          "oklch(0.18 0.09 190)",
+          "oklch(0.28 0.09 190)",
+          "oklch(0.38 0.09 190)",
+          "oklch(0.5 0.09 190)",
+          "oklch(0.62 0.09 190)",
+          "oklch(0.72 0.09 190)",
+          "oklch(0.84 0.09 190)",
+          "oklch(0.94 0.09 190)"
+        ]
+      },
+      "run": {
+        "role": "secondary",
+        "displayName": "En cours",
+        "canonical": "oklch(0.79 0.15 155)",
+        "tonalRamp": [
+          "oklch(0.18 0.14 155)",
+          "oklch(0.28 0.14 155)",
+          "oklch(0.38 0.14 155)",
+          "oklch(0.5 0.14 155)",
+          "oklch(0.62 0.14 155)",
+          "oklch(0.72 0.14 155)",
+          "oklch(0.84 0.14 155)",
+          "oklch(0.94 0.14 155)"
+        ]
+      },
+      "wait": {
+        "role": "secondary",
+        "displayName": "Attente",
+        "canonical": "oklch(0.84 0.14 82)",
+        "tonalRamp": [
+          "oklch(0.18 0.13 82)",
+          "oklch(0.28 0.13 82)",
+          "oklch(0.38 0.13 82)",
+          "oklch(0.5 0.13 82)",
+          "oklch(0.62 0.13 82)",
+          "oklch(0.72 0.13 82)",
+          "oklch(0.84 0.13 82)",
+          "oklch(0.94 0.13 82)"
+        ]
+      },
+      "del": {
+        "role": "secondary",
+        "displayName": "Erreur",
+        "canonical": "oklch(0.74 0.14 22)",
+        "tonalRamp": [
+          "oklch(0.18 0.14 22)",
+          "oklch(0.28 0.14 22)",
+          "oklch(0.38 0.14 22)",
+          "oklch(0.5 0.14 22)",
+          "oklch(0.62 0.14 22)",
+          "oklch(0.72 0.14 22)",
+          "oklch(0.84 0.14 22)",
+          "oklch(0.94 0.14 22)"
+        ]
+      },
+      "frame": {
+        "role": "neutral",
+        "displayName": "Cadre",
+        "canonical": "color-mix(in oklch, var(--p) 8%, #08090a)",
+        "tonalRamp": [
+          "oklch(0.18 0.008 260)",
+          "oklch(0.28 0.008 260)",
+          "oklch(0.38 0.008 260)",
+          "oklch(0.5 0.008 260)",
+          "oklch(0.62 0.008 260)",
+          "oklch(0.72 0.008 260)",
+          "oklch(0.84 0.008 260)",
+          "oklch(0.94 0.008 260)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panneau du travail",
+        "canonical": "color-mix(in oklch, var(--p) 4.5%, #0e0f11)",
+        "tonalRamp": [
+          "oklch(0.18 0.008 260)",
+          "oklch(0.28 0.008 260)",
+          "oklch(0.38 0.008 260)",
+          "oklch(0.5 0.008 260)",
+          "oklch(0.62 0.008 260)",
+          "oklch(0.72 0.008 260)",
+          "oklch(0.84 0.008 260)",
+          "oklch(0.94 0.008 260)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Texte",
+        "canonical": "#f7f8f8",
+        "tonalRamp": [
+          "oklch(0.18 0.006 260)",
+          "oklch(0.28 0.006 260)",
+          "oklch(0.38 0.006 260)",
+          "oklch(0.5 0.006 260)",
+          "oklch(0.62 0.006 260)",
+          "oklch(0.72 0.006 260)",
+          "oklch(0.84 0.006 260)",
+          "oklch(0.94 0.006 260)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Titre",
+        "purpose": "Nom de l’agent dans son en-tête, titre d’une fenêtre."
+      },
+      "body": {
+        "displayName": "Corps",
+        "purpose": "L’interface, 13 px ; la conversation à 13,5 px."
+      },
+      "body-dense": {
+        "displayName": "Corps dense",
+        "purpose": "Descriptions des réglages, champs, listes."
+      },
+      "label": {
+        "displayName": "Étiquette",
+        "purpose": "Étiquettes, titres de groupe, boutons secondaires."
+      },
+      "meta": {
+        "displayName": "Métadonnée",
+        "purpose": "Durées, tokens, coûts, compteurs, touches ; chiffres tabulaires."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code, chemins, branches, commandes seulement."
+      }
+    },
+    "shadows": [
+      {
+        "name": "work-panel",
+        "value": "0 0 0 1px var(--line), 0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)))",
+        "purpose": "Le panneau du travail posé sur le cadre."
+      },
+      {
+        "name": "composer",
+        "value": "inset 0 0 0 1px var(--line-2), 0 12px 32px -12px rgba(0, 0, 0, calc(0.6 * var(--shade)))",
+        "purpose": "La zone de saisie qui flotte sur la conversation."
+      },
+      {
+        "name": "window",
+        "value": "inset 0 0 0 1px var(--line-2), 0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)))",
+        "purpose": "Les fenêtres, sur leur voile."
+      },
+      {
+        "name": "card",
+        "value": "inset 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shade)))",
+        "purpose": "Les cartes du Kanban, à peine levées."
+      },
+      {
+        "name": "focus-field",
+        "value": "inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent), 0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent)",
+        "purpose": "Un champ qui a le focus."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Toutes les transitions (--ease)."
+      },
+      {
+        "name": "tint",
+        "value": "--p 0.7s var(--ease)",
+        "purpose": "Le teint qui glisse d’un projet à l’autre."
+      },
+      {
+        "name": "rise",
+        "value": "rise 0.35s var(--ease)",
+        "purpose": "La montée d’une fenêtre ; les menus en 0,2 s."
+      },
+      {
+        "name": "shimmer",
+        "value": "shimmer 2.4s linear infinite",
+        "purpose": "Le reflet de « Claude travaille… », arrêté par prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "window-ci",
+        "value": "1028px"
+      },
+      {
+        "name": "window-mid",
+        "value": "1280px"
+      },
+      {
+        "name": "window-default",
+        "value": "1440px"
+      },
+      {
+        "name": "conv-figures",
+        "value": "@container conv 1100px, 960px, 880px"
+      },
+      {
+        "name": "conv-words",
+        "value": "@container conv 800px, 680px, 580px, 440px"
+      },
+      {
+        "name": "settings-body",
+        "value": "@container settings 520px"
+      },
+      {
+        "name": "ticket-card",
+        "value": "@container tcard 270px"
+      },
+      {
+        "name": "short-window",
+        "value": "(max-height: 820px)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Le bouton ordinaire : encre à 4 %, filet intérieur.",
+      "html": "<button class=\"ds-btn\">Annuler</button>",
+      "css": ".ds-btn { height: 30px; padding: 0 11px; border: none; border-radius: 8px; background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); font: 550 13px var(--font); cursor: pointer; } .ds-btn:hover { background: rgba(var(--fg-rgb), 0.08); box-shadow: inset 0 0 0 1px var(--line-3); } .ds-btn:focus-visible { outline: 2px solid var(--p-ink); outline-offset: 1px; }"
+    },
+    {
+      "name": "Bouton principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Le seul bouton plein d’une vue.",
+      "html": "<button class=\"ds-btn-primary\">Envoyer<kbd>Entrée</kbd></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border: none; border-radius: 8px; background: var(--primary); box-shadow: inset 0 -1px 0 var(--on-primary-line); color: var(--on-primary); font: 550 13px var(--font); cursor: pointer; } .ds-btn-primary:hover { background: var(--primary-hover); } .ds-btn-primary:focus-visible { outline: 2px solid var(--p-ink); outline-offset: 1px; } .ds-btn-primary kbd { padding: 0 4px; border: 1px solid var(--on-primary-kbd); border-radius: 4px; color: var(--on-primary-dim); font: 500 11px var(--font); }"
+    },
+    {
+      "name": "Champ",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Un champ dans son puits.",
+      "html": "<input class=\"ds-field\" placeholder=\"vide = détection automatique\" />",
+      "css": ".ds-field { height: 30px; padding: 0 10px; border: none; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); font: 400 12.5px var(--font); outline: none; } .ds-field:focus { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent), 0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent); }"
+    },
+    {
+      "name": "Segments",
+      "kind": "chip",
+      "refersTo": "segmented",
+      "description": "Un choix parmi peu : vues, dispositions, thème, seuils.",
+      "html": "<div class=\"ds-seg\"><button aria-pressed=\"true\">Système</button><button>Clair</button><button>Sombre</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.035); box-shadow: inset 0 0 0 1px var(--line); } .ds-seg button { height: 28px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font: 550 12.5px var(--font); cursor: pointer; } .ds-seg button:hover { color: var(--text); } .ds-seg button:focus-visible { outline: 2px solid var(--p-ink); } .ds-seg button[aria-pressed=\"true\"] { background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); }"
+    },
+    {
+      "name": "Marque du harness",
+      "kind": "chip",
+      "refersTo": "engine-mark",
+      "description": "Le harness d’un agent : un mot dans un filet, jamais une couleur.",
+      "html": "<span class=\"ds-mark\">Codex</span>",
+      "css": ".ds-mark { display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); font: 560 10.5px var(--font); letter-spacing: 0.01em; }"
+    },
+    {
+      "name": "Pastille d’état",
+      "kind": "chip",
+      "description": "L’état d’un agent dans son en-tête, de la couleur de l’état.",
+      "html": "<span class=\"ds-pill\"><i></i>En cours</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border-radius: 6px; background: oklch(from var(--run) l c h / 0.1); color: var(--run); font: 550 12px var(--font); } .ds-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }"
+    },
+    {
+      "name": "L’agent qui attend",
+      "kind": "card",
+      "description": "La signature : en tête de liste, en ambre, sa question et ses réponses au clavier.",
+      "html": "<div class=\"ds-wait\"><div class=\"ds-wait-h\"><b>tests-e2e</b><span>Question</span></div><p>Lancer toute la suite e2e (38 tests) ?</p><div class=\"ds-wait-a\"><button><kbd>1</kbd>Oui</button><button><kbd>2</kbd>Seulement auth</button></div></div>",
+      "css": ".ds-wait { width: 252px; padding: 9px 10px; border-radius: 10px; background: color-mix(in oklch, var(--wait) 5%, var(--raise)); box-shadow: inset 0 0 0 1px var(--wait-line); color: var(--text); font: 400 13px var(--font); } .ds-wait-h { display: flex; justify-content: space-between; } .ds-wait-h span { color: var(--wait); font-size: 12px; font-weight: 600; } .ds-wait p { margin: 6px 0 8px; font-weight: 550; } .ds-wait-a { display: flex; gap: 6px; } .ds-wait-a button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border: none; border-radius: 7px; background: rgba(var(--fg-rgb), 0.05); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); font: 600 12.5px var(--font); cursor: pointer; } .ds-wait-a button:hover { background: rgba(var(--fg-rgb), 0.09); } .ds-wait-a button:focus-visible { outline: 2px solid var(--p-ink); } .ds-wait-a kbd { padding: 0 4px; border: 1px solid var(--line-2); border-radius: 4px; color: var(--muted); font: 500 11px var(--font); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Qui attend passe devant",
+    "overview": "Escouade est un outil qu'on garde ouvert toute la journée, sur un écran de bureau, pendant que plusieurs agents travaillent. Le système en découle : un cadre presque noir (ou presque blanc) teinté par la couleur du projet ouvert, le travail posé sur un panneau en relief, et tout le reste en retrait jusqu'à ce qu'un agent ait besoin de toi. Alors l'ambre le fait passer en tête de liste, avec sa question et ses réponses à portée du clavier.\n\nC'est la langue du site (`website/app/assets/main.css`), au niveau de finition de Linear et de Raycast : Inter, filets blancs à faible opacité, un seul bouton plein par écran, des icônes tracées, le teal du logo pour Escouade elle-même et la couleur du projet pour le reste. La densité est celle d'un outil de travail : 13 px de base, des métadonnées à 11,5–12 px, des rangées de 26 à 32 px. Le monde rejeté est celui de la 1.x : brun chaud, Hanken Grotesk, accent orange, un cadre autour de chaque appel d'outil, du mono pour toutes les métadonnées, des caractères Unicode en guise d'icônes.\n\nDeux thèmes, mêmes jetons : le sombre est le monde d'origine, le clair (« Système » par défaut) relit les mêmes rôles à l'envers. Aucune couleur n'est écrite en dur dans un composant.",
+    "keyCharacteristics": [
+      "Toute la fenêtre prend la couleur du projet ouvert (`--p`), qui glisse en 0,7 s d'un projet à l'autre.",
+      "L'agent qui attend est en tête, en ambre, avec ce qu'il demande ; on lui répond sans quitter ce qu'on lit.",
+      "Le travail est posé sur un panneau en relief (rayon 12 px, marge de 8 px), le cadre autour reste sombre et calme.",
+      "Un seul bouton plein par vue, en blanc (encre en clair) ; le teal reste au logo et aux vues globales.",
+      "Le texte passe le WCAG AA dans les deux thèmes, pour chacune des 15 couleurs de projet."
+    ],
+    "rules": [
+      {
+        "name": "The Tinted Frame Rule",
+        "body": "Aucune surface n'a de couleur à elle : chacune est un gris neutre mêlé à `--p` à un dosage fixe (8 % le cadre, 4,5 % le panneau, 6 % les reliefs, 2 % les puits en sombre). Changer de projet change toute la fenêtre, rien d'autre.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three States Rule",
+        "body": "Vert, ambre, rouge disent un état et rien d'autre. Une couleur saturée qui n'est ni le projet, ni le teal, ni un de ces états n'a pas sa place hors du code et des graphiques.",
+        "section": "colors"
+      },
+      {
+        "name": "The Charts Carry Names Rule",
+        "body": "Les palettes des graphiques sont validées pour le daltonisme (tokens : Entrée `#4c88d3`, Cache `#008b7a`, Sortie `#9555b0` ; modèles par rang : `#ca723c`, `#4682cc`, `#339c6d`, `#9555b0`, puis un gris). Les couleurs de projet ne passent pas ce contrôle : chaque barre d'un projet porte son nom.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is For Code Rule",
+        "body": "JetBrains Mono pour le code, les chemins, les branches et les commandes, jamais pour une métadonnée (un coût, une durée, un état s'écrivent en Inter à chiffres tabulaires).",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Tout chiffre qui change sous les yeux (tokens, coût, durée, pourcentage) est en chiffres tabulaires, pour ne pas faire danser la ligne.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Before Shadow Rule",
+        "body": "Un contour est un filet intérieur (`inset 0 0 0 1px`), jamais une bordure de couleur ; une ombre n'apparaît que sous ce qui flotte (panneau, saisie, fenêtres, menus, notifications).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do passer par un jeton de `src/app.css` pour chaque couleur, avec ses deux valeurs (sombre et clair) ; `src/lib/contrast.test.ts` vérifie l'AA pour chaque couleur de projet.",
+      "Do dessiner les icônes avec `Icon` (tracés de 1,5 px sur 16), jamais un caractère Unicode.",
+      "Do replier par `@container` sur la largeur de la colonne, et vérifier à 1028, 1280 et 1440 px en français et en anglais, panneau latéral ouvert ou non.",
+      "Do couper par une ellipse ce qui ne tient pas, son texte entier dans l'infobulle `use:tip` (jamais un `title` natif).",
+      "Do garder un seul bouton plein par vue, et le teal pour Escouade elle-même."
+    ],
+    "donts": [
+      "Don't encadrer chaque appel d'outil ni chaque message : la conversation se lit sans boîtes, les appels en rangées.",
+      "Don't écrire une métadonnée en mono, ni une couleur en dur dans un composant.",
+      "Don't utiliser une bordure de couleur sur le côté d'une carte ou d'une alerte : l'état se dit par un fond et un filet de sa couleur.",
+      "Don't ajouter un mouvement décoratif : les trois moments et les signaux d'état suffisent, et tous s'arrêtent avec `prefers-reduced-motion`.",
+      "Don't revenir au monde de la 1.x (brun chaud, Hanken Grotesk, accent orange, cadres partout)."
+    ]
+  }
+}

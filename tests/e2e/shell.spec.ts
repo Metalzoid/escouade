@@ -239,6 +239,15 @@ test.describe('in English', () => {
     const box = (await panel.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(1028);
+    // Captured once risen (a panel half-way up shows what is under it).
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+    );
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'quota-small-en.app.png') });
   });
 });

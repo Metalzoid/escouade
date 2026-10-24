@@ -154,6 +154,8 @@ export default {
     notLocated:
       'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
     notLocatedHere: 'Introuvable. Indique le chemin de claude.',
+    /** Another harness than Claude Code: its path is not set in this tab. */
+    notLocatedOther: 'Introuvable.',
     /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
@@ -205,6 +207,13 @@ export default {
     attachKeep: 'Purger les copies après',
     attachKeepHint: 'jours, 0 = tant que leur propriétaire existe',
     attachKeepLabel: 'Purger les copies après (jours)',
+    /** A harness that does not tell what its turns cost (Codex): Escouade estimates it. */
+    cost: 'Coût',
+    costEstimated:
+      'Estimé d’après les tokens et les tarifs publics : {engine} ne donne pas le coût de ses tours. Il est écrit « ≈ » partout.',
+    /** What it cannot do, beside: joined by « · », the first one capitalised. */
+    costNoPdf: 'pas de PDF joint',
+    costNoBackground: 'pas de tâches de fond',
     /** The group of the remote control of every agent, after the MCP server’s. */
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control pour tous les agents',

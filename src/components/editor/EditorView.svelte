@@ -1035,6 +1035,7 @@
     display: grid;
     gap: 2px;
     padding: 0 8px 10px;
+    container: tree-h / inline-size;
   }
   /* As high as its title's line (the design's 12 px on 1.45): the buttons beside it overflow it, centred. */
   .th-row {
@@ -1082,6 +1083,13 @@
   .editor-side:hover .actions,
   .actions:focus-within {
     opacity: 1;
+  }
+  /* A narrow column (200 px, an editor of 904 px or less): over the folder's line under the title, which stays whole. */
+  @container tree-h (max-width: 200px) {
+    .actions {
+      top: calc(100% + 1px);
+      right: 0;
+    }
   }
   .views {
     flex: none;

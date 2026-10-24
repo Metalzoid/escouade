@@ -7,31 +7,31 @@ import { addProject, expect, send, test } from './fixture';
 const PR = 'https://example.com/pr/1';
 
 /**
- * What the app asks to open outside, seen on its way to the opener plugin, and the native confirmations it asks for
+ * What the app asks to open outside, on its way to the opener plugin, and the native confirmations it asks for
  * (xterm.js's own, for an OSC 8 link, went through tauri-plugin-dialog). The opening is answered here: no browser opens.
+ * Caught in the page, on the `fetch` of Tauri's IPC: Playwright's `page.route` misses the WebView2's IPC requests from
+ * time to time, and then sees none of them (no `request` event either) while the real browser opens.
  */
 async function watch(page: Page) {
-  const opened: string[] = [];
-  const confirms: string[] = [];
-  page.on('request', (r) => {
-    const command = decodeURIComponent(r.url());
-    if (command.includes('plugin:opener|open_url')) opened.push(JSON.parse(r.postData() ?? '{}').url);
-    if (command.includes('plugin:dialog|confirm')) confirms.push(r.postData() ?? '');
+  await page.evaluate(() => {
+    const w = window as unknown as { esc101Opened: string[]; esc101Confirms: string[] };
+    w.esc101Opened = [];
+    w.esc101Confirms = [];
+    const fetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const command = decodeURIComponent(String(input instanceof Request ? input.url : input));
+      if (command.includes('plugin:opener|open_url')) {
+        w.esc101Opened.push(JSON.parse(String(init?.body ?? '{}')).url);
+        // As Tauri's own answer.
+        return Promise.resolve(new Response('null', { headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' } }));
+      }
+      if (command.includes('plugin:dialog|confirm')) w.esc101Confirms.push(String(init?.body ?? ''));
+      return fetch(input, init);
+    };
   });
-  await page.route(/ipc\.localhost\/plugin%3Aopener%7Copen_url/, (route) =>
-    // As Tauri's own answer: the page may read `Tauri-Response` only once exposed.
-    route.fulfill({
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Tauri-Response': 'ok',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Expose-Headers': 'Tauri-Response',
-      },
-      body: 'null',
-    }),
-  );
-  return { opened, confirms };
+  const read = (key: 'esc101Opened' | 'esc101Confirms') => () =>
+    page.evaluate((k) => (window as unknown as Record<string, string[]>)[k], key);
+  return { opened: read('esc101Opened'), confirms: read('esc101Confirms') };
 }
 
 /** Marks the page: the mark is gone if the window navigated, or reloaded the interface. */
@@ -61,23 +61,23 @@ test('a link of the conversation opens in the browser, whatever the click, and t
   await mark(page);
 
   await link.click();
-  await expect.poll(() => opened.length).toBe(1);
+  await expect.poll(async () => (await opened()).length).toBe(1);
   await link.click({ button: 'middle' });
-  await expect.poll(() => opened.length).toBe(2);
+  await expect.poll(async () => (await opened()).length).toBe(2);
   await link.click({ modifiers: ['Control'] });
-  await expect.poll(() => opened.length).toBe(3);
+  await expect.poll(async () => (await opened()).length).toBe(3);
   await link.click({ modifiers: ['Shift'] });
-  await expect.poll(() => opened.length).toBe(4);
+  await expect.poll(async () => (await opened()).length).toBe(4);
   await link.focus();
   await page.keyboard.press('Enter');
-  await expect.poll(() => opened.length).toBe(5);
-  expect(opened).toEqual([PR, PR, PR, PR, PR]);
+  await expect.poll(async () => (await opened()).length).toBe(5);
+  expect(await opened()).toEqual([PR, PR, PR, PR, PR]);
 
   // `[rien]()` has an empty href: it used to reload the interface.
   await page.locator('.md a', { hasText: 'rien' }).click();
   await page.waitForTimeout(1000);
   await stillHere(page, home);
-  expect(opened).toHaveLength(5);
+  expect(await opened()).toHaveLength(5);
 
   // A link outside the markdown, which nothing of the app handles.
   await page.evaluate((href) => {
@@ -89,11 +89,11 @@ test('a link of the conversation opens in the browser, whatever the click, and t
     document.body.appendChild(a);
   }, 'https://example.com/stray');
   await page.locator('#stray').click();
-  await expect.poll(() => opened.length).toBe(6);
-  expect(opened[5]).toBe('https://example.com/stray');
+  await expect.poll(async () => (await opened()).length).toBe(6);
+  expect((await opened())[5]).toBe('https://example.com/stray');
   await page.waitForTimeout(1000);
   await stillHere(page, home);
-  expect(confirms).toEqual([]);
+  expect(await confirms()).toEqual([]);
 });
 
 test('an OSC 8 hyperlink of a terminal opens in the browser, without a confirmation', async ({ app }) => {
@@ -130,10 +130,10 @@ test('an OSC 8 hyperlink of a terminal opens in the browser, without a confirmat
     )
     .toBe('pointer');
   await page.mouse.click(at.x, at.y);
-  await expect.poll(() => opened).toEqual([PR]);
+  await expect.poll(opened).toEqual([PR]);
   await page.waitForTimeout(1000);
   await stillHere(page, home);
-  expect(confirms).toEqual([]);
+  expect(await confirms()).toEqual([]);
 });
 
 test('the window refuses to leave the app when a script asks it to, and to open another window', async ({ app }) => {

@@ -1803,6 +1803,8 @@
      button unrolls the others: it never scrolls inside the list of the agents, which scrolls already. */
   .subl {
     display: grid;
+    /* One column no wider than the sidebar: a long command of a background task is cut short, never pushes out. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1px;
     margin: -1px 0 4px 18px;
     padding-left: 8px;

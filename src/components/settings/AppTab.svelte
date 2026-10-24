@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+  import { tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { anyCan, offered } from '../../lib/engines';
@@ -65,6 +66,15 @@
     return () => {
       stale = true;
     };
+  });
+  // The folder of Escouade's data, read with « À propos » (another one for a development build or a sandbox).
+  let dataDir = $state<string | null>(null);
+  $effect(() => {
+    if (tab !== 'about' || dataDir) return;
+    api
+      .dataDir()
+      .then((d) => (dataDir = d))
+      .catch(() => {});
   });
   // Where Escouade's update of Claude Code stands (ESC-133): read with the tab, again once the switch is saved, and
   // every 2 s until its first run ends.
@@ -206,7 +216,8 @@
         <Row label={t('settings.claude.path')}>
           {#snippet extra()}
             {@render foundLine(
-              info?.located.path ? t('settings.claude.located', { path: info.located.path }) : t('settings.claude.notLocatedHere'),
+              // Not found: « Installer » gives its command; its path is not set here, unlike Claude Code's.
+              info?.located.path ? t('settings.claude.located', { path: info.located.path }) : t('settings.claude.notLocatedOther'),
               !!info?.located.path,
             )}
             {@render versionLine(versionSaid, decl.id, tone)}
@@ -247,6 +258,17 @@
             {/if}
           {/snippet}
           <Switch label={t('settings.claude.selfUpdate')} bind:on={s.claudeSelfUpdate} />
+        </Row>
+      {/if}
+      {#if decl.caps.cost === 'estimated'}
+        {@const cannot = [
+          !decl.caps.pdf && t('settings.claude.costNoPdf'),
+          !decl.caps.backgroundTasks && t('settings.claude.costNoBackground'),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        <Row label={t('settings.claude.cost')} desc={t('settings.claude.costEstimated', { engine: decl.name })}>
+          {#if cannot}<span class="hint">{cannot[0].toUpperCase() + cannot.slice(1)}</span>{/if}
         </Row>
       {/if}
       {#if decl.caps.remoteControl}
@@ -448,7 +470,12 @@
       >
     </Row>
     <Row label={t('settings.about.localData')}>
-      {#snippet extra()}<span class="more mono data">~/.escouade/</span>{/snippet}
+      {#snippet extra()}<span class="more mono data">{dataDir ? tildify(dataDir) : '~/.escouade'}</span>{/snippet}
+      {#if dataDir}
+        <button class="btn" onclick={() => openPath(dataDir!).catch((e) => app.toast(String(e), 'error'))}
+          ><Icon name="folder" size={14} />{t('nav.titleBar.menu.openFolder')}</button
+        >
+      {/if}
     </Row>
   </Group>
 {/if}

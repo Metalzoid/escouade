@@ -590,6 +590,15 @@ test.describe('in English', () => {
     await settings.getByRole('tab', { name: 'Accounts' }).click();
     await settings.getByRole('button', { name: 'Add a Claude Code account…' }).click();
     const account = page.getByRole('dialog', { name: /^Add a/ });
+    // Captured once risen (a window half-way up shows what is under it).
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => {})),
+      ),
+    );
     for (const size of SIZES) {
       await page.setViewportSize(size);
       expect.soft(await cut(account), `« Add an account », ${size.width}×${size.height}`).toEqual([]);

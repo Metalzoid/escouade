@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -1234,6 +1234,23 @@ describe('Conversation', () => {
 describe('Conversation of an agent whose harness has no account (choice 19)', () => {
   const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes.';
   const CODEX = { ...BARE_ENGINE, id: 'codex' as const, name: 'Codex', speaker: 'Codex' };
+
+  it('says in its header that a Codex agent runs in a sandbox, and what it means in its mode (choice 8)', async () => {
+    const SANDBOXED = { ...CODEX, caps: { ...CODEX.caps, sandbox: true } };
+    const a = agent({ id: `sb${Math.random()}`, status: 'idle', engine: 'codex', mode: 'plan' });
+    resetApp({ projects: [project()], agents: [a] });
+    app.engines = [CLAUDE_ENGINE, SANDBOXED];
+    fakeBackend({ get_conversation: () => [] });
+    render(Conversation, { agent: a, project: project() });
+    expect(screen.getByRole('img', { name: 'Bac à sable. Lecture seule, dans un bac à sable' })).toBeInTheDocument();
+    cleanup();
+    // Claude Code has none.
+    const b = agent({ id: `sc${Math.random()}`, status: 'idle' });
+    resetApp({ projects: [project()], agents: [b] });
+    app.engines = [CLAUDE_ENGINE, SANDBOXED];
+    render(Conversation, { agent: b, project: project() });
+    expect(screen.queryByRole('img', { name: /^Bac à sable/ })).toBeNull();
+  });
 
   it('says so in an amber card, keeps the message in the field, and adds an account from it', async () => {
     const a = agent({ id: `na${Math.random()}`, status: 'idle', engine: 'codex' });

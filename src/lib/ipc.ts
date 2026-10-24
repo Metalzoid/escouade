@@ -159,6 +159,7 @@ export const api = {
   claudeFound: () => invoke<{ claudeFound: boolean; claudePathFound: boolean; enginesFound?: EngineId[] }>('claude_found'),
   /** Where Escouade's update of Claude Code stands (ESC-133). */
   claudeUpdateStatus: () => invoke<ClaudeUpdateStatus>('claude_update_status'),
+  dataDir: () => invoke<string>('data_dir'),
   /** Every harness with what is found of it here: its program, version and state (versions read again). */
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The items of Principal's folder a new account may share (those it has), files first. */

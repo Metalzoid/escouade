@@ -1134,6 +1134,14 @@ describe('SettingsModal', () => {
     setLang('fr');
   });
 
+  it('says where the local data is, and opens its folder', async () => {
+    const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', 'plugin:opener|open_path': () => null });
+    render(SettingsModal, { tab: 'about' });
+    expect(await screen.findByText('~/.escouade')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le dossier' }));
+    expect(backend.called('plugin:opener|open_path').map((c) => c.args.path)).toEqual(['C:\\Users\\moi\\.escouade']);
+  });
+
   it('keeps the focus inside, from the tab it opens on', async () => {
     fakeBackend();
     const outside = document.createElement('button');
@@ -1686,6 +1694,22 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     expect(screen.queryByText('État')).toBeNull();
   });
 
+  it('says that the cost of a harness that does not tell it is estimated, and what it cannot do', async () => {
+    const estimated = { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, cost: 'estimated' as const } };
+    app.engines = [CLAUDE_ENGINE, estimated];
+    fakeBackend({ claude_locate: () => located, engines: () => [claude({ state: 'ready' }), bare({ caps: estimated.caps })] });
+    render(SettingsModal, { tab: 'claude' });
+    const other = await screen.findByRole('region', { name: 'Harness nu' });
+    expect(within(other).getByText('Coût')).toBeInTheDocument();
+    expect(
+      within(other).getByText(
+        'Estimé d’après les tokens et les tarifs publics : Harness nu ne donne pas le coût de ses tours. Il est écrit « ≈ » partout.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(other).getByText('Pas de PDF joint · pas de tâches de fond')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Claude Code' })).queryByText('Coût')).toBeNull();
+  });
+
   it('gives the command that installs a harness that is not found', async () => {
     fakeBackend({
       claude_locate: () => located,
@@ -1699,6 +1723,9 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     expect(await within(other).findByText('Introuvable')).toHaveAttribute('data-engine-state', 'absent');
     expect(within(other).getByText('npm install -g @openai/codex')).toBeInTheDocument();
     expect(await within(screen.getByRole('region', { name: 'Claude Code' })).findByText('2.1.301')).toHaveAttribute('data-state', 'ready');
+    // Its path is not set here (Claude Code's alone is): no « Indique le chemin de claude » under it (ESC-84).
+    expect(within(other).queryByText(/chemin de claude/)).toBeNull();
+    expect(within(other).getByText('Introuvable.')).toBeInTheDocument();
   });
 
   it('says it in English too', async () => {

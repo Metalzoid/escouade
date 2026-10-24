@@ -5,6 +5,7 @@ export default defineZone('accounts', {
   principal: 'Main',
 
   tab: {
+    today: 'Today',
     list: 'Accounts',
     group: '{harness} accounts',
     order:

@@ -197,6 +197,18 @@ describe('AccountsTab', () => {
     expect(b.called('account_update')[1].args.account.dailyBudget).toBeNull();
   });
 
+  it('shows what an account of a harness without a quota spent today, in the place of the gauges', async () => {
+    const OC: Account = { id: 'oc', name: 'Local', engine: 'codex', configDir: 'C:\\oc', claudePath: '', active: true };
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, OC] };
+    app.usage = { ...app.usage, accounts: [usageOf('principal'), usageOf('oc', { engine: 'codex', meters: [], todayCost: 0.42 })] };
+    backend();
+    render(SettingsModal, { tab: 'accounts' });
+    expect(within(row('Local')).getByText('0,42 $')).toBeInTheDocument();
+    expect(within(row('Local')).getByText('0,42 $').parentElement).toHaveTextContent('Aujourd’hui 0,42 $');
+    expect(within(row('Principal')).queryByText(/Aujourd’hui/)).not.toBeInTheDocument();
+  });
+
   it('puts the name back when the backend refuses it', async () => {
     backend({ account_update: () => Promise.reject('Un compte s’appelle déjà « Principal ».') });
     render(SettingsModal, { tab: 'accounts' });

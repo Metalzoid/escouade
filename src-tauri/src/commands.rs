@@ -223,6 +223,13 @@ pub fn claude_update_status(core: CoreState) -> crate::selfupdate::Status {
     crate::selfupdate::status(&core.settings.read())
 }
 
+/// The folder of Escouade's data (`~/.escouade`, another one for a development build or a sandbox), for
+/// « Réglages › À propos › Données locales » and its « Ouvrir le dossier ».
+#[tauri::command(async)]
+pub fn data_dir(core: CoreState) -> String {
+    core.data.root().display().to_string()
+}
+
 /// Where the `claude` of a path of the settings is (empty: the one found by itself), the
 /// distribution of the settings (`wsl_distro`) for one of WSL: the line under the field.
 #[tauri::command(async)]

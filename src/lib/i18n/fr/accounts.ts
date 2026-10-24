@@ -7,6 +7,8 @@ export default {
 
   // The « Comptes » tab of the settings: a group per harness.
   tab: {
+    /** In the place of the gauges, for a harness without a quota (OpenCode): what the account spent today. */
+    today: 'Aujourd’hui',
     list: 'Comptes',
     /** The accounts of one harness; `{harness}`: « Claude Code ». */
     group: 'Comptes {harness}',

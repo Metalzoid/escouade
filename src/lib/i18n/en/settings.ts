@@ -125,6 +125,7 @@ export default defineZone('settings', {
     notLocated:
       'Not found. Give the path to claude.exe, or to Claude Code installed in WSL: ~/.local/bin/claude, /home/<user>/…, or \\\\wsl.localhost\\<distribution>\\….',
     notLocatedHere: 'Not found. Give the path to claude.',
+    notLocatedOther: 'Not found.',
     /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
@@ -176,6 +177,11 @@ export default defineZone('settings', {
     attachKeep: 'Purge copies after',
     attachKeepHint: 'days, 0 = as long as their owner exists',
     attachKeepLabel: 'Purge copies after (days)',
+    cost: 'Cost',
+    costEstimated:
+      'Estimated from the tokens and the public prices: {engine} does not tell what its turns cost. It is written “≈” everywhere.',
+    costNoPdf: 'no attached PDF',
+    costNoBackground: 'no background tasks',
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control for all agents',
     remoteAllDesc:

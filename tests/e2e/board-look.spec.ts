@@ -451,6 +451,30 @@ test.describe('in English', () => {
       for (const b of await board.locator('.card .btn').all())
         expect((await b.boundingBox())!.height, `${await b.textContent()}, ${size.width}×${size.height}`).toBeLessThanOrEqual(29);
       await expect(review.getByRole('button', { name: 'Approve and merge' })).toHaveText('Approve');
+      // A card under way with its harness and its attachments beside its key and its loop (the room of two more items
+      // on its top line, as wide as « Claude » and « 📎 1 »): nothing leaves the card, the key stays on one line (ESC-84).
+      const top = await page
+        .getByRole('region', { name: 'In progress' })
+        .locator('.card .top')
+        .first()
+        .evaluate((el) => {
+          const key = el.querySelector<HTMLElement>('.key')!;
+          const extra = ['Claude', 'C 1'].map((text) => {
+            const c = key.cloneNode() as HTMLElement;
+            c.classList.add('esc84');
+            c.textContent = text;
+            key.after(c);
+            return c;
+          });
+          const card = el.closest('.card')!.getBoundingClientRect();
+          const out = [...el.children]
+            .filter((c) => c.getBoundingClientRect().right > card.right - 11 || c.getBoundingClientRect().left < card.left)
+            .map((c) => c.textContent);
+          const keyLines = key.getBoundingClientRect().height;
+          for (const c of extra) c.remove();
+          return { out, oneLine: keyLines < 20 };
+        });
+      expect(top, `the top line of a full card, ${size.width}×${size.height}`).toEqual({ out: [], oneLine: true });
       if (SHOTS) {
         fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: path.join(SHOTS, `kanban${size.name}-en.app.png`) });

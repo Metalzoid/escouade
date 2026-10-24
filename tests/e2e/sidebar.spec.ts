@@ -479,6 +479,12 @@ test.describe('what the agent does, on its card', () => {
           expect
             .soft(await within(card, [act.locator('.ok svg'), act.locator('.tgt')]), `its parts' place, ${where}`)
             .toEqual(await within(pc, [pact.locator('svg.ok'), pact.locator('.tgt')]));
+          // Its background task's long command is cut short in the sidebar, never past its edge (ESC-84).
+          const sideRight = await page.locator('aside.side').evaluate((n) => n.getBoundingClientRect().right);
+          for (const row of await page.locator('aside.side .subl .sub').all())
+            expect
+              .soft(await row.evaluate((n) => n.getBoundingClientRect().right), `a row under the card, ${where}`)
+              .toBeLessThanOrEqual(sideRight);
           await shot(`card-waiting${size.name}${light}`);
 
           // #pr: the pull request under the card, its CI failed, « L’agent corrige ».

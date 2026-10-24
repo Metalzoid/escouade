@@ -32,8 +32,8 @@ export const ALLOWED: Allowed[] = [
   },
   {
     file: 'src/components/settings/AppTab.svelte',
-    text: '~/.escouade/',
-    why: 'un chemin de dossier, pas un texte',
+    text: '~/.escouade',
+    why: 'un chemin de dossier, pas un texte (le temps que le vrai soit lu)',
   },
 
   // L5 — integrations, boardSettings

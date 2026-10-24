@@ -183,7 +183,8 @@
     </select>
   </Row>
   {#if !online}
-    <p class="vnote">{t('voice.settings.modelDesc')}</p>
+    <!-- The list's own title: its note is not « Langue parlée »'s (ESC-84). -->
+    <Row label={t('voice.settings.model')} desc={t('voice.settings.modelDesc')} wide />
     <div class="models model-list" role="radiogroup" aria-label={t('voice.settings.model')}>
       {#each info?.models ?? [] as m (m.id)}
         {@const on = v.model === m.id}

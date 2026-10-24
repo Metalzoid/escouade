@@ -419,6 +419,7 @@ pub fn run() {
             commands::save_settings,
             commands::claude_locate,
             commands::claude_update_status,
+            commands::data_dir,
             commands::account_sign_in_ended,
             commands::claude_found,
             commands::engines,

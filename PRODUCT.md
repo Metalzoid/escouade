@@ -28,12 +28,12 @@ Un environnement de développement agentique (ADE) complet : l'endroit où l'on 
 - **Livrer** : commit relu, merge (squash ou rebase), push ou pull request ; un conflit revient à l'agent.
 - **Piloter** : un signal dès qu'un agent attend, la vue d'ensemble, quotas, coût et statistiques, plusieurs comptes, un serveur MCP qui laisse un agent mener Escouade, le téléphone.
 
-Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du moteur : les agents tournent aujourd'hui sur le Claude Code de l'utilisateur, d'autres moteurs (Codex, Copilot CLI, Cursor CLI, OpenCode) et les hébergeurs de code (PR, CI, déploiements) viennent s'y ajouter sans le réécrire. On n'annonce que ce qui est publié ; ce qui arrive va dans la feuille de route.
+Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du moteur : les agents tournent sur le harness de l'utilisateur, Claude Code, Codex, OpenCode ou Copilot CLI (1.8) ; Cursor CLI et les hébergeurs de code (PR, CI, déploiements) viennent s'y ajouter sans le réécrire. On n'annonce que ce qui est publié ; ce qui arrive va dans la feuille de route.
 
 ## Operating Context
 
-- Chaque agent est un process `claude` local, dans le dossier du projet ou dans son propre worktree ; conversations, projets et statistiques restent dans `~/.escouade/` (le dossier de chaque compte Claude ajouté compris).
-- Le réseau ne sert qu'à Claude Code lui-même, à la lecture des quotas, aux mises à jour de l'app et, si l'utilisateur les connecte, à Jira, Trello ou GitHub. Le serveur MCP d'Escouade (1.7) n'écoute que sur la machine, derrière un jeton.
+- Chaque agent est un process local de son harness (`claude`, `codex`, `opencode`, `copilot`), dans le dossier du projet ou dans son propre worktree ; conversations, projets et statistiques restent dans `~/.escouade/` (le dossier de chaque compte ajouté compris).
+- Le réseau ne sert qu'aux harness eux-mêmes, à la lecture des quotas, aux mises à jour de l'app, aux statistiques anonymes si l'utilisateur les laisse et, s'il les connecte, à Jira, Trello, GitHub, Linear et aux services de voix en ligne. Le serveur MCP d'Escouade (1.7) n'écoute que sur la machine, derrière un jeton.
 - Statuts d'un agent : Prêt, En cours, Question, Terminé (et erreur). Un ticket passe par À faire, En cours (avec sa boucle, « boucle 2/5 »), À tester, Terminé.
 - Les raccourcis portent l'usage quotidien : Ctrl+N nouvel agent, Ctrl+J prochain agent qui attend, Ctrl+1…9 projets.
 
@@ -41,7 +41,7 @@ Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du m
 
 - Projets dans une barre à gauche (2.0), agents en parallèle avec leur modèle (Fable, Opus, Sonnet, Haiku), leur effort et leur mode de permission ; copie d'un agent qui reprend sa conversation (1.6).
 - Français et anglais (1.7) : l'interface suit la langue du système ou le choix de l'utilisateur, sans redémarrer ; nombres, dates et pluriels suivent la langue. Une langue à part pour ce que Claude rédige (messages de commit, pull requests, commentaires Jira, Trello et GitHub, consignes aux agents).
-- Plusieurs comptes Claude (1.7) : chacun son dossier de configuration et sa connexion, ajoutés et connectés depuis l'app ; quotas et statistiques par compte, nouveaux agents et tickets envoyés sur le premier compte sous le seuil, agent arrêté par la limite d'usage repris sur un autre compte.
+- Plusieurs comptes par harness (1.7 pour Claude Code, 1.8 pour les autres) : chacun son dossier de configuration et sa connexion, ajoutés et connectés depuis l'app ; quotas et statistiques par compte, nouveaux agents et tickets envoyés sur le premier compte sous le seuil, agent arrêté par la limite d'usage repris sur un autre compte.
 - Serveur MCP (1.7) : Claude, depuis un terminal, un autre outil ou un agent d'Escouade, lit les projets, agents et tickets et peut créer, déplacer et lancer des tickets ou des agents, sous les garde-fous du pilote auto ; aucune permission accordée, aucune commande lancée, rien supprimé ; journal des appels.
 - Vue d'ensemble (1.6) : tous les agents de tous les projets, ceux qui attendent en tête, avec les autorisations qui s'accordent sur place.
 - Chat natif : markdown, appels d'outils compacts, questions et autorisations en cartes cliquables, auxquelles on répond aussi au clavier ; brouillons gardés, position de lecture retrouvée, longues conversations dessinées par tranches.
@@ -57,7 +57,8 @@ Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du m
 - Intégrations (1.4) : import et synchro des tickets Jira, Trello et GitHub Issues, synchros ratées retentées, jetons dans le trousseau du système (1.6).
 - Mises à jour silencieuses (1.6) : téléchargées en arrière-plan, installées sans fenêtre, au redémarrage quand l'app est au repos.
 - Remote control depuis claude.ai et l'app Claude sur mobile.
-- Pas encore de Linux. L'app macOS est signée avec un certificat Apple Developer ID et notarisée depuis la 1.5.4.
+- Windows, macOS et Linux (1.7.3). L'app macOS est signée avec un certificat Apple Developer ID et notarisée depuis la 1.5.4 ; l'app Windows est signée au nom de GAGNAIRE DEVELOPPEMENT depuis la 1.8.14.
+- Thème clair et sombre (2.0), « Système » par défaut, qui suit celui de l'OS à chaud.
 
 ## Brand Commitments
 
@@ -66,6 +67,7 @@ Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du m
 - Voix : en français, au tutoiement, simple et concrète, sans emphase publicitaire ; depuis la 1.7 l'app et le site existent aussi en anglais (la vidéo garde sa voix française, avec des sous-titres anglais), dans le même ton.
 - Projet indépendant, non affilié à Anthropic ; Claude et Claude Code sont des marques d'Anthropic, et le site le dit.
 - Le site suit le standard des sites d'outils de dev, au niveau de finition de Linear et de Raycast, sans thème ni gadget : choix de l'utilisateur du 2026-10-11, après avoir vu sur aperçu des directions plus marquées (tableau des départs, cuisine, cracktro) et les avoir écartées.
+- Depuis la 2.0, l'app suit le site : même langue visuelle (fond presque noir, Inter, filets, teal du logo), au même niveau de finition, avec un thème clair en plus ; toute la fenêtre prend la couleur du projet ouvert. Son système est décrit dans `DESIGN.md`.
 
 ## Evidence on Hand
 
@@ -77,9 +79,9 @@ Gratuit, local et open source (GPL-3.0). Le récit ne repose pas sur le nom du m
 
 - Le développeur garde la vue d'ensemble ; les agents font le travail et disent quand ils ont besoin de lui.
 - Montrer la vraie chose : l'app au travail plutôt que des promesses sur elle.
-- Local et transparent : le Claude Code de l'utilisateur, sa machine, du code ouvert.
+- Local et transparent : le harness de l'utilisateur, sa machine, du code ouvert.
 - Des mots qui disent exactement ce qui se passe, en français ou en anglais selon l'utilisateur.
 
 ## Accessibility & Inclusion
 
-Les couleurs de texte respectent le WCAG AA (4,5:1) sur le fond (testé dans `website/tests/tokens.test.ts`) ; les animations respectent `prefers-reduced-motion` ; tout se fait au clavier, avec un focus visible.
+Les couleurs de texte respectent le WCAG AA (4,5:1) sur le fond, et les points et anneaux 3:1 : sur le site (testé dans `website/tests/tokens.test.ts`) et dans l'app, dans ses deux thèmes et pour chaque couleur de projet (`src/lib/contrast.test.ts`) ; les animations respectent `prefers-reduced-motion` ; tout se fait au clavier, avec un focus visible.

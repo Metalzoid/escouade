@@ -1879,6 +1879,20 @@
         font-weight: 500;
         font-variant-numeric: tabular-nums;
       }
+      /* The key never wraps (ESC-84); a narrow card lets the squares of its loop go. */
+      .col .card {
+        container: tcard / inline-size;
+      }
+      .card-top > span:first-child,
+      .card-top .loop {
+        flex: none;
+        white-space: nowrap;
+      }
+      @container tcard (max-width: 270px) {
+        .card-top .loops {
+          display: none;
+        }
+      }
       .card-top .loop {
         margin-left: auto;
         display: inline-flex;
