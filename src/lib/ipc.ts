@@ -316,6 +316,8 @@ export const api = {
     output.onmessage = onData;
     return invoke<TermInfo>('agent_terminal', { id, cols, rows, output, manual });
   },
+  /** Whether the agent's interface asks the question about the trust of its folder (Codex, Copilot CLI), answered in its terminal. */
+  tuiAsksTrust: (id: string) => invoke<boolean>('tui_asks_trust', { id }),
   /** An image pasted in the agent's Claude Code view (base64), written to a file: the path to type there, as its `claude` reads it. */
   pasteImage: (id: string, mediaType: string, data: string) => invoke<string>('paste_image', { id, mediaType, data }),
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),

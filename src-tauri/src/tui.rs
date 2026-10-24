@@ -2197,6 +2197,30 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// Whether the agent's interface, up in its terminal, asks the question about the trust of its
+    /// folder (Codex, Copilot CLI): the band of the harness's view says so, above the terminal.
+    pub(crate) fn tui_asks_trust(&self, id: &str) -> Result<bool> {
+        let h = self.agent(id)?;
+        let (account, cwd, spoke, view) = {
+            let rt = h.lock();
+            let Some(tui) = rt.tui.as_ref() else {
+                return Ok(false);
+            };
+            let (view, _) = view_of(&rt.meta)?;
+            (
+                rt.meta.account.clone(),
+                rt.meta.cwd.clone(),
+                tui.spoke,
+                view,
+            )
+        };
+        let config_dir = {
+            let settings = self.settings.read();
+            accounts::config_dir(&accounts::get(&settings, &account), &settings)
+        };
+        Ok(view.paste_refusal(&config_dir, &cwd, spoke).is_some())
+    }
+
     /// A message for an agent in the Claude Code view: typed in its interface, as pasted text
     /// then Enter. Refused while it waits for an answer there (the text would go to its dialog).
     pub(crate) fn send_to_tui(self: &Arc<Self>, id: &str, text: &str) -> Result<()> {

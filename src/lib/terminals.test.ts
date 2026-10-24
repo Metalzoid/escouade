@@ -134,6 +134,7 @@ import {
   pastedContent,
   roomOf,
   setTerminalFontSize,
+  ANSI_TOKENS,
 } from './terminals';
 
 beforeEach(() => {
@@ -1864,5 +1865,36 @@ describe('« Taille du texte des terminaux »', () => {
     disposeLog('size-shown');
     disposeLog('size-parked');
     box.remove();
+  });
+});
+
+describe('the theme of the terminals', () => {
+  afterEach(() => {
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('draws its 16 colours with tokens of the app that have a value in both themes', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { tokensOf } = await import('../test/color');
+    const css = readFileSync('src/app.css', 'utf8');
+    const dark = tokensOf(css, ':root');
+    const light = { ...dark, ...tokensOf(css, ":root[data-theme='light']") };
+    const tokens = Object.values(ANSI_TOKENS);
+    expect(Object.keys(ANSI_TOKENS)).toHaveLength(16);
+    expect(tokens.filter((t) => !(t in dark) || !(t in light))).toEqual([]);
+  });
+
+  it('follows the theme at once, without opening the terminal again, and keeps colours readable in the light one', async () => {
+    const x = launchLog('theme-hot', () => {});
+    const before = x.term.options.theme;
+    expect(termOptions.at(-1)).toMatchObject({ minimumContrastRatio: 1 });
+    document.documentElement.dataset.theme = 'light';
+    await new Promise((r) => setTimeout(r, 0));
+    expect(x.term.options.theme).not.toBe(before);
+    expect(x.term.options.minimumContrastRatio).toBe(4.5);
+    document.documentElement.dataset.theme = 'dark';
+    await new Promise((r) => setTimeout(r, 0));
+    expect(x.term.options.minimumContrastRatio).toBe(1);
+    disposeLog('theme-hot');
   });
 });

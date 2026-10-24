@@ -678,3 +678,68 @@ describe('dictation in Claude Code’s interface', () => {
     expect(backend.called('term_write')).toHaveLength(0);
   });
 });
+
+describe('the band above the harness’s terminal', () => {
+  it('says in amber that Codex asks about the trust of the folder, until it no longer does', async () => {
+    let asks = true;
+    const a = agent({ terminal: true, engine: 'codex' });
+    resetApp({ projects: [project()], agents: [a] });
+    const backend = fakeBackend({ tui_asks_trust: () => asks });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(AgentTerminal, { agent: a });
+    const band = await screen.findByRole('status');
+    expect(band).toHaveClass('trust');
+    expect(band.textContent).toContain('Codex demande s’il peut faire confiance au dossier de l’agent.');
+    expect(band.textContent).toContain('sans confiance, il s’arrête');
+    expect(band.querySelector('[data-icon="shield"]')).not.toBeNull();
+    expect(backend.called('tui_asks_trust')[0].args).toEqual({ id: a.id });
+    // Answered in the terminal: the band goes, and the view asks no more.
+    asks = false;
+    await vi.advanceTimersByTimeAsync(1600);
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    const n = backend.called('tui_asks_trust').length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(backend.called('tui_asks_trust')).toHaveLength(n);
+  });
+
+  it('says it for Copilot CLI too, in its words', async () => {
+    const a = agent({ terminal: true, engine: 'copilot' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend({ tui_asks_trust: () => true });
+    render(AgentTerminal, { agent: a });
+    const band = await screen.findByRole('status');
+    expect(band.textContent).toContain('Copilot CLI demande s’il peut faire confiance au dossier de l’agent.');
+    expect(band.textContent).toContain('Escouade ne répond pas à ta place');
+  });
+
+  it('says in OpenCode’s view that Escouade keeps the thread, and asks nothing of Claude Code’s', async () => {
+    const oc = agent({ terminal: true, engine: 'opencode' });
+    resetApp({ projects: [project()], agents: [oc] });
+    const backend = fakeBackend();
+    const { unmount } = render(AgentTerminal, { agent: oc });
+    const note = await screen.findByRole('note');
+    expect(note.querySelector('b')?.textContent).toBe('Escouade garde le fil');
+    expect(note.textContent).toContain('Revenir à la vue Escouade n’arrête que l’interface.');
+    unmount();
+    const cc = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [cc] });
+    render(AgentTerminal, { agent: cc });
+    await waitFor(() => expect(terms.mounted).toContain('t2'));
+    await settle();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(backend.called('tui_asks_trust')).toHaveLength(0);
+  });
+
+  it('is written in English when the interface is', async () => {
+    setLang('en');
+    const a = agent({ terminal: true, engine: 'opencode' });
+    resetApp({ projects: [project()], agents: [a] });
+    fakeBackend();
+    render(AgentTerminal, { agent: a });
+    const note = await screen.findByRole('note');
+    expect(note.textContent?.trim()).toBe(
+      'Escouade keeps the thread: the conversation, the card, the notifications and the cost stay up to date while you work here. Going back to the Escouade view only stops the interface.',
+    );
+  });
+});

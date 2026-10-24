@@ -94,6 +94,10 @@
   --ansi-cy-2: oklch(0.8 0.1 210);
   --term-sel-bg: #c8ccd2;
   --term-sel-fg: #08090a;
+  /* The ANSI black and white of xterm (the other colours are the ones above). */
+  --ansi-k: #2e3138;
+  --ansi-w: #c8ccd2;
+  --ansi-w-2: #f7f8f8;
 
   --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
@@ -202,6 +206,9 @@
   --ansi-cy-2: oklch(0.5 0.1 215);
   --term-sel-bg: #2a2e35;
   --term-sel-fg: #f7f8f8;
+  --ansi-k: #f6f7f9;
+  --ansi-w: #4a4e55;
+  --ansi-w-2: #15171c;
   color-scheme: light;
 }
 

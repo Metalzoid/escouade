@@ -384,6 +384,13 @@ pub async fn agent_terminal(
     .map_err(err)
 }
 
+/// Whether the agent's interface asks the question about the trust of its folder (Codex, Copilot
+/// CLI), which the user answers in its terminal.
+#[tauri::command(async)]
+pub fn tui_asks_trust(core: CoreState, id: String) -> Res<bool> {
+    core.tui_asks_trust(&id).map_err(err)
+}
+
 /// An image pasted in the agent's Claude Code interface, written to a file: the path to type there.
 #[tauri::command(async)]
 pub fn paste_image(core: CoreState, id: String, media_type: String, data: String) -> Res<String> {

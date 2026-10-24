@@ -22,6 +22,8 @@ export default {
     /** `{why}`: the reason the backend gave, as received. */
     couldNotStart: "« {name} » n'a pas pu démarrer : {why}",
     crashed: "« {name} » s'est arrêté en erreur (code {code})",
+    /** The button of that notification: the command's log. */
+    viewLog: 'Voir le log',
   },
   /** Where a launch command runs: the menu of its ▶, and the confirmation when it already runs elsewhere. */
   where: {
@@ -120,6 +122,8 @@ export default {
     variable: 'Variable',
     address: 'Adresse',
     opening: 'Ouverture',
-    recipeChanged: 'La recette a changé : relance ▶ Tester.',
+    recipeChanged: 'La recette a changé : relance « Tester ».',
+    /** Beside the title: what the window is at. */
+    phase: { read: 'À relire', running: 'En cours', ready: 'Prêt', failed: 'En échec' },
   },
 } as const satisfies Tree;

@@ -303,12 +303,15 @@ async fn codexs_question_about_the_folder_is_left_to_the_user() {
         "{refused:#}"
     );
     assert!(items_of(&h, &id, "user").is_empty());
+    // The band of its view says it, above the terminal.
+    assert!(h.core.tui_asks_trust(&id).unwrap());
     // The user answers in the terminal (Codex writes it in its config); then the message goes.
     h.core.pty.write(&info.id, b"\r").unwrap();
     h.wait("the folder trusted", |_| {
         std::fs::read_to_string(home.join("config.toml")).is_ok_and(|c| c.contains("trust_level"))
     })
     .await;
+    assert!(!h.core.tui_asks_trust(&id).unwrap());
     h.core
         .send_message(&id, "Bonjour".into(), Vec::new())
         .await

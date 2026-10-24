@@ -53,12 +53,12 @@ describe('RunView', () => {
     // A Windows project keeps the backslash, whatever the way the command spells its folder.
     const win = project({ path: 'C:\\code\\demo-api', runCommands: [FRONT] });
     const { unmount } = render(RunView, { cmd: { ...FRONT, cwd: 'web/admin' }, project: win });
-    expect(screen.getByText(/· C:\\code\\demo-api\\web\\admin$/)).toBeInTheDocument();
+    expect(screen.getByText(/^C:\\code\\demo-api\\web\\admin$/)).toBeInTheDocument();
     unmount();
     // On macOS a backslash would make a name of its own: the folder is under the project with a slash.
     const mac = project({ path: '/Users/guill/dev/demo-api', runCommands: [FRONT] });
     render(RunView, { cmd: { ...FRONT, cwd: 'web/admin' }, project: mac });
-    expect(screen.getByText(/· \/Users\/guill\/dev\/demo-api\/web\/admin$/)).toBeInTheDocument();
+    expect(screen.getByText(/^\/Users\/guill\/dev\/demo-api\/web\/admin$/)).toBeInTheDocument();
   });
 
   it('writes the folder of a recipe step in an agent’s worktree on macOS with a slash too', () => {
@@ -67,7 +67,7 @@ describe('RunView', () => {
     resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
     fakeBackend();
     render(RunView, { cmd: step, project: P });
-    expect(screen.getByText(/· \/Users\/guill\/wt\/dem-1\/web$/)).toBeInTheDocument();
+    expect(screen.getByText(/^\/Users\/guill\/wt\/dem-1\/web$/)).toBeInTheDocument();
   });
 
   it('starts, then stops the command', async () => {
@@ -105,14 +105,14 @@ describe('RunView', () => {
       resetApp({ projects: [P], agents: [agent({ id: 'a7', worktree: wt })] });
       fakeBackend();
       render(RunView, { cmd: { ...STEP, cwd: '' }, project: P });
-      expect(screen.getByText(/· C:\\code\\wt\\dem-1$/)).toBeInTheDocument();
+      expect(screen.getByText(/^C:\\code\\wt\\dem-1$/)).toBeInTheDocument();
     });
 
     it('runs in the folder of an agent without a worktree', () => {
       resetApp({ projects: [P], agents: [agent({ id: 'a7', cwd: 'C:\\code\\autre' })] });
       fakeBackend();
       render(RunView, { cmd: { ...STEP, cwd: '' }, project: P });
-      expect(screen.getByText(/· C:\\code\\autre$/)).toBeInTheDocument();
+      expect(screen.getByText(/^C:\\code\\autre$/)).toBeInTheDocument();
     });
 
     it('starts through the test launch', async () => {
@@ -123,6 +123,30 @@ describe('RunView', () => {
       expect(backend.called('test_run_start')[0].args).toMatchObject({ agentId: 'a7', kind: 'run', index: 0 });
       expect(backend.called('run_start')).toHaveLength(0);
     });
+  });
+
+  it('names a launch command run in an agent’s worktree by its own name, and says whose worktree (choice 30)', () => {
+    const wt = { path: 'C:\\code\\wt\\refacto-auth', branch: 'escouade/refacto-auth', baseBranch: 'main' };
+    resetApp({ projects: [P], agents: [agent({ id: 'a3', name: 'refacto-auth', worktree: wt })] });
+    app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
+    fakeBackend();
+    render(RunView, { cmd: { ...FRONT, id: 'wt:a3:c1', name: 'Front · refacto-auth' }, project: P });
+    expect(screen.getByRole('heading', { name: 'Front' })).toBeInTheDocument();
+    expect(screen.getByText('dans le worktree de refacto-auth')).toBeInTheDocument();
+    expect(screen.getByText(/^C:\\code\\wt\\refacto-auth\\web$/)).toBeInTheDocument();
+  });
+
+  it('draws its buttons with icons, and its state in a pill of its tone', async () => {
+    fakeBackend({ run_start: () => ({ id: 't1', projectId: 'p1', name: 'Front', shell: 'pwsh' }) });
+    const { container } = render(RunView, { cmd: FRONT, project: P });
+    expect(container.querySelector('.state.idle')?.textContent).toBe('prêt');
+    expect(screen.getByRole('button', { name: /Rechercher/ }).querySelector('[data-icon="search"]')).not.toBeNull();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Lancer' })[0]);
+    expect(await screen.findByRole('button', { name: 'Stopper' })).toContainElement(
+      container.querySelector('[data-icon="stop"]') as HTMLElement,
+    );
+    expect(screen.getByRole('button', { name: 'Relancer' }).querySelector('[data-icon="restart"]')).not.toBeNull();
+    expect(container.querySelector('.state')?.className).not.toMatch(/idle|err|wait/);
   });
 });
 
@@ -137,7 +161,7 @@ describe('RunView in English', () => {
     fakeBackend();
     render(RunView, { cmd: FRONT, project: P });
     expect(screen.getByText('Not run yet.')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '▶ Run' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Run' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
     // The symbol says nothing: the button is named by its tooltip.
     expect(screen.getByRole('button', { name: 'Search (Ctrl+Shift+F)' })).toHaveAttribute('data-tip', 'Search (Ctrl+Shift+F)');
@@ -150,8 +174,8 @@ describe('RunView in English', () => {
     render(RunView, { cmd: FRONT, project: P });
     expect(screen.getByText('running')).toBeInTheDocument();
     expect(screen.getByText(/^since 9:30\sPM$/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '⟳ Restart' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '■ Stop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
   });
 
   it('says how the last run ended', () => {
@@ -159,6 +183,6 @@ describe('RunView in English', () => {
     app.launches.c1 = { status: 'crashed', ptyId: null, name: 'Front', stopping: false, code: 1, startedAt: 1 };
     render(RunView, { cmd: FRONT, project: P });
     expect(screen.getByText('crashed (code 1)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '⟳ Restart' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart' })).toBeInTheDocument();
   });
 });

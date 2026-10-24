@@ -17,7 +17,8 @@ import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf } from './refusal';
-import { testCommand, worktreeCommand } from './recipe';
+import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
+import type { IconName } from './icons';
 import type { SettingsTab } from './settings.svelte';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
@@ -99,6 +100,8 @@ export type Modal =
       option?: { label: string; value: boolean };
       /** A third choice, between cancelling and confirming. */
       alt?: { label: string; onClick: () => void | Promise<void> };
+      /** Before the title, in amber. */
+      icon?: IconName;
       onConfirm: (option: boolean) => void | Promise<void>;
       /** Where cancelling goes back to (no modal by default). */
       onCancel?: () => void;
@@ -1176,12 +1179,33 @@ class AppState {
 
   /** A launch command's process ended: stopped on purpose, finished, or crashed. */
   private onLaunchExit(ptyId: string, code: number | null) {
-    const l = Object.values(this.launches).find((x) => x.ptyId === ptyId);
-    if (!l) return;
+    const found = Object.entries(this.launches).find(([, x]) => x.ptyId === ptyId);
+    if (!found) return;
+    const [id, l] = found;
     delete this.exitedTerms[ptyId];
     const status = l.stopping ? 'stopped' : code === 0 ? 'done' : 'crashed';
     Object.assign(l, { status, code, ptyId: null, stopping: false });
-    if (status === 'crashed') this.toast(t('runs.launch.crashed', { name: l.name, code: code ?? '?' }), 'error');
+    if (status !== 'crashed') return;
+    // « Voir le log »: its log in the main area, in its project.
+    const projectId = this.launchProject(id);
+    this.toast(
+      t('runs.launch.crashed', { name: l.name, code: code ?? '?' }),
+      'error',
+      projectId ? { label: t('runs.launch.viewLog'), onClick: () => this.showLaunch(projectId, id) } : undefined,
+    );
+  }
+
+  /** The project a launch runs for: its command's, or that of the agent whose test or worktree it runs in. */
+  private launchProject(id: string): string | null {
+    const of = parseTestId(id) ?? parseWorktreeRunId(id);
+    if (of) return this.agents[of.agentId]?.projectId ?? null;
+    return this.projects.find((p) => p.runCommands.some((c) => c.id === id))?.id ?? null;
+  }
+
+  /** The log of a launch, in the main area of its project. */
+  showLaunch(projectId: string, id: string) {
+    if (this.ui.view !== 'project' || this.ui.activeProject !== projectId) this.selectProject(projectId);
+    this.selectLaunch(id);
   }
 
   /**

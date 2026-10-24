@@ -81,6 +81,13 @@ const REDRAWN = {
     'src/components/branches/MergedBranchesModal.svelte',
     'src/components/modals/CommitModal.svelte',
   ],
+  'lot 8 (ESC-80)': [
+    'src/components/TerminalView.svelte',
+    'src/components/RunView.svelte',
+    'src/components/AgentTerminal.svelte',
+    'src/components/modals/TestLaunchModal.svelte',
+    'src/components/modals/ConfirmModal.svelte',
+  ],
 };
 
 /**

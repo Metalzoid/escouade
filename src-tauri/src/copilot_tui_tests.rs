@@ -442,6 +442,8 @@ async fn copilots_question_about_the_folder_is_left_to_the_user() {
         "{refused:#}"
     );
     assert!(items_of(&h, &id, "user").is_empty());
+    // The band of its view says it, above the terminal.
+    assert!(h.core.tui_asks_trust(&id).unwrap());
     // « 1. Yes », for this process alone: nothing written, so Escouade still cannot tell.
     h.core.pty.write(&info.id, b"\r").unwrap();
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -456,6 +458,7 @@ async fn copilots_question_about_the_folder_is_left_to_the_user() {
         !items_of(h, &id, "turn").is_empty()
     })
     .await;
+    assert!(!h.core.tui_asks_trust(&id).unwrap());
     h.core
         .send_message(&id, "Bonjour".into(), Vec::new())
         .await

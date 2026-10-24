@@ -98,10 +98,10 @@ describe('TestLaunchModal', () => {
     app.agents.a7 = { ...app.agents.a7, recipe, approvedRecipe: recipe };
     fakeBackend();
     render(TestLaunchModal, { agentId: 'a7' });
-    expect(screen.queryByText('La recette a changé : relance ▶ Tester.')).not.toBeInTheDocument();
+    expect(screen.queryByText('La recette a changé : relance « Tester ».')).not.toBeInTheDocument();
     // What the window does when the agent sends another recipe.
     delete flows.all.a7;
-    expect(await screen.findByText('La recette a changé : relance ▶ Tester.')).toBeInTheDocument();
+    expect(await screen.findByText('La recette a changé : relance « Tester ».')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Étapes du lancement' })).not.toBeInTheDocument();
   });
 
@@ -151,11 +151,15 @@ describe('TestLaunchModal, a recipe to read before it runs', () => {
   it('shows what will run, where, and who wrote it, before anything runs', () => {
     const backend = fakeBackend();
     render(TestLaunchModal, { agentId: 'a7' });
-    expect(
-      screen.getByText(
-        'Ces commandes ont été écrites par dem-1-ajouter. Elles tournent dans ton shell, hors du mode de permission de Claude Code.',
-      ),
-    ).toBeInTheDocument();
+    // Who wrote them first, the agent in bold, beside the shield.
+    const notice = document.querySelector('.notice')!;
+    expect(notice.textContent?.trim()).toBe(
+      'Ces commandes ont été écrites par dem-1-ajouter. Elles tournent dans ton shell, hors du mode de permission de Claude Code.',
+    );
+    expect(notice.querySelector('b')?.textContent).toBe('dem-1-ajouter');
+    expect(notice.querySelector('[data-icon="shield"]')).not.toBeNull();
+    // The window says it is to be read, beside its title.
+    expect(screen.getByText('À relire')).toBeInTheDocument();
 
     const prepare = within(section('Préparation'));
     expect(prepare.getByText('npm install')).toHaveClass('mono');
@@ -414,7 +418,7 @@ describe('TestLaunchModal, a recipe to read before it runs', () => {
       expect(
         screen.getByText(/isola lance les commandes de ce fichier dans ton shell, hors du mode de permission de Claude Code/),
       ).toBeInTheDocument();
-      expect(screen.getByText(/dem-1-ajouter peut l’avoir écrit ou modifié/)).toBeInTheDocument();
+      expect(document.querySelector('.notice')?.textContent).toMatch(/dem-1-ajouter peut l’avoir écrit ou modifié/);
       const config = within(section('Configuration isola (.isola.toml)')).getByText(/\[services\.web\]/);
       expect(config).toHaveClass('mono');
       expect(config.textContent).toBe(CONFIG);
@@ -431,7 +435,7 @@ describe('TestLaunchModal, a recipe to read before it runs', () => {
       render(TestLaunchModal, { agentId: 'a7' });
       expect(screen.getByText('Lecture du .isola.toml…')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
-      expect(screen.queryByText('La recette a changé : relance ▶ Tester.')).not.toBeInTheDocument();
+      expect(screen.queryByText('La recette a changé : relance « Tester ».')).not.toBeInTheDocument();
     });
 
     it('spells out what hides in the file, but takes a Windows line ending for a line break', () => {
@@ -499,9 +503,10 @@ describe('TestLaunchModal in English', () => {
     fakeBackend();
     render(TestLaunchModal, { agentId: 'a7' });
     expect(screen.getByRole('dialog', { name: 'Test DEM-1' })).toBeInTheDocument();
-    expect(
-      screen.getByText('These commands were written by dem-1-add. They run in your shell, outside Claude Code’s permission mode.'),
-    ).toBeInTheDocument();
+    expect(document.querySelector('.notice')?.textContent?.trim()).toBe(
+      'These commands were written by dem-1-add. They run in your shell, outside Claude Code’s permission mode.',
+    );
+    expect(screen.getByText('To read')).toBeInTheDocument();
     const setup = screen.getByRole('heading', { name: 'Setup' }).closest('section') as HTMLElement;
     expect(within(setup).getByText('Folder')).toBeInTheDocument();
     const launch = screen.getByRole('heading', { name: 'Launch' }).closest('section') as HTMLElement;

@@ -7,6 +7,7 @@
   import { isolaApproved, openAddress, recipeApproved, revealHidden } from '../../lib/recipe';
   import { app } from '../../lib/state.svelte';
   import { approveAndTest, flows, stopTests } from '../../lib/test-launch.svelte';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   let { agentId }: { agentId: string } = $props();
@@ -73,7 +74,10 @@
     return (withLog.find((l) => !l.id.includes(':prep:')) ?? withLog[0])?.launchId ?? null;
   });
   const close = () => (app.modal = null);
-  const MARK = { running: '…', waiting: '…', ready: '✓', failed: '✕', stopped: '■', skipped: '–' } as const;
+  /** The mark of a step: a spinner while it runs or is waited for, else an icon of how it ended. */
+  const MARK = { ready: 'check', failed: 'close', stopped: 'stop', skipped: 'circle' } as const;
+  /** What the window is at, beside its title. */
+  const phase = $derived(flow ? flow.phase : toRead || reading ? 'read' : null);
 
   /** « Lancer »: what is shown is approved, then it runs. */
   async function launch() {
@@ -98,12 +102,18 @@
   }
 </script>
 
-<Modal title={t('runs.testLaunch.title', { name: ticket?.key ?? agent?.name ?? '' })} width={560} onclose={close}>
+<Modal title={t('runs.testLaunch.title', { name: ticket?.key ?? agent?.name ?? '' })} width={620} onclose={close}>
+  {#snippet badge()}{#if phase}<span class="phase {phase}">{t(`runs.testLaunch.phase.${phase}`)}</span>{/if}{/snippet}
   {#if flow}
     <ul class="lines" aria-label={t('runs.testLaunch.steps')}>
       {#each flow.lines as l (l.id)}
         <li class={l.state}>
-          <span class="mark">{MARK[l.state]}</span>
+          <span class="mark"
+            >{#if l.state === 'running' || l.state === 'waiting'}<i class="spin"></i>{:else}<Icon
+                name={MARK[l.state]}
+                size={14}
+              />{/if}</span
+          >
           <span class="label">{l.label}</span>
           <span class="detail mono">{l.detail}</span>
           {#if l.state === 'failed' && hasLog(l.launchId)}
@@ -114,7 +124,8 @@
     </ul>
     {#if flow.error}<p class="error">{flow.error}</p>{/if}
     {#if flow.opened}
-      <p class="opened">
+      <p class="opened done">
+        <Icon name="ext" size={14} />
         <Rich k="runs.testLaunch.opened">{#snippet address()}<span class="mono">{flow.opened}</span>{/snippet}</Rich>
       </p>
     {/if}
@@ -122,20 +133,32 @@
     <p class="opened">{t('runs.testLaunch.reading')}</p>
   {:else if toRead && agent}
     {#if changed}
-      <p class="notice changed" role="status">{t('runs.testLaunch.changed')}</p>
+      <p class="notice changed" role="status"><Icon name="info" size={16} /><span>{t('runs.testLaunch.changed')}</span></p>
     {/if}
     {#if agent.isola && isolaConfig !== undefined}
-      <p class="notice">{t('runs.testLaunch.isolaNotice', { name: agent.name, harness: engineName(agent.engine) })}</p>
+      <p class="notice">
+        <Icon name="shield" size={16} />
+        <span
+          ><Rich k="runs.testLaunch.isolaNotice" harness={engineName(agent.engine)}>{#snippet name()}<b>{agent.name}</b>{/snippet}</Rich
+          ></span
+        >
+      </p>
       <section>
-        <h3 class="section-label">{t('runs.testLaunch.isolaConfig')}</h3>
+        <h3>{t('runs.testLaunch.isolaConfig')}</h3>
         <pre class="cmd mono">{revealHidden(isolaConfig)}</pre>
       </section>
     {:else if agent.recipe}
       {@const recipe = agent.recipe}
-      <p class="notice">{t('runs.testLaunch.recipeNotice', { name: agent.name, harness: engineName(agent.engine) })}</p>
+      <p class="notice">
+        <Icon name="shield" size={16} />
+        <span
+          ><Rich k="runs.testLaunch.recipeNotice" harness={engineName(agent.engine)}>{#snippet name()}<b>{agent.name}</b>{/snippet}</Rich
+          ></span
+        >
+      </p>
       {#if recipe.prepare.length}
         <section>
-          <h3 class="section-label">{t('runs.testLaunch.prepare')}</h3>
+          <h3>{t('runs.testLaunch.prepare')}</h3>
           <ol class="steps">
             {#each recipe.prepare as step, i (i)}
               <li>
@@ -151,7 +174,7 @@
       {/if}
       {#if recipe.processes.length}
         <section>
-          <h3 class="section-label">{t('runs.testLaunch.launch')}</h3>
+          <h3>{t('runs.testLaunch.launch')}</h3>
           <ul class="steps">
             {#each recipe.processes as p, i (i)}
               <li>
@@ -177,8 +200,8 @@
     {/if}
     {#if address}
       <section>
-        <h3 class="section-label">{t('runs.testLaunch.opening')}</h3>
-        <p class="cmd mono">{revealHidden(address)}</p>
+        <h3>{t('runs.testLaunch.opening')}</h3>
+        <pre class="cmd mono">{revealHidden(address)}</pre>
       </section>
     {/if}
   {:else if agent?.recipe && !agent.isola}
@@ -189,12 +212,14 @@
     {#if !flow && (toRead || reading)}
       <button class="btn" disabled={approving} onclick={close}>{t('common.cancel')}</button>
       {#if toRead}
-        <button class="btn primary" disabled={approving || settling || !project} onclick={launch}>{t('runs.action.run')}</button>
+        <button class="btn primary" disabled={approving || settling || !project} onclick={launch}
+          ><Icon name="play" size={14} />{t('runs.action.run')}</button
+        >
       {/if}
     {:else}
       {#if flow?.opened}
         {@const opened = flow.opened}
-        <button class="btn" onclick={() => app.run(openUrl(opened))}>{t('runs.testLaunch.reopen')}</button>
+        <button class="btn reopen" onclick={() => app.run(openUrl(opened))}>{t('runs.testLaunch.reopen')}</button>
       {/if}
       <button class="btn" disabled={!logs} onclick={() => viewLog(logs)}>{t('runs.testLaunch.viewLogs')}</button>
       <button class="btn danger" onclick={() => stopTests(agentId)}>{t('common.stopAll')}</button>
@@ -204,52 +229,89 @@
 </Modal>
 
 <style>
+  /* The window of « Tester » in the 2.0 design: who wrote the commands first, then each step in a well, then the launch,
+     step by step with its time. */
+  .phase {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--soft);
+    font-size: 11.5px;
+    font-weight: 550;
+    white-space: nowrap;
+  }
+  .phase.failed {
+    background: oklch(from var(--del) l c h / 0.1);
+    color: var(--del);
+  }
   .lines {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    gap: 2px;
   }
-  li {
-    display: flex;
-    align-items: baseline;
+  .lines li {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 210px) minmax(0, 1fr) auto;
+    align-items: center;
     gap: 10px;
+    min-height: 34px;
     font-size: 13px;
   }
   .mark {
-    width: 14px;
-    flex: none;
-    text-align: center;
+    display: grid;
+    place-items: center;
     color: var(--dim);
   }
   li.ready .mark {
-    color: var(--ok);
+    color: var(--add);
   }
   li.failed .mark,
   li.failed .detail {
     color: var(--del);
   }
+  .spin {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1.75px solid rgba(var(--fg-rgb), 0.15);
+    border-top-color: var(--soft);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+  }
   .label {
-    flex: none;
-    max-width: 45%;
     font-weight: 600;
     overflow-wrap: anywhere;
   }
   .detail {
-    flex: 1;
     min-width: 0;
-    font-size: 11.5px;
+    font-family: var(--mono);
+    font-size: 12px;
     color: var(--muted);
     overflow-wrap: anywhere;
   }
+  li.ready .detail {
+    color: var(--soft);
+  }
   .link {
-    flex: none;
     border: none;
     background: none;
     padding: 0;
-    color: var(--accent);
+    color: var(--p-ink);
     font-size: 12px;
     cursor: pointer;
   }
@@ -262,39 +324,60 @@
     font-size: 12.5px;
   }
   .notice {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 10px;
     margin: 0;
-    padding: 8px 12px;
-    border-left: 2px solid var(--wait);
-    background: var(--wait-soft);
+    padding: 11px 13px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--soft);
     font-size: 12.5px;
     line-height: 1.5;
-    color: var(--text);
   }
-  .notice.changed {
-    border-left-color: var(--del);
+  .notice > :global(.icon) {
+    margin-top: 1px;
+    color: var(--wait);
+  }
+  .notice :global(b) {
+    color: var(--text);
     font-weight: 600;
   }
+  .notice.changed {
+    background: oklch(from var(--del) l c h / 0.08);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+    color: var(--text);
+    font-weight: 600;
+  }
+  .notice.changed > :global(.icon) {
+    color: var(--del);
+  }
   section {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 8px;
   }
   h3 {
     margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
   }
   .steps {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
   }
   .steps li {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
+    display: grid;
+    gap: 7px;
+    padding: 12px 0;
+  }
+  .steps li + li {
+    border-top: 1px solid var(--line);
   }
   /* What is read here is what the shell reads, in that order: right-to-left letters must not reorder a « ; » or a « | ». */
   .name,
@@ -304,17 +387,17 @@
     direction: ltr;
   }
   .name {
-    font-size: 13px;
     font-weight: 600;
   }
   /* The whole command, as written: never cut, never reflowed, however long or many its lines. */
   .cmd {
     margin: 0;
-    padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    font-size: 11.5px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--text);
+    font: 12.5px var(--mono);
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -323,15 +406,17 @@
     margin: 0;
     display: grid;
     grid-template-columns: max-content 1fr;
-    gap: 2px 10px;
-    font-size: 11.5px;
+    gap: 3px 14px;
+    font-size: 12px;
   }
   .facts dt {
-    color: var(--dim);
+    color: var(--muted);
   }
   .facts dd {
     margin: 0;
-    color: var(--muted);
+    color: var(--soft);
+    font-family: var(--mono);
+    font-size: 11.5px;
     overflow-wrap: anywhere;
   }
   .opened {
@@ -339,5 +424,24 @@
     font-size: 12.5px;
     color: var(--muted);
     overflow-wrap: anywhere;
+  }
+  .opened.done {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .opened.done > :global(.icon) {
+    flex: none;
+    color: var(--add);
+  }
+  .opened :global(.mono) {
+    color: var(--soft);
+  }
+  /* « Rouvrir » on the left of the footer, apart from what closes or stops. */
+  .reopen {
+    margin-right: auto;
   }
 </style>

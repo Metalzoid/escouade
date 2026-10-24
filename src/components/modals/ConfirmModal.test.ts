@@ -27,6 +27,22 @@ describe('ConfirmModal', () => {
     expect(app.modal).toBeNull();
   });
 
+  it('draws the icon it is given before its title: « Front » tourne déjà, its choices in their order', () => {
+    render(ConfirmModal, {
+      title: '« Front » tourne déjà',
+      body: 'b',
+      confirm: "Arrêter l'autre et lancer",
+      icon: 'play',
+      onConfirm: () => {},
+      alt: { label: 'Lancer quand même', onClick: () => {} },
+    });
+    const dialog = screen.getByRole('dialog', { name: '« Front » tourne déjà' });
+    expect(dialog.querySelector('.head [data-icon="play"]')).not.toBeNull();
+    const foot = [...dialog.querySelectorAll('.foot button')].map((b) => b.textContent);
+    expect(foot).toEqual(['Annuler', 'Lancer quand même', "Arrêter l'autre et lancer"]);
+    expect(dialog.querySelector('.foot .primary')?.textContent).toBe("Arrêter l'autre et lancer");
+  });
+
   it('goes back where it came from when cancelled', async () => {
     const onCancel = vi.fn(() => {
       app.modal = { kind: 'settings', resume: true };

@@ -42,6 +42,8 @@ const PAIRS: [string, string[], number][] = [
   ...['--code-fg', '--code-dim', '--syn-k', '--syn-f', '--syn-s', '--syn-t', '--syn-n', '--ansi-y', '--ansi-cy', '--ansi-cy-2'].map(
     (t): [string, string[], number] => [t, CODE, TEXT],
   ),
+  // xterm's white and bright white, in the terminal's well.
+  ...['--ansi-w', '--ansi-w-2'].map((t): [string, string[], number] => [t, ['puits'], TEXT]),
   // The project's own colour is the product's: its dot and its bars always carry the project's name.
   ...['--idle', '--ring', '--brand'].map((t): [string, string[], number] => [t, PLAIN, MARK]),
 ];

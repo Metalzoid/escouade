@@ -10,7 +10,20 @@
     onclose,
     children,
     footer,
-  }: { title: string; width?: number; tall?: boolean; onclose: () => void; children: Snippet; footer?: Snippet } = $props();
+    lead,
+    badge,
+  }: {
+    title: string;
+    width?: number;
+    tall?: boolean;
+    onclose: () => void;
+    children: Snippet;
+    footer?: Snippet;
+    /** Before the title: an icon of what is asked. */
+    lead?: Snippet;
+    /** Beside the title: what the window is at. */
+    badge?: Snippet;
+  } = $props();
 
   // Only a click on the overlay closes it: not the end of a selection dragged out of a field (what was typed there
   // would be lost).
@@ -46,7 +59,9 @@
     aria-label={title}
   >
     <div class="head">
+      {#if lead}{@render lead()}{/if}
       <span class="t">{title}</span>
+      {#if badge}{@render badge()}{/if}
       <div style="flex:1"></div>
       <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={onclose} aria-label={t('common.close')}>×</button>
     </div>

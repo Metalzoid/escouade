@@ -22,6 +22,7 @@ export default defineZone('runs', {
     /** `{why}`: the reason the backend gave, as received. */
     couldNotStart: '“{name}” couldn’t start: {why}',
     crashed: '“{name}” stopped with an error (code {code})',
+    viewLog: 'View the log',
   },
   /** Where a launch command runs: the menu of its ▶, and the confirmation when it already runs elsewhere. */
   where: {
@@ -118,6 +119,7 @@ export default defineZone('runs', {
     variable: 'Variable',
     address: 'Address',
     opening: 'Opens in the browser',
-    recipeChanged: 'The recipe changed: press ▶ Test again.',
+    recipeChanged: 'The recipe changed: press “Test” again.',
+    phase: { read: 'To read', running: 'Running', ready: 'Ready', failed: 'Failed' },
   },
 });

@@ -611,6 +611,37 @@ describe('AppState launch commands', () => {
     expect(app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Front') });
   });
 
+  it('offers the log of a command that crashed, in its project, whichever is shown', async () => {
+    const { emit } = await start({
+      projects: [
+        project(),
+        project({
+          id: 'p2',
+          name: 'studio-web',
+          runCommands: [{ id: 'w1', name: 'Worker', command: 'node w.js', shell: 'pwsh', cwd: '' }],
+        }),
+      ],
+    });
+    app.launches.w1 = running({ name: 'Worker' });
+    emit({ type: 'terminalExit', id: 't9', code: 1 });
+    const toast = app.toasts.at(-1)!;
+    expect(toast).toMatchObject({ kind: 'error', text: "« Worker » s'est arrêté en erreur (code 1)" });
+    expect(toast.action?.label).toBe('Voir le log');
+    toast.action!.onClick();
+    expect(app.ui).toMatchObject({ activeProject: 'p2', view: 'project' });
+    expect(app.selectedLaunch.p2).toBe('w1');
+  });
+
+  it('offers the log of a launch run in an agent’s worktree, in the agent’s project', async () => {
+    const { emit } = await start();
+    app.ui.view = 'stats';
+    app.launches['wt:b1:c1'] = running({ name: 'Front · landing' });
+    emit({ type: 'terminalExit', id: 't9', code: 3 });
+    app.toasts.at(-1)!.action!.onClick();
+    expect(app.ui).toMatchObject({ activeProject: 'p2', view: 'project' });
+    expect(app.selectedLaunch.p2).toBe('wt:b1:c1');
+  });
+
   it('does not call a stopped or finished command a crash', async () => {
     const { emit } = await start();
     app.launches.c1 = running({ stopping: true });

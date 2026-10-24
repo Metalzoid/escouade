@@ -45,6 +45,14 @@ export default defineZone('conv', {
     restart: 'Restart',
     failed: '{engine} didn’t start: {error}',
     imageTooBig: '{name} is over {max}: {engine} won’t get it.',
+    trust: {
+      title: '{engine} asks whether it may trust the agent’s folder.',
+      codex: 'Answer in the terminal: without trust, it stops. Escouade already approved its hooks for this process alone.',
+      copilot: 'Answer in the terminal: Escouade doesn’t answer for you and types nothing while the question is asked.',
+    },
+    keeps:
+      '{title}: the conversation, the card, the notifications and the cost stay up to date while you work here. Going back to the Escouade view only stops the interface.',
+    keepsTitle: 'Escouade keeps the thread',
   },
 
   escouadeNext: {

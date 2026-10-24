@@ -2,6 +2,8 @@
   import { untrack } from 'svelte';
   import { t } from '../../lib/i18n';
   import { app } from '../../lib/state.svelte';
+  import type { IconName } from '../../lib/icons';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   let {
@@ -11,6 +13,7 @@
     danger = false,
     option,
     alt,
+    icon,
     onConfirm,
     onCancel,
   }: {
@@ -20,6 +23,8 @@
     danger?: boolean;
     option?: { label: string; value: boolean };
     alt?: { label: string; onClick: () => void | Promise<void> };
+    /** Before the title, in amber: what is about to happen (▶ of a command that already runs elsewhere). */
+    icon?: IconName;
     onConfirm: (option: boolean) => void | Promise<void>;
     onCancel?: () => void;
   } = $props();
@@ -47,7 +52,8 @@
   }
 </script>
 
-<Modal {title} width={480} onclose={cancel}>
+<Modal {title} width={icon ? 540 : 480} onclose={cancel}>
+  {#snippet lead()}{#if icon}<span class="lead"><Icon name={icon} size={16} /></span>{/if}{/snippet}
   <p class="p">{body}</p>
   {#if option}
     <label class="opt">
@@ -69,6 +75,10 @@
     margin: 0;
     color: var(--muted);
     line-height: 1.55;
+  }
+  .lead {
+    display: inline-flex;
+    color: var(--wait);
   }
   .opt {
     display: flex;

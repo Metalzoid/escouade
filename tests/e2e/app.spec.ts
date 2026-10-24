@@ -722,7 +722,8 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await expect(serveur).toContainText('prêt');
   // Its log says where it runs.
   await inWt.click();
-  await expect(page.locator('main.rv')).toContainText(`Serveur · ${agentName}`);
+  await expect(page.locator('main.rv h1')).toHaveText('Serveur');
+  await expect(page.locator('main.rv .crumbs')).toContainText(`dans le worktree de ${agentName}`);
 
   // The same command in the project: the user is told first, and runs both.
   await serveur.hover();

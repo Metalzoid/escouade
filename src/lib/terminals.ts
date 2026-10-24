@@ -82,31 +82,80 @@ export function resolveColor(css: string): string {
   return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * The 16 ANSI colours of the terminals, by the tokens of src/app.css that give them their value in each theme (the
+ * preview's palette): the bright ones are the same, but for white. Dim text is `--code-dim`.
+ */
+export const ANSI_TOKENS = {
+  black: '--ansi-k',
+  red: '--del',
+  green: '--add',
+  yellow: '--ansi-y',
+  blue: '--syn-f',
+  magenta: '--syn-k',
+  cyan: '--ansi-cy',
+  white: '--ansi-w',
+  brightBlack: '--code-dim',
+  brightRed: '--del',
+  brightGreen: '--add',
+  brightYellow: '--ansi-y',
+  brightBlue: '--syn-f',
+  brightMagenta: '--syn-k',
+  brightCyan: '--ansi-cy',
+  brightWhite: '--ansi-w-2',
+} as const;
+
+/**
+ * The theme of a terminal, in the theme the window shows (dark or light): the well's background, the code's ink, the
+ * cursor of the text's ink (none in a log, which takes no input), the selection of the project's colour.
+ */
 export function terminalTheme(readOnly = false): ITheme {
   const background = resolveColor('var(--term)');
+  const ansi = Object.fromEntries(Object.entries(ANSI_TOKENS).map(([k, v]) => [k, resolveColor(`var(${v})`)]));
   return {
     background,
-    foreground: '#ede7df',
-    cursor: readOnly ? background : resolveColor('var(--accent)'),
-    cursorAccent: '#1b1512',
-    selectionBackground: resolveColor('color-mix(in oklch, var(--accent) 35%, transparent)') + '99',
-    black: '#2a2724',
-    red: '#e2735f',
-    green: '#7cc48d',
-    yellow: '#e9c46a',
-    blue: '#6fa8dc',
-    magenta: '#c792ea',
-    cyan: '#6cc5c1',
-    white: '#d8d0c4',
-    brightBlack: '#6f685f',
-    brightRed: '#f08c78',
-    brightGreen: '#9bd8a9',
-    brightYellow: '#f4d68a',
-    brightBlue: '#8fbfea',
-    brightMagenta: '#d9aef2',
-    brightCyan: '#8ad8d4',
-    brightWhite: '#f5efe7',
+    foreground: resolveColor('var(--code-fg)'),
+    cursor: readOnly ? background : resolveColor('var(--text)'),
+    cursorAccent: background,
+    selectionBackground: resolveColor('var(--p)') + '42',
+    ...ansi,
   };
+}
+
+/**
+ * The least contrast xterm.js keeps between a cell's ink and its background: in the light theme, what a program draws
+ * in colours made for a dark terminal (most TUIs do) stays readable.
+ */
+export function terminalContrast(): number {
+  return document.documentElement.dataset.theme === 'light' ? 4.5 : 1;
+}
+
+/**
+ * Every terminal takes the theme the window shows: at once when it changes (Réglages › Application › Thème, or the
+ * system's under Système), without opening it again; and once `--p` has glided to the next project's colour.
+ */
+export function retheme() {
+  const contrast = terminalContrast();
+  for (const x of xterms.values()) {
+    x.term.options.theme = terminalTheme(x.readOnly);
+    x.term.options.minimumContrastRatio = contrast;
+  }
+}
+
+/** How long `--p` glides from a project's colour to the next (src/app.css), after which the terminals take it. */
+const GLIDE_MS = 750;
+let watched = false;
+let glide: ReturnType<typeof setTimeout> | undefined;
+
+/** Follows the theme of the window (`data-theme`) and its tint (`--p`, in the root's style), once. */
+function watchTheme() {
+  if (watched || typeof MutationObserver === 'undefined') return;
+  watched = true;
+  new MutationObserver((changes) => {
+    if (changes.some((c) => c.attributeName === 'data-theme')) retheme();
+    clearTimeout(glide);
+    glide = setTimeout(retheme, GLIDE_MS);
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
 }
 
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);
@@ -150,6 +199,7 @@ function reportRenderer(x: XTerm) {
  * pseudo-console is started at that size, never at one a message of resize has to correct.
  */
 function createXTerm(readOnly: boolean, room?: Room | null): XTerm {
+  watchTheme();
   const term = new Terminal({
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: app.settings.terminalFontSize || DEFAULT_FONT_SIZE,
@@ -162,6 +212,7 @@ function createXTerm(readOnly: boolean, room?: Room | null): XTerm {
     linkHandler: terminalLinks,
     scrollback: 10000,
     theme: terminalTheme(readOnly),
+    minimumContrastRatio: terminalContrast(),
     // Rows added by a resize stay blank at the bottom, as in the pseudo-console, which repaints
     // its screen at absolute positions: pulling scrollback down would shift the log under it.
     windowsPty: { backend: 'conpty' },

@@ -35,6 +35,9 @@
   import MicButton from './MicButton.svelte';
   import { app } from '../lib/state.svelte';
   import { engineName, speakerOf } from '../lib/engines';
+  import Rich from '../lib/i18n/Rich.svelte';
+  import { api } from '../lib/ipc';
+  import Icon from './Icon.svelte';
   import type { Agent } from '../lib/types';
 
   // « Vue Claude Code »: the agent's conversation in Claude Code's own interface. Escouade still follows it (status,
@@ -42,6 +45,9 @@
   let { agent }: { agent: Agent } = $props();
   /** Its harness, as the texts name it. */
   const engine = $derived(engineName(agent.engine));
+
+  /** How often the view asks whether the interface still asks about the trust of its folder. */
+  const TRUST_POLL_MS = 1500;
 
   /** How long the note about a session not found stays, once the interface is up on the new one. */
   const LOST_NOTE_MS = 6000;
@@ -68,6 +74,38 @@
   const stop = $derived(exited ? agent.tuiExit : null);
   /** It stopped as soon as it started, the session not found, and the view has yet to start it again by itself. */
   const retrying = $derived(!!stop?.quick && stop.sessionLost && !retried);
+
+  /** Its harness: Codex and Copilot CLI ask about the trust of the folder, OpenCode's view keeps the thread (choice 37). */
+  const engineId = $derived(agent.engine);
+  const asksAboutFolders = $derived(engineId === 'codex' || engineId === 'copilot');
+  /** The interface asks whether to trust the agent's folder: the amber band above the terminal says it. */
+  let asksTrust = $state(false);
+
+  // Asked of the backend while the interface is up, until it no longer asks (once answered, it never asks again).
+  $effect(() => {
+    const id = agentId;
+    if (!term || exited || !asksAboutFolders) {
+      asksTrust = false;
+      return;
+    }
+    let gone = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const check = () =>
+      api
+        .tuiAsksTrust(id)
+        .then((asks) => {
+          if (gone) return;
+          asksTrust = asks;
+          if (!asks) clearInterval(timer);
+        })
+        .catch(() => {});
+    void check();
+    timer = setInterval(check, TRUST_POLL_MS);
+    return () => {
+      gone = true;
+      clearInterval(timer);
+    };
+  });
 
   // Its interface, started when the view opens, and again on « Relancer ».
   $effect(() => {
@@ -117,7 +155,7 @@
   const dictated: DictationTarget = {
     kind: 'terminal',
     id: 'terminal-' + Math.random().toString(36).slice(2),
-    el: () => box?.parentElement,
+    el: () => box?.closest('.tui'),
     insert: (said) => {
       if (term) void typeIntoTerminal(term, said.trim());
     },
@@ -180,10 +218,27 @@
 </script>
 
 <div class="tui">
-  <div class="box" bind:this={box} aria-label={t('conv.header.toTerminal', { engine })}></div>
-  {#if term && !exited}
-    <div class="voice"><MicButton target={dictated} below /></div>
+  {#if asksTrust}
+    <div class="band trust" role="status">
+      <Icon name="shield" size={14} />
+      <span class="grow"
+        ><b>{t('conv.terminal.trust.title', { engine })}</b>
+        {engineId === 'codex' ? t('conv.terminal.trust.codex') : t('conv.terminal.trust.copilot')}</span
+      >
+    </div>
+  {:else if engineId === 'opencode'}
+    <div class="band keeps" role="note">
+      <Icon name="check-c" size={14} />
+      <span class="grow"><Rich k="conv.terminal.keeps">{#snippet title()}<b>{t('conv.terminal.keepsTitle')}</b>{/snippet}</Rich></span>
+    </div>
   {/if}
+  <!-- The terminal and its microphone, over its top right corner: under the band, if there is one. -->
+  <div class="well">
+    <div class="box" bind:this={box} aria-label={t('conv.header.toTerminal', { engine })}></div>
+    {#if term && !exited}
+      <div class="voice"><MicButton target={dictated} below /></div>
+    {/if}
+  </div>
   {#if error}
     <div class="note err" role="alert">
       {t('conv.terminal.failed', { error, engine })}
@@ -217,12 +272,61 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    background: var(--term);
+  }
+  .well {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   .box {
     flex: 1;
     min-height: 0;
-    padding: 8px 4px 4px 12px;
+    padding: 16px 8px 8px 22px;
+    background: var(--term);
+  }
+  /* Under a band, the terminal starts below it, the panel between them. */
+  .band + .well {
+    margin-top: 10px;
+  }
+  /* Above the terminal: what the harness asks there (amber), or what Escouade keeps doing meanwhile (OpenCode). */
+  .band {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 14px 0;
+    padding: 9px 12px;
+    border-radius: 10px;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .band b {
+    font-weight: 700;
+  }
+  .band .grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .trust {
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+  }
+  .trust > :global(.icon) {
+    flex: none;
+    color: var(--wait);
+  }
+  .keeps {
+    margin: 10px 0 0;
+    padding: 8px 10px 8px 12px;
+    background: rgba(var(--fg-rgb), 0.035);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .keeps > :global(.icon) {
+    flex: none;
+    color: var(--run);
   }
   /* Over the top right corner of the terminal, above its layers. */
   .voice {

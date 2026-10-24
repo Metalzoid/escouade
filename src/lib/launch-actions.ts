@@ -112,6 +112,7 @@ export async function startAll(project: Project) {
   app.modal = {
     kind: 'confirm',
     title: t('runs.conflict.titleSome'),
+    icon: 'play',
     body: t('runs.conflict.bodySome', { list }),
     confirm: t('runs.conflict.stopOthers'),
     onConfirm: async () => {
@@ -194,6 +195,7 @@ export async function runIn(project: Project, cmd: RunCommand, agentId: string |
   app.modal = {
     kind: 'confirm',
     title: t('runs.conflict.title', { name: cmd.name }),
+    icon: 'play',
     body: t('runs.conflict.body', { where: others.map(whereOf).join(', ') }),
     confirm: t('runs.conflict.stopOther'),
     onConfirm: async () => {

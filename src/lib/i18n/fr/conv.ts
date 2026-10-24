@@ -56,6 +56,16 @@ export default {
     restart: 'Relancer',
     failed: '{engine} n’a pas démarré : {error}',
     imageTooBig: '{name} dépasse {max} : {engine} ne la recevra pas.',
+    /** The amber band above the terminal while Codex or Copilot CLI asks whether to trust the agent's folder. */
+    trust: {
+      title: '{engine} demande s’il peut faire confiance au dossier de l’agent.',
+      codex: 'Réponds dans le terminal : sans confiance, il s’arrête. Escouade a déjà approuvé ses hooks pour ce seul process.',
+      copilot: 'Réponds dans le terminal : Escouade ne répond pas à ta place et ne tape rien tant que la question est posée.',
+    },
+    /** The green band of OpenCode's view (choice 37): its conversation stays up to date. `{title}`: `keepsTitle`, in bold. */
+    keeps:
+      '{title} : la conversation, la carte, les notifications et le coût restent à jour pendant que tu travailles ici. Revenir à la vue Escouade n’arrête que l’interface.',
+    keepsTitle: 'Escouade garde le fil',
   },
 
   /** An agent whose process started without Escouade’s tools, which its next start gives (ESC-91). */

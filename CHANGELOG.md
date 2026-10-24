@@ -15,6 +15,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Le bandeau « Plan » est redessiné dans la colonne de la conversation : une case par tâche, puis chaque tâche avec son état, le sous-agent qui y travaille et le modèle sur lequel il tourne vraiment, quel que soit son harness, ce qu’il fait et ce qu’elle attend.
 - Le Kanban est redessiné : des colonnes sans cadre, des cartes qui montrent leurs critères cochés, la boucle en cases, ce que fait l’agent et ce qu’il coûte, et le ticket à tester en ambre avec « Valider » et « Tester ». Dans le formulaire d’un ticket, chaque champ a son libellé, la description prend toute la place libre et « Après » s’ouvre en menu.
 - Git est redessiné à côté de la conversation : des onglets « Non commités » et « Historique », les fichiers avec leur lettre et leurs compteurs, le diff dans un cadre, « Commit… » et le merge à portée de main. L’historique dessine la branche de chaque agent qui rejoint la branche principale, et dit quel agent a fait chaque commit.
+- Les terminaux et les lancements sont redessinés : le log d’une commande dit son état, depuis quand elle tourne, sa commande, son dossier et le worktree où elle tourne, et la notification d’une commande plantée a « Voir le log ». Les terminaux suivent le thème clair ou sombre à chaud, et la fenêtre « Tester » dit qui a écrit les commandes avant de les lancer, puis chaque étape avec son temps.
+- Dans la vue Codex ou Copilot CLI, une bande ambre dit quand le harness demande s’il peut faire confiance au dossier de l’agent ; la vue OpenCode rappelle qu’Escouade garde le fil de la conversation.
 
 ### Corrections
 
