@@ -244,12 +244,12 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'A redesigned app, your code host in the loop, and Cursor CLI. No date promised: the work is planned in detail on GitHub.',
+    lead: 'Your code host in the loop, Cursor CLI, and dictation through Wispr Flow. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
       {
-        title: 'A redesigned app',
-        text: 'The whole interface speaks this site’s language, tinted by the active project’s color. Each card tells what its agent is doing, and a question is answered from the list, without leaving the open conversation.',
+        title: 'Wispr Flow and GitLab Issues',
+        text: 'Wispr Flow’s dictation in the message field and the voice conversation, and the Kanban synced with GitLab’s issues, as it is with GitHub Issues, Jira, Linear and Trello.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket and Gitea',

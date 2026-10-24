@@ -248,12 +248,12 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'Une app redessinée, ton hébergeur de code dans la boucle, et Cursor CLI. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'Ton hébergeur de code dans la boucle, Cursor CLI, et la dictée par Wispr Flow. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
-        title: 'Une app redessinée',
-        text: 'Toute l’interface parle la langue de ce site, teintée par la couleur du projet actif. Chaque carte dit ce que fait son agent, et une question se répond depuis la liste, sans quitter la conversation ouverte.',
+        title: 'Wispr Flow et GitLab Issues',
+        text: 'La dictée de Wispr Flow dans la zone de saisie et la conversation vocale, et le Kanban synchronisé avec les tickets de GitLab, comme avec GitHub Issues, Jira, Linear et Trello.',
       },
       {
         title: 'GitHub, GitLab, Bitbucket et Gitea',
