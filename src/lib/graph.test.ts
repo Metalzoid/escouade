@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchCommits, layout } from './graph';
+import { agentCommits, branchCommits, layout, mainLane, trunkTip, type GraphRow } from './graph';
 import type { Commit } from './types';
 
 const c = (hash: string, parents: string[] = [], refs: string[] = []): Commit => ({
@@ -12,10 +12,9 @@ const c = (hash: string, parents: string[] = [], refs: string[] = []): Commit =>
 });
 
 /** Rows as compact strings: node column, then "from>to" segments above and below the node. */
-const draw = (commits: Commit[]) =>
-  layout(commits).map(
-    (r) => `${r.col} | ${r.top.map((s) => `${s.from}>${s.to}`).join(' ')} | ${r.bottom.map((s) => `${s.from}>${s.to}`).join(' ')}`,
-  );
+const show = (rows: GraphRow[]) =>
+  rows.map((r) => `${r.col} | ${r.top.map((s) => `${s.from}>${s.to}`).join(' ')} | ${r.bottom.map((s) => `${s.from}>${s.to}`).join(' ')}`);
+const draw = (commits: Commit[]) => show(layout(commits));
 
 describe('layout', () => {
   it('keeps a linear history on one lane', () => {
@@ -55,5 +54,57 @@ describe('branchCommits', () => {
     expect([...branchCommits(commits, 'main')]).toEqual(['m', 'b', 'a']);
     expect(branchCommits(commits, 'unknown').size).toBe(0);
     expect(branchCommits(commits, null).size).toBe(0);
+  });
+});
+
+describe('agentCommits', () => {
+  it('gives an agent the commits of its branch down to where it left its base, not those of the base', () => {
+    // main: m <- b <- a ; the agent's branch: y <- x <- a.
+    const commits = [c('y', ['x'], ['ccm/landing']), c('m', ['b'], ['HEAD', 'main']), c('x', ['a']), c('b', ['a']), c('a')];
+    const owners = agentCommits(commits, [{ branch: 'ccm/landing', base: 'main', name: 'landing' }]);
+    expect([...owners]).toEqual([
+      ['y', 'landing'],
+      ['x', 'landing'],
+    ]);
+  });
+
+  it('keeps them the agent’s once merged, and gives nothing for a branch the history does not have', () => {
+    const commits = [c('m', ['b', 'x'], ['main']), c('x', ['a'], ['ccm/done']), c('b', ['a']), c('a')];
+    expect(agentCommits(commits, [{ branch: 'ccm/gone', base: 'main', name: 'gone' }]).size).toBe(0);
+    expect([...agentCommits(commits, [{ branch: 'ccm/done', base: 'main', name: 'done' }])]).toEqual([['x', 'done']]);
+  });
+});
+
+describe('mainLane', () => {
+  it('is the lane of the commit the folder is on, else of the base branch, else the first', () => {
+    const commits = [c('y', ['a'], ['ccm/landing']), c('m', ['a'], ['HEAD', 'main']), c('a')];
+    const rows = layout(commits);
+    expect(mainLane(commits, rows, 'main')).toBe(rows[1].lane);
+    const noHead = [c('y', ['a'], ['ccm/landing']), c('m', ['a'], ['main']), c('a')];
+    expect(mainLane(noHead, layout(noHead), 'main')).toBe(layout(noHead)[1].lane);
+    expect(mainLane(noHead, layout(noHead), null)).toBe(layout(noHead)[0].lane);
+    expect(mainLane([], [], 'main')).toBeNull();
+  });
+});
+
+describe('layout with a trunk', () => {
+  it('keeps the trunk to the first column, drawn from its first commit down, the branches converging on it', () => {
+    // The agent's y and x above main's m; all from a.
+    const commits = [c('y', ['x'], ['ccm/landing']), c('x', ['a']), c('m', ['a'], ['HEAD', 'main']), c('a')];
+    expect(show(layout(commits, 'm'))).toEqual(['1 |  | 1>1', '1 | 1>1 | 1>1', '0 | 1>1 | 0>0 1>1', '0 | 0>0 1>0 | ']);
+    const rows = layout(commits, 'm');
+    expect(rows[3].lane).toBe(rows[2].lane);
+  });
+
+  it('is the layout without a trunk when the trunk is not in the history', () => {
+    const commits = [c('m', ['b', 'x']), c('x', ['a']), c('b', ['a']), c('a')];
+    expect(show(layout(commits, 'zzz'))).toEqual(draw(commits));
+  });
+
+  it('starts at the folder’s commit, else at the base branch’s, else at the first', () => {
+    expect(trunkTip([c('y', [], ['ccm/x']), c('m', [], ['HEAD', 'main'])], 'main')).toBe('m');
+    expect(trunkTip([c('y', [], ['ccm/x']), c('m', [], ['main'])], 'main')).toBe('m');
+    expect(trunkTip([c('y'), c('m')], null)).toBe('y');
+    expect(trunkTip([], 'main')).toBeNull();
   });
 });

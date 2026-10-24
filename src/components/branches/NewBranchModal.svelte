@@ -204,7 +204,7 @@
     overflow-wrap: anywhere;
   }
   .opt input {
-    accent-color: var(--accent);
+    accent-color: var(--p-ink);
   }
   .opt {
     display: flex;

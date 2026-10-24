@@ -1294,9 +1294,11 @@
     font-size: 18px;
     font-weight: 600;
   }
+  /* Narrow (beside the files), the agent's folder breaks rather than overflow on both sides. */
   .empty .s {
     color: var(--muted);
-    max-width: 420px;
+    max-width: min(420px, 100%);
+    overflow-wrap: anywhere;
     text-wrap: pretty;
     line-height: 1.5;
   }

@@ -513,7 +513,8 @@ describe('FilesPanel in English', () => {
     resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
     fakeBackend({ git_files: () => [change('src/auth.ts', 'a3', true)] });
     render(FilesPanel, { project: project(), agent: app.agents.a3 });
-    expect(await screen.findByText('worktree .claude/worktrees/landing · isolated from the other agents')).toBeInTheDocument();
+    expect(await screen.findByText('.claude/worktrees/landing', { selector: '.caption .mono' })).toBeInTheDocument();
+    expect(document.querySelector('.caption')).toHaveTextContent('Worktree .claude/worktrees/landing · isolated from the other agents');
     expect(screen.getByRole('button', { name: 'Merge ccm/landing → main…' })).toBeInTheDocument();
   });
 
@@ -522,7 +523,8 @@ describe('FilesPanel in English', () => {
     resetApp({ agents: [agent({ id: 'a3', name: 'landing', worktree: wt })] });
     fakeBackend({ git_files: () => [change('src/auth.ts', 'a3', true)] });
     render(FilesPanel, { project: project(), agent: app.agents.a3 });
-    expect(await screen.findByText('worktree ../demo-api-worktrees/landing · isolated from the other agents')).toBeInTheDocument();
+    expect(await screen.findByText('../demo-api-worktrees/landing', { selector: '.caption .mono' })).toBeInTheDocument();
+    expect(document.querySelector('.caption')).toHaveTextContent('Worktree ../demo-api-worktrees/landing · isolated from the other agents');
   });
 
   it('asks in English before discarding the changes of a file, deleting a new one', async () => {

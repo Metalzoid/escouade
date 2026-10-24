@@ -5,7 +5,8 @@ export default defineZone('git', {
   files: {
     scopeAgent: 'This agent',
     scopeProject: 'Whole project',
-    hintWorktree: 'worktree {path} · isolated from the other agents',
+    scope: 'Scope',
+    hintWorktree: 'Worktree {path} · isolated from the other agents',
     hintAgent: 'Files changed by this agent (from its edits)',
     hintProject: 'All the project’s agents · attributed by worktree',
     emptyAgent: 'No files changed by this agent.',
@@ -65,6 +66,8 @@ export default defineZone('git', {
     empty: 'No commits.',
     tag: 'tag {name}',
     agentBranch: 'branch {branch} of agent {agent}',
+    all: 'All branches',
+    sync: '{behind} behind, {ahead} ahead of the remote',
   },
 
   agent: {

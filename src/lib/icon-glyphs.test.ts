@@ -69,6 +69,18 @@ const REDRAWN = {
     'src/components/board/RejectForm.svelte',
     'src/components/modals/ImportModal.svelte',
   ],
+  'lot 7 (ESC-79)': [
+    'src/components/SidePanel.svelte',
+    'src/components/FilesPanel.svelte',
+    'src/components/FileDiff.svelte',
+    'src/components/DiffView.svelte',
+    'src/components/DiffModal.svelte',
+    'src/components/GitGraph.svelte',
+    'src/components/branches/BranchPicker.svelte',
+    'src/components/branches/NewBranchModal.svelte',
+    'src/components/branches/MergedBranchesModal.svelte',
+    'src/components/modals/CommitModal.svelte',
+  ],
 };
 
 /**

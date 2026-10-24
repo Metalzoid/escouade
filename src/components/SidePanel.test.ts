@@ -27,6 +27,23 @@ describe('SidePanel', () => {
     expect(app.panelTab).toBe('history');
   });
 
+  it('keeps its count while the files are read again, back from another tab', async () => {
+    let slow = false;
+    fakeBackend({
+      git_files: () =>
+        slow
+          ? new Promise((r) => setTimeout(() => r([change('src/a.ts'), change('src/b.ts')]), 400))
+          : [change('src/a.ts'), change('src/b.ts')],
+      git_log: () => LOG,
+    });
+    render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
+    await screen.findByRole('tab', { name: /Non commités\s*2/ });
+    slow = true;
+    await userEvent.click(screen.getByRole('tab', { name: 'Historique' }));
+    await userEvent.click(screen.getByRole('tab', { name: /Non commités/ }));
+    expect(screen.getByRole('tab', { name: /Non commités/ })).toHaveAccessibleName(/Non commités\s*2/);
+  });
+
   it('counts every uncommitted file in its tab, whatever the list shows', async () => {
     fakeBackend({ git_files: () => Array.from({ length: 620 }, (_, i) => change(`src/f${i}.ts`)), git_log: () => LOG });
     render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
@@ -39,6 +56,26 @@ describe('SidePanel', () => {
     render(SidePanel, { project: project(), agent: app.agents.a1 });
     await userEvent.click(getByTip(document.body, 'Fermer'));
     expect(app.filesOpen).toBe(false);
+  });
+
+  it('keeps the place of « PR et CI » for after the 2.0, without drawing it', async () => {
+    fakeBackend({ git_files: () => [], git_log: () => LOG });
+    render(SidePanel, { project: project(), agent: app.agents.a1, docked: true });
+    const hosts = screen.getByRole('tab', { name: /PR et CI\s*après la 2\.0/ });
+    await userEvent.click(hosts);
+    expect(hosts).toHaveAttribute('aria-selected', 'true');
+    expect(app.panelTab).toBe('hosts');
+    expect(screen.getByText('PR, CI et déploiements de la branche de l’agent')).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).toHaveTextContent('GitHub, GitLab, Bitbucket, Gitea');
+  });
+
+  it('draws its close button with an icon, not a character', async () => {
+    fakeBackend({ git_files: () => [] });
+    app.filesOpen = true;
+    render(SidePanel, { project: project(), agent: app.agents.a1 });
+    const close = getByTip(document.body, 'Fermer');
+    expect(close.querySelector('svg[data-icon="close"]')).not.toBeNull();
+    expect(close.textContent?.trim()).toBe('');
   });
 
   it('cannot be closed in the split layout', () => {

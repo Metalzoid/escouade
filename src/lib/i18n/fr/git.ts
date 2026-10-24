@@ -6,7 +6,8 @@ export default {
   files: {
     scopeAgent: 'Cet agent',
     scopeProject: 'Tout le projet',
-    hintWorktree: 'worktree {path} · isolé des autres agents',
+    scope: 'Portée',
+    hintWorktree: 'Worktree {path} · isolé des autres agents',
     hintAgent: 'Fichiers modifiés par cet agent (d’après ses éditions)',
     hintProject: 'Tous les agents du projet · attribution par worktree',
     emptyAgent: 'Aucun fichier modifié par cet agent.',
@@ -73,6 +74,9 @@ export default {
     empty: 'Aucun commit.',
     tag: 'tag {name}',
     agentBranch: 'branche {branch} de l’agent {agent}',
+    all: 'Toutes les branches',
+    /** The folder's branch against its remote, said to a screen reader. */
+    sync: 'en retard de {behind}, en avance de {ahead} sur le dépôt distant',
   },
 
   // What an agent is asked and told about its work: commit, merge, remote control.

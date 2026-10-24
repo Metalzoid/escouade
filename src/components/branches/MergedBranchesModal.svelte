@@ -117,23 +117,24 @@
     max-height: 280px;
     overflow: auto;
     padding: 4px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--bg);
+    border-radius: 8px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 5px 8px;
-    border-radius: var(--r-sm);
+    min-height: 30px;
+    padding: 0 8px;
+    border-radius: 7px;
     cursor: pointer;
   }
   .item input {
-    accent-color: var(--accent);
+    accent-color: var(--p-ink);
   }
   .item:hover {
-    background: var(--elev2);
+    background: var(--hover);
   }
   .name {
     min-width: 0;

@@ -14,6 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The conversation is redrawn: a header with the status in a pill and the agent’s figures, its actions under “…”, the tool calls of a turn in a single thread, and a floating message field where dictation and dropped files happen. A message refused for want of an account says so in the conversation, with “Add an account…” a click away.
 - The “Plan” banner is redrawn in the conversation’s column: a segment per task, then each task with its state, the subagent working on it and the model it really runs on, whatever its harness, what it is doing and what it waits for.
 - The Kanban is redrawn: columns without frames, cards that show their criteria checked, the loop in squares, what the agent is doing and what it costs, and the ticket to review in amber with “Approve” and “Test”. In a ticket’s form, every field has its label, the description takes all the free room and “After” opens as a menu.
+- Git is redrawn beside the conversation: “Uncommitted” and “History” tabs, the files with their letter and their counts, the diff in a frame, “Commit…” and the merge at hand. The history draws each agent’s branch joining the main one, and tells which agent made each commit.
 
 ### Fixes
 

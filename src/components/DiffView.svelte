@@ -59,8 +59,8 @@
   <div class="rows unified" tabindex="-1" bind:this={rowsBox}>
     {#each lines.slice(0, shown) as l, i (i)}
       <div class="urow {l.kind}">
-        <span class="no">{l.oldNo ?? ''}</span>
-        <span class="no">{l.newNo ?? ''}</span>
+        <!-- One number, as the preview draws it: the old one of a line removed, the new one of the others. -->
+        <span class="no">{(l.kind === 'del' ? l.oldNo : l.newNo) ?? ''}</span>
         <span class="sign">{l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ''}</span>
         <span class="txt">{l.text}</span>
       </div>
@@ -84,50 +84,48 @@
     margin: 0;
     padding: 40px;
     color: var(--muted);
+    font-size: 12.5px;
   }
   .note.more {
     padding: 14px;
   }
+  /* The lines of a diff as the preview draws them (`.code.diff`): mono 12 px on 1.7, a gutter of numbers, the sign. */
   .rows {
+    padding: 12px 0;
+    color: var(--code-fg);
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.7;
   }
   .rows:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--p-ink);
     outline-offset: -2px;
   }
   .rows.unified {
     min-width: max-content;
   }
   .urow {
-    display: flex;
+    display: grid;
+    grid-template-columns: 34px 16px 1fr;
+    padding: 0 14px;
     white-space: pre;
   }
   .no {
-    width: 48px;
-    flex: none;
-    padding-right: 8px;
+    padding-right: 10px;
     text-align: right;
-    color: var(--dim);
+    color: var(--code-ln);
     user-select: none;
   }
   .sign {
-    width: 18px;
-    flex: none;
-    text-align: center;
     user-select: none;
-  }
-  .txt {
-    padding-right: 20px;
   }
   .urow.add,
   .cell.add {
-    background: color-mix(in oklch, var(--add) 14%, transparent);
+    background: oklch(from var(--add) l c h / 0.08);
   }
   .urow.del,
   .cell.del {
-    background: color-mix(in oklch, var(--del) 14%, transparent);
+    background: oklch(from var(--del) l c h / 0.09);
   }
   .urow.add .sign {
     color: var(--add);
@@ -138,25 +136,25 @@
   .urow.meta,
   .cell.meta {
     color: var(--info);
-    background: color-mix(in oklch, var(--info) 8%, transparent);
+    background: oklch(from var(--info) l c h / 0.07);
   }
   .srow {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .cell {
-    display: flex;
-    min-width: 0;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    border-right: 1px solid var(--line);
+  }
+  .cell + .cell {
+    box-shadow: inset 1px 0 0 var(--line);
   }
   .cell .txt {
-    flex: 1;
-    min-width: 0;
     padding-right: 12px;
   }
   .cell.void {
-    background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, 0.02) 6px 12px);
+    background: repeating-linear-gradient(135deg, transparent 0 6px, var(--hover) 6px 12px);
   }
 </style>

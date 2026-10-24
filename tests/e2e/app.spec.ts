@@ -64,7 +64,7 @@ test('uncommitted changes show up beside the project’s name, in the files pane
   await expect(page.locator('header .delta')).toHaveText('Δ 1');
   await page.getByRole('button', { name: /Fichiers/ }).click();
   await page.getByRole('button', { name: 'Tout le projet' }).click();
-  await expect(page.locator('.panel')).toContainText('app.ts');
+  await expect(page.locator('aside.git-side')).toContainText('app.ts');
   // The row's own button, not its `</>` editor button (whose name also holds the file name).
   await page.locator('.filerow .file').filter({ hasText: 'app.ts' }).click();
   const diff = page.getByRole('dialog', { name: 'src/app.ts' });
@@ -80,7 +80,7 @@ test('a changed file is reverted or deleted from its context menu', async ({ app
   fs.writeFileSync(path.join(app.repo, 'notes.md'), 'brouillon\n');
   await page.getByRole('button', { name: /Fichiers/ }).click();
   await page.getByRole('button', { name: 'Tout le projet' }).click();
-  const panel = page.locator('.panel');
+  const panel = page.locator('aside.git-side');
   // The row's own button, not its `</>` editor button (whose name also holds the file name).
   const file = (name: RegExp) => panel.locator('.filerow .file').filter({ hasText: name });
 
@@ -275,7 +275,7 @@ test('the split layout shows the files the agent edits, with their diff, next to
   const { page } = app;
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Conversation et fichiers côte à côte' }).click();
-  const pane = page.locator('.panel.docked');
+  const pane = page.locator('aside.git-side.docked');
   await expect(pane).toContainText('Aucun fichier modifié par cet agent.');
   await send(page, 'edit');
   await expect(page.getByText('Fichier modifié.')).toBeVisible();
@@ -283,7 +283,8 @@ test('the split layout shows the files the agent edits, with their diff, next to
   await expect(pane.getByRole('region', { name: 'Diff de src/app.ts' })).toContainText('const b = 3;');
   const conv = (await page.locator('main.conv').boundingBox())!;
   const side = (await pane.boundingBox())!;
-  expect(Math.abs(conv.width - side.width)).toBeLessThan(2);
+  // As the preview lays it out: 44 % of the work, never under 340 pixels.
+  expect(Math.abs(side.width - Math.max(340, 0.44 * (conv.width + side.width)))).toBeLessThan(2);
   await page.keyboard.press('Control+Shift+L');
   await expect(pane).toBeHidden();
 });
@@ -293,7 +294,7 @@ test('the history shows the repository’s commits and opens a commit’s diff',
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Conversation et fichiers côte à côte' }).click();
   await page.getByRole('tab', { name: 'Historique' }).click();
-  const pane = page.locator('.panel.docked');
+  const pane = page.locator('aside.git-side.docked');
   await expect(pane).toContainText('init');
   fs.writeFileSync(path.join(app.repo, 'src', 'app.ts'), 'const a = 2;\n');
   execFileSync('git', ['-c', 'user.email=e2e@test', '-c', 'user.name=e2e', 'commit', '-qam', 'passe a à 2'], { cwd: app.repo });

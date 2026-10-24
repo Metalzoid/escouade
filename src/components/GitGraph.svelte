@@ -4,29 +4,25 @@
   import { deleteBranch, switchBranch, worktreeReason } from '../lib/branch-actions';
   import { fAgo } from '../lib/format';
   import { t } from '../lib/i18n';
-  import { branchCommits, layout, type Segment } from '../lib/graph';
+  import { agentCommits, branchCommits, layout, mainLane, trunkTip, type Segment } from '../lib/graph';
   import { api } from '../lib/ipc';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
   import type { Agent, BranchInfo, Commit, GitLog, Project } from '../lib/types';
+  import { syncInfo } from '../lib/git-sync.svelte';
   import { tip } from '../lib/tip';
+  import Icon from './Icon.svelte';
 
   // The repository's history, every branch included, with the agent's branch highlighted. A commit's menu (right
   // click, menu key, Shift+F10) starts a branch there, switches to its branches, compares it, deletes its branches.
   let { project, agent }: { project: Project; agent: Agent | null } = $props();
 
-  const W = 14;
-  const H = 26;
-  const COLORS = [
-    'oklch(0.72 0.12 48)',
-    'oklch(0.74 0.12 235)',
-    'oklch(0.76 0.12 150)',
-    'oklch(0.72 0.14 330)',
-    'oklch(0.82 0.13 80)',
-    'oklch(0.7 0.13 290)',
-    'oklch(0.75 0.11 190)',
-    'oklch(0.72 0.14 25)',
-  ];
+  /** A lane's width, a row's height, the middle of the first lane: the preview's graph. */
+  const W = 16;
+  const H = 34;
+  const X0 = 14;
+  /** The branches' colours (the trunk has its own, `--lane-main`). */
+  const LANES = 8;
 
   let log = $state<GitLog | null>(null);
   /** The repository's branches, read with the history; null when they could not be, and there is no earlier reading. */
@@ -75,10 +71,27 @@
   }
 
   const commits = $derived(log?.commits ?? []);
-  const rows = $derived(layout(commits));
+  /** The branch the trunk follows when the folder's commit is not in the history read. */
+  const base = $derived(agent?.worktree?.baseBranch ?? null);
+  const rows = $derived(layout(commits, trunkTip(commits, base)));
   const mine = $derived(branchCommits(commits, log?.head ?? null));
-  const mineLanes = $derived(new Set(rows.filter((_, i) => mine.has(commits[i].hash)).map((r) => r.lane)));
   const cols = $derived(Math.min(12, Math.max(1, ...rows.map((r) => r.width))));
+  /** The lanes' column: three lanes at least, as the preview leaves them room. */
+  const lanesWidth = $derived(Math.max(56, cols * W + 8));
+  const projectAgents = $derived(Object.values(app.agents).filter((a) => a.projectId === project.id && a.worktree));
+  const trunk = $derived(mainLane(commits, rows, base));
+  /** The commits of each agent's own branch: told by the agent's name rather than its author's. */
+  const byAgent = $derived(
+    agentCommits(
+      commits,
+      projectAgents.map((a) => ({ branch: a.worktree!.branch, base: a.worktree!.baseBranch, name: a.name })),
+    ),
+  );
+  /** The colour of a lane: the trunk's grey, else one of the branches' colours. */
+  const color = (lane: number) => (lane === trunk ? 'var(--lane-main)' : `var(--lane-${(lane % LANES) + 1})`);
+  /** The folder's branch and how far it is from its remote, under the tabs. */
+  const sync = $derived(syncInfo(app.git[project.id]));
+  const folderBranch = $derived(app.git[project.id]?.branch ?? null);
 
   // Shows the agent's branch once the history is first loaded.
   $effect(() => {
@@ -87,7 +100,7 @@
     list.querySelector('[data-mine="true"]')?.scrollIntoView({ block: 'center' });
   });
 
-  const x = (col: number) => col * W + W / 2;
+  const x = (col: number) => X0 + col * W;
 
   function path(s: Segment, y0: number, y1: number) {
     const [a, b] = [x(s.from), x(s.to)];
@@ -100,13 +113,16 @@
     text: string;
     title: string;
     kind: 'head' | 'agent' | 'branch' | 'remote' | 'tag';
+    /** Its colour: its lane's, grey for a remote. */
+    lane: string;
   }
 
-  function labels(c: Commit): Label[] {
+  function labels(c: Commit, lane: number): Label[] {
     return c.refs
       .filter((r) => r !== 'HEAD' && !r.endsWith('/HEAD'))
       .map((r) => {
-        if (r.startsWith('tag: ')) return { text: r.slice(5), title: t('git.graph.tag', { name: r.slice(5) }), kind: 'tag' };
+        if (r.startsWith('tag: '))
+          return { text: r.slice(5), title: t('git.graph.tag', { name: r.slice(5) }), kind: 'tag', lane: 'var(--wait)' };
         const owner = Object.values(app.agents).find((a) => a.projectId === project.id && a.worktree?.branch === r);
         const kind =
           r === log?.head
@@ -116,7 +132,12 @@
               : r.includes('/') && !isAgentBranch(r, project.agentBranchPrefix)
                 ? 'remote'
                 : 'branch';
-        return { text: owner ? owner.name : r, title: owner ? t('git.graph.agentBranch', { branch: r, agent: owner.name }) : r, kind };
+        return {
+          text: r,
+          title: owner ? t('git.graph.agentBranch', { branch: r, agent: owner.name }) : r,
+          kind,
+          lane: kind === 'remote' ? 'var(--muted)' : color(lane),
+        };
       });
   }
 
@@ -219,6 +240,18 @@
   }
 </script>
 
+<div class="side-top">
+  <div class="caption">
+    {t('git.graph.all')}{#if folderBranch}{' '}· <span class="mono">{folderBranch}</span>{/if}
+    {#if sync && (sync.behind || sync.ahead)}
+      <span class="ab"
+        ><span class="n"><Icon name="pull" size={11} /><span aria-hidden="true">{sync.behind}</span></span><span class="n"
+          ><Icon name="up" size={11} /><span aria-hidden="true">{sync.ahead}</span></span
+        ><span class="sr">{t('git.graph.sync', { behind: sync.behind, ahead: sync.ahead })}</span></span
+      >
+    {/if}
+  </div>
+</div>
 <div class="graph" bind:this={list}>
   {#if error}
     <div class="msg">{error}</div>
@@ -231,38 +264,66 @@
     {@const r = rows[i]}
     {@const own = mine.has(c.hash)}
     <button
-      class="row"
-      class:own
+      class="commit"
+      style:grid-template-columns="{lanesWidth}px minmax(0, 1fr) auto"
       data-mine={own}
       use:tip={`${c.hash.slice(0, 7)} · ${c.author}`}
       onclick={() => open(c)}
       oncontextmenu={(e) => onContextMenu(e, c)}
       onkeydown={(e) => onKeydown(e, c)}
     >
-      <svg class="lanes" width={cols * W} height={H} aria-hidden="true">
+      <svg class="lanes" width={lanesWidth} height={H} aria-hidden="true">
         {#each r.top as s, k (k)}
-          <path d={path(s, 0, H / 2)} stroke={COLORS[s.lane % COLORS.length]} class:dim={!mineLanes.has(s.lane)} />
+          <path d={path(s, 0, H / 2)} style:stroke={color(s.lane)} />
         {/each}
         {#each r.bottom as s, k (k)}
-          <path d={path(s, H / 2, H)} stroke={COLORS[s.lane % COLORS.length]} class:dim={!mineLanes.has(s.lane)} />
+          <path d={path(s, H / 2, H)} style:stroke={color(s.lane)} />
         {/each}
-        <circle cx={x(r.col)} cy={H / 2} r={own ? 4.5 : 3.5} fill={COLORS[r.lane % COLORS.length]} class:dim={!own} />
+        <circle cx={x(r.col)} cy={H / 2} r="4.5" style:fill={color(r.lane)} />
       </svg>
-      {#each labels(c) as l (l.text + l.kind)}
-        <span class="ref {l.kind}" use:tip={l.title}>{l.text}</span>
-      {/each}
-      <span class="subject">{c.subject}</span>
-      <span class="when">{fAgo(c.time, app.now)}</span>
+      <span class="msg-line">
+        <span class="subject">{c.subject}</span>
+        {#each labels(c, r.lane) as l (l.text + l.kind)}
+          <span class="ref {l.kind}" style:--lane={l.lane} use:tip={l.title}>{l.text}</span>
+        {/each}
+      </span>
+      <span class="who"><span>{byAgent.get(c.hash) ?? c.author}</span> · <span>{fAgo(c.time, app.now)}</span></span>
     </button>
   {/each}
 </div>
 
 <style>
+  .side-top {
+    padding: 12px 14px 8px;
+  }
+  .caption {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .caption .mono {
+    font-size: 11px;
+  }
+  .ab {
+    display: inline-flex;
+    gap: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ab .n {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+  }
   .graph {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 4px 8px 12px;
+    padding: 6px 8px 14px;
   }
   .msg {
     padding: 30px 10px;
@@ -270,79 +331,81 @@
     font-size: 12.5px;
     color: var(--muted);
   }
-  .row {
-    width: 100%;
-    height: 26px;
-    display: flex;
+  /* A commit: its place on the lanes, its message and the branches on it, who made it and when. */
+  .commit {
+    display: grid;
     align-items: center;
     gap: 6px;
-    padding: 0 8px 0 2px;
+    width: 100%;
+    height: 34px;
+    padding: 0 8px 0 0;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
     text-align: left;
     cursor: pointer;
-    min-width: 0;
-    color: var(--muted);
   }
-  .row:hover {
-    background: var(--elev);
-  }
-  .row.own {
-    color: var(--text);
+  .commit:hover {
+    background: var(--hover);
   }
   .lanes {
-    flex: none;
-    overflow: hidden;
+    display: block;
+    overflow: visible;
   }
   .lanes path {
     fill: none;
     stroke-width: 2;
+    stroke-linecap: round;
   }
-  .lanes .dim {
-    opacity: 0.35;
+  .lanes circle {
+    stroke: var(--panel);
+    stroke-width: 2;
+  }
+  .msg-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    white-space: nowrap;
   }
   .subject {
-    flex: 1;
-    min-width: 0;
-    font-size: 12.5px;
+    flex: 0 1 auto;
+    min-width: 72px;
     overflow: hidden;
+    color: var(--soft);
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  .when {
-    flex: none;
-    font-size: 11px;
-    color: var(--dim);
-  }
+  /* A branch gives way to the message only so far: both stay legible in a narrow panel. */
   .ref {
-    flex: none;
-    max-width: 120px;
+    flex: 0 1 auto;
+    display: block;
+    min-width: 0;
+    max-width: 180px;
+    height: 19px;
     overflow: hidden;
+    padding: 0 6px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--lane) 45%, transparent);
+    background: color-mix(in oklch, var(--lane) 12%, transparent);
+    color: var(--soft);
+    font: 11px var(--mono);
+    line-height: 19px;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    background: var(--elev2);
+  }
+  .who {
     color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
   }
-  .ref.head {
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-  }
-  .ref.agent {
-    background: color-mix(in oklch, var(--info) 22%, transparent);
-    color: var(--text);
-  }
-  .ref.remote {
-    background: transparent;
-    border: 1px solid var(--line2);
-  }
-  .ref.tag {
-    background: color-mix(in oklch, var(--wait) 20%, transparent);
-    color: var(--text);
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 </style>

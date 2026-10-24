@@ -61,15 +61,16 @@ describe('BranchPicker', () => {
     setup();
     await loaded();
     expect(option('main')).toHaveAttribute('aria-current', 'true');
-    expect(option('main').querySelector('.chk')).toHaveTextContent('✓');
-    expect(option('main')).toHaveTextContent('↑2');
-    expect(option('main')).toHaveTextContent('↓5');
+    expect(option('main').querySelector('.chk [data-icon="check"]')).not.toBeNull();
+    expect(option('main').querySelector('[data-dir="ahead"]')).toHaveTextContent('2');
+    expect(option('main').querySelector('[data-dir="ahead"] [data-icon="up"]')).not.toBeNull();
+    expect(option('main').querySelector('[data-dir="behind"]')).toHaveTextContent('5');
+    expect(option('main').querySelector('[data-dir="behind"] [data-icon="pull"]')).not.toBeNull();
     expect(option('main')).toHaveTextContent('2 commits à pousser');
     expect(option('main')).toHaveTextContent('5 commits à tirer');
     expect(option('feat/login')).not.toHaveAttribute('aria-current');
     expect(option('feat/login').querySelector('.chk')!.textContent).toBe('');
-    expect(option('feat/login')).not.toHaveTextContent('↑');
-    expect(option('feat/login')).not.toHaveTextContent('↓');
+    expect(option('feat/login').querySelector('[data-dir]')).toBeNull();
   });
 
   it('says a branch whose remote branch was deleted, and a remote branch a local one tracks', async () => {
@@ -304,10 +305,10 @@ describe('BranchPicker', () => {
       await loaded();
       const pull = screen.getByRole('button', { name: /Récupérer/ });
       expect(pull).toBeDisabled();
-      expect(pull).toHaveTextContent('↓0');
+      expect(pull.querySelector('[data-dir="behind"]')).toHaveTextContent('0');
       const push = screen.getByRole('button', { name: /Pousser/ });
       expect(push).toBeEnabled();
-      expect(push).toHaveTextContent('↑2');
+      expect(push.querySelector('[data-dir="ahead"]')).toHaveTextContent('2');
       expect(screen.getByRole('button', { name: /Fetch/ })).toHaveTextContent('maintenant');
       expect(screen.getByRole('button', { name: /Fetch/ })).toBeEnabled();
     });
@@ -470,7 +471,7 @@ describe('BranchPicker', () => {
   it('shows a detached HEAD as no branch checked out', async () => {
     setup({ list: [branchInfo({ name: 'main' }), FEAT], git: { branch: '(detached)', hasRemote: true } });
     await loaded(2);
-    expect(screen.queryByText('✓')).toBeNull();
+    expect(document.querySelector('.chk [data-icon="check"]')).toBeNull();
     expect(screen.getAllByRole('option').some((o) => o.hasAttribute('aria-current'))).toBe(false);
   });
 

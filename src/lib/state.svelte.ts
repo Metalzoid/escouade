@@ -269,7 +269,7 @@ class AppState {
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
   /** Tab of the side panel: uncommitted files or the repository history. */
-  panelTab = $state<'files' | 'history'>('files');
+  panelTab = $state<'files' | 'history' | 'hosts'>('files');
   /** Side-by-side diffs (else unified), shared by the diff dialog and the split layout. */
   diffSplit = $state(readPref('diffSplit') === '1');
   showArchived = $state(false);

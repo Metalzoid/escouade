@@ -40,12 +40,14 @@ describe('GitGraph', () => {
     }),
   );
 
-  it('lists every branch’s commits, naming agent branches after their agent', async () => {
+  it('lists every branch’s commits, the agent’s own told by its name rather than their author’s', async () => {
     const backend = fakeBackend({ git_log: () => LOG });
     render(GitGraph, { project: project(), agent: app.agents.a2 });
     expect(await screen.findByText('nouvelle page')).toBeInTheDocument();
     expect(backend.called('git_log')[0].args).toEqual({ projectId: 'p1', agentId: 'a2' });
-    expect(within(row('nouvelle page')).getByText('landing')).toBeInTheDocument();
+    expect(within(row('nouvelle page')).getByText('ccm/landing')).toHaveAttribute('data-tip', 'branche ccm/landing de l’agent landing');
+    expect(row('nouvelle page').querySelector('.who')).toHaveTextContent(/^landing · /);
+    expect(row('fix du header').querySelector('.who')).toHaveTextContent(/^Ada · /);
     expect(within(row('Merge landing')).getByText('main')).toBeInTheDocument();
     expect(within(row('Merge landing')).getByText('v0.1.0')).toBeInTheDocument();
     expect(within(row('Merge landing')).queryByText('HEAD')).not.toBeInTheDocument();
@@ -516,7 +518,8 @@ describe('GitGraph in English', () => {
     render(GitGraph, { project: project(), agent: app.agents.a2 });
     expect(await screen.findByText('Merge landing')).toBeInTheDocument();
     expect(screen.getByText('v0.1.0')).toHaveAttribute('data-tip', 'tag v0.1.0');
-    expect(screen.getByText('landing')).toHaveAttribute('data-tip', 'branch ccm/landing of agent landing');
+    expect(screen.getByText('ccm/landing')).toHaveAttribute('data-tip', 'branch ccm/landing of agent landing');
+    expect(screen.getByText('All branches', { exact: false })).toBeInTheDocument();
     expect(within(row('Merge landing')).getByText('5 min ago')).toBeInTheDocument();
   });
 

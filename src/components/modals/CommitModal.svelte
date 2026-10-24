@@ -5,6 +5,7 @@
   import { api } from '../../lib/ipc';
   import { app, type CommitDraft } from '../../lib/state.svelte';
   import type { CommitScope } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   // A direct commit: the files it takes, a message Haiku proposes that the user reads and edits, and « Commiter »,
@@ -13,7 +14,6 @@
   let { projectId, agentId, resume }: { projectId: string; agentId: string | null; resume?: CommitDraft } = $props();
 
   const owner = $derived((agentId ? app.agents[agentId]?.name : app.projects.find((p) => p.id === projectId)?.name) ?? '');
-  const SC: Record<string, string> = { A: 'var(--add)', M: 'var(--wait)', D: 'var(--del)' };
   /** Rows listed: a commit of thousands of files shows the first ones, and how many more. */
   const SHOWN = 500;
 
@@ -130,7 +130,7 @@
     {#if scope.files.length}
       <ul class="files" aria-label={t('git.commit.filesLabel')}>
         {#each scope.files.slice(0, SHOWN) as f (f.path)}
-          <li><span class="st mono" style:color={SC[f.status]}>{f.status}</span> <span class="path mono">{f.path}</span></li>
+          <li><span class="letter {f.status.toLowerCase()}">{f.status}</span> <span class="path">{f.path}</span></li>
         {/each}
       </ul>
       {#if scope.files.length > SHOWN}<p class="note">
@@ -154,61 +154,73 @@
     {#if refused}<p class="error" role="alert">{refused}</p>{/if}
   </div>
   {#snippet footer()}
-    <button class="btn ghost" disabled={committing} onclick={close}>{t('common.cancel')}</button>
-    <button class="btn" disabled={proposing || committing || !paths.length} onclick={propose}>{t('git.commit.regenerate')}</button>
+    <button class="btn regen" disabled={proposing || committing || !paths.length} onclick={propose}
+      ><Icon name="sparkle" size={14} />{t('git.commit.regenerate')}</button
+    >
+    <button class="btn" disabled={committing} onclick={close}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={!message.trim() || committing || !paths.length} onclick={commit}
-      >{committing ? t('git.commit.committing') : t('git.commit.commit')}</button
+      ><Icon name="check" size={14} />{committing ? t('git.commit.committing') : t('git.commit.commit')}</button
     >
   {/snippet}
 </Modal>
 
 <style>
   .scope {
-    margin: -8px 0 0;
-    font-size: 13px;
+    margin: 0;
     color: var(--muted);
+    font-size: 12.5px;
   }
+  /* The files it takes, in a well, as the diff's rows letter them. */
   .files {
     list-style: none;
     margin: 0;
     padding: 6px 0;
     max-height: 180px;
     overflow: auto;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--bg);
+    border-radius: 8px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .files li {
-    display: flex;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 8px;
     padding: 3px 12px;
-    font-size: 12px;
+    font: 12px var(--mono);
+    line-height: 1.55;
   }
-  .st {
-    width: 12px;
-    flex: none;
-    font-weight: 700;
+  .letter {
+    font-weight: 600;
+    text-align: center;
+    color: var(--git-m);
+  }
+  .letter.a {
+    color: var(--add);
+  }
+  .letter.d {
+    color: var(--del);
   }
   .path {
     min-width: 0;
+    color: var(--code-fg);
     overflow-wrap: anywhere;
   }
   .grp {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
   }
   .lab {
+    color: var(--muted);
     font-size: 12px;
     font-weight: 600;
-    color: var(--muted);
   }
   .message {
     height: auto;
-    padding: 8px 12px;
+    min-height: 150px;
+    padding: 8px 10px;
     resize: vertical;
-    font-size: 12.5px;
-    line-height: 1.5;
+    font-size: 12px;
+    line-height: 1.55;
   }
   .note {
     margin: 0;
@@ -223,5 +235,9 @@
     color: var(--del);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  /* « Régénérer » apart, on the left, as « Proposer à nouveau » in the preview's pull request window. */
+  .regen {
+    margin-right: auto;
   }
 </style>

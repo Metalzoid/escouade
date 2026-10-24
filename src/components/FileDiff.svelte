@@ -41,73 +41,100 @@
   }
 </script>
 
-<section class="fdiff" aria-label={t('git.diff.ofFile', { path })}>
-  <div class="bar">
-    <span class="p mono" use:tip={{ text: path, cut: true }}>{path}</span>
-    {#if file && !file.tooLarge}<span class="add mono">+{file.add}</span><span class="del mono">−{file.del}</span>{/if}
-    <div style="flex:1"></div>
-    <div class="segmented small">
-      <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
-      <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
+<!-- In a well, as the preview draws the diff beside the files: the file, its counts and the layout above its lines. -->
+<div class="side-diff">
+  <section class="code" aria-label={t('git.diff.ofFile', { path })}>
+    <div class="code-head">
+      <span class="p mono" use:tip={{ text: path, cut: true }}>{path}</span>
+      {#if file && !file.tooLarge}<span class="stat mono"><span class="add">+{file.add}</span><span class="del">−{file.del}</span></span
+        >{/if}
+      <div class="segmented small">
+        <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
+        <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
+      </div>
     </div>
-  </div>
-  <div class="body">
-    {#if error}
-      <div class="msg">{error}</div>
-    {:else if !loaded}
-      <div class="msg">{t('common.loading')}</div>
-    {:else if !file}
-      <div class="msg">{t('git.diff.none')}</div>
-    {:else if file.binary}
-      <div class="msg">{t('git.diff.binary')}</div>
-    {:else}
-      <DiffView lines={fileLines(file)} split={app.diffSplit} tooLarge={file.tooLarge} />
-    {/if}
-  </div>
-</section>
+    <div class="body">
+      {#if error}
+        <div class="msg">{error}</div>
+      {:else if !loaded}
+        <div class="msg">{t('common.loading')}</div>
+      {:else if !file}
+        <div class="msg">{t('git.diff.none')}</div>
+      {:else if file.binary}
+        <div class="msg">{t('git.diff.binary')}</div>
+      {:else}
+        <DiffView lines={fileLines(file)} split={app.diffSplit} tooLarge={file.tooLarge} />
+      {/if}
+    </div>
+  </section>
+</div>
 
 <style>
-  .fdiff {
+  .side-diff {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--line);
+    padding: 10px 14px 14px;
   }
-  .bar {
+  .code {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .code-head {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 14px 8px 18px;
-    min-width: 0;
+    height: 34px;
+    padding: 0 6px 0 12px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
   }
   .p {
     min-width: 0;
-    font-size: 12px;
     overflow: hidden;
+    color: var(--soft);
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .add {
+  .stat {
     flex: none;
-    font-size: 11px;
+    display: inline-flex;
+    gap: 8px;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .add {
     color: var(--add);
   }
   .del {
-    flex: none;
-    font-size: 11px;
     color: var(--del);
+  }
+  .segmented {
+    margin-left: auto;
+    flex: none;
+  }
+  .segmented button {
+    height: 22px;
   }
   .body {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    background: var(--term);
-    border-top: 1px solid var(--line);
   }
   .msg {
     padding: 40px;
     text-align: center;
     color: var(--muted);
+    font-size: 12.5px;
   }
 </style>

@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La conversation est redessinée : un en-tête avec l’état en pastille et les chiffres de l’agent, ses actions sous « … », les appels d’outils d’un tour en un seul fil et un champ de message flottant où se font la dictée et le dépôt de fichiers. Un message refusé faute de compte le dit dans la conversation, avec « Ajouter un compte… » à portée de clic.
 - Le bandeau « Plan » est redessiné dans la colonne de la conversation : une case par tâche, puis chaque tâche avec son état, le sous-agent qui y travaille et le modèle sur lequel il tourne vraiment, quel que soit son harness, ce qu’il fait et ce qu’elle attend.
 - Le Kanban est redessiné : des colonnes sans cadre, des cartes qui montrent leurs critères cochés, la boucle en cases, ce que fait l’agent et ce qu’il coûte, et le ticket à tester en ambre avec « Valider » et « Tester ». Dans le formulaire d’un ticket, chaque champ a son libellé, la description prend toute la place libre et « Après » s’ouvre en menu.
+- Git est redessiné à côté de la conversation : des onglets « Non commités » et « Historique », les fichiers avec leur lettre et leurs compteurs, le diff dans un cadre, « Commit… » et le merge à portée de main. L’historique dessine la branche de chaque agent qui rejoint la branche principale, et dit quel agent a fait chaque commit.
 
 ### Corrections
 

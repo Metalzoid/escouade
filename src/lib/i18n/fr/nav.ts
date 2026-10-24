@@ -205,7 +205,19 @@ export default {
   },
 
   // The side panel's two tabs.
-  sidePanel: { uncommitted: 'Non commités', history: 'Historique' },
+  sidePanel: {
+    uncommitted: 'Non commités',
+    history: 'Historique',
+    // The place of the code hosts (ESC-53 to 70), kept and not drawn until after the 2.0.
+    hosts: 'PR et CI',
+    soon: 'après la 2.0',
+    laterTitle: 'PR, CI et déploiements de la branche de l’agent',
+    laterBody: 'Ici, après la 2.0 : l’hébergeur du dépôt (GitHub, GitLab, Bitbucket, Gitea) dit ce que devient la branche.',
+    laterPr: 'la pull request ouverte, ses revues et ses commentaires ;',
+    laterCi: 'les vérifications de la CI, leur log, relancer ;',
+    laterDeploy: 'les déploiements de prévisualisation et leur adresse.',
+    laterCard: 'Sur la carte du ticket, la ligne « PR #41 → main » d’aujourd’hui, avec l’état de la CI.',
+  },
 
   // The context menu's row of colors: « Couleur 3 ».
   menu: { swatch: '{label} {n}' },

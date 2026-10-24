@@ -11,6 +11,7 @@
   import { app } from '../../lib/state.svelte';
   import type { BranchInfo } from '../../lib/types';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // The picker the status bar's branch button opens, above it: the branches of the project's repository, searched, and
   // under them what is done to branches (create one, clean up, sync). `anchor`: the button, to open over it (under it
@@ -465,17 +466,19 @@
               onmousemove={() => (active = b.name)}
               oncontextmenu={(e) => onContextMenu(e, b)}
             >
-              <span class="chk" aria-hidden="true">{checked ? '✓' : ''}</span>
+              <span class="chk" aria-hidden="true"
+                >{#if checked}<Icon name="check" size={14} />{/if}</span
+              >
               <span class="name">{b.name}</span>
               {#if checked}<span class="sr">{targeting || basing ? t('branches.picker.chosen') : t('branches.picker.current')}</span>{/if}
               {#if r.tag}<span class="tag">{r.tag}</span>{/if}
               {#if b.ahead || b.behind}
                 <span class="ab">
-                  {#if b.ahead}<span aria-hidden="true">↑{b.ahead}</span><span class="sr"
-                      >{t('branches.picker.ahead', { count: b.ahead })}</span
+                  {#if b.ahead}<span class="n" data-dir="ahead" aria-hidden="true"><Icon name="up" size={11} />{b.ahead}</span><span
+                      class="sr">{t('branches.picker.ahead', { count: b.ahead })}</span
                     >{/if}
-                  {#if b.behind}<span aria-hidden="true">↓{b.behind}</span><span class="sr"
-                      >{t('branches.picker.behind', { count: b.behind })}</span
+                  {#if b.behind}<span class="n" data-dir="behind" aria-hidden="true"><Icon name="pull" size={11} />{b.behind}</span><span
+                      class="sr">{t('branches.picker.behind', { count: b.behind })}</span
                     >{/if}
                 </span>
               {/if}
@@ -502,7 +505,7 @@
           onclick={() => create()}
           onmousemove={() => (active = CREATE)}
         >
-          <span class="chk" aria-hidden="true">+</span>
+          <span class="chk mk" aria-hidden="true"><Icon name="plus" size={14} /></span>
           <span class="label">{t('branches.agent.create', { branch: wanted })}</span>
           {#if startsFrom}<span class="tag">{t('branches.agent.createFrom', { base: startsFrom })}</span>{/if}
         </div>
@@ -521,7 +524,7 @@
             onclick={() => create(true)}
             onmousemove={() => (active = CREATE_FROM)}
           >
-            <span class="chk" aria-hidden="true">⎇</span>
+            <span class="chk mk" aria-hidden="true"><Icon name="branch" size={14} /></span>
             <span class="label">{t('branches.agent.createFromOther', { branch: wanted })}</span>
           </div>
         {/if}
@@ -552,11 +555,11 @@
       {#if sync}
         <div class="acts">
           <button class="act" disabled={!sync.tracked || sync.behind === 0} onclick={() => runSync('pull')}
-            >{t('branches.sync.pull')} <span class="hint">↓{sync.behind}</span></button
+            >{t('branches.sync.pull')} <span class="hint" data-dir="behind"><Icon name="pull" size={11} />{sync.behind}</span></button
           >
           {#if sync.tracked}
             <button class="act" disabled={sync.ahead === 0} onclick={() => runSync('push')}
-              >{t('branches.sync.push')} <span class="hint">↑{sync.ahead}</span></button
+              >{t('branches.sync.push')} <span class="hint" data-dir="ahead"><Icon name="up" size={11} />{sync.ahead}</span></button
             >
           {:else}
             <button class="act" onclick={() => runSync('push')}>{t('branches.sync.publish')}</button>
@@ -589,13 +592,15 @@
     max-width: calc(100vw - 16px);
     display: flex;
     flex-direction: column;
-    background: var(--elev);
-    border: 1px solid var(--line2);
-    border-radius: var(--r);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    border-radius: 11px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 18px 48px -10px rgba(0, 0, 0, calc(0.8 * var(--shade)));
     font-size: 12.5px;
     color: var(--text);
-    animation: ccFadeIn 0.1s ease-out;
+    animation: ccFadeIn 0.2s var(--ease);
   }
   @media (prefers-reduced-motion: reduce) {
     .picker {
@@ -604,49 +609,49 @@
   }
   .search {
     flex: none;
-    padding: 8px;
-    border-bottom: 1px solid var(--line);
+    padding: 5px 5px 0;
   }
   .search input {
     width: 100%;
     height: 30px;
     padding: 0 10px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--bg);
+    border: none;
+    border-radius: 7px;
+    background: var(--well);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--text);
     font: inherit;
     outline: none;
   }
-  .search input:focus {
-    border-color: var(--accent);
+  .search input:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
   }
   .list {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 4px 6px;
+    padding: 5px;
   }
   .grp {
-    padding: 8px 8px 4px;
-    font-size: 10.5px;
+    padding: 7px 9px 5px;
+    color: var(--muted);
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--dim);
   }
   .row {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 28px;
-    padding: 0 8px;
-    border-radius: var(--r-sm);
+    height: 30px;
+    padding: 0 9px;
+    border-radius: 7px;
     cursor: pointer;
     white-space: nowrap;
   }
   .row.on {
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
   }
   .row.blocked {
     cursor: default;
@@ -654,8 +659,12 @@
   }
   .chk {
     flex: none;
-    width: 12px;
-    color: var(--ok);
+    display: inline-flex;
+    width: 14px;
+    color: var(--p-ink);
+  }
+  .chk.mk {
+    color: var(--muted);
   }
   .name {
     min-width: 0;
@@ -672,19 +681,26 @@
   .tag {
     flex: none;
     padding: 0 6px;
-    border: 1px solid var(--line2);
-    border-radius: 99px;
-    font-size: 10.5px;
-    color: var(--dim);
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 11px;
+    line-height: 18px;
+    color: var(--muted);
   }
   .ab {
     flex: none;
     margin-left: auto;
     display: flex;
     gap: 6px;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
     color: var(--muted);
+  }
+  .ab .n,
+  .hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
   }
   .none {
     margin: 0;
@@ -697,9 +713,9 @@
   .note {
     flex: none;
     min-height: 30px;
-    padding: 6px 14px;
+    padding: 7px 14px;
     border-top: 1px solid var(--line);
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--muted);
   }
   .note p {
@@ -711,7 +727,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 6px;
+    padding: 5px;
     border-top: 1px solid var(--line);
   }
   .acts {
@@ -725,27 +741,31 @@
     border-top: 1px solid var(--line);
   }
   .act {
-    height: 26px;
-    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 9px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     font: inherit;
-    font-size: 12px;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--text);
     cursor: pointer;
   }
   .act:hover:not(:disabled) {
-    background: var(--elev2);
+    background: rgba(var(--fg-rgb), 0.06);
   }
   .act:disabled {
     opacity: 0.45;
     cursor: default;
   }
   .hint {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--dim);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
   }
   .sr {
     position: absolute;

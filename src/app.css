@@ -46,6 +46,16 @@
   --add: oklch(0.8 0.13 155);
   --del: oklch(0.74 0.14 22);
   --git-m: oklch(0.82 0.11 75);
+  /* The lanes of the history: the trunk in grey, the branches in colours that read on both themes (as the preview). */
+  --lane-main: #c8ccd2;
+  --lane-1: oklch(0.72 0.12 250);
+  --lane-2: oklch(0.72 0.13 340);
+  --lane-3: oklch(0.72 0.12 48);
+  --lane-4: oklch(0.7 0.13 155);
+  --lane-5: oklch(0.74 0.12 85);
+  --lane-6: oklch(0.7 0.13 290);
+  --lane-7: oklch(0.72 0.11 190);
+  --lane-8: oklch(0.7 0.14 25);
   --warn-ink: oklch(0.8 0.1 60);
   --teal-ink: oklch(0.86 0.08 190);
   --teal-ink-2: oklch(0.82 0.09 190);
@@ -154,6 +164,7 @@
   --add: oklch(0.47 0.12 155);
   --del: oklch(0.5 0.18 25);
   --git-m: oklch(0.5 0.11 65);
+  --lane-main: #595e68;
   --warn-ink: oklch(0.49 0.11 55);
   --teal-ink: oklch(0.47 0.08 190);
   --teal-ink-2: oklch(0.47 0.08 190);

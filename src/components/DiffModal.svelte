@@ -6,6 +6,7 @@
   import { keyLabel } from '../lib/platform';
   import { app } from '../lib/state.svelte';
   import DiffView from './DiffView.svelte';
+  import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
 
   // Uncommitted changes (`paths` of the agent's checkout), what `commit` changed, what changes from one ref to
@@ -67,28 +68,32 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (app.modal = null)} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-<div class="overlay" onclick={() => (app.modal = null)}>
+<div class="scrim" onclick={() => (app.modal = null)}>
   <div class="win" use:trapFocus onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-label={title}>
     <div class="head">
-      <span class="t">{title}</span>
-      <span class="n mono">{t('common.count.files', { count: files.length })}</span>
-      <div style="flex:1"></div>
+      <h2>{title}</h2>
+      <span class="n">{t('common.count.files', { count: files.length })}</span>
       <div class="segmented small">
         <button class:on={!app.diffSplit} onclick={() => app.setDiffSplit(false)}>{t('git.diff.unified')}</button>
         <button class:on={app.diffSplit} onclick={() => app.setDiffSplit(true)}>{t('git.diff.split')}</button>
       </div>
-      <button class="icon-btn" use:tip={t('git.diff.closeTitle', { key: keyLabel('Esc') })} onclick={() => (app.modal = null)}>×</button>
+      <button
+        class="icon-btn close"
+        aria-label={t('common.close')}
+        use:tip={t('git.diff.closeTitle', { key: keyLabel('Esc') })}
+        onclick={() => (app.modal = null)}><Icon name="close" size={16} /></button
+      >
     </div>
     <div class="body">
       {#if files.length > 1}
         <nav class="files">
           {#each files as f, i (f.key)}
-            <button class:on={i === current} onclick={() => (current = i)}>
-              <span class="st" class:a={f.status === 'A'} class:d={f.status === 'D'}>{f.status}</span>
-              <span class="p mono">{f.path}</span>
-              {#if f.agentId}<span class="tag mono">{agentName(f.agentId)}</span>{/if}
+            <button class="file" aria-current={i === current ? 'true' : undefined} onclick={() => (current = i)}>
+              <span class="letter {f.status.toLowerCase()}">{f.status}</span>
+              <span class="p">{f.path}</span>
+              {#if f.agentId}<span class="tag">{agentName(f.agentId)}</span>{/if}
               <!-- A file whose diff was not sent has no counts to show. -->
-              {#if !f.tooLarge}<span class="add mono">+{f.add}</span><span class="del mono">−{f.del}</span>{/if}
+              {#if !f.tooLarge}<span class="cnt"><span class="add">+{f.add}</span><span class="del">−{f.del}</span></span>{/if}
             </button>
           {/each}
         </nav>
@@ -101,10 +106,10 @@
         {:else if !file}
           <div class="msg">{t('git.diff.none')}</div>
         {:else}
-          <div class="fhead mono">
-            {file.path}
+          <div class="fhead">
+            <span class="path">{file.path}</span>
             {#if file.agentId}<span class="tag">{agentName(file.agentId)}</span>{/if}
-            {#if !file.tooLarge}<span class="add">+{file.add}</span> <span class="del">−{file.del}</span>{/if}
+            {#if !file.tooLarge}<span class="cnt"><span class="add">+{file.add}</span><span class="del">−{file.del}</span></span>{/if}
           </div>
           {#if file.binary}
             <div class="msg">{t('git.diff.binary')}</div>
@@ -121,41 +126,77 @@
 </div>
 
 <style>
-  .overlay {
+  .scrim {
     position: fixed;
     inset: 0;
     z-index: 60;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(12, 10, 8, 0.6);
-    backdrop-filter: blur(3px);
+    display: grid;
+    place-items: center;
+    background: var(--scrim);
+    animation: fade 0.2s ease-out;
   }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+  /* The window of the 2.0 design (the preview's modal), as large as the screen allows: a diff wants room. */
   .win {
     width: calc(100vw - 80px);
     height: calc(100vh - 80px);
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--line2);
-    border-radius: 14px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
     overflow: hidden;
+    border-radius: 14px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
+    animation: rise 0.35s var(--ease);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scrim,
+    .win {
+      animation: none;
+    }
   }
   .head {
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px 12px 20px;
+    gap: 10px;
+    height: 54px;
+    padding: 0 12px 0 20px;
     border-bottom: 1px solid var(--line);
   }
-  .t {
+  h2 {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 620;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .n {
-    font-size: 11px;
-    color: var(--dim);
+    flex: none;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .segmented {
+    flex: none;
+    margin-left: auto;
+  }
+  .close {
+    width: 30px;
+    height: 30px;
   }
   .body {
     flex: 1;
@@ -165,47 +206,52 @@
   .files {
     width: 300px;
     flex: none;
+    display: grid;
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 1px;
     overflow: auto;
-    border-right: 1px solid var(--line);
     padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    border-right: 1px solid var(--line);
   }
-  .files button {
-    display: flex;
+  .file {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 8px;
-    padding: 6px 8px;
+    height: 30px;
+    padding: 0 8px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
+    color: var(--soft);
+    font: inherit;
     text-align: left;
     cursor: pointer;
-    min-width: 0;
   }
-  .files button:hover,
-  .files button.on {
-    background: var(--elev);
+  .file:hover {
+    background: var(--hover);
   }
-  .st {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--wait);
-    flex: none;
+  .file[aria-current='true'] {
+    background: rgba(var(--fg-rgb), 0.06);
+    color: var(--text);
   }
-  .st.a {
+  .letter {
+    font: 600 11.5px var(--mono);
+    text-align: center;
+    color: var(--git-m);
+  }
+  .letter.a {
     color: var(--add);
   }
-  .st.d {
+  .letter.d {
     color: var(--del);
   }
+  /* The end of a long path matters most: cut at its start. */
   .p {
-    flex: 1;
     min-width: 0;
-    font-size: 11.5px;
     overflow: hidden;
+    font: 12px var(--mono);
     text-overflow: ellipsis;
     white-space: nowrap;
     direction: rtl;
@@ -214,46 +260,61 @@
   /* The agent a file is listed under, as in the files panel. */
   .tag {
     flex: none;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--muted);
-    white-space: nowrap;
-    max-width: 90px;
+    max-width: 96px;
     overflow: hidden;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 18px;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .fhead .tag {
-    display: inline-block;
-    vertical-align: bottom;
+  .cnt {
+    display: inline-flex;
+    gap: 6px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .add {
     color: var(--add);
-    font-size: 11px;
   }
   .del {
     color: var(--del);
-    font-size: 11px;
   }
   .diff {
     flex: 1;
-    overflow: auto;
-    background: var(--term);
     min-width: 0;
+    overflow: auto;
+    background: var(--well);
   }
   .msg {
     padding: 40px;
     text-align: center;
     color: var(--muted);
+    font-size: 12.5px;
   }
   .fhead {
     position: sticky;
     top: 0;
     z-index: 1;
-    padding: 8px 14px;
-    font-size: 12px;
-    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 34px;
+    padding: 0 14px;
     border-bottom: 1px solid var(--line);
+    background: var(--well);
+    color: var(--soft);
+    font-size: 12px;
+  }
+  .path {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

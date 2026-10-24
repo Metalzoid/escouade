@@ -7,6 +7,7 @@
   import { app } from '../lib/state.svelte';
   import type { Agent, FileChange, Project } from '../lib/types';
   import FileDiff from './FileDiff.svelte';
+  import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
   import { worktreeLabel } from '../lib/worktrees';
 
@@ -24,8 +25,9 @@
   // nodes. The count, the diff and the commit still cover them all.
   const SHOWN = 500;
   const listed = $derived(files.slice(0, SHOWN));
+  // Once a list is read: shown again (its tab chosen anew), the panel does not say 0 while it reads it.
   $effect(() => {
-    count = files.length;
+    if (listFor !== null) count = files.length;
   });
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -36,7 +38,6 @@
   // The agent object changes on every backend update: refetch on id / scope / git changes only.
   const agentId = $derived(agent?.id ?? null);
   const projectId = $derived(project.id);
-  const SC: Record<string, string> = { A: 'var(--add)', M: 'var(--wait)', D: 'var(--del)' };
 
   // Which list `files` holds: until the list of a newly selected agent / scope arrives, the old one
   // must not be paired with the new owner to load a diff.
@@ -81,13 +82,22 @@
     if (!list.some((f) => keyOf(f) === picked)) picked = list[0] ? keyOf(list[0]) : null;
   }
 
-  const hint = $derived(
-    scope === 'agent'
-      ? agent?.worktree
-        ? t('git.files.hintWorktree', { path: worktreeLabel(project.path, agent.worktree.path) })
-        : t('git.files.hintAgent')
-      : t('git.files.hintProject'),
-  );
+  /** Where the agent's worktree is, said around its path (in mono). */
+  const worktree = $derived(scope === 'agent' && agent?.worktree ? worktreeLabel(project.path, agent.worktree.path) : null);
+  const around = $derived(worktree === null ? null : t('git.files.hintWorktree', { path: '\u0000' }).split('\u0000'));
+  const hint = $derived(scope === 'agent' ? t('git.files.hintAgent') : t('git.files.hintProject'));
+
+  /** « Merger <b>branch</b> → <b>base</b>… », its two branches apart from the words around them. */
+  function mergeParts(branch: string, base: string) {
+    const [a, b, c] = t('git.files.merge', { branch: '\u0000', base: '\u0001' }).split(/[\u0000\u0001]/);
+    return [
+      { text: a, ref: false },
+      { text: branch, ref: true },
+      { text: b, ref: false },
+      { text: base, ref: true },
+      { text: c, ref: false },
+    ];
+  }
 
   function agentName(id: string | null) {
     return id ? (app.agents[id]?.name ?? '?') : '';
@@ -170,19 +180,15 @@
 </script>
 
 <div class="files" class:docked>
-  <div class="scope">
-    <div class="segmented small" style="width:100%">
-      <button style="flex:1;font-family:var(--ui);font-size:12px" class:on={scope === 'agent'} onclick={() => (app.filesScope = 'agent')}
-        >{t('git.files.scopeAgent')}</button
-      >
-      <button
-        style="flex:1;font-family:var(--ui);font-size:12px"
-        class:on={scope === 'project'}
-        onclick={() => (app.filesScope = 'project')}>{t('git.files.scopeProject')}</button
-      >
+  <div class="side-top">
+    <div class="segmented small scope" role="group" aria-label={t('git.files.scope')}>
+      <button aria-pressed={scope === 'agent'} onclick={() => (app.filesScope = 'agent')}>{t('git.files.scopeAgent')}</button>
+      <button aria-pressed={scope === 'project'} onclick={() => (app.filesScope = 'project')}>{t('git.files.scopeProject')}</button>
+    </div>
+    <div class="caption" use:tip={{ text: around ? around.join(worktree ?? '') : hint, cut: true }}>
+      {#if around}{around[0]}<span class="mono">{worktree}</span>{around[1]}{:else}{hint}{/if}
     </div>
   </div>
-  <div class="hint mono">{hint}</div>
   <div class="list">
     {#if error}
       <div class="empty">{error}</div>
@@ -194,33 +200,30 @@
       <div class="filerow" class:on>
         <button
           class="file"
-          class:on
           aria-current={on ? 'true' : undefined}
           onclick={() => (docked ? (picked = keyOf(f)) : openDiff([f.path], diffOwner(f), f.path))}
           oncontextmenu={(e) => fileMenu(e, f)}
         >
-          <span class="st" style:color={SC[f.status]}>{f.status}</span>
-          <span class="names">
-            <span class="fname mono">{basename(f.path)}</span>
-            <span class="dir mono">{dirname(f.path)}</span>
-          </span>
-          {#if scope === 'project' && f.agentId}<span class="tag mono">{agentName(f.agentId)}</span>{/if}
-          <span class="add mono">+{f.add}</span>
-          <span class="del mono">−{f.del}</span>
+          <span class="letter {f.status.toLowerCase()}">{f.status}</span>
+          <span class="fn"
+            ><b>{basename(f.path)}</b>{#if dirname(f.path)}<span class="dir">{dirname(f.path)}</span>{/if}</span
+          >
+          {#if scope === 'project' && f.agentId}<span class="tag">{agentName(f.agentId)}</span>{/if}
+          <span class="cnt"><span class="add">+{f.add}</span><span class="del">−{f.del}</span></span>
         </button>
         <!-- A sibling of the row's button, not inside it. -->
         {#if f.status !== 'D'}
           <button
-            class="edit"
+            class="edit icon-btn"
             aria-label={t('git.files.openNamed', { name: basename(f.path) })}
             use:tip={t('common.openInEditor')}
             onclick={() => openInEditor(f)}
-            oncontextmenu={(e) => fileMenu(e, f)}>&lt;/&gt;</button
+            oncontextmenu={(e) => fileMenu(e, f)}><Icon name="code" size={14} /></button
           >
         {/if}
       </div>
     {/each}
-    {#if files.length > SHOWN}<p class="more mono">
+    {#if files.length > SHOWN}<p class="more">
         {t('git.files.more', { count: files.length - SHOWN, n: fInt(files.length - SHOWN) })}
       </p>{/if}
   </div>
@@ -234,31 +237,37 @@
     {/if}
   {/if}
   <div class="foot">
-    <button class="btn" style="flex:1" disabled={!files.length} onclick={openListedDiff}>{t('git.files.showDiff')}</button>
-    <button
-      class="btn primary"
-      style="flex:1"
-      disabled={!canCommit(project, agent, scope) || !files.length}
-      onclick={() => askCommit(project, agent, scope)}
-    >
-      {scope === 'agent' ? t('git.files.commitAgent') : t('git.files.commitAll')}
-    </button>
-  </div>
-  {#if scope === 'agent' && agent?.worktree}
-    <div class="foot merge">
-      <button class="btn" style="flex:1" onclick={() => agent && mergeAgent(agent)}
-        >{t('git.files.merge', { branch: agent.worktree.branch, base: agent.worktree.baseBranch })}</button
+    <div class="rowb">
+      <button class="btn" disabled={!files.length} onclick={openListedDiff}>{t('git.files.showDiff')}</button>
+      <button
+        class="btn primary"
+        disabled={!canCommit(project, agent, scope) || !files.length}
+        onclick={() => askCommit(project, agent, scope)}
       >
+        {scope === 'agent' ? t('git.files.commitAgent') : t('git.files.commitAll')}
+      </button>
     </div>
-    <!-- Not for an archived agent, as in the sidebar's menu: nothing goes into the worktree of one that is not running. -->
-    {#if !agent.archived}
-      <div class="foot merge">
-        <button class="btn" style="flex:1" onclick={() => agent && integrateBase(agent)}
-          >{t('branches.integrate.menu', { base: agent.worktree.baseBranch })}</button
+    {#if scope === 'agent' && agent?.worktree}
+      {@const wt = agent.worktree}
+      {@const merge = t('git.files.merge', { branch: wt.branch, base: wt.baseBranch })}
+      <div class="rowb">
+        <button class="btn wide" aria-label={merge} use:tip={{ text: merge, cut: true }} onclick={() => agent && mergeAgent(agent)}
+          ><Icon name="merge" size={14} /><span class="ell"
+            >{#each mergeParts(wt.branch, wt.baseBranch) as p, i (i)}{#if p.ref}<b>{p.text}</b>{:else}{p.text}{/if}{/each}</span
+          ></button
         >
+        <!-- Not for an archived agent, as in the sidebar's menu: nothing goes into the worktree of one that is not running. -->
+        {#if !agent.archived}
+          <button
+            class="btn icon-only"
+            aria-label={t('branches.integrate.menu', { base: wt.baseBranch })}
+            use:tip={t('branches.integrate.menu', { base: wt.baseBranch })}
+            onclick={() => agent && integrateBase(agent)}><Icon name="pull" size={14} /></button
+          >
+        {/if}
       </div>
     {/if}
-  {/if}
+  </div>
 </div>
 
 <style>
@@ -275,22 +284,41 @@
   .fill {
     flex: 1;
   }
-  .scope {
-    padding: 0 14px 12px 18px;
+  .side-top {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px 8px;
   }
-  .hint {
-    padding: 0 18px 10px;
+  /* The scope in two equal segments, as the preview draws them. */
+  .scope {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    padding: 3px;
+    border-radius: 9px;
+  }
+  .scope button {
+    padding: 0;
+    border-radius: 7px;
+  }
+  .caption {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .caption .mono {
     font-size: 11px;
-    color: var(--dim);
-    line-height: 1.5;
-    overflow-wrap: anywhere;
   }
   .list {
     flex: 1;
     overflow: auto;
-    display: flex;
-    flex-direction: column;
-    padding: 0 8px 12px;
+    display: grid;
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 1px;
+    padding: 0 8px;
   }
   .empty {
     padding: 30px 10px;
@@ -300,110 +328,139 @@
   }
   .more {
     margin: 0;
-    padding: 8px 10px;
-    font-size: 11px;
+    padding: 8px;
+    font-size: 11.5px;
     color: var(--dim);
   }
   .filerow {
     position: relative;
     display: flex;
-  }
-  .filerow .file {
-    flex: 1;
     min-width: 0;
   }
-  /* Over the row's counters, once the row is pointed at, picked or reached with the keyboard. */
-  .filerow .edit {
-    position: absolute;
-    right: 6px;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
-    height: 22px;
-    padding: 0 7px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .filerow:hover .edit,
-  .filerow.on .edit,
-  .filerow .edit:focus-visible {
-    opacity: 1;
-  }
+  /* A file: its letter, its name and its folder, its counts. */
   .file {
-    display: flex;
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
+    gap: 8px;
+    height: 30px;
+    padding: 0 8px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12.5px;
     text-align: left;
     cursor: pointer;
+  }
+  .file:hover {
+    background: var(--hover);
+  }
+  .file[aria-current='true'] {
+    background: rgba(var(--fg-rgb), 0.06);
+  }
+  .letter {
+    font: 600 11.5px var(--mono);
+    text-align: center;
+    color: var(--git-m);
+  }
+  .letter.a {
+    color: var(--add);
+  }
+  .letter.d {
+    color: var(--del);
+  }
+  .fn {
     min-width: 0;
-  }
-  .file:hover,
-  .file.on {
-    background: var(--elev);
-  }
-  .st {
-    width: 16px;
-    flex: none;
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-  }
-  .names {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .fname {
-    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .dir {
-    font-size: 10.5px;
-    color: var(--dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .fn b {
+    color: var(--text);
+    font-weight: 550;
   }
-  .tag {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
+  .fn .dir {
+    margin-left: 6px;
     color: var(--muted);
-    white-space: nowrap;
-    max-width: 90px;
+  }
+  /* In the whole project: the agent whose worktree has the file. */
+  .tag {
+    max-width: 96px;
     overflow: hidden;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: var(--hover);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 18px;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cnt {
+    display: inline-flex;
+    gap: 6px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
   .add {
-    font-size: 11px;
     color: var(--add);
   }
   .del {
-    font-size: 11px;
     color: var(--del);
   }
+  /* In place of the row's counts, once the row is pointed at or reached with the keyboard. */
+  .edit {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translateY(-50%);
+    opacity: 0;
+    background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--p-ink);
+  }
+  .filerow:hover .edit,
+  .filerow:has(:focus-visible) .edit {
+    opacity: 1;
+  }
+  .filerow:hover .cnt,
+  .filerow:has(:focus-visible) .cnt {
+    visibility: hidden;
+  }
   .foot {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 12px 14px 14px;
     border-top: 1px solid var(--line);
   }
-  .foot.merge {
-    border-top: none;
-    padding-top: 0;
+  .rowb {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+  }
+  .rowb .btn.primary {
+    margin-left: auto;
+  }
+  .btn.wide {
+    flex: 1;
+    min-width: 0;
+  }
+  .btn.wide .ell {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .btn.wide b {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
   }
 </style>

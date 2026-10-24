@@ -168,7 +168,18 @@ export default defineZone('nav', {
     },
   },
 
-  sidePanel: { uncommitted: 'Uncommitted', history: 'History' },
+  sidePanel: {
+    uncommitted: 'Uncommitted',
+    history: 'History',
+    hosts: 'PR and CI',
+    soon: 'after 2.0',
+    laterTitle: 'PRs, CI and deployments of the agent’s branch',
+    laterBody: 'Here, after 2.0: the repository’s host (GitHub, GitLab, Bitbucket, Gitea) tells what becomes of the branch.',
+    laterPr: 'the open pull request, its reviews and its comments;',
+    laterCi: 'the CI checks, their log, run again;',
+    laterDeploy: 'the preview deployments and their address.',
+    laterCard: 'On the ticket’s card, today’s “PR #41 → main” line, with the state of the CI.',
+  },
 
   menu: { swatch: '{label} {n}' },
 
