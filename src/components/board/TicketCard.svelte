@@ -1,7 +1,17 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { accountName, newAgentDefaults, pauseOf } from '../../lib/accounts';
-  import { APPROVE_LABEL, canStart, criteriaMet, doneMeta, launchAnyway, ticketSpent, waitingFor, waitLabel } from '../../lib/board';
+  import {
+    APPROVE_LABEL,
+    canStart,
+    doneMeta,
+    launchAnyway,
+    outcomeShown,
+    reviewMeta,
+    ticketSpent,
+    waitingFor,
+    waitLabel,
+  } from '../../lib/board';
   import { buffers, lossNotice } from '../../lib/editor/buffers.svelte';
   import { fTime, fWhen } from '../../lib/format';
   import { t } from '../../lib/i18n';
@@ -14,8 +24,10 @@
   import { app } from '../../lib/state.svelte';
   import { anyRunning, flows, stopTests, testAgent } from '../../lib/test-launch.svelte';
   import type { Project, Ticket } from '../../lib/types';
+  import { cardActivity } from '../../lib/sidebar';
+  import type { IconName } from '../../lib/icons';
   import EngineMark from '../EngineMark.svelte';
-  import StatusDot from '../StatusDot.svelte';
+  import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
   import { tip } from '../../lib/tip';
 
@@ -74,10 +86,16 @@
       .filter(Boolean)
       .join(', '),
   );
-  const met = $derived(criteriaMet(ticket));
-  const total = $derived(ticket.criteria.length);
-  /** The foot's figures: what the ticket cost, the criteria met of a ticket to test, the loops of a finished one. */
-  const figures = $derived(!!used || ticket.column === 'review' || ticket.column === 'done');
+  /** The harness its agent runs on, or the one set on a ticket to do (« Harness »): the brand beside its key. */
+  const engine = $derived(
+    ticket.column === 'doing' && agent ? (agent.engine ?? 'claude') : ticket.column === 'todo' ? ticket.engine : null,
+  );
+  /** What its agent does right now, as its card in the list says it (« Lit src/db.ts »: the verb, then what it acts on). */
+  const activity = $derived(agent && ticket.column === 'doing' ? cardActivity(agent, 0) : null);
+  /** The words and the icon of a finished ticket's outcome. */
+  const outcome = $derived(ticket.outcome ? outcomeShown(ticket.outcome) : null);
+  /** What validating does, drawn on « Valider »: its words are in the button's name. */
+  const APPROVE_ICON: Record<string, IconName> = { merge: 'merge', pr: 'pr', push: 'push', keep: 'check' };
   const waiting = $derived(ticket.column === 'doing' && agent?.status === 'waiting');
   // Under way, the last items; to test, all of them.
   const steps = $derived(ticket.column === 'doing' ? ticket.progress.slice(-SHOWN) : ticket.progress);
@@ -244,7 +262,8 @@
 <div
   bind:this={card}
   class="card"
-  class:done={ticket.column === 'done'}
+  class:attn={ticket.column === 'review'}
+  class:past={ticket.column === 'done'}
   class:waiting
   role="button"
   tabindex="0"
@@ -262,7 +281,7 @@
         use:tip={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
         aria-label={t('board.card.openExternal', { key: ticket.external.key, service: svc.name })}
         onclick={(e) => act(e, () => app.run(openUrl(ticket.external!.url)))}
-        ><span class="svc" style:background={svc.color} style:color={svc.ink} aria-hidden="true">{svc.letter}</span><span class="mono"
+        ><span class="svc" style:background={svc.color} style:color={svc.ink} aria-hidden="true">{svc.letter}</span><span
           >{ticket.external.key}</span
         ></button
       >
@@ -272,25 +291,15 @@
           aria-label={t('board.card.syncError', { service: svc.name, error: ticket.external.error })}
           aria-expanded={syncOpen}
           use:tip={ticket.external.error}
-          onclick={(e) => act(e, () => (syncOpen = !syncOpen))}>⚠</button
+          onclick={(e) => act(e, () => (syncOpen = !syncOpen))}><Icon name="info" size={14} /></button
         >{/if}
     {/if}
-    <span class="key mono">{ticket.key}</span>
+    <span class="key">{ticket.key}</span>
+    {#if engine}<EngineMark {engine} />{/if}
     {#if attached}
       <!-- The images and the files attached in its form, which its agent gets with its first message. -->
       <span class="clip" id="{uid}-images" use:tip={said}
-        ><svg
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-          ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
-        ><span class="mono" aria-hidden="true">{attached}</span><span class="sr">{said}</span></span
+        ><Icon name="clip" size={13} /><span class="n" aria-hidden="true">{attached}</span><span class="sr">{said}</span></span
       >
     {/if}
     {#if ownAccount}<span
@@ -299,31 +308,56 @@
         aria-label={t('board.card.ownAccount', { account: ownAccount })}
         use:tip={t('board.card.ownAccount', { account: ownAccount })}>{ownAccount}</span
       >{/if}
-    {#if own}<span class="own mono" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
-    <div style="flex:1"></div>
-    {#if ticket.column === 'doing'}<span class="loop mono"
-        >{t('board.card.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span
-      >{/if}
-    {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
-      >{/if}
+    {#if own}<span class="own" role="img" aria-label={own.label} use:tip={own.label}>{own.text}</span>{/if}
+    {#if ticket.column === 'doing'}
+      <span class="loop"
+        >{t('board.card.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}<span class="loops" aria-hidden="true"
+          >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+        ></span
+      >
+    {:else if ticket.column === 'review'}
+      <span class="sum" use:tip={used?.estimated ? estimateHint(used) : undefined}
+        ><span class="sr">{t('board.card.costLabel')}{' '}</span><span>{reviewMeta(ticket, used)}</span></span
+      >
+    {:else if ticket.column === 'done'}
+      <span class="sum">{doneMeta(ticket)}</span>
+    {/if}
   </div>
   {#if ticket.external?.error && syncOpen}
     <div class="sync" bind:this={panel}>
       <span class="why">{ticket.external.error}</span>
       <div class="row">
         <!-- Not disabled while it runs: the focus stays on it (resync asks once). -->
-        <button class="small" aria-disabled={resyncing} onclick={(e) => act(e, resync)}>{t('board.card.resync')}</button>
+        <button class="btn small" aria-disabled={resyncing} onclick={(e) => act(e, resync)}>{t('board.card.resync')}</button>
       </div>
     </div>
   {/if}
-  <span class="title">{ticket.title}</span>
+  <h2 class="title">{ticket.title}</h2>
+  {#if ticket.partial && (ticket.column === 'review' || ticket.column === 'done')}<span class="partial">{t('board.card.partial')}</span
+    >{/if}
 
-  {#if ticket.column === 'done' && ticket.outcome}
+  {#if ticket.column === 'done' && outcome}
     {#if ticket.outcomeUrl}
-      <button class="outcome mono link" onclick={(e) => act(e, () => app.run(openUrl(ticket.outcomeUrl!)))}>{ticket.outcome}</button>
+      <button class="outcome link" onclick={(e) => act(e, () => app.run(openUrl(ticket.outcomeUrl!)))}
+        >{#if outcome.icon}<Icon name={outcome.icon} size={14} />{/if}{outcome.text}</button
+      >
     {:else}
-      <span class="outcome mono">{ticket.outcome}</span>
+      <span class="outcome"
+        >{#if outcome.icon}<Icon name={outcome.icon} size={14} />{/if}{outcome.text}</span
+      >
     {/if}
+  {/if}
+
+  {#if ticket.column !== 'done' && ticket.criteria.length}
+    <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
+      {#each ticket.criteria as c, i (i)}
+        <li class:met={c.ok} use:tip={c.note || undefined}>
+          <Icon name={c.ok ? 'check-c' : 'circle'} size={14} /><span
+            >{c.text}{#if c.ok}<span class="sr">{' '}{t('board.card.met')}</span>{/if}</span
+          >
+        </li>
+      {/each}
+    </ul>
   {/if}
 
   {#snippet stepList()}
@@ -339,29 +373,11 @@
     </div>
   {/if}
 
-  {#if ticket.column === 'doing' || ticket.column === 'review'}
-    <ul class="crit" aria-label={t('board.card.criteriaLabel')}>
-      {#each ticket.criteria as c, i (i)}
-        <li class:ok={c.ok} use:tip={c.note || undefined}><span class="mark">{c.ok ? '✓' : '○'}</span><span>{c.text}</span></li>
-      {/each}
-    </ul>
-  {/if}
-
   {#if ticket.column === 'doing'}
-    <div
-      class="bar"
-      role="progressbar"
-      aria-label={t('board.card.criteriaMetLabel')}
-      aria-valuemin={0}
-      aria-valuemax={total}
-      aria-valuenow={met}
-    >
-      <div style:width={`${total ? (met / total) * 100 : 0}%`}></div>
-    </div>
     {#if steps.length}
       <div class="prog">
         {@render stepList()}
-        {#if hidden > 0}<span class="more mono" use:tip={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
+        {#if hidden > 0}<span class="more" use:tip={t('board.card.moreSteps', { count: hidden })}>+{hidden}</span>{/if}
       </div>
     {/if}
     {#if agent?.progressLine}
@@ -370,22 +386,6 @@
         <span class="sr">{t('mcp.progress.label')}{' '}</span>{agent.progressLine}
       </div>
     {/if}
-    {#if !ticket.blocked}
-      {#if waiting}
-        <div class="act wait"><span class="pulse" style="width:7px;height:7px"></span>{t('board.card.questionWaiting')}</div>
-      {:else if agent?.resumeAt && ownAccount}
-        <!-- Set on its account, it waits for that one's reset, never going elsewhere (ESC-153). -->
-        <div class="act">{t('board.card.waitsAccount', { account: ownAccount, at: fTime(agent.resumeAt) })}</div>
-      {:else if agent?.resumeAt}
-        <div class="act">{t('board.card.resumes', { when: fWhen(agent.resumeAt, app.now) })}</div>
-      {:else if agent?.setup}
-        <div class="act" use:tip={agent.setup}>
-          <span class="dots"><span></span><span></span><span></span></span>{t('board.card.settingUp', { step: agent.setup })}
-        </div>
-      {:else if agent?.status === 'running'}
-        <div class="act"><span class="dots"><span></span><span></span><span></span></span>{agent.activity ?? t('board.card.thinking')}</div>
-      {/if}
-    {/if}
   {/if}
 
   {#if ticket.accountLost && ticket.column !== 'done'}
@@ -393,69 +393,79 @@
     <span class="lost" role="status">{ticket.accountLost}</span>
   {/if}
 
-  {#if ticket.column === 'todo'}
-    <span class="meta">{t('board.card.todoMeta', { count: total, max: ticket.maxLoops })}</span>
-    <div class="row">
-      <span class="k">{waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}</span>
-      <div style="flex:1"></div>
-      {#if canStart(ticket, s, busyCount, quota, issue, pause)}
-        <button class="small" onclick={(e) => act(e, launch)}>{t('board.card.launch')}</button>
-      {/if}
-    </div>
-  {/if}
-
-  {#if (agent?.recipe || agent?.isola) && (ticket.column === 'doing' || ticket.column === 'review')}
-    {@const a = agent}
-    {@const address = flows.all[a.id]?.opened ?? openAddress(a)}
-    {#if anyRunning(a.id)}
-      <div class="row actions">
-        <button class="small" onclick={(e) => act(e, () => stopTests(a.id))}>■ {t('board.card.stopTests')}</button>
-        {#if address}<button class="small" onclick={(e) => act(e, () => app.run(openUrl(address)))}>{t('common.open')}</button>{/if}
-      </div>
-    {:else if ticket.column === 'review' && !ticket.step}
-      <div class="row"><button class="small" onclick={(e) => act(e, () => testAgent(a, project))}>▶ {t('board.card.test')}</button></div>
-    {/if}
-  {/if}
-
-  {#if ticket.step}
-    <div class="act"><span class="dots"><span></span><span></span><span></span></span>{ticket.step}</div>
-  {/if}
-
   {#if ticket.blocked}
     <div class="blocked" class:conflict={ticket.conflict}>
       <span class="why">{ticket.blocked}</span>
       {#if ticket.column === 'doing'}
         <div class="row">
-          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
         </div>
       {:else if ticket.conflict}
-        <div class="row actions">
-          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(ticket.id)))}
+        <div class="row">
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResolveConflict(ticket.id)))}
             >{t('board.card.agentResolves')}</button
           >
-          <button class="small" onclick={(e) => act(e, () => app.run(api.ticketDismiss(ticket.id)))}>{t('common.cancel')}</button>
+          <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketDismiss(ticket.id)))}>{t('common.cancel')}</button>
         </div>
       {/if}
     </div>
   {/if}
 
-  {#if ticket.column !== 'todo' && (agent || ticket.column === 'done')}
-    <div class="row foot">
-      {#if agent}<span class="who mono"
-          ><StatusDot status={agent.status} size={7} /><span class="name" use:tip={{ text: agent.name, cut: true }}>{agent.name}</span
-          ><EngineMark engine={agent.engine} /></span
-        >{/if}
-      {#if figures}
-        <div class="figures">
-          {#if used}
-            <span class="k mono" use:tip={used.estimated ? estimateHint(used) : undefined}
-              ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
-            >
-          {/if}
-          {#if ticket.column === 'review'}<span class="k mono">{t('board.card.criteriaMet', { count: total, met, total })}</span>{/if}
-          {#if ticket.column === 'done'}<span class="k mono">{doneMeta(ticket)}</span>{/if}
-        </div>
+  <!-- The card's last line: why a ticket to do waits, or what the agent of one under way does and what it cost. -->
+  {#if ticket.column === 'todo'}
+    {@const why = waitLabel(ticket, queueIndex, s, busyCount, issue, pause, awaited)}
+    <div class="act">
+      <Icon name={awaited.length && !ticket.forced ? 'link' : 'clock'} size={14} /><span class="grow" use:tip={{ text: why, cut: true }}
+        >{why}</span
+      >
+      {#if canStart(ticket, s, busyCount, quota, issue, pause)}
+        <button class="btn small" onclick={(e) => act(e, launch)}><Icon name="play" size={14} />{t('board.card.launch')}</button>
       {/if}
+    </div>
+  {:else if ticket.column === 'doing' && !ticket.blocked && (waiting || agent?.resumeAt || agent?.setup || activity || used)}
+    <div class="act" class:wait={waiting}>
+      {#if waiting}
+        <i class="dot"></i><span class="grow">{t('board.card.questionWaiting')}</span>
+      {:else if agent?.resumeAt}
+        <!-- Set on its account, it waits for that one's reset, never going elsewhere (ESC-153). -->
+        {@const when = ownAccount
+          ? t('board.card.waitsAccount', { account: ownAccount, at: fTime(agent.resumeAt) })
+          : t('board.card.resumes', { when: fWhen(agent.resumeAt, app.now) })}
+        <Icon name="clock" size={14} /><span class="grow" use:tip={{ text: when, cut: true }}>{when}</span>
+      {:else if agent?.setup}
+        <i class="dot"></i><span class="grow" use:tip={agent.setup}>{t('board.card.settingUp', { step: agent.setup })}</span>
+      {:else if activity?.kind === 'doing'}
+        <i class="dot"></i><span class="grow"
+          ><b>{activity.verb}</b>{#if activity.what}{' '}<span class="mono">{activity.what}</span>{/if}</span
+        >
+      {:else if activity?.kind === 'thinking'}
+        <i class="dot"></i><span class="grow">{t('board.card.thinking')}</span>
+      {:else}
+        <!-- Between two turns: its cost alone, at the right. -->
+        <span class="grow"></span>
+      {/if}
+      {#if used}
+        <span class="num cost" use:tip={used.estimated ? estimateHint(used) : undefined}
+          ><span class="sr">{t('board.card.costLabel')}{' '}</span>{fSpentUsd(used)}</span
+        >
+      {/if}
+    </div>
+  {/if}
+
+  {#if ticket.step}
+    <div class="act"><i class="dot"></i><span class="grow" use:tip={{ text: ticket.step, cut: true }}>{ticket.step}</span></div>
+  {/if}
+
+  {#if (agent?.recipe || agent?.isola) && (ticket.column === 'doing' || ticket.column === 'review') && anyRunning(agent.id)}
+    {@const a = agent}
+    {@const address = flows.all[a.id]?.opened ?? openAddress(a)}
+    <div class="row">
+      <button class="btn small" onclick={(e) => act(e, () => stopTests(a.id))}
+        ><Icon name="stop" size={14} />{t('board.card.stopTests')}</button
+      >
+      {#if address}<button class="btn small" onclick={(e) => act(e, () => app.run(openUrl(address)))}
+          ><Icon name="ext" size={14} />{t('common.open')}</button
+        >{/if}
     </div>
   {/if}
 
@@ -463,56 +473,100 @@
     {#if rejecting}
       <RejectForm onsubmit={reject} oncancel={() => (rejecting = false)} />
     {:else}
-      <div class="row actions">
-        <button class="approve" onclick={(e) => act(e, approve)}>{ticket.blocked ? t('common.retry') : APPROVE_LABEL[s.action]}</button>
-        <button class="small grow" onclick={(e) => act(e, () => (rejecting = true))}>{t('board.card.sendBack')}</button>
+      <!-- « Valider » draws what validating does, said whole in its name; « Tester » once its launch is ready. -->
+      <div class="row">
+        {#if ticket.blocked}
+          <button class="btn primary small" onclick={(e) => act(e, approve)}><Icon name="restart" size={14} />{t('common.retry')}</button>
+        {:else}
+          <button
+            class="btn primary small"
+            aria-label={APPROVE_LABEL[s.action]}
+            use:tip={APPROVE_LABEL[s.action]}
+            onclick={(e) => act(e, approve)}
+            ><Icon name={APPROVE_ICON[s.action] ?? 'check'} size={14} />{t('boardSettings.approve.keep')}</button
+          >
+        {/if}
+        {#if (agent?.recipe || agent?.isola) && !anyRunning(agent.id)}
+          {@const a = agent}
+          <button class="btn small" onclick={(e) => act(e, () => testAgent(a, project))}
+            ><Icon name="play" size={14} />{t('board.card.test')}</button
+          >
+        {/if}
+        <button class="btn ghost small" onclick={(e) => act(e, () => (rejecting = true))}>{t('board.card.sendBack')}</button>
       </div>
     {/if}
   {/if}
 </div>
 
 <style>
+  /* A card on the board (2.0): raised, its key and loop, its title, its criteria, what its agent does and costs. */
   .card {
     flex: none;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 9px;
-    padding: 11px 12px;
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    border: 1px solid var(--line);
+    min-width: 0;
+    padding: 12px 12px 11px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      0 1px 2px rgba(0, 0, 0, calc(0.3 * var(--shade)));
+    text-align: left;
     cursor: pointer;
     outline: none;
+    transition: box-shadow 0.15s;
   }
-  .card:hover,
+  .card:hover {
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 4px 12px -4px rgba(0, 0, 0, calc(0.5 * var(--shade)));
+  }
   .card:focus-visible {
-    border-color: var(--line2);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent),
+      0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent);
   }
+  /* To test, or its agent waiting for an answer: amber, the card to act on. */
+  .card.attn,
   .card.waiting {
-    border-color: var(--wait);
+    background: color-mix(in oklch, var(--wait) 5%, var(--raise));
+    box-shadow: inset 0 0 0 1px var(--wait-line);
   }
-  .card.done {
-    opacity: 0.72;
+  .card.past {
+    background: transparent;
   }
   .top,
   .row {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+  }
+  .top {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .row {
+    flex-wrap: wrap;
+    gap: 6px;
   }
   .key {
-    font-size: 10.5px;
-    color: var(--dim);
+    flex: none;
+    white-space: nowrap;
   }
   .clip {
-    display: flex;
+    flex: none;
+    display: inline-flex;
     align-items: center;
     gap: 3px;
-    font-size: 10.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .ext {
-    display: flex;
+    flex: 0 1 auto;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
@@ -521,11 +575,15 @@
     background: none;
     color: var(--muted);
     font: inherit;
-    font-size: 10.5px;
     cursor: pointer;
   }
   .ext:hover {
     color: var(--text);
+  }
+  .ext > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .svc {
     min-width: 15px;
@@ -540,234 +598,249 @@
     justify-content: center;
   }
   .sync-err {
-    padding: 0 2px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
     border: none;
-    border-radius: 3px;
+    border-radius: 5px;
     background: none;
-    font: inherit;
-    font-size: 11px;
     color: var(--wait);
     cursor: pointer;
   }
   .sync-err[aria-expanded='true'] {
-    background: var(--wait-soft);
+    background: var(--wait-bg);
   }
   .sync {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
     padding: 7px 9px;
-    border-radius: var(--r-sm);
-    background: var(--wait-soft);
-    color: var(--wait);
-    font-size: 11.5px;
+    border-radius: 7px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--soft);
+    font-size: 12px;
   }
   .sync .why {
     overflow-wrap: anywhere;
   }
-  .small[aria-disabled='true'] {
-    opacity: 0.5;
-    cursor: default;
-  }
-  /* Cut with an ellipsis before it pushes the loop or the partial goal out of a narrow column: the tooltip says it whole. */
+  /* Its own account, model and effort, in a hairline as the harness's brand; cut before they push the loop out. */
   .own {
+    min-width: 0;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: rgba(var(--fg-rgb), 0.05);
+    color: var(--soft);
+    font-size: 10.5px;
+    font-weight: 560;
+    line-height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The loop and its squares, or the loops and the cost of a ticket to test or done: at the right of the line. */
+  .loop,
+  .sum {
+    flex: none;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .loop,
+  .sum {
+    font-weight: 550;
+  }
+  .loop {
+    color: var(--p-ink);
+  }
+  .loops {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .loops i {
+    width: 7px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(var(--fg-rgb), 0.12);
+  }
+  .loops i.on {
+    background: var(--p-ink);
+  }
+  .title {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 590;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+  .past .title {
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .partial {
+    justify-self: start;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 9px;
+    background: oklch(from var(--wait) l c h / 0.1);
+    color: var(--wait);
+    font-size: 11.5px;
+    font-weight: 550;
+    line-height: 18px;
+  }
+  .outcome {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+  }
+  .outcome > :global(.icon) {
+    color: var(--add);
+  }
+  .outcome.link {
+    cursor: pointer;
+  }
+  .outcome.link:hover {
+    color: var(--text);
+  }
+  .crit {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--soft);
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .crit li {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    gap: 8px;
+    overflow-wrap: anywhere;
+  }
+  .crit li > :global(.icon) {
+    margin-top: 1px;
+    color: var(--idle);
+  }
+  .crit li.met {
+    color: var(--muted);
+  }
+  .crit li.met > :global(.icon) {
+    color: var(--add);
+  }
+  .prog {
+    display: grid;
+    gap: 4px;
+  }
+  .h {
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+  }
+  .steps {
+    display: grid;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .steps li {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  /* A small dot in the criteria's column, drawn. */
+  .steps li::before {
+    content: '';
+    justify-self: center;
+    width: 3px;
+    height: 3px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: var(--idle);
+  }
+  .more {
+    justify-self: start;
+    color: var(--dim);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .said {
+    color: var(--soft);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .lost {
+    color: var(--wait);
+    font-size: 12px;
+  }
+  /* The last line, under a hairline: a dot of the agent's state, what it does, its cost. */
+  .act {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .act > :global(.icon) {
+    flex: none;
+  }
+  .act .grow {
+    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 10.5px;
-    font-weight: 600;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--muted);
   }
-  .loop {
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--accent);
+  .act b {
+    color: var(--soft);
+    font-weight: 550;
   }
-  .partial {
-    font-size: 10.5px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: var(--wait-soft);
-    color: var(--wait);
+  .act .mono {
+    font-size: 0.92em;
   }
-  .title {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.4;
-    text-wrap: pretty;
-  }
-  .outcome {
-    align-self: flex-start;
-    font-size: 10.5px;
-    padding: 3px 7px;
-    border-radius: 3px;
-    background: var(--elev2);
-    color: var(--ok);
-  }
-  .outcome.link {
-    border: none;
-    cursor: pointer;
-  }
-  .outcome.link:hover {
-    text-decoration: underline;
-  }
-  .crit {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .crit li {
-    display: flex;
-    gap: 7px;
-    font-size: 11.5px;
-    line-height: 1.4;
-  }
-  .crit li.ok {
-    color: var(--muted);
-  }
-  .mark {
-    width: 10px;
+  .dot {
     flex: none;
-    color: var(--dim);
-  }
-  .crit li.ok .mark {
-    color: var(--ok);
-  }
-  .prog {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .h {
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--dim);
-  }
-  .steps {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .steps li {
-    display: flex;
-    gap: 7px;
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--muted);
-  }
-  .steps li::before {
-    content: '·';
-    width: 10px;
-    flex: none;
-    text-align: center;
-    color: var(--dim);
-  }
-  .more {
-    align-self: flex-start;
-    font-size: 10.5px;
-    color: var(--dim);
-  }
-  .bar {
-    height: 4px;
-    border-radius: 2px;
-    background: var(--elev2);
-    overflow: hidden;
-  }
-  .bar div {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.9s linear;
-  }
-  .act {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11.5px;
-    color: var(--muted);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--run);
   }
   .act.wait {
     color: var(--wait);
   }
-  .said {
-    font-size: 11.5px;
-    color: var(--text);
-    overflow-wrap: anywhere;
+  .act.wait .dot {
+    background: var(--wait);
   }
-  .dots {
-    display: inline-flex;
-    gap: 3px;
+  .cost {
     flex: none;
-  }
-  .dots span {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: ccBlink 1.2s infinite;
-  }
-  .dots span:nth-child(2) {
-    animation-delay: 0.15s;
-  }
-  .dots span:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  .meta {
-    font-size: 11.5px;
-    color: var(--muted);
-  }
-  .lost {
-    font-size: 11.5px;
-    color: var(--wait);
-  }
-  .k {
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .who {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    font-size: 11px;
-  }
-  /* A long agent name is cut, not broken over the card's lines. */
-  .name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /*
-   * The agent's name keeps at least a dozen characters: where the figures (cost, criteria met, loops) would squeeze it
-   * below that, they go under it, and break between them if they do not fit one line either. A column is a quarter of
-   * the board, and nothing may stick out of its card.
-   */
-  .foot {
-    flex-wrap: wrap;
-    row-gap: 3px;
-  }
-  .foot .who {
-    flex: 1 1 13ch;
-  }
-  .figures {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 3px 8px;
-    margin-left: auto;
+  .act .btn {
+    flex: none;
   }
   .sr {
     position: absolute;
@@ -777,52 +850,28 @@
     clip: rect(0 0 0 0);
   }
   .blocked {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
     padding: 7px 9px;
-    border-radius: var(--r-sm);
-    background: color-mix(in oklch, var(--del) 12%, transparent);
+    border-radius: 7px;
+    background: oklch(from var(--del) l c h / 0.08);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.32);
     color: var(--del);
-    font-size: 11.5px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
   }
   .blocked.conflict {
-    background: var(--wait-soft);
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
     color: var(--wait);
   }
-  .small {
-    height: 24px;
-    padding: 0 10px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .small:hover {
-    border-color: var(--accent);
-  }
-  /* In a narrow column the buttons of a row go under one another (the "Valider" and "Renvoyer" ones then fill their line). */
-  .actions {
-    flex-wrap: wrap;
-  }
-  .small.grow,
-  .approve {
-    flex: 1;
+  /* The card's buttons, 28 pixels high as the preview's « Valider » and « Tester ». */
+  .btn.small {
     height: 28px;
+    font-size: 12.5px;
   }
-  .approve {
-    border: none;
-    border-radius: var(--r-sm);
-    background: var(--ok);
-    color: #0f1a12;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
+  .btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: default;
   }
 </style>

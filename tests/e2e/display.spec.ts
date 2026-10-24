@@ -24,10 +24,13 @@ const zoomOf = async (page: Page, base: number) => Math.round(((await page.evalu
 function overflowing(page: Page) {
   return page.evaluate(() => {
     const out: string[] = [];
-    const scrolledTo = (el: Element) => {
+    /** Whether `el` lies in a box that scrolls on `axis` (the board scrolls sideways under four columns), itself in view. */
+    const scrolledTo = (el: Element, axis: 'x' | 'y') => {
       for (let p = el.parentElement; p; p = p.parentElement) {
-        const y = getComputedStyle(p).overflowY;
-        if ((y === 'auto' || y === 'scroll') && p.scrollHeight > p.clientHeight) {
+        const s = getComputedStyle(p);
+        const o = axis === 'y' ? s.overflowY : s.overflowX;
+        const scrolls = axis === 'y' ? p.scrollHeight > p.clientHeight : p.scrollWidth > p.clientWidth;
+        if ((o === 'auto' || o === 'scroll') && scrolls) {
           const b = p.getBoundingClientRect();
           return b.bottom <= innerHeight + 1 && b.right <= innerWidth + 1;
         }
@@ -39,7 +42,7 @@ function overflowing(page: Page) {
       if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
       // The terminals' parking lot is off screen on purpose.
       if (r.left < -1000) continue;
-      if (r.right <= innerWidth + 1 && scrolledTo(el)) continue;
+      if ((r.right <= innerWidth + 1 || scrolledTo(el, 'x')) && (r.bottom <= innerHeight + 1 || scrolledTo(el, 'y'))) continue;
       if (r.right > innerWidth + 1 || r.bottom > innerHeight + 1) {
         out.push(`${el.tagName.toLowerCase()}.${[...el.classList].join('.')} (${Math.round(r.right)}, ${Math.round(r.bottom)})`);
       }

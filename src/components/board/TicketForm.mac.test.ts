@@ -29,7 +29,7 @@ describe('TicketForm on macOS', () => {
 
   it('adds the ticket with Cmd+Enter, not with Ctrl+Enter, and writes the key the Mac way', async () => {
     const onsubmit = show();
-    expect(screen.getByText('⌘Entrée pour ajouter')).toBeInTheDocument();
+    expect(document.querySelector('.hint')).toHaveTextContent('⌘Entrée pour ajouter');
     expect(screen.getByRole('button', { name: 'Ajouter' })).toHaveAttribute('aria-keyshortcuts', 'Meta+Enter');
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), 'Un ticket');
     await userEvent.click(screen.getByRole('textbox', { name: 'Description' }));

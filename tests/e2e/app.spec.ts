@@ -954,32 +954,30 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   const review = page.getByRole('region', { name: 'À tester' });
   // Exact: the progress list (« Fichier dem-1.txt écrit ») and the agent's name also hold the key.
   await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
-  await expect(review.getByText('2/2 critères')).toBeVisible();
+  // Both criteria met, each checked.
+  await expect(review.locator('.crit li.met')).toHaveCount(2);
   // A met criterion is a plain line, not a green button.
   await expect(review.getByRole('list', { name: 'Critères' }).getByRole('listitem').first()).toHaveCSS(
     'background-color',
     'rgba(0, 0, 0, 0)',
   );
-  // The card's foot keeps the agent's name readable and its figures (cost, criteria met) inside the card: at this
-  // width they go under the name, which they neither squeeze to nothing nor push out of the card.
-  const foot = () =>
-    review.locator('.foot').evaluate((e) => {
-      const card = e.closest('.card')!.getBoundingClientRect();
-      const box = (selector: string) => e.querySelector(selector)!.getBoundingClientRect();
+  // The card's first line keeps its key, and its loops and cost, inside the card; its buttons too.
+  const inside = () =>
+    review.locator('.card').evaluate((card) => {
+      const c = card.getBoundingClientRect();
       const problems: string[] = [];
-      if (box('.name').width < 60) problems.push(`the agent's name is ${box('.name').width} px wide`);
-      for (const child of e.querySelectorAll('.who, .figures, .figures > .k')) {
+      for (const child of card.querySelectorAll('.top > *, .row > *')) {
         const r = child.getBoundingClientRect();
-        if (r.left < card.left || r.right > card.right)
-          problems.push(`${child.className} lies ${r.left}..${r.right}, the card ${card.left}..${card.right}`);
+        if (r.left < c.left || r.right > c.right)
+          problems.push(`${child.className} lies ${r.left}..${r.right}, the card ${c.left}..${c.right}`);
       }
       return problems;
     });
-  expect(await foot()).toEqual([]);
+  expect(await inside()).toEqual([]);
   expect(await sticksOut()).toEqual([]);
   await review.getByRole('button', { name: 'Valider et merger' }).click();
   const done = page.getByRole('region', { name: 'Terminé' });
-  await expect(done.getByText('⤵ Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
+  await expect(done.getByText('Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
   expect(await sticksOut()).toEqual([]);
   // The agent's file is on the project's branch, committed with a generated message.
   expect(fs.readFileSync(path.join(app.repo, 'dem-1.txt'), 'utf8')).toBe('Boucle 2\n');
@@ -1018,7 +1016,7 @@ test('a ticket’s test launches leave the launch section, their processes stopp
   const review = page.getByRole('region', { name: 'À tester' });
   await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
 
-  await review.getByRole('button', { name: '▶ Tester' }).click();
+  await review.getByRole('button', { name: 'Tester' }).click();
   const dialog = page.getByRole('dialog', { name: 'Tester DEM-1' });
   // The agent wrote this recipe: it is shown first, and nothing of it runs until « Lancer ».
   await expect(dialog.getByText(/Ces commandes ont été écrites par/)).toBeVisible();
@@ -1042,7 +1040,7 @@ test('a ticket’s test launches leave the launch section, their processes stopp
 
   await review.getByRole('button', { name: 'Valider et merger' }).click();
   const done = page.getByRole('region', { name: 'Terminé' });
-  await expect(done.getByText('⤵ Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
+  await expect(done.getByText('Mergé dans main · squash')).toBeVisible({ timeout: 60_000 });
   // Done: its terminal is gone from the section, its process with it, and neither crashed.
   await expect(runs.locator('.group')).toHaveCount(0);
   await expect(runs.locator('.run')).toHaveCount(0);

@@ -11,10 +11,12 @@ import {
   keyList,
   keyPrefix,
   launchAnyway,
+  outcomeShown,
   pauseLabel,
   placesLabel,
   queueIndices,
   quotaUntil,
+  reviewMeta,
   settingsSummary,
   ticketSpent,
   ticketTag,
@@ -136,6 +138,27 @@ describe('board labels', () => {
     expect(doneMeta(ticket({ column: 'done', iteration: 2, loops: 0, cost: 1.5 }))).toBe('2 boucles · 1,50\u00a0$');
   });
 
+  it('sums up a ticket to test as a finished one: its loops and what its agents cost so far, an estimate said', () => {
+    expect(reviewMeta(ticket({ column: 'review', iteration: 2 }), { cost: 0.61, estimated: false, tokens: 1 })).toBe('2 boucles · 0,61 $');
+    expect(reviewMeta(ticket({ column: 'review', iteration: 1 }), { cost: 0.5, estimated: true, tokens: 1 })).toBe('1 boucle · ≈ 0,50 $');
+    // Nothing used yet: its loops alone.
+    expect(reviewMeta(ticket({ column: 'review', iteration: 1 }), null)).toBe('1 boucle');
+  });
+
+  it('draws the outcome of a finished ticket with an icon, not with the glyph the backend writes before it', () => {
+    expect(outcomeShown('⤵ Mergé dans main · squash')).toEqual({ icon: 'merge', text: 'Mergé dans main · squash' });
+    expect(outcomeShown('⇡ PR #12 → main')).toEqual({ icon: 'pr', text: 'PR #12 → main' });
+    expect(outcomeShown('⇡ ticket/dem-3 poussée · PR à finaliser')).toEqual({ icon: 'pr', text: 'ticket/dem-3 poussée · PR à finaliser' });
+    expect(outcomeShown('⇡ Poussé sur ticket/dem-3')).toEqual({ icon: 'push', text: 'Poussé sur ticket/dem-3' });
+    expect(outcomeShown('◇ Laissé dans le worktree')).toEqual({ icon: 'folder', text: 'Laissé dans le worktree' });
+    expect(outcomeShown('∅ Aucune modification · worktree gardé')).toEqual({
+      icon: 'circle',
+      text: 'Aucune modification · worktree gardé',
+    });
+    // An outcome of an older version, or with no glyph: its words, no icon.
+    expect(outcomeShown('Mergé')).toEqual({ icon: null, text: 'Mergé' });
+  });
+
   it('writes the accent-stripping pattern without any literal combining mark (they get lost when copied)', () => {
     expect(source).not.toMatch(/\p{M}/u);
   });
@@ -160,10 +183,10 @@ describe('dependencies between tickets', () => {
   it('tells a ticket to do that waits for others, after the target branch and before the pause, unless launched by hand', () => {
     const issue = 'Branche cible main introuvable — aucun ticket ne démarre';
     const pause = { reason: 'limit' as const, pct: null, until: 1 };
-    expect(waitLabel(ticket(), 0, board(), 0, null, null, ['DEM-3'])).toBe('⏸ après DEM-3');
-    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('⏸ après DEM-3 et DEM-4');
-    expect(waitLabel(ticket(), 0, board({ autopilot: false }), 0, null, null, ['DEM-3'])).toBe('⏸ après DEM-3');
-    expect(waitLabel(ticket(), 0, board(), 0, null, pause, ['DEM-3'])).toBe('⏸ après DEM-3');
+    expect(waitLabel(ticket(), 0, board(), 0, null, null, ['DEM-3'])).toBe('Après DEM-3');
+    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('Après DEM-3 et DEM-4');
+    expect(waitLabel(ticket(), 0, board({ autopilot: false }), 0, null, null, ['DEM-3'])).toBe('Après DEM-3');
+    expect(waitLabel(ticket(), 0, board(), 0, null, pause, ['DEM-3'])).toBe('Après DEM-3');
     expect(waitLabel(ticket(), 0, board(), 0, issue, pause, ['DEM-3'])).toBe('En attente de la branche cible');
     // Launched by hand, it starts all the same: only what holds every ticket back holds it.
     expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0, null, null, ['DEM-3'])).toBe('Lancement demandé…');
@@ -276,7 +299,7 @@ describe('board labels in English', () => {
     expect(waitLabel(ticket({ forced: true }), 0, board({ autopilot: false }), 0)).toBe('Start requested…');
     expect(waitLabel(ticket(), 0, board(), 0, 'x')).toBe('Waiting for the target branch');
     expect(waitLabel(ticket(), 0, board(), 0, null, { reason: 'limit', pct: null, until: 1 })).toBe('Waiting: autopilot paused');
-    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('⏸ after DEM-3 and DEM-4');
+    expect(waitLabel(ticket(), 1, board(), 2, null, null, ['DEM-3', 'DEM-4'])).toBe('After DEM-3 and DEM-4');
   });
 
   it('lists keys as a sentence does, and asks before a ticket that waits is launched by hand', () => {

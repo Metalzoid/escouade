@@ -16,8 +16,8 @@ export default {
   // The header of the board.
   header: {
     sub: {
-      one: '{name} · {count} ticket · {looping} en boucle',
-      other: '{name} · {count} tickets · {looping} en boucle',
+      one: '{count} ticket · {looping} en boucle',
+      other: '{count} tickets · {looping} en boucle',
     },
     noEngine: 'Aucun harness trouvé — aucun ticket ne démarre',
     importTitle: 'Importer des tickets de Jira, Trello, GitHub Issues ou Linear',
@@ -35,6 +35,7 @@ export default {
     syncError: 'Synchro avec {service} : {error}',
     resync: 'Resynchroniser',
     loop: 'Boucle {iteration}/{max}',
+    loops: { one: '{count} boucle', other: '{count} boucles' },
     partial: 'Objectif partiel',
     // Its own model or effort, which come before the Kanban's for its agent (the label of the chip, and its tooltip).
     ownModel: 'Modèle de ce ticket : {model} (avant celui du Kanban)',
@@ -48,11 +49,9 @@ export default {
     progressLabel: 'Avancement',
     moreSteps: { one: '{count} autre élément', other: '{count} autres éléments' },
     criteriaLabel: 'Critères',
+    met: 'atteint',
     images: { one: '{count} image jointe', other: '{count} images jointes' },
     files: { one: '{count} fichier joint', other: '{count} fichiers joints' },
-    criteriaMetLabel: 'Critères atteints',
-    criteriaMet: { one: '{met}/{total} critère', other: '{met}/{total} critères' },
-    todoMeta: { one: '{count} critère · max {max} boucles', other: '{count} critères · max {max} boucles' },
     questionWaiting: 'Question en attente de ta réponse',
     resumes: 'Reprise {when}',
     settingUp: 'Prépare le worktree · {step}',
@@ -103,6 +102,10 @@ export default {
     /** « Harness » of the ticket, from two harnesses found on: the project's by default, which the autopilot follows. */
     engine: 'Harness',
     engineProject: 'Celui du projet ({engine})',
+    /** On its button, beside the brand of the project's harness, which says the rest. */
+    engineOwn: 'Celui du projet',
+    /** Under « Harness »: what it starts from, and that the autopilot follows it. */
+    engineHelp: 'Celui du projet : {engine}. Le pilote auto suit ce choix.',
     // « Compte », « Modèle », « Effort » of the ticket (ESC-153): « Auto » says what it gives.
     options: {
       account: 'Compte',
@@ -133,11 +136,14 @@ export default {
     criteria: "Critères d'acceptation",
     maxLoops: 'Boucles max',
     after: 'Après',
+    afterNone: 'Aucun',
     searchKey: 'Rechercher une clé',
     noMatch: 'Aucun ticket pour cette clé',
     // The button over the description that attaches any file (an image or not), as pasting and dropping do.
     attach: 'Joindre un fichier',
     attachTitle: 'Joindre un fichier (ou colle-le, glisse-le dans la fenêtre)',
+    attachHelp:
+      'Colle ou glisse un fichier dans la fenêtre : les images restent des images du ticket, les autres fichiers sont copiés avec lui.',
     // The files that are no image of the ticket, as chips under its images: copied at once, kept with the ticket.
     files: {
       label: 'Fichiers du ticket',
@@ -146,6 +152,9 @@ export default {
     // The images pasted or dropped in the window, under the description: the formats and limits of the chat.
     images: {
       label: 'Images du ticket',
+      // What its chip says under its name.
+      kind: 'Image',
+      kindSize: 'Image · {size}',
       // Several images are named with their rank: screenshots are all called image.png.
       ranked: '{name} ({n}/{total})',
       remove: 'Retirer {name}',

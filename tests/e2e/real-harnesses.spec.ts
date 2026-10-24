@@ -221,7 +221,7 @@ async function ticket(app: App, h: Harness) {
     .fill(`bonjour.txt contient « Bonjour depuis ${NAMES[h]} » et il est commité`);
   if (h !== 'claude') {
     await page.getByRole('group', { name: 'Harness' }).getByRole('button').click();
-    await page.getByRole('menuitem', { name: NAMES[h], exact: true }).click();
+    await page.getByRole('menuitemradio', { name: NAMES[h], exact: true }).click();
   }
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
   const review = page.getByRole('region', { name: 'À tester' });
@@ -255,7 +255,7 @@ async function ticket(app: App, h: Harness) {
   await page.waitForTimeout(1_000);
   console.log(`${h}: validate clicked; toast: ${await page.locator('.toasts').textContent()}`);
   await snap(page, `${h}-ticket-validate-clicked`);
-  for (let i = 0; !(await done.getByText(/⤵ Mergé dans main/).isVisible()); i++) {
+  for (let i = 0; !(await done.getByText(/Mergé dans main/).isVisible()); i++) {
     expect(i, 'the ticket was merged').toBeLessThan(40);
     await page.waitForTimeout(15_000);
     await snap(page, `${h}-ticket-validating`);

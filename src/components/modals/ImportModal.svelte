@@ -8,6 +8,7 @@
   import { app } from '../../lib/state.svelte';
   import type { ExternalIssue, IssuePage, Service } from '../../lib/types';
   import { tip } from '../../lib/tip';
+  import Icon from '../Icon.svelte';
 
   // « Importer des tickets »: the tickets of the project's linked sources, searched and filtered by
   // their service, chosen across sources, then put at the end of « À faire ».
@@ -205,11 +206,11 @@
   >
     <div class="head">
       <div class="hd">
-        <span class="t">{t('integrations.modal.title')}</span>
+        <h2 class="t">{t('integrations.modal.title')}</h2>
         <span class="sub">{t('integrations.modal.sub', { project: project?.name ?? '' })}</span>
       </div>
       <div style="flex:1"></div>
-      <button class="icon-btn" style="width:28px;height:28px;font-size:16px" onclick={close} aria-label={t('common.close')}>×</button>
+      <button class="icon-btn close" onclick={close} aria-label={t('common.close')}><Icon name="close" size={14} /></button>
     </div>
     {#if !current || !link}
       <div class="none">
@@ -224,23 +225,23 @@
           {@const n = countOf(id)}
           <button class="src" class:on={id === current} role="tab" aria-selected={id === current} onclick={() => pickSource(id)}>
             {@render badge(id)}
-            <span class="sn"><span class="n">{SERVICES[id].name}</span><span class="c mono">{l?.name}</span></span>
-            {#if n}<span class="count mono" aria-label={t('integrations.modal.pickedCount', { count: n, n: fInt(n) })}>{fInt(n)}</span>{/if}
+            <span class="sn"><span class="n">{SERVICES[id].name}</span><span class="c">{l?.name}</span></span>
+            {#if n}<span class="count" aria-label={t('integrations.modal.pickedCount', { count: n, n: fInt(n) })}>{fInt(n)}</span>{/if}
           </button>
         {/each}
         <div style="flex:1"></div>
         <button class="manage" onclick={manage}>{t('integrations.modal.manage')}</button>
       </div>
       <div class="search">
-        <div class="box">
-          <span class="ic" aria-hidden="true">⌕</span>
+        <div class="field box">
+          <Icon name="search" size={14} />
           <input bind:value={text} placeholder={SERVICES[current].placeholder} spellcheck="false" aria-label={t('common.search')} />
         </div>
         {#if page?.filters.length}
           <div class="filters" role="group" aria-label={t('integrations.modal.filters')}>
             {#each page.filters as f (f.id)}
               {@const on = (filters[current] ?? []).includes(f.id)}
-              <button class="chip" class:on aria-pressed={on} onclick={() => toggleFilter(f.id)}>{f.label}</button>
+              <button class="chip" aria-pressed={on} onclick={() => toggleFilter(f.id)}>{f.label}</button>
             {/each}
           </div>
         {/if}
@@ -252,11 +253,12 @@
           role="checkbox"
           aria-checked={allOn}
           aria-label={t('integrations.modal.selectAll')}
-          onclick={toggleAll}>{allOn ? '✓' : ''}</button
+          onclick={toggleAll}
+          >{#if allOn}<Icon name="check" size={12} />{/if}</button
         >
         <span class="count-l">{counted}</span>
         <div style="flex:1"></div>
-        <span class="ctx mono">{[account?.label.split(' · ')[0], link.name].filter(Boolean).join(' · ')}</span>
+        <span class="ctx">{[account?.label.split(' · ')[0], link.name].filter(Boolean).join(' · ')}</span>
       </div>
       <div class="list" bind:this={list} aria-busy={loading || more}>
         {#if failure}
@@ -283,9 +285,11 @@
               }
             }}
           >
-            <span class="cb" class:on aria-hidden="true">{on ? '✓' : ''}</span>
+            <span class="cb" class:on aria-hidden="true"
+              >{#if on}<Icon name="check" size={12} />{/if}</span
+            >
             <div class="main">
-              <div class="line"><span class="key mono">{i.key}</span><span class="title">{i.title}</span></div>
+              <div class="line"><span class="key">{i.key}</span><span class="title">{i.title}</span></div>
               <div class="meta">
                 <span class="kind" style:color={kindColor(i.kindCode)}>{i.kind}</span>
                 {#if i.meta.length}<span>{i.meta.join('  ·  ')}</span>{/if}
@@ -312,12 +316,12 @@
         >
         <div style="flex:1"></div>
         <span class="ml">{t('integrations.modal.maxLoops')}</span>
-        <div class="loops" role="group" aria-label={t('integrations.modal.maxLoops')}>
+        <div class="segmented small loops" role="group" aria-label={t('integrations.modal.maxLoops')}>
           {#each [3, 5, 8] as n (n)}
-            <button class="mono" class:on={maxLoops === n} aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
+            <button aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
           {/each}
         </div>
-        <button class="btn ghost" onclick={close}>{t('common.cancel')}</button>
+        <button class="btn" onclick={close}>{t('common.cancel')}</button>
         <button class="btn primary" disabled={!picked.length || importing} onclick={doImport}
           >{picked.length
             ? t('integrations.modal.importCount', { count: picked.length, n: fInt(picked.length) })
@@ -329,16 +333,15 @@
 </div>
 
 <style>
+  /* As the preview's windows (2.0): raised on a scrim, a head of 54 pixels, a foot under a hairline. */
   .overlay {
     position: fixed;
     inset: 0;
     z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(12, 10, 8, 0.6);
-    backdrop-filter: blur(3px);
-    animation: fade 0.12s ease-out;
+    display: grid;
+    place-items: center;
+    background: var(--scrim);
+    animation: fade 0.2s ease-out;
   }
   @keyframes fade {
     from {
@@ -346,37 +349,52 @@
     }
   }
   .modal {
-    width: 860px;
-    max-width: calc(100vw - 40px);
+    width: min(860px, 100vw - 48px);
     height: 660px;
     max-height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border: 1px solid var(--line2);
-    border-radius: 14px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
     overflow: hidden;
-    animation: ccFadeIn 0.15s ease-out;
+    border-radius: 14px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
+    animation: rise 0.35s var(--ease);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
   }
   .head {
+    flex: none;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
-    padding: 20px 18px 14px 24px;
+    min-height: 54px;
+    padding: 8px 12px 8px 20px;
+    border-bottom: 1px solid var(--line);
   }
   .hd {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    gap: 2px;
+    min-width: 0;
   }
   .t {
-    font-size: 18px;
-    font-weight: 700;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 620;
+    letter-spacing: -0.01em;
   }
   .sub {
-    font-size: 12.5px;
     color: var(--muted);
+    font-size: 12px;
+  }
+  .close {
+    width: 30px;
+    height: 30px;
   }
   .none {
     flex: 1;
@@ -390,13 +408,13 @@
   }
   .nt {
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 620;
   }
   .nd {
     max-width: 380px;
+    color: var(--muted);
     font-size: 12.5px;
     line-height: 1.5;
-    color: var(--muted);
     text-wrap: pretty;
   }
   .none .btn {
@@ -415,10 +433,11 @@
     justify-content: center;
   }
   .sources {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 0 24px 12px;
+    padding: 10px 16px;
   }
   .src {
     height: 40px;
@@ -426,45 +445,44 @@
     align-items: center;
     gap: 9px;
     padding: 0 12px;
-    border: 1px solid transparent;
-    border-radius: var(--r);
+    border: none;
+    border-radius: 9px;
     background: transparent;
     color: var(--muted);
-    font: inherit;
     cursor: pointer;
     white-space: nowrap;
   }
   .src:hover {
-    background: var(--elev);
+    background: var(--hover);
   }
   .src.on {
-    border-color: var(--line2);
-    background: var(--elev);
+    background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--text);
   }
   .sn {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    justify-items: start;
     gap: 1px;
   }
   .sn .n {
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
   }
   .sn .c {
-    font-size: 10px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11px;
   }
   .count {
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
     border-radius: 9px;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-size: 10.5px;
-    font-weight: 700;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -473,41 +491,30 @@
     height: 28px;
     padding: 0 10px;
     border: none;
-    border-radius: var(--r-sm);
+    border-radius: 7px;
     background: transparent;
     color: var(--muted);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 550;
     cursor: pointer;
   }
   .manage:hover {
-    background: var(--elev2);
+    background: var(--hover);
     color: var(--text);
   }
   .search {
-    display: flex;
-    flex-direction: column;
+    flex: none;
+    display: grid;
     gap: 10px;
-    padding: 14px 24px 12px;
+    padding: 12px 20px;
     border-top: 1px solid var(--line);
   }
   .box {
-    height: 38px;
+    height: 34px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--bg);
-  }
-  .box:focus-within {
-    border-color: var(--accent);
-  }
-  .box .ic {
-    font-size: 14px;
-    color: var(--dim);
+    gap: 8px;
+    color: var(--muted);
   }
   .box input {
     flex: 1;
@@ -517,10 +524,10 @@
     background: transparent;
     color: var(--text);
     font: inherit;
-    font-size: 13.5px;
+    font-size: 13px;
   }
   .box input::placeholder {
-    color: var(--dim);
+    color: var(--muted);
   }
   .filters {
     display: flex;
@@ -530,57 +537,60 @@
   .chip {
     height: 26px;
     padding: 0 11px;
-    border: 1px solid var(--line2);
-    border-radius: 99px;
+    border: none;
+    border-radius: 13px;
     background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
     color: var(--muted);
-    font: inherit;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 550;
     cursor: pointer;
   }
-  .chip.on {
-    border-color: var(--accent);
-    background: var(--elev2);
+  .chip:hover {
+    color: var(--text);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--p-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 45%, transparent);
     color: var(--text);
   }
   .bar {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 24px 8px 38px;
+    padding: 8px 20px 8px 34px;
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
-    background: var(--bg);
+    background: var(--well);
   }
+  /* A checkbox, drawn: the project's colour once ticked, its tick an icon. */
   .cb {
     width: 16px;
     height: 16px;
     flex: none;
     padding: 0;
+    border: none;
     border-radius: 4px;
-    border: 1.5px solid var(--line2);
     background: transparent;
-    color: var(--accent-ink);
-    font-size: 11px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    box-shadow: inset 0 0 0 1.5px var(--line-3);
+    color: var(--on-primary);
+    display: grid;
+    place-items: center;
     cursor: pointer;
   }
   .cb.on {
-    border-color: var(--accent);
-    background: var(--accent);
+    background: var(--p-ink);
+    box-shadow: none;
   }
   .count-l {
-    font-size: 12px;
-    font-weight: 600;
     color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
   }
   .ctx {
-    font-size: 10.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11px;
   }
   .list {
     flex: 1;
@@ -588,14 +598,14 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
-    padding: 6px 10px;
+    padding: 6px 8px;
   }
   .empty {
     margin: 0;
     padding: 40px;
     text-align: center;
-    font-size: 12.5px;
     color: var(--muted);
+    font-size: 12.5px;
   }
   .empty.error {
     color: var(--del);
@@ -606,15 +616,19 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 11px 14px 11px 28px;
-    border-radius: var(--r-sm);
+    padding: 10px 14px 10px 26px;
+    border-radius: 8px;
     cursor: pointer;
   }
   .row:hover {
-    background: var(--elev);
+    background: var(--hover);
+  }
+  .row:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent);
   }
   .row.on {
-    background: color-mix(in oklch, var(--accent) 8%, transparent);
+    background: var(--p-soft);
   }
   .row.imported {
     opacity: 0.5;
@@ -627,9 +641,8 @@
   .main {
     flex: 1;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    display: grid;
+    gap: 4px;
   }
   .line {
     display: flex;
@@ -638,12 +651,13 @@
   }
   .key {
     flex: none;
-    font-size: 11px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 11.5px;
   }
   .title {
     font-size: 13.5px;
-    font-weight: 600;
+    font-weight: 590;
+    letter-spacing: -0.01em;
     text-wrap: pretty;
   }
   .meta {
@@ -651,18 +665,20 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    font-size: 11.5px;
     color: var(--muted);
+    font-size: 12px;
   }
   .kind {
-    font-size: 10.5px;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 3px;
-    background: var(--elev2);
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: rgba(var(--fg-rgb), 0.06);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
   }
   .crit {
-    color: var(--ok);
+    color: var(--add);
   }
   .more {
     flex: none;
@@ -675,50 +691,33 @@
   }
   .already {
     flex: none;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 99px;
-    background: var(--elev2);
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.06);
     color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 550;
+    line-height: 20px;
   }
   .foot {
+    flex: none;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 18px 16px 24px;
+    gap: 12px;
+    padding: 12px 16px;
     border-top: 1px solid var(--line);
   }
   .sel {
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 550;
   }
   .ml {
-    font-size: 11.5px;
-    color: var(--dim);
-  }
-  .loops {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: var(--r-sm);
-    background: var(--bg);
-    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
   }
   .loops button {
-    height: 24px;
-    min-width: 28px;
-    padding: 0 8px;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .loops button.on {
-    background: var(--elev2);
-    color: var(--text);
+    min-width: 30px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

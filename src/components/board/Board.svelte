@@ -6,6 +6,7 @@
   import { hasPending } from '../../lib/shared-file';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
   import { tip } from '../../lib/tip';
 
@@ -20,7 +21,7 @@
   /** When the agents waiting for their quota resume, if every account this project could use waits for its own. */
   const quota = $derived(quotaOf(project));
   const target = $derived(s.target || app.git[project.id]?.branch || 'main');
-  const sub = $derived(t('board.header.sub', { name: project.name, count: tickets.length, looping }));
+  const sub = $derived(t('board.header.sub', { count: tickets.length, looping }));
   const summary = $derived(settingsSummary(s, target, project.ticketBranchPrefix));
   const places = $derived(placesLabel(busyCount, s.maxParallel, quota));
   /** Why no ticket starts from the target branch (no commit yet, or gone), as the backend says. */
@@ -42,11 +43,12 @@
 
 <main class="board">
   <header class="head">
-    <div class="who">
-      <span class="t">Kanban</span>
-      <span class="sub mono" use:tip={{ text: sub, cut: true }}>{sub}</span>
+    <div class="h-title">
+      <h1>Kanban</h1>
+      <div class="crumbs" use:tip={{ text: `${project.name} · ${sub}`, cut: true }}>
+        <span class="proj-name">{project.name}</span><span aria-hidden="true">·</span><span class="num sub">{sub}</span>
+      </div>
     </div>
-    <div style="flex:1"></div>
     {#if !app.enginesFound.length}
       <!-- No place is worth showing: nothing starts without a harness. -->
       <span class="places missing" use:tip={{ text: t('board.header.noEngine'), cut: true }}>{t('board.header.noEngine')}</span>
@@ -55,53 +57,57 @@
       <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
       {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
     {:else if pause}
-      <!-- Nor while the autopilot is paused: the line under the header says why. -->
+      <!-- Nor while the autopilot is paused: the band under the header says why. -->
     {:else}
       <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
     {/if}
-    <!-- Its label goes in a narrow window, its icon and its name stay. -->
-    <button
-      class="imp"
-      aria-label={t('common.import')}
-      use:tip={t('board.header.importTitle')}
-      onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
-      ><span class="ic" aria-hidden="true">⤓</span><span class="l">{t('common.import')}</span></button
-    >
-    <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
-    <button
-      class="cfg"
-      use:tip={t('board.header.settingsTitle', { summary })}
-      onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
-    >
-      <span class="gear">⚙</span><span class="k">{t('board.header.afterApproval')}</span><span class="v mono">{summary}</span>
-    </button>
-    <div class="auto" use:tip={t('board.header.autopilotTitle')}>
-      <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span>
+    <div class="actions">
+      <!-- Its label goes in a narrow window, its icon and its name stay. -->
       <button
-        class="switch"
-        class:on={s.autopilot}
+        class="btn imp"
+        aria-label={t('common.import')}
+        use:tip={t('board.header.importTitle')}
+        onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
+        ><Icon name="import" size={14} /><span class="l">{t('common.import')}</span></button
+      >
+      <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
+      <button
+        class="cfg"
+        use:tip={t('board.header.settingsTitle', { summary })}
+        onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
+      >
+        <span class="k">{t('board.header.afterApproval')}</span><b class="v">{summary}</b><Icon name="down" size={14} />
+      </button>
+      <button
+        class="auto"
         role="switch"
         aria-checked={s.autopilot}
         aria-label={t('board.header.autopilot')}
+        use:tip={t('board.header.autopilotTitle')}
         onclick={toggleAutopilot}
-      ></button>
+      >
+        <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span><span
+          class="knob"
+          aria-hidden="true"
+        ></span>
+      </button>
     </div>
   </header>
   {#if pause}
-    <!-- A line of its own under the header: its text and its button would not fit in a narrow one. -->
-    <div class="pause" role="status">
-      <span class="dot" aria-hidden="true"></span>
+    <!-- A band of its own under the header: its text and its button would not fit in it. -->
+    <div class="band pause" role="status">
+      <Icon name="clock" size={14} />
       <span class="why" use:tip={{ text: paused, cut: true }}>{paused}</span>
       {#if over}<span class="over" use:tip={{ text: over, cut: true }}>{over}</span>{/if}
-      <button class="resume" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
+      <button class="btn" onclick={() => app.run(api.autopilotResume())}>{t('board.header.resumeNow')}</button>
     </div>
   {/if}
   {#if hasPending(project)}
-    <!-- Its .escouade.yml brought commands that wait for the user: nothing of them runs until then (ESC-146). -->
-    <div class="pause shared" role="status">
-      <span class="dot" aria-hidden="true"></span>
+    <!-- Its .escouade.yml brought commands that wait for the user: nothing of them runs until then (ESC-146, choice 29). -->
+    <div class="band shared" role="status">
+      <Icon name="shield" size={14} />
       <span class="why" use:tip={{ text: t('settings.shared.banner'), cut: true }}>{t('settings.shared.banner')}</span>
-      <button class="resume" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
+      <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
         >{t('settings.shared.bannerButton')}</button
       >
     </div>
@@ -117,43 +123,57 @@
   .board {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
+  /* As the conversation's header (lot 4): the title and its line, then what the board says and its controls. */
   .head {
-    height: 60px;
     flex: none;
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 0 20px 0 24px;
+    min-height: 60px;
+    padding: 0 14px 0 22px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
-    container: head / inline-size;
   }
-  /*
-   * In a narrow window the settings button and the switch keep their size (the button's summary is
-   * capped, its label never cut), the places wrap over up to three lines and the project's line is
-   * cut with an ellipsis, the full texts in their tooltips.
-   */
-  .who {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+  .h-title {
+    display: grid;
+    gap: 2px;
     min-width: 0;
+    margin-right: auto;
   }
-  .t {
+  h1 {
+    margin: 0;
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+  .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .proj-name {
+    flex: none;
   }
   .sub {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 11px;
-    color: var(--dim);
   }
+  /*
+   * What the places say, on up to three lines when it is long; the full text in its tooltip. Under 1240 pixels the usual
+   * ones give their room to the controls, as in the preview; why nothing starts stays, capped.
+   */
   .places {
-    flex: none;
+    flex: 0 1 auto;
+    max-width: 30ch;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
@@ -161,128 +181,133 @@
     overflow: hidden;
     white-space: normal;
     text-align: right;
-    font-size: 12px;
-    line-height: 1.3;
     color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.3;
   }
   .places.missing {
-    font-weight: 600;
     color: var(--del);
+    font-weight: 550;
   }
-  /*
-   * Under this width the longest places (« Claude Code introuvable — … ») no longer fit beside the rest, nor a
-   * long summary in the settings button: it is cut, in full in the button's tooltip.
-   */
-  @container head (max-width: 880px) {
-    .places {
-      max-width: 108px;
+  .add-account {
+    flex: none;
+  }
+  .actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  /* « Après validation : merge squash → main », the button of the Kanban's settings. */
+  .cfg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 9px 0 11px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .cfg:hover {
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
+  .cfg .k {
+    flex: none;
+  }
+  .v {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+    font-weight: 550;
+  }
+  /* « Pilote auto », a switch with its label. */
+  .auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 30px;
+    padding: 0 4px 0 11px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  .knob {
+    position: relative;
+    flex: none;
+    width: 30px;
+    height: 18px;
+    border-radius: 9px;
+    background: rgba(var(--fg-rgb), 0.14);
+    transition: background-color 0.2s;
+  }
+  .knob::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade)));
+    transition: left 0.25s var(--ease);
+  }
+  .auto[aria-checked='true'] .knob {
+    background: color-mix(in oklch, var(--p) 75%, black);
+  }
+  .auto[aria-checked='true'] .knob::after {
+    left: 14px;
+  }
+  @media (max-width: 1240px) {
+    .places:not(.missing) {
+      display: none;
     }
     .places.missing {
       max-width: 132px;
-      font-size: 11px;
+      font-size: 11.5px;
     }
+  }
+  /* A narrow window: a long summary is cut, whole in its tooltip. */
+  @media (max-width: 1100px) {
     .v {
       max-width: 22ch;
     }
-    .imp .l {
-      display: none;
-    }
-    .add-account {
-      height: 30px;
-      flex: none;
-      font-size: 12px;
-    }
-    .imp {
-      padding: 0 10px;
-    }
   }
-  .imp {
-    height: 34px;
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 0 13px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--text);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .imp:hover {
-    border-color: var(--accent);
-  }
-  .imp .ic {
-    color: var(--accent);
-  }
-  .cfg {
-    height: 34px;
-    flex: none;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 12px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--text);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .cfg:hover {
-    border-color: var(--accent);
-  }
-  .gear {
-    flex: none;
-    font-size: 14px;
-    color: var(--muted);
-  }
-  .k {
-    flex: none;
-    color: var(--muted);
-  }
-  .v {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-  .auto {
+  /* A band under the header, amber: what waits for the user (the autopilot paused, commands to read). */
+  .band {
     flex: none;
     display: flex;
     align-items: center;
     gap: 10px;
-    height: 34px;
-    padding: 0 6px 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--elev);
-  }
-  .auto .l {
-    font-size: 12.5px;
-    font-weight: 600;
-  }
-  .pause {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 20px 8px 24px;
-    border-bottom: 1px solid var(--line);
-    background: var(--elev);
+    margin: 0 22px 10px;
+    padding: 8px 10px 8px 12px;
+    border-radius: 10px;
+    background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
+    color: var(--soft);
     font-size: 12.5px;
   }
-  .pause .dot {
+  .band > :global(.icon) {
+    color: var(--wait);
+  }
+  .band .btn {
     flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--wait);
+    height: 28px;
+    font-size: 12.5px;
   }
   /* Cut with an ellipsis in a narrow window, in full in its tooltip. */
   .why {
@@ -291,9 +316,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 600;
   }
-  /* The accounts past the threshold keep their words, the line above gives way first. */
+  /* The accounts past the threshold keep their words, the line before gives way first. */
   .over {
     flex: 0 1 auto;
     min-width: 0;
@@ -302,28 +326,14 @@
     white-space: nowrap;
     color: var(--muted);
   }
-  .resume {
-    flex: none;
-    height: 28px;
-    padding: 0 12px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev2);
-    color: var(--text);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .resume:hover {
-    border-color: var(--accent);
-  }
+  /* Columns without a box, side by side; under four times 220 pixels the board scrolls sideways, as the preview does. */
   .cols {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    padding: 16px 18px 18px;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap: 14px;
+    padding: 16px 16px 16px 18px;
+    overflow: auto;
   }
 </style>

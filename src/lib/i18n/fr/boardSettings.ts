@@ -46,7 +46,7 @@ export default {
   // When a ticket « À faire » starts.
   wait: {
     targetBranch: 'En attente de la branche cible',
-    after: '⏸ après {keys}',
+    after: 'Après {keys}',
     pause: 'En attente : pilote auto en pause',
     forced: 'Lancement demandé…',
     autopilotOff: 'Pilote auto désactivé',

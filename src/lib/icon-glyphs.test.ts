@@ -61,6 +61,14 @@ const REDRAWN = {
     'src/components/TaskView.svelte',
   ],
   'lot 5 (ESC-77)': ['src/components/PlanBanner.svelte'],
+  'lot 6 (ESC-78)': [
+    'src/components/board/Board.svelte',
+    'src/components/board/BoardColumn.svelte',
+    'src/components/board/TicketCard.svelte',
+    'src/components/board/TicketForm.svelte',
+    'src/components/board/RejectForm.svelte',
+    'src/components/modals/ImportModal.svelte',
+  ],
 };
 
 /**

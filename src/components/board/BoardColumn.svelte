@@ -4,6 +4,7 @@
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Column, Project, Ticket, TicketDraft } from '../../lib/types';
+  import Icon from '../Icon.svelte';
   import TicketCard from './TicketCard.svelte';
   import { tip } from '../../lib/tip';
 
@@ -14,8 +15,8 @@
     busyCount,
     quota,
   }: {
-    // Its name and its empty text are in the catalogs, by `id`: the column of `COLUMNS` is only given for its color.
-    column: { id: Column; color: string };
+    // Its name and its empty text are in the catalogs, by `id`: the column of `COLUMNS` is only given for its ring.
+    column: { id: Column; tone: string; fill: number };
     tickets: Ticket[];
     project: Project;
     busyCount: number;
@@ -57,15 +58,21 @@
   }
 </script>
 
-<section class="col" aria-label={t(`board.columns.${column.id}`)}>
+<!-- A column without a box (2.0): its ring, its name and its count, then its cards. -->
+<section class="col" aria-label={t(`board.columns.${column.id}`)} style:--tone={column.tone}>
   <div class="head">
-    <span class="dot" style:background={column.color}></span>
+    <i
+      class="ring"
+      class:part={column.fill > 0 && column.fill < 100}
+      class:full={column.fill >= 100}
+      style:--fill="{column.fill}%"
+      aria-hidden="true"
+    ></i>
     <span class="label">{t(`board.columns.${column.id}`)}</span>
-    <span class="count mono">{tickets.length}</span>
-    <div style="flex:1"></div>
+    <span class="count">{tickets.length}</span>
     {#if column.id === 'todo'}
-      <button class="plus" use:tip={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}
-        >+</button
+      <button class="add" use:tip={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}
+        ><Icon name="plus" size={14} /></button
       >
     {/if}
   </div>
@@ -84,43 +91,57 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    border-radius: var(--r);
-    background: var(--panel);
-    border: 1px solid var(--line);
+    gap: 8px;
   }
   .head {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 10px 10px 14px;
+    height: 30px;
+    padding: 0 4px 0 6px;
+    font-weight: 600;
   }
-  .dot {
-    width: 8px;
-    height: 8px;
+  /* The column's state, a ring of its tone filled as far as the tickets in it have come. */
+  .ring {
+    flex: none;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--tone);
+  }
+  .ring.part {
+    background: conic-gradient(var(--tone) 0 var(--fill), transparent var(--fill));
+  }
+  .ring.full {
+    background: var(--tone);
   }
   .label {
-    font-size: 13px;
-    font-weight: 700;
+    white-space: nowrap;
   }
   .count {
-    font-size: 11px;
     color: var(--dim);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
-  .plus {
-    width: 26px;
-    height: 26px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: var(--elev);
-    color: var(--accent);
-    font-size: 15px;
-    line-height: 1;
+  .add {
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
     cursor: pointer;
   }
-  .plus:hover {
-    border-color: var(--accent);
+  .add:hover {
+    background: var(--hover);
+    color: var(--text);
   }
+  /* The cards scroll in their column, the header stays; the room around them keeps their shadow and focus ring. */
   .cards {
     flex: 1;
     min-height: 0;
@@ -128,16 +149,20 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 0 8px 10px;
+    margin: 0 -4px;
+    padding: 0 4px 4px;
   }
   .empty {
     flex: none;
-    padding: 18px 12px;
-    border-radius: var(--r-sm);
-    border: 1px dashed var(--line2);
-    text-align: center;
-    font-size: 11.5px;
+    display: grid;
+    place-items: center;
+    min-height: 86px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px dashed var(--line-2);
     color: var(--dim);
+    font-size: 12.5px;
+    text-align: center;
     text-wrap: pretty;
   }
 </style>

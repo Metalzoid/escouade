@@ -2,15 +2,20 @@
 
 import { fList, fPct, fTime, fUsd, fWhen } from './format';
 import { t } from './i18n';
-import { spent, type Spent } from './spend';
+import type { IconName } from './icons';
+import { fSpentUsd, spent, type Spent } from './spend';
 import type { Agent, AutopilotPause, BoardAction, BoardSettings, Column, Ticket } from './types';
 
-/** The four columns in order, with their color; their names and what they say while empty are in the `board` zone, by `id`. */
-export const COLUMNS: { id: Column; color: string }[] = [
-  { id: 'todo', color: 'var(--dim)' },
-  { id: 'doing', color: 'var(--accent)' },
-  { id: 'review', color: 'var(--wait)' },
-  { id: 'done', color: 'var(--ok)' },
+/**
+ * The four columns in order, with the tone of their ring and how far it is filled (as in the preview: empty to do, half
+ * under way, three quarters to test, whole once done); their names and what they say while empty are in the `board`
+ * zone, by `id`.
+ */
+export const COLUMNS: { id: Column; tone: string; fill: number }[] = [
+  { id: 'todo', tone: 'var(--code-dim)', fill: 0 },
+  { id: 'doing', tone: 'var(--run)', fill: 50 },
+  { id: 'review', tone: 'var(--wait)', fill: 75 },
+  { id: 'done', tone: 'var(--done)', fill: 100 },
 ];
 
 /**
@@ -228,4 +233,26 @@ export function ticketSpent(ticket: Ticket, agents: Record<string, Agent>): Spen
 /** "n boucles · coût" of a finished ticket: every loop, those of the rounds it was sent back for included (a ticket saved before they were counted: its last round's). */
 export function doneMeta(ticket: Ticket): string {
   return t('boardSettings.loops', { count: ticket.loops || ticket.iteration, cost: fUsd(ticket.cost) });
+}
+
+/** A ticket to test, summed up as a finished one: its loops, and what its agents cost so far (`ticketSpent`), if anything. */
+export function reviewMeta(ticket: Ticket, used: Spent | null): string {
+  const count = ticket.loops || ticket.iteration;
+  if (!used) return t('board.card.loops', { count });
+  return t('boardSettings.loops', { count, cost: fSpentUsd(used) });
+}
+
+/** The glyph the backend writes before an outcome (board.rs), and the icon that stands for it. */
+const OUTCOME_ICONS: Record<string, IconName> = { '⤵': 'merge', '⇡': 'push', '◇': 'folder', '∅': 'circle' };
+
+/**
+ * A finished ticket's outcome as the backend writes it (« ⤵ Mergé dans main · squash », the same in the comments it
+ * publishes): its words, and an icon for its glyph. A pull request, opened or to open, is drawn as one.
+ */
+export function outcomeShown(outcome: string): { icon: IconName | null; text: string } {
+  const at = outcome.indexOf(' ');
+  const icon = at > 0 ? OUTCOME_ICONS[outcome.slice(0, at)] : undefined;
+  if (!icon) return { icon: null, text: outcome };
+  const text = outcome.slice(at + 1);
+  return { icon: icon === 'push' && /\bPR\b/.test(text) ? 'pr' : icon, text };
 }

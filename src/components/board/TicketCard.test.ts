@@ -39,16 +39,26 @@ const steps = (n: number) => Array.from({ length: n }, (_, i) => `Étape ${i + 1
 describe('TicketCard', () => {
   beforeEach(() => resetApp({ agents: [agent({ status: 'running', activity: 'Lit src/db.ts' })] }));
 
-  it('shows a ticket under way with its loop, its criteria, its progress and what its agent does', () => {
+  it('shows a ticket under way with its loop in squares, its criteria checked and what its agent does', () => {
     fakeBackend();
-    show(doing());
+    const { container } = show(doing());
     expect(screen.getByText('Boucle 2/5')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Critères atteints' })).toHaveAttribute('aria-valuenow', '1');
-    expect(screen.getByText('Lit src/db.ts')).toBeInTheDocument();
-    expect(screen.getByText('refacto-auth')).toBeInTheDocument();
+    // A square a loop, those gone through filled.
+    const squares = [...container.querySelectorAll('.loops i')];
+    expect(squares).toHaveLength(5);
+    expect(squares.map((i) => i.classList.contains('on'))).toEqual([true, true, false, false, false]);
+    // The verb, then what it acts on, as on its card in the list.
+    const act = container.querySelector('.act')!;
+    expect(act).toHaveTextContent('Lit src/db.ts');
+    expect(within(act as HTMLElement).getByText('Lit').tagName).toBe('B');
+    expect(within(act as HTMLElement).getByText('src/db.ts')).toHaveClass('mono');
+    // Each criterion drawn with an icon, not a character; a met one says so to a screen reader.
     const items = within(screen.getByRole('list', { name: 'Critères' })).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('✓Le fichier existe');
-    expect(items[1]).toHaveTextContent('○Tests verts');
+    expect(items[0]).toHaveTextContent('Le fichier existe atteint');
+    expect(items[0]).toHaveClass('met');
+    expect(items[0].querySelector('[data-icon="check-c"]')).not.toBeNull();
+    expect(items[1]).toHaveTextContent(/^Tests verts$/);
+    expect(items[1].querySelector('[data-icon="circle"]')).not.toBeNull();
   });
 
   it('shows a paperclip and the number of its images, in every column, and nothing without any', () => {
@@ -63,8 +73,8 @@ describe('TicketCard', () => {
     expect(card()).toHaveAccessibleDescription('2 images jointes');
     const clip = card().querySelector('.clip')!;
     expect(clip).toHaveAttribute('data-tip', '2 images jointes');
-    expect(clip.querySelector('svg')).not.toBeNull();
-    expect(clip.querySelector('.mono')).toHaveTextContent('2');
+    expect(clip.querySelector('[data-icon="clip"]')).not.toBeNull();
+    expect(clip.querySelector('.n')).toHaveTextContent('2');
     unmount();
     const under = show(doing({ images: images.slice(1) }));
     expect(card()).toHaveAccessibleDescription('1 image jointe');
@@ -86,7 +96,7 @@ describe('TicketCard', () => {
       expect(card()).toHaveAccessibleDescription(description);
       const clip = card().querySelector('.clip')!;
       expect(clip).toHaveAttribute('data-tip', description);
-      expect(clip.querySelector('.mono')).toHaveTextContent(count);
+      expect(clip.querySelector('.n')).toHaveTextContent(count);
     };
     const only = show(ticket({ files }));
     check('2 fichiers joints', '2');
@@ -105,7 +115,7 @@ describe('TicketCard', () => {
     const line = screen.getByText('Écrit les tests du parseur');
     expect(line).toHaveAttribute('data-tip', 'Écrit les tests du parseur');
     expect(line).toHaveTextContent('Ce que l’agent dit faire Écrit les tests du parseur');
-    expect(screen.getByText('Lit src/db.ts')).toBeInTheDocument();
+    expect(document.querySelector('.act')).toHaveTextContent('Lit src/db.ts');
     unmount();
     // Nothing reported, nothing shown.
     resetApp({ agents: [agent({ status: 'running', activity: 'Lit src/db.ts', progressLine: null })] });
@@ -150,8 +160,11 @@ describe('TicketCard', () => {
     const backend = fakeBackend();
     show(doing({ column: 'review', partial: true }), project({ board: board({ action: 'pr' }) }));
     expect(screen.getByText('Objectif partiel')).toBeInTheDocument();
-    expect(screen.getByText('1/2 critères')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Valider + PR' }));
+    // « Valider » draws what validating does, which its name says whole.
+    const approve = screen.getByRole('button', { name: 'Valider + PR' });
+    expect(approve).toHaveTextContent(/^Valider$/);
+    expect(approve.querySelector('[data-icon="pr"]')).not.toBeNull();
+    await userEvent.click(approve);
     expect(backend.called('ticket_approve')).toEqual([{ cmd: 'ticket_approve', args: { id: 't1' } }]);
   });
 
@@ -253,8 +266,11 @@ describe('TicketCard', () => {
       doing({ column: 'done', iteration: 3, cost: 0.42, outcome: '⇡ PR #12 → main', outcomeUrl: 'https://github.com/acme/demo/pull/12' }),
     );
     expect(screen.getByText('3 boucles · 0,42 $')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveClass('done');
-    await userEvent.click(screen.getByRole('button', { name: '⇡ PR #12 → main' }));
+    expect(screen.getByRole('button', { name: /DEM-1/ })).toHaveClass('past');
+    // The backend's glyph is drawn as an icon.
+    const link = screen.getByRole('button', { name: 'PR #12 → main' });
+    expect(link.querySelector('[data-icon="pr"]')).not.toBeNull();
+    await userEvent.click(link);
     expect(backend.called('plugin:opener|open_url')[0].args.url).toBe('https://github.com/acme/demo/pull/12');
   });
 
@@ -265,7 +281,7 @@ describe('TicketCard', () => {
       },
     });
     show(doing({ column: 'done', outcome: '⇡ PR #12 → main', outcomeUrl: 'https://github.com/acme/demo/pull/12' }));
-    await userEvent.click(screen.getByRole('button', { name: '⇡ PR #12 → main' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PR #12 → main' }));
     expect(backend.called('plugin:opener|open_url')).toHaveLength(1);
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ kind: 'error', text: expect.stringContaining('Aucun navigateur') });
     expect(app.ui.selectedAgent.p1).toBeUndefined();
@@ -385,13 +401,13 @@ describe('TicketCard', () => {
       resetApp({ agents: [agent({ recipe })] });
       const backend = fakeBackend({ test_run_start: () => ({ id: 't1', projectId: 'p1', name: 'web', shell: 'pwsh' }) });
       const { rerender } = show(doing({ column: 'review' }));
-      await userEvent.click(screen.getByRole('button', { name: '▶ Tester' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Tester' }));
       expect(app.modal).toEqual({ kind: 'testLaunch', agentId: 'a1' });
       app.launches['test:a1:run:0'] = running();
       await rerender({ ticket: doing({ column: 'review' }) });
       await userEvent.click(screen.getByRole('button', { name: 'Ouvrir' }));
       expect(backend.called('plugin:opener|open_url').at(-1)!.args.url).toBe('http://localhost:4111');
-      await userEvent.click(screen.getByRole('button', { name: '■ Arrêter' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Arrêter' }));
       expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });
       // Testing did not open the agent.
       expect(app.ui.selectedAgent.p1).toBeUndefined();
@@ -401,11 +417,11 @@ describe('TicketCard', () => {
       resetApp({ agents: [agent({ recipe })] });
       fakeBackend();
       const { unmount } = show(doing({ column: 'review', step: 'Tests…' }));
-      expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument();
       unmount();
       resetApp({ agents: [agent()] });
       show(doing({ column: 'review' }));
-      expect(screen.queryByRole('button', { name: '▶ Tester' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Tester' })).not.toBeInTheDocument();
     });
 
     it('stops its test launches before validating it', async () => {
@@ -547,11 +563,11 @@ describe('TicketCard of a ticket that comes after others', () => {
   it('says which tickets it waits for, those done left out, until they are done', async () => {
     fakeBackend();
     show(ticket({ key: 'DEM-5', after: ['t3', 't4'] }));
-    expect(screen.getByText('⏸ après DEM-3')).toBeInTheDocument();
+    expect(screen.getByText('Après DEM-3')).toBeInTheDocument();
     expect(screen.queryByText("Pris dès qu'une place se libère")).not.toBeInTheDocument();
     app.tickets.t3 = { ...app.tickets.t3, column: 'done' };
     await expect.poll(() => screen.queryByText("Pris dès qu'une place se libère")).toBeInTheDocument();
-    expect(screen.queryByText(/⏸ après/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Après DEM/)).not.toBeInTheDocument();
   });
 
   it('asks before launching it by hand, and launches it once confirmed', async () => {
@@ -729,10 +745,10 @@ describe('TicketCard cost of a ticket under way', () => {
   it('shows the exact cost of a ticket to test, next to its criteria', () => {
     resetApp({ agents: [first(), second({ status: 'done' })] });
     fakeBackend();
-    show(doing({ column: 'review' }));
-    const cost = screen.getByText('1,50 $');
-    expect(cost).not.toHaveAttribute('data-tip');
-    expect(screen.getByText('1/2 critères')).toBeInTheDocument();
+    const { container } = show(doing({ column: 'review' }));
+    // With its loops, as a finished ticket: no estimate to tell.
+    expect(screen.getByText('2 boucles · 1,50 $')).toBeInTheDocument();
+    expect(container.querySelector('.sum')).not.toHaveAttribute('data-tip');
   });
 
   it('leaves out the agents of other tickets', () => {
@@ -766,42 +782,52 @@ describe('TicketCard cost of a ticket under way', () => {
   });
 });
 
-// jsdom lays nothing out: what keeps the foot inside a column a quarter of the board wide (the e2e test of the
-// ticket's loop measures it) is that its figures are one group beside the agent's name, which the CSS wraps under it.
-describe('TicketCard foot', () => {
-  const foot = (container: HTMLElement) => container.querySelector<HTMLElement>('.foot')!;
-  const figuresOf = (container: HTMLElement) => {
-    const group = foot(container).querySelector<HTMLElement>(':scope > .figures');
-    expect(group, 'the figures of the foot are one group').not.toBeNull();
-    return group!;
-  };
-
-  it('groups the cost and the criteria met of a ticket to test apart from its agent’s name', () => {
+// The card's first line: its key, its harness, its paperclip, at the right its loop, or the loops and the cost of a
+// ticket to test or done; its last line, what its agent does and what it cost so far.
+describe('TicketCard lines', () => {
+  it('puts the loops and the cost of a ticket to test at the right of its first line', () => {
     resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', tokens: 1000, cost: 1.5 })] });
     fakeBackend();
     const { container } = show(doing({ column: 'review' }));
-    const figures = figuresOf(container);
-    expect(within(figures).getByText('1,50 $')).toBeInTheDocument();
-    expect(within(figures).getByText('1/2 critères')).toBeInTheDocument();
-    expect(within(figures).queryByText('refacto-auth')).not.toBeInTheDocument();
-    expect(foot(container)).toContainElement(screen.getByText('refacto-auth'));
+    expect(container.querySelector('.top .sum')).toHaveTextContent('Coût du ticket 2 boucles · 1,50 $');
+    expect(container.querySelector('.act')).toBeNull();
   });
 
-  it('groups the loops and the cost of a finished ticket apart from its agent’s name', () => {
+  it('puts the loops and the cost of a finished ticket there too', () => {
     resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', archived: true })] });
     fakeBackend();
     const { container } = show(doing({ column: 'done', iteration: 2, cost: 0.5 }));
-    const figures = figuresOf(container);
-    expect(within(figures).getByText('2 boucles · 0,50 $')).toBeInTheDocument();
-    expect(within(figures).queryByText('refacto-auth')).not.toBeInTheDocument();
+    expect(container.querySelector('.top .sum')).toHaveTextContent('2 boucles · 0,50 $');
   });
 
-  it('has no group of figures while there is nothing to say, which would add an empty line under the name', () => {
+  it('says what the agent of a ticket under way does, and its cost once it used something', () => {
     resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', tokens: 0, cost: 0 })] });
     fakeBackend();
-    const { container } = show(doing());
-    expect(foot(container)).toContainElement(screen.getByText('refacto-auth'));
-    expect(container.querySelector('.figures')).toBeNull();
+    const { container, unmount } = show(doing());
+    const act = container.querySelector('.act')!;
+    expect(act).toHaveTextContent(/^Réfléchit$/);
+    expect(act.querySelector('.dot')).not.toBeNull();
+    unmount();
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', activity: 'Edit src/a.ts', tokens: 10, cost: 0.41 })] });
+    const again = show(doing());
+    expect(again.container.querySelector('.act')).toHaveTextContent('Edit src/a.ts Coût du ticket 0,41 $');
+  });
+
+  it('shows the brand of the harness its agent runs on, and the one set on a ticket to do', () => {
+    // Agents on two harnesses: the brands show.
+    resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'running', engine: 'codex' }), agent({ id: 'a2', ticketId: null })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    fakeBackend();
+    const { container, unmount } = show(doing());
+    expect(container.querySelector('.top [data-engine="codex"]')).toBeInTheDocument();
+    unmount();
+    const todo = show(ticket({ engine: 'codex' }));
+    expect(todo.container.querySelector('.top [data-engine="codex"]')).toBeInTheDocument();
+    todo.unmount();
+    // On « Celui du projet », none on a ticket to do.
+    const plain = show(ticket());
+    expect(plain.container.querySelector('.top [data-engine]')).toBeNull();
   });
 });
 
@@ -916,7 +942,7 @@ describe('TicketCard in English', () => {
   it('writes a ticket under way in English', () => {
     show(doing());
     expect(screen.getByText('Loop 2/5')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Criteria met' })).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getByText('Le fichier existe')).toHaveTextContent('Le fichier existe met');
     expect(within(screen.getByRole('list', { name: 'Criteria' })).getAllByRole('listitem')).toHaveLength(2);
     // The agent has not said what it does yet.
     expect(screen.getByText('Thinking')).toBeInTheDocument();
@@ -972,22 +998,18 @@ describe('TicketCard in English', () => {
     expect(screen.getByText('Setting up the worktree · 1/2 · npm ci')).toBeInTheDocument();
   });
 
-  it('counts the criteria of a ticket to do with the plural of English', () => {
-    const { unmount } = show(ticket());
-    expect(screen.getByText('2 criteria · max 5 loops')).toBeInTheDocument();
-    unmount();
-    show(ticket({ criteria: [{ text: 'Le fichier existe', ok: false, note: '' }] }));
-    expect(screen.getByText('1 criterion · max 5 loops')).toBeInTheDocument();
+  it('says why a ticket to do waits in English', () => {
+    show(ticket());
+    expect(screen.getByText('Picked up as soon as a slot is free')).toBeInTheDocument();
   });
 
   it('shows the cost of a ticket to test in dollars, with what it is for a screen reader, and its criteria met', () => {
     resetApp({ agents: [agent({ id: 'a1', ticketId: 't1', status: 'done', tokens: 1000, cost: 1.5 })] });
     const { container } = show(doing({ column: 'review' }));
-    const figures = container.querySelector<HTMLElement>('.figures')!;
-    expect(within(figures).getByText('$1.50')).toBeInTheDocument();
-    expect(within(figures).getByText('1/2 criteria')).toBeInTheDocument();
+    const sum = container.querySelector<HTMLElement>('.sum')!;
+    expect(within(sum).getByText('2 loops · $1.50')).toBeInTheDocument();
     // The hidden label and the amount are apart for a screen reader.
-    expect(figures.textContent).toContain('Ticket cost $1.50');
+    expect(sum.textContent).toContain('Ticket cost 2 loops · $1.50');
     expect(screen.getByRole('button', { name: 'Send back' })).toBeInTheDocument();
   });
 

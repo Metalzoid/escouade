@@ -318,7 +318,7 @@
       {#each COLUMNS as c (c.id)}
         {@const column = t(`board.columns.${c.id}`)}
         <div class="mrow">
-          <span class="col"><span class="dot" style:background={c.color}></span>{column}</span>
+          <span class="col"><span class="dot" style:background={c.tone}></span>{column}</span>
           {#each linked as id (id)}
             {@const link = linkOf(id)}
             {@const why = link ? failed[statesKey(id, link.container)] : undefined}

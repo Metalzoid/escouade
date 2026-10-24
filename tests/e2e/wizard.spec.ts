@@ -121,7 +121,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   expect(worktreesOf(atlas).some((w) => fs.existsSync(path.join(w, 'setup-ran.txt')))).toBe(true);
   await review.getByRole('button', { name: /^Valider/ }).click();
   const done = page.getByRole('region', { name: 'Terminé' });
-  await expect(done.getByText('⤵ Mergé dans main · rebase')).toBeVisible({ timeout: 60_000 });
+  await expect(done.getByText('Mergé dans main · rebase')).toBeVisible({ timeout: 60_000 });
   // Nothing of the first project's integrations or tickets came with it.
   await expect(done.getByText(/DEM-/)).toHaveCount(0);
 });

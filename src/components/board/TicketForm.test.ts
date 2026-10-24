@@ -1,4 +1,5 @@
 import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -7,6 +8,17 @@ import { menu } from '../../lib/menu.svelte';
 import type { Account, AttachedFile, Ticket, TicketDraft, ToldModel } from '../../lib/types';
 import { BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
+
+/** The group « Après » (`name`), its popover opened: its search and the tickets to check are in it. */
+function openAfter(name: string) {
+  const group = screen.getByRole('group', { name });
+  const button = within(group).getByRole('button', { name: new RegExp(`^${name} `) });
+  if (button.getAttribute('aria-expanded') !== 'true') {
+    button.click();
+    flushSync();
+  }
+  return group;
+}
 
 interface Props {
   ticket?: Ticket;
@@ -284,7 +296,7 @@ describe('TicketForm', () => {
       const onsubmit = vi.fn();
       show({ onsubmit });
       await userEvent.type(title(), 'Un ticket');
-      screen.getByRole('searchbox', { name: 'Rechercher une clé' }).focus();
+      within(openAfter('Après')).getByRole('searchbox', { name: 'Rechercher une clé' }).focus();
       await ctrlEnter();
       expect(onsubmit).toHaveBeenCalledTimes(1);
     });
@@ -352,11 +364,13 @@ describe('TicketForm', () => {
 
     it('says which key adds the ticket, and which saves a ticket that is edited', () => {
       const { unmount } = show();
-      expect(screen.getByText('Ctrl+Entrée pour ajouter')).toBeInTheDocument();
+      expect(document.querySelector('.hint')).toHaveTextContent('Ctrl+Entrée pour ajouter');
+      // The key drawn as one.
+      expect(document.querySelector('.hint kbd')).toHaveTextContent('Ctrl+Entrée');
       expect(screen.getByRole('button', { name: 'Ajouter' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter');
       unmount();
       show({ ticket: ticket() });
-      expect(screen.getByText('Ctrl+Entrée pour enregistrer')).toBeInTheDocument();
+      expect(document.querySelector('.hint')).toHaveTextContent('Ctrl+Entrée pour enregistrer');
     });
 
     it('closes once the ticket is saved, and stays open, what was typed in it, when it was not', async () => {
@@ -715,7 +729,7 @@ describe('TicketForm, its images', () => {
         .map((b) => b.getAttribute('aria-label')),
     ).toEqual(['Retirer image.png (1/2)', 'Retirer image.png (2/2)']);
     // The tooltip names it as well.
-    expect(within(list).getByAltText('image.png (2/2)')).toHaveAttribute('data-tip', 'image.png (2/2)');
+    expect(within(list).getByAltText('image.png (2/2)').closest('li')).toHaveAttribute('data-tip', 'image.png (2/2)');
     await userEvent.click(screen.getByRole('button', { name: 'Retirer image.png (1/2)' }));
     expect(within(list).getByAltText('image.png')).toBeInTheDocument();
     expect(within(list).getByRole('button', { name: 'Retirer image.png' })).toBeInTheDocument();
@@ -1376,7 +1390,8 @@ describe('TicketForm « Après »', () => {
     }),
   );
 
-  const group = () => screen.getByRole('group', { name: 'Après' });
+  /** « Après », its popover opened (the list and its search are in it). */
+  const group = () => openAfter('Après');
   const listed = () =>
     within(group())
       .queryAllByRole('checkbox')
@@ -1437,15 +1452,37 @@ describe('TicketForm « Après »', () => {
     // Unchecked then checked again: nothing changed.
     await userEvent.click(box('DEM-2'));
     await userEvent.click(box('DEM-2'));
+    // Escape closes the popover alone, its button getting the focus back; once more, the window.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Après' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Après / })).toHaveFocus();
+    expect(app.modal).not.toBeNull();
     await userEvent.keyboard('{Escape}');
     expect(app.modal).toBeNull();
     app.modal = { kind: 'ticket', projectId: 'p1', onSubmit: () => true };
     await userEvent.click(box('DEM-2'));
     await userEvent.keyboard('{Escape}');
+    await userEvent.keyboard('{Escape}');
     expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Abandonner les modifications ?' });
     // DEM-4, done, is not listed but stays.
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
     expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({ after: ['t4'] }));
+  });
+
+  it('says on its button the tickets checked, « Aucun » without any, and closes its popover on a click elsewhere', async () => {
+    show({ ticket: ticket({ after: ['t4', 't5'] }) });
+    const button = () => screen.getByRole('button', { name: /^Après / });
+    // DEM-4, done, holds nothing back: not said.
+    expect(button()).toHaveAccessibleName('Après DEM-5');
+    expect(button()).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(box('DEM-5'));
+    expect(button()).toHaveAccessibleName('Après Aucun');
+    await userEvent.click(box('DEM-2'));
+    await userEvent.click(box('DEM-3'));
+    expect(button()).toHaveAccessibleName('Après DEM-2, DEM-3');
+    await userEvent.click(screen.getByRole('textbox', { name: 'Titre du ticket' }));
+    expect(screen.queryByRole('dialog', { name: 'Après' })).not.toBeInTheDocument();
+    expect(button()).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows no « Après » when no other ticket of the project is left to wait for', () => {
@@ -1465,14 +1502,14 @@ describe('TicketForm in English', () => {
 
   it('writes its fields, its loops and its dependencies in English', async () => {
     show();
-    expect(screen.getByRole('textbox', { name: 'Ticket title' })).toHaveAttribute('placeholder', 'Ticket title');
+    expect(screen.getByRole('textbox', { name: 'Ticket title' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Description' })).toHaveAttribute('placeholder', 'Description (optional)');
     expect(screen.getByRole('textbox', { name: 'Acceptance criteria' })).toHaveAttribute(
       'placeholder',
       'Acceptance criteria, one per line',
     );
     expect(screen.getByRole('group', { name: 'Max loops' })).toBeInTheDocument();
-    const after = screen.getByRole('group', { name: 'After' });
+    const after = openAfter('After');
     await userEvent.type(within(after).getByRole('searchbox', { name: 'Search for a key' }), 'ZZZ');
     expect(within(after).getByText('No tickets for this key')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
@@ -1482,12 +1519,12 @@ describe('TicketForm in English', () => {
   it('names its window and says the key that adds the ticket in English', () => {
     const { unmount } = show();
     expect(screen.getByRole('dialog', { name: 'New ticket' })).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+Enter to add')).toBeInTheDocument();
+    expect(document.querySelector('.hint')).toHaveTextContent('Ctrl+Enter to add');
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
     unmount();
     show({ ticket: ticket() });
     expect(screen.getByRole('dialog', { name: 'Edit DEM-1' })).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+Enter to save')).toBeInTheDocument();
+    expect(document.querySelector('.hint')).toHaveTextContent('Ctrl+Enter to save');
   });
 
   it('says Save for a ticket that is edited, and asks in English before throwing a change away', async () => {
@@ -1508,7 +1545,7 @@ describe('TicketForm in English', () => {
       tickets: [ticket({ id: 't2', key: 'DEM-2', title: 'Deux', createdAt: 2, after: ['t1'] })],
     });
     show({ ticket: ticket() });
-    await userEvent.click(within(screen.getByRole('group', { name: 'After' })).getByRole('checkbox', { name: /^DEM-2 / }));
+    await userEvent.click(within(openAfter('After')).getByRole('checkbox', { name: /^DEM-2 / }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 });

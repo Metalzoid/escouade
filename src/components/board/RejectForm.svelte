@@ -22,6 +22,7 @@
 <div class="reject" onclick={(e) => e.stopPropagation()}>
   <!-- svelte-ignore a11y_autofocus -->
   <textarea
+    class="field"
     rows="3"
     placeholder={t('board.reject.comment')}
     aria-label={t('board.reject.comment')}
@@ -40,25 +41,13 @@
 
 <style>
   .reject {
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
     cursor: default;
   }
   textarea {
     resize: none;
-    padding: 8px 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--bg);
-    color: var(--text);
-    font: inherit;
-    font-size: 12px;
-    line-height: 1.5;
-    outline: none;
-  }
-  textarea:focus {
-    border-color: var(--accent);
+    font-size: 12.5px;
   }
   .row {
     display: flex;
@@ -67,6 +56,6 @@
   }
   .btn {
     height: 28px;
-    font-size: 12px;
+    font-size: 12.5px;
   }
 </style>

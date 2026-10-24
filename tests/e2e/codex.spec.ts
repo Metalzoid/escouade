@@ -209,11 +209,11 @@ test.describe('a ticket on Codex', () => {
     await page.getByRole('button', { name: 'Nouveau ticket' }).click();
     await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Ajouter le fichier [ok]');
     await page.getByRole('group', { name: 'Harness' }).getByRole('button').click();
-    await page.getByRole('menuitem', { name: 'Codex', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'Codex', exact: true }).click();
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const review = page.getByRole('region', { name: 'À tester' });
     await expect(review.getByText('DEM-1', { exact: true })).toBeVisible({ timeout: 60_000 });
-    await expect(review.getByText('2/2 critères')).toBeVisible();
+    await expect(review.locator('.crit li.met')).toHaveCount(2);
     // Its protocol went to Codex as the instructions of its thread.
     const start = requests(app, 'thread/start')[0]!.params;
     expect(start.developerInstructions).toContain('DEM-1');

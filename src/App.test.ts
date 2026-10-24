@@ -803,7 +803,7 @@ describe('App ticket window', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Modifier DEM-1' });
     expect(title()).toHaveValue('Ajouter le fichier');
     expect(within(dialog).getByRole('textbox', { name: 'Description' })).toHaveValue('Un fichier');
-    expect(within(dialog).getByText('Ctrl+Entrée pour enregistrer')).toBeInTheDocument();
+    expect(dialog.querySelector('.hint')).toHaveTextContent('Ctrl+Entrée pour enregistrer');
     await userEvent.type(title(), ' du ticket');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Modifier DEM-1' })).toBeNull());
@@ -897,7 +897,7 @@ describe('App ticket window', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New ticket' }));
     const dialog = await screen.findByRole('dialog', { name: 'New ticket' });
     expect(within(dialog).getByRole('textbox', { name: 'Ticket title' })).toHaveFocus();
-    expect(within(dialog).getByText('Ctrl+Enter to add')).toBeInTheDocument();
+    expect(dialog.querySelector('.hint')).toHaveTextContent('Ctrl+Enter to add');
     expect(within(dialog).getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(within(dialog).getByRole('textbox', { name: 'Acceptance criteria' })).toBeInTheDocument();
   });

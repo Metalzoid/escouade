@@ -28,7 +28,10 @@
   import { accountName } from '../../lib/accounts';
   import { insertAt } from '../../lib/dictation';
   import type { DictationTarget } from '../../lib/dictation.svelte';
+  import { fSize } from '../../lib/format';
   import AttachmentChip from '../AttachmentChip.svelte';
+  import EngineMark from '../EngineMark.svelte';
+  import Icon from '../Icon.svelte';
   import MicButton from '../MicButton.svelte';
   import BranchPicker from '../branches/BranchPicker.svelte';
   import Modal from '../modals/Modal.svelte';
@@ -383,8 +386,18 @@
   function engineMenu() {
     if (!engineButton) return;
     menu.showAt(engineButton, [
-      { label: t('board.form.engineProject', { engine: engineName(projectEngine) }), onClick: () => setEngine(null) },
-      ...engineOptions(engine).map((e) => ({ label: e.label, onClick: () => setEngine(e.value) })),
+      {
+        label: t('board.form.engineProject', { engine: engineName(projectEngine) }),
+        engine: projectEngine,
+        checked: engine === null,
+        onClick: () => setEngine(null),
+      },
+      ...engineOptions(engine).map((e) => ({
+        label: e.label,
+        engine: e.value,
+        checked: engine === e.value,
+        onClick: () => setEngine(e.value),
+      })),
     ]);
   }
 
@@ -469,6 +482,65 @@
       },
     ]);
   }
+
+  /** « Après », the menu's button of the tickets it comes after, and its popover (the list and its search). */
+  let afterButton = $state<HTMLButtonElement>();
+  let afterPop = $state<HTMLDivElement>();
+  let afterOpen = $state(false);
+  /**
+   * Where the popover opens, fixed to the window (the window's body would cut it): under its button, or over it when the
+   * room under it is short.
+   */
+  let popAt = $state<{ left: number; top: number | null; bottom: number | null; width: number }>({
+    left: 0,
+    top: 0,
+    bottom: null,
+    width: 280,
+  });
+  /** What the button says: the keys of the tickets checked that are not done yet, else « Aucun ». */
+  const afterShown = $derived(
+    candidates
+      .filter((x) => after.includes(x.id))
+      .map((x) => x.key)
+      .join(', ') || t('board.form.afterNone'),
+  );
+
+  function openAfter() {
+    if (!afterButton) return;
+    const r = afterButton.getBoundingClientRect();
+    const width = Math.max(r.width, 280);
+    const left = Math.min(r.left, window.innerWidth - width - 8);
+    popAt =
+      r.bottom + 240 > window.innerHeight
+        ? { left, top: null, bottom: window.innerHeight - r.top + 4, width }
+        : { left, top: r.bottom + 4, bottom: null, width };
+    afterOpen = true;
+  }
+
+  /** Closed, the focus goes back to its button (`back`), but when a click elsewhere closed it. */
+  function closeAfter(back = true) {
+    afterOpen = false;
+    query = '';
+    if (back) afterButton?.focus();
+  }
+
+  /** Escape closes the popover alone, not the window under it. */
+  function afterKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    closeAfter();
+  }
+
+  // A click outside the popover and its button closes it.
+  $effect(() => {
+    if (!afterOpen) return;
+    const away = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!afterPop?.contains(target) && !afterButton?.contains(target)) closeAfter(false);
+    };
+    window.addEventListener('pointerdown', away, true);
+    return () => window.removeEventListener('pointerdown', away, true);
+  });
 
   /** A ticket checked that already waits for this one is refused: neither would ever start. */
   function toggle(x: Ticket, box: HTMLInputElement) {
@@ -562,10 +634,22 @@
   let viewHeight = $state(window.innerHeight);
   const short = $derived(viewHeight < 820);
 
+  /** What the foot says around the key that adds the ticket, drawn in a key. */
+  const hint = $derived(t(ticket ? 'board.form.saveHint' : 'board.form.addHint', { key: '\u0001' }).split('\u0001'));
+
+  /** Hands a menu's button, made by the snippet `select`, to the variable its menu opens from. */
+  function ref(node: HTMLButtonElement, set: (el: HTMLButtonElement) => void) {
+    set(node);
+  }
+
   /** The textarea grows with what is typed in it (up to its `max-height`), and keeps a height the user dragged it to. */
   function grow(node: HTMLTextAreaElement, _text: string) {
     const fit = () => {
-      if (node.scrollHeight > node.clientHeight) node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`;
+      if (node.scrollHeight <= node.clientHeight) return;
+      // Its least height too: the room the window gives it never takes back what its text needs, up to 60 % of the window.
+      const needed = node.scrollHeight + node.offsetHeight - node.clientHeight;
+      node.style.height = `${needed}px`;
+      node.style.minHeight = `${Math.min(needed, window.innerHeight * 0.6)}px`;
     };
     fit();
     return { update: fit };
@@ -574,215 +658,240 @@
 
 <svelte:window bind:innerHeight={viewHeight} />
 
+{#snippet select(
+  id: string,
+  label: string,
+  value: string,
+  button: (el: HTMLButtonElement) => void,
+  onclick: () => void,
+  extra: { mark?: EngineId; more?: string; disabled?: string | null; describedby?: string } = {},
+)}
+  <div class="fld" role="group" aria-label={label}>
+    <span class="lb" id="{uid}-{id}">{label}</span>
+    <button
+      class="select pick"
+      use:ref={button}
+      aria-haspopup="menu"
+      aria-labelledby="{uid}-{id} {uid}-{id}-value"
+      aria-describedby={extra.describedby}
+      disabled={!!extra.disabled}
+      use:tip={extra.disabled ?? (extra.more ? `${value} ${extra.more}` : value)}
+      {onclick}
+    >
+      {#if extra.mark}<EngineMark engine={extra.mark} always />{/if}<b id="{uid}-{id}-value"
+        >{value}{#if extra.more}<span class="sr">{' '}{extra.more}</span>{/if}</b
+      ><Icon name="down" size={14} />
+    </button>
+  </div>
+{/snippet}
+
 <Modal title={ticket ? t('board.form.editTitle', { key: ticket.key }) : t('board.form.newTitle')} width={760} tall onclose={leave}>
   <div class="form" class:short class:drag={dragOver} role="presentation" bind:this={form} onkeydown={chord}>
-    <!-- svelte-ignore a11y_autofocus -->
-    <input
-      class="title"
-      placeholder={t('board.form.title')}
-      aria-label={t('board.form.title')}
-      bind:value={title}
-      autofocus
-      onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
-    />
-    <div class="grp">
+    <div class="fld">
+      <label for="{uid}-title">{t('board.form.title')}</label>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        id="{uid}-title"
+        class="field title"
+        bind:value={title}
+        autofocus
+        onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
+      />
+    </div>
+    <!-- The description takes what the window leaves free: a large field to write in, whatever its height. -->
+    <div class="fld desc">
       <div class="lab-row">
-        <label class="lab" for="{uid}-description">{t('board.form.description')}</label>
-        <input
-          bind:this={fileInput}
-          type="file"
-          multiple
-          hidden
-          aria-label={t('board.form.attach')}
-          onchange={(e) => {
-            // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
-            addFiles([...(e.currentTarget.files ?? [])]);
-            e.currentTarget.value = '';
-          }}
-        />
-        <div class="lab-tools">
-          <MicButton target={dictated} below />
-          <button class="attach" use:tip={t('board.form.attachTitle')} onclick={() => fileInput?.click()}>
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-              ><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg
-            >{t('board.form.attach')}
-          </button>
-        </div>
+        <label for="{uid}-description">{t('board.form.description')}</label>
+        <MicButton target={dictated} below />
       </div>
       <textarea
         bind:this={descriptionField}
         id="{uid}-description"
-        class="description"
+        class="field description"
         rows={(short ? 8 : 12) - (images.length ? 3 : 0) - (files.length ? 2 : 0)}
         placeholder={t('board.form.descriptionPlaceholder')}
         bind:value={description}
         use:grow={description}
       ></textarea>
-      {#if images.length}
-        <ul class="imgs" bind:this={imageList} aria-label={t('board.form.images.label')}>
-          {#each images as img, i (i)}
-            {@const label =
-              images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
-            <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
-            <li class="img">
-              {#if img.url}
-                <img src={img.url} alt={label} use:tip={{ text: label, cut: true }} />
-              {:else}
-                <span class="wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
-              {/if}
-              <button class="rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}>×</button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-      {#if files.length}
-        <ul class="files" bind:this={fileList} aria-label={t('board.form.files.label')}>
-          {#each files as f, i (f)}
-            <li><AttachmentChip attachment={f} onremove={() => removeFile(i)} /></li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
-    <div class="grp">
-      <label class="lab" for="{uid}-criteria">{t('board.form.criteria')}</label>
-      <textarea id="{uid}-criteria" rows={short ? 5 : 6} placeholder={t('board.form.criteriaPlaceholder')} bind:value={criteria}></textarea>
-    </div>
-    <div class="meta" class:single={!candidates.length}>
-      <div class="side">
-        <div class="loops" role="group" aria-label={t('board.form.maxLoops')}>
-          <span class="k">{t('board.form.maxLoops')}</span>
-          {#each [3, 5, 8] as n (n)}
-            <button class:on={maxLoops === n} aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
-          {/each}
-        </div>
-        <div class="branch" role="group" aria-label={t('branches.ticket.branch')}>
-          <span class="k" id="{uid}-branch">{t('branches.ticket.branch')}</span>
-          <button
-            class="pick mono"
-            bind:this={branchButton}
-            aria-haspopup="menu"
-            aria-labelledby="{uid}-branch {uid}-branch-value"
-            use:tip={branch || own}
-            onclick={branchMenu}
-          >
-            <span id="{uid}-branch-value">{branch || own}</span>
-            <span aria-hidden="true">▾</span>
-          </button>
-        </div>
-        {#if choosesEngine()}
-          <div class="branch" role="group" aria-label={t('board.form.engine')}>
-            <span class="k" id="{uid}-engine">{t('board.form.engine')}</span>
-            <button
-              class="pick"
-              bind:this={engineButton}
-              aria-haspopup="menu"
-              aria-labelledby="{uid}-engine {uid}-engine-value"
-              onclick={engineMenu}
-            >
-              <span id="{uid}-engine-value">{engineLabel}</span>
-              <span aria-hidden="true">▾</span>
-            </button>
-          </div>
+      <input
+        bind:this={fileInput}
+        type="file"
+        multiple
+        hidden
+        aria-label={t('board.form.attach')}
+        onchange={(e) => {
+          // Copied first: the list is the input's own, emptied with its value below, before `addFiles` reads it.
+          addFiles([...(e.currentTarget.files ?? [])]);
+          e.currentTarget.value = '';
+        }}
+      />
+      <!-- Its images and its files in one row of chips, as the message's, and what attaches one at its end. -->
+      <div class="atts">
+        {#if images.length}
+          <ul class="imgs" bind:this={imageList} aria-label={t('board.form.images.label')}>
+            {#each images as img, i (i)}
+              {@const label =
+                images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
+              <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
+              <li class="att img" use:tip={{ text: label, cut: true }}>
+                {#if img.url}
+                  <img class="th" src={img.url} alt={label} />
+                {:else}
+                  <span class="th wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
+                {/if}
+                <span class="nm2"
+                  ><b>{img.name}</b><span
+                    >{img.size ? t('board.form.images.kindSize', { size: fSize(img.size) }) : t('board.form.images.kind')}</span
+                  ></span
+                >
+                <button class="x rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}
+                  ><Icon name="close" size={14} /></button
+                >
+              </li>
+            {/each}
+          </ul>
         {/if}
+        {#if files.length}
+          <ul class="files" bind:this={fileList} aria-label={t('board.form.files.label')}>
+            {#each files as f, i (f)}
+              <li><AttachmentChip attachment={f} onremove={() => removeFile(i)} /></li>
+            {/each}
+          </ul>
+        {/if}
+        <button class="btn attach" use:tip={t('board.form.attachTitle')} onclick={() => fileInput?.click()}
+          ><Icon name="clip" size={14} />{t('board.form.attach')}</button
+        >
+      </div>
+      {#if !short}<span class="help">{t('board.form.attachHelp')}</span>{/if}
+    </div>
+    <div class="fld">
+      <!-- The loops beside the criteria: how many rounds its agent gets to meet them. -->
+      <div class="lab-row">
+        <label for="{uid}-criteria">{t('board.form.criteria')}</label>
+        <div class="loops-row">
+          <span class="lb" id="{uid}-loops">{t('board.form.maxLoops')}</span>
+          <div class="segmented small loops" role="group" aria-labelledby="{uid}-loops">
+            {#each [3, 5, 8] as n (n)}
+              <button aria-pressed={maxLoops === n} onclick={() => (maxLoops = n)}>{n}</button>
+            {/each}
+          </div>
+        </div>
+      </div>
+      <textarea
+        id="{uid}-criteria"
+        class="field"
+        rows={short ? 5 : 6}
+        placeholder={t('board.form.criteriaPlaceholder')}
+        bind:value={criteria}
+      ></textarea>
+    </div>
+    <div class="fgrid">
+      {#if choosesEngine()}
+        <div class="engine">
+          <!-- The project's: its brand says which, the rest of its name for a screen reader. -->
+          {@render select(
+            'engine',
+            t('board.form.engine'),
+            engine ? engineLabel : t('board.form.engineOwn'),
+            (el) => (engineButton = el),
+            engineMenu,
+            { mark: engine ?? projectEngine, more: engine ? undefined : `(${engineName(projectEngine)})` },
+          )}
+          {#if !short}<span class="help">{t('board.form.engineHelp', { engine: engineName(projectEngine) })}</span>{/if}
+        </div>
+      {/if}
+      <div class="fld" role="group" aria-label={t('branches.ticket.branch')}>
+        <span class="lb" id="{uid}-branch">{t('branches.ticket.branch')}</span>
+        <button
+          class="select pick"
+          bind:this={branchButton}
+          aria-haspopup="menu"
+          aria-labelledby="{uid}-branch {uid}-branch-value"
+          use:tip={branch || own}
+          onclick={branchMenu}
+        >
+          <Icon name="branch" size={14} /><b class="mono" id="{uid}-branch-value">{branch || own}</b><Icon name="down" size={14} />
+        </button>
       </div>
       {#if candidates.length}
-        <div class="after" role="group" aria-label={t('board.form.after')}>
-          <div class="find">
-            <span class="k">{t('board.form.after')}</span>
-            <input
-              class="search"
-              role="searchbox"
-              placeholder={t('board.form.searchKey')}
-              aria-label={t('board.form.searchKey')}
-              spellcheck="false"
-              autocomplete="off"
-              bind:value={query}
-            />
-          </div>
-          {#if shown.length}
-            <ul class="deps">
-              {#each shown as x (x.id)}
-                <li>
-                  <label
-                    ><input type="checkbox" checked={after.includes(x.id)} onchange={(e) => toggle(x, e.currentTarget)} /><span
-                      class="key mono">{x.key}</span
-                    > <span class="name" use:tip={{ text: x.title, cut: true }}>{x.title}</span></label
-                  >
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <span class="none">{t('board.form.noMatch')}</span>
+        <!-- « Après », a menu's button as in the preview: the tickets checked, the list and its search in its popover. -->
+        <div class="fld after" role="group" aria-label={t('board.form.after')}>
+          <span class="lb" id="{uid}-after">{t('board.form.after')}</span>
+          <button
+            class="select pick"
+            bind:this={afterButton}
+            aria-haspopup="dialog"
+            aria-expanded={afterOpen}
+            aria-labelledby="{uid}-after {uid}-after-value"
+            use:tip={afterShown}
+            onclick={() => (afterOpen ? closeAfter() : openAfter())}
+          >
+            <b id="{uid}-after-value">{afterShown}</b><Icon name="down" size={14} />
+          </button>
+          {#if afterOpen}
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div
+              class="pop"
+              bind:this={afterPop}
+              role="dialog"
+              tabindex="-1"
+              aria-label={t('board.form.after')}
+              style:left="{popAt.left}px"
+              style:top={popAt.top === null ? undefined : `${popAt.top}px`}
+              style:bottom={popAt.bottom === null ? undefined : `${popAt.bottom}px`}
+              style:width="{popAt.width}px"
+              onkeydown={afterKey}
+            >
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                class="field search"
+                role="searchbox"
+                placeholder={t('board.form.searchKey')}
+                aria-label={t('board.form.searchKey')}
+                spellcheck="false"
+                autocomplete="off"
+                autofocus
+                bind:value={query}
+              />
+              {#if shown.length}
+                <ul class="deps">
+                  {#each shown as x (x.id)}
+                    <li>
+                      <label
+                        ><input type="checkbox" checked={after.includes(x.id)} onchange={(e) => toggle(x, e.currentTarget)} /><span
+                          class="key">{x.key}</span
+                        > <span class="name" use:tip={{ text: x.title, cut: true }}>{x.title}</span></label
+                      >
+                    </li>
+                  {/each}
+                </ul>
+              {:else}
+                <span class="help">{t('board.form.noMatch')}</span>
+              {/if}
+              {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
+            </div>
           {/if}
-          {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
         </div>
       {/if}
-      <!-- The account, the model and the effort of its agents (ESC-153): one row across the form, short windows included. -->
-      <div class="opts-row">
-        <div class="opts">
-          <div class="branch" role="group" aria-label={t('board.form.options.account')}>
-            <span class="k" id="{uid}-account">{t('board.form.options.account')}</span>
-            <button
-              class="pick"
-              bind:this={accountButton}
-              aria-haspopup="menu"
-              aria-labelledby="{uid}-account {uid}-account-value"
-              use:tip={accountShown}
-              onclick={accountMenu}
-            >
-              <span id="{uid}-account-value">{accountShown}</span>
-              <span aria-hidden="true">▾</span>
-            </button>
-          </div>
-          <div class="branch" role="group" aria-label={t('board.form.options.model')}>
-            <span class="k" id="{uid}-model">{t('board.form.options.model')}</span>
-            <button
-              class="pick"
-              bind:this={modelButton}
-              aria-haspopup="menu"
-              aria-labelledby="{uid}-model {uid}-model-value"
-              use:tip={modelShown}
-              onclick={modelMenu}
-            >
-              <span id="{uid}-model-value">{modelShown}</span>
-              <span aria-hidden="true">▾</span>
-            </button>
-          </div>
-          <div class="branch" role="group" aria-label={t('board.form.options.effort')}>
-            <span class="k" id="{uid}-effort">{t('board.form.options.effort')}</span>
-            <!-- Greyed out with its reason when the model its agent would run takes no effort. -->
-            <button
-              class="pick"
-              bind:this={effortButton}
-              aria-haspopup="menu"
-              aria-labelledby="{uid}-effort {uid}-effort-value"
-              aria-describedby={noEffort ? `${uid}-effort-why` : undefined}
-              disabled={!!noEffort}
-              use:tip={noEffort ?? effortShown}
-              onclick={effortMenu}
-            >
-              <span id="{uid}-effort-value">{noEffort ? t('board.form.options.auto') : effortShown}</span>
-              <span aria-hidden="true">▾</span>
-            </button>
-            {#if noEffort}<span class="sr" id="{uid}-effort-why">{noEffort}</span>{/if}
-          </div>
-        </div>
-        {#each notices as n (n)}<span class="notice" role="status">{n}</span>{/each}
-      </div>
+      <!-- The account, the model and the effort of its agents (ESC-153), on « Auto » unless set. -->
+      {@render select('account', t('board.form.options.account'), accountShown, (el) => (accountButton = el), accountMenu)}
+      {@render select('model', t('board.form.options.model'), modelShown, (el) => (modelButton = el), modelMenu)}
+      <!-- Greyed out with its reason when the model its agent would run takes no effort. -->
+      {@render select(
+        'effort',
+        t('board.form.options.effort'),
+        noEffort ? t('board.form.options.auto') : effortShown,
+        (el) => (effortButton = el),
+        effortMenu,
+        { disabled: noEffort, describedby: noEffort ? `${uid}-effort-why` : undefined },
+      )}
+      {#if noEffort}<span class="sr" id="{uid}-effort-why">{noEffort}</span>{/if}
+      {#each notices as n (n)}<span class="notice" role="status">{n}</span>{/each}
     </div>
   </div>
   {#snippet footer()}
-    <span class="hint">{t(ticket ? 'board.form.saveHint' : 'board.form.addHint', { key: keyLabel('Ctrl+Enter') })}</span>
-    <button class="btn ghost" onclick={leave}>{t('common.cancel')}</button>
+    <span class="hint">{hint[0]}<kbd>{keyLabel('Ctrl+Enter')}</kbd>{hint[1]}</span>
+    <button class="btn" onclick={leave}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={!ready} aria-keyshortcuts={ariaEnter()} onclick={submit}
       >{ticket ? t('common.save') : t('common.add')}</button
     >
@@ -794,256 +903,224 @@
 {/if}
 
 <style>
-  /* The whole body of the window: an image is dropped anywhere in it. */
+  /* The whole body of the window: a file is dropped anywhere in it, which the project's colour around it says. */
   .form {
-    flex: 1 0 auto;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
     min-width: 0;
-    border-radius: var(--r-sm);
+    min-height: 0;
+    border-radius: 10px;
+  }
+  .form > * {
+    flex: none;
   }
   .form.drag {
-    outline: 1px dashed var(--accent);
+    outline: 1px solid color-mix(in oklch, var(--p) 60%, transparent);
     outline-offset: 8px;
   }
-  .title,
-  textarea {
-    padding: 0 12px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--bg);
-    color: var(--text);
-    font: inherit;
-    outline: none;
-  }
-  .title:focus,
-  textarea:focus {
-    border-color: var(--accent);
-  }
-  .title {
-    height: 40px;
-    font-size: 14.5px;
-    font-weight: 600;
-  }
-  .grp {
-    display: flex;
-    flex-direction: column;
+  /* A field: its label over it, as the preview's form (`#ticket`). */
+  .fld {
+    display: grid;
+    align-content: start;
     gap: 6px;
+    min-width: 0;
   }
-  .lab {
+  .fld label,
+  .lb {
+    color: var(--muted);
     font-size: 12px;
     font-weight: 600;
-    color: var(--muted);
   }
-  .lab-tools {
+  .field {
+    width: 100%;
+    font-family: inherit;
+  }
+  .title {
+    height: 30px;
+  }
+  textarea.field {
+    resize: vertical;
+    line-height: 1.5;
+  }
+  /*
+   * The description's field takes the height the window leaves (its rows say how high it starts), down to five lines;
+   * past what it holds, it scrolls in itself.
+   */
+  .form > .desc {
+    flex: 1 1 auto;
     display: flex;
-    align-items: center;
-    gap: 4px;
+    flex-direction: column;
+    min-height: 0;
   }
-  .lab-tools :global(.mic) {
-    width: 24px;
-    height: 22px;
+  .description {
+    flex: 1 1 auto;
+    min-height: 116px;
+    max-height: 60vh;
   }
-  /* The description's label, and on its right what attaches an image to the ticket. */
+  /* The description's label, and on its right the microphone that dictates into it. */
   .lab-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    min-height: 18px;
   }
-  .attach {
-    display: flex;
-    align-items: center;
-    gap: 5px;
+  .lab-row :global(.mic) {
+    width: 24px;
     height: 22px;
-    padding: 0 6px;
-    border: none;
-    border-radius: var(--r-sm);
-    background: transparent;
+  }
+  .help {
     color: var(--muted);
-    font: inherit;
     font-size: 11.5px;
-    cursor: pointer;
   }
-  .attach:hover {
-    background: var(--elev2);
-    color: var(--text);
-  }
-  /* The images under the description, as the chat shows its attachments. */
-  .imgs {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  /* The images, the files, and « Joindre un fichier », in one row of chips. */
+  .atts {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-  }
-  /* The files that are no image, as the chat shows them: chips. */
-  .files {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .img {
-    position: relative;
-    width: 64px;
-    height: 64px;
-    border-radius: var(--r-sm);
-    overflow: hidden;
-    border: 1px solid var(--line2);
-  }
-  .img img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .img .wait {
-    display: block;
-    width: 100%;
-    height: 100%;
-    background: var(--elev2);
-  }
-  .rm {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 18px;
-    height: 18px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    font-size: 12px;
-    line-height: 1;
-    cursor: pointer;
-  }
-  textarea {
-    resize: vertical;
-    padding: 10px 12px;
-    font-size: 13px;
-    line-height: 1.55;
-  }
-  /* A short window: tighter, for the loops, the branch and the dependencies to show without scrolling. */
-  .form.short {
-    gap: 12px;
-  }
-  .form.short .title {
-    height: 36px;
-  }
-  .form.short .grp {
-    gap: 4px;
-  }
-  .form.short textarea {
-    padding-block: 8px;
-  }
-  .form.short .meta {
-    padding-top: 10px;
-  }
-  .form.short .side {
-    gap: 10px;
-  }
-  /* Grows with its text up to this, then scrolls in itself. */
-  .description {
-    max-height: 60vh;
-  }
-  /* Beside each other: the loops and the branch, the dependencies. */
-  .meta {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: 16px 24px;
-    align-items: start;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
-  }
-  .meta.single {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .side {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-  }
-  .loops {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .k {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted);
-    margin-right: 4px;
-  }
-  .loops button {
-    height: 26px;
-    min-width: 30px;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
-    background: transparent;
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 11.5px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .loops button.on {
-    background: var(--elev2);
-    color: var(--text);
-  }
-  .branch {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-  }
-  .pick {
-    display: flex;
     align-items: center;
     gap: 6px;
+    padding-top: 2px;
+  }
+  .imgs,
+  .files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     min-width: 0;
-    height: 26px;
-    padding: 0 8px;
-    border: 1px solid var(--line2);
-    border-radius: var(--r-sm);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .att {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 260px;
+    height: 40px;
+    padding: 0 6px;
+    border-radius: 9px;
+    background: rgba(var(--fg-rgb), 0.04);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font-size: 12px;
+  }
+  .att .th {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+  .att .th.wait {
+    background: rgba(var(--fg-rgb), 0.06);
+  }
+  .nm2 {
+    display: grid;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .nm2 b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 550;
+  }
+  .nm2 span {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .x {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
     background: transparent;
     color: var(--muted);
-    font-size: 11.5px;
     cursor: pointer;
   }
-  .pick:hover:not(:disabled) {
+  .x:hover {
+    background: var(--hover);
     color: var(--text);
-    border-color: var(--accent);
   }
-  .pick:disabled {
-    opacity: 0.55;
+  .attach {
+    height: 40px;
+  }
+  /* Harness, loops, branch; account, model, effort: three a row. */
+  .fgrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .engine {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-width: 0;
+  }
+  /* A menu's button, as « Harness » in the preview: its value, then the chevron at its end. */
+  .select {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 9px 0 11px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .select:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
+  .select:disabled {
+    opacity: 0.5;
     cursor: default;
   }
-  /* The account, the model and the effort, side by side under the rest, across both columns; a long name is cut. */
-  .opts-row {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .select b {
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-weight: 550;
   }
-  .opts {
+  .select b.mono {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .select > :global(.icon:last-child) {
+    margin-left: auto;
+  }
+  /* « Boucles max » at the right of the criteria's label. */
+  .loops-row {
     display: flex;
-    gap: 14px;
-    min-width: 0;
+    align-items: center;
+    gap: 8px;
   }
-  .opts .branch {
-    flex: 0 1 auto;
+  .loops button {
+    min-width: 30px;
+    font-variant-numeric: tabular-nums;
   }
-  /* What a change set back to « Auto ». */
+  /* What a change set back to « Auto », across the grid. */
   .notice {
-    font-size: 11.5px;
+    grid-column: 1 / -1;
     color: var(--muted);
+    font-size: 11.5px;
   }
   .sr {
     position: absolute;
@@ -1052,72 +1129,53 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
   }
-  .pick span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .after {
-    display: flex;
-    flex-direction: column;
+  /* The popover of « Après », raised over the window: its search, then the tickets to check. */
+  .pop {
+    position: fixed;
+    z-index: 60;
+    display: grid;
     gap: 6px;
-    min-width: 0;
-  }
-  /* The label and the search on one line, as the loops and the branch have theirs: less height for the list under them. */
-  .find {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .search {
-    flex: 1;
-    min-width: 0;
-    height: 30px;
-    padding: 0 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line2);
-    background: var(--bg);
-    color: var(--text);
-    font: inherit;
-    font-size: 12.5px;
-    outline: none;
-  }
-  .search:focus {
-    border-color: var(--accent);
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--raise-2);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 12px 32px -8px rgba(0, 0, 0, calc(0.6 * var(--shade)));
   }
   /* A long column of tickets scrolls rather than stretch the form. */
   .deps {
-    list-style: none;
+    display: grid;
+    gap: 2px;
+    max-height: 136px;
     margin: 0;
     padding: 0;
-    max-height: 136px;
     overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    list-style: none;
   }
   .deps label {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
-    padding: 3px 4px;
-    border-radius: var(--r-sm);
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: var(--text);
     font-size: 12.5px;
+    font-weight: 450;
     cursor: pointer;
   }
   .deps label:hover {
-    background: var(--elev2);
+    background: var(--hover);
   }
   .deps input {
-    margin: 0;
     flex: none;
-    accent-color: var(--accent);
+    margin: 0;
+    accent-color: var(--p-ink);
   }
   .deps .key {
     flex: none;
-    font-size: 11px;
     color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
   /* A long title is cut, in full in its tooltip. */
   .deps .name {
@@ -1126,19 +1184,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .none {
-    font-size: 11.5px;
-    color: var(--dim);
-  }
   .refusal {
-    font-size: 11.5px;
     color: var(--del);
+    font-size: 11.5px;
+  }
+  /* A short window: tighter, for the grid and the dependencies to show without scrolling. */
+  .form.short {
+    gap: 12px;
+  }
+  .form.short .fld {
+    gap: 4px;
+  }
+  .form.short .atts {
+    padding-top: 0;
   }
   /* The key that adds the ticket, at the foot's left: the buttons stay on the right. */
   .hint {
     flex: 1;
     align-self: center;
-    font-size: 11.5px;
-    color: var(--dim);
+    color: var(--muted);
+    font-size: 12px;
   }
 </style>

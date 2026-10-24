@@ -58,7 +58,12 @@ describe('Board', () => {
     expect(within(col('En cours')).getByText('DEM-3')).toBeInTheDocument();
     expect(within(col('À tester')).getByText('Rien à tester')).toBeInTheDocument();
     expect(within(col('Terminé')).getByText('Aucun ticket terminé')).toBeInTheDocument();
-    expect(screen.getByText('demo-api · 3 tickets · 1 en boucle')).toBeInTheDocument();
+    expect(screen.getByText('3 tickets · 1 en boucle')).toBeInTheDocument();
+    // The project's name before its counts, the whole line in its tooltip when it is cut.
+    expect(screen.getByText('3 tickets · 1 en boucle').closest('.crumbs')).toHaveAttribute(
+      'data-tip',
+      'demo-api · 3 tickets · 1 en boucle',
+    );
     expect(screen.getByText('1 place libre')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Après validation : merge squash → main/ })).toBeInTheDocument();
   });
@@ -175,7 +180,8 @@ describe('Board', () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
     const todo = col('À faire');
-    expect(within(todo).getAllByText('2 critères · max 5 boucles')).toHaveLength(2);
+    // Each with its criteria, none met yet.
+    expect(within(todo).getAllByRole('list', { name: 'Critères' })).toHaveLength(2);
     expect(within(todo).getByText("Pris dès qu'une place se libère")).toBeInTheDocument();
     expect(within(todo).getByText("En attente d'une place (1/2)")).toBeInTheDocument();
     expect(within(todo).queryByRole('button', { name: 'Lancer' })).not.toBeInTheDocument();
@@ -186,7 +192,7 @@ describe('Board', () => {
     app.tickets.t1 = { ...app.tickets.t1, after: ['t3'] };
     render(Board, { project: app.projects[0] });
     const todo = col('À faire');
-    expect(within(within(todo).getByRole('button', { name: /DEM-1/ })).getByText('⏸ après DEM-3')).toBeInTheDocument();
+    expect(within(within(todo).getByRole('button', { name: /DEM-1/ })).getByText('Après DEM-3')).toBeInTheDocument();
     expect(within(within(todo).getByRole('button', { name: /DEM-2/ })).getByText("Pris dès qu'une place se libère")).toBeInTheDocument();
   });
 
@@ -233,7 +239,7 @@ describe('Board', () => {
   it('is the Kanban, whose settings button opens the settings on its tab and project', async () => {
     fakeBackend();
     render(Board, { project: app.projects[0] });
-    expect(screen.getByText('Kanban', { selector: '.t' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Kanban' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Après validation/ }));
     expect(app.modal).toEqual({ kind: 'settings', tab: 'board', projectId: 'p1' });
   });
@@ -349,7 +355,7 @@ describe('Board in English', () => {
     expect(within(col('In progress')).getByText('DEM-3')).toBeInTheDocument();
     expect(within(col('To review')).getByText('Nothing to review')).toBeInTheDocument();
     expect(within(col('Done')).getByText('No finished tickets')).toBeInTheDocument();
-    expect(screen.getByText('demo-api · 3 tickets · 1 looping')).toBeInTheDocument();
+    expect(screen.getByText('3 tickets · 1 looping')).toBeInTheDocument();
   });
 
   it('counts one ticket in the singular', () => {
@@ -357,7 +363,7 @@ describe('Board in English', () => {
     app.enginesFound = ['claude'];
     fakeBackend();
     render(Board, { project: app.projects[0] });
-    expect(screen.getByText('demo-api · 1 ticket · 0 looping')).toBeInTheDocument();
+    expect(screen.getByText('1 ticket · 0 looping')).toBeInTheDocument();
     expect(within(col('In progress')).getByText('No agents looping')).toBeInTheDocument();
   });
 

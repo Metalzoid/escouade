@@ -37,7 +37,7 @@ export default defineZone('boardSettings', {
 
   wait: {
     targetBranch: 'Waiting for the target branch',
-    after: '⏸ after {keys}',
+    after: 'After {keys}',
     pause: 'Waiting: autopilot paused',
     forced: 'Start requested…',
     autopilotOff: 'Autopilot is off',

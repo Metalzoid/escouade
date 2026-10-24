@@ -31,6 +31,7 @@ const shots = [
   { name: 'settings-small', ...SMALL, hash: 'settings-notifications' },
   { name: 'tint-studio-web', ...BIG, click: '.tile[data-hue="300"]' },
   { name: 'agents-small', ...SMALL },
+  { name: 'kanban-small', ...SMALL, hash: 'board' },
   { name: 'git-small', ...SMALL, hash: 'git' },
   { name: 'overview-small', ...SMALL, hash: 'overview' },
 
@@ -145,7 +146,7 @@ const shots = [
   // The theme selector, on Système (its default): the window follows the emulated system theme.
   { name: 'settings-app', ...BIG, hash: 'settings-app', system: true },
 ];
-const LIGHT_SMALL = ['pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en'];
+const LIGHT_SMALL = ['kanban-small', 'pr-small-en', 'models-small-en', 'waiting-small-en', 'private-small-en', 'agents-small', 'git-small', 'overview-small', 'settings-small', 'agents-small-en', 'quota-small-en', 'terminal-view-small-en', 'settings-harness-small-en', 'rail-small', 'rail-small-en'];
 shots.push(
   ...shots
     .filter((s) => (s.width === BIG.width && !s.lang) || LIGHT_SMALL.includes(s.name))

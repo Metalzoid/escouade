@@ -13,6 +13,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The list of agents is redrawn: the agent waiting goes first with its question, which you answer in a click or with 1, 2… without leaving the conversation open (several questions and permissions too; Ctrl+J puts the focus on its card), and each card says what the agent is doing (“Editing src/auth.ts”), whatever its harness, what it changed, or what still runs once its turn is over. The arrow of “New agent”, or Ctrl+Shift+N, opens the menu of the harnesses, numbered.
 - The conversation is redrawn: a header with the status in a pill and the agent’s figures, its actions under “…”, the tool calls of a turn in a single thread, and a floating message field where dictation and dropped files happen. A message refused for want of an account says so in the conversation, with “Add an account…” a click away.
 - The “Plan” banner is redrawn in the conversation’s column: a segment per task, then each task with its state, the subagent working on it and the model it really runs on, whatever its harness, what it is doing and what it waits for.
+- The Kanban is redrawn: columns without frames, cards that show their criteria checked, the loop in squares, what the agent is doing and what it costs, and the ticket to review in amber with “Approve” and “Test”. In a ticket’s form, every field has its label, the description takes all the free room and “After” opens as a menu.
 
 ### Fixes
 
