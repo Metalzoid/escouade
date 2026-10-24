@@ -57,6 +57,8 @@ The installers are on the [GitHub releases](https://github.com/guillaume-gagnair
 2. Run it. It installs Escouade for your user account, without asking for administrator rights, and it speaks the system language (French or English).
 3. Open Escouade from the Start menu.
 
+The installer and the app are signed by GAGNAIRE DEVELOPPEMENT, Escouade’s publisher. Until this signature has enough downloads behind it, SmartScreen may show “Windows protected your PC”: choose “More info”, then “Run anyway”.
+
 > [!NOTE]
 > Escouade used to be called “Claude Code Manager”. Installed over an old version, it replaces it and keeps your settings and conversations.
 

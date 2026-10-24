@@ -57,6 +57,8 @@ Les installeurs sont sur la page des [releases GitHub](https://github.com/guilla
 2. Lance-le. Il installe Escouade pour ton compte utilisateur, sans demander de droits d’administrateur, et il parle la langue du système (français ou anglais).
 3. Ouvre Escouade depuis le menu Démarrer.
 
+L’installeur et l’app sont signés au nom de GAGNAIRE DEVELOPPEMENT, l’éditeur d’Escouade. Tant que cette signature n’a pas encore assez de téléchargements derrière elle, SmartScreen peut afficher « Windows a protégé votre ordinateur » : choisis « Informations complémentaires », puis « Exécuter quand même ».
+
 > [!NOTE]
 > Escouade s’appelait « Claude Code Manager ». Installée sur une ancienne version, elle la remplace et garde tes réglages et tes conversations.
 
