@@ -19,6 +19,7 @@ export default {
     tokens: 'Tokens',
     duration: 'Durée',
     filesHint: 'Voir les fichiers non commités',
+    filesClose: 'Fermer les fichiers',
     layout: 'Disposition ({key})',
     layoutClassic: 'Disposition classique',
     layoutSplit: 'Conversation et fichiers côte à côte',

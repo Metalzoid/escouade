@@ -50,6 +50,14 @@ import type {
   Usage,
 } from './types';
 
+/** What an agent's header, too narrow, no longer shows (ESC-166): « … » offers it in its menu. */
+export interface HeaderFolded {
+  /** « Fichiers », the figure that opens the side panel. */
+  files: boolean;
+  /** The layouts, classic and side by side. */
+  layout: boolean;
+}
+
 /** Where the focus goes back to when a subagent's conversation is left: the element that had it, and the call opened from. */
 export interface SubFocus {
   agentId: string;
@@ -319,7 +327,7 @@ class AppState {
   /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
   newAgentMenu = $state(0);
   /** « … » in an agent's header: the sidebar opens the agent's menu (its card's right click) at this place. */
-  agentMenuAsk = $state<{ id: string; x: number; y: number; seq: number } | null>(null);
+  agentMenuAsk = $state<{ id: string; x: number; y: number; seq: number; folded?: HeaderFolded } | null>(null);
   /** Counts the projects and agents chosen, the one on screen again included: its project's tab comes back into view. */
   chosen = $state(0);
   /**
@@ -815,10 +823,13 @@ class AppState {
     else this.openOverview();
   }
 
-  /** Opens the menu of the agent `id` under `el` (« … » of its header): the sidebar, which draws it, watches this. */
-  askAgentMenu(id: string, el: HTMLElement) {
+  /**
+   * Opens the menu of the agent `id` under `el` (« … » of its header): the sidebar, which draws it, watches this.
+   * `folded`: what the header, too narrow, no longer shows, which the menu then offers (ESC-166).
+   */
+  askAgentMenu(id: string, el: HTMLElement, folded?: HeaderFolded) {
     const r = el.getBoundingClientRect();
-    this.agentMenuAsk = { id, x: r.left, y: r.bottom + 4, seq: (this.agentMenuAsk?.seq ?? 0) + 1 };
+    this.agentMenuAsk = { id, x: r.left, y: r.bottom + 4, seq: (this.agentMenuAsk?.seq ?? 0) + 1, folded };
   }
 
   toggleLayout() {

@@ -406,6 +406,38 @@ describe('Sidebar', () => {
       menu.open!.items.find((i) => i.label === 'Ouvrir un terminal')!.onClick!();
       await vi.waitFor(() => expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · refacto-auth', { agentId: 'a1' }));
     });
+
+    it('offers the files and the layout that the narrow header folded away, and switches them (ESC-166)', async () => {
+      resetApp({ agents: [agent()] });
+      fakeBackend();
+      render(Sidebar, { project: project() });
+      const button = document.createElement('button');
+      document.body.append(button);
+      onTestFinished(() => button.remove());
+      const ask = async (folded?: { files: boolean; layout: boolean }) => {
+        menu.close();
+        app.askAgentMenu('a1', button, folded);
+        await vi.waitFor(() => expect(menu.open).not.toBeNull());
+        return menu.open!.items;
+      };
+      // Shown by the header: not in the menu.
+      let labels = (await ask({ files: false, layout: false })).map((i) => i.label);
+      expect(labels).not.toContain('Voir les fichiers non commités');
+      expect(labels).not.toContain('Conversation et fichiers côte à côte');
+      expect((await ask()).map((i) => i.label)).not.toContain('Conversation et fichiers côte à côte');
+
+      let items = await ask({ files: true, layout: true });
+      expect(items.find((i) => i.label === 'Voir les fichiers non commités')?.hint).toBe('Ctrl+Maj+B');
+      items.find((i) => i.label === 'Voir les fichiers non commités')!.onClick!();
+      expect(app.filesOpen).toBe(true);
+      items = await ask({ files: true, layout: true });
+      labels = items.map((i) => i.label);
+      expect(labels).toContain('Fermer les fichiers');
+      items.find((i) => i.label === 'Conversation et fichiers côte à côte')!.onClick!();
+      expect(app.split).toBe(true);
+      labels = (await ask({ files: false, layout: true })).map((i) => i.label);
+      expect(labels).toContain('Disposition classique');
+    });
   });
 
   describe('« Intégrer <base> »', () => {

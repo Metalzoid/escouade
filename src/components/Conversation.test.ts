@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 /** The interfaces of Claude Code started (« Vue Claude Code »). */
 const tui = vi.hoisted(() => ({ opened: 0 }));
@@ -1430,6 +1430,22 @@ describe('Conversation header « … » (2.0 design, choice 6)', () => {
     expect(app.agentMenuAsk).toMatchObject({ id: a.id, seq: 1 });
     await userEvent.click(more);
     expect(app.agentMenuAsk).toMatchObject({ id: a.id, seq: 2 });
+  });
+
+  it('tells the menu what the header, too narrow, no longer shows: « Fichiers » and the layouts (ESC-166)', async () => {
+    setup({ worktree: WT });
+    const more = screen.getByRole('button', { name: 'Actions de l’agent' });
+    await userEvent.click(more);
+    expect(app.agentMenuAsk?.folded).toEqual({ files: false, layout: false });
+    // Folded away by its container queries, which jsdom neither applies nor tells (no checkVisibility).
+    Element.prototype.checkVisibility = function (this: Element) {
+      return !this.matches('.fig.files, .layout-seg');
+    };
+    onTestFinished(() => {
+      delete (Element.prototype as Partial<Element>).checkVisibility;
+    });
+    await userEvent.click(more);
+    expect(app.agentMenuAsk?.folded).toEqual({ files: true, layout: true });
   });
 
   it('has no « Terminal » of its own: the menu opens one in the agent’s worktree', () => {

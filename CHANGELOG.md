@@ -21,6 +21,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Corrections
 
 - Un message envoyé juste après le précédent, avant que celui-ci soit pris, n’est plus perdu : il quitte le champ et part aussitôt après.
+- L’en-tête d’un agent ne déborde plus quand le panneau des fichiers et de l’historique est ouvert ou que la fenêtre est étroite : il range ses chiffres, puis les mots de ses boutons, et passe la disposition dans « … », en gardant toujours le nom et l’état de l’agent.
 
 ## [1.8.13] — 2026-10-24
 

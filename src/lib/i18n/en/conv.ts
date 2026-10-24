@@ -17,6 +17,7 @@ export default defineZone('conv', {
     tokens: 'Tokens',
     duration: 'Duration',
     filesHint: 'Show uncommitted files',
+    filesClose: 'Close the files',
     layout: 'Layout ({key})',
     layoutClassic: 'Classic layout',
     layoutSplit: 'Conversation and files side by side',

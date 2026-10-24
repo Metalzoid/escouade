@@ -206,3 +206,25 @@ Demandé par l'utilisateur le 2026-10-23 : « fais la navigation des projets sur
 47. **Les projets fermés gardés n'ont pas de tuile** : « + » ouvre un menu court, « Ajouter un projet… » (l'assistant) puis les derniers projets fermés avec « Rouvrir », et « Tous les projets fermés… » (Réglages › Projets) ; sans projet fermé, « + » ouvre l'assistant directement, comme aujourd'hui. Raison : la barre ne montre que ce qui est ouvert, comme Slack, et rouvrir reste à deux clics. Adresse : `#rail-add`.
 48. **Les largeurs** : barre des projets de 52 px, barre des agents gardée à 276 px, le panneau qui perd 52 px, la colonne de la conversation qui rétrécit avec lui (voir « La place »). Raison : la barre des agents et la zone de saisie passent avant la largeur du fil. Adresses : `agents-small`, `handover-small-en`.
 49. **Au premier démarrage**, la barre ne garde que « + » et Réglages, et la barre de titre que le logo et les boutons de la fenêtre. Raison : le chemin vers un premier projet et vers les réglages, rien d'autre. Adresse : `#welcome`.
+
+# Les colonnes étroites (ESC-166, 2026-10-24) : l'en-tête d'un agent se replie par la largeur de sa colonne
+
+Remonté par l'utilisateur le 2026-10-24 : l'en-tête d'un agent débordait quand le panneau de droite (fichiers, diff, historique) était ouvert. Dans l'aperçu aussi : à 1028 px, `#git` ne laissait du nom qu'un « p » et coupait le chemin avant la branche. Les replis suivent la largeur de la colonne de la conversation (`@container conv`), pas celle de la fenêtre ; l'app (`Conversation.svelte`) et l'aperçu ont les mêmes paliers.
+
+**À valider par l'utilisateur** : les choix 50 à 52.
+
+## Adresses
+
+- `#git` à 1028×779 (`git-small`, `git-small-light`) : le panneau ouvert, la colonne à 352 px ; `#git` et `#history` à 1440×900 (`git`, `history` et leurs jumelles `-light`) : la colonne à 618 px.
+- L'app, mesurée par `tests/e2e/narrow-columns.spec.ts` : 1028, 1280 et 1440 px, panneau fermé, ouvert à côté de la disposition classique (340 px, sa largeur par défaut) et côte à côte (44 % du panneau de travail, sa plus grande largeur), en français et en anglais, puis toutes les largeurs de 1000 à 1960 px, aussi dans la vue Claude Code.
+
+## Choix
+
+50. **Les paliers de l'en-tête, colonne de la conversation** : sous 1100 px, « Durée » s'en va et les vues ne gardent que leur icône ; sous 960 px, « Fichiers » ; sous 880 px, « Tokens » ; sous 800 px, les boutons perdent leurs mots (icône et infobulle) ; sous 680 px, la disposition passe dans « … » ; sous 580 px, Contexte et Coût s'en vont ; sous 440 px, les vues passent dans « … ». Le nom (au moins 80 px avant ses « … »), l'état et le bouton principal restent toujours. Raison : le nom et l'état disent de quel agent on parle ; les chiffres se relisent sur sa carte. Les deux largeurs déjà comparées (1104 et 692 px, panneau fermé) ne changent pas.
+51. **Le chemin cède le nom du projet avant la branche** : « d… / escouade/pagination-users ». Raison : le projet est déjà dit dans la barre de titre, la branche non.
+52. **« … » reprend ce que l'en-tête ne montre plus** : la disposition (« Conversation et fichiers côte à côte » ou « Disposition classique », `Ctrl Maj L`) et « Voir les fichiers non commités » / « Fermer les fichiers » (`Ctrl Maj B`) quand la figure « Fichiers » est repliée ; les vues y étaient déjà (« Vue Claude Code », « Vue Escouade »), comme « Préparer le lancement ». Raison : rien de ce qu'offrait l'en-tête ne devient inaccessible.
+
+## Vérifié panneau ouvert, sans retouche
+
+- La zone de saisie, le bandeau Plan (ses replis `@container conv` du lot 5), la carte d'une question, les onglets et le haut de « Non commités » et d'« Historique » dans le panneau à 340 px : rien ne déborde ni ne passe sur deux lignes, en français et en anglais.
+- Les en-têtes d'un terminal et du log d'un lancement ne sont jamais à côté du panneau (il n'accompagne que la conversation) : leur colonne la plus étroite est celle de la fenêtre à 1028 px, déjà vérifiée par `terminals-look.spec.ts`.

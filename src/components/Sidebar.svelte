@@ -40,7 +40,7 @@
   import { BG_FINISHED_SHOWN, BG_RUNNING_SHOWN, bgCount, bgDuration, rowLine, rowTitle, sidebarBg, type BgRow } from '../lib/bgtasks';
   import { estimateHint, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
-  import { app } from '../lib/state.svelte';
+  import { app, type HeaderFolded } from '../lib/state.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
@@ -157,7 +157,7 @@
     if (!a) return;
     const at = { clientX: ask.x, clientY: ask.y, preventDefault() {}, stopPropagation() {} } as MouseEvent;
     untrack(() => {
-      agentMenu(at, a);
+      agentMenu(at, a, ask.folded);
       if (menu.open) menu.open.keyboard = true;
     });
   });
@@ -273,7 +273,8 @@
     if (kept) app.toast(kept, 'info');
   }
 
-  function agentMenu(e: MouseEvent, a: Agent) {
+  /** `folded`: what the header of its conversation, too narrow, no longer shows (ESC-166), offered here instead. */
+  function agentMenu(e: MouseEvent, a: Agent, folded?: HeaderFolded) {
     // A copy is made from a conversation at rest: during a turn, the original's session moves on.
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
@@ -329,11 +330,30 @@
             },
           ]
         : []),
+      ...foldedItems(folded),
       ...handoverItems(e, a),
       ...remoteItems(a),
       { label: '', separator: true },
       { label: t('nav.sidebar.menu.delete'), danger: true, onClick: () => confirmDelete(a) },
     ]);
+  }
+
+  /** The files beside the conversation and its layout, when its header folded them away. */
+  function foldedItems(folded?: HeaderFolded): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (folded?.files)
+      items.push({
+        label: t(app.filesOpen ? 'conv.header.filesClose' : 'conv.header.filesHint'),
+        hint: keyLabel('Ctrl+Shift+B'),
+        onClick: () => (app.filesOpen = !app.filesOpen),
+      });
+    if (folded?.layout)
+      items.push({
+        label: t(app.split ? 'conv.header.layoutClassic' : 'conv.header.layoutSplit'),
+        hint: keyLabel('Ctrl+Shift+L'),
+        onClick: () => app.toggleLayout(),
+      });
+    return items;
   }
 
   /** « Lancer… »: the project's launch commands, each to run in the agent's worktree, where its menu was. */

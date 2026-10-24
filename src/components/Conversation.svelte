@@ -32,7 +32,7 @@
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
   import { editsByTurn } from '../lib/tools';
-  import { app, type SubFocus } from '../lib/state.svelte';
+  import { app, type HeaderFolded, type SubFocus } from '../lib/state.svelte';
   import { canPrepare, canTest, prepareLaunch, testAgent } from '../lib/test-launch.svelte';
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
@@ -508,6 +508,16 @@
     if (restarting === id) restarting = null;
   }
 
+  /** What the header, folded by its width (its container queries), hides: « … » under `more` offers it then. */
+  function folded(more: HTMLElement): HeaderFolded {
+    const head = more.closest('.head');
+    const hidden = (sel: string) => {
+      const el = head?.querySelector(sel);
+      return !el || (typeof el.checkVisibility === 'function' && !el.checkVisibility());
+    };
+    return { files: !app.split && hidden('.fig.files'), layout: hidden('.layout-seg') };
+  }
+
   function rename() {
     app.modal = {
       kind: 'rename',
@@ -610,7 +620,7 @@
         </dd>
         {#if context.pct !== null}<div class="ctx-meter" class:full={context.full}><i style:width="{context.pct}%"></i></div>{/if}
       </div>
-      <div class="fig opt-fig">
+      <div class="fig fig-tok">
         <dt>{t('conv.header.tokens')}</dt>
         <dd>{fTok(used.tokens)}</dd>
       </div>
@@ -623,13 +633,13 @@
         </div>
       {/if}
       {#if app.split}
-        <div class="fig opt-fig">
+        <div class="fig fig-files">
           <dt>{t('common.files')}</dt>
           <dd>{files}</dd>
         </div>
       {:else}
         <button
-          class="fig files opt-fig"
+          class="fig files fig-files"
           class:open={app.filesOpen}
           aria-pressed={app.filesOpen}
           use:tip={t('conv.header.filesHint')}
@@ -639,7 +649,7 @@
           <dd>{files}</dd>
         </button>
       {/if}
-      <div class="fig opt-fig2">
+      <div class="fig fig-dur">
         <dt>{t('conv.header.duration')}</dt>
         <dd>{duration}</dd>
       </div>
@@ -703,7 +713,7 @@
         aria-haspopup="menu"
         aria-label={t('conv.header.more')}
         use:tip={t('conv.header.more')}
-        onclick={(e) => app.askAgentMenu(agent.id, e.currentTarget)}><Icon name="more" size={14} /></button
+        onclick={(e) => app.askAgentMenu(agent.id, e.currentTarget, folded(e.currentTarget))}><Icon name="more" size={14} /></button
       >
       <div class="layout-seg" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
         <button
@@ -981,8 +991,12 @@
   .crumbs :global(.mark) {
     margin-right: 2px;
   }
+  /* Short of room, the project's name gives way first, then the branch: « dem…/agent-1 ». */
   .proj-name {
-    flex: none;
+    flex: 0 1000 auto;
+    min-width: 2ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .branch {
     min-width: 0;
@@ -1181,10 +1195,12 @@
     background: rgba(var(--fg-rgb), 0.08);
     color: var(--text);
   }
-  /* The header folds as the conversation narrows (the split layout, a small window): the lesser figures go, then the
-     labels of its buttons, then the figures. */
-  @container conv (max-width: 1000px) {
-    .figures .opt-fig,
+  /* The header folds by the width of the conversation, not the window's (the side panel open, the split layout, a small
+     window), for its name and its state to keep their room (ESC-166): the figures go one by one (Durée, Fichiers, Tokens),
+     then the words of its buttons (their icon and tooltip stay), then the layout and the views, which « … » takes over. The
+     path gives up its project's name before its branch. */
+  @container conv (max-width: 1100px) {
+    .figures .fig-dur,
     .vseg .lbl {
       display: none;
     }
@@ -1195,9 +1211,18 @@
       display: none;
     }
   }
-  @container conv (max-width: 760px) {
-    .head .btn .lbl,
-    .figures .opt-fig2 {
+  @container conv (max-width: 960px) {
+    .figures .fig-files {
+      display: none;
+    }
+  }
+  @container conv (max-width: 880px) {
+    .figures .fig-tok {
+      display: none;
+    }
+  }
+  @container conv (max-width: 800px) {
+    .head .btn .lbl {
       display: none;
     }
     .head .btn:has(.lbl) {
@@ -1209,8 +1234,18 @@
       gap: 14px;
     }
   }
+  @container conv (max-width: 680px) {
+    .layout-seg {
+      display: none;
+    }
+  }
   @container conv (max-width: 580px) {
     .figures {
+      display: none;
+    }
+  }
+  @container conv (max-width: 440px) {
+    .vseg {
       display: none;
     }
   }

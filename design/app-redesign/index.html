@@ -4474,15 +4474,26 @@
         font-size: 12.5px;
       }
 
-      @container conv (max-width: 1000px) {
-        .figures .fig.opt-fig,
-        .plan-head .subs {
+      /* The header folds by the width of the conversation (the side panel open, side by side, a small window), for the
+         name and the state to keep their room (ESC-166): Durée, Fichiers, Tokens go one by one, then the words of the
+         buttons, then the layout and the views, which « … » takes over. */
+      @container conv (max-width: 1100px) {
+        .figures .fig.fig-dur {
           display: none;
         }
       }
-      @container conv (max-width: 760px) {
-        .head .btn .lbl,
-        .figures .fig.opt-fig2 {
+      @container conv (max-width: 960px) {
+        .figures .fig.fig-files {
+          display: none;
+        }
+      }
+      @container conv (max-width: 880px) {
+        .figures .fig.fig-tok {
+          display: none;
+        }
+      }
+      @container conv (max-width: 800px) {
+        .head .btn .lbl {
           display: none;
         }
         .head .btn:has(.lbl) {
@@ -4493,6 +4504,23 @@
         .figures {
           gap: 14px;
         }
+      }
+      @container conv (max-width: 680px) {
+        .head .layout-seg {
+          display: none;
+        }
+      }
+      @container conv (max-width: 440px) {
+        .head .vseg {
+          display: none;
+        }
+      }
+      @container conv (max-width: 1000px) {
+        .plan-head .subs {
+          display: none;
+        }
+      }
+      @container conv (max-width: 760px) {
         .plan-list .meta .step,
         .composer .chip .cap,
         .btn.stop kbd {
@@ -4869,9 +4897,15 @@
         margin-left: 4px;
         font-size: 11px;
       }
-      .crumbs .emark,
-      .crumbs .proj-name {
+      .crumbs .emark {
         flex: none;
+      }
+      /* Short of room, the project's name gives way first, then the branch (ESC-166). */
+      .crumbs .proj-name {
+        flex: 0 1000 auto;
+        min-width: 2ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       #h-branch {
         min-width: 0;
@@ -6906,7 +6940,7 @@
         color: var(--soft);
       }
 
-      @container conv (max-width: 1000px) {
+      @container conv (max-width: 1100px) {
         .vseg .lbl {
           display: none;
         }
@@ -7302,10 +7336,10 @@
                   <dd>76,2 k <small>/ 200 k</small></dd>
                   <div class="ctx-meter"><i></i></div>
                 </div>
-                <div class="fig opt-fig"><dt>Tokens</dt><dd>12,4 k</dd></div>
+                <div class="fig fig-tok"><dt>Tokens</dt><dd>12,4 k</dd></div>
                 <div class="fig"><dt>Coût</dt><dd id="fig-cost">0,14 $</dd></div>
-                <div class="fig opt-fig"><dt>Fichiers</dt><dd>3</dd></div>
-                <div class="fig opt-fig2"><dt>Durée</dt><dd>3m 15s</dd></div>
+                <div class="fig fig-files"><dt>Fichiers</dt><dd>3</dd></div>
+                <div class="fig fig-dur"><dt>Durée</dt><dd>3m 15s</dd></div>
               </dl>
               <div class="actions">
                 <button class="btn" id="h-pr" aria-label="Ouvrir une PR" hidden><svg class="i s14"><use href="#i-pr" /></svg><span class="lbl">Ouvrir une PR</span></button>

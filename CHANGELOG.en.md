@@ -21,6 +21,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ### Fixes
 
 - A message sent right after the one before, before that one is taken, is no longer lost: it leaves the field and goes right after it.
+- An agent’s header no longer overflows when the files and history panel is open or the window is narrow: it puts away its figures, then the words of its buttons, and moves the layout into “…”, always keeping the agent’s name and status.
 
 ## [1.8.13] — 2026-10-24
 
